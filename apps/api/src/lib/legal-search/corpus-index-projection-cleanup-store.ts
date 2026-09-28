@@ -10,6 +10,7 @@ import {
   min,
   or,
   sql,
+  type SQL,
 } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -36,16 +37,23 @@ import {
   corpusIndexUnknownAppendBarrierAt,
   countCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
-import { lockCorpusIndexProjectionIntentMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import {
+  lockCorpusIndexProjectionIntentMutationsTx,
+  lockCorpusIndexProjectionMutationsTx,
+} from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
   entityIdsForCorpusProjectionWorkScope,
   type CorpusProjectionScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
+  CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+  CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
+  CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT,
   CORPUS_PROJECTION_LEASE_MAX_MS,
   CORPUS_PROJECTION_LEASE_MIN_MS,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { logger } from "@/api/lib/observability/logger";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 type ProjectionIntentId = SafeId<"corpusIndexProjectionIntent">;
@@ -932,6 +940,23 @@ export type CorpusProjectionExpiredIntent = {
   >;
 };
 
+const recoveredIntent = ({
+  id,
+  status,
+}: Pick<
+  typeof corpusIndexProjectionIntents.$inferSelect,
+  "id" | "status"
+>): CorpusProjectionExpiredIntent => {
+  if (
+    status !== "reserved" &&
+    status !== "append_started" &&
+    status !== "cleanup_started"
+  ) {
+    return panic(`Unexpected expired projection intent status: ${status}`);
+  }
+  return { intentId: id, status };
+};
+
 type RecoverExpiredCorpusProjectionIntentsOptions<Family extends CorpusFamily> =
   CorpusProjectionScopedWorkOptions<Family> & {
     generation: string;
@@ -939,10 +964,161 @@ type RecoverExpiredCorpusProjectionIntentsOptions<Family extends CorpusFamily> =
     testNow?: Date;
   };
 
+type ExpiredAppendStateTarget = Pick<
+  typeof corpusIndexProjectionIntents.$inferSelect,
+  "entityId" | "epoch" | "fingerprint" | "indexId"
+>;
+
+type ChargeExpiredAppendStatesOptions = {
+  family: CorpusFamily;
+  generation: string;
+  targets: readonly ExpiredAppendStateTarget[];
+  transitionAt: Date | SQL<Date>;
+};
+
+const expiredAppendTargets = (targets: readonly ExpiredAppendStateTarget[]) =>
+  or(
+    ...targets.map((row) =>
+      and(
+        eq(corpusIndexProjectionStates.entityId, row.entityId),
+        eq(corpusIndexProjectionStates.desiredEpoch, row.epoch),
+        eq(corpusIndexProjectionStates.desiredFingerprint, row.fingerprint),
+        eq(corpusIndexProjectionStates.desiredIndexId, row.indexId),
+      ),
+    ),
+  );
+
+const chargeExpiredAppendStatesTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    targets,
+    transitionAt,
+  }: ChargeExpiredAppendStatesOptions,
+): Promise<void> => {
+  const nextAttempts = sql<number>`${corpusIndexProjectionStates.failureAttempts} + 1`;
+  const exhausted = sql<boolean>`${nextAttempts} >= ${CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT}`;
+  const retryDelayMs = sql<number>`LEAST(
+    ${CORPUS_PROJECTION_APPEND_RETRY_CAP_MS},
+    ${CORPUS_PROJECTION_APPEND_RETRY_BASE_MS} * POWER(
+      2,
+      LEAST(${corpusIndexProjectionStates.failureAttempts}, 6)
+    )
+  )`;
+  const updated = await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: sql<"blocked" | "retry_scheduled">`CASE
+        WHEN ${exhausted} THEN 'blocked'
+        ELSE 'retry_scheduled'
+      END`,
+      retryNotBefore: sql<Date | null>`CASE
+        WHEN ${exhausted} THEN NULL::timestamptz
+        ELSE ${transitionAt}::timestamptz + ${retryDelayMs} * INTERVAL '1 millisecond'
+      END`,
+      failureAttempts: nextAttempts,
+      lastFailureKind: "append_unknown",
+      lastFailureMessage:
+        "projection append lease expired with unknown outcome",
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        expiredAppendTargets(targets),
+      ),
+    )
+    .returning({
+      entityId: corpusIndexProjectionStates.entityId,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      workStatus: corpusIndexProjectionStates.workStatus,
+    });
+  for (const row of updated) {
+    if (row.workStatus === "blocked") {
+      logger.warn("corpus_projection.append_blocked", {
+        family,
+        generation,
+        entity: row.entityId,
+        kind: "append_unknown",
+        attempts: row.failureAttempts,
+      });
+    }
+  }
+};
+
+const deferExpiredBatchStatesTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    targets,
+    transitionAt,
+  }: ChargeExpiredAppendStatesOptions,
+): Promise<void> => {
+  await tx
+    .update(corpusIndexProjectionStates)
+    .set({
+      workStatus: "retry_scheduled",
+      retryNotBefore: sql<Date>`${transitionAt}::timestamptz + ${CORPUS_PROJECTION_APPEND_RETRY_BASE_MS} * INTERVAL '1 millisecond'`,
+      appendMode: "single",
+      lastFailureKind: "append_unknown",
+      lastFailureMessage:
+        "projection batch append lease expired with unknown outcome",
+      updatedAt: transitionAt,
+    })
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+        expiredAppendTargets(targets),
+      ),
+    );
+};
+
+const updateExpiredAppendStatesTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    targets,
+    transitionAt,
+  }: Omit<ChargeExpiredAppendStatesOptions, "targets"> & {
+    targets: readonly (ExpiredAppendStateTarget & {
+      appendRequestRevisionCount: number | null;
+    })[];
+  },
+): Promise<void> => {
+  const isolated = targets.filter(
+    ({ appendRequestRevisionCount }) => appendRequestRevisionCount === 1,
+  );
+  const batches = targets.filter(
+    ({ appendRequestRevisionCount }) => appendRequestRevisionCount !== 1,
+  );
+  if (isolated.length > 0) {
+    await chargeExpiredAppendStatesTx(tx, {
+      family,
+      generation,
+      targets: isolated,
+      transitionAt,
+    });
+  }
+  if (batches.length > 0) {
+    await deferExpiredBatchStatesTx(tx, {
+      family,
+      generation,
+      targets: batches,
+      transitionAt,
+    });
+  }
+};
+
 /**
- * Recover only states whose external outcome is known from the recorded phase:
- * an expired reservation is cancelled, an expired append is assumed written,
- * and an expired delete is retried exactly.
+ * Recover expired intents by phase: cancel a reservation, treat an append as
+ * an unknown write requiring cleanup, and retry an expired delete exactly.
  */
 export const recoverExpiredCorpusProjectionIntentsTx = async <
   Family extends CorpusFamily,
@@ -958,16 +1134,17 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
 ): Promise<CorpusProjectionExpiredIntent[]> => {
   const limit = validateCleanupBatchSize(requestedLimit);
   const scopedEntityIds = entityIdsForCorpusProjectionWorkScope(scope);
+  await lockCorpusIndexProjectionMutationsTx(tx, [{ family, generation }]);
   const manifest = await lockRegisteredCorpusProjectionManifestForMutation(
     tx,
     family,
     generation,
   );
-  const rows = await tx
+  const candidates = await tx
     .select({
       id: corpusIndexProjectionIntents.id,
       status: corpusIndexProjectionIntents.status,
-      appendStartedAt: corpusIndexProjectionIntents.appendStartedAt,
+      entityId: corpusIndexProjectionIntents.entityId,
     })
     .from(corpusIndexProjectionIntents)
     .where(
@@ -977,6 +1154,56 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
         scopedEntityIds === null
           ? undefined
           : inArray(corpusIndexProjectionIntents.entityId, scopedEntityIds),
+        inArray(corpusIndexProjectionIntents.status, [
+          "reserved",
+          "append_started",
+          "cleanup_started",
+        ]),
+        sql`${corpusIndexProjectionIntents.leaseExpiresAt} <= clock_timestamp()`,
+      ),
+    )
+    .orderBy(asc(corpusIndexProjectionIntents.leaseExpiresAt))
+    .limit(limit);
+  if (candidates.length === 0) {
+    return [];
+  }
+  const appendEntityIds = candidates
+    .filter(({ status }) => status === "append_started")
+    .map(({ entityId }) => entityId);
+  if (appendEntityIds.length > 0) {
+    await tx
+      .select({ entityId: corpusIndexProjectionStates.entityId })
+      .from(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.family, family),
+          eq(corpusIndexProjectionStates.generation, generation),
+          inArray(corpusIndexProjectionStates.entityId, appendEntityIds),
+        ),
+      )
+      .orderBy(asc(corpusIndexProjectionStates.entityId))
+      .limit(appendEntityIds.length)
+      .for("update");
+  }
+  const rows = await tx
+    .select({
+      id: corpusIndexProjectionIntents.id,
+      status: corpusIndexProjectionIntents.status,
+      entityId: corpusIndexProjectionIntents.entityId,
+      epoch: corpusIndexProjectionIntents.epoch,
+      fingerprint: corpusIndexProjectionIntents.fingerprint,
+      indexId: corpusIndexProjectionIntents.indexId,
+      appendStartedAt: corpusIndexProjectionIntents.appendStartedAt,
+      appendRequestRevisionCount:
+        corpusIndexProjectionIntents.appendRequestRevisionCount,
+    })
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        inArray(
+          corpusIndexProjectionIntents.id,
+          candidates.map(({ id }) => id),
+        ),
         inArray(corpusIndexProjectionIntents.status, [
           "reserved",
           "append_started",
@@ -1084,15 +1311,12 @@ export const recoverExpiredCorpusProjectionIntentsTx = async <
           eq(corpusIndexProjectionIntents.status, "append_started"),
         ),
       );
+    await updateExpiredAppendStatesTx(tx, {
+      family,
+      generation,
+      targets: appendStarted,
+      transitionAt,
+    });
   }
-  return rows.map(({ id, status }) => {
-    if (
-      status !== "reserved" &&
-      status !== "append_started" &&
-      status !== "cleanup_started"
-    ) {
-      return panic(`Unexpected expired projection intent status: ${status}`);
-    }
-    return { intentId: id, status };
-  });
+  return rows.map(recoveredIntent);
 };

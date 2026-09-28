@@ -6,6 +6,7 @@ import { isUuid } from "@stll/uuid-codec";
 import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import {
+  CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   CorpusIndexError,
   type CorpusIndexClient,
@@ -22,7 +23,7 @@ export const CORPUS_PROJECTION_APPEND_MAX_REVISIONS = 512;
 export const CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES =
   LIMITS.corpusIndexIngestMaxBytes;
 export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
-  LIMITS.corpusPayloadMaxDecompressedBytes;
+  CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES - 512 * 1024;
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 

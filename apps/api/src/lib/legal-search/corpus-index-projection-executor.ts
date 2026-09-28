@@ -1,15 +1,20 @@
 import { panic, Result } from "better-result";
+import { and, eq, inArray } from "drizzle-orm";
 import { Buffer } from "node:buffer";
 
 import { streamWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
+import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import { errorFingerprint } from "@/api/lib/errors/utils";
-import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import type {
+  CorpusIndexClient,
+  CorpusIndexError,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { buildCorpusProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
@@ -34,6 +39,7 @@ import {
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX,
   CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN,
   CORPUS_PROJECTION_RETRY_MIN_MS,
+  CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
@@ -127,6 +133,7 @@ type ExecuteCorpusProjectionAppendCycleOptions<
   payloadReadConcurrency: number;
   retryDelayMs: number;
   payloadRetryLimit: number;
+  payloadReader?: typeof loadCorpusProjectionPayload;
 };
 
 /** Wall-clock milliseconds per phase, summed over the cycle, for the caller's logs. */
@@ -159,7 +166,13 @@ export type CorpusProjectionAppendCycleTiming = {
 };
 
 export type CorpusProjectionAppendCycleResult = {
-  status: "idle" | "completed" | "append_unknown";
+  status:
+    | "idle"
+    | "completed"
+    | "append_unknown"
+    | "append_blocked"
+    | "engine_unavailable";
+  cycleRetryDelayMs: number | null;
   replacementCleanupScheduled: number;
   reserved: number;
   applied: number;
@@ -179,6 +192,7 @@ const emptyResult = (
   timing: CorpusProjectionAppendCycleTiming,
 ): CorpusProjectionAppendCycleResult => ({
   status: "idle",
+  cycleRetryDelayMs: null,
   replacementCleanupScheduled,
   timing,
   reserved: 0,
@@ -279,7 +293,7 @@ const classifyReservationFailures = async ({
       leaseLost: 0,
     };
   }
-  return await runInTransaction(async (tx) => {
+  const classified = await runInTransaction(async (tx) => {
     const outcomes = await mapSequentially(failures, async (failure) =>
       classifyCorpusProjectionReservationFailureTx(tx, {
         intentId: failure.lease.intentId,
@@ -287,6 +301,36 @@ const classifyReservationFailures = async ({
         failure: failure.failure,
       }),
     );
+    const blockedLeases = failures.flatMap((failure, index) =>
+      outcomes.at(index) === "blocked" ? [failure.lease] : [],
+    );
+    const firstBlockedLease = blockedLeases.at(0);
+    const blockedStates =
+      firstBlockedLease === undefined
+        ? []
+        : await tx
+            .select({
+              entityId: corpusIndexProjectionStates.entityId,
+              failureAttempts: corpusIndexProjectionStates.failureAttempts,
+              lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+            })
+            .from(corpusIndexProjectionStates)
+            .where(
+              and(
+                eq(
+                  corpusIndexProjectionStates.family,
+                  firstBlockedLease.family,
+                ),
+                eq(
+                  corpusIndexProjectionStates.generation,
+                  firstBlockedLease.generation,
+                ),
+                inArray(
+                  corpusIndexProjectionStates.entityId,
+                  blockedLeases.map(({ entityId }) => entityId),
+                ),
+              ),
+            );
     return {
       retryScheduled: outcomes.filter(
         (outcome) => outcome === "retry_scheduled",
@@ -296,8 +340,19 @@ const classifyReservationFailures = async ({
         (outcome) => outcome === "stale_cancelled",
       ).length,
       leaseLost: outcomes.filter((outcome) => outcome === "lease_lost").length,
+      blockedStates,
     };
   });
+  for (const state of classified.blockedStates) {
+    logger.warn("corpus_projection.append_blocked", {
+      entity: state.entityId,
+      kind:
+        state.lastFailureKind ??
+        panic(`Blocked projection has no failure kind: ${state.entityId}`),
+      attempts: state.failureAttempts,
+    });
+  }
+  return classified;
 };
 
 const rereadMaterial = async (
@@ -347,6 +402,7 @@ type PreparedProjectionEntry = {
   ndjson: string;
   ndjsonBytes: number;
   leaseExpiresAtMs: number;
+  appendMode: CorpusProjectionIntentLease["appendMode"];
 };
 
 type PreparedProjectionFailure = {
@@ -377,6 +433,7 @@ type ProjectionAppendPart = {
   ndjson: string;
   ndjsonBytes: number;
   leaseExpiresAtMs: number;
+  appendMode?: CorpusProjectionIntentLease["appendMode"];
 };
 
 type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
@@ -437,6 +494,7 @@ export const advanceCorpusProjectionAppendTails = <
       if (
         tail !== undefined &&
         (tail.entries.length >= CORPUS_PROJECTION_APPEND_MAX_REVISIONS ||
+          entry.appendMode === "single" ||
           tail.ndjsonBytes + entry.ndjsonBytes >
             CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES)
       ) {
@@ -445,12 +503,17 @@ export const advanceCorpusProjectionAppendTails = <
         tail = undefined;
       }
       if (tail === undefined) {
-        nextTails.set(indexId, {
+        const next = {
           indexId,
           entries: [entry],
           ndjsonBytes: entry.ndjsonBytes,
           earliestLeaseExpiresAtMs: entry.leaseExpiresAtMs,
-        });
+        };
+        if (entry.appendMode === "single") {
+          flush.push(next);
+        } else {
+          nextTails.set(indexId, next);
+        }
         continue;
       }
       tail.entries.push(entry);
@@ -546,6 +609,7 @@ const prepareProjectionEntry = (
     ndjson: request.ndjson,
     ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
     leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
+    appendMode: material.lease.appendMode,
   });
 };
 
@@ -554,12 +618,14 @@ type BuildPreparedEntryOptions = {
   material: CorpusProjectionMaterial;
   /** Records the synchronous build's share of the payload window. */
   recordBuildMs: (elapsedMs: number) => void;
+  payloadReader: typeof loadCorpusProjectionPayload;
 };
 
 const buildPreparedEntry = async ({
   runInTransaction,
   material,
   recordBuildMs,
+  payloadReader,
 }: BuildPreparedEntryOptions): Promise<
   Result<PreparedProjectionEntry, PreparedProjectionFailure>
 > => {
@@ -567,8 +633,7 @@ const buildPreparedEntry = async ({
   // wrapped, and every budget failure would classify as a transient
   // `payload_unavailable` and retry forever instead of blocking.
   const payload = await Result.tryPromise({
-    try: async () =>
-      await loadCorpusProjectionPayload(runInTransaction, material),
+    try: async () => await payloadReader(runInTransaction, material),
     catch: (cause: unknown) => cause,
   });
   if (payload.isErr()) {
@@ -610,7 +675,9 @@ const processPreparedRequests = async ({
   requestIndex,
   unattemptedLeases,
   result,
-}: ProcessPreparedRequestsOptions): Promise<"completed" | "append_unknown"> => {
+}: ProcessPreparedRequestsOptions): Promise<
+  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
+> => {
   const request = requests.at(requestIndex);
   if (request === undefined) {
     return "completed";
@@ -672,12 +739,30 @@ const processPreparedRequests = async ({
     },
   );
   if (appended.isErr()) {
-    // The outcome is recorded on each intent, but the cycle summary only says
-    // "unknown"; without this line the engine's answer never reaches a log.
-    logger.warn("corpus_projection.append_unknown", {
+    const error: CorpusIndexError = appended.error;
+    const engineFault =
+      error.rejection === "transient" ||
+      error.cause !== undefined ||
+      (error.status !== undefined &&
+        error.status !== 400 &&
+        error.status !== 413 &&
+        error.status !== 422);
+    // A batch 500 may be caused by one document, so isolate its members
+    // without charging them. A singleton 500 then counts as an unknown
+    // document outcome and cannot loop without bound.
+    const documentFault = !engineFault || error.status === 500;
+    const stopForEngine =
+      engineFault && !(error.status === 500 && started.length === 1);
+    let event = "corpus_projection.append_unknown";
+    if (stopForEngine) {
+      event = "corpus_projection.engine_unavailable";
+    } else if (error.rejection === "definite") {
+      event = "corpus_projection.append_rejected";
+    }
+    logger.warn(event, {
       indexId: request.indexId,
       documents: started.length,
-      ...errorFingerprint(appended.error),
+      ...errorFingerprint(error),
     });
     const abandoned = await runInTransaction(async (tx) => {
       const outcomes = await mapSequentially(
@@ -686,19 +771,32 @@ const processPreparedRequests = async ({
           await abandonCorpusProjectionAppendTx(tx, {
             intentId: preparedEntry.material.lease.intentId,
             leaseToken: preparedEntry.material.lease.leaseToken,
-            errorMessage: appended.error.message,
+            errorMessage: error.message,
+            rejection: error.rejection,
+            fault: documentFault ? "document" : "engine",
           }),
       );
       return {
         cleanupPending: outcomes.filter(
-          (outcome) => outcome === "cleanup_pending",
+          ({ status }) => status === "cleanup_pending",
         ).length,
-        leaseLost: outcomes.filter((outcome) => outcome === "lease_lost")
+        blocked: outcomes.filter(({ status }) => status === "blocked"),
+        leaseLost: outcomes.filter(({ status }) => status === "lease_lost")
           .length,
       };
     });
     result.unknownCleanupPending += abandoned.cleanupPending;
+    result.blocked += abandoned.blocked.length;
     result.leaseLost += abandoned.leaseLost;
+    for (const outcome of abandoned.blocked) {
+      if (outcome.status === "blocked") {
+        logger.warn("corpus_projection.append_blocked", {
+          entity: outcome.entityId,
+          kind: outcome.kind,
+          attempts: outcome.attempts,
+        });
+      }
+    }
     const laterLeases = requests
       .slice(requestIndex + 1)
       .flatMap(({ entries: laterEntries }) =>
@@ -715,8 +813,17 @@ const processPreparedRequests = async ({
         errorMessage: "projection append stopped after an unknown request",
       }),
     );
-    result.status = "append_unknown";
-    return "append_unknown";
+    if (stopForEngine) {
+      result.status = "engine_unavailable";
+    } else if (abandoned.blocked.length > 0) {
+      result.status = "append_blocked";
+    } else {
+      result.status = "append_unknown";
+    }
+    if (stopForEngine) {
+      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
+    }
+    return result.status;
   }
 
   const committed = await measured(
@@ -777,6 +884,7 @@ type ProcessPreparedStreamOptions = {
   retryDelayMs: number;
   payloadRetryLimit: number;
   result: CorpusProjectionAppendCycleResult;
+  payloadReader: typeof loadCorpusProjectionPayload;
 };
 
 /**
@@ -823,7 +931,10 @@ const processPreparedStream = async ({
   retryDelayMs,
   payloadRetryLimit,
   result,
-}: ProcessPreparedStreamOptions): Promise<"completed" | "append_unknown"> => {
+  payloadReader,
+}: ProcessPreparedStreamOptions): Promise<
+  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
+> => {
   let tails = new Map<string, ProjectionAppendTail<PreparedProjectionEntry>>();
   const pendingFailures: ReservationFailure[] = [];
   let consumed = 0;
@@ -854,6 +965,7 @@ const processPreparedStream = async ({
         recordBuildMs: (elapsedMs) => {
           result.timing.documentBuildMs += elapsedMs;
         },
+        payloadReader,
       }),
     }),
   });
@@ -936,7 +1048,7 @@ const processPreparedStream = async ({
         unattemptedLeases: remainingLeases(tails, consumed, materialsReady),
         result,
       });
-      if (requestStatus === "append_unknown") {
+      if (requestStatus !== "completed") {
         return requestStatus;
       }
     }
@@ -1002,6 +1114,7 @@ export const executeCorpusProjectionAppendCycle = async <
   payloadReadConcurrency,
   retryDelayMs,
   payloadRetryLimit,
+  payloadReader = loadCorpusProjectionPayload,
 }: ExecuteCorpusProjectionAppendCycleOptions<Family>): Promise<CorpusProjectionAppendCycleResult> => {
   validateExecutorPolicy(
     payloadReadConcurrency,
@@ -1100,6 +1213,10 @@ export const executeCorpusProjectionAppendCycle = async <
     retryDelayMs,
     payloadRetryLimit,
     result,
+    payloadReader,
   });
+  if (result.status === "completed" && result.blocked > 0) {
+    result.status = "append_blocked";
+  }
   return result;
 };
