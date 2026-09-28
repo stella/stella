@@ -32,6 +32,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationDocuments: "legislation_documents",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
+  statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
 export type PublicLawRelation =
@@ -350,6 +351,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
     retry_after: "required",
+  },
+  statute_sitemap_shards: {
+    country: "required",
+    bucket: "required",
+    lastmod: "required",
+    total: "required",
   },
   legislation_sources: {
     id: "required",
