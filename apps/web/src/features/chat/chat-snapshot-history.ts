@@ -8,6 +8,7 @@ type SnapshotChunk = Extract<
   { type: EventType.MESSAGES_SNAPSHOT }
 >;
 type SnapshotMessage = SnapshotChunk["messages"][number];
+type ReasoningSnapshotMessage = Extract<SnapshotMessage, { role: "reasoning" }>;
 
 /**
  * A snapshot's messages with every message the page posted put back where
@@ -58,6 +59,71 @@ export const keepPostedMessages = (
   return restored;
 };
 
+const nonEmptyString = (value: unknown): string | undefined =>
+  typeof value === "string" && value !== "" ? value : undefined;
+
+/** The provider signature a reasoning message carries: the AG-UI field, or
+ *  TanStack's metadata copy of it. */
+const reasoningSignature = ({
+  encryptedValue,
+  metadata,
+}: ReasoningSnapshotMessage): string | undefined => {
+  const tanstack: unknown =
+    typeof metadata === "object" && metadata !== null
+      ? Reflect.get(metadata, "tanstack")
+      : undefined;
+  return (
+    nonEmptyString(encryptedValue) ??
+    nonEmptyString(
+      typeof tanstack === "object" && tanstack !== null
+        ? Reflect.get(tanstack, "signature")
+        : undefined,
+    )
+  );
+};
+
+/**
+ * A snapshot's messages with each reasoning message as a thinking part that
+ * names its own step.
+ *
+ * The client turns a reasoning message into a thinking part without a step,
+ * and the next thinking step streamed onto that answer takes over the first
+ * such part: TanStack adopts it as a stored part the stream is replaying. A
+ * snapshot closes a run at an interrupt, so the reasoning of the run that
+ * continues the answer is always a new step, and adopting would overwrite the
+ * earlier step's reasoning on the page while the stored thread keeps both.
+ * The part is keyed by the reasoning message's id, the key TanStack itself
+ * gives reasoning that arrives without a step. A message a subagent owns is
+ * left to the client's subagent handling.
+ */
+export const keepReasoningSteps = (
+  snapshot: readonly SnapshotMessage[],
+): SnapshotMessage[] =>
+  snapshot.map((message) => {
+    if (message.role !== "reasoning" || message.subagentRunId !== undefined) {
+      return message;
+    }
+    const signature = reasoningSignature(message);
+    const settled: UIMessage = {
+      id: message.id,
+      parts:
+        message.content === "" && signature === undefined
+          ? []
+          : [
+              {
+                content: message.content,
+                stepId: message.id,
+                type: "thinking",
+                ...(signature === undefined ? {} : { signature }),
+              },
+            ],
+      role: "assistant",
+      ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    };
+    // AG-UI requires `content`; the client reads `parts`.
+    return { ...settled, content: "" };
+  });
+
 /**
  * Which events replace the page's messages, per event type: an upstream event
  * added or renamed fails the typecheck until it is decided here.
@@ -97,9 +163,11 @@ const REPLACES_MESSAGES = {
 } as const satisfies Record<StreamChunk["type"], boolean>;
 
 /**
- * `source` with every snapshot keeping the messages the page posted.
+ * `source` with every snapshot keeping the messages the page posted and the
+ * step of every reasoning it carries.
  *
- * @yields Each chunk of `source`, a snapshot with the posted messages kept.
+ * @yields Each chunk of `source`, a snapshot with the posted messages and the
+ * reasoning steps kept.
  */
 export const keepPostedMessagesInSnapshots = async function* (
   posted: readonly UIMessage[],
@@ -113,6 +181,9 @@ export const keepPostedMessagesInSnapshots = async function* (
     if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
       panic(`${chunk.type} replaces messages but is not a snapshot`);
     }
-    yield { ...chunk, messages: keepPostedMessages(posted, chunk.messages) };
+    yield {
+      ...chunk,
+      messages: keepPostedMessages(posted, keepReasoningSteps(chunk.messages)),
+    };
   }
 };

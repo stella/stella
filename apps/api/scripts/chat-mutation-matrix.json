@@ -561,6 +561,20 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "snapshot-reasoning-keeps-its-step",
+      "fix": "#TBD",
+      "behaviour": "The page takes each reasoning message of an interrupt snapshot as a thinking part with its own step, so the run that continues the answer adds its reasoning beside the earlier step's instead of overwriting it.",
+      "status": "active",
+      "file": "../web/src/features/chat/chat-snapshot-history.ts",
+      "search": "keepPostedMessages(posted, keepReasoningSteps(chunk.messages))",
+      "replace": "keepPostedMessages(posted, chunk.messages)",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps the first step's reasoning when the answer continues after an approval"
+      },
+      "oracle": "chat.live.equals-reload"
     }
   ]
 }

@@ -1410,6 +1410,39 @@ const STEP: StepShape = {
 };
 
 describe("a conversation's live view", () => {
+  test.each([
+    ["an approval", "approval", ["approve"]],
+    ["a client call", "client", []],
+  ] satisfies [string, CallKind, Decision[]][])(
+    "keeps the first step's reasoning when the answer continues after %s",
+    async (_label, call, decisions) => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: [call], reasoning: true }]],
+          "Draft the NDA",
+        ).run(model, real);
+        // The fixture must reach the fault: the answer the run continues
+        // already holds a thinking part when the next step reasons again.
+        expect(
+          real.client
+            .messages()
+            .flatMap(({ parts }) =>
+              parts.filter((part) => part.type === "thinking"),
+            ),
+        ).toHaveLength(1);
+        expect(real.ledger.pending).toHaveLength(1);
+        await new ResolveCards(decisions, [[{ ...STEP, reasoning: true }]]).run(
+          model,
+          real,
+        );
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
   test(
     "keeps every card after an approval on a message that already holds a tool result",
     async () => {
