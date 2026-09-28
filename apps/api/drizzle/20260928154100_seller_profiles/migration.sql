@@ -32,6 +32,7 @@ CREATE UNIQUE INDEX "seller_profiles_org_default_uidx" ON "seller_profiles" USIN
 --> statement-breakpoint
 ALTER TABLE "seller_profiles" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "seller_profiles" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "seller_profiles" TO "stella";--> statement-breakpoint
 CREATE POLICY "organization_select" ON "seller_profiles" AS PERMISSIVE FOR SELECT TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_insert" ON "seller_profiles" AS PERMISSIVE FOR INSERT TO stella WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_update" ON "seller_profiles" AS PERMISSIVE FOR UPDATE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
