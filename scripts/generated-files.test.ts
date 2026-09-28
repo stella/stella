@@ -157,6 +157,11 @@ test("the route generator guard rejects missing script and direct pin", async ()
 });
 
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
+  const requiredIds = [
+    "capability-catalog",
+    "cli-registry",
+    "mcp-surface",
+  ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
@@ -168,7 +173,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     "packages/time/src/format.ts",
   ]) {
     const selected = new Set(generatorsForFiles([file]).map(({ id }) => id));
-    for (const id of ["capability-catalog", "cli-registry", "mcp-surface"]) {
+    for (const id of requiredIds) {
       expect(selected.has(id), `${file} selects ${id}`).toBe(true);
     }
   }
