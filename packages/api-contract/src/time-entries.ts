@@ -50,6 +50,7 @@ type UnknownRecord = Record<string, unknown> & {
   messageCount?: unknown;
   name?: unknown;
   narrative?: unknown;
+  narrativeLanguage?: unknown;
   nextCursor?: unknown;
   noCharge?: unknown;
   rateAtEntry?: unknown;
@@ -111,6 +112,7 @@ const parseTimeEntry = (input: unknown): TimeEntry | null => {
     typeof input.id !== "string" ||
     !isNullableString(input.invoiceNarrative) ||
     typeof input.narrative !== "string" ||
+    !isNullableString(input.narrativeLanguage) ||
     typeof input.noCharge !== "boolean" ||
     !isInteger(input.rateAtEntry) ||
     !isTimeEntrySource(input.source) ||
@@ -137,6 +139,7 @@ const parseTimeEntry = (input: unknown): TimeEntry | null => {
     id: input.id,
     invoiceNarrative: input.invoiceNarrative,
     narrative: input.narrative,
+    narrativeLanguage: input.narrativeLanguage,
     noCharge: input.noCharge,
     rateAtEntry: input.rateAtEntry,
     source: input.source,

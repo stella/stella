@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "napr. Štandard 2025"
     },
     "revertToDraft": "Vrátiť do konceptu",
+    "savedNarratives": {
+      "empty": "Uložte popis na ďalšie použitie.",
+      "save": "Uložiť popis",
+      "title": "Uložené popisy"
+    },
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis na spustenie merania",
     "selectedCount": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",

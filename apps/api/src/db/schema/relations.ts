@@ -5,6 +5,7 @@ import {
   rateEntries,
   rateTables,
   sellerProfiles,
+  savedTimeNarratives,
   timeEntries,
 } from "./billing";
 import {
@@ -133,6 +134,7 @@ export const relations = defineRelations(
     agentSkills,
     agentSkillResources,
     savedSearches,
+    savedTimeNarratives,
     entityViews,
     styleSets,
     user,
