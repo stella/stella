@@ -41,6 +41,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   allowsInstanceModels,
   endOrganizationEvaluation,
+  recordMissingOrganizationAccessStatesWhileUnenforced,
   recordNewOrganizationAccessState,
 } from "@/api/lib/organization-access-state";
 import {
@@ -225,8 +226,7 @@ describe("with FEATURE_ORG_ACCESS_STATE off", () => {
   });
 
   test("a new organization keeps the self-managed-keys path", async () => {
-    await recordNewOrganizationAccessState({
-      db: ownerDb(),
+    await recordNewOrganizationAccessState(ownerDb(), {
       organizationId: createdOrgId,
       now: new Date(),
     });
@@ -237,8 +237,7 @@ describe("with FEATURE_ORG_ACCESS_STATE off", () => {
 
     // Recording again, even once enforcement is on, starts no evaluation.
     await withAccessStateEnforced(async () => {
-      await recordNewOrganizationAccessState({
-        db: ownerDb(),
+      await recordNewOrganizationAccessState(ownerDb(), {
         organizationId: createdOrgId,
         now: new Date(),
       });
@@ -288,8 +287,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
   test("a new organization starts one evaluation of the configured length", async () => {
     await withAccessStateEnforced(async () => {
       const now = new Date();
-      await recordNewOrganizationAccessState({
-        db: ownerDb(),
+      await recordNewOrganizationAccessState(ownerDb(), {
         organizationId: createdOrgId,
         now,
       });
@@ -300,18 +298,17 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       );
 
       // A replay does not restart it.
-      await recordNewOrganizationAccessState({
-        db: ownerDb(),
+      await recordNewOrganizationAccessState(ownerDb(), {
         organizationId: createdOrgId,
         now: new Date(now.getTime() + DAY_IN_MS),
       });
       expect(await readState(createdOrgId)).toEqual(started);
 
       // Ending is once; nothing brings the evaluation back.
-      const end = { db: ownerDb(), organizationId: createdOrgId, now };
-      expect(await endOrganizationEvaluation(end)).toBe(true);
-      expect(await endOrganizationEvaluation(end)).toBe(false);
-      await recordNewOrganizationAccessState(end);
+      const end = { organizationId: createdOrgId, now };
+      expect(await endOrganizationEvaluation(ownerDb(), end)).toBe(true);
+      expect(await endOrganizationEvaluation(ownerDb(), end)).toBe(false);
+      await recordNewOrganizationAccessState(ownerDb(), end);
       expect((await readState(createdOrgId))?.state).toBe(
         ORGANIZATION_ACCESS_STATE.evaluationEnded,
       );
@@ -323,8 +320,7 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
 
   test("ending applies only to a running evaluation", async () => {
     expect(
-      await endOrganizationEvaluation({
-        db: ownerDb(),
+      await endOrganizationEvaluation(ownerDb(), {
         organizationId: selfManagedOrgId,
         now: new Date(),
       }),
@@ -370,5 +366,26 @@ describe("the stored shape", () => {
     );
 
     expect(rows).toEqual([{ organizationId: selfManagedOrgId }]);
+  });
+});
+
+// Last: it records a state for every organization still without one.
+describe("recording missing states", () => {
+  test("fills only missing rows, and only while the state is not enforced", async () => {
+    const evaluating = await readState(evaluatingOrgId);
+
+    await withAccessStateEnforced(async () => {
+      await recordMissingOrganizationAccessStatesWhileUnenforced(ownerDb());
+    });
+    expect(await readState(unrecordedOrgId)).toBeUndefined();
+
+    env.FEATURE_ORG_ACCESS_STATE = false;
+    await recordMissingOrganizationAccessStatesWhileUnenforced(ownerDb());
+    await recordMissingOrganizationAccessStatesWhileUnenforced(ownerDb());
+
+    expect((await readState(unrecordedOrgId))?.state).toBe(
+      ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+    );
+    expect(await readState(evaluatingOrgId)).toEqual(evaluating);
   });
 });

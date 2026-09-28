@@ -88,6 +88,10 @@ import {
   extractMemoriesFromCompactions,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
+  RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
+  recordMissingOrganizationAccessStatesTask,
+} from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
+import {
   RECONCILE_REPORT_EXPORTS_TASK,
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
@@ -155,6 +159,8 @@ const SCHEDULER_TASKS = {
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
   [MEMORY_CURATOR_TASK]: curateAiMemories,
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
+  [RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK]:
+    recordMissingOrganizationAccessStatesTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,

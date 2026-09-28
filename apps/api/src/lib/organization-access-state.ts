@@ -7,10 +7,11 @@
  */
 
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   ORGANIZATION_ACCESS_STATE,
@@ -73,8 +74,7 @@ export const mayUseInstanceModels = async (
   return allowsInstanceModels(row, new Date());
 };
 
-type RecordNewOrganizationAccessStateOptions = {
-  db: Pick<Transaction, "insert">;
+type OrganizationAccessStateChange = {
   organizationId: SafeId<"organization">;
   now: Date;
 };
@@ -85,11 +85,10 @@ type RecordNewOrganizationAccessStateOptions = {
  * self-managed-keys path. The insert never overwrites, so a replayed call
  * cannot start a second evaluation or move an existing organization.
  */
-export const recordNewOrganizationAccessState = async ({
-  db,
-  organizationId,
-  now,
-}: RecordNewOrganizationAccessStateOptions): Promise<void> => {
+export const recordNewOrganizationAccessState = async (
+  db: Pick<Transaction, "insert">,
+  { organizationId, now }: OrganizationAccessStateChange,
+): Promise<void> => {
   const values = env.FEATURE_ORG_ACCESS_STATE
     ? {
         organizationId,
@@ -115,22 +114,15 @@ export const recordNewOrganizationAccessState = async ({
 const addDays = (from: Date, days: number): Date =>
   new Date(from.getTime() + days * DAY_IN_MS);
 
-type EndOrganizationEvaluationOptions = {
-  db: Pick<Transaction, "update">;
-  organizationId: SafeId<"organization">;
-  now: Date;
-};
-
 /**
  * Ends a running evaluation period. Returns whether this call ended it; a
  * repeated call, or one for an organization in any other state, changes
  * nothing.
  */
-export const endOrganizationEvaluation = async ({
-  db,
-  organizationId,
-  now,
-}: EndOrganizationEvaluationOptions): Promise<boolean> => {
+export const endOrganizationEvaluation = async (
+  db: Pick<Transaction, "update">,
+  { organizationId, now }: OrganizationAccessStateChange,
+): Promise<boolean> => {
   const ended = await db
     .update(organizationAccessStates)
     .set({
@@ -148,4 +140,36 @@ export const endOrganizationEvaluation = async ({
     )
     .returning({ organizationId: organizationAccessStates.organizationId });
   return ended.length > 0;
+};
+
+/**
+ * Records `self_managed_keys` for every organization that has no state yet.
+ * An organization gets no row when a process without the creation step
+ * created it (an older task during a rolling deploy); while the state is not
+ * enforced, the self-managed-keys path is exactly what it had. Existing rows
+ * are never changed, so this is safe to run repeatedly and concurrently.
+ */
+export const recordMissingOrganizationAccessStates = async (
+  db: Pick<Transaction, "execute">,
+): Promise<void> => {
+  await db.execute(sql`
+    INSERT INTO ${organizationAccessStates} (organization_id, state)
+    SELECT ${organization.id}, ${ORGANIZATION_ACCESS_STATE.selfManagedKeys}
+    FROM ${organization}
+    ON CONFLICT (organization_id) DO NOTHING
+  `);
+};
+
+/**
+ * The recurring convergence step: while the flag is off, every organization
+ * without a state was created without enforcement. With the flag on nothing
+ * is recorded, so a missing row stays denied.
+ */
+export const recordMissingOrganizationAccessStatesWhileUnenforced = async (
+  db: Pick<Transaction, "execute">,
+): Promise<void> => {
+  if (env.FEATURE_ORG_ACCESS_STATE) {
+    return;
+  }
+  await recordMissingOrganizationAccessStates(db);
 };

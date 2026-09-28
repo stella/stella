@@ -24,11 +24,7 @@ if (organizationId === null) {
 const db = openMaintenanceDb({ readOnly: false });
 const ended = await db.transaction(
   async (tx) =>
-    await endOrganizationEvaluation({
-      db: tx,
-      organizationId,
-      now: new Date(),
-    }),
+    await endOrganizationEvaluation(tx, { organizationId, now: new Date() }),
 );
 
 console.log(

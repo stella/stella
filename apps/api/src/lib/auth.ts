@@ -857,8 +857,7 @@ const createAuth = () => {
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
     recordAccessState: async (organizationId: SafeId<"organization">) =>
-      await recordNewOrganizationAccessState({
-        db: rootDb,
+      await recordNewOrganizationAccessState(rootDb, {
         organizationId,
         now: new Date(),
       }),

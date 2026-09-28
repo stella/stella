@@ -116,8 +116,7 @@ const ensureSmokePrincipal = async (
         ...org,
         createdAt: now,
       });
-      await recordNewOrganizationAccessState({
-        db: tx,
+      await recordNewOrganizationAccessState(tx, {
         organizationId: brandPersistedOrganizationId(org.id),
         now,
       });

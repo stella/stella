@@ -192,8 +192,7 @@ export const ensureOrganizationExists = async (organizationId: string) => {
   // Both are idempotent.
   const seededOrganizationId = toSafeId<"organization">(org.id);
   await db.transaction(async (tx) => {
-    await recordNewOrganizationAccessState({
-      db: tx,
+    await recordNewOrganizationAccessState(tx, {
       organizationId: seededOrganizationId,
       now,
     });
