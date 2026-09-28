@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/lists/verification/contract";
 import type {
   ClaimRef,
+  ClaimType,
   ClaimVerdict,
   VerificationEvidenceFact,
 } from "@/api/lib/lists/verification/contract";
@@ -38,6 +39,7 @@ const CONCURRENCY = 3;
 const GRADED_VERDICTS = [
   ...SCORED_CLAIM_STATES,
   "nocover",
+  "notverifiable",
   "recordconflict",
 ] as const;
 
@@ -69,6 +71,15 @@ type RawGrade = v.InferOutput<typeof rawGradeSchema>;
 
 export type ClaimGrade = ClaimVerdict & { refs: ClaimRef[] };
 
+/**
+ * The type a graded claim is stored with. Extraction sets aside the claims it
+ * recognises as untestable, but the grader can still find that one taken for
+ * a fact cannot be tested; that claim is stored as unverifiable, the only type
+ * the state may carry.
+ */
+export const gradedClaimType = (grade: ClaimGrade): ClaimType =>
+  grade.state === "notverifiable" ? "unverifiable" : "fact";
+
 /** A claim to grade, with the text of the block it sits in for meaning. */
 type GradeableClaim = { key: string; text: string; context: string };
 
@@ -78,11 +89,12 @@ const CLAIM_CONTEXT_MAX = 1500;
 const SYSTEM_PROMPT = `You check claims from a legal document against a record of evidence (the facts), one claim at a time.
 
 For each claim choose a verdict:
-- supported: the facts confirm it.
-- tension: the facts partly fit but sit uneasily with it (a different date, amount or emphasis).
-- contradicted: the facts refute it.
-- nocover: no fact bears on it. This is a normal answer, not a failure; never stretch a fact to avoid it.
-- recordconflict: two facts disagree with each other on the exact point the claim rests on, so the verdict depends on which record governs.
+- supported: the facts confirm the claim as worded, including its approximate or qualified terms.
+- tension: relevant facts partly fit or challenge the claim without conclusively refuting it (for example, an ambiguous source, date or interpretation).
+- contradicted: the facts directly establish the opposite of the claim as worded, taking its qualifications into account.
+- nocover: the claim is checkable, but no fact directly bears on it. Shared people or subject matter alone is not coverage; a claim framed "to my knowledge" can still be checkable.
+- notverifiable: the claim itself is an opinion, hypothetical expectation or private judgment that evidence cannot test. Lack of evidence for a checkable claim is nocover instead.
+- recordconflict: two facts give incompatible accounts of the same material point in a transaction or disclosure, so the claim's verdict changes with the governing record. If both accounts support the claim as worded, use supported or tension instead.
 
 score is how strongly the facts support the claim, 0 to 100, for supported, tension and contradicted only; null otherwise. refs lists the facts the verdict rests on by factId, with rel supports, conflicts, or record (relevant context that neither supports nor conflicts). supported, tension and contradicted must cite at least one fact.
 
@@ -146,6 +158,14 @@ const normalizeGrade = (
         score: null,
         recordConflict: null,
         refs: refs.filter((ref) => ref.rel === "record"),
+      });
+    }
+    case "notverifiable": {
+      return Result.ok({
+        state: raw.verdict,
+        score: null,
+        recordConflict: null,
+        refs: [],
       });
     }
     case "recordconflict": {

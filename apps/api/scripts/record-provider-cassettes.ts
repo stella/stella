@@ -23,10 +23,10 @@
 // conversation, on one model.
 //
 // Nothing but the synthetic prompts is sent. Request bodies and request
-// headers are never stored; response headers are kept only when an SDK reads
-// them; response and request identifiers are replaced, one placeholder per
-// value; a response that
-// contains the key fails the recording. Review the diff before committing.
+// headers are never stored, only the prompt; response headers are kept only
+// when an SDK reads them; response and request identifiers are replaced, one
+// placeholder per value; a response that contains the key fails the
+// recording. Review the diff before committing.
 
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
@@ -59,6 +59,7 @@ import {
   findWireContractViolations,
   replayWireScenario,
   runWireScenario,
+  scenarioPrompt,
   UNKNOWN_MODEL_ID,
   wireChatModel,
 } from "@/api/tests/helpers/provider-wire-contract";
@@ -591,6 +592,7 @@ export const recordOne = async ({
     expect: expectationFor(scenario, recorder.exchanges),
     format: 1,
     model,
+    prompt: scenarioPrompt(provider, scenario),
     provider,
     recordedAt: new Date().toISOString(),
     scenario,

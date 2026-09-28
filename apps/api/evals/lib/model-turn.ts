@@ -10,7 +10,7 @@ import type { TokenUsage } from "@tanstack/ai";
 import { EventType } from "@tanstack/ai";
 
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
+import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 
 export type EvalModelTurnResult = {
   /** The provider's run error, the stream/`chat()` rejection message, or the
@@ -75,7 +75,7 @@ export const runEvalModelTurn = async ({
         continue;
       }
       if (chunk.type === EventType.RUN_FINISHED) {
-        usage = tokenUsageFromRunFinishedChunk(chunk) ?? null;
+        usage = tokenUsageFromTerminalChunk(chunk) ?? null;
       }
     }
   } catch (caughtError: unknown) {

@@ -42,7 +42,7 @@ import {
 } from "@/api/lib/tanstack-ai-generate";
 import {
   addTokenUsage,
-  tokenUsageFromRunFinishedChunk,
+  tokenUsageFromTerminalChunk,
 } from "@/api/lib/tanstack-ai-usage";
 
 type RunSubagentMetering = {
@@ -323,10 +323,11 @@ export const runSubagent = async (
   let runErrorMessage: string | null = null;
   for await (const chunk of stream) {
     if (chunk.type === EventType.RUN_FINISHED) {
-      usage = addTokenUsage(usage, tokenUsageFromRunFinishedChunk(chunk));
+      usage = addTokenUsage(usage, tokenUsageFromTerminalChunk(chunk));
       finishReason = finishReasonOf(chunk);
     }
     if (chunk.type === EventType.RUN_ERROR) {
+      usage = addTokenUsage(usage, tokenUsageFromTerminalChunk(chunk));
       runErrorMessage = chunk.message;
     }
     processor.processChunk(chunk);

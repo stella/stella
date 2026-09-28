@@ -236,7 +236,7 @@ const seedFixtures = async ({ rootDb, ingestionDb }: CaseLawWriteHandles) => {
               decisionDate:
                 d.decision_date === null
                   ? null
-                  : canonicalDecisionDate(d.decision_date),
+                  : canonicalDecisionDate(d.decision_date, d.country),
               decisionType: d.decision_type,
               fulltext,
               sections: d.sections,

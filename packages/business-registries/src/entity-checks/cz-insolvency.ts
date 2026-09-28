@@ -11,7 +11,7 @@ import { EntityCheckCancelledError, unavailable } from "./result.js";
 import type {
   EntityCheckSource,
   EntityCheckSourceError,
-  EntityCheckSubject,
+  CheckedEntityCheckSubject,
   EntityCheckUnavailableError,
   SourceAnswer,
 } from "./result.js";
@@ -259,12 +259,12 @@ const parseIsirAnswer = (
   });
 
 type IsirQuery = {
-  subject: EntityCheckSubject;
+  subject: CheckedEntityCheckSubject;
   pendingOnly: boolean;
   signal: AbortSignal | undefined;
 };
 
-const subjectCriteria = (subject: EntityCheckSubject): string => {
+const subjectCriteria = (subject: CheckedEntityCheckSubject): string => {
   switch (subject.type) {
     case "company-id": {
       return `<ic>${escapeXml(subject.value)}</ic><maxRelevanceVysledku>${RELEVANCE.companyId}</maxRelevanceVysledku>`;
@@ -280,6 +280,11 @@ const subjectCriteria = (subject: EntityCheckSubject): string => {
         `<vyhledatBezDiakritiky>T</vyhledatBezDiakritiky>`,
         `<maxRelevanceVysledku>${RELEVANCE.nameAndBirthDate}</maxRelevanceVysledku>`,
       ].join("");
+    }
+    case "tax-id": {
+      // The service has no tax ID criterion; the runner answers not-covered
+      // before a query is built.
+      return panic("ISIR cannot be queried by tax ID");
     }
     default: {
       subject satisfies never;
@@ -338,9 +343,11 @@ const phaseOf = (
  * proceeding, pending or ended. Anything but an explicit answer is an error.
  */
 export const checkCzInsolvency = async (
-  subject: EntityCheckSubject,
+  subject: CheckedEntityCheckSubject,
   signal: AbortSignal | undefined,
-): Promise<Result<SourceAnswer<CzInsolvencyFinding>, EntityCheckSourceError>> =>
+): Promise<
+  Result<SourceAnswer<CzInsolvencyFinding, null>, EntityCheckSourceError>
+> =>
   await Result.gen(async function* () {
     const all = yield* Result.await(
       queryIsir({ subject, pendingOnly: false, signal }),
@@ -349,7 +356,8 @@ export const checkCzInsolvency = async (
       return Result.ok({
         type: "clear",
         sourceDataAsOf: all.syncedAt,
-      } satisfies SourceAnswer<CzInsolvencyFinding>);
+        record: null,
+      } satisfies SourceAnswer<CzInsolvencyFinding, null>);
     }
     // Co-debtors (for example a spouse in a joint proceeding) are added by
     // the service without matching the criteria; they are not the subject.
@@ -385,7 +393,8 @@ export const checkCzInsolvency = async (
       sourceDataAsOf: all.syncedAt,
       totalMatches: all.totalMatches,
       findings: [first, ...rest],
-    } satisfies SourceAnswer<CzInsolvencyFinding>);
+      record: null,
+    } satisfies SourceAnswer<CzInsolvencyFinding, null>);
   });
 
 /** Keep a source failure as a value; let cancellation end the check. */

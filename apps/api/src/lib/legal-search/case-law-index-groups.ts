@@ -38,6 +38,7 @@ export const CASE_LAW_INDEX_GROUP_OF = {
   HUN: "hun",
   POL: "pol",
   SVK: "cs_sk",
+  USA: "usa",
 } as const satisfies {
   [J in CaseLawJurisdiction]: Lowercase<J> | `${string}_${string}`;
 };

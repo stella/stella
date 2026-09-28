@@ -4,6 +4,7 @@
   "scenario": "parallel-tool-calls",
   "source": "recorded",
   "recordedAt": "2026-09-27T14:31:59.034Z",
+  "prompt": "Call the mcp__external__delete tool twice in parallel, in one response: once with name \"draft\" and once with name \"memo\". Do not write any text.",
   "model": "gpt-6-luna",
   "exchanges": [
     {

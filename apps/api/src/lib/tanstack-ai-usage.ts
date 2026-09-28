@@ -8,7 +8,12 @@ import type {
 } from "@tanstack/ai";
 import { tanstackMetadata } from "@tanstack/ai/adapter-internals";
 
-type RunFinishedChunk = Extract<StreamChunk, { type: "RUN_FINISHED" }>;
+/** A run's terminal event: a finish, or an error that may still report the
+ *  usage the provider supplied before the run failed. */
+type RunTerminalChunk = Extract<
+  StreamChunk,
+  { type: "RUN_ERROR" } | { type: "RUN_FINISHED" }
+>;
 
 const nonEmptyDetails = <T extends object>(details: T): T | undefined =>
   Object.keys(details).length === 0 ? undefined : details;
@@ -19,9 +24,11 @@ const nonEmptyDetails = <T extends object>(details: T): T | undefined =>
  * Run events may expose the provider/model-neutral counters in `usage[0]`
  * while keeping non-spec details in `metadata.tanstack.usage`. Older or
  * in-process adapters may still emit the rich TokenUsage object directly.
+ * A run error reads the same way: a provider that reported usage before the
+ * run failed billed it, so it is metered like a finished run's.
  */
-export const tokenUsageFromRunFinishedChunk = (
-  chunk: RunFinishedChunk,
+export const tokenUsageFromTerminalChunk = (
+  chunk: RunTerminalChunk,
 ): TokenUsage | undefined => {
   if (chunk.usage !== undefined && !Array.isArray(chunk.usage)) {
     return chunk.usage;

@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Overené voči {count, plural, one {# faktu} few {# faktom} many {# faktom} other {# faktom}} v stave ku dňu {checkedAt}. Neskoršie úpravy zoznamu toto overenie nemenia.",
       "failedTitle": "Overenie zlyhalo",
+      "history": {
+        "label": "História overení",
+        "loadFailed": "Predchádzajúce overenia tohto dokumentu sa nepodarilo načítať."
+      },
       "inProgress": "Porovnávanie tvrdení dokumentu s faktami zoznamu…",
       "loadFailed": "Toto overenie sa nepodarilo načítať.",
       "noClaims": "V tomto dokumente sa nenašli žiadne tvrdenia.",

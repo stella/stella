@@ -14,6 +14,13 @@ import { isRecord } from "@/api/lib/type-guards";
 // a fresh one before anything else reads it. The provider reads the fresh id
 // back in later history, which is sound: an id is opaque as long as a call
 // and its result carry the same one.
+//
+// The history a request carries is only a window of the thread: the send
+// window and compaction leave older turns out, and compaction inside a run
+// can drop the run's own earlier calls. So the ids a call must not reuse come
+// from a `ToolCallIdLedger` the caller seeds with every id the thread holds
+// and hands to each request of the run through `metadata`; a request without
+// one falls back to the ids its own history carries.
 
 /**
  * Where each chunk type carries a tool call id: the call a chunk starts, the
@@ -60,16 +67,64 @@ export const CALL_ID_CARRIER = {
 } as const satisfies Record<StreamChunk["type"], CallIdCarrier>;
 
 /** The call ids `messages` already hold. */
-const callIdsOf = (messages: readonly ModelMessage[]): Set<string> =>
-  new Set(
-    messages.flatMap((message) => [
-      ...arrayOrEmpty(message.toolCalls).map(({ id }) => id),
-      ...(message.toolCallId === undefined ? [] : [message.toolCallId]),
-    ]),
-  );
+const callIdsOf = (messages: readonly ModelMessage[]): string[] =>
+  messages.flatMap((message) => [
+    ...arrayOrEmpty(message.toolCalls).map(({ id }) => id),
+    ...(message.toolCallId === undefined ? [] : [message.toolCallId]),
+  ]);
+
+/**
+ * Every tool call id one thread holds, the ones its current run starts
+ * included. One ledger serves every request of one run (fallback attempts
+ * too), so a call started early in the run stays taken after compaction drops
+ * it from a later request's history.
+ */
+export class ToolCallIdLedger {
+  readonly #taken: Set<string>;
+
+  constructor(threadCallIds: Iterable<string>) {
+    this.#taken = new Set(threadCallIds);
+  }
+
+  has(id: string): boolean {
+    return this.#taken.has(id);
+  }
+
+  take(id: string): void {
+    this.#taken.add(id);
+  }
+}
+
+const TOOL_CALL_ID_LEDGER_METADATA_KEY = "stellaToolCallIdLedger";
+
+/**
+ * The `metadata` a run hands the engine so each of its requests reads
+ * `ledger`. The engine passes `metadata` to every adapter request and never
+ * onto the provider wire.
+ */
+export const toolCallIdLedgerMetadata = (ledger: ToolCallIdLedger) => ({
+  [TOOL_CALL_ID_LEDGER_METADATA_KEY]: ledger,
+});
+
+type ToolCallIdRequest = {
+  messages: readonly ModelMessage[];
+  metadata?: Record<string, unknown> | undefined;
+};
+
+/** The run's ledger with `request`'s history taken, or one for the request
+ *  alone when the caller keeps none. */
+const ledgerFor = ({ messages, metadata }: ToolCallIdRequest) => {
+  const carried = metadata?.[TOOL_CALL_ID_LEDGER_METADATA_KEY];
+  const ledger =
+    carried instanceof ToolCallIdLedger ? carried : new ToolCallIdLedger([]);
+  for (const id of callIdsOf(messages)) {
+    ledger.take(id);
+  }
+  return ledger;
+};
 
 /** `id` with the first numeric suffix no call in `taken` holds. */
-const freshCallId = (id: string, taken: ReadonlySet<string>): string => {
+const freshCallId = (id: string, taken: ToolCallIdLedger): string => {
   for (let suffix = 2; ; suffix += 1) {
     const candidate = `${id}_${String(suffix)}`;
     if (!taken.has(candidate)) {
@@ -79,17 +134,18 @@ const freshCallId = (id: string, taken: ReadonlySet<string>): string => {
 };
 
 /**
- * `chunks` with every tool call id unique within the thread `history` belongs
- * to: a call whose id `history` or an earlier call of this response already
- * holds gets a fresh one, and every later chunk that names it follows.
+ * `chunks` with every tool call id unique within the thread `request` belongs
+ * to: a call whose id the run's ledger, the request's history, or an earlier
+ * call of this response already holds gets a fresh one, and every later chunk
+ * that names it follows.
  *
  * @yields Each chunk of `chunks`, its call ids unique within the thread.
  */
 export const withUniqueToolCallIds = async function* (
   chunks: AsyncIterable<StreamChunk>,
-  history: readonly ModelMessage[],
+  request: ToolCallIdRequest,
 ): AsyncIterable<StreamChunk> {
-  const taken = callIdsOf(history);
+  const taken = ledgerFor(request);
   const renamed = new Map<string, string>();
   const idOf = (id: string): string => renamed.get(id) ?? id;
   for await (const chunk of chunks) {
@@ -100,12 +156,12 @@ export const withUniqueToolCallIds = async function* (
           panic(`${chunk.type} does not start a tool call`);
         }
         if (!taken.has(chunk.toolCallId)) {
-          taken.add(chunk.toolCallId);
+          taken.take(chunk.toolCallId);
           yield chunk;
           break;
         }
         const fresh = freshCallId(chunk.toolCallId, taken);
-        taken.add(fresh);
+        taken.take(fresh);
         renamed.set(chunk.toolCallId, fresh);
         yield { ...chunk, toolCallId: fresh };
         break;

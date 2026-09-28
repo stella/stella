@@ -25,6 +25,7 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "unknown"
+    "errorKind": "unknown",
+    "usageAfterFailure": "Usage arrives in the chunk after the one that fails the run."
   }
 }

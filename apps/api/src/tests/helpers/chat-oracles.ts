@@ -19,6 +19,10 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A turn's run does not depend on the request that started it: once the
+   *  handler hands its response back, nothing reads the request, and its end
+   *  cuts no turn short whose response is read to the end. */
+  runOutlivesRequest: "chat.run.outlives-request",
   /** A messages snapshot on the wire holds each message id and tool call
    *  once, before any client folds it. */
   wireSnapshotIdentity: "chat.wire.snapshot-identity",
@@ -83,7 +87,8 @@ export const CHAT_ORACLE = {
   /** Each tool call ends once with input that satisfies the tool's
    *  declared schema. */
   providerWireToolInput: "chat.provider-wire.tool-input",
-  /** A finished run reports its token usage. */
+  /** A finished run reports its token usage, and a failed one the usage the
+   *  provider reported before it failed. */
   providerWireUsage: "chat.provider-wire.usage",
   /** A provider failure reaches the run error with its message and
    *  classification. */
