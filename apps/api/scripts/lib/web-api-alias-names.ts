@@ -10,11 +10,17 @@
 //   member order follows the compiler's type ids, and inserting a member would
 //   otherwise shift every later one.
 // - A type reached along several paths is named from the smallest one in plain
-//   string order, never from the first one the traversal visited.
-// - Shared types that end up with the same path (members of one union, say)
-//   are told apart by a hash of everything they print, and share the name
-//   when they print the same type. Only such a type is renamed when something
-//   inside it changes; the types around it keep their names.
+//   string order, never from the first one the traversal visited. A new reach
+//   along a smaller path does rename it: naming by content alone would instead
+//   rename a type, and every alias around it, whenever anything inside it
+//   changes, which happens far more often.
+// - A union or intersection member shares its path with every other member
+//   there, so its name also carries a hash of everything it prints, and
+//   members that print the same share the name. That holds from the first
+//   member on, so adding a member renames none. Other shared types that end up
+//   with the same path are told apart the same way. Only such a type is
+//   renamed when something inside it changes; the types around it keep their
+//   names.
 
 import { panic } from "better-result";
 import { createHash } from "node:crypto";
@@ -137,25 +143,97 @@ export const canonicalPaths = (
 };
 
 /**
+ * The strongly connected components of the graph formed by the tokens in
+ * node bodies (Tarjan, iterative). Two nodes share a component when each
+ * reaches the other.
+ */
+const componentsOf = (nodes: readonly AliasGraphNode[]): number[] => {
+  const children = nodes.map((node) =>
+    [...node.body.matchAll(TOKEN)].map((match) => Number(match[1])),
+  );
+  const index: (number | undefined)[] = Array.from({ length: nodes.length });
+  const low: number[] = Array.from({ length: nodes.length }, () => 0);
+  const component: number[] = Array.from({ length: nodes.length }, () => -1);
+  const stack: number[] = [];
+  const onStack = new Set<number>();
+  let nextIndex = 0;
+  let nextComponent = 0;
+  for (const [start] of nodes.entries()) {
+    if (index[start] !== undefined) {
+      continue;
+    }
+    const frames: { id: number; child: number }[] = [{ id: start, child: 0 }];
+    index[start] = nextIndex;
+    low[start] = nextIndex;
+    nextIndex += 1;
+    stack.push(start);
+    onStack.add(start);
+    while (frames.length > 0) {
+      const frame = frames.at(-1) ?? panic("tarjan frame");
+      const next = children[frame.id]?.[frame.child];
+      if (next !== undefined) {
+        frame.child += 1;
+        const nextSeen = index[next];
+        if (nextSeen === undefined) {
+          index[next] = nextIndex;
+          low[next] = nextIndex;
+          nextIndex += 1;
+          stack.push(next);
+          onStack.add(next);
+          frames.push({ id: next, child: 0 });
+        } else if (onStack.has(next)) {
+          low[frame.id] = Math.min(low[frame.id] ?? 0, nextSeen);
+        }
+        continue;
+      }
+      frames.pop();
+      const parent = frames.at(-1);
+      if (parent !== undefined) {
+        low[parent.id] = Math.min(low[parent.id] ?? 0, low[frame.id] ?? 0);
+      }
+      if (low[frame.id] === index[frame.id]) {
+        for (;;) {
+          const member = stack.pop() ?? panic("tarjan stack underflow");
+          onStack.delete(member);
+          component[member] = nextComponent;
+          if (member === frame.id) {
+            break;
+          }
+        }
+        nextComponent += 1;
+      }
+    }
+  }
+  return component;
+};
+
+/**
  * A hash of everything a node prints, nested nodes included, so two nodes
  * share it only when they print the same type. A cycle back to a node still
- * being hashed is written as its distance up the stack; a hash that depends on
- * such an outer node is not cached, since it differs by where it is reached.
+ * being hashed is written as its distance up the stack, so a recursive node
+ * hashes as the tree unfolded from it. A cached hash is that unfolding too,
+ * so it stands in only for a node outside every cycle through the stack: a
+ * node of such a cycle is unfolded again from where it is reached, or the
+ * hash would depend on which member of the cycle was hashed first.
  */
 const structuralHashes = (nodes: readonly AliasGraphNode[]) => {
+  const component = componentsOf(nodes);
   const cache = new Map<number, string>();
   const stack: number[] = [];
+  const componentsOnStack = new Map<number, number>();
   const visit = (id: number): { hash: string; outermost: number } => {
     const onStack = stack.lastIndexOf(id);
     if (onStack !== -1) {
       return { hash: `^${stack.length - 1 - onStack}`, outermost: onStack };
     }
+    const own = component[id] ?? panic(`missing component ${id}`);
     const cached = cache.get(id);
-    if (cached !== undefined) {
+    if (cached !== undefined && !componentsOnStack.has(own)) {
       return { hash: cached, outermost: Number.POSITIVE_INFINITY };
     }
     const depth = stack.length;
     stack.push(id);
+    componentsOnStack.set(own, (componentsOnStack.get(own) ?? 0) + 1);
     let outermost = Number.POSITIVE_INFINITY;
     const body = (nodes[id] ?? panic(`missing node ${id}`)).body.replaceAll(
       TOKEN,
@@ -166,6 +244,12 @@ const structuralHashes = (nodes: readonly AliasGraphNode[]) => {
       },
     );
     stack.pop();
+    const remaining = (componentsOnStack.get(own) ?? 1) - 1;
+    if (remaining === 0) {
+      componentsOnStack.delete(own);
+    } else {
+      componentsOnStack.set(own, remaining);
+    }
     const hash = createHash("sha256").update(body).digest("hex");
     if (outermost >= depth) {
       cache.set(id, hash);
@@ -176,11 +260,19 @@ const structuralHashes = (nodes: readonly AliasGraphNode[]) => {
   return (id: number): string => visit(id).hash;
 };
 
+/** Whether a path ends at a union or intersection member position. */
+const endsAtMemberPosition = (nodePath: string): boolean =>
+  nodePath === "|" ||
+  nodePath === "&" ||
+  nodePath.endsWith("/|") ||
+  nodePath.endsWith("/&");
+
 /**
  * Names every shared (referenced more than once) or recursive node. The rest
  * are inlined by the printer and need no name. A path held by one shared node
- * names it; nodes sharing a path are told apart by what they print, and nodes
- * that print the same type share the name.
+ * names it; a union or intersection member, or a node sharing its path with
+ * others, is also named by what it prints, and nodes that print the same type
+ * share the name.
  */
 export const nameAliases = (
   nodes: readonly AliasGraphNode[],
@@ -203,7 +295,7 @@ export const nameAliases = (
   for (const [nodePath, group] of byPath) {
     for (const id of group) {
       const key =
-        group.length === 1
+        group.length === 1 && !endsAtMemberPosition(nodePath)
           ? nodePath
           : `${nodePath}\u0000${structuralHash(id)}`;
       const name = hashName(key);

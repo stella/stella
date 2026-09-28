@@ -16,8 +16,8 @@
 //   symbol the package does not export.
 // - A type reached more than once, or recursively, becomes a local alias named
 //   from a hash of its smallest path, with no union or intersection positions
-//   in it (see lib/web-api-alias-names.ts), so adding a route renames nothing
-//   elsewhere.
+//   in it (see lib/web-api-alias-names.ts), so adding a route renames only a
+//   type it reaches along a smaller path than before.
 // - Anything the printer cannot express structurally falls back to
 //   `typeToString` and is reported; the identity check then decides.
 // - A route's `response` prints as the client reads it: JSON carries a `Date`

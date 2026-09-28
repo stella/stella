@@ -166,4 +166,47 @@ describe("nameAliases", () => {
     const names = nameAliases(nodes, edges);
     expect(names.get(0)).toBe(names.get(1));
   });
+  test("adding a member under a union renames none already there", () => {
+    const shared = { body: "{ id: string }", references: 2, recursive: false };
+    const alone = nameAliases(
+      [shared],
+      [{ from: undefined, to: 0, path: "R/|" }],
+    );
+    const joined = nameAliases(
+      [shared, { body: "{ code: number }", references: 2, recursive: false }],
+      [
+        { from: undefined, to: 0, path: "R/|" },
+        { from: undefined, to: 1, path: "R/|" },
+      ],
+    );
+    expect(joined.get(0)).toBe(alone.get(0));
+  });
+
+  test("mutually recursive union members keep their names in any order", () => {
+    // `A = { a: B }` and `B = { b: A }`, both members of one union, numbered
+    // in either order.
+    const named = (order: readonly ("A" | "B")[]) => {
+      const idOf = (name: "A" | "B") => order.indexOf(name);
+      const bodyOf = (name: "A" | "B") =>
+        name === "A"
+          ? `{ a: ${TOKEN(idOf("B"))} }`
+          : `{ b: ${TOKEN(idOf("A"))} }`;
+      const names = nameAliases(
+        order.map((name) => ({
+          body: bodyOf(name),
+          references: 2,
+          recursive: true,
+        })),
+        [
+          ...order.map((_, id) => ({ from: undefined, to: id, path: "R/|" })),
+          { from: idOf("A"), to: idOf("B"), path: "a" },
+          { from: idOf("B"), to: idOf("A"), path: "b" },
+        ],
+      );
+      return { A: names.get(idOf("A")), B: names.get(idOf("B")) };
+    };
+    const ab = named(["A", "B"]);
+    expect(ab.A).not.toBe(ab.B);
+    expect(named(["B", "A"])).toEqual(ab);
+  });
 });
