@@ -55,6 +55,7 @@ import {
   isDocumentAst,
 } from "@/api/lib/case-law/document-ast";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { settleReservedCaseLawCorpusUpload } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
@@ -882,9 +883,7 @@ export const claimDocumentFetch = async (
     const lockResult: unknown = await tx.execute(
       sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext(${decisionId})) AS locked`,
     );
-    const lockRow: unknown = Array.isArray(lockResult)
-      ? lockResult.at(0)
-      : undefined;
+    const lockRow = executedRows(lockResult).at(0);
     if (!isRecord(lockRow) || lockRow["locked"] !== true) {
       return { status: "held" };
     }
@@ -910,9 +909,7 @@ export const claimDocumentFetch = async (
       RETURNING source_hash AS "sourceHash"
     `);
 
-    const claimedRow: unknown = Array.isArray(claimed)
-      ? claimed.at(0)
-      : undefined;
+    const claimedRow = executedRows(claimed).at(0);
     if (!isRecord(claimedRow)) {
       return { status: "held" };
     }
