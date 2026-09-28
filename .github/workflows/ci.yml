@@ -799,6 +799,15 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-contract-changeset.ts --base "origin/$BASE_REF"
 
+      - name: SQL performance suppression summary
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && (github.event_name == 'pull_request'
+          || github.event_name == 'merge_group')
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: bun scripts/sql-perf-suppressions.ts
+
       - name: Release marketing freshness warning
         if: >-
           github.event_name == 'pull_request'
@@ -855,6 +864,14 @@ jobs:
         run: |
           bun test scripts/design-lint-baseline.test.ts scripts/oxlint-config-inputs.test.ts
           bun scripts/design-lint-baseline.ts --check
+
+      - name: SQL performance baseline
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+        run: |
+          bun test scripts/sql-perf-detector.test.ts scripts/sql-perf-baseline.test.ts
+          bun scripts/sql-perf-baseline.ts --check
 
       - name: Oxlint override union guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'

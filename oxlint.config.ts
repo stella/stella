@@ -27,6 +27,10 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import {
+  SQL_PERF_LINT_EXCLUDES,
+  SQL_PERF_LINT_FILES,
+} from "./scripts/sql-perf-scope.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -1197,6 +1201,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
+    "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
@@ -3290,6 +3295,16 @@ export default defineConfig({
         "require-fetch-timeout/require-fetch-timeout": "error",
         "require-escape-like/require-escape-like": "error",
       },
+    },
+    {
+      // The baseline counter reads the same scope.
+      files: SQL_PERF_LINT_FILES,
+      excludeFiles: SQL_PERF_LINT_EXCLUDES,
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/sql-perf.fixture.ts"],
+      rules: { "sql-perf/sql-perf": "error" },
     },
     {
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
