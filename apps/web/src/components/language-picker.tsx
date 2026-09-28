@@ -1,6 +1,5 @@
-import { GlobeIcon } from "lucide-react";
-
 import { Button } from "@stll/ui/button";
+import { GlobeIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuPopup,

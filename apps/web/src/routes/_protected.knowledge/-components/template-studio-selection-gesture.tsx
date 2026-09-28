@@ -1,17 +1,6 @@
 import type { ReactNode, RefObject } from "react";
 import { useCallback, useRef, useState } from "react";
 
-import type { LucideIcon } from "lucide-react";
-import {
-  BracesIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  RepeatIcon,
-  SplitIcon,
-  TextQuoteIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import type { EditorState } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useDebouncedCallback } from "use-debounce";
@@ -23,6 +12,17 @@ import {
 } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import type { LucideIcon } from "@stll/ui/icons";
+import {
+  BracesIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  RepeatIcon,
+  SplitIcon,
+  TextQuoteIcon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -926,7 +926,7 @@ const GestureAiRow = ({
     >
       <TypeIcon className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">{label}</span>
-      <WandSparklesIcon className="ms-auto size-3.5 shrink-0" />
+      <AiActionIcon className="ms-auto size-3.5 shrink-0" />
     </Button>
   );
 };

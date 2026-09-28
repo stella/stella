@@ -1,13 +1,13 @@
+import { useTranslations } from "use-intl";
+
+import { Temporal } from "@stll/time";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   CalendarIcon,
   MinusIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Temporal } from "@stll/time";
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import {

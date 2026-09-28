@@ -1,12 +1,12 @@
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   Columns3Icon,
   Rows3Icon,
   Settings2Icon,
   SparklesIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Select,

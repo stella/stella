@@ -2,12 +2,12 @@ import { useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { InfoIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { InfoIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";

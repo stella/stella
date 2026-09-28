@@ -11,16 +11,16 @@
 
 import { useState } from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   EyeOffIcon,
   ListMinusIcon,
   PencilLineIcon,
   RefreshCwIcon,
   Trash2Icon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";

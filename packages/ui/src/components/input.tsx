@@ -3,9 +3,9 @@
 import type * as React from "react";
 
 import { Input as InputPrimitive } from "@base-ui/react/input";
-import { SearchIcon } from "lucide-react";
 
 import { isStructuredInputType, useContentDir } from "../hooks/use-content-dir";
+import { SearchIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";

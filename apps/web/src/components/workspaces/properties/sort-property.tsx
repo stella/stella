@@ -1,7 +1,7 @@
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ArrowDownIcon, ArrowUpIcon } from "@stll/ui/icons";
 
 import type {
   TableColumn,

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
-import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -14,6 +13,7 @@ import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {

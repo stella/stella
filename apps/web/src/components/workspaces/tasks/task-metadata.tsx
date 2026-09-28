@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PlusIcon, XIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Select,

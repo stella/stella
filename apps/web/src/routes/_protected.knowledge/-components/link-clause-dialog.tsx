@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { SearchIcon, TextQuoteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -17,6 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { SearchIcon, TextQuoteIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import {

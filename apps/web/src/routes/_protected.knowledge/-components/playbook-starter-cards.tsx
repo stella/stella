@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRightIcon, ClipboardListIcon, LoaderIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ArrowRightIcon, ClipboardListIcon, LoaderIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 

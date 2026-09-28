@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 
 import { panic } from "better-result";
+import { useFormatter, useTranslations } from "use-intl";
+
+import { Temporal } from "@stll/time";
 import {
   CalendarIcon,
   CircleDotIcon,
@@ -10,11 +13,8 @@ import {
   ShapesIcon,
   TextIcon,
   UserIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
-
-import { Temporal } from "@stll/time";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";

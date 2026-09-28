@@ -14,7 +14,6 @@ import {
 } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { Result } from "better-result";
-import { KeyboardIcon, PlusIcon, RouteIcon, XIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { PROPERTY_DEPENDENCIES_PER_PROPERTY_MAX } from "@stll/api-contract";
@@ -27,6 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { KeyboardIcon, PlusIcon, RouteIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,

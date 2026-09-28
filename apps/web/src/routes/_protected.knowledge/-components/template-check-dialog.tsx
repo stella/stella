@@ -3,12 +3,6 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import {
-  AlertCircleIcon,
-  AlertTriangleIcon,
-  CheckCircle2Icon,
-  ListChecksIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -22,6 +16,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import {
+  AlertCircleIcon,
+  AlertTriangleIcon,
+  CheckCircle2Icon,
+  ListChecksIcon,
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { TranslationKey } from "@/i18n/types";

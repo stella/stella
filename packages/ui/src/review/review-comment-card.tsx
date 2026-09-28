@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-import { CheckIcon, RotateCcwIcon, Trash2Icon } from "lucide-react";
 import { Temporal } from "temporal-polyfill/full";
 
 import { BidiText } from "../components/bidi-text";
 import { Button } from "../components/button";
+import { CheckIcon, RotateCcwIcon, Trash2Icon } from "../icons";
 import { cn } from "../lib/utils";
 import { ReviewAuthorAvatar } from "./review-author-avatar";
 

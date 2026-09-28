@@ -1,9 +1,9 @@
 import type { ReactElement, ReactNode } from "react";
 
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

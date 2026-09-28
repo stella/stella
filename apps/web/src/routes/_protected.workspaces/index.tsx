@@ -3,14 +3,6 @@ import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  LayoutGridIcon,
-  ListIcon,
-  PlusIcon,
-  SlidersHorizontalIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
@@ -18,6 +10,14 @@ import { useShallow } from "zustand/shallow";
 import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Frame } from "@stll/ui/frame";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  LayoutGridIcon,
+  ListIcon,
+  PlusIcon,
+  SlidersHorizontalIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";

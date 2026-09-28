@@ -1,8 +1,8 @@
 import { panic } from "better-result";
-import { CheckIcon, ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { CheckIcon, ClockIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { GuideTourPreview } from "@/features/guides/guide-tour-preview";

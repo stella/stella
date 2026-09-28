@@ -1,10 +1,10 @@
 import { useRef } from "react";
 
-import { Loader2Icon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Loader2Icon, AiActionIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -76,7 +76,7 @@ export const ChatTitleSuggestButton = ({
       {isPending ? (
         <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
       ) : (
-        <WandSparklesIcon aria-hidden="true" className="size-3.5" />
+        <AiActionIcon aria-hidden="true" className="size-3.5" />
       )}
     </Button>
   );

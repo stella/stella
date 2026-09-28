@@ -3,7 +3,6 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
@@ -16,6 +15,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { FolderPlusIcon, ListTreeIcon, UngroupIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {

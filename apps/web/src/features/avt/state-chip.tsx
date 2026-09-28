@@ -7,6 +7,9 @@
 
 import type * as React from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   BanIcon,
@@ -18,10 +21,7 @@ import {
   PenIcon,
   SplitIcon,
   XCircleIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { TEXT_MARK_TONE_COLOR } from "@stll/ui/text-mark";

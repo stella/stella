@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { XIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

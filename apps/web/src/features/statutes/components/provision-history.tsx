@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Columns2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio-core/ai-edits";
@@ -11,6 +10,7 @@ import {
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
+import { Columns2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 

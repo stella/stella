@@ -4,17 +4,17 @@ import type { Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { MentionNodeAttrs } from "@tiptap/extension-mention";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
-import {
-  ArrowLeftIcon,
-  ChevronRightIcon,
-  LandmarkIcon,
-  LoaderIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  LandmarkIcon,
+  LoaderIcon,
+} from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 

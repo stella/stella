@@ -1,7 +1,7 @@
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";

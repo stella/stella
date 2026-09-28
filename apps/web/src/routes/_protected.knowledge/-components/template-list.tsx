@@ -2,20 +2,6 @@ import { type CSSProperties, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import {
-  CheckIcon,
-  DownloadIcon,
-  MoreHorizontalIcon,
-  PencilLineIcon,
-  PlusIcon,
-  Rows2Icon,
-  Rows3Icon,
-  SquarePenIcon,
-  TagIcon,
-  Trash2Icon,
-  WandSparklesIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
@@ -49,6 +35,20 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  CheckIcon,
+  DownloadIcon,
+  MoreHorizontalIcon,
+  PencilLineIcon,
+  PlusIcon,
+  Rows2Icon,
+  Rows3Icon,
+  SquarePenIcon,
+  TagIcon,
+  Trash2Icon,
+  AiActionIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
@@ -641,7 +641,7 @@ const TemplateRow = ({
   if (canUseTemplate) {
     rowActions.push({
       label: t("templates.useTemplate"),
-      icon: <WandSparklesIcon />,
+      icon: <AiActionIcon />,
       onClick: () => setUseOpen(true),
     });
   }

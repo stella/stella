@@ -1,5 +1,4 @@
-import { LockIcon } from "lucide-react";
-
+import { LockIcon } from "@stll/ui/icons";
 import {
   TooltipPopup,
   Tooltip as TooltipRoot,

@@ -1,6 +1,8 @@
 import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useShallow } from "zustand/react/shallow";
+
 import {
   DatabaseIcon,
   LibraryBigIcon,
@@ -8,9 +10,7 @@ import {
   RotateCcwIcon,
   Trash2Icon,
   WrenchIcon,
-} from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-
+} from "@stll/ui/icons";
 import {
   MenuCheckboxItem,
   MenuItem,

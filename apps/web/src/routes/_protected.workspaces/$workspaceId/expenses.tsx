@@ -1,12 +1,12 @@
 import { Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
