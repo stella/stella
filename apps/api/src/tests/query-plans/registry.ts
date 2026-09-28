@@ -5,12 +5,13 @@ import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readine
 
 import type { Transaction } from "@/api/db/root";
 import { decisionTextPresenceQuery } from "@/api/handlers/case-law/decisions/get";
-import { listDecisionsQuery } from "@/api/handlers/case-law/decisions/list";
+import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import { decisionIdsByIdentityQuery } from "@/api/handlers/case-law/decisions/search";
 import {
   getShardConditions,
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
+import { statuteSitemapShardQuery } from "@/api/handlers/legislation/sitemap";
 import { sitemapBucketCountsQuery } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
@@ -24,11 +25,8 @@ type QueryPlanEntry = {
   class: "point" | "page" | "aggregate";
   role: "root" | "public-law-reader";
   build: (tx: Transaction) => SQLWrapper;
-  seed: "case-law";
+  seed: "case-law" | "legislation";
   planMode?: "covering-index";
-  status:
-    | { type: "active" }
-    | { type: "known-violation"; reason: string; expectedViolation: string };
   contract: {
     scans: readonly AccessPath[];
     allowSeqScan?: boolean;
@@ -64,7 +62,6 @@ export const QUERY_PLAN_REGISTRY = [
         tx,
       }),
     seed: "case-law",
-    status: { type: "active" },
     contract: planContracts["case-law.ecli-identity"],
   },
   {
@@ -74,7 +71,6 @@ export const QUERY_PLAN_REGISTRY = [
     build: (tx) => sitemapBucketCountsQuery(tx),
     seed: "case-law",
     planMode: "covering-index",
-    status: { type: "active" },
     contract: planContracts["case-law.sitemap-refresh"],
   },
   {
@@ -83,26 +79,32 @@ export const QUERY_PLAN_REGISTRY = [
     role: "public-law-reader",
     build: (tx) => sitemapShardDecisionsQuery(tx, shardConditions),
     seed: "case-law",
-    status: { type: "active" },
     contract: planContracts["case-law.sitemap-shard-read"],
+  },
+  {
+    id: "legislation.sitemap-shard-read",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      statuteSitemapShardQuery({
+        query: QUERY_PLAN_SAMPLE.legislation,
+        tx,
+      }),
+    seed: "legislation",
+    contract: planContracts["legislation.sitemap-shard-read"],
   },
   {
     id: "case-law.decisions-list",
     class: "page",
     role: "public-law-reader",
     build: (tx) =>
-      listDecisionsQuery({
-        cursor: null,
+      listDecisionsPageQuery({
+        cursor: undefined,
         limit: LIMITS.caseLawSearchPageSizeDefault,
         query: { country: sampleCountry },
         tx,
       }),
     seed: "case-law",
-    status: {
-      type: "known-violation",
-      reason: "Pending query update.",
-      expectedViolation: "OR with a subplan",
-    },
     contract: planContracts["case-law.decisions-list"],
   },
   {
@@ -112,7 +114,6 @@ export const QUERY_PLAN_REGISTRY = [
     build: (tx) =>
       decisionTextPresenceQuery(tx, QUERY_PLAN_SAMPLE.caseLaw.decisionId),
     seed: "case-law",
-    status: { type: "active" },
     contract:
       planContracts[PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence],
   },

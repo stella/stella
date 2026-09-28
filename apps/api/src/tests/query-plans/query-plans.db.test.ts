@@ -129,33 +129,23 @@ for (const entry of QUERY_PLAN_REGISTRY) {
         entry.build,
         "planMode" in entry ? entry.planMode : undefined,
       );
+      const guardedScans = observedPaths(scans);
+      if (guardedScans.length === 0) {
+        panic(
+          `${entry.id} has no guarded scan: ${JSON.stringify(scans, null, 2)}`,
+        );
+      }
       if (UPDATE_PLAN_CONTRACTS) {
-        observedContracts[entry.id] = { scans: observedPaths(scans) };
+        observedContracts[entry.id] = { scans: guardedScans };
       }
       const violations = accessPathViolations(
         scans,
-        UPDATE_PLAN_CONTRACTS ? observedPaths(scans) : entry.contract.scans,
+        UPDATE_PLAN_CONTRACTS ? guardedScans : entry.contract.scans,
         entry.class,
         "allowSeqScan" in entry.contract &&
           entry.contract.allowSeqScan === true,
       );
-      switch (entry.status.type) {
-        case "active":
-          assertPlan(violations, scans);
-          break;
-        case "known-violation": {
-          const expectedViolation = entry.status.expectedViolation;
-          if (
-            violations.length !== 1 ||
-            !violations[0]?.endsWith(expectedViolation)
-          ) {
-            panic(
-              `Expected ${expectedViolation}; got ${violations.join("; ")}\nObserved scans (estimated rows):\n${JSON.stringify(scans, null, 2)}`,
-            );
-          }
-          break;
-        }
-      }
+      assertPlan(violations, scans);
     },
     DB_TEST_TIMEOUT_MS,
   );

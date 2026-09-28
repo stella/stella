@@ -11,7 +11,10 @@ import {
   statuteBucketSql,
   statuteWorksQuery,
 } from "@/api/lib/legal-search/statute-sitemap-shard-sql";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
 const SITEMAP_COUNTRY_PATTERN = "^[a-z]{2,3}$";
@@ -87,10 +90,16 @@ export const listStatuteSitemapShardsHandler = async (
  * latest consolidations mint the same segment share a page as well, so the
  * outer grouping collapses them into the one URL the resolver answers with.
  */
-export const listStatuteSitemapStatutesHandler = async (
-  query: SitemapShardStatutesQuery,
-  legislationDb: LegislationReadDb,
-) => {
+type StatuteSitemapShardQueryOptions = {
+  query: SitemapShardStatutesQuery;
+  tx: LegislationReadTransaction;
+};
+
+/** The public shard read, shared with its access-path contract. */
+export const statuteSitemapShardQuery = ({
+  query,
+  tx,
+}: StatuteSitemapShardQueryOptions) => {
   const bucket = query.bucket ?? SITEMAP_ALL_BUCKET;
   const conditions: SQL[] = [
     eq(legislationDocuments.country, query.country.toUpperCase()),
@@ -101,20 +110,27 @@ export const listStatuteSitemapStatutesHandler = async (
     conditions.push(sql`${statuteBucketSql} = ${bucket}`);
   }
 
-  const rows = await legislationDb(async (tx) => {
-    const works = statuteWorksQuery(tx, conditions).as("works");
+  const works = statuteWorksQuery(tx, conditions).as("works");
 
-    return await tx
-      .select({
-        country: works.country,
-        slug: works.slug,
-        lastmod: sql<string>`max(${works.lastmod})`,
-      })
-      .from(works)
-      .groupBy(works.country, works.slug)
-      .orderBy(asc(works.country), asc(works.slug))
-      .limit(LIMITS.statuteSitemapShardUrlLimit + 1);
-  });
+  return tx
+    .select({
+      country: works.country,
+      slug: works.slug,
+      lastmod: sql<string>`max(${works.lastmod})`,
+    })
+    .from(works)
+    .groupBy(works.country, works.slug)
+    .orderBy(asc(works.country), asc(works.slug))
+    .limit(LIMITS.statuteSitemapShardUrlLimit + 1);
+};
+
+export const listStatuteSitemapStatutesHandler = async (
+  query: SitemapShardStatutesQuery,
+  legislationDb: LegislationReadDb,
+) => {
+  const rows = await legislationDb(
+    async (tx) => await statuteSitemapShardQuery({ query, tx }),
+  );
 
   if (rows.length > LIMITS.statuteSitemapShardUrlLimit) {
     return status(500, {

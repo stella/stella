@@ -7,12 +7,15 @@ import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
+  legislationDocuments,
+  legislationSources,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 const QUERY_PLAN_ROW_COUNT = 3000;
 const DECISION_ID_PREFIX = "00000000-0000-7000-8000-";
+const LEGISLATION_DOCUMENT_ID_PREFIX = "00000000-0000-7000-9000-";
 const SAMPLE_DECISION_NUMBER = 12;
 
 const makeUuid = (prefix: string, number: number): string =>
@@ -25,6 +28,10 @@ export const QUERY_PLAN_SAMPLE = {
       makeUuid(DECISION_ID_PREFIX, SAMPLE_DECISION_NUMBER),
     ),
     sharedEcli: "ECLI:EU:C:2024:12",
+  },
+  legislation: {
+    country: "cze",
+    bucket: "00",
   },
 } as const;
 
@@ -40,6 +47,7 @@ export const seedQueryPlanData = async (
   db: QueryPlanSeedDb,
 ): Promise<QueryPlanSeedResult> => {
   const caseLawSourceId = createSafeId<"caseLawSource">();
+  const legislationSourceId = createSafeId<"legislationSource">();
 
   await db.insert(caseLawSources).values(
     caseLawSourceRow({
@@ -100,6 +108,29 @@ export const seedQueryPlanData = async (
   await db.execute(sql`VACUUM (ANALYZE) ${caseLawDecisions}`);
   await db.execute(sql`ANALYZE ${caseLawDecisionIdentifiers}`);
   await db.execute(sql`ANALYZE ${caseLawSources}`);
+
+  await db.insert(legislationSources).values({
+    id: legislationSourceId,
+    adapterKey: "query-plan-seed-legislation",
+    name: "Query plan seed legislation",
+  });
+
+  await db.execute(sql`
+    INSERT INTO ${legislationDocuments}
+      (id, source_id, eli, title, slug, country, language, updated_at)
+    SELECT
+      (${sql.raw(`'${LEGISLATION_DOCUMENT_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
+      ${legislationSourceId}::uuid,
+      '/eli/cz/sb/2024/' || n::text,
+      'Query Plan Act ' || n::text,
+      'query-plan-act-' || n::text,
+      CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
+      CASE n % 3 WHEN 0 THEN 'cs' WHEN 1 THEN 'sk' ELSE 'pl' END,
+      TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute'
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+  await db.execute(sql`ANALYZE ${legislationDocuments}`);
+  await db.execute(sql`ANALYZE ${legislationSources}`);
 
   return { caseLawSourceId, sample: QUERY_PLAN_SAMPLE };
 };
