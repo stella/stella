@@ -145,6 +145,7 @@ jobs:
     outputs:
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
+      allowed: ${{ steps.scope.outputs.allowed }}
     steps:
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -159,8 +160,7 @@ jobs:
 
       # The manifest owns generator inputs and outputs. The files API lists at
       # most 3000 files, so a list that long regenerates rather than guessing.
-      - name: Match generator inputs
-        id: scope
+      - name: Fetch changed paths
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -168,11 +168,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
-          if [[ "$(wc -l <<<"$files")" -ge 3000 ]]; then
-            printf '%s\n' "$files" | bun --no-install --no-env-file scripts/autofix-plan.ts plan --all >> "$GITHUB_OUTPUT"
+          gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
+
+      - name: Match generator inputs
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(wc -l < "$RUNNER_TEMP/changed-paths")" -ge 3000 ]]; then
+            bun --no-install --no-env-file scripts/autofix-plan.ts plan --all < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
           else
-            printf '%s\n' "$files" | bun --no-install --no-env-file scripts/autofix-plan.ts plan >> "$GITHUB_OUTPUT"
+            bun --no-install --no-env-file scripts/autofix-plan.ts plan < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
           fi
 
   regenerate-derived-files:
@@ -216,7 +222,7 @@ jobs:
       - name: Restrict regenerated changes
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+          GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -226,8 +232,7 @@ jobs:
             exit 1
           fi
 
-          generated_paths="$(bun scripts/autofix-plan.ts allowed "$GENERATOR_IDS")"
-          mapfile -t generated <<< "$generated_paths"
+          IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           excludes=()
           for path in "${generated[@]}"; do
             excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")

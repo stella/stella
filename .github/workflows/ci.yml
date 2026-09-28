@@ -995,8 +995,6 @@ jobs:
 
       - name: Generated files manifest guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/stella
         run: |
           bun scripts/generated-files-guard.ts --guard-a
           bun scripts/generated-files-guard.ts --guard-b

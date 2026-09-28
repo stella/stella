@@ -1,5 +1,6 @@
 import {
   GENERATORS,
+  allowedOutputs,
   generatorsForFiles,
   orderGenerators,
 } from "./generated-files";
@@ -9,7 +10,8 @@ const fail = (message: string): never => {
   process.exit(1);
 };
 
-const [mode, ...args] = process.argv.slice(2);
+const [rawMode, ...args] = process.argv.slice(2);
+const mode = rawMode ?? "";
 
 const selectedFromIds = (ids: string) => {
   if (ids === "") {
@@ -39,6 +41,7 @@ switch (mode) {
     );
     console.log(`run=${selected.length > 0}`);
     console.log(`ids=${selected.map((generator) => generator.id).join(",")}`);
+    console.log(`allowed=${allowedOutputs(selected).join("|")}`);
     break;
   }
   case "run": {
@@ -65,11 +68,7 @@ switch (mode) {
     break;
   }
   case "allowed": {
-    for (const output of new Set(
-      selectedFromIds(args.at(0) ?? "").flatMap(
-        (generator) => generator.outputs,
-      ),
-    )) {
+    for (const output of allowedOutputs(selectedFromIds(args.at(0) ?? ""))) {
       console.log(output);
     }
     break;

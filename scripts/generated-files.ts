@@ -35,8 +35,11 @@ export const GENERATORS = [
     ],
     inputs: [
       "apps/api/src/handlers/**",
+      "apps/api/src/mcp/**",
+      "apps/api/src/lib/capability-transport*",
       "apps/api/scripts/export-capability-catalog.ts",
-      "scripts/lib/**",
+      "apps/api/scripts/lib/**",
+      "packages/cli/src/**",
       ".oxfmtrc.json",
     ],
     write: ["bun", "apps/api/scripts/export-capability-catalog.ts"],
@@ -56,6 +59,8 @@ export const GENERATORS = [
     inputs: [
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
+      "apps/api/scripts/export-mcp-tool-registry.ts",
+      ".oxfmtrc.json",
       "packages/cli/src/**",
       "packages/cli/package.json",
       "packages/cli/capability-catalog.json",
@@ -72,6 +77,8 @@ export const GENERATORS = [
     inputs: [
       "apps/api/src/mcp/apps/**",
       "apps/api/scripts/build-mcp-apps.ts",
+      "packages/api-contract/**",
+      "packages/fetch/**",
       "bun.lock",
     ],
     write: ["bun", "--cwd=apps/api", "run", "build:mcp-apps"],
@@ -104,10 +111,14 @@ export const GENERATORS = [
   {
     id: "mcp-surface",
     outputs: ["apps/api/mcp-surface-baseline.json"],
-    inputs: ["apps/api/src/mcp/**", "apps/api/scripts/mcp-surface-baseline.ts"],
+    inputs: [
+      "apps/api/src/mcp/**",
+      "apps/api/src/handlers/**",
+      "apps/api/scripts/mcp-surface-baseline.ts",
+      "packages/api-contract/**",
+    ],
     write: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--write"],
     check: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--check"],
-    checkedBy: "MCP registry quality test",
     autofix: true,
     after: ["capability-catalog", "cli-registry"],
   },
@@ -167,8 +178,8 @@ export const GENERATORS = [
     ],
     write: ["bun", "scripts/check-published-package-lists.ts", "--write"],
     check: null,
-    checkedBy: "Published package lists guard",
-    autofix: true,
+    checkedBy: "Published package lists match the release policy",
+    autofix: false,
     after: [],
   },
   {
@@ -177,6 +188,7 @@ export const GENERATORS = [
     inputs: [
       "apps/web/src/routes/**",
       "apps/web/vite.config.ts",
+      "apps/web/route-tree.config.ts",
       "apps/web/scripts/generate-route-tree.ts",
       "apps/web/package.json",
       "bun.lock",
@@ -225,7 +237,7 @@ export const GENERATORS = [
       "apps/web/src/i18n/langs",
       "--check",
     ],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -246,7 +258,7 @@ export const GENERATORS = [
       "apps/landing/src/i18n/messages",
       "--check",
     ],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -267,7 +279,7 @@ export const GENERATORS = [
       "packages/transactional/i18n/langs",
       "--check",
     ],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -299,7 +311,7 @@ export const GENERATORS = [
       "apps/web/src/i18n",
       "--check",
     ],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -318,7 +330,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "apps/web/scripts/sync-prepaint-locales.ts"],
     check: ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -327,17 +339,18 @@ export const GENERATORS = [
       "apps/api/.env.example",
       "apps/web/.env.example",
       "apps/collab/.env.example",
+      "apps/web/build-env-contract.json",
     ],
     inputs: [
       "scripts/env-tool.ts",
       "scripts/env-catalog.ts",
-      "apps/api/src/lib/env*.ts",
-      "apps/web/src/lib/env*.ts",
-      "apps/collab/src/lib/env*.ts",
+      "apps/api/src/env*.ts",
+      "apps/web/src/env*.ts",
+      "apps/collab/src/env*.ts",
     ],
     write: ["bun", "run", "env:generate"],
     check: ["bun", "run", "env:check"],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -376,7 +389,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "run", "selfhost:generate"],
     check: ["bun", "run", "selfhost:check"],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -385,7 +398,7 @@ export const GENERATORS = [
     inputs: ["apps/desktop/src-tauri/src/types.rs"],
     write: ["bun", "--filter", "@stll/desktop", "rpc:generate"],
     check: null,
-    checkedBy: "Desktop Rust checks",
+    checkedBy: "Test",
     autofix: false,
     after: [],
   },
@@ -406,7 +419,7 @@ export const GENERATORS = [
       "scripts/generate-manifest.ts",
       "--check",
     ],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -416,14 +429,14 @@ export const GENERATORS = [
       "packages/template-packs/src/fixtures/packs.gen.ts",
     ],
     inputs: [
-      "packages/template-packs/content/**",
-      "packages/template-packs/fixtures/**",
+      "packages/template-packs/content",
+      "packages/template-packs/src/fixtures/content/**",
       "packages/template-packs/scripts/generate-manifest.ts",
     ],
     write: ["bun", "--filter", "@stll/template-packs", "generate"],
     check: null,
-    checkedBy: "Template packs package test",
-    autofix: true,
+    checkedBy: "Test",
+    autofix: false,
     after: [],
   },
   {
@@ -440,7 +453,7 @@ export const GENERATORS = [
       "scripts/generate-blueprints-manifest.ts",
       "--check",
     ],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
@@ -450,25 +463,25 @@ export const GENERATORS = [
       "packages/api-contract/src/us-writable-courts.generated.ts",
     ],
     inputs: [
-      "data/us-courts/**",
+      "packages/api-contract/data/us-courts/**",
       "scripts/generate-us-courts.ts",
-      "packages/api-contract/src/vocabulary/**",
+      "packages/api-contract/src/us-court-vocabulary.ts",
     ],
     write: ["bun", "scripts/generate-us-courts.ts", "--write"],
     check: ["bun", "scripts/generate-us-courts.ts", "--check"],
-    autofix: true,
+    autofix: false,
     after: [],
   },
   {
     id: "snowball",
     outputs: [
       "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",
-      "apps/api/src/lib/legal-search/morphology/snowball/__fixtures__/**",
+      "apps/api/src/lib/legal-search/morphology/snowball/__fixtures__/*.conformance.txt",
     ],
     inputs: ["scripts/generate-snowball-stemmers.ts"],
     write: ["bun", "run", "generate:snowball-stemmers", "--write"],
     check: null,
-    checkedBy: "Snowball conformance test",
+    checkedBy: "Test",
     autofix: false,
     after: [],
   },
@@ -478,7 +491,7 @@ export const GENERATORS = [
     inputs: ["packages/infosoud/scripts/extract-codes.ts"],
     write: ["bun", "--filter", "@stll/infosoud", "extract:codes"],
     check: null,
-    checkedBy: "Manual network extraction",
+    checkedBy: "Test",
     autofix: false,
     after: [],
   },
@@ -488,7 +501,7 @@ export const GENERATORS = [
     inputs: ["packages/mojibake/scripts/extract-exemplars.ts"],
     write: ["bun", "--filter", "@stll/mojibake", "extract:exemplars"],
     check: null,
-    checkedBy: "Mojibake exemplars test",
+    checkedBy: "Test",
     autofix: false,
     after: [],
   },
@@ -504,7 +517,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "--cwd=apps/api", "run", "gen:chat-transcripts"],
     check: null,
-    checkedBy: "Chat integration test",
+    checkedBy: "Test",
     autofix: false,
     after: [],
   },
@@ -520,10 +533,10 @@ export const GENERATORS = [
       ".agents/skills/**/SKILL.md",
       ".claude/skills/**/SKILL.md",
     ],
-    inputs: [".ai/manifest.json", ".ai/local/**", ".ai/shared/**"],
+    inputs: [".ai/manifest.json", ".ai/local/**", ".ai/shared"],
     write: ["bun", "run", "sync-ai"],
     check: null,
-    checkedBy: "AI skill sync",
+    checkedBy: "Check AI prompt sync",
     autofix: false,
     after: [],
   },
@@ -563,7 +576,10 @@ export const GUARD_A_EXCLUSIONS = [
     glob: "apps/api/src/lib/legal-search/morphology/stem.ts",
     reason: "Hand-written stemmer adapter",
   },
-  { glob: "docs/reference/tools.mdx", reason: "Hand-written documentation" },
+  {
+    glob: "apps/landing/src/content/docs/docs/reference/tools.mdx",
+    reason: "Hand-written documentation",
+  },
   {
     glob: "apps/api/drizzle/*/migration.sql",
     reason: "Hand-written migration",
@@ -575,14 +591,51 @@ export const GUARD_A_EXCLUSIONS = [
 export const matchesGeneratedGlob = (glob: string, file: string): boolean =>
   new Bun.Glob(glob).match(file);
 
-export const generatorsForFiles = (files: readonly string[]) =>
-  GENERATORS.filter(
-    (generator) =>
-      generator.autofix &&
-      [...generator.inputs, ...generator.outputs].some((glob) =>
-        files.some((file) => matchesGeneratedGlob(glob, file)),
-      ),
+const globWitness = (glob: string) =>
+  glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example");
+
+const outputFeedsInput = (output: string, input: string) =>
+  matchesGeneratedGlob(input, globWitness(output)) ||
+  matchesGeneratedGlob(output, globWitness(input));
+
+export const generatorsForFiles = (files: readonly string[]) => {
+  const selected = new Set(
+    GENERATORS.filter(
+      (generator) =>
+        generator.autofix &&
+        [...generator.inputs, ...generator.outputs].some((glob) =>
+          files.some((file) => matchesGeneratedGlob(glob, file)),
+        ),
+    ).map((generator) => generator.id),
   );
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const generator of GENERATORS) {
+      if (!generator.autofix || selected.has(generator.id)) {
+        continue;
+      }
+      if (
+        generator.after.some((id) => selected.has(id)) ||
+        GENERATORS.some(
+          (upstream) =>
+            selected.has(upstream.id) &&
+            upstream.outputs.some((output) =>
+              generator.inputs.some((input) => outputFeedsInput(output, input)),
+            ),
+        )
+      ) {
+        selected.add(generator.id);
+        changed = true;
+      }
+    }
+  }
+  return GENERATORS.filter((generator) => selected.has(generator.id));
+};
+
+export const allowedOutputs = (generators: readonly Generator[]) => [
+  ...new Set(generators.flatMap((generator) => generator.outputs)),
+];
 
 export const orderGenerators = (
   generators: readonly Generator[],
