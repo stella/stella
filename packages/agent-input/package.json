@@ -2,7 +2,7 @@
   "name": "@stll/agent-input",
   "version": "0.0.0",
   "private": true,
-  "description": "Lenient readers for values agents write: dates, date-format specs, numbers, booleans, locales, countries, enum values",
+  "description": "Lenient readers for values agents write: dates, date bounds, date-format specs, numbers, booleans, locales, countries, enum and vocabulary values, ids, ELIs, string lists",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,

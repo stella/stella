@@ -7,7 +7,7 @@
           "name": "Markus Ecker <markus.ecker@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@ag-ui/core@0.1.1-canary.beta.0",
+      "bom-ref": "pkg:npm/@ag-ui/core@1.0.0",
       "evidence": {
         "identity": [
           {
@@ -55,10 +55,10 @@
           "value": "node_modules/@ag-ui/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ag-ui/core@0.1.1-canary.beta.0",
+      "purl": "pkg:npm/%40ag-ui/core@1.0.0",
       "scope": "required",
       "type": "library",
-      "version": "0.1.1-canary.beta.0"
+      "version": "1.0.0"
     },
     {
       "authors": [
@@ -121,10 +121,67 @@
             "location": "apps/web/src/components/docx/docx-editor-host.logic.ts#22"
           },
           {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-comments.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-compatibility.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-mode.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -133,13 +190,40 @@
             "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-preview-file.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-evidence-references.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -163,10 +247,22 @@
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-email-attachment-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-pdf-tab-zoom.ts#1"
@@ -841,16 +937,19 @@
             "location": "apps/web/src/components/docx/app-docx-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#8"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#18"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#6"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#13"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-editor-ai-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-host-instance.tsx#15"
@@ -964,10 +1063,22 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -1799,6 +1910,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#1"
@@ -3567,10 +3681,67 @@
             "location": "apps/web/src/components/docx/docx-editor-host.logic.ts#22"
           },
           {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-comments.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-compatibility.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-mode.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -3579,13 +3750,40 @@
             "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-preview-file.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-evidence-references.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -3609,10 +3807,22 @@
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-email-attachment-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-pdf-tab-zoom.ts#1"
@@ -4287,16 +4497,19 @@
             "location": "apps/web/src/components/docx/app-docx-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#8"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#18"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#6"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#13"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-editor-ai-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-host-instance.tsx#15"
@@ -4410,10 +4623,22 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -5245,6 +5470,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#1"
@@ -6914,10 +7142,10 @@
         ],
         "occurrences": [
           {
-            "location": "packages/scripts/src/i18n-check.ts#15"
+            "location": "packages/scripts/src/i18n-check.ts#19"
           },
           {
-            "location": "packages/scripts/src/i18n-check.ts#16"
+            "location": "packages/scripts/src/i18n-check.ts#20"
           },
           {
             "location": "packages/scripts/src/i18n-lint.ts#25"
@@ -8105,10 +8333,67 @@
             "location": "apps/web/src/components/docx/docx-editor-host.logic.ts#22"
           },
           {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-comments.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-compatibility.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-mode.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -8117,13 +8402,40 @@
             "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-preview-file.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-evidence-references.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -8147,10 +8459,22 @@
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-email-attachment-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-pdf-tab-zoom.ts#1"
@@ -8825,16 +9149,19 @@
             "location": "apps/web/src/components/docx/app-docx-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#8"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#18"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#6"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#13"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-editor-ai-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-host-instance.tsx#15"
@@ -8948,10 +9275,22 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -9783,6 +10122,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#1"
@@ -11608,7 +11950,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.18.6",
+      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.19.1",
       "description": "Anthropic Claude adapter for TanStack AI chat, tool calling, thinking, and structured outputs.",
       "evidence": {
         "identity": [
@@ -11686,16 +12028,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.18.6",
+      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.19.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.18.6"
+      "version": "0.19.1"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.3.8",
+      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.3.15",
       "description": "Amazon Bedrock adapter for TanStack AI — OpenAI-compatible chat, responses, tools, and reasoning.",
       "evidence": {
         "identity": [
@@ -11751,13 +12093,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-bedrock/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.3.8",
+      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.3.15",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.3.8"
+      "version": "0.3.15"
     },
     {
       "authors": [
@@ -11765,7 +12107,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-client@0.31.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-client@0.35.1",
       "description": "Framework-agnostic headless client for TanStack AI chat, realtime sessions, streaming transports, and media generations.",
       "evidence": {
         "identity": [
@@ -11809,6 +12151,9 @@
           },
           {
             "location": "apps/web/src/features/chat/chat-runtime.ts#10"
+          },
+          {
+            "location": "apps/web/src/features/chat/chat-snapshot-history.ts#3"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts#1"
@@ -11858,14 +12203,14 @@
           "value": "apps/api/node_modules/@tanstack/ai-client/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-client@0.31.1",
+      "purl": "pkg:npm/%40tanstack/ai-client@0.35.1",
       "scope": "required",
       "tags": [
         "ai",
         "framework"
       ],
       "type": "framework",
-      "version": "0.31.1"
+      "version": "0.35.1"
     },
     {
       "authors": [
@@ -11873,7 +12218,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.4.9",
+      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.4.16",
       "description": "Secure TypeScript Code Mode for TanStack AI agents to execute sandboxed tool orchestration programs.",
       "evidence": {
         "identity": [
@@ -11929,16 +12274,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-code-mode/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.4.9",
+      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.4.16",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.4.9"
+      "version": "0.4.16"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.5.5",
+      "bom-ref": "pkg:npm/@tanstack/ai-codex@0.5.12",
       "description": "Codex harness adapter for TanStack AI — run OpenAI Codex as a chat backend with local tool execution and stateful sessions.",
       "evidence": {
         "identity": [
@@ -11987,13 +12332,13 @@
           "value": "node_modules/@tanstack/ai-codex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-codex@0.5.5",
+      "purl": "pkg:npm/%40tanstack/ai-codex@0.5.12",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.5.5"
+      "version": "0.5.12"
     },
     {
       "authors": [
@@ -12001,7 +12346,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.29.2",
+      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.33.1",
       "description": "Google Gemini adapter for TanStack AI chat, images, speech, audio generation, and structured outputs.",
       "evidence": {
         "identity": [
@@ -12061,13 +12406,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-gemini/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-gemini@0.29.2",
+      "purl": "pkg:npm/%40tanstack/ai-gemini@0.33.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.29.2"
+      "version": "0.33.1"
     },
     {
       "authors": [
@@ -12075,7 +12420,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.3.10",
+      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.4.6",
       "description": "Host-side Model Context Protocol client for TanStack AI: discover and run MCP server tools, resources, and prompts in any adapter's chat() loop, with generated end-to-end types.",
       "evidence": {
         "identity": [
@@ -12137,13 +12482,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mcp@0.3.10",
+      "purl": "pkg:npm/%40tanstack/ai-mcp@0.4.6",
       "scope": "required",
       "type": "library",
-      "version": "0.3.10"
+      "version": "0.4.6"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.6.2",
+      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.6.10",
       "description": "Mistral adapter for TanStack AI",
       "evidence": {
         "identity": [
@@ -12199,10 +12544,10 @@
           "value": "apps/api/node_modules/@tanstack/ai-mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mistral@0.6.2",
+      "purl": "pkg:npm/%40tanstack/ai-mistral@0.6.10",
       "scope": "required",
       "type": "library",
-      "version": "0.6.2"
+      "version": "0.6.10"
     },
     {
       "authors": [
@@ -12210,7 +12555,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.22.6",
+      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.24.1",
       "description": "OpenAI adapter for TanStack AI chat, tools, images, video, speech, transcription, realtime, and structured outputs.",
       "evidence": {
         "identity": [
@@ -12229,7 +12574,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#14"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#13"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#13"
@@ -12269,13 +12614,13 @@
           "value": "apps/api/node_modules/@tanstack/ai-openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openai@0.22.6",
+      "purl": "pkg:npm/%40tanstack/ai-openai@0.24.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.22.6"
+      "version": "0.24.1"
     },
     {
       "authors": [
@@ -12283,7 +12628,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.19.9",
+      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.19.20",
       "description": "TanStack AI adapter for OpenRouter chat, provider tools, structured outputs, and access to hundreds of LLMs.",
       "evidence": {
         "identity": [
@@ -12346,16 +12691,16 @@
           "value": "apps/api/node_modules/@tanstack/ai-openrouter/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.19.9",
+      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.19.20",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.19.9"
+      "version": "0.19.20"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.5.7",
+      "bom-ref": "pkg:npm/@tanstack/ai-sandbox@0.5.15",
       "description": "Provider-agnostic sandbox layer for TanStack AI — run harness adapters inside isolated sandboxes (defineSandbox, defineWorkspace, withSandbox) with a uniform SandboxHandle, workspace bootstrap, policy, and resumable lifecycle.",
       "evidence": {
         "identity": [
@@ -12413,13 +12758,13 @@
           "value": "node_modules/@tanstack/ai-sandbox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.5.7",
+      "purl": "pkg:npm/%40tanstack/ai-sandbox@0.5.15",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.5.7"
+      "version": "0.5.15"
     },
     {
       "authors": [
@@ -12427,7 +12772,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai@0.54.0",
+      "bom-ref": "pkg:npm/@tanstack/ai@0.61.0",
       "description": "Type-safe TypeScript AI SDK for streaming chat, tool calling, agents, structured outputs, and multimodal generation.",
       "evidence": {
         "identity": [
@@ -12512,6 +12857,12 @@
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
           },
           {
+            "location": "apps/api/scripts/record-provider-cassettes.ts#31"
+          },
+          {
+            "location": "apps/api/scripts/record-provider-cassettes.ts#32"
+          },
+          {
             "location": "apps/api/src/dev/register-mock-ai.ts#1"
           },
           {
@@ -12524,16 +12875,22 @@
             "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-turn-run.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-turn-run.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/compaction.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#5"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#15"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#11"
           },
           {
             "location": "apps/api/src/handlers/chat/stream-message-identity.ts#1"
@@ -12570,6 +12927,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/counterparty-check-tools.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#1"
@@ -12647,6 +13007,12 @@
             "location": "apps/api/src/lib/chat/model-ingress-guard.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/provider-stream-contract.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/provider-stream-contract.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/chat/stream-message-capture.ts#9"
           },
           {
@@ -12657,6 +13023,12 @@
           },
           {
             "location": "apps/api/src/lib/chat/tanstack-chat-runtime.ts#20"
+          },
+          {
+            "location": "apps/api/src/lib/chat/unique-tool-call-ids.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/unique-tool-call-ids.ts#2"
           },
           {
             "location": "apps/api/src/lib/document-review/reference-grade.ts#19"
@@ -12686,7 +13058,7 @@
             "location": "apps/api/src/lib/tanstack-ai-generate.ts#5"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#13"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#12"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#3"
@@ -12710,6 +13082,12 @@
             "location": "apps/web/src/features/chat/chat-runtime.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/chat-snapshot-history.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/chat-snapshot-history.ts#2"
+          },
+          {
             "location": "apps/web/src/generated/api-routes.gen.ts#11"
           },
           {
@@ -12726,6 +13104,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/streaming-answer.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/provider-stream-contract.ts#6"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-usage.ts#9"
@@ -12773,13 +13154,13 @@
           "value": "apps/api/node_modules/@tanstack/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai@0.54.0",
+      "purl": "pkg:npm/%40tanstack/ai@0.61.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.54.0"
+      "version": "0.61.0"
     },
     {
       "authors": [
@@ -13206,6 +13587,15 @@
             "location": "apps/web/src/components/docx/docx-document-cache.ts#12"
           },
           {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-preview-file.ts#3"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#10"
           },
           {
@@ -13221,7 +13611,16 @@
             "location": "apps/web/src/components/inspector/maximize-tab.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/skill-history/use-skill-edit-access.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-file-tab-entity.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#3"
           },
           {
             "location": "apps/web/src/components/legal-reader/annotations/reader-annotations-query.ts#1"
@@ -13479,7 +13878,7 @@
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-document.ts#2"
           },
           {
-            "location": "apps/web/src/lib/prompts/use-saved-prompts.ts#1"
+            "location": "apps/web/src/lib/prompts/use-suggested-skills.ts#1"
           },
           {
             "location": "apps/web/src/lib/react-query.ts#7"
@@ -13833,9 +14232,6 @@
             "location": "apps/web/src/components/dev-sidebar-group.tsx#3"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#24"
-          },
-          {
             "location": "apps/web/src/components/docx/evidence-references.tsx#3"
           },
           {
@@ -13882,9 +14278,6 @@
           },
           {
             "location": "apps/web/src/components/inspector/file-facets.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#4"
@@ -14071,6 +14464,9 @@
           },
           {
             "location": "apps/web/src/features/avt/document-verifications.tsx#6"
+          },
+          {
+            "location": "apps/web/src/features/avt/run-history-picker.tsx#6"
           },
           {
             "location": "apps/web/src/features/avt/verification-detail.tsx#6"
@@ -14916,7 +15312,7 @@
             "location": "apps/web/src/components/inspector/compare-versions-panel.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#11"
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-rail.tsx#5"
@@ -15153,19 +15549,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/route.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#5"
@@ -15538,7 +15925,7 @@
             "location": "apps/web/src/lib/public-tools-github-content.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#2175"
+            "location": "apps/web/src/routeTree.gen.ts#2110"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -16135,10 +16522,67 @@
             "location": "apps/web/src/components/docx/docx-editor-host.logic.ts#22"
           },
           {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-comments.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-compatibility.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-mode.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -16147,13 +16591,40 @@
             "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-preview-file.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-evidence-references.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -16177,10 +16648,22 @@
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-email-attachment-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-pdf-tab-zoom.ts#1"
@@ -16855,16 +17338,19 @@
             "location": "apps/web/src/components/docx/app-docx-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#8"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#18"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#6"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#13"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-editor-ai-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-host-instance.tsx#15"
@@ -16978,10 +17464,22 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -17813,6 +18311,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#1"
@@ -19604,10 +20105,67 @@
             "location": "apps/web/src/components/docx/docx-editor-host.logic.ts#22"
           },
           {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-comments.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-compatibility.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-mode.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -19616,13 +20174,40 @@
             "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-preview-file.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-evidence-references.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -19646,10 +20231,22 @@
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-email-attachment-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-pdf-tab-zoom.ts#1"
@@ -20324,16 +20921,19 @@
             "location": "apps/web/src/components/docx/app-docx-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#8"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#18"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#6"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#13"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-editor-ai-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-host-instance.tsx#15"
@@ -20447,10 +21047,22 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -21282,6 +21894,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#1"
@@ -22372,7 +22987,7 @@
             "location": "scripts/rc-bailouts.ts#24"
           },
           {
-            "location": "scripts/root-connection-shapes.ts#35"
+            "location": "scripts/root-connection-shapes.ts#48"
           },
           {
             "location": "scripts/typecheck-coverage.ts#21"
@@ -22952,7 +23567,16 @@
             "location": "apps/api/scripts/mcp-coverage-guard.ts#45"
           },
           {
+            "location": "apps/api/scripts/mcp-surface-baseline.ts#27"
+          },
+          {
+            "location": "apps/api/scripts/mcp-surface-token-calibration.ts#16"
+          },
+          {
             "location": "apps/api/scripts/record-eu-ecj-fixtures.ts#35"
+          },
+          {
+            "location": "apps/api/scripts/record-provider-cassettes.ts#33"
           },
           {
             "location": "apps/api/scripts/run-tests.ts#1"
@@ -22973,6 +23597,12 @@
             "location": "apps/api/scripts/seed-matter-activity.ts#10"
           },
           {
+            "location": "apps/api/scripts/seed-reset.ts#12"
+          },
+          {
+            "location": "apps/api/scripts/seed-seal.ts#24"
+          },
+          {
             "location": "apps/api/scripts/seed-test-user.ts#21"
           },
           {
@@ -22980,6 +23610,9 @@
           },
           {
             "location": "apps/api/scripts/test-batch-plan.ts#1"
+          },
+          {
+            "location": "apps/api/scripts/test-lanes.ts#1"
           },
           {
             "location": "apps/api/src/agent-auth/id-jag.ts#1"
@@ -23001,6 +23634,9 @@
           },
           {
             "location": "apps/api/src/db/online-constraint-completion.ts#9"
+          },
+          {
+            "location": "apps/api/src/db/online-migration-connection.ts#1"
           },
           {
             "location": "apps/api/src/db/online-migrations.ts#1"
@@ -23303,6 +23939,12 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-uodo.ts#16"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/pipeline/batch-types.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline/citations.ts#1"
           },
           {
@@ -23414,6 +24056,9 @@
             "location": "apps/api/src/handlers/case-law/provisions/citation-count-repair.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts#1"
           },
           {
@@ -23492,6 +24137,9 @@
             "location": "apps/api/src/handlers/chat/chat-turn-persistence.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/chat-turn-run.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/chat/chat-turn-settlement.ts#1"
           },
           {
@@ -23564,6 +24212,9 @@
             "location": "apps/api/src/handlers/chat/read-file-thread.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/requested-skills-prompt.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#1"
           },
           {
@@ -23588,7 +24239,10 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#16"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-message-identity.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/subagent-runner.ts#3"
@@ -23622,6 +24276,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/counterparty-check-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts#2"
@@ -23684,6 +24341,9 @@
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/chat/turns/cancel.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/update-thread-model.ts#1"
           },
           {
@@ -23733,6 +24393,9 @@
           },
           {
             "location": "apps/api/src/handlers/clauses/versions/summarize.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/business-registries/check.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/business-registries/lookup.ts#1"
@@ -24809,9 +25472,6 @@
             "location": "apps/api/src/handlers/skills/revisions/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/seed.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/skills/update.ts#1"
           },
           {
@@ -25094,7 +25754,7 @@
             "location": "apps/api/src/handlers/time-entries/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/uploads/agent-skill.ts#11"
+            "location": "apps/api/src/handlers/uploads/agent-skill.ts#10"
           },
           {
             "location": "apps/api/src/handlers/uploads/create.ts#10"
@@ -25322,7 +25982,16 @@
             "location": "apps/api/src/lib/agent-skills/access.ts#1"
           },
           {
+            "location": "apps/api/src/lib/agent-skills/content-hash.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/agent-skills/origin.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/requested-skills.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/skill-read-audit.ts#1"
           },
           {
             "location": "apps/api/src/lib/agent-skills/skill-tools.ts#2"
@@ -25412,6 +26081,9 @@
             "location": "apps/api/src/lib/business-registries/desktop/auth.ts#1"
           },
           {
+            "location": "apps/api/src/lib/business-registries/entity-checks.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/capability-transport.ts#19"
           },
           {
@@ -25431,6 +26103,15 @@
           },
           {
             "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/provision-state-backfill/backfill.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/provision-state-backfill/citation-checks.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/provision-state-backfill/step.ts#6"
           },
           {
             "location": "apps/api/src/lib/case-law/public-subject.ts#25"
@@ -25466,13 +26147,25 @@
             "location": "apps/api/src/lib/chat/projection-schema.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/provider-stream-contract.ts#7"
+          },
+          {
             "location": "apps/api/src/lib/chat/ref-registry.ts#1"
           },
           {
             "location": "apps/api/src/lib/chat/ref-token.ts#1"
           },
           {
+            "location": "apps/api/src/lib/chat/tanstack-chat-runtime.ts#21"
+          },
+          {
             "location": "apps/api/src/lib/chat/thread-compaction.ts#27"
+          },
+          {
+            "location": "apps/api/src/lib/chat/thread-names.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/unique-tool-call-ids.ts#3"
           },
           {
             "location": "apps/api/src/lib/chat-model-selection.ts#1"
@@ -25617,6 +26310,9 @@
           },
           {
             "location": "apps/api/src/lib/docx/ai-field-generator.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/docx/ai-skill-tools.ts#17"
           },
           {
             "location": "apps/api/src/lib/docx/block-directives.ts#62"
@@ -25802,6 +26498,9 @@
             "location": "apps/api/src/lib/groupable-sql.ts#1"
           },
           {
+            "location": "apps/api/src/lib/health/database-login-probe.ts#11"
+          },
+          {
             "location": "apps/api/src/lib/health/readiness.ts#1"
           },
           {
@@ -25809,6 +26508,9 @@
           },
           {
             "location": "apps/api/src/lib/huggingface.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/json-schema/null-optionals.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/browse-facets-cache.ts#1"
@@ -25946,6 +26648,9 @@
             "location": "apps/api/src/lib/legal-search/legislation-ingestion-types.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/legislation-version-blocks.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/morphology/dictionary.ts#16"
           },
           {
@@ -25956,6 +26661,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/parsers/rtf-reader.ts#26"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/parsers/text-encoding.ts#17"
           },
           {
             "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#1"
@@ -26132,10 +26840,16 @@
             "location": "apps/api/src/lib/scheduler/tasks/case-law-corpus-upload-cleanup.ts#1"
           },
           {
+            "location": "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/case-law-sitemap-shard-refresh.ts#1"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/chat-thread-compactor-queue.ts#1"
@@ -26279,7 +26993,7 @@
             "location": "apps/api/src/lib/subprocess.ts#1"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#15"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#14"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#16"
@@ -26540,6 +27254,9 @@
             "location": "apps/api/src/mcp/file-comparison-run.ts#10"
           },
           {
+            "location": "apps/api/src/mcp/gateway/dispatch-call.ts#2"
+          },
+          {
             "location": "apps/api/src/mcp/gateway/external-tools.ts#2"
           },
           {
@@ -26786,7 +27503,16 @@
             "location": "apps/extension/scripts/assert-manifest.ts#1"
           },
           {
+            "location": "apps/extension/src/entrypoints/background.ts#1"
+          },
+          {
             "location": "apps/extension/src/entrypoints/popup/main.ts#1"
+          },
+          {
+            "location": "apps/extension/src/lib/command-budget.ts#1"
+          },
+          {
+            "location": "apps/extension/src/lib/download-guard.ts#1"
           },
           {
             "location": "apps/extension/src/lib/snapshot-guard.ts#1"
@@ -26961,6 +27687,24 @@
           },
           {
             "location": "apps/web/src/components/docx/evidence-reference.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/operation-payload.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#5"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#4"
           },
           {
             "location": "apps/web/src/components/docx/use-edit-session.ts#11"
@@ -27150,6 +27894,9 @@
           },
           {
             "location": "apps/web/src/features/chat/chat-runtime.ts#11"
+          },
+          {
+            "location": "apps/web/src/features/chat/chat-snapshot-history.ts#4"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts#2"
@@ -27404,6 +28151,9 @@
             "location": "apps/web/src/routes/_protected.contacts/-contact-import-request.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-removal.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.logic.ts#1"
           },
           {
@@ -27509,6 +28259,9 @@
             "location": "packages/api-contract/src/decision-docket-grammar.ts#1"
           },
           {
+            "location": "packages/api-contract/src/decision-query-intent.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/resource-link.ts#1"
           },
           {
@@ -27518,10 +28271,37 @@
             "location": "packages/api-contract/src/statute-route.ts#1"
           },
           {
+            "location": "packages/api-contract/src/us-court-vocabulary.ts#7"
+          },
+          {
+            "location": "packages/api-contract/src/us-courts.ts#1"
+          },
+          {
             "location": "packages/business-registries/src/companies-house/normalized.ts#1"
           },
           {
             "location": "packages/business-registries/src/edgar/parse.ts#1"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/cz-insolvency.ts#1"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/cz-vat-reliability.ts#1"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/fields.ts#1"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/result.ts#1"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/result.ts#2"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/run.ts#6"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/soap.ts#1"
           },
           {
             "location": "packages/business-registries/src/gcis/parse.ts#1"
@@ -27530,7 +28310,13 @@
             "location": "packages/business-registries/src/krs/normalized.ts#1"
           },
           {
+            "location": "packages/business-registries/src/orsr/client.ts#1"
+          },
+          {
             "location": "packages/business-registries/src/recherche-entreprises/normalized.ts#1"
+          },
+          {
+            "location": "packages/business-registries/src/rpo/client.ts#1"
           },
           {
             "location": "packages/business-registries/src/zefix/normalized.ts#1"
@@ -27548,7 +28334,7 @@
             "location": "packages/catalogue/scripts/check-upstream.ts#19"
           },
           {
-            "location": "packages/catalogue/scripts/generate-manifest.ts#11"
+            "location": "packages/catalogue/scripts/generate-manifest.ts#10"
           },
           {
             "location": "packages/catalogue/scripts/validate.ts#13"
@@ -27710,10 +28496,25 @@
             "location": "packages/legal-ast/src/document-ast.ts#1"
           },
           {
+            "location": "packages/legal-ast/src/projection-digest.ts#11"
+          },
+          {
             "location": "packages/legal-atlas/src/provision-citation-grammars.ts#17"
           },
           {
             "location": "packages/legal-atlas/src/runners/registry.ts#1"
+          },
+          {
+            "location": "packages/mojibake/scripts/extract-exemplars.ts#12"
+          },
+          {
+            "location": "packages/mojibake/src/alphabet.ts#1"
+          },
+          {
+            "location": "packages/mojibake/src/charsets.ts#1"
+          },
+          {
+            "location": "packages/mojibake/src/declared-charset.ts#13"
           },
           {
             "location": "packages/money/src/cents.ts#9"
@@ -27725,16 +28526,25 @@
             "location": "packages/money/src/index.ts#22"
           },
           {
+            "location": "packages/scripts/src/agent-evidence.ts#7"
+          },
+          {
+            "location": "packages/scripts/src/agent-session.ts#17"
+          },
+          {
             "location": "packages/scripts/src/auth-md-spec-drift.ts#1"
           },
           {
             "location": "packages/scripts/src/dev-runner.ts#2"
           },
           {
+            "location": "packages/scripts/src/dev-runtime.ts#1"
+          },
+          {
             "location": "packages/scripts/src/glossary-gen.ts#16"
           },
           {
-            "location": "packages/scripts/src/i18n-check.ts#17"
+            "location": "packages/scripts/src/i18n-check.ts#21"
           },
           {
             "location": "packages/scripts/src/i18n-lint.ts#27"
@@ -27768,9 +28578,6 @@
           },
           {
             "location": "packages/skills/scripts/generate-blueprints-manifest.ts#1"
-          },
-          {
-            "location": "packages/skills/scripts/generate-manifest.ts#1"
           },
           {
             "location": "packages/skills/src/loader.ts#1"
@@ -27872,13 +28679,13 @@
             "location": "scripts/check-test-input-coverage.ts#23"
           },
           {
-            "location": "scripts/code-check-affected.ts#13"
+            "location": "scripts/code-check-affected.ts#15"
           },
           {
             "location": "scripts/db-await-in-loop.ts#77"
           },
           {
-            "location": "scripts/design-lint-baseline.ts#23"
+            "location": "scripts/design-lint-baseline.ts#24"
           },
           {
             "location": "scripts/design-tokens-doc.ts#8"
@@ -27888,6 +28695,12 @@
           },
           {
             "location": "scripts/generate-snowball-stemmers.ts#22"
+          },
+          {
+            "location": "scripts/generate-us-courts.ts#35"
+          },
+          {
+            "location": "scripts/generated-artifacts.ts#6"
           },
           {
             "location": "scripts/knip-exports-ratchet.ts#30"
@@ -27950,13 +28763,16 @@
             "location": "scripts/sync-lockfile-workspace-versions.ts#3"
           },
           {
+            "location": "scripts/tanstack-drift.ts#23"
+          },
+          {
             "location": "scripts/test-scope.ts#21"
           },
           {
-            "location": "scripts/test-shards.ts#22"
+            "location": "scripts/test-shards.ts#23"
           },
           {
-            "location": "scripts/typecheck-baseline.ts#30"
+            "location": "scripts/typecheck-baseline.ts#33"
           },
           {
             "location": "scripts/typecheck-coverage.ts#18"
@@ -28085,7 +28901,7 @@
             "location": "apps/web/src/components/document-language-picker.tsx#6"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#25"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#8"
           },
           {
             "location": "apps/web/src/components/docx/evidence-references.tsx#4"
@@ -28134,6 +28950,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#5"
@@ -28356,6 +29175,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#25"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx#4"
@@ -28607,6 +29432,10 @@
         {
           "name": "SrcFile",
           "value": "packages/money/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/mojibake/node_modules/better-result/package.json"
         },
         {
           "name": "SrcFile",
@@ -29650,6 +30479,9 @@
             "location": "apps/api/scripts/seed-matter-activity.ts#11"
           },
           {
+            "location": "apps/api/scripts/seed-seal.ts#25"
+          },
+          {
             "location": "apps/api/scripts/seed-test-user.ts#22"
           },
           {
@@ -29686,10 +30518,10 @@
             "location": "apps/api/src/db/columns.ts#2"
           },
           {
-            "location": "apps/api/src/db/decision-date-ceiling-repair.ts#28"
+            "location": "apps/api/src/db/decision-date-ceiling-repair.ts#30"
           },
           {
-            "location": "apps/api/src/db/decision-date-ceiling-repair.ts#29"
+            "location": "apps/api/src/db/decision-date-ceiling-repair.ts#31"
           },
           {
             "location": "apps/api/src/db/json-utils.ts#2"
@@ -30046,10 +30878,10 @@
             "location": "apps/api/src/handlers/case-law/provisions/citing-decisions.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#1"
+            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#2"
+            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts#2"
@@ -30094,7 +30926,7 @@
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-turn-persistence.ts#3"
+            "location": "apps/api/src/handlers/chat/chat-turn-persistence.ts#12"
           },
           {
             "location": "apps/api/src/handlers/chat/file-thread-mapping.ts#1"
@@ -30142,7 +30974,7 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#13"
           },
           {
             "location": "apps/api/src/handlers/chat/threads/delete.ts#2"
@@ -30961,9 +31793,6 @@
             "location": "apps/api/src/handlers/skills/revisions/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/skills/seed.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/skills/update.ts#2"
           },
           {
@@ -31096,7 +31925,7 @@
             "location": "apps/api/src/handlers/time-entries/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/uploads/agent-skill.ts#12"
+            "location": "apps/api/src/handlers/uploads/agent-skill.ts#11"
           },
           {
             "location": "apps/api/src/handlers/uploads/delete.ts#14"
@@ -31285,6 +32114,9 @@
             "location": "apps/api/src/lib/agent-skills/access.ts#2"
           },
           {
+            "location": "apps/api/src/lib/agent-skills/content-hash.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/agent-skills/revisions.ts#1"
           },
           {
@@ -31292,6 +32124,9 @@
           },
           {
             "location": "apps/api/src/lib/agent-skills/skills.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/team-skill-refs.ts#1"
           },
           {
             "location": "apps/api/src/lib/ai-config-loader.ts#12"
@@ -31414,6 +32249,12 @@
             "location": "apps/api/src/lib/case-law/search-sql.ts#1"
           },
           {
+            "location": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/sitemap-shard-sql.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/case-law/stored-analysis.ts#2"
           },
           {
@@ -31427,6 +32268,9 @@
           },
           {
             "location": "apps/api/src/lib/chat/thread-compaction.ts#28"
+          },
+          {
+            "location": "apps/api/src/lib/chat/thread-names.ts#2"
           },
           {
             "location": "apps/api/src/lib/confirmation-otp.ts#2"
@@ -31474,10 +32318,10 @@
             "location": "apps/api/src/lib/db-query-counter.ts#1"
           },
           {
-            "location": "apps/api/src/lib/decision-date-bounds-sql.ts#25"
+            "location": "apps/api/src/lib/decision-date-bounds-sql.ts#32"
           },
           {
-            "location": "apps/api/src/lib/decision-date-bounds-sql.ts#26"
+            "location": "apps/api/src/lib/decision-date-bounds-sql.ts#33"
           },
           {
             "location": "apps/api/src/lib/delete-account.ts#2"
@@ -31813,7 +32657,7 @@
             "location": "apps/api/src/lib/legal-search/legislation-validity-window.ts#2"
           },
           {
-            "location": "apps/api/src/lib/legal-search/legislation-version-blocks.ts#1"
+            "location": "apps/api/src/lib/legal-search/legislation-version-blocks.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/legislation-works-at-date.ts#1"
@@ -31940,6 +32784,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/runner.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.ts#2"
           },
           {
             "location": "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts#2"
@@ -32239,9 +33086,6 @@
             "location": "apps/api/src/mcp/gateway/external-tools.ts#3"
           },
           {
-            "location": "apps/api/src/mcp/gateway/skills.ts#2"
-          },
-          {
             "location": "apps/api/src/mcp/stella-tools.ts#2"
           },
           {
@@ -32419,7 +33263,7 @@
             "location": "apps/api/src/db/columns.ts#2"
           },
           {
-            "location": "apps/api/src/db/decision-date-ceiling-repair.ts#29"
+            "location": "apps/api/src/db/decision-date-ceiling-repair.ts#31"
           },
           {
             "location": "apps/api/src/db/rls.ts#3"
@@ -32769,10 +33613,10 @@
             "location": "apps/api/src/handlers/case-law/provisions/citing-decisions.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#3"
+            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#4"
+            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#5"
           },
           {
             "location": "apps/api/src/handlers/case-law/public-routes.ts#2"
@@ -32856,6 +33700,9 @@
             "location": "apps/api/src/handlers/chat/threads/update.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/chat/turns/cancel.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/update-thread-model.ts#3"
           },
           {
@@ -32935,6 +33782,12 @@
           },
           {
             "location": "apps/api/src/handlers/clauses/versions/summarize.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/business-registries/check.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/business-registries/check.ts#3"
           },
           {
             "location": "apps/api/src/handlers/contacts/business-registries/lookup.ts#2"
@@ -33178,6 +34031,9 @@
           },
           {
             "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/publish-folio-collab-version.ts#4"
           },
           {
             "location": "apps/api/src/handlers/entities/read-group-counts.ts#4"
@@ -33493,6 +34349,9 @@
           },
           {
             "location": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/lists/generation-candidates/acceptance/create.ts#4"
           },
           {
             "location": "apps/api/src/handlers/lists/generation-candidates/create.ts#3"
@@ -34903,6 +35762,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "packages/mojibake/node_modules/fast-check/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "packages/legal-ast/node_modules/fast-check/package.json"
         },
         {
@@ -34945,6 +35808,133 @@
       ],
       "type": "framework",
       "version": "4.10.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Amit Gupta (https://solothought.com)"
+        }
+      ],
+      "bom-ref": "pkg:npm/fast-xml-parser@5.10.1",
+      "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/fast-xml-parser/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/fast-xml-parser/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/business-registries/src/entity-checks/soap.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/fast-xml-parser.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "fast-xml-parser",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/business-registries/node_modules/fast-xml-parser/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/fast-xml-parser/package.json"
+        }
+      ],
+      "purl": "pkg:npm/fast-xml-parser@5.10.1",
+      "scope": "required",
+      "tags": [
+        "parse",
+        "xml"
+      ],
+      "type": "library",
+      "version": "5.10.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Amit Gupta (https://solothought.com)"
+        }
+      ],
+      "bom-ref": "pkg:npm/fast-xml-validator@1.4.2",
+      "description": "Validate XML for Syntax and Business rules without C/C++ based libraries",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/fast-xml-validator/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/fast-xml-validator/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/business-registries/src/entity-checks/soap.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/fast-xml-validator.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "fast-xml-validator",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/business-registries/node_modules/fast-xml-validator/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/fast-xml-validator/package.json"
+        }
+      ],
+      "purl": "pkg:npm/fast-xml-validator@1.4.2",
+      "scope": "required",
+      "tags": [
+        "xml"
+      ],
+      "type": "library",
+      "version": "1.4.2"
     },
     {
       "authors": [
@@ -35854,7 +36844,7 @@
             "location": "apps/web/src/components/document-icon.tsx#4"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#33"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#16"
           },
           {
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#3"
@@ -35920,7 +36910,10 @@
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#5"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#18"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#4"
@@ -35939,6 +36932,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/markdown-file-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#30"
@@ -36202,6 +37198,9 @@
             "location": "apps/web/src/features/avt/document-verifications.tsx#7"
           },
           {
+            "location": "apps/web/src/features/avt/run-history-picker.tsx#7"
+          },
+          {
             "location": "apps/web/src/features/avt/state-chip.tsx#21"
           },
           {
@@ -36379,7 +37378,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#15"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-detail-panel.tsx#16"
@@ -37885,10 +38884,16 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#4"
           },
           {
-            "location": "apps/web/src/components/dev/autocomplete-playground.tsx#9"
+            "location": "apps/web/src/components/docx/docx-anonymization-detection.ts#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#34"
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#5"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-view.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/dev/autocomplete-playground.tsx#9"
           },
           {
             "location": "apps/web/src/components/docx/evidence-references.tsx#7"
@@ -38530,10 +39535,67 @@
             "location": "apps/web/src/components/docx/docx-editor-host.logic.ts#22"
           },
           {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-active-docx-registration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-anonymization.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-block-scroll.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-collaboration.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-browser-editor-actions.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-comments.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-compatibility.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-mode.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-view.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-editor-viewport.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-docx-find.ts#1"
@@ -38542,13 +39604,40 @@
             "location": "apps/web/src/components/docx/use-docx-find.ts#2"
           },
           {
+            "location": "apps/web/src/components/docx/use-docx-preview-file.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-unlock-transition.ts#2"
+          },
+          {
             "location": "apps/web/src/components/docx/use-edit-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-evidence-reference-insertion.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-evidence-references.ts#1"
           },
           {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-retained-style-picker-label.ts#2"
           },
           {
             "location": "apps/web/src/components/docx/use-sync-docx-suggestions.ts#13"
@@ -38572,10 +39661,22 @@
             "location": "apps/web/src/components/inspector/skill-history/use-skill-history-actions.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-docx-editor-bindings.ts#2"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
           },
           {
+            "location": "apps/web/src/components/inspector/use-email-attachment-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-pdf-tab-zoom.ts#1"
@@ -39250,16 +40351,19 @@
             "location": "apps/web/src/components/docx/app-docx-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#8"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#1"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#18"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#6"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#13"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-action-bar.tsx#14"
+          },
+          {
+            "location": "apps/web/src/components/docx/docx-editor-ai-overlay.tsx#1"
           },
           {
             "location": "apps/web/src/components/docx/docx-editor-host-instance.tsx#15"
@@ -39373,10 +40477,22 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-full-view.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#7"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -40208,6 +41324,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#1"
@@ -41516,6 +42635,12 @@
             "location": "packages/business-registries/src/edgar/parse.ts#2"
           },
           {
+            "location": "packages/business-registries/src/entity-checks/result.ts#3"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/run.ts#7"
+          },
+          {
             "location": "packages/business-registries/src/gcis/parse.ts#2"
           },
           {
@@ -41595,6 +42720,12 @@
           },
           {
             "location": "packages/business-registries/src/edgar/parse.ts#2"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/result.ts#3"
+          },
+          {
+            "location": "packages/business-registries/src/entity-checks/run.ts#7"
           },
           {
             "location": "packages/business-registries/src/gcis/parse.ts#2"
@@ -41875,7 +43006,7 @@
             "location": "scripts/rc-bailouts.ts#24"
           },
           {
-            "location": "scripts/root-connection-shapes.ts#35"
+            "location": "scripts/root-connection-shapes.ts#48"
           },
           {
             "location": "scripts/typecheck-coverage.ts#21"
@@ -41987,7 +43118,7 @@
             "location": "scripts/rc-bailouts.ts#24"
           },
           {
-            "location": "scripts/root-connection-shapes.ts#35"
+            "location": "scripts/root-connection-shapes.ts#48"
           },
           {
             "location": "scripts/typecheck-coverage.ts#21"
@@ -42180,6 +43311,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/web/src/components/docx/use-docx-checkpoint-autosave.ts#4"
+          },
+          {
             "location": "apps/web/src/components/docx/use-docx-find.ts#4"
           },
           {
@@ -42220,9 +43354,6 @@
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#6"
-          },
-          {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#35"
           },
           {
             "location": "apps/web/src/components/docx/evidence-references.tsx#8"
@@ -42371,6 +43502,15 @@
             "location": "apps/web/src/components/chat/use-chat-model-selection.ts#4"
           },
           {
+            "location": "apps/web/src/components/docx/use-collaboration-version-publisher.ts#6"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-edit-opening.ts#4"
+          },
+          {
+            "location": "apps/web/src/components/docx/use-docx-session-finish.ts#5"
+          },
+          {
             "location": "apps/web/src/components/docx/use-folio-collaboration-room.ts#6"
           },
           {
@@ -42387,6 +43527,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/use-markdown-file-draft.ts#4"
           },
           {
             "location": "apps/web/src/components/legal-reader/annotations/use-reader-annotations.ts#5"
@@ -42767,7 +43910,7 @@
             "location": "apps/web/src/components/document-language-picker.tsx#7"
           },
           {
-            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#36"
+            "location": "apps/web/src/components/docx/docx-browser-editor.tsx#17"
           },
           {
             "location": "apps/web/src/components/docx/docx-find-bar.tsx#4"
@@ -42857,7 +44000,13 @@
             "location": "apps/web/src/components/inspector/file-facets.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#19"
+            "location": "apps/web/src/components/inspector/file-tab-header.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
@@ -42885,6 +44034,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/inspector/markdown-file-viewer.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#31"
@@ -43259,6 +44411,9 @@
             "location": "apps/web/src/features/avt/document-verifications.tsx#8"
           },
           {
+            "location": "apps/web/src/features/avt/run-history-picker.tsx#8"
+          },
+          {
             "location": "apps/web/src/features/avt/state-chip.tsx#22"
           },
           {
@@ -43529,7 +44684,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#16"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-detail-panel.tsx#17"
@@ -43539,6 +44694,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-catalogue-removal.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#10"
@@ -44328,6 +45486,15 @@
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#15"
           },
           {
+            "location": "apps/api/scripts/mcp-surface-baseline.ts#30"
+          },
+          {
+            "location": "apps/api/scripts/mcp-surface-token-calibration.ts#17"
+          },
+          {
+            "location": "apps/api/scripts/record-provider-cassettes.ts#36"
+          },
+          {
             "location": "apps/api/scripts/seed-case-law.ts#23"
           },
           {
@@ -44377,6 +45544,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/provisions/list-for-decision.ts#6"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#11"
@@ -44487,6 +45657,9 @@
             "location": "apps/api/src/handlers/skills/proposals/from-comments/create.ts#4"
           },
           {
+            "location": "apps/api/src/handlers/skills/slug.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/template-recipes/definition.ts#1"
           },
           {
@@ -44530,6 +45703,9 @@
           },
           {
             "location": "apps/api/src/lib/chat/projections.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/ref-registry.ts#2"
           },
           {
             "location": "apps/api/src/lib/conditions/parse-stored.ts#6"
@@ -44643,7 +45819,7 @@
             "location": "apps/api/src/lib/secret-brands.ts#17"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#16"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#15"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
@@ -44736,6 +45912,9 @@
             "location": "apps/api/src/mcp/file-comparison-prepare-tool.ts#10"
           },
           {
+            "location": "apps/api/src/mcp/gateway/dispatch-call.ts#3"
+          },
+          {
             "location": "apps/api/src/mcp/gateway/dynamic-tool-policy.ts#1"
           },
           {
@@ -44824,6 +46003,9 @@
           },
           {
             "location": "apps/collab/src/server.ts#11"
+          },
+          {
+            "location": "apps/extension/src/lib/popup-request.ts#1"
           },
           {
             "location": "apps/extension/src/lib/snapshot-merge.ts#1"
@@ -45048,7 +46230,7 @@
             "location": "packages/template-packs/src/schema.ts#9"
           },
           {
-            "location": "scripts/design-lint-baseline.ts#27"
+            "location": "scripts/design-lint-baseline.ts#28"
           },
           {
             "location": "scripts/env-catalog.ts#1"
@@ -45057,7 +46239,13 @@
             "location": "scripts/env-tool.ts#14"
           },
           {
+            "location": "scripts/generate-us-courts.ts#39"
+          },
+          {
             "location": "scripts/selfhost-contract.ts#1"
+          },
+          {
+            "location": "scripts/tanstack-drift.ts#34"
           },
           {
             "location": "apps/web/src/components/api-version-mismatch-refresh.tsx#6"
@@ -45285,10 +46473,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/extension/src/entrypoints/background.ts#1"
+            "location": "apps/extension/src/entrypoints/background.ts#2"
           },
           {
-            "location": "apps/extension/src/entrypoints/background.ts#1"
+            "location": "apps/extension/src/entrypoints/background.ts#2"
           },
           {
             "location": "apps/extension/src/entrypoints/bridge.content.ts#1"

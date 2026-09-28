@@ -388,7 +388,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   return decision;
 };
 
-export const createPublicCaseLawDecisionHead = ({
+export const createPublicCaseLawDecisionHead = async ({
   decision,
   params,
 }: PublicDecisionHeadOptions) => {
@@ -398,7 +398,7 @@ export const createPublicCaseLawDecisionHead = ({
   return createPublicLawHead({
     alternateLinks: createDecisionAlternateLinks(decision),
     description: buildDescription(decision),
-    jsonLd: createCaseLawDecisionJsonLd({
+    jsonLd: await createCaseLawDecisionJsonLd({
       canonicalUrl,
       caseNumber: decision.caseNumber,
       country: decision.country,

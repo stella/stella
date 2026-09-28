@@ -801,6 +801,12 @@
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
+    "seo": {
+      "collectionName": "Stella tiesu prakse",
+      "description": "Publiska tiesu prakses datubāze ar indeksējamiem tiesu nolēmumiem un tiesību avotiem.",
+      "homeDescription": "Publiska juridiskā datubāze: tiesu nolēmumi un konsolidēti tiesību akti, meklējami pēc identifikatora vai vārdiem.",
+      "scopedDescription": "Publiska tiesu prakses datubāze ({scope}) ar indeksējamiem tiesu nolēmumiem un tiesību avotiem."
+    },
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
@@ -1928,6 +1934,41 @@
       "organization": "Organizācija",
       "person": "Persona"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Lietas e-pasta adrese",
+    "assertedOriginal": "Sākotnējās galvenes (pēc pārsūtītāja norādītā)",
+    "authResults": {
+      "fail": "Neizdevās",
+      "pass": "Izdevās",
+      "unknown": "Nav noteikts"
+    },
+    "backToList": "Atpakaļ uz saraksti",
+    "createAddress": "Izveidot adresi",
+    "deliveredBy": "Piegādāja <address>{sender}</address>",
+    "deliveredByAuthenticated": "Piegādāja <address>{sender}</address> · autentificēts",
+    "deliveryAuthentication": "Piegādes autentifikācija",
+    "empty": "Sarakstes vēl nav.",
+    "filers": "Iesniedzēji",
+    "forwardedBy": "Pārsūtīja <address>{sender}</address>",
+    "forwardedByAuthenticated": "Pārsūtīja <address>{sender}</address> · autentificēts",
+    "inboundNotConfigured": "Ienākošais e-pasts nav konfigurēts. Lūdziet administratoram konfigurēt ienākošā pasta domēnu.",
+    "markHandled": "Atzīmēt kā izskatītu",
+    "markNew": "Atzīmēt kā jaunu",
+    "noAddress": "Nav aktīvas e-pasta adreses.",
+    "originalSender": "Sākotnējais sūtītājs",
+    "originalSenderUnverified": "Sākotnējais sūtītājs (norādīts, nav pārbaudīts)",
+    "originalSignatureVerified": "Sākotnējais paraksts pārbaudīts (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Saņemts",
+    "revokeAddress": "Atsaukt adresi",
+    "rotateAddress": "Mainīt adresi",
+    "sentAt": "Nosūtīts",
+    "sharedMailboxFiler": "Koplietota pastkaste {address}, apstiprināja {approver}",
+    "states": {
+      "handled": "Izskatīts"
+    },
+    "title": "Sarakste",
+    "unknownApprover": "Nezināms apstiprinātājs"
   },
   "docxReview": {
     "acceptAll": "Pieņemt visu",
@@ -4302,6 +4343,7 @@
     "compareVersionMissing": "Salīdzināmās redakcijas šī akta vēsturē nav.",
     "compareWholeAct": "Salīdzināt visu aktu",
     "compareWithVersion": "Salīdzināt ar redakciju {version}",
+    "description": "Publiska konsolidētu tiesību aktu datubāze, indeksējama pēc akta un tā redakcijas.",
     "diffInserted": "Pievienots:",
     "diffRemoved": "Svītrots:",
     "emptyDocument": "Šai redakcijai nav pieejams teksts.",
@@ -5359,6 +5401,7 @@
         },
         "targets": {
           "automation": "automatizācija",
+          "correspondence": "sarakste",
           "court": "tiesas ieraksts",
           "document": "dokuments",
           "documentReview": "dokumenta pārbaude",

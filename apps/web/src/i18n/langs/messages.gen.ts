@@ -804,6 +804,12 @@ type Messages = {
       "resultsFor": "Results for: <bdi>{query}</bdi>";
       "searchEveryWord": "Search every word";
     };
+    "seo": {
+      "collectionName": "Stella case law";
+      "description": "Public case-law database with indexable court decisions and legal source materials.";
+      "homeDescription": "Public legal database: court decisions and consolidated statutes, searchable by identifier or by words.";
+      "scopedDescription": "Public case-law database for {scope}, with indexable court decisions and legal source materials.";
+    };
     "showWholeHeadnote": "Show whole headnote";
     "sort": {
       "newest": "Newest";
@@ -1931,6 +1937,41 @@ type Messages = {
       "organization": "Organization";
       "person": "Person";
     };
+  };
+  "correspondence": {
+    "addressTitle": "Matter email address";
+    "assertedOriginal": "Original headers (as stated by the forwarder)";
+    "authResults": {
+      "fail": "Fail";
+      "pass": "Pass";
+      "unknown": "Not determined";
+    };
+    "backToList": "Back to correspondence";
+    "createAddress": "Create address";
+    "deliveredBy": "Delivered by <address>{sender}</address>";
+    "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated";
+    "deliveryAuthentication": "Delivery authentication";
+    "empty": "No correspondence yet.";
+    "filers": "Filers";
+    "forwardedBy": "Forwarded by <address>{sender}</address>";
+    "forwardedByAuthenticated": "Forwarded by <address>{sender}</address> · authenticated";
+    "inboundNotConfigured": "Incoming email is not configured. Ask your administrator to set up the inbound mail domain.";
+    "markHandled": "Mark handled";
+    "markNew": "Mark new";
+    "noAddress": "No email address is active.";
+    "originalSender": "Original sender";
+    "originalSenderUnverified": "Original sender (as stated, not verified)";
+    "originalSignatureVerified": "Original signature verified (<identifier>d={domain}</identifier>)";
+    "receivedAt": "Received";
+    "revokeAddress": "Revoke address";
+    "rotateAddress": "Rotate address";
+    "sentAt": "Sent on";
+    "sharedMailboxFiler": "Shared mailbox {address}, approved by {approver}";
+    "states": {
+      "handled": "Handled";
+    };
+    "title": "Correspondence";
+    "unknownApprover": "Unknown approver";
   };
   "docxReview": {
     "acceptAll": "Accept all";
@@ -4305,6 +4346,7 @@ type Messages = {
     "compareVersionMissing": "The version to compare with is not in this act's history.";
     "compareWholeAct": "Compare the whole act";
     "compareWithVersion": "Compare with {version}";
+    "description": "Public database of consolidated statutes, indexable by act and version.";
     "diffInserted": "Inserted:";
     "diffRemoved": "Deleted:";
     "emptyDocument": "This version has no text available.";
@@ -5362,6 +5404,7 @@ type Messages = {
         };
         "targets": {
           "automation": "automation";
+          "correspondence": "correspondence";
           "court": "court record";
           "document": "document";
           "documentReview": "document review";

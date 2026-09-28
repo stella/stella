@@ -41,6 +41,7 @@ import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
+import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1394,7 +1395,10 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       // phrasing that required every word it carried and found something.
       warnings: v.array(
         v.strictObject({
-          code: v.picklist(CASE_LAW_SEARCH_WARNING_CODES),
+          code: v.picklist([
+            ...CASE_LAW_SEARCH_WARNING_CODES,
+            ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
+          ]),
           message: v.string(),
           hint: v.string(),
         }),

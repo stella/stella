@@ -397,14 +397,14 @@
     {
       "id": "stream-ends-in-one-terminal-event",
       "fix": "maintenance",
-      "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
+      "behaviour": "A provider stream that stops before its terminal event ends in a run error, also from an adapter that reports no terminal event of its own.",
       "status": "active",
       "file": "src/lib/chat/provider-stream-contract.ts",
       "search": "if (!ended && signal?.aborted !== true) {\n    yield runError(options.model, {",
       "replace": "if (false) {\n    yield runError(options.model, {",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
-        "test": "anthropic early-eof"
+        "test": "a cut-off stream an adapter leaves unended"
       },
       "oracle": "chat.provider-wire.one-terminal"
     },
@@ -439,7 +439,7 @@
     {
       "id": "run-continues-stored-thread",
       "fix": "#3885",
-      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it.",
+      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it, so it reads a replaced call the way every later request does.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
       "search": "message.id === supersededMessage.id",
@@ -448,7 +448,7 @@
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
       },
-      "oracle": "chat.live.equals-reload"
+      "oracle": "chat.provider.results-stable"
     },
     {
       "id": "superseding-turn-opens-with-stored-message",
