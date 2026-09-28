@@ -428,7 +428,8 @@ export const answerCallsInTheirStep = (
         : [],
     ),
   );
-  const answersBefore = new Map<number, ToolResultPart[]>();
+  // Each answer with the index of the part it goes before, in call order.
+  const answers: { answer: ToolResultPart; at: number }[] = [];
   for (const [index, part] of parts.entries()) {
     if (part.type !== "tool-call" || answeredIds.has(part.id)) {
       continue;
@@ -437,13 +438,13 @@ export const answerCallsInTheirStep = (
     const at = answerIndexInStep(parts, index);
     // A step that ends the message already has the SDK's answers after it.
     if (answer !== undefined && at < parts.length) {
-      answersBefore.set(at, [...(answersBefore.get(at) ?? []), answer]);
+      answers.push({ answer, at });
     }
   }
-  return answersBefore.size === 0
+  return answers.length === 0
     ? parts
     : parts.flatMap((part, index) => [
-        ...(answersBefore.get(index) ?? []),
+        ...answers.flatMap(({ answer, at }) => (at === index ? [answer] : [])),
         part,
       ]);
 };
