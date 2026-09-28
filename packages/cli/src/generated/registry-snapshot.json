@@ -4721,13 +4721,13 @@
           "anyOf": [
             {
               "type": "string",
-              "format": "date",
-              "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+              "format": "date"
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
         },
         "time_narrative_required": {
           "type": "boolean",

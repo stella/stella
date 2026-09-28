@@ -2927,13 +2927,13 @@ export const generatedRouteMap: RouteNode = {
                     {
                       type: "string",
                       format: "date",
-                      description:
-                        "Last day of the latest locked month, or null to unlock (update_org_settings)",
                     },
                     {
                       type: "null",
                     },
                   ],
+                  description:
+                    "Last day of the latest locked month, or null to unlock (update_org_settings)",
                 },
                 time_narrative_required: {
                   type: "boolean",
@@ -3046,13 +3046,13 @@ export const generatedRouteMap: RouteNode = {
                     {
                       type: "string",
                       format: "date",
-                      description:
-                        "Last day of the latest locked month, or null to unlock (update_org_settings)",
                     },
                     {
                       type: "null",
                     },
                   ],
+                  description:
+                    "Last day of the latest locked month, or null to unlock (update_org_settings)",
                 },
                 time_narrative_required: {
                   type: "boolean",
@@ -3188,13 +3188,13 @@ export const generatedRouteMap: RouteNode = {
                     {
                       type: "string",
                       format: "date",
-                      description:
-                        "Last day of the latest locked month, or null to unlock (update_org_settings)",
                     },
                     {
                       type: "null",
                     },
                   ],
+                  description:
+                    "Last day of the latest locked month, or null to unlock (update_org_settings)",
                 },
                 time_narrative_required: {
                   type: "boolean",
