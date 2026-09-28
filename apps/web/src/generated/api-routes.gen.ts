@@ -747,6 +747,24 @@ export type WebRoutes = {
       };
     };
   };
+  smoke: {
+    session: {
+      post: {
+        body: unknown;
+        params: T5e3ac29766;
+        query: unknown;
+        headers: unknown;
+        response: {
+          200: (Response | {
+            cookieName: string;
+            cookieValue: string;
+            expiresAt: string;
+          });
+        };
+      };
+    };
+  };
+} & {
   "dev-public": {
     "last-otp": {
       get: {
@@ -769,23 +787,6 @@ export type WebRoutes = {
             property?: string;
             expected?: string;
           };
-        };
-      };
-    };
-  };
-  smoke: {
-    session: {
-      post: {
-        body: unknown;
-        params: T5e3ac29766;
-        query: unknown;
-        headers: unknown;
-        response: {
-          200: (Response | {
-            cookieName: string;
-            cookieValue: string;
-            expiresAt: string;
-          });
         };
       };
     };
@@ -12053,164 +12054,6 @@ export type WebRoutes = {
               property?: string;
               expected?: string;
             };
-            500: never;
-          };
-        };
-      };
-    };
-    dev: {
-      seed: {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: T1912688821;
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      seed: {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: T1912688821;
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "seed-firm-knowledge": {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: {
-            jobId: string;
-          };
-          headers: Record<never, never>;
-          response: {
-            200: T270991263d;
-            401: never;
-            422: {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            };
-            500: never;
-          };
-        };
-      };
-    } & {
-      "seed-firm-knowledge": {
-        post: {
-          body: (null | {
-            matters?: number;
-            organizationId?: string;
-            incompleteMatterMode?: "skip" | "replace";
-            selectionSeed?: string;
-          });
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: T270991263d;
-            401: never;
-            422: {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            };
-            500: never;
-          };
-        };
-      };
-    } & {
-      clean: {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | {
-              ok: Tfddd645dc8;
-            });
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "rebuild-search": {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | {
-              ok: Tfddd645dc8;
-            });
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "clear-cache": {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | {
-              ok: Tfddd645dc8;
-            });
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "public-law-connection": {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | Tb54386b5fb | T18754db7fb | T09d1419f79 | T7cacacdd34 | T238b2f5b62);
-            401: never;
-            500: never;
-          };
-        };
-      };
-    } & {
-      "public-law-connection": {
-        post: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: (Response | Tb54386b5fb | T18754db7fb | T09d1419f79 | T7cacacdd34 | T238b2f5b62);
-            401: never;
             500: never;
           };
         };
@@ -24826,6 +24669,183 @@ export type WebRoutes = {
       };
     };
   } & {
+    dev: T5e3ac29766;
+  } & {
+    dev: {
+      seed: {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T92e9230d1b;
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      seed: {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T92e9230d1b;
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "seed-firm-knowledge": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: {
+            jobId: string;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: T13b00b267e;
+            401: never;
+            422: {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            };
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "seed-firm-knowledge": {
+        post: {
+          body: (null | {
+            matters?: number;
+            organizationId?: string;
+            incompleteMatterMode?: "skip" | "replace";
+            selectionSeed?: string;
+          });
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T13b00b267e;
+            401: never;
+            422: {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            };
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      clean: {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | {
+              ok: Tfddd645dc8;
+            });
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "rebuild-search": {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | {
+              ok: Tfddd645dc8;
+            });
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "clear-cache": {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | {
+              ok: Tfddd645dc8;
+            });
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "public-law-connection": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | T37fe4edf98 | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
+    dev: {
+      "public-law-connection": {
+        post: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: (Response | T37fe4edf98 | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
+            401: never;
+            500: never;
+          };
+        };
+      };
+    };
+  } & {
     entities: (Record<never, never> & {
       ":workspaceId": {
         query: {
@@ -32934,10 +32954,6 @@ type T09c57cc1dd = null | T0da73a8dae;
 
 type T09d040568c = "Internal Server Error" | T9a51b7d2bc;
 
-type T09d1419f79 = {
-  status: "connected";
-};
-
 type T09dc0536e6 = stll_api_contract_AgendaItemWireFields & {
   entityId: string;
   workspaceId: string;
@@ -33220,6 +33236,26 @@ type T13442801e2 = {
 
 type T139d25f59c = "task" | "activity";
 
+type T13b00b267e = Response | {
+  status: "idle";
+  jobId: string;
+} | {
+  status: "running";
+  startedAt: string;
+  jobId: string;
+} | {
+  status: "succeeded";
+  startedAt: string;
+  finishedAt: string;
+  jobId: string;
+} | {
+  status: "failed";
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+  jobId: string;
+};
+
 type T13c40e7e09 = {
   status: "unverified";
 } | {
@@ -33286,28 +33322,8 @@ type T1856d5abc1 = {
   url: string;
 };
 
-type T18754db7fb = {
-  status: "connecting";
-};
-
 type T18f0d4543f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentReviewFinding";
-};
-
-type T1912688821 = Response | {
-  status: "idle";
-} | {
-  status: "running";
-  startedAt: string;
-} | {
-  status: "succeeded";
-  startedAt: string;
-  finishedAt: string;
-} | {
-  status: "failed";
-  startedAt: string;
-  finishedAt: string;
-  message: string;
 };
 
 type T19752008a0 = null | "reviewed" | "disputed";
@@ -33611,11 +33627,6 @@ type T22d9b74f40 = {
 
 type T23680c2d7b = "global" | "ch" | "eu";
 
-type T238b2f5b62 = {
-  status: "failed";
-  message: string;
-};
-
 type T239c95b432 = {
   readonly value: Taf56293cce;
   readonly issues?: undefined;
@@ -33678,26 +33689,6 @@ type T26d760a340 = {
 type T26ffdbcefc = {
   readonly value: T0739338f2c;
   readonly issues?: undefined;
-};
-
-type T270991263d = Response | {
-  status: "idle";
-  jobId: string;
-} | {
-  status: "running";
-  startedAt: string;
-  jobId: string;
-} | {
-  status: "succeeded";
-  startedAt: string;
-  finishedAt: string;
-  jobId: string;
-} | {
-  status: "failed";
-  startedAt: string;
-  finishedAt: string;
-  message: string;
-  jobId: string;
 };
 
 type T270af050c9 = {
@@ -33787,7 +33778,7 @@ type T270af050c9 = {
         rationale: Tbe0400fa4c;
         matchedRef?: T6b29dee50d | Tcbd1655cb4;
         consensus?: "mixed" | "single" | "consistent";
-        impact?: "unknown" | "neutral" | "favourable" | "unfavourable";
+        impact?: "neutral" | "unknown" | "favourable" | "unfavourable";
         explanation?: {
           type: "comparison";
           text: string;
@@ -34130,6 +34121,10 @@ type T2f575449b0 = string & valibot_Brand<"SafeId"> & {
 
 type T2fb0b2d20e = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
 
+type T2fe5059b53 = {
+  status: "connected";
+};
+
 type T300701e436 = {
   workspaceId: T8d02a37b3f;
 };
@@ -34358,6 +34353,11 @@ type T369422441d = {
 };
 
 type T373044b8de = "workspace" | "download";
+
+type T37fe4edf98 = {
+  status: "unconfigured";
+  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
+};
 
 type T37fefd1259 = {
   entityId: string;
@@ -35104,6 +35104,11 @@ type T5535a308b3 = string & valibot_Brand<"SafeId"> & {
 
 type T561c958713 = {
   code?: string;
+  message: string;
+};
+
+type T563240ea85 = {
+  status: "failed";
   message: string;
 };
 
@@ -36500,11 +36505,6 @@ type T7c5bb3a7e5 = {
   }>;
 };
 
-type T7cacacdd34 = {
-  status: "disconnected";
-  reason: string;
-};
-
 type T7cf33d5fda = {
   documentTypeId: T1cbe63218a;
 };
@@ -36763,6 +36763,10 @@ type T880f60a469 = "Bad Request" | {
   requiredFields?: Array<T81694d3f69>;
 };
 
+type T8833b520cb = {
+  status: "connecting";
+};
+
 type T884a45faa8 = "message" | "document" | "folder" | "task" | "link";
 
 type T888f21ca4b = {
@@ -37006,6 +37010,22 @@ type T92cce81fcb = {
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
+
+type T92e9230d1b = Response | {
+  status: "idle";
+} | {
+  status: "running";
+  startedAt: string;
+} | {
+  status: "succeeded";
+  startedAt: string;
+  finishedAt: string;
+} | {
+  status: "failed";
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+};
 
 type T93760ea794 = {
   readonly input: T52fcbe1ef6;
@@ -37969,11 +37989,6 @@ type Tb44e1703bb = {
 
 type Tb532bdabe3 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateCategory";
-};
-
-type Tb54386b5fb = {
-  status: "unconfigured";
-  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
 };
 
 type Tb5de57bdb6 = {
@@ -38948,6 +38963,11 @@ type Tdf2b0d1150 = null | string;
 
 type Tdf4839a002 = {
   workspaceId: string;
+};
+
+type Tdfa2695a01 = {
+  status: "disconnected";
+  reason: string;
 };
 
 type Tdfa6d7299b = {

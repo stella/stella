@@ -11,6 +11,8 @@
  *
  * Resolved once in `env-base`; every consumer reads that single value.
  */
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
+
 export const CORPUS_STORAGE_MODES = ["off", "dual-write", "canonical"] as const;
 
 export type CorpusStorageMode = (typeof CORPUS_STORAGE_MODES)[number];
@@ -44,7 +46,7 @@ type CorpusStorageInvariantInput = {
    */
   projectionOwner: "external" | undefined;
   corpusBucket: string | undefined;
-  isDev: boolean;
+  runtimeMode: RuntimeMode;
 };
 
 /**
@@ -57,7 +59,7 @@ export const corpusStorageInvariantViolation = ({
   searchProvider,
   projectionOwner,
   corpusBucket,
-  isDev,
+  runtimeMode,
 }: CorpusStorageInvariantInput): string | null => {
   if (mode === "off") {
     return null;
@@ -83,9 +85,9 @@ export const corpusStorageInvariantViolation = ({
     );
   }
 
-  // In deployed envs the corpus must use its own bucket, not the default
-  // document bucket (it falls back to S3_BUCKET only for local dev).
-  if (!isDev && corpusBucket === undefined) {
+  // Outside local development the corpus must use its own bucket, not the
+  // default document bucket.
+  if (runtimeMode.mode !== RUNTIME_MODE.open && corpusBucket === undefined) {
     return `CORPUS_STORAGE_MODE=${mode} requires LEGAL_CORPUS_S3_BUCKET in deployed environments`;
   }
 

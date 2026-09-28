@@ -1,7 +1,14 @@
 import path from "node:path";
 import * as v from "valibot";
 
-import { DEPLOYED_NODE_ENVS, featureFlagSchema } from "@/api/env-base-schema";
+import {
+  NODE_ENV,
+  type NodeEnvLabel,
+  RUNTIME_MODE,
+  type RuntimeMode,
+} from "@stll/runtime-mode";
+
+import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
@@ -576,7 +583,8 @@ type EnvApiInvariantInput = {
   SMTP_PORT?: number | undefined;
   TRANSACTIONAL_EMAIL_FROM?: string | undefined;
   USE_MOCK_AI: boolean;
-  nodeEnv?: string | undefined;
+  nodeEnv: NodeEnvLabel;
+  runtimeMode: RuntimeMode;
 };
 
 export const envApiInvariantViolation = ({
@@ -600,11 +608,13 @@ export const envApiInvariantViolation = ({
   TRANSACTIONAL_EMAIL_FROM,
   USE_MOCK_AI,
   nodeEnv,
+  runtimeMode,
 }: EnvApiInvariantInput): string | null => {
+  const localDevOpen = runtimeMode.mode === RUNTIME_MODE.open;
   if (REPORT_SPECS_DIR !== undefined && REPORT_SPECS_S3_PREFIX !== undefined) {
     return "REPORT_SPECS_DIR and REPORT_SPECS_S3_PREFIX are exclusive; set one.";
   }
-  if (DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")) {
+  if (!localDevOpen) {
     const insecurePublicOrigin = [
       { name: "BETTER_AUTH_URL", value: BETTER_AUTH_URL },
       { name: "FRONTEND_URL", value: FRONTEND_URL },
@@ -627,19 +637,16 @@ export const envApiInvariantViolation = ({
       return "GOTENBERG_URL must use HTTPS unless it targets a loopback address or a private deployment network.";
     }
   }
-  if (E2E_DISABLE_AUTH_RATE_LIMIT && nodeEnv !== "development") {
-    return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.";
-  }
-  // Tests boot with the developer's local .env, so the command may be set
-  // there; only a deployed environment refuses it, and the route that runs it
-  // answers 404 outside development either way.
   if (
-    DEV_PUBLIC_LAW_CONNECT_COMMAND !== undefined &&
-    DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")
+    E2E_DISABLE_AUTH_RATE_LIMIT &&
+    !(localDevOpen && nodeEnv === NODE_ENV.development)
   ) {
+    return "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development with STELLA_LOCAL_DEV=1.";
+  }
+  if (DEV_PUBLIC_LAW_CONNECT_COMMAND !== undefined && !localDevOpen) {
     return "DEV_PUBLIC_LAW_CONNECT_COMMAND is only supported in local development and tests.";
   }
-  if (USE_MOCK_AI && DEPLOYED_NODE_ENVS.has(nodeEnv ?? "")) {
+  if (USE_MOCK_AI && !localDevOpen) {
     return "USE_MOCK_AI is only supported in local development and tests.";
   }
   if (FEATURE_ORG_ACCESS_STATE && ORG_EVALUATION_PERIOD_DAYS === undefined) {

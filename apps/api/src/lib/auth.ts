@@ -28,6 +28,7 @@ import Elysia, { t } from "elysia";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -133,6 +134,7 @@ import {
   MCP_MEMBER_ID_CLAIM,
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
+import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 /** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
@@ -209,17 +211,19 @@ export const runEmailOtpRequestOnResponseSchedule = async ({
 };
 
 type EmailOtpMinimumResponseDurationOptions = {
-  isDev: boolean;
   path: string | undefined;
+  runtimeMode: RuntimeMode;
   type: string;
 };
 
 export const getEmailOtpMinimumResponseDuration = ({
-  isDev,
   path,
+  runtimeMode: mode,
   type,
 }: EmailOtpMinimumResponseDurationOptions): number =>
-  !isDev && path === SEND_VERIFICATION_OTP_PATH && type === "sign-in"
+  mode.mode !== RUNTIME_MODE.open &&
+  path === SEND_VERIFICATION_OTP_PATH &&
+  type === "sign-in"
     ? EMAIL_OTP_MIN_RESPONSE_DURATION_MS
     : 0;
 
@@ -878,10 +882,10 @@ const createAuth = () => {
     trustedOrigins: [
       ...frontendOrigins({
         frontendUrl: env.FRONTEND_URL,
-        isDev: env.isDev,
+        runtimeMode: runtimeMode(),
       }),
-      ...(env.isDev ? ["chrome-extension://*"] : []),
-      ...(env.isDev ? DEV_INSPECTOR_ORIGINS : []),
+      ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
+      ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
     ],
     disabledPaths: [
@@ -1097,8 +1101,8 @@ const createAuth = () => {
         async sendVerificationOTP({ email, otp, type }, ctx) {
           await runEmailOtpRequestOnResponseSchedule({
             responseDelayMs: getEmailOtpMinimumResponseDuration({
-              isDev: env.isDev,
               path: ctx?.path,
+              runtimeMode: runtimeMode(),
               type,
             }),
             runRequest: async () => {
@@ -1122,8 +1126,8 @@ const createAuth = () => {
                   );
               }
 
-              if (env.isDev) {
-                // oxlint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
+              if (isLocalDevOpen()) {
+                // oxlint-disable-next-line no-console -- local development OTP echo (gated on the runtime opt-in; value printed verbatim by design)
                 console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
                 stashDevOtp(email, otp);
                 return;
@@ -1274,7 +1278,7 @@ const createAuth = () => {
         },
         async sendInvitationEmail(data, request) {
           const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
-          if (env.isDev) {
+          if (isLocalDevOpen()) {
             // oxlint-disable-next-line no-console -- dev-only invitation-link echo for local testing
             console.log(
               `[DEV] Org invitation for ${data.email}: ${inviteLink}`,
@@ -1435,7 +1439,7 @@ const createAuth = () => {
         return undefined;
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (!isSessionCreatingAuthPath(ctx.path) || env.isDev) {
+        if (!isSessionCreatingAuthPath(ctx.path) || isLocalDevOpen()) {
           return;
         }
 

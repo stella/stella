@@ -3,7 +3,8 @@
  * nothing. `bun run agent:reset` runs it against a worktree's own stack, then
  * restarts the stack, which migrates, seeds and seals it again.
  *
- * Refuses anything but a local server, and never runs in production.
+ * Refuses anything but a local server, and runs only with local development
+ * access open.
  *
  * Usage:
  *   bun scripts/seed-reset.ts --confirm-local-reset
@@ -13,6 +14,7 @@ import { panic } from "better-result";
 import { SQL } from "bun";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 const CONFIRM_FLAG = "--confirm-local-reset";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -23,9 +25,7 @@ const ADMIN_DATABASE = "postgres";
 if (!process.argv.includes(CONFIRM_FLAG)) {
   panic(`Refusing to reset without ${CONFIRM_FLAG}`);
 }
-if (process.env.NODE_ENV === "production") {
-  panic("Refusing to reset in production");
-}
+requireLocalDevOpen("Resetting the database");
 
 const url = new URL(
   resolveDatabaseUrl() ?? panic("No database connection is configured"),
