@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Postleitzahl",
       "billingAddressState": "Bundesland",
       "color": "Farbe",
-      "dateOfBirth": "Geburtsdatum",
       "day": "Tag",
       "defaultHourlyRate": "Standard-Stundensatz",
       "firstName": "Vorname",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden."
     },
     "invalidDateOfBirth": "Geben Sie ein gültiges Geburtsdatum ein.",
+    "invalidNationalityCodes": "Geben Sie gültige Staatsangehörigkeitscodes ein.",
     "mattersAsClient": "Akten als Klient",
     "newContact": "Neuer Klient",
     "noContactsDescription": "Erstellen Sie Ihren ersten Klienten, um ihn mit Akten zu verknüpfen.",

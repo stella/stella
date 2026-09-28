@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Pašto kodas",
       "billingAddressState": "Valstija / regionas",
       "color": "Spalva",
-      "dateOfBirth": "Gimimo data",
       "day": "Diena",
       "defaultHourlyRate": "Numatytasis valandinis tarifas",
       "firstName": "Vardas",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Nepavyko patikrinti šių kontaktų."
     },
     "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",
+    "invalidNationalityCodes": "Įveskite galiojančius pilietybės kodus.",
     "mattersAsClient": "Bylos kaip klientas",
     "newContact": "Naujas klientas",
     "noContactsDescription": "Sukurkite pirmąjį klientą ir pradėkite jį susieti su bylomis.",

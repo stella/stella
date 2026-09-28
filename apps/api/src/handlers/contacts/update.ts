@@ -203,7 +203,11 @@ export const updateContactHandler = async function* ({
         ...(dateOfBirth === undefined ? {} : dateOfBirthToColumns(dateOfBirth)),
         ...(nationalityCodes === undefined
           ? {}
-          : { nationalityCodes: nationalityCodes ?? [] }),
+          : {
+              nationalityCodes: Array.isArray(nationalityCodes)
+                ? nationalityCodes
+                : [],
+            }),
         ...(defaultHourlyRate === undefined
           ? {}
           : {

@@ -93,6 +93,8 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   invalidCursorResult,
   bindWorkspaceRecorder,
+  countryInputSchema,
+  countryNormalization,
   cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -707,62 +709,66 @@ const saveContactArgsSchema = nullAsAbsent(
         ),
       ),
       date_of_birth: v.optional(
-        v.nullable(
-          v.variant("precision", [
-            v.strictObject({
-              precision: v.literal("year"),
-              year: v.pipe(
-                v.number(),
-                v.integer(),
-                v.minValue(1000),
-                v.maxValue(9999),
-              ),
-            }),
-            v.strictObject({
-              precision: v.literal("month"),
-              year: v.pipe(
-                v.number(),
-                v.integer(),
-                v.minValue(1000),
-                v.maxValue(9999),
-              ),
-              month: v.pipe(
-                v.number(),
-                v.integer(),
-                v.minValue(1),
-                v.maxValue(12),
-              ),
-            }),
-            v.strictObject({
-              precision: v.literal("day"),
-              year: v.pipe(
-                v.number(),
-                v.integer(),
-                v.minValue(1000),
-                v.maxValue(9999),
-              ),
-              month: v.pipe(
-                v.number(),
-                v.integer(),
-                v.minValue(1),
-                v.maxValue(12),
-              ),
-              day: v.pipe(
-                v.number(),
-                v.integer(),
-                v.minValue(1),
-                v.maxValue(31),
-              ),
-            }),
-          ]),
+        v.pipe(
+          v.nullable(
+            v.variant("precision", [
+              v.strictObject({
+                precision: v.literal("year"),
+                year: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.minValue(1000),
+                  v.maxValue(9999),
+                ),
+              }),
+              v.strictObject({
+                precision: v.literal("month"),
+                year: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.minValue(1000),
+                  v.maxValue(9999),
+                ),
+                month: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.minValue(1),
+                  v.maxValue(12),
+                ),
+              }),
+              v.strictObject({
+                precision: v.literal("day"),
+                year: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.minValue(1000),
+                  v.maxValue(9999),
+                ),
+                month: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.minValue(1),
+                  v.maxValue(12),
+                ),
+                day: v.pipe(
+                  v.number(),
+                  v.integer(),
+                  v.minValue(1),
+                  v.maxValue(31),
+                ),
+              }),
+            ]),
+          ),
+          v.description(
+            "Date of birth with known year, month, or day precision; pass null to clear",
+          ),
         ),
       ),
       nationality_codes: v.optional(
-        v.nullable(
-          v.pipe(
-            v.array(v.pipe(v.string(), v.regex(/^[A-Z]{2}$/u))),
-            v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
-          ),
+        v.pipe(
+          v.array(countryInputSchema("Nationality country")),
+          v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
+          v.description("Nationality countries; pass [] to clear"),
         ),
       ),
     }),
@@ -846,7 +852,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
       nationalityCodes: input.nationality_codes,
     });
     if (detailsError) {
-      return errorResult(detailsError.message);
+      return internalFailureResult(detailsError);
     }
     const created = await Result.gen(() =>
       createContactHandler({
@@ -874,8 +880,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
           ...(input.date_of_birth === null || input.date_of_birth === undefined
             ? {}
             : { dateOfBirth: input.date_of_birth }),
-          ...(input.nationality_codes === null ||
-          input.nationality_codes === undefined
+          ...(input.nationality_codes === undefined
             ? {}
             : { nationalityCodes: input.nationality_codes }),
         },
@@ -2336,6 +2341,12 @@ export const MATTER_TOOL_DEFINITIONS = [
       "from); pass contact_id to update. String fields other than " +
       "display_name accept null to clear them.",
     inputSchema: saveContactArgsSchema,
+    inputNormalization: {
+      "nationality_codes[]": countryNormalization({
+        spelling: "alpha-2",
+        tool: "save_contact",
+      }),
+    },
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],
       reason:

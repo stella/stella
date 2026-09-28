@@ -38,29 +38,44 @@ export const ContactPersonDetailsEditor = ({
     contact.nationalityCodes,
   );
   const currentBirthDate = birthDateDraft(contact.dateOfBirth);
+  const hasBirthDateInput = Boolean(
+    birthDate.year || birthDate.month || birthDate.day,
+  );
+  const comparableBirthDate = hasBirthDateInput
+    ? birthDate
+    : birthDateDraft(null);
   const dirty =
-    JSON.stringify(birthDate) !== JSON.stringify(currentBirthDate) ||
+    JSON.stringify(comparableBirthDate) !== JSON.stringify(currentBirthDate) ||
     nationalityCodes.join(",") !== contact.nationalityCodes.join(",");
 
-  const save = async () => {
+  const save = () => {
     const dateOfBirth = parseBirthDateDraft(birthDate);
-    if ((birthDate.year || birthDate.month || birthDate.day) && !dateOfBirth) {
+    if (hasBirthDateInput && !dateOfBirth) {
       stellaToast.add({
         title: t("contacts.invalidDateOfBirth"),
         type: "error",
       });
       return;
     }
-    await updateContact.mutateAsync({
-      contactId: contact.id,
-      dateOfBirth,
-      nationalityCodes,
-    });
-    await invalidateContactCaches(queryClient, {
-      activeOrganizationId,
-      contactId: contact.id,
-    });
-    stellaToast.add({ title: t("contacts.saved"), type: "success" });
+    updateContact.mutate(
+      { contactId: contact.id, dateOfBirth, nationalityCodes },
+      {
+        onSuccess: () => {
+          setBirthDate(birthDateDraft(dateOfBirth));
+          detached(
+            invalidateContactCaches(queryClient, {
+              activeOrganizationId,
+              contactId: contact.id,
+            }),
+            "contact-person-details.invalidate-contact-caches",
+          );
+          stellaToast.add({ title: t("contacts.saved"), type: "success" });
+        },
+        onError: () => {
+          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+        },
+      },
+    );
   };
 
   return (
@@ -78,7 +93,7 @@ export const ContactPersonDetailsEditor = ({
         <div className="mt-4 flex justify-end">
           <Button
             loading={updateContact.isPending}
-            onClick={() => detached(save(), "contact-person-details.save")}
+            onClick={save}
             type="button"
           >
             {t("common.save")}

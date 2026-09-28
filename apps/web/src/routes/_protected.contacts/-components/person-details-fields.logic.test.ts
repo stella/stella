@@ -2,10 +2,16 @@ import { describe, expect, test } from "bun:test";
 
 import {
   birthDateDraft,
+  normalizeBirthDateDigits,
   parseBirthDateDraft,
 } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 
 describe("person date of birth precision", () => {
+  test("accepts Arabic and Eastern Arabic digits at the input boundary", () => {
+    expect(normalizeBirthDateDigits("١٩٨٤")).toBe("1984");
+    expect(normalizeBirthDateDigits("۱۹۸۴")).toBe("1984");
+    expect(normalizeBirthDateDigits("２０００")).toBe("2000");
+  });
   test("preserves year, month, and full-date precision", () => {
     expect(birthDateDraft({ precision: "year", year: 1984 })).toEqual({
       precision: "year",

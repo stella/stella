@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Pasta indekss",
       "billingAddressState": "Novads / reģions",
       "color": "Krāsa",
-      "dateOfBirth": "Dzimšanas datums",
       "day": "Diena",
       "defaultHourlyRate": "Noklusējuma stundas likme",
       "firstName": "Vārds",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas."
     },
     "invalidDateOfBirth": "Ievadiet derīgu dzimšanas datumu.",
+    "invalidNationalityCodes": "Ievadiet derīgus valstspiederības kodus.",
     "mattersAsClient": "Lietas kā klients",
     "newContact": "Jauns klients",
     "noContactsDescription": "Izveidojiet savu pirmo klientu, lai sāktu tos saistīt ar lietām.",

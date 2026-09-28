@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Sihtnumber",
       "billingAddressState": "Maakond",
       "color": "Värv",
-      "dateOfBirth": "Sünniaeg",
       "day": "Päev",
       "defaultHourlyRate": "Vaikimisi tunnitasu",
       "firstName": "Eesnimi",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida."
     },
     "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",
+    "invalidNationalityCodes": "Sisestage kehtivad kodakondsuskoodid.",
     "mattersAsClient": "Toimikud kliendina",
     "newContact": "Uus klient",
     "noContactsDescription": "Looge oma esimene klient, et hakata neid toimikutega siduma.",

@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Kod pocztowy",
       "billingAddressState": "Województwo / stan",
       "color": "Kolor",
-      "dateOfBirth": "Data urodzenia",
       "day": "Dzień",
       "defaultHourlyRate": "Domyślna stawka godzinowa",
       "firstName": "Imię",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Nie udało się sprawdzić tych kontaktów."
     },
     "invalidDateOfBirth": "Wprowadź prawidłową datę urodzenia.",
+    "invalidNationalityCodes": "Wprowadź prawidłowe kody narodowości.",
     "mattersAsClient": "Sprawy jako klient",
     "newContact": "Nowy klient",
     "noContactsDescription": "Utwórz pierwszego klienta, aby zacząć przypisywać go do spraw.",

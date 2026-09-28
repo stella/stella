@@ -1,5 +1,9 @@
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
+import { COUNTRY_CODES } from "@stll/country-codes";
+
+import { contactImportCandidateSchema } from "./contact-import-schema";
 import {
   dateOfBirthFromColumns,
   dateOfBirthToColumns,
@@ -7,6 +11,15 @@ import {
 } from "./person-details";
 
 describe("person contact details", () => {
+  test("the import draft accepts the full country-code set", () => {
+    expect(
+      Value.Check(contactImportCandidateSchema, {
+        type: "person",
+        displayName: "Example Person",
+        nationalityCodes: [...COUNTRY_CODES],
+      }),
+    ).toBe(true);
+  });
   test("every date precision roundtrips through typed columns", () => {
     const dates = [
       { precision: "year", year: 1984 },

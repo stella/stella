@@ -1830,20 +1830,19 @@ type Messages = {
       "billingAddressPostalCode": "Postal code";
       "billingAddressState": "State";
       "color": "Color";
-      "dateOfBirth": "Date of birth";
-      "day": "Day";
+      "day": "Day of birth";
       "defaultHourlyRate": "Default hourly rate";
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
-      "month": "Month";
+      "month": "Month of birth";
       "nationalities": "Nationalities";
       "paymentTermDays": "Payment terms (days)";
       "prefix": "Prefix";
       "registrationNumber": "Registration number";
       "suffix": "Suffix";
       "taxId": "Tax ID";
-      "year": "Year";
+      "year": "Year of birth";
     };
     "filterOrganizations": "Organizations";
     "filterPersons": "Persons";
@@ -1927,6 +1926,7 @@ type Messages = {
       "validateFailed": "Couldn't check these contacts.";
     };
     "invalidDateOfBirth": "Enter a valid date of birth.";
+    "invalidNationalityCodes": "Enter valid nationality codes.";
     "mattersAsClient": "Matters as client";
     "newContact": "New contact";
     "noContactsDescription": "Create your first contact to start linking them to matters.";
@@ -1947,7 +1947,7 @@ type Messages = {
     };
     "saved": "Contact details saved.";
     "search": "Search contacts...";
-    "searchCountries": "Search countries";
+    "searchCountries": "Search nationalities";
     "title": "Clients";
     "type": {
       "organization": "Organization";

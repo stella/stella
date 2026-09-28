@@ -2175,8 +2175,16 @@ export const generatedRouteMap: RouteNode = {
                 description: "Free-text notes; pass null to clear",
                 required: false,
               },
+              {
+                flag: "--nationality-codes",
+                prop: "nationality_codes",
+                kind: "string-array",
+                repeatable: true,
+                description: "Nationality countries; pass [] to clear",
+                required: false,
+              },
             ],
-            inputOnly: ["date_of_birth", "nationality_codes"],
+            inputOnly: ["date_of_birth"],
             paginated: false,
             followable: true,
             windowedText: false,
@@ -2324,21 +2332,26 @@ export const generatedRouteMap: RouteNode = {
                       type: "null",
                     },
                   ],
+                  description:
+                    "Date of birth with known year, month, or day precision; pass null to clear",
                 },
                 nationality_codes: {
-                  anyOf: [
-                    {
-                      type: "array",
-                      items: {
-                        type: "string",
-                        pattern: "^[A-Z]{2}$",
+                  type: "array",
+                  items: {
+                    type: "string",
+                    maxLength: 64,
+                    description:
+                      "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                    "x-stella-agent-input": {
+                      kind: "country",
+                      country: {
+                        spelling: "alpha-2",
+                        tool: "save_contact",
                       },
-                      maxItems: 250,
                     },
-                    {
-                      type: "null",
-                    },
-                  ],
+                  },
+                  maxItems: 250,
+                  description: "Nationality countries; pass [] to clear",
                 },
               },
             },
@@ -12714,7 +12727,7 @@ export const generatedRouteMap: RouteNode = {
                                 ],
                               },
                               nationalityCodes: {
-                                maxItems: 200,
+                                maxItems: 250,
                                 type: "array",
                                 items: {
                                   maxLength: 50000,

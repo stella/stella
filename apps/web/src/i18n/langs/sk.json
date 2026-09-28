@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "PSČ",
       "billingAddressState": "Kraj",
       "color": "Farba",
-      "dateOfBirth": "Dátum narodenia",
       "day": "Deň",
       "defaultHourlyRate": "Predvolená hodinová sadzba",
       "firstName": "Meno",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
     },
     "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
+    "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",
     "mattersAsClient": "Spisy ako klient",
     "newContact": "Nový klient",
     "noContactsDescription": "Vytvorte svojho prvého klienta a začnite ho priraďovať k spisom.",

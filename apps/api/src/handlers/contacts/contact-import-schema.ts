@@ -15,6 +15,7 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
+import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/handlers/contacts/person-details";
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -113,7 +114,7 @@ export const contactImportCandidateSchema = t.Object({
     ]),
   ),
   nationalityCodes: t.Optional(
-    t.Array(draftText, { maxItems: DRAFT_LIST_MAX_ITEMS }),
+    t.Array(draftText, { maxItems: MAX_CONTACT_NATIONALITY_CODES }),
   ),
   metadata: t.Optional(
     t.Object({

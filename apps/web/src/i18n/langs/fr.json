@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Code postal",
       "billingAddressState": "Région / État",
       "color": "Couleur",
-      "dateOfBirth": "Date de naissance",
       "day": "Jour",
       "defaultHourlyRate": "Taux horaire par défaut",
       "firstName": "Prénom",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Impossible de vérifier ces contacts."
     },
     "invalidDateOfBirth": "Saisissez une date de naissance valide.",
+    "invalidNationalityCodes": "Saisissez des codes de nationalité valides.",
     "mattersAsClient": "Dossiers en tant que client",
     "newContact": "Nouveau client",
     "noContactsDescription": "Créez votre premier client pour commencer à les associer aux dossiers.",

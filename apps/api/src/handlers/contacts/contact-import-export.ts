@@ -71,15 +71,22 @@ export const contactToPortableImport = (
         dateOfBirthMonth: contact.dateOfBirthMonth ?? null,
         dateOfBirthDay: contact.dateOfBirthDay ?? null,
       });
-      if (date === null) {return "";}
+      if (date === null) {
+        return "";
+      }
       const year = String(date.year).padStart(4, "0");
-      if (date.precision === "year") {return year;}
+      if (date.precision === "year") {
+        return year;
+      }
       const month = String(date.month).padStart(2, "0");
-      if (date.precision === "month") {return `${year}-${month}`;}
+      if (date.precision === "month") {
+        return `${year}-${month}`;
+      }
       return `${year}-${month}-${String(date.day).padStart(2, "0")}`;
     })(),
-    nationality_codes: contact.nationalityCodes?.length
-      ? JSON.stringify(contact.nationalityCodes)
-      : "",
+    nationality_codes:
+      (contact.nationalityCodes?.length ?? 0) > 0
+        ? JSON.stringify(contact.nationalityCodes)
+        : "",
   };
 };

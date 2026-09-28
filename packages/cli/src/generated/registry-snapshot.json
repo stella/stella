@@ -2819,22 +2819,25 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Date of birth with known year, month, or day precision; pass null to clear"
         },
         "nationality_codes": {
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^[A-Z]{2}$"
-              },
-              "maxItems": 250
-            },
-            {
-              "type": "null"
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+            "x-stella-agent-input": {
+              "kind": "country",
+              "country": {
+                "spelling": "alpha-2",
+                "tool": "save_contact"
+              }
             }
-          ]
+          },
+          "maxItems": 250,
+          "description": "Nationality countries; pass [] to clear"
         }
       }
     },

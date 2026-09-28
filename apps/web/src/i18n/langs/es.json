@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Código postal",
       "billingAddressState": "Provincia",
       "color": "Color",
-      "dateOfBirth": "Fecha de nacimiento",
       "day": "Día",
       "defaultHourlyRate": "Tarifa por hora predeterminada",
       "firstName": "Nombre",
@@ -1924,6 +1923,7 @@
       "validateFailed": "No se han podido comprobar estos contactos."
     },
     "invalidDateOfBirth": "Introduce una fecha de nacimiento válida.",
+    "invalidNationalityCodes": "Introduce códigos de nacionalidad válidos.",
     "mattersAsClient": "Asuntos como cliente",
     "newContact": "Nuevo cliente",
     "noContactsDescription": "Cree su primer cliente para empezar a vincularlo con asuntos.",

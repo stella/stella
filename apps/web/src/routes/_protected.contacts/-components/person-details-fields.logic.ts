@@ -1,3 +1,5 @@
+import { ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
+
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";
 
 export type BirthDateDraft = {
@@ -6,6 +8,14 @@ export type BirthDateDraft = {
   month: string;
   day: string;
 };
+
+export const normalizeBirthDateDigits = (value: string): string =>
+  Array.from(
+    value.normalize("NFKC"),
+    (char) => ARABIC_DIGIT_FOLDS[char] ?? char,
+  )
+    .join("")
+    .replaceAll(/\D/gu, "");
 
 export const birthDateDraft = (
   value: PersonDateOfBirth | null | undefined,
@@ -45,8 +55,11 @@ export const parseBirthDateDraft = (
   const day = Number(value.day);
   const leapYear = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
   let lastDay = 31;
-  if (month === 2) {lastDay = leapYear ? 29 : 28;}
-  else if ([4, 6, 9, 11].includes(month)) {lastDay = 30;}
+  if (month === 2) {
+    lastDay = leapYear ? 29 : 28;
+  } else if ([4, 6, 9, 11].includes(month)) {
+    lastDay = 30;
+  }
   if (day < 1 || day > lastDay) {
     return null;
   }

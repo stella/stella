@@ -93,8 +93,11 @@ export const isValidDateOfBirth = (dateOfBirth: DateOfBirth): boolean => {
   const { year, month, day } = dateOfBirth;
   const leap = year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0);
   let days = 31;
-  if (month === 2) {days = leap ? 29 : 28;}
-  else if ([4, 6, 9, 11].includes(month)) {days = 30;}
+  if (month === 2) {
+    days = leap ? 29 : 28;
+  } else if ([4, 6, 9, 11].includes(month)) {
+    days = 30;
+  }
   return Number.isInteger(day) && day >= 1 && day <= days;
 };
 
@@ -104,8 +107,8 @@ export const validatePersonDetails = ({
   nationalityCodes,
 }: {
   type: "person" | "organization";
-  dateOfBirth?: DateOfBirth | null;
-  nationalityCodes?: string[] | null;
+  dateOfBirth?: DateOfBirth | null | undefined;
+  nationalityCodes?: string[] | null | undefined;
 }): HandlerError | null => {
   if (
     type === "organization" &&
@@ -115,10 +118,22 @@ export const validatePersonDetails = ({
     return new HandlerError({
       status: 400,
       message: "Date of birth and nationalities require a person contact",
+      issues: [
+        ...(dateOfBirth === null || dateOfBirth === undefined
+          ? []
+          : [{ path: "dateOfBirth", message: "Requires a person contact" }]),
+        ...((nationalityCodes?.length ?? 0) > 0
+          ? [{ path: "nationalityCodes", message: "Requires a person contact" }]
+          : []),
+      ],
     });
   }
   if (dateOfBirth && !isValidDateOfBirth(dateOfBirth)) {
-    return new HandlerError({ status: 400, message: "Invalid date of birth" });
+    return new HandlerError({
+      status: 400,
+      message: "Invalid date of birth",
+      issues: [{ path: "dateOfBirth", message: "Invalid date of birth" }],
+    });
   }
   if (
     nationalityCodes &&
@@ -129,6 +144,13 @@ export const validatePersonDetails = ({
     return new HandlerError({
       status: 400,
       message: "Nationalities must be unique ISO 3166-1 alpha-2 country codes",
+      issues: [
+        {
+          path: "nationalityCodes",
+          message:
+            "Nationalities must be unique ISO 3166-1 alpha-2 country codes",
+        },
+      ],
     });
   }
   return null;

@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "Irányítószám",
       "billingAddressState": "Megye/tartomány",
       "color": "Szín",
-      "dateOfBirth": "Születési dátum",
       "day": "Nap",
       "defaultHourlyRate": "Alapértelmezett óradíj",
       "firstName": "Keresztnév",
@@ -1924,6 +1923,7 @@
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat."
     },
     "invalidDateOfBirth": "Adjon meg érvényes születési dátumot.",
+    "invalidNationalityCodes": "Adjon meg érvényes állampolgársági kódokat.",
     "mattersAsClient": "Ügyek ügyfélként",
     "newContact": "Új ügyfél",
     "noContactsDescription": "Hozza létre első ügyfelét, hogy ügyekhez rendelhesse.",

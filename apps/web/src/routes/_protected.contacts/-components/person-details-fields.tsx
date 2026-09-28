@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/utils";
 
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { createCountryOptions } from "@/lib/jurisdictions";
+import { normalizeBirthDateDigits } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 import type { BirthDateDraft } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 
 type PersonDetailsFieldsProps = {
@@ -54,7 +55,7 @@ export const PersonDetailsFields = ({
   return (
     <div className="flex flex-col gap-4">
       <Field>
-        <FieldLabel>{t("contacts.fields.dateOfBirth")}</FieldLabel>
+        <FieldLabel>{t("common.anonymizationLabels.dateOfBirth")}</FieldLabel>
         <div className="flex flex-wrap gap-2" dir="ltr">
           <select
             aria-label={t("contacts.datePrecision")}
@@ -86,7 +87,7 @@ export const PersonDetailsFields = ({
               onChange={(event) =>
                 onBirthDateChange({
                   ...birthDate,
-                  day: event.target.value.replaceAll(/\D/gu, ""),
+                  day: normalizeBirthDateDigits(event.target.value),
                 })
               }
               placeholder={t("contacts.fields.day")}
@@ -103,7 +104,7 @@ export const PersonDetailsFields = ({
               onChange={(event) =>
                 onBirthDateChange({
                   ...birthDate,
-                  month: event.target.value.replaceAll(/\D/gu, ""),
+                  month: normalizeBirthDateDigits(event.target.value),
                 })
               }
               placeholder={t("contacts.fields.month")}
@@ -119,7 +120,7 @@ export const PersonDetailsFields = ({
             onChange={(event) =>
               onBirthDateChange({
                 ...birthDate,
-                year: event.target.value.replaceAll(/\D/gu, ""),
+                year: normalizeBirthDateDigits(event.target.value),
               })
             }
             placeholder={t("contacts.fields.year")}

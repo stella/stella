@@ -1827,7 +1827,6 @@
       "billingAddressPostalCode": "الرمز البريدي",
       "billingAddressState": "الولاية",
       "color": "اللون",
-      "dateOfBirth": "تاريخ الميلاد",
       "day": "اليوم",
       "defaultHourlyRate": "السعر الافتراضي للساعة",
       "firstName": "الاسم الأول",
@@ -1924,6 +1923,7 @@
       "validateFailed": "تعذّر التحقق من جهات الاتصال هذه."
     },
     "invalidDateOfBirth": "أدخل تاريخ ميلاد صحيحًا.",
+    "invalidNationalityCodes": "أدخل رموز جنسية صالحة.",
     "mattersAsClient": "الملفات القانونية بصفة عميل",
     "newContact": "جهة اتصال جديدة",
     "noContactsDescription": "أنشئ أول جهة اتصال لك للبدء بربطها بالملفات القانونية.",
