@@ -589,6 +589,20 @@
         "test": "keeps a denial ahead of the approved call it was answered with"
       },
       "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "denied-step-ends-at-its-recorded-step",
+      "fix": "#4020",
+      "behaviour": "A step whose every call was denied ends where the next step's first call records a step of its own, so its answers go right after it even when no text separates the two steps.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "  while (callOfSameStep(call, parts[end])) {",
+      "replace": "  while (parts[end]?.type === \"tool-call\") {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "answers each call right after its own step in every request"
+      },
+      "oracle": "chat.provider.prefix-stable"
     }
   ]
 }

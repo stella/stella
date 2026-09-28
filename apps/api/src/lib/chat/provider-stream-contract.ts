@@ -11,6 +11,7 @@ import { Temporal } from "@stll/time";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
+import { isRecord } from "@/api/lib/type-guards";
 
 // One owner for what every provider adapter's stream promises the rest of
 // the service: it ends in exactly one terminal event (`RUN_FINISHED` or
@@ -243,6 +244,50 @@ const parsedArguments = (text: string | undefined): unknown => {
     : undefined;
 };
 
+/**
+ * The metadata key naming the model response (the step) a tool call came
+ * from. Stored with the call, so the step a call belongs to stays readable
+ * where nothing else in the message separates two steps: two calls in a row,
+ * the first denied, the second asked for by the next response with no text
+ * between them.
+ */
+const TOOL_CALL_STEP_METADATA_KEY = "stellaStepId";
+
+/** The step a tool call's metadata names, if it names one. Calls stored
+ *  before steps were recorded name none. */
+export const toolCallStepOf = (metadata: unknown): string | undefined => {
+  const step: unknown = isRecord(metadata)
+    ? metadata[TOOL_CALL_STEP_METADATA_KEY]
+    : undefined;
+  return typeof step === "string" ? step : undefined;
+};
+
+/**
+ * Every tool call of one response stamped with the response's step: the id of
+ * its first call, which the thread holds once. The engine keeps a call's
+ * metadata on the call it records, and so do the page and persistence, so
+ * the step reads the same live, stored and reloaded. Adapters read only the
+ * metadata keys they own, so the key never reaches a provider's wire.
+ *
+ * @yields Each chunk of `chunks`, every call start naming its step.
+ */
+async function* withToolCallSteps(
+  chunks: AsyncIterable<StreamChunk>,
+): AsyncIterable<StreamChunk> {
+  let step: string | undefined;
+  for await (const chunk of chunks) {
+    if (chunk.type !== EventType.TOOL_CALL_START) {
+      yield chunk;
+      continue;
+    }
+    step ??= chunk.toolCallId;
+    yield {
+      ...chunk,
+      metadata: { ...chunk.metadata, [TOOL_CALL_STEP_METADATA_KEY]: step },
+    };
+  }
+}
+
 async function* withOneTerminalEvent(
   chunks: AsyncIterable<StreamChunk>,
   options: ChatStreamOptions,
@@ -312,7 +357,9 @@ export const withProviderStreamContract = (
     withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
-          withUniqueToolCallIds(adapter.chatStream(options), options),
+          withToolCallSteps(
+            withUniqueToolCallIds(adapter.chatStream(options), options),
+          ),
         ),
         options,
       ),
