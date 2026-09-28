@@ -84,6 +84,54 @@ const scoreOf = (query: ScreeningQuery, key: string) =>
   )?.score ?? 0;
 
 describe("name screening", () => {
+  test("does not penalise an unknown-quality alias and keeps strong duplicate quality", () => {
+    const name = "North Star Holdings";
+    const entry = listed({
+      sourceId: "quality",
+      entityType: "organisation",
+      name,
+    });
+    const variants: ParsedList = {
+      version: EXTRA_VERSION,
+      entries: [
+        { ...entry, sourceId: "strong", names: [{ name, quality: "strong" }] },
+        {
+          ...entry,
+          sourceId: "unknown",
+          names: [{ name, quality: "unknown" }],
+        },
+        { ...entry, sourceId: "weak", names: [{ name, quality: "weak" }] },
+        {
+          ...entry,
+          sourceId: "unknown-then-weak",
+          names: [
+            { name, quality: "unknown" },
+            { name, quality: "weak" },
+          ],
+        },
+        {
+          ...entry,
+          sourceId: "weak-then-strong",
+          names: [
+            { name, quality: "weak" },
+            { name, quality: "strong" },
+          ],
+        },
+      ],
+    };
+    const results = screen(
+      buildScreeningIndex([variants]),
+      { name, entityType: "organisation" },
+      { cutoff: 0 },
+    ).unwrap().possibleMatches;
+    const score = (sourceId: string) =>
+      results.find(({ entry: hit }) => hit.sourceId === sourceId)?.score;
+    expect(score("unknown")).toBe(score("strong"));
+    expect(score("unknown-then-weak")).toBe(score("strong"));
+    expect(score("weak-then-strong")).toBe(score("strong"));
+    expect(score("weak")).toBeLessThan(score("strong") ?? 0);
+  });
+
   test("matches a listed person however the name is written", () => {
     for (const name of [
       "Vladimir Putin",
