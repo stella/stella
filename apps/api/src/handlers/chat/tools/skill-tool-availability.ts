@@ -41,7 +41,7 @@ const isRegistryToolUsable = (
  * that runner is registered. This is the chat side of
  * `resolveSkillToolAvailability`.
  */
-export const chatOfferedToolNames = ({
+const chatOfferedToolNames = ({
   memberRole,
   tools,
 }: {

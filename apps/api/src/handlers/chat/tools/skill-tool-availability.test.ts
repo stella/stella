@@ -88,15 +88,11 @@ describe("chat skill availability", () => {
     });
   });
 
-  test("a chat with no matter to write to cannot save a playbook", () => {
-    expect(
-      availabilityIn("save_playbook", {
-        toolWorkspaceIds: resolveToolWorkspaceIds({
-          accessibleWorkspaceIds: [],
-          pinnedIds: [],
-        }),
-      }),
-    ).toEqual({ status: "unavailable", missingTools: ["save_playbook"] });
+  test("a role without template access cannot fill templates", () => {
+    expect(availabilityIn("fill_template")).toEqual({ status: "available" });
+    expect(availabilityIn("fill_template", { memberRole: "external" })).toEqual(
+      { status: "unavailable", missingTools: ["fill_template"] },
+    );
   });
 
   test("anonymized mode drops the tools it cannot redact", () => {

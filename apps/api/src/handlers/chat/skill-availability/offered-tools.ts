@@ -154,17 +154,15 @@ const loadNewChatToolNames = async ({
  * Whether each skill can finish in this caller's chat, keyed by skill id.
  * Resolves the chat's tools only when some skill declares required tools.
  */
-export const resolveCallerChatSkillAvailability = async <
-  TSkill extends {
-    id: string;
-    metadata: Readonly<Record<string, string>> | null;
-  },
->({
+export const resolveCallerChatSkillAvailability = async ({
   context,
   skills,
 }: {
   context: ChatSkillAvailabilityContext;
-  skills: readonly TSkill[];
+  skills: readonly {
+    id: string;
+    metadata: Readonly<Record<string, string>> | null;
+  }[];
 }): Promise<
   Result<
     ReadonlyMap<string, SkillToolAvailability>,

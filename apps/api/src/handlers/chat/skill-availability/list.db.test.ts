@@ -22,14 +22,14 @@ import listUnavailableChatSkills from "./list";
 
 /**
  * A skill that declares `stella-required-tools` is offered in chat only when
- * chat has those tools. Chat registers `save_playbook` only for a caller with
- * a matter to write to, so the same caller sees the playbook skill offered or
- * hidden depending on the matters they can reach.
+ * chat has those tools. Chat registers `create_matter_document` only with a
+ * matter open, so the same caller sees a skill that needs it offered or not
+ * depending on whether they can reach a matter at all.
  */
 
 const RUN = Bun.randomUUIDv7().slice(-10);
 const PLAIN_SLUG = `plain-${RUN}`;
-const PLAYBOOK_SLUG = `playbook-builder-${RUN}`;
+const MATTER_DOCUMENT_SLUG = `matter-document-${RUN}`;
 const DOCUMENT_SLUG = `redline-${RUN}`;
 
 let testDb: TestDatabase;
@@ -51,7 +51,10 @@ beforeAll(async () => {
 
   for (const [slug, metadata] of [
     [PLAIN_SLUG, {}],
-    [PLAYBOOK_SLUG, { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "save_playbook" }],
+    [
+      MATTER_DOCUMENT_SLUG,
+      { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "create_matter_document" },
+    ],
     [
       DOCUMENT_SLUG,
       { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "read_document suggest_changes" },
@@ -111,15 +114,18 @@ const unavailableIn = async (workspaces: AccessibleWorkspace[]) => {
 };
 
 describe("skills chat can offer", () => {
-  test("a playbook skill is unavailable only where chat cannot save playbooks", async () => {
-    const playbookId = seededSkillIds.at(1);
-    if (playbookId === undefined) {
-      throw new TypeError("expected the playbook skill to be seeded");
+  test("a skill that writes into a matter is unavailable to a caller with none", async () => {
+    const matterDocumentId = seededSkillIds.at(1);
+    if (matterDocumentId === undefined) {
+      throw new TypeError("expected the matter-document skill to be seeded");
     }
 
     expect(await unavailableIn(WITH_MATTER())).toEqual([]);
     expect(await unavailableIn([])).toEqual([
-      { missingTools: ["save_playbook"], skillId: playbookId },
+      {
+        missingTools: ["create_matter_document"],
+        skillId: matterDocumentId,
+      },
     ]);
   });
 });
