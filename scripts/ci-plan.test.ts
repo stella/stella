@@ -27,6 +27,8 @@ const runSelector = (
   outputs: readonly string[],
   suiteDepth = "fast",
   e2eLandingRequired = "false",
+  event = "pull_request",
+  title = "",
 ) => {
   const process = Bun.spawnSync({
     cmd: [
@@ -42,7 +44,9 @@ printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
     ],
     env: {
       E2E_LANDING_REQUIRED: e2eLandingRequired,
+      EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",
+      PR_TITLE: title,
       SUITE_DEPTH: suiteDepth,
     },
     stdout: "pipe",
@@ -246,6 +250,37 @@ const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
     )
     .map(({ platform }) => platform)
     .toSorted();
+
+test("a fix pull request that changes an API test plans the fix-tests-on-base check", () => {
+  const plan = (event: string, title: string, files: readonly string[]) =>
+    runSelector(
+      files,
+      ["fix_tests_on_base_required"],
+      "fast",
+      "false",
+      event,
+      title,
+    )[0];
+  const apiTest = "apps/api/src/handlers/chat/stream-chat.test.ts";
+  for (const title of [
+    "fix: keep ids",
+    "fix(chat): keep ids",
+    "fix(api)!: keep ids",
+  ]) {
+    expect(plan("pull_request", title, ["README.md", apiTest]), title).toBe(
+      "true",
+    );
+  }
+  expect(plan("pull_request", "feat(chat): keep ids", [apiTest])).toBe("false");
+  expect(plan("pull_request", "fixup: keep ids", [apiTest])).toBe("false");
+  expect(plan("merge_group", "", [apiTest])).toBe("false");
+  expect(
+    plan("pull_request", "fix(chat): keep ids", [
+      "apps/api/src/handlers/chat/stream-chat.ts",
+      "packages/ai/src/stream.test.ts",
+    ]),
+  ).toBe("false");
+});
 
 test("a pull request builds the API image for arm64 unless it releases", () => {
   fc.assert(

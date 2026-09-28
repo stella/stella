@@ -2909,6 +2909,37 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
                 },
+                time_minimum_unit_minutes: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 60,
+                  description:
+                    "Minimum time increment in minutes; must divide 60 (update_org_settings)",
+                },
+                time_edit_window_days: {
+                  type: "integer",
+                  minimum: 0,
+                  description:
+                    "Days a timekeeper may edit an entry (update_org_settings)",
+                },
+                time_locked_through_month: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      format: "date",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "Last day of the latest locked month, or null to unlock (update_org_settings)",
+                },
+                time_narrative_required: {
+                  type: "boolean",
+                  description:
+                    "Require a narrative on time entries (update_org_settings)",
+                },
                 confirm: {
                   type: "boolean",
                   description:
@@ -2996,6 +3027,37 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description:
                     "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+                },
+                time_minimum_unit_minutes: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 60,
+                  description:
+                    "Minimum time increment in minutes; must divide 60 (update_org_settings)",
+                },
+                time_edit_window_days: {
+                  type: "integer",
+                  minimum: 0,
+                  description:
+                    "Days a timekeeper may edit an entry (update_org_settings)",
+                },
+                time_locked_through_month: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      format: "date",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "Last day of the latest locked month, or null to unlock (update_org_settings)",
+                },
+                time_narrative_required: {
+                  type: "boolean",
+                  description:
+                    "Require a narrative on time entries (update_org_settings)",
                 },
                 confirm: {
                   type: "boolean",
@@ -3107,6 +3169,37 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description:
                     "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+                },
+                time_minimum_unit_minutes: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 60,
+                  description:
+                    "Minimum time increment in minutes; must divide 60 (update_org_settings)",
+                },
+                time_edit_window_days: {
+                  type: "integer",
+                  minimum: 0,
+                  description:
+                    "Days a timekeeper may edit an entry (update_org_settings)",
+                },
+                time_locked_through_month: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      format: "date",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "Last day of the latest locked month, or null to unlock (update_org_settings)",
+                },
+                time_narrative_required: {
+                  type: "boolean",
+                  description:
+                    "Require a narrative on time entries (update_org_settings)",
                 },
                 confirm: {
                   type: "boolean",
@@ -6801,7 +6894,7 @@ export const generatedRouteMap: RouteNode = {
                 },
                 narrative: {
                   type: "string",
-                  minLength: 1,
+                  minLength: 0,
                   maxLength: 10000,
                   description:
                     "Description of the work; required when creating",
@@ -31582,7 +31675,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "organization-settings", "get"],
                 capabilityId: "organization-settings.get",
                 description:
-                  "Read the organization's general settings: document processing mode, matter-number pattern and padding, practice jurisdictions, prompt caching, and memory extraction. An organization that has never saved settings gets the defaults rather than an error.",
+                  "Read the organization's general settings: document processing mode, matter-number pattern and padding, practice jurisdictions, prompt caching, memory extraction, and time policy. An organization that has never saved settings gets the defaults rather than an error.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -31716,7 +31809,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "organization-settings", "update"],
                 capabilityId: "organization-settings.update",
                 description:
-                  "Change the organization's general settings: document processing mode, matter-number pattern and padding, prompt caching, and memory extraction. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.practice-jurisdictions.update.",
+                  "Change the organization's general settings: document processing mode, matter-number pattern and padding, prompt caching, memory extraction, and time policy. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.practice-jurisdictions.update.",
                 access: "write",
                 flags: [
                   {
@@ -31757,6 +31850,45 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "memoryExtractionEnabled",
                   },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 60,
+                    repeatable: false,
+                    flag: "--time-minimum-unit-minutes",
+                    prop: "timeMinimumUnitMinutes",
+                    required: false,
+                    part: "body",
+                    partPath: "timeMinimumUnitMinutes",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    repeatable: false,
+                    flag: "--time-edit-window-days",
+                    prop: "timeEditWindowDays",
+                    required: false,
+                    part: "body",
+                    partPath: "timeEditWindowDays",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--time-locked-through-month",
+                    prop: "timeLockedThroughMonth",
+                    required: false,
+                    part: "body",
+                    partPath: "timeLockedThroughMonth",
+                  },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--time-narrative-required",
+                    prop: "timeNarrativeRequired",
+                    required: false,
+                    part: "body",
+                    partPath: "timeNarrativeRequired",
+                  },
                 ],
                 inputOnly: ["body.documentProcessingMode"],
                 paginated: false,
@@ -31795,6 +31927,30 @@ export const generatedRouteMap: RouteNode = {
                           type: "boolean",
                         },
                         memoryExtractionEnabled: {
+                          type: "boolean",
+                        },
+                        timeMinimumUnitMinutes: {
+                          minimum: 1,
+                          maximum: 60,
+                          type: "integer",
+                        },
+                        timeEditWindowDays: {
+                          minimum: 0,
+                          type: "integer",
+                        },
+                        timeLockedThroughMonth: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        timeNarrativeRequired: {
                           type: "boolean",
                         },
                       },
@@ -47711,7 +47867,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         narrative: {
-                          minLength: 1,
+                          minLength: 0,
                           maxLength: 10000,
                           description: "Description of the work",
                           type: "string",
@@ -48495,7 +48651,7 @@ export const generatedRouteMap: RouteNode = {
                                   type: "integer",
                                 },
                                 narrative: {
-                                  minLength: 1,
+                                  minLength: 0,
                                   maxLength: 10000,
                                   description: "Description of the work",
                                   type: "string",
@@ -48736,7 +48892,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "time-entries", "timer-start"],
                 capabilityId: "time-entries.timer.start",
                 description:
-                  "Start a running timer for the signed-in user in the current matter, creating a draft time entry dated today in the timezoneId you pass and optionally attached to a work item. The user's effective rate is resolved at start and an entry with no resolvable rate is recorded as non-billable. Refused when the user already has a running timer.",
+                  "Start a running timer for the signed-in user in the current matter, creating a draft time entry dated today in the timezoneId you pass and optionally attached to a work item. The user's effective rate is resolved at start and an entry with no resolvable rate is recorded as non-billable. A narrative can be added before the draft is approved. Refused when the user already has a running timer.",
                 access: "write",
                 flags: [
                   {
@@ -49019,7 +49175,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         narrative: {
-                          minLength: 1,
+                          minLength: 0,
                           maxLength: 10000,
                           type: "string",
                         },

@@ -387,6 +387,11 @@ export const OWNERSHIP = [
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
         },
         {
+          path: "apps/api/src/lib/rate-limit/action-admission.ts",
+          reason:
+            "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
+        },
+        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",

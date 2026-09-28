@@ -18461,6 +18461,10 @@ export type WebRoutes = {
             practiceJurisdictions: Array<T21e7b1b9fc>;
             promptCachingEnabled: Tfddd645dc8;
             memoryExtractionEnabled: Tfddd645dc8;
+            timeMinimumUnitMinutes: number;
+            timeEditWindowDays: number;
+            timeLockedThroughMonth: Tbe0400fa4c;
+            timeNarrativeRequired: Tfddd645dc8;
           };
           400: T9a51b7d2bc;
           401: T9a51b7d2bc;
@@ -18623,12 +18627,20 @@ export type WebRoutes = {
           promptCachingEnabled?: false | true;
           documentProcessingMode?: "off" | "searchable-text";
           memoryExtractionEnabled?: false | true;
+          timeMinimumUnitMinutes?: number;
+          timeEditWindowDays?: number;
+          timeLockedThroughMonth?: null | string;
+          timeNarrativeRequired?: false | true;
         };
         params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
           200: {
+            timeNarrativeRequired?: false | true;
+            timeLockedThroughMonth?: null | string;
+            timeEditWindowDays?: number;
+            timeMinimumUnitMinutes?: number;
             memoryExtractionEnabled?: false | true;
             documentProcessingMode?: "off" | "searchable-text";
             promptCachingEnabled?: false | true;
