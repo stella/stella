@@ -1,9 +1,4 @@
-import {
-  EventType,
-  maxIterations,
-  RUN_CANCEL_REASON,
-  toServerSentEventsResponse,
-} from "@tanstack/ai";
+import { EventType, maxIterations, RUN_CANCEL_REASON } from "@tanstack/ai";
 import type {
   AnyServerTool,
   ChatMiddleware,
@@ -28,7 +23,6 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -56,8 +50,7 @@ import {
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
 import { USER_STOP_OUTCOME } from "@/api/handlers/chat/chat-turn-persistence";
-import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
-import { registerChatTurnProducer } from "@/api/handlers/chat/chat-turn-producers";
+import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
   findHandedOutInteraction,
@@ -143,6 +136,7 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -157,6 +151,10 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
+  ToolCallIdLedger,
+  toolCallIdLedgerMetadata,
+} from "@/api/lib/chat/unique-tool-call-ids";
+import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
   HandlerError,
@@ -165,9 +163,7 @@ import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
-import { withSseHeartbeat } from "@/api/lib/sse";
 import {
-  abortControllerFromSignal,
   chatTurnOutputTokens,
   mergeGenerationOptions,
   resolveTanStackTextModel,
@@ -176,7 +172,7 @@ import {
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
+import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -215,7 +211,6 @@ type StreamChatFinishEvent = {
 };
 
 type StreamChatProps = {
-  abortSignal: AbortSignal;
   /**
    * Explicit chat model override for this turn: the dev-only
    * `body.devModelId`, or (in prod) a validated per-thread selection
@@ -225,8 +220,6 @@ type StreamChatProps = {
   devModelId?: string | undefined;
   /** Explicit effort for a validated manual model selection. */
   reasoningEffort?: ReasoningEffort | undefined;
-  /** The claimed execution this run produces for; a stop aborts it. */
-  execution: ChatTurnExecution;
   latestMessageId: string;
   runId: string;
   parentRunId?: string | undefined;
@@ -255,6 +248,8 @@ type StreamChatProps = {
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  /** The turn's run: it owns the abort, the stop and the settlement. */
+  run: ChatTurnRun;
   safeDb: SafeDb;
   systemSafe: ChatSafePrompt;
   systemUntrusted: ChatUntrustedPromptSuffix;
@@ -266,6 +261,11 @@ type StreamChatProps = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  /**
+   * Every tool call id the thread already holds, the turns outside `messages`
+   * included, so no call of this run reuses one.
+   */
+  threadToolCallIds: readonly string[];
   tools: ChatToolMap;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
@@ -346,9 +346,7 @@ export const prepareResumeForThirdParty = async ({
 };
 
 export const streamChat = async ({
-  abortSignal,
   devModelId,
-  execution,
   latestMessageId,
   runId,
   parentRunId,
@@ -368,6 +366,7 @@ export const streamChat = async ({
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
+  run,
   safeDb,
   storedHistory,
   systemSafe,
@@ -375,6 +374,7 @@ export const streamChat = async ({
   tenantWorkspaceIds,
   thirdPartyBoundary,
   threadId,
+  threadToolCallIds,
   tools,
   externalMcpToolSource,
   userId,
@@ -514,17 +514,12 @@ export const streamChat = async ({
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
-  const abortController = abortControllerFromSignal(abortSignal);
-  const producer = registerChatTurnProducer({
-    abortController,
-    execution,
-    safeDb,
-  });
+  const { abortController, deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
 
   const stream = runChatAttempts({
     abortController,
-    abortSignal,
+    abortSignal: deadlineSignal,
     devModelId,
     externalMcpToolSource,
     fallbackModel,
@@ -548,6 +543,8 @@ export const streamChat = async ({
     },
     thirdPartyBoundary,
     threadId,
+    // One ledger for the run: every request of it, a fallback's included.
+    toolCallIds: new ToolCallIdLedger(threadToolCallIds),
     userId,
     workspaceId,
   });
@@ -570,15 +567,13 @@ export const streamChat = async ({
     // aborts only this derived controller — that is the abort a client
     // disconnect delivers — while the deadline reaches both.
     abortSignal: abortController.signal,
-    deadlineSignal: abortSignal,
+    deadlineSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
-      try {
+      await run.settle(async () => {
         await onFinish(event);
-      } finally {
-        producer.settled();
-      }
+      });
     },
     owningAssistantMessageId,
     restorationPairs,
@@ -594,12 +589,7 @@ export const streamChat = async ({
     storedHistory,
   });
 
-  return withSseHeartbeat(
-    toServerSentEventsResponse(output, {
-      abortController,
-      headers: { [CHAT_TURN_ID_HEADER]: execution.id },
-    }),
-  );
+  return run.produce(output);
 };
 
 const thirdPartyBoundaryRefusalResponse = (
@@ -940,6 +930,7 @@ type RunChatAttemptsProps = {
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  toolCallIds: ToolCallIdLedger;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -965,6 +956,7 @@ const runChatAttempts = async function* ({
   surfaces,
   thirdPartyBoundary,
   threadId,
+  toolCallIds,
   userId,
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<PublicStreamChunk> {
@@ -995,6 +987,7 @@ const runChatAttempts = async function* ({
     surfaces,
     thirdPartyBoundary,
     threadId,
+    toolCallIds,
     userId,
     workspaceId,
   });
@@ -1043,6 +1036,7 @@ const runChatAttempts = async function* ({
     surfaces,
     thirdPartyBoundary,
     threadId,
+    toolCallIds,
     userId,
     workspaceId,
   });
@@ -1084,6 +1078,7 @@ type RunChatAttemptProps = {
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  toolCallIds: ToolCallIdLedger;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1111,6 +1106,7 @@ const runChatAttempt = async function* ({
   surfaces,
   thirdPartyBoundary,
   threadId,
+  toolCallIds,
   userId,
   workspaceId,
 }: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
@@ -1178,8 +1174,9 @@ const runChatAttempt = async function* ({
     const { adapter, middleware: sandboxMiddleware } =
       resolveStellaSandboxRun(sandboxRun);
     yield* streamChatChunks({
-      adapter,
+      adapter: withProviderStreamContract(adapter),
       messages: preparedMessages,
+      metadata: toolCallIdLedgerMetadata(toolCallIds),
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
       abortController,
       threadId,
@@ -1211,6 +1208,7 @@ const runChatAttempt = async function* ({
   const stream = streamChatChunks({
     adapter: model.adapter,
     messages: preparedMessages,
+    metadata: toolCallIdLedgerMetadata(toolCallIds),
     tools: projectChatToolSchemasForProvider({
       modelTools,
       provider: model.provider,
@@ -1797,7 +1795,7 @@ export const processServerChatStream = async function* ({
           panic("Unhandled TanStack completed stream event");
         }
         if (chunk.usage) {
-          usage = tokenUsageFromRunFinishedChunk(chunk);
+          usage = tokenUsageFromTerminalChunk(chunk);
         }
         // TanStack's agent loop can emit continuation events after a model
         // run finishes, notably `approval-requested` for a gated server tool.
@@ -1825,6 +1823,7 @@ export const processServerChatStream = async function* ({
         if (chunk.type !== EventType.RUN_ERROR) {
           panic("Unhandled TanStack failed stream event");
         }
+        usage = tokenUsageFromTerminalChunk(chunk) ?? usage;
         await terminalize({
           flushProcessor: true,
           outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
@@ -2007,20 +2006,22 @@ const createTerminalResponseMessage = ({
     });
   }
 
-  const persistableMessage =
-    responseMessage === null
-      ? toPersistableChatMessage({
-          id: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-          parts: [],
-          role: "assistant",
-        })
-      : attachUsageMetadata({
-          message: normalizeFinalAssistantMessageId({
+  // A turn that failed before its first part still spent what the provider
+  // reported, so the usage rides on the message it writes either way.
+  const persistableMessage = attachUsageMetadata({
+    message:
+      responseMessage === null
+        ? toPersistableChatMessage({
+            id: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+            parts: [],
+            role: "assistant",
+          })
+        : normalizeFinalAssistantMessageId({
             mapMessageId,
             message: responseMessage,
           }),
-          usage,
-        });
+    usage,
+  });
   return attachTerminalTurnOutcome({
     message: persistableMessage,
     turnOutcome: outcome,

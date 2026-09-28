@@ -11,7 +11,10 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { extractClaims } from "@/api/lib/lists/verification/claim-extract";
-import { gradeClaims } from "@/api/lib/lists/verification/claim-grade";
+import {
+  gradeClaims,
+  gradedClaimType,
+} from "@/api/lib/lists/verification/claim-grade";
 import type { VerificationEvidenceFact } from "@/api/lib/lists/verification/contract";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
@@ -279,6 +282,62 @@ describe("gradeClaims", () => {
       expect(outcome.grades.get("1")?.refs).toEqual([
         { factEntityId: FACT_B, rel: "conflicts" },
       ]);
+    }
+  });
+
+  test("sets aside an uncheckable claim while leaving an uncovered fact checkable", async () => {
+    answers.push({
+      grades: [
+        {
+          claimId: "C1",
+          verdict: "notverifiable",
+          score: null,
+          refs: [{ factId: "F1", rel: "record" }],
+          conflict: null,
+        },
+        {
+          claimId: "C2",
+          verdict: "nocover",
+          score: null,
+          refs: [],
+          conflict: null,
+        },
+      ],
+    });
+    const result = await gradeClaims({
+      claims: [
+        {
+          key: "opinion",
+          text: "The arrangement was proper",
+          context: "The arrangement was proper.",
+        },
+        {
+          key: "fact",
+          text: "The payment was approved",
+          context: "The payment was approved.",
+        },
+      ],
+      facts: [fact(FACT_A, "An unrelated meeting took place")],
+      deps,
+    });
+    const outcome = Result.isOk(result) ? result.value : null;
+    expect(outcome?.type).toBe("graded");
+    if (outcome?.type === "graded") {
+      expect(outcome.grades.get("opinion")).toEqual({
+        state: "notverifiable",
+        score: null,
+        recordConflict: null,
+        refs: [],
+      });
+      expect(outcome.grades.get("fact")).toEqual({
+        state: "nocover",
+        score: null,
+        recordConflict: null,
+        refs: [],
+      });
+      // Stored types must match the verdicts: only a fact is checkable.
+      const types = [...outcome.grades.values()].map(gradedClaimType);
+      expect(types).toEqual(["unverifiable", "fact"]);
     }
   });
 

@@ -10,7 +10,6 @@ import {
 } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import nodePath from "node:path";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -59,7 +58,6 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { installPgliteMigration } from "@/api/tests/pglite-schema";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Written reasons SAOS publishes apart from their ruling, through the real
@@ -93,15 +91,6 @@ const scopedDb: ScopedDb = async (callback) =>
 beforeAll(async () => {
   client = await createTestPglite();
   db = connect(client);
-  // The schema snapshot carries no triggers; this one fences every write of
-  // a decision's publisher hash on its observation order.
-  await installPgliteMigration({
-    db,
-    migrationPath: nodePath.resolve(
-      import.meta.dir,
-      "../../../../drizzle/20260731190000_case_law_observation_legacy_fence/migration.sql",
-    ),
-  });
 }, 120_000);
 
 afterAll(async () => {

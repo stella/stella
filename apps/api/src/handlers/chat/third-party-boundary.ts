@@ -15,6 +15,7 @@ import {
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
 import {
+  chatMessageFromPersisted,
   createChatAttachmentPart,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
@@ -28,11 +29,13 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { ChatToolPolicyKind } from "@/api/handlers/chat/tools/tool-policy";
 import type {
+  ChatAnonRestoration,
   ChatAttachmentPart,
   ChatMessage,
 } from "@/api/handlers/chat/types";
 import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
@@ -69,6 +72,8 @@ export type ChatThirdPartyBoundary =
       placeholderOffsets: Map<string, number>;
       /** Provider-visible alias → late literal token restored at the boundary. */
       literalPlaceholderAliases: Map<string, string>;
+      /** Prior requests' identities; only current provider input is restorable. */
+      historicalRedactionMap: Map<string, string>;
       /** Indexed placeholder tokens present literally in provider-bound source text. */
       sourcePlaceholders: Set<string>;
       /**
@@ -83,12 +88,67 @@ export type ChatThirdPartyBoundary =
       type: "anonymized";
     };
 
+/**
+ * The restorations stored on `messages`, oldest first: the placeholders
+ * earlier requests sent for the history a request reads.
+ */
+export const storedRestorationsOf = (
+  messages: readonly Parameters<typeof chatMessageFromPersisted>[0][],
+): ChatAnonRestoration[] =>
+  messages.flatMap((message) => {
+    const { content } = message;
+    switch (content.version) {
+      case 1:
+        // Legacy rows keep their restorations as a data part.
+        return arrayOrEmpty(
+          chatMessageFromPersisted(message).metadata?.anonRestorations?.pairs,
+        );
+      case 2:
+      case 3:
+        return arrayOrEmpty(content.metadata?.anonRestorations?.pairs);
+      default:
+        content satisfies never;
+        return panic(`Unhandled content version: ${String(content)}`);
+    }
+  });
+
+/**
+ * The placeholder maps a boundary starts from: every placeholder the history
+ * it reads already sent, each naming the original it named then, and the
+ * numbering continuing after the highest index per label. Anonymization
+ * numbers each request from `[LABEL_1]`; starting from those names keeps an
+ * original under the placeholder earlier requests gave it and gives a new
+ * original an index none of them used, so one placeholder spelling never
+ * names two values across that history (or in a message a continuation
+ * finishes). Where stored turns already disagree, the earliest meaning wins.
+ */
+const threadPlaceholderMaps = (
+  restorations: readonly ChatAnonRestoration[],
+) => {
+  const historicalRedactionMap = new Map<string, string>();
+  const placeholderOffsets = new Map<string, number>();
+  for (const { original, placeholder } of restorations) {
+    const parsed = parseIndexedPlaceholder(placeholder);
+    if (parsed !== null) {
+      placeholderOffsets.set(
+        parsed.label,
+        Math.max(placeholderOffsets.get(parsed.label) ?? 0, parsed.index),
+      );
+    }
+    if (!historicalRedactionMap.has(placeholder)) {
+      historicalRedactionMap.set(placeholder, original);
+    }
+  }
+  return { historicalRedactionMap, placeholderOffsets };
+};
+
 export const createChatThirdPartyBoundary = ({
   anonymizeFields,
   anonymizationScopeId,
   organizationId,
   scopedDb,
   sendMode,
+  threadRestorations,
   workspaceId,
 }: {
   anonymizeFields?: typeof anonymizeTextFields | undefined;
@@ -96,6 +156,9 @@ export const createChatThirdPartyBoundary = ({
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
   sendMode: ChatSendMode;
+  /** The restorations the history this request reads holds, oldest first
+   *  (`storedRestorationsOf`). */
+  threadRestorations: readonly ChatAnonRestoration[];
   /**
    * When the chat is workspace-scoped, the validated workspace
    * SafeId from the workspaceAccessMacro. Threads gazetteer
@@ -129,9 +192,9 @@ export const createChatThirdPartyBoundary = ({
             }),
         organizationId,
         pipelineContext: createPipelineContext(),
-        placeholderOffsets: new Map<string, number>(),
-        literalPlaceholderAliases: new Map<string, string>(),
+        ...threadPlaceholderMaps(threadRestorations),
         redactionMap: new Map<string, string>(),
+        literalPlaceholderAliases: new Map<string, string>(),
         sourcePlaceholders: new Set<string>(),
       }
     : { type: "raw" };
@@ -164,8 +227,17 @@ const findExistingPlaceholder = (
   label: string,
   original: string,
 ): string | null => {
-  for (const [placeholder, mappedOriginal] of boundary.redactionMap) {
+  for (const [placeholder, mappedOriginal] of [
+    ...boundary.redactionMap,
+    ...boundary.historicalRedactionMap,
+  ]) {
     if (mappedOriginal !== original) {
+      continue;
+    }
+    if (
+      boundary.sourcePlaceholders.has(placeholder) &&
+      ![...boundary.literalPlaceholderAliases.values()].includes(placeholder)
+    ) {
       continue;
     }
     const parsed = parseIndexedPlaceholder(placeholder);
@@ -195,6 +267,7 @@ const encodeLateLiteralPlaceholders = (
   const replacements = new Map<string, string>();
   const restorableTokens = [
     ...boundary.redactionMap.keys(),
+    ...boundary.historicalRedactionMap.keys(),
     ...boundary.literalPlaceholderAliases.keys(),
   ];
   for (const token of restorableTokens) {
@@ -607,7 +680,9 @@ export const prepareTextForThirdParty = async ({
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
   reserveSourcePlaceholders(boundary, [text]);
-  const protectedInput = protectBoundaryPlaceholders(boundary, [text]);
+  const protectedInput = protectBoundaryPlaceholders(boundary, [
+    encodeLateLiteralPlaceholders(boundary, text),
+  ]);
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
@@ -641,9 +716,11 @@ export const prepareTextForThirdParty = async ({
 
 const prepareTextBatchForThirdParty = async ({
   boundary,
+  sourceAlreadyEncoded = false,
   replacements,
 }: {
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  sourceAlreadyEncoded?: boolean;
   replacements: TextReplacement[];
 }): Promise<Result<void, BoundaryRefusal>> => {
   const fields = replacements.map((replacement) => replacement.text);
@@ -653,7 +730,12 @@ const prepareTextBatchForThirdParty = async ({
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
   reserveSourcePlaceholders(boundary, fields);
-  const protectedInput = protectBoundaryPlaceholders(boundary, fields);
+  const protectedInput = protectBoundaryPlaceholders(
+    boundary,
+    sourceAlreadyEncoded
+      ? fields
+      : fields.map((field) => encodeLateLiteralPlaceholders(boundary, field)),
+  );
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
@@ -687,7 +769,10 @@ const prepareTextBatchForThirdParty = async ({
     const replacement = replacements.at(index);
     if (
       replacement?.type === "reject-if-changed" &&
-      restoredFields.at(index) !== replacement.text
+      rewritePlaceholders(
+        restoredFields.at(index) ?? "",
+        literalPlaceholderRestoreMap(boundary),
+      ) !== replacement.text
     ) {
       return Result.err(
         new HandlerError({
@@ -1132,6 +1217,7 @@ export const prepareUnknownForThirdParty = async ({
   preparedValue = anonymized.value;
   const anonymizedBatch = await prepareTextBatchForThirdParty({
     boundary,
+    sourceAlreadyEncoded: encodeClaimedPlaceholders,
     replacements,
   });
   if (Result.isError(anonymizedBatch)) {
@@ -1763,6 +1849,7 @@ const anonymizeToolOutputForThirdParty = async ({
   preparedOutput = anonymizedOutput.value;
   const anonymizedBatch = await prepareTextBatchForThirdParty({
     boundary,
+    sourceAlreadyEncoded: true,
     replacements,
   });
   if (Result.isError(anonymizedBatch)) {

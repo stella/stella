@@ -60,6 +60,11 @@ const PROVISION_READ_STATUS_MIGRATION_PATH = nodePath.join(
   "20260927090000_case_law_provision_read_status",
   "migration.sql",
 );
+const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260731190000_case_law_observation_legacy_fence",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -369,6 +374,21 @@ export const installPgliteLegislationPayloadRevision = async (
       executableSql(statement).startsWith(prefix),
     ),
   );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
+ * Install the fence that rejects a write of a decision's publisher hash that
+ * does not advance its observation order.
+ */
+export const installPgliteCaseLawObservationFence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH,
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

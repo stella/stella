@@ -54,8 +54,9 @@ the current list.
 
 ## Entity checks
 
-`/entity-checks` screens a company or a person against an official source,
-such as the Czech insolvency register:
+`/entity-checks` screens a company or a person against an official source:
+`cz-insolvency` (the Czech insolvency register) and `cz-vat-reliability` (the
+Czech VAT register's unreliable-payer status and published bank accounts).
 
 ```ts
 import { runEntityCheck } from "@stll/business-registries/entity-checks";
@@ -67,10 +68,11 @@ const result = await runEntityCheck({
 ```
 
 Every check resolves to one outcome: `clear` (the source answered and lists
-nothing), `found` (typed findings), `unavailable` (a transport error, timeout,
-outage page, SOAP fault, error code, or unparseable answer), or `not-covered`
-(the source cannot answer for this subject type). A failure is never reported
-as `clear`.
+nothing), `found` (typed findings), `not-registered` (the source holds no
+record, such as a DIČ that is not a VAT payer), `unavailable` (a transport
+error, timeout, outage page, SOAP fault, error code, or unparseable answer), or
+`not-covered` (the source cannot answer for this subject type). A failure is
+never reported as `clear`.
 
 ## Design notes
 

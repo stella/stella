@@ -39,6 +39,33 @@
   "disconnectTab": {
     "message": "Desconectar pestaña"
   },
+  "downloadKept": {
+    "message": "Descargas que terminaron mientras stella controlaba una pestaña y se conservaron: $COUNT$. Comprueba su origen antes de abrirlas.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadStopped": {
+    "message": "Descargas que stella detuvo mientras controlaba una pestaña: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "Mientras stella controlaba una pestaña: descargas detenidas: $STOPPED$. Descargas terminadas y conservadas (comprueba su origen antes de abrirlas): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
+  },
   "extensionDescription": {
     "message": "Permite a stella controlar una pestaña dedicada de Chrome después de que concedas acceso."
   },

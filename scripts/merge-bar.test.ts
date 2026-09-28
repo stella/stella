@@ -403,9 +403,7 @@ describe("merge bar", () => {
     expect(
       failedGate(
         passingSnapshot({
-          checkRuns: [
-            checkRun("ci-result", "in_progress", null),
-          ],
+          checkRuns: [checkRun("ci-result", "in_progress", null)],
         }),
       ),
     ).toEqual({ decision: "abort", reasons: ["REQUIRED_CHECK_INCOMPLETE"] });
@@ -419,9 +417,7 @@ describe("merge bar", () => {
       evaluateMergeBar(
         passingSnapshot({
           landing: "merge-when-ready",
-          checkRuns: [
-            checkRun("ci-result", "in_progress", null),
-          ],
+          checkRuns: [checkRun("ci-result", "in_progress", null)],
         }),
       ).decision,
     ).toBe("merge");
@@ -434,9 +430,7 @@ describe("merge bar", () => {
       failedGate(
         passingSnapshot({
           landing: "merge-when-ready",
-          checkRuns: [
-            checkRun("ci-result", "completed", "failure"),
-          ],
+          checkRuns: [checkRun("ci-result", "completed", "failure")],
         }),
       ),
     ).toEqual({
@@ -445,13 +439,39 @@ describe("merge bar", () => {
     });
   });
 
+  test("a skipped CI plan on a ready head is refused even when ci-result passed", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      expect(
+        failedGate(
+          passingSnapshot({
+            landing,
+            checkRuns: [
+              checkRun("ci-plan", "completed", "skipped", { id: 3 }),
+              checkRun("ci-result", "completed", "success"),
+            ],
+          }),
+        ),
+        landing,
+      ).toEqual({ decision: "abort", reasons: ["CI_PLAN_SKIPPED"] });
+    }
+    // A plan that ran is not in the way.
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          checkRuns: [
+            checkRun("ci-plan", "completed", "success", { id: 3 }),
+            checkRun("ci-result", "completed", "success"),
+          ],
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
   test("a completed but unsuccessful ci-result is refused", () => {
     expect(
       failedGate(
         passingSnapshot({
-          checkRuns: [
-            checkRun("ci-result", "completed", "failure"),
-          ],
+          checkRuns: [checkRun("ci-result", "completed", "failure")],
         }),
       ),
     ).toEqual({
@@ -513,9 +533,7 @@ describe("merge bar", () => {
     expect(
       failedGate(
         passingSnapshot({
-          checkRuns: [
-            checkRun("ci-result", "completed", "skipped"),
-          ],
+          checkRuns: [checkRun("ci-result", "completed", "skipped")],
         }),
       ),
     ).toEqual({
