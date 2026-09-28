@@ -68,10 +68,7 @@ const reasoningSignature = ({
   encryptedValue,
   metadata,
 }: ReasoningSnapshotMessage): string | undefined => {
-  const tanstack: unknown =
-    typeof metadata === "object" && metadata !== null
-      ? Reflect.get(metadata, "tanstack")
-      : undefined;
+  const tanstack: unknown = metadata?.["tanstack"];
   return (
     nonEmptyString(encryptedValue) ??
     nonEmptyString(
