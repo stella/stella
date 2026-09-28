@@ -22,6 +22,7 @@ type RootAttributes = Record<string, string>;
 type ReadState = {
   failure: SanctionsListParseError | null;
   rootAttributes: RootAttributes | null;
+  metadata: XmlNode | null;
 };
 
 /**
@@ -35,10 +36,11 @@ type ReadXmlOptions = {
   input: AsyncIterable<Uint8Array>;
   source: SanctionsSource;
   rootName: string;
-  /** "root" stops reading once the root element's attributes are known. */
-  extent: "root" | "document";
+  /** "root" and "metadata" stop as soon as the edition can be read. */
+  extent: "root" | "metadata" | "document";
   layout: XmlLayout;
   recordNames: ReadonlySet<string>;
+  metadataName?: string;
   onRecord: (record: XmlNode) => Result<void, SanctionsListParseError>;
 };
 
@@ -49,12 +51,20 @@ const readXml = async ({
   extent,
   layout,
   recordNames,
+  metadataName,
   onRecord,
 }: ReadXmlOptions): Promise<
-  Result<RootAttributes, SanctionsListParseError>
+  Result<
+    { root: RootAttributes; metadata: XmlNode | null },
+    SanctionsListParseError
+  >
 > => {
   const parser = new SaxesParser();
-  const state: ReadState = { failure: null, rootAttributes: null };
+  const state: ReadState = {
+    failure: null,
+    rootAttributes: null,
+    metadata: null,
+  };
   const stack: XmlNode[] = [];
   // Open elements above the current record: the root and list containers.
   const containers: string[] = [];
@@ -89,7 +99,7 @@ const readXml = async ({
         );
         return;
       }
-      if (!recordNames.has(tag.name)) {
+      if (!recordNames.has(tag.name) && tag.name !== metadataName) {
         containers.push(tag.name);
         return;
       }
@@ -121,6 +131,10 @@ const readXml = async ({
     if (stack.length > 0) {
       return;
     }
+    if (node.name === metadataName) {
+      state.metadata = node;
+      return;
+    }
     const handled = onRecord(node);
     if (handled.isErr()) {
       state.failure ??= handled.error;
@@ -129,7 +143,8 @@ const readXml = async ({
 
   const done = () =>
     state.failure !== null ||
-    (extent === "root" && state.rootAttributes !== null);
+    (extent === "root" && state.rootAttributes !== null) ||
+    (extent === "metadata" && state.metadata !== null);
 
   const fed = await Result.tryPromise({
     try: async () => {
@@ -165,7 +180,7 @@ const readXml = async ({
       }),
     );
   }
-  return Result.ok(state.rootAttributes);
+  return Result.ok({ root: state.rootAttributes, metadata: state.metadata });
 };
 
 /** How one XML list maps onto entries and an edition stamp. */
@@ -174,10 +189,15 @@ export type XmlListFormat = {
   rootName: string;
   layout: XmlLayout;
   recordNames: ReadonlySet<string>;
+  metadataName?: string;
   toEntry: (record: XmlNode) => Result<SanctionsEntry, SanctionsListParseError>;
   toVersion: (
     root: RootAttributes,
+    metadata: XmlNode | null,
   ) => Result<ListVersion, SanctionsListParseError>;
+  toRecordCount?: (
+    metadata: XmlNode | null,
+  ) => Result<number, SanctionsListParseError>;
 };
 
 /**
@@ -198,6 +218,7 @@ export const parseXmlList = async (
     extent: "document",
     layout: format.layout,
     recordNames: format.recordNames,
+    metadataName: format.metadataName,
     onRecord: (record) => {
       const entry = format.toEntry(record);
       if (entry.isErr()) {
@@ -210,6 +231,21 @@ export const parseXmlList = async (
   if (read.isErr()) {
     return Result.err(read.error);
   }
+  if (format.toRecordCount !== undefined) {
+    const count = format.toRecordCount(read.value.metadata);
+    if (count.isErr()) {
+      return Result.err(count.error);
+    }
+    if (entries.length !== count.value) {
+      return Result.err(
+        new SanctionsListParseError({
+          code: "unexpected-structure",
+          message: `the ${format.source} list declares ${count.value} records but contains ${entries.length}`,
+          source: format.source,
+        }),
+      );
+    }
+  }
   if (entries.length === 0) {
     return Result.err(
       new SanctionsListParseError({
@@ -219,7 +255,9 @@ export const parseXmlList = async (
       }),
     );
   }
-  return format.toVersion(read.value).map((version) => ({ version, entries }));
+  return format
+    .toVersion(read.value.root, read.value.metadata)
+    .map((version) => ({ version, entries }));
 };
 
 /** Reads only the edition stamp at the start of a list and stops there. */
@@ -231,12 +269,13 @@ export const readXmlListVersion = async (
     input,
     source: format.source,
     rootName: format.rootName,
-    extent: "root",
+    extent: format.metadataName === undefined ? "root" : "metadata",
     layout: format.layout,
     recordNames: format.recordNames,
+    metadataName: format.metadataName,
     onRecord: () => Result.ok(),
   });
-  return read.andThen(format.toVersion);
+  return read.andThen(({ root, metadata }) => format.toVersion(root, metadata));
 };
 
 export const childrenNamed = (node: XmlNode, name: string): XmlNode[] =>

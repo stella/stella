@@ -166,7 +166,9 @@ export const buildNameIndex = (
       }
       if (existing !== undefined) {
         // A weak alias the entry also lists as a strong one counts as strong.
-        existing.quality = quality;
+        if (quality === "strong" || existing.quality === "unknown") {
+          existing.quality = quality;
+        }
         continue;
       }
       const alias: IndexedAlias = {
@@ -511,7 +513,7 @@ const scoreAlias = (
     (queryExplained / queryTotal) *
       listedCoverage(index, alias, alignment.listed),
   );
-  return alias.quality === "weak" ? score * WEAK_ALIAS_FACTOR : score;
+  return alias.quality === "strong" ? score : score * WEAK_ALIAS_FACTOR;
 };
 
 export type NameMatch = { score: number; name: string };

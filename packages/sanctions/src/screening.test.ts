@@ -52,6 +52,7 @@ const listed = ({
   name,
 }: ListedOptions): SanctionsEntry => ({
   source: "eu",
+  issuer: "EU",
   sourceId,
   referenceNumber: null,
   entityType,

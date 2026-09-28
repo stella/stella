@@ -1,22 +1,37 @@
 # @stll/sanctions
 
 Sanctions-list parsing and name screening. Pure library: no network, no
-storage; callers fetch the lists and keep the index.
+storage; callers fetch the lists and keep the index. `SANCTIONS_SOURCES` gives
+each list's issuer, official download location, reuse terms, and a cheap
+edition check. Each entry carries its issuer; callers decide the legal effect
+of a hit in their jurisdiction.
+
+Fetch the URL in `editionMarker` with HEAD for `http-last-modified`, or GET
+for the other strategies, then pass its header or small response body to
+`readSourceEditionMarker(source, response)`. The returned opaque value can be
+compared with the last poll. For the Czech dated file, the result also gives
+the current direct CSV URL. A missing or changed publisher marker returns an
+error rather than treating the list as unchanged.
+The Commission endpoints require the caller's FSF portal token as the `token`
+query parameter; the registry records this access requirement without storing
+a credential.
 
 ## Lists
 
-| Source                                         | Publication                             | Parser                                | Edition stamp                    |
-| ---------------------------------------------- | --------------------------------------- | ------------------------------------- | -------------------------------- |
-| EU consolidated financial sanctions list       | XML (schema 1.1)                        | `parseEuList(stream)`                 | `generationDate`, `globalFileId` |
-| UN Security Council consolidated list          | XML                                     | `parseUnList(stream)`                 | `dateGenerated`                  |
-| Czech national sanctions list (Act 1/2023 Sb.) | CSV in the national open data catalogue | `parseCzList({ csv, fileNameOrUrl })` | date in the file name            |
+| Source                                   | Official publication                                                                                                                    | Parser                                | Edition stamp                    | Cheap edition check                                                                                      |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| EU consolidated financial sanctions list | [Commission XML 1.1](https://webgate.ec.europa.eu/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content)                                | `parseEuList(stream)`                 | `generationDate`, `globalFileId` | Publisher checksum endpoint                                                                              |
+| UN Security Council consolidated list    | [UN XML](https://scsanctions.un.org/resources/xml/en/consolidated.xml)                                                                  | `parseUnList(stream)`                 | `dateGenerated`                  | [Official list page](https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list) update date |
+| Czech national sanctions list            | [MFA publication page](https://mzv.gov.cz/jnp/cz/zahranicni_vztahy/sankcni_politika/sankcni_seznam_cr/vnitrostatni_sankcni_seznam.html) | `parseCzList({ csv, fileNameOrUrl })` | date in the file name            | Dated CSV link on the publication page                                                                   |
+| US OFAC SDN                              | [SLS SDN XML](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML)                                       | `parseOfacList("us-sdn", stream)`     | `Publish_Date`                   | HTTP HEAD `Last-Modified`                                                                                |
+| US OFAC consolidated non-SDN             | [SLS consolidated XML](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONSOLIDATED.XML)                     | `parseOfacList("us-non-sdn", stream)` | `Publish_Date`                   | HTTP HEAD `Last-Modified`                                                                                |
 
 Every parser returns a `Result`: the complete list or a
 `SanctionsListParseError`, never the entries read before a problem. The XML
 parsers stream, so the 26 MB EU file never sits in memory as text.
 `readEuListVersion` and `readUnListVersion` read the edition stamp and stop.
 The Czech CSV keeps revoked and superseded rows as history; only rows in force
-become entries.
+become entries. OFAC's [standard XML](https://ofac.treasury.gov/sdn-list-data-formats-data-schemas/frequently-asked-questions-on-advanced-sanctions-list-standard) carries the core records inside each `sdnEntry`; the advanced XML links records across separate sections, so standard XML allows bounded streaming. The OFAC parser keeps every name, birth date, nationality or citizenship, identification row, address and programme in the entry shape. Several programme tags are joined with `; ` in `programme`. Dates with bounded day or month ranges become inclusive year ranges, the precision supported by the entry model. Unknown source types and alias quality are explicit `unknown` values. OFAC also uses `idList` for non-identity facts, such as gender and website; these retain their original label and value with identifier kind `unknown` and cannot trigger a decisive identifier match. OFAC [requires a User-Agent](https://ofac.treasury.gov/sdn-list-data-formats-data-schemas/ofac-technical-actions-in-reverse-chronological-order/20240516_44) on automated downloads.
 
 A parse proves a file well formed, not complete. Before a new edition replaces
 the one in use, `checkListReplacement({ previous, next })` refuses a first
@@ -57,4 +72,11 @@ replay.
 
 ## License
 
-Apache-2.0
+The library code is Apache-2.0. Source data has separate terms:
+
+| Data                                                                                                                                                    | Reuse terms                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [EU Commission list](https://data.europa.eu/data/datasets/consolidated-list-of-persons-groups-and-entities-subject-to-eu-financial-sanctions?locale=en) | [Commission reuse decision 2011/833/EU](https://eur-lex.europa.eu/eli/dec/2011/833/oj/eng) for the XML 1.1 distribution                                                               |
+| [UN Security Council list](https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list)                                                      | The [UN website terms](https://www.un.org/Depts/los/LEGISLATIONANDTREATIES/terms_and_conditions.htm) apply; list-specific commercial redistribution permission has not been verified. |
+| [Czech MFA list](https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html)                                                                   | Published as open data; an explicit dataset reuse licence has not been verified.                                                                                                      |
+| [US OFAC lists](https://ofac.treasury.gov/sanctions-list-service)                                                                                       | US federal government work is [public domain under 17 USC § 105](https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec105.htm).                  |
