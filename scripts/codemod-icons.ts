@@ -284,29 +284,38 @@ const LUCIDE_STATEMENT =
 const rewriteFile = (file: string, source: string): string => {
   const renames = new Map<string, string>();
   const target = iconSpecifierFor(file);
-  const output = source.replace(LUCIDE_STATEMENT, (...args: unknown[]) => {
-    const groups = args.at(-1) as Record<string, string | undefined>;
-    const keyword = groups["keyword"] ?? "import";
-    const typeKeyword = groups["typeKeyword"] === undefined ? "" : " type";
-    const specifiers = parseSpecifiers(groups["list"] ?? "").map(
-      ({ typeOnly, imported, local }): Specifier => {
-        const glyph = typeOnly || typeKeyword !== "" ? null : glyphOf(imported);
-        if (glyph === null) {
-          return { typeOnly, imported, local };
-        }
-        const semantic = semanticFor(glyph, file);
-        if (semantic === null) {
-          return { typeOnly, imported: `${glyph}Icon`, local };
-        }
-        if (keyword === "import" && local === imported) {
-          renames.set(local, semantic);
-          return { typeOnly, imported: semantic, local: semantic };
-        }
-        return { typeOnly, imported: semantic, local };
-      },
-    );
-    return `${keyword}${typeKeyword} { ${uniqueSpecifiers(specifiers).map(printSpecifier).join(", ")} } from "${target}";`;
-  });
+  // The replacer receives LUCIDE_STATEMENT's capture groups positionally:
+  // the keyword, the optional ` type`, and the specifier list.
+  const output = source.replace(
+    LUCIDE_STATEMENT,
+    (
+      _statement: string,
+      keyword: string,
+      typeGroup: string | undefined,
+      list: string,
+    ) => {
+      const typeKeyword = typeGroup === undefined ? "" : " type";
+      const specifiers = parseSpecifiers(list).map(
+        ({ typeOnly, imported, local }): Specifier => {
+          const glyph =
+            typeOnly || typeKeyword !== "" ? null : glyphOf(imported);
+          if (glyph === null) {
+            return { typeOnly, imported, local };
+          }
+          const semantic = semanticFor(glyph, file);
+          if (semantic === null) {
+            return { typeOnly, imported: `${glyph}Icon`, local };
+          }
+          if (keyword === "import" && local === imported) {
+            renames.set(local, semantic);
+            return { typeOnly, imported: semantic, local: semantic };
+          }
+          return { typeOnly, imported: semantic, local };
+        },
+      );
+      return `${keyword}${typeKeyword} { ${uniqueSpecifiers(specifiers).map(printSpecifier).join(", ")} } from "${target}";`;
+    },
+  );
   return mergeValueImports(renameIdentifiers(file, output, renames), target);
 };
 
