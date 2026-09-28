@@ -4,11 +4,9 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  answerCallsInTheirStep,
-  guardProviderHistory,
-  settleHistoryForRun,
-} from "@/api/handlers/chat/chat-turn-settlement";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
+import { answerCallsInTheirStep } from "@/api/handlers/chat/step-answers";
 import type { GuardedChatSurfaces } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";

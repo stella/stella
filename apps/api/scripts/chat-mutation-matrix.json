@@ -567,7 +567,7 @@
       "fix": "#4020",
       "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
       "status": "active",
-      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "file": "src/handlers/chat/step-answers.ts",
       "search": "    if (answer !== undefined && at < parts.length) {",
       "replace": "    if (answer !== undefined && at < 0) {",
       "scenario": {
@@ -581,7 +581,7 @@
       "fix": "#4020",
       "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
       "status": "active",
-      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "file": "src/handlers/chat/provider-history.ts",
       "search": "      messages: answerHistoryCallsInTheirStep(messages),",
       "replace": "      messages,",
       "scenario": {

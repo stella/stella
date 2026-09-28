@@ -35,10 +35,8 @@ import {
   CHAT_RUN_MODE,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
-import {
-  guardProviderHistory,
-  settleHistoryForRun,
-} from "@/api/handlers/chat/chat-turn-settlement";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";

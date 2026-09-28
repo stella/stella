@@ -54,12 +54,8 @@ import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
   findHandedOutInteraction,
-  guardProviderHistory,
 } from "@/api/handlers/chat/chat-turn-settlement";
-import type {
-  CutShortOutcome,
-  GuardedProviderHistory,
-} from "@/api/handlers/chat/chat-turn-settlement";
+import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -69,6 +65,8 @@ import {
   shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
+import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
