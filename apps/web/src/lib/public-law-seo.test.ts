@@ -3,8 +3,9 @@ import { createTranslator } from "use-intl/core";
 
 import {
   getTranslator,
-  messageLoaders,
+  loadLocaleMessages,
   supportedLanguages,
+  useI18nStore,
 } from "@/i18n/i18n-store";
 import cs from "@/i18n/langs/cs.json";
 import en from "@/i18n/langs/en.json";
@@ -349,11 +350,42 @@ describe("public law SEO", () => {
 });
 
 describe("public law metadata language", () => {
+  test("keeps unsupported content languages independent of every interface locale", async () => {
+    const initialLocale = useI18nStore.getState().loadedLang;
+    try {
+      for (const locale of supportedLanguages) {
+        await useI18nStore.getState().setLang(locale);
+        const interfaceTranslator = getTranslator();
+        for (const language of ["it", "fi", "nl", "it-IT"]) {
+          const decision = await createCaseLawDecisionJsonLd({
+            canonicalUrl: "http://localhost:3000/law/cases",
+            caseNumber: "20 Cdo 470/2017",
+            country: "CZE",
+            court: "Nejvyšší soud",
+            decisionDate: null,
+            ecli: null,
+            language,
+          });
+          expect(decision).toMatchObject({
+            inLanguage: language,
+            isPartOf: {
+              "@type": "Collection",
+              name: en.caseLaw.seo.collectionName,
+            },
+          });
+          expect(getTranslator()).toBe(interfaceTranslator);
+        }
+      }
+    } finally {
+      await useI18nStore.getState().setLang(initialLocale);
+    }
+  });
+
   test.each(supportedLanguages)(
     "uses the %s catalog without changing the interface language",
     async (locale) => {
       const interfaceTranslator = getTranslator();
-      const messages = await messageLoaders[locale]();
+      const messages = await loadLocaleMessages(locale);
       const translate = createTranslator({ locale, messages });
       const canonicalUrl = "http://localhost:3000/law/cases";
       const decision = await createCaseLawDecisionJsonLd({
@@ -432,10 +464,10 @@ describe("public law metadata language", () => {
       ),
     );
     const catalogs = await Promise.all([
-      messageLoaders.cs(),
-      messageLoaders.en(),
-      messageLoaders.ar(),
-      messageLoaders["pt-BR"](),
+      loadLocaleMessages("cs"),
+      loadLocaleMessages("en"),
+      loadLocaleMessages("ar"),
+      loadLocaleMessages("pt-BR"),
     ]);
     expect(decisions.map((decision) => decision["isPartOf"])).toEqual(
       catalogs.map((messages) => ({

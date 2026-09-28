@@ -2,7 +2,7 @@ import { createTranslator } from "use-intl/core";
 
 import { resolveUiLocale, toLanguageCode } from "@stll/locales";
 
-import { getTranslator, messageLoaders } from "@/i18n/i18n-store";
+import { loadLocaleMessages } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
@@ -113,10 +113,11 @@ export const createCaseLawDecisionJsonLd = async ({
 }: CaseLawDecisionJsonLdInput): Promise<JsonLdObject> => {
   // Resolve the content language independently of the interface store: public
   // requests can render different document languages concurrently.
-  const locale = resolveUiLocale(toLanguageCode(language) ?? language);
-  const t = locale
-    ? createTranslator({ locale, messages: await messageLoaders[locale]() })
-    : getTranslator();
+  const locale = resolveUiLocale(toLanguageCode(language) ?? language) ?? "en";
+  const t = createTranslator({
+    locale,
+    messages: await loadLocaleMessages(locale),
+  });
   const publishedDate = dateToIsoDate(decisionDate);
   const modifiedDate = dateToIsoDate(updatedAt ?? null);
   const officialSourceUrl = absoluteUrlOrNull(sourceUrl);
