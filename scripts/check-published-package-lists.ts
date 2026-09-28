@@ -15,7 +15,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { loadChangesetPolicy } from "./changeset-guard";
-import { formattedLikeRepository } from "./generated-artifacts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const START_MARKER = "<!-- published-packages:start -->";
@@ -107,26 +106,25 @@ type RenderedFile = {
   readonly rendered: string;
 };
 
-const renderFiles = async (root: string): Promise<readonly RenderedFile[]> => {
+const renderFiles = (root: string): readonly RenderedFile[] => {
   const block = renderPublishedPackageBlock(
     loadChangesetPolicy(root).releasePaths,
   );
-  return await Promise.all(
-    RENDERED_FILES.map(async (file) => {
-      const committed = readFileSync(path.join(root, file), "utf-8");
-      return {
-        committed,
+  return RENDERED_FILES.map((file) => {
+    const committed = readFileSync(path.join(root, file), "utf-8");
+    return {
+      committed,
+      file,
+      rendered: replacePublishedPackageBlock({
+        block,
+        contents: committed,
         file,
-        rendered: await formattedLikeRepository(
-          replacePublishedPackageBlock({ block, contents: committed, file }),
-          "md",
-        ),
-      };
-    }),
-  );
+      }),
+    };
+  });
 };
 
-const main = async (argv: readonly string[]): Promise<number> => {
+const main = (argv: readonly string[]): number => {
   const write = argv.includes("--write");
   if (!write && !argv.includes("--check")) {
     console.error(
@@ -135,7 +133,7 @@ const main = async (argv: readonly string[]): Promise<number> => {
     return 1;
   }
 
-  const files = await renderFiles(REPO_ROOT);
+  const files = renderFiles(REPO_ROOT);
   if (write) {
     for (const { file, rendered } of files) {
       writeFileSync(path.join(REPO_ROOT, file), rendered);
@@ -165,5 +163,5 @@ const main = async (argv: readonly string[]): Promise<number> => {
 };
 
 if (import.meta.main) {
-  process.exit(await main(process.argv.slice(2)));
+  process.exit(main(process.argv.slice(2)));
 }

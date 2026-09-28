@@ -190,8 +190,6 @@ export const GENERATORS = [
     inputs: [
       "scripts/changeset-policy.json",
       "scripts/check-published-package-lists.ts",
-      "scripts/generated-artifacts.ts",
-      ".oxfmtrc.json",
     ],
     write: ["bun", "scripts/check-published-package-lists.ts", "--write"],
     check: null,

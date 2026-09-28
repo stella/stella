@@ -18,7 +18,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { formattedLikeRepository } from "./generated-artifacts";
+// With its extension: oxlint.config.ts loads this file under Node's resolver.
+import { formattedLikeRepository } from "./generated-artifacts.ts";
 
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
