@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { savedTimeNarratives } from "@/api/db/schema";
@@ -7,6 +8,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 import { toSavedTimeNarrativeItem } from "./schema";
 
@@ -35,6 +37,23 @@ const createSavedTimeNarrative = createSafeRootHandler(
     }
     const created = yield* Result.await(
       safeDb(async (tx) => {
+        // Serialize the count and insert for this user's narratives.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}), hashtext(${`saved-time-narratives:${user.id}`}))`,
+        );
+        const count = await tx.$count(
+          savedTimeNarratives,
+          and(
+            eq(
+              savedTimeNarratives.organizationId,
+              session.activeOrganizationId,
+            ),
+            eq(savedTimeNarratives.userId, user.id),
+          ),
+        );
+        if (count >= LIMITS.savedTimeNarrativesPerUser) {
+          return null;
+        }
         const rows = await tx
           .insert(savedTimeNarratives)
           .values({
@@ -58,6 +77,14 @@ const createSavedTimeNarrative = createSafeRootHandler(
         return row;
       }),
     );
+    if (!created) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Saved time narrative limit reached",
+        }),
+      );
+    }
     return Result.ok(toSavedTimeNarrativeItem(created));
   },
 );

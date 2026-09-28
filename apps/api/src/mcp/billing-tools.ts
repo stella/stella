@@ -854,6 +854,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
         ["date_worked"],
         ["duration_minutes"],
         ["narrative"],
+        ["narrative_language"],
         ["invoice_narrative"],
         ["billable"],
         ["no_charge"],
@@ -866,6 +867,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
         i.date_worked !== undefined ||
         i.duration_minutes !== undefined ||
         i.narrative !== undefined ||
+        i.narrative_language !== undefined ||
         i.invoice_narrative !== undefined ||
         i.billable !== undefined ||
         i.no_charge !== undefined ||

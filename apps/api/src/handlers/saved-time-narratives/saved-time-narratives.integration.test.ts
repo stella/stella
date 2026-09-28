@@ -4,7 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { savedTimeNarratives } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -157,4 +159,30 @@ test("blank names and narratives are rejected before persistence", async () => {
       ),
     );
   expect(rows).toEqual([]);
+});
+
+test("saved narratives stop at the per-user limit", async () => {
+  const rows = Array.from(
+    { length: LIMITS.savedTimeNarrativesPerUser },
+    (_, index) => ({
+      id: createSafeId<"savedTimeNarrative">(),
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      name: `Template ${index}`,
+      narrative: "Reusable text",
+    }),
+  );
+  await testDb.insert(savedTimeNarratives).values(rows);
+  createdIds.push(...rows.map(({ id }) => id));
+
+  const result = await createSavedTimeNarrative.handler(
+    asTestRaw<CreateCtx>({
+      ...context(ids.orgA, ids.userA1),
+      body: { name: "Over limit", narrative: "More text" },
+    }),
+  );
+  expect(result).toMatchObject({
+    code: 400,
+    response: { message: "Saved time narrative limit reached" },
+  });
 });
