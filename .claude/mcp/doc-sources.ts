@@ -369,6 +369,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "re2-wasm",
   "react-native-web",
   "rollup-plugin-visualizer",
+  "saxes",
   "scslre",
   "sherif",
   "slimdom",
