@@ -735,13 +735,17 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
-      const run = async () =>
-        await handleMcpToolCall({
+      const run = async (signal?: AbortSignal) => {
+        signal?.throwIfAborted();
+        const result = await handleMcpToolCall({
           args: toolRequest.params.arguments ?? {},
           context,
           mode,
           toolName,
         });
+        signal?.throwIfAborted();
+        return result;
+      };
       if (!env.FEATURE_ACTION_ADMISSION) {
         return await run();
       }

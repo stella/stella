@@ -4,7 +4,10 @@ import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
-import { createRedisClient } from "@/api/lib/redis-client";
+import {
+  createLazyRedisClient,
+  createRedisClient,
+} from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 
 type RedisCommands = {
@@ -12,6 +15,14 @@ type RedisCommands = {
 };
 
 const REDIS_COMMAND_TIMEOUT_MS = 500;
+const admissionRedis = createLazyRedisClient(() =>
+  createRedisClient({
+    connectionTimeout: REDIS_COMMAND_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  }),
+);
+
+export const closeActionAdmissionRedis = () => admissionRedis.close();
 
 export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   message: string;
@@ -45,11 +56,13 @@ return 1
 `;
 
 const RENEW_SCRIPT = `
-if redis.call("ZSCORE", KEYS[1], ARGV[1]) == false or redis.call("ZSCORE", KEYS[2], ARGV[1]) == false then
-  return 0
-end
 local clock = redis.call("TIME")
 local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+local orgExpiry = redis.call("ZSCORE", KEYS[1], ARGV[1])
+local userExpiry = redis.call("ZSCORE", KEYS[2], ARGV[1])
+if orgExpiry == false or userExpiry == false or tonumber(orgExpiry) <= now or tonumber(userExpiry) <= now then
+  return 0
+end
 redis.call("ZADD", KEYS[1], now + tonumber(ARGV[2]), ARGV[1])
 redis.call("ZADD", KEYS[2], now + tonumber(ARGV[2]), ARGV[1])
 redis.call("PEXPIRE", KEYS[1], ARGV[2])
@@ -107,11 +120,26 @@ const configuredPolicy = (): ActionAdmissionPolicy => {
 type ActionAdmissionOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  run: () => Promise<unknown>;
+  run: (signal: AbortSignal) => Promise<unknown>;
   enabled?: boolean;
   policy?: ActionAdmissionPolicy;
   redis?: RedisCommands;
+  redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
+  timing?: AdmissionTiming;
+};
+
+type AdmissionTiming = {
+  now: () => number;
+  schedule: (callback: () => void, delayMs: number) => () => void;
+};
+
+const defaultTiming: AdmissionTiming = {
+  now: () => performance.now(),
+  schedule: (callback, delayMs) => {
+    const timer = setTimeout(callback, delayMs);
+    return () => clearTimeout(timer);
+  },
 };
 
 /** The disabled branch never opens Valkey or reads admission configuration. */
@@ -122,21 +150,28 @@ export const withActionAdmission = async <T>({
   enabled = env.FEATURE_ACTION_ADMISSION,
   policy,
   redis,
+  redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
+  timing = defaultTiming,
 }: Omit<ActionAdmissionOptions, "run"> & {
-  run: () => Promise<T>;
+  run: (signal: AbortSignal) => Promise<T>;
 }): Promise<T> => {
   if (!enabled) {
-    return await run();
+    return await run(new AbortController().signal);
   }
 
   const limits = policy ?? configuredPolicy();
-  const client: RedisCommands =
-    redis ?? createRedisClient({ enableOfflineQueue: false });
   const keys = admissionKeys({ organizationId, userId });
   const leaseId = createId();
   const execute = async (script: string, args: string[]) => {
     try {
+      const client: RedisCommands =
+        redis ??
+        (await withCommandTimeout({
+          command: redisReady(),
+          commandTimeoutMs: REDIS_COMMAND_TIMEOUT_MS,
+          label: "action-admission-redis-connect",
+        }));
       return await withCommandTimeout({
         command: client.send("EVAL", [
           script,
@@ -157,6 +192,7 @@ export const withActionAdmission = async <T>({
     }
   };
 
+  const initialAttemptAt = timing.now();
   const admitted = await execute(ACQUIRE_SCRIPT, [
     String(limits.leaseMs),
     String(limits.organizationConcurrency),
@@ -176,38 +212,86 @@ export const withActionAdmission = async <T>({
     });
   }
 
+  let leaseDeadline = initialAttemptAt + limits.leaseMs;
+  const controller = new AbortController();
+  let leaseLost: ActionAdmissionError | null = null;
+  let stopped = false;
+  let cancelScheduled = () => undefined;
   let renewal: Promise<void> | null = null;
-  const heartbeat = setInterval(
-    () => {
-      if (renewal !== null) {
-        return;
-      }
-      renewal = (async () => {
-        const renewed = await execute(RENEW_SCRIPT, [
-          leaseId,
-          String(limits.leaseMs),
-        ]);
-        if (renewed !== 1) {
-          throw new ActionAdmissionError({
-            message: "Action lease was lost",
-            reason: "unavailable",
-          });
-        }
-      })()
-        .catch((error: unknown) => {
-          clearInterval(heartbeat);
-          captureError(error, { source: "action-admission", phase: "renew" });
-        })
-        .finally(() => {
+
+  const loseLease = () => {
+    if (stopped || leaseLost !== null) {
+      return;
+    }
+    leaseLost = new ActionAdmissionError({
+      message: "Action lease was lost",
+      reason: "unavailable",
+    });
+    cancelScheduled();
+    controller.abort(leaseLost);
+  };
+
+  const scheduleRenewal = (delayMs: number) => {
+    if (!stopped && leaseLost === null) {
+      cancelScheduled = timing.schedule(() => {
+        renewal = renew().finally(() => {
           renewal = null;
         });
-    },
-    Math.max(1, Math.floor(limits.leaseMs / 2)),
-  );
+      }, delayMs);
+    }
+  };
+
+  const renew = async () => {
+    const attemptAt = timing.now();
+    if (attemptAt >= leaseDeadline) {
+      loseLease();
+      return;
+    }
+    try {
+      const result = await execute(RENEW_SCRIPT, [
+        leaseId,
+        String(limits.leaseMs),
+      ]);
+      if (result !== 1) {
+        loseLease();
+        return;
+      }
+      leaseDeadline = attemptAt + limits.leaseMs;
+      scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
+    } catch (error) {
+      captureError(error, { source: "action-admission", phase: "renew" });
+      const remaining = leaseDeadline - timing.now();
+      if (remaining <= 0) {
+        loseLease();
+        return;
+      }
+      scheduleRenewal(
+        Math.max(1, Math.min(Math.floor(limits.leaseMs / 4), remaining)),
+      );
+    }
+  };
+
+  if (timing.now() >= leaseDeadline) {
+    loseLease();
+  } else {
+    scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
+  }
+
   try {
-    return await run();
+    controller.signal.throwIfAborted();
+    const result = await run(controller.signal);
+    if (leaseLost !== null) {
+      throw leaseLost;
+    }
+    return result;
+  } catch (error) {
+    if (leaseLost !== null) {
+      throw leaseLost;
+    }
+    throw error;
   } finally {
-    clearInterval(heartbeat);
+    stopped = true;
+    cancelScheduled();
     if (renewal !== null) {
       await renewal;
     }

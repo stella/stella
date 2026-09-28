@@ -35,7 +35,11 @@ const failureOf = async (operation: Promise<unknown>) => {
 
 // Separate caller instances share this one command boundary, as separate API
 // processes do when they connect to the same coordination service.
-const sharedRedis = () => {
+const sharedRedis = ({
+  onRenew,
+}: {
+  onRenew?: () => Promise<0 | 1 | undefined>;
+} = {}) => {
   const leases = new Map<string, Map<string, number>>();
   let currentTime = 0;
   const members = (key: string) => {
@@ -81,6 +85,10 @@ const sharedRedis = () => {
         return 1;
       }
       if (script.includes("ZSCORE")) {
+        const response = await onRenew?.();
+        if (response === 0) {
+          return 0;
+        }
         const [leaseId, leaseMs] = values;
         if (!leaseId || !organization.has(leaseId) || !user.has(leaseId)) {
           return 0;
@@ -99,7 +107,64 @@ const sharedRedis = () => {
   };
 };
 
+const manualTiming = (redis: ReturnType<typeof sharedRedis>) => {
+  let currentTime = 0;
+  let next: { at: number; callback: () => void } | null = null;
+  return {
+    now: () => currentTime,
+    schedule: (callback: () => void, delayMs: number) => {
+      const scheduled = { at: currentTime + delayMs, callback };
+      next = scheduled;
+      return () => {
+        if (next === scheduled) {
+          next = null;
+        }
+      };
+    },
+    fireNext: async () => {
+      const scheduled = next;
+      if (scheduled === null) {
+        throw new Error("No renewal scheduled");
+      }
+      next = null;
+      currentTime = scheduled.at;
+      redis.setTime(currentTime);
+      scheduled.callback();
+      await Bun.sleep(0);
+    },
+    setTime: (time: number) => {
+      currentTime = time;
+      redis.setTime(time);
+    },
+  };
+};
+
 describe("shared action admission", () => {
+  test("waits for the shared connection before sending a command", async () => {
+    const redis = sharedRedis();
+    const connected = Promise.withResolvers<typeof redis>();
+    let commands = 0;
+    const admitted = withActionAdmission({
+      enabled: true,
+      organizationId,
+      userId: firstUser,
+      policy,
+      redisReady: async () => await connected.promise,
+      run: async () => "served",
+    });
+    await Promise.resolve();
+    expect(commands).toBe(0);
+    connected.resolve({
+      ...redis,
+      send: async (command, args) => {
+        commands += 1;
+        return await redis.send(command, args);
+      },
+    });
+    expect(await admitted).toBe("served");
+    expect(commands).toBeGreaterThan(0);
+  });
+
   test("disabled admission preserves the handler result without touching coordination", async () => {
     const result = await withActionAdmission({
       organizationId,
@@ -238,5 +303,86 @@ describe("shared action admission", () => {
     ).toBe("served");
     pending.finish();
     await firstCall;
+  });
+
+  test("a transient renewal failure retries before the lease expires", async () => {
+    let renewalAttempts = 0;
+    const redis = sharedRedis({
+      onRenew: async () => {
+        renewalAttempts += 1;
+        if (renewalAttempts === 1) {
+          throw new Error("Transient connection failure");
+        }
+        return 1;
+      },
+    });
+    const timing = manualTiming(redis);
+    const pending = deferred();
+    const started = deferred();
+    const common = {
+      enabled: true,
+      organizationId,
+      userId: firstUser,
+      policy: { ...policy, leaseMs: 100 },
+      redis,
+      timing,
+    };
+    const firstCall = withActionAdmission({
+      ...common,
+      createId: () => "first",
+      run: async (signal) => {
+        started.finish();
+        await pending.promise;
+        expect(signal.aborted).toBe(false);
+      },
+    });
+    await started.promise;
+    await timing.fireNext();
+    await timing.fireNext();
+    expect(renewalAttempts).toBe(2);
+    timing.setTime(100);
+    expect(
+      await failureOf(
+        withActionAdmission({
+          ...common,
+          createId: () => "second",
+          run: async () => "unexpected",
+        }),
+      ),
+    ).toMatchObject({ reason: "busy" });
+    pending.finish();
+    await firstCall;
+  });
+
+  test("a missing lease aborts and fails the admitted action", async () => {
+    const redis = sharedRedis({ onRenew: async () => 0 });
+    const timing = manualTiming(redis);
+    const started = deferred();
+    let observedAbort = false;
+    const admitted = withActionAdmission({
+      enabled: true,
+      organizationId,
+      userId: firstUser,
+      policy: { ...policy, leaseMs: 100 },
+      redis,
+      timing,
+      run: async (signal) => {
+        started.finish();
+        await new Promise<void>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => {
+              observedAbort = true;
+              reject(signal.reason);
+            },
+            { once: true },
+          );
+        });
+      },
+    });
+    await started.promise;
+    await timing.fireNext();
+    expect(await failureOf(admitted)).toMatchObject({ reason: "unavailable" });
+    expect(observedAbort).toBe(true);
   });
 });
