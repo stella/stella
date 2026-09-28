@@ -44,7 +44,10 @@ const iri = (n: number) =>
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
-const run = async (task: SchedulerTask): Promise<void> => {
+const run = async (
+  task: SchedulerTask,
+  taskLogger: typeof logger = logger,
+): Promise<void> => {
   const job = (
     await db.select().from(schedulerJobs).where(eq(schedulerJobs.id, JOB_ID))
   ).at(0);
@@ -58,8 +61,25 @@ const run = async (task: SchedulerTask): Promise<void> => {
     runId: createSafeId<"schedulerJobRun">(),
     scheduleContinuation: () => undefined,
     signal: new AbortController().signal,
-    logger,
+    logger: taskLogger,
   });
+};
+
+type LogLine = { message: string; attributes: Record<string, unknown> };
+
+/** A logger that keeps what the task says, for the test to read. */
+const recordingLogger = () => {
+  const lines: LogLine[] = [];
+  const record = (
+    message: string,
+    attributes: Record<string, unknown> = {},
+  ) => {
+    lines.push({ message, attributes });
+  };
+  return {
+    lines,
+    logger: { ...logger, info: record, warn: record } satisfies typeof logger,
+  };
 };
 
 const cursor = async (): Promise<unknown> =>
@@ -232,7 +252,7 @@ describe("legislation expression id backfill", () => {
     ]);
   });
 
-  test("an id too long to store, or one two unclaimed rows could take, is left for the census", async () => {
+  test("an id too long to store, or one two unclaimed rows could take, is left unclaimed and reported", async () => {
     await insertLegacy(12, {
       metadata: { versionIri: `https://example.test/${"x".repeat(1100)}` },
     });
@@ -258,6 +278,42 @@ describe("legislation expression id backfill", () => {
       null,
       `esel:${iri(15)}`,
     ]);
+
+    // Nothing is left behind silently: each skipped row is named with its
+    // reason, and the run's totals count it.
+    const { lines, logger: recording } = recordingLogger();
+    await run(createLegislationExpressionIdBackfill(), recording);
+    const skips = lines.filter(
+      ({ message }) =>
+        message === "scheduler.legislation_expression_ids_skipped",
+    );
+    const skippedIds = (reason: string) =>
+      skips
+        .filter(
+          ({ attributes }) =>
+            attributes["legislationExpressionIds.reason"] === reason,
+        )
+        .flatMap(({ attributes }) =>
+          String(attributes["legislationExpressionIds.documentIds"]).split(","),
+        );
+    expect(skippedIds("oversized-id")).toEqual([documentId(12)]);
+    // Row 10 is the earlier test's: its IRI is already another row's id.
+    expect(skippedIds("ambiguous-id").toSorted()).toEqual(
+      [documentId(10), documentId(13), documentId(14)].toSorted(),
+    );
+    // The rows the first test leaves without an IRI or a namespace.
+    expect(skippedIds("no-version-iri")).toEqual([documentId(6)]);
+    expect(skippedIds("no-namespace")).toEqual([documentId(7)]);
+    const summary = lines.find(
+      ({ message }) =>
+        message === "scheduler.legislation_expression_ids_backfilled",
+    );
+    expect(summary?.attributes).toMatchObject({
+      "legislationExpressionIds.skipped.oversizedId": 1,
+      "legislationExpressionIds.skipped.ambiguousId": 3,
+      "legislationExpressionIds.skipped.noVersionIri": 1,
+      "legislationExpressionIds.skipped.sourceUnprefixed": 1,
+    });
   });
 
   test("the writer finds a row the backfill claimed first, by its id", async () => {

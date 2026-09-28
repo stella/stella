@@ -1,5 +1,16 @@
 import { panic } from "better-result";
-import { and, asc, eq, gt, isNull, lte, notExists, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  not,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { isUuid } from "@stll/uuid-codec";
@@ -44,13 +55,60 @@ const backfillCursor = (
   return brandPersistedLegislationDocumentId(cursor);
 };
 
+/**
+ * Why a row without an id was not given one. Every such row is reported, on
+ * every pass, until a writer or an operator settles it: nothing is left
+ * behind silently.
+ */
+export const EXPRESSION_ID_SKIP_REASONS = [
+  /** Its source declares no namespace yet. */
+  "no-namespace",
+  /** It stores no version IRI; its writer has to supply the id. */
+  "no-version-iri",
+  /** The id would not fit the column. */
+  "oversized-id",
+  /** Another row of the work carries, or could equally claim, the id. */
+  "ambiguous-id",
+] as const;
+
+export type ExpressionIdSkipReason =
+  (typeof EXPRESSION_ID_SKIP_REASONS)[number];
+
+const isSkipReason = (value: unknown): value is ExpressionIdSkipReason =>
+  EXPRESSION_ID_SKIP_REASONS.some((reason) => reason === value);
+
+export type ExpressionIdSkip = {
+  reason: ExpressionIdSkipReason;
+  documentId: SafeId<"legislationDocument">;
+};
+
 export type ExpressionIdPage =
-  | { type: "page"; last: SafeId<"legislationDocument">; claimed: number }
+  | {
+      type: "page";
+      last: SafeId<"legislationDocument">;
+      claimed: number;
+      skipped: ExpressionIdSkip[];
+    }
   | { type: "cycle-complete" };
 
 /**
+ * The run summary's attribute per reason. Spelled out rather than derived:
+ * the logger drops keys that look sensitive, and `…namespace` is one.
+ */
+const SKIP_SUMMARY_KEYS = {
+  "no-namespace": "legislationExpressionIds.skipped.sourceUnprefixed",
+  "no-version-iri": "legislationExpressionIds.skipped.noVersionIri",
+  "oversized-id": "legislationExpressionIds.skipped.oversizedId",
+  "ambiguous-id": "legislationExpressionIds.skipped.ambiguousId",
+} as const satisfies Record<ExpressionIdSkipReason, string>;
+
+/** Document ids one skip log line names; the count is always complete. */
+const LOGGED_SKIP_IDS = 20;
+
+/**
  * Give every row of one id-ordered page that has no publisher expression id
- * the one its stored version IRI proves: `<source namespace>:<versionIri>`.
+ * the one its stored version IRI proves: `<source namespace>:<versionIri>`,
+ * and name every row it leaves without one, with the reason.
  *
  * Only rows whose id is still null are touched, so a page replayed after a
  * crash, or racing the writer's own claim of the same row, changes nothing a
@@ -85,59 +143,94 @@ export const claimExpressionIdPageTx = async (
     WHERE ${legislationSources.id} = ${legislationDocuments.sourceId}
   )`;
   const publisherId = sql<string>`${namespace} || ':' || ${versionIri}`;
-  const sibling = alias(legislationDocuments, "sibling");
   const twin = alias(legislationDocuments, "twin");
-  const claimed = await tx
-    .update(legislationDocuments)
-    // An identity attachment, not an edit: `updated_at` keeps its value.
-    .set({
-      publisherExpressionId: publisherId,
-      updatedAt: sql`${legislationDocuments.updatedAt}`,
-    })
+  const sibling = alias(legislationDocuments, "sibling");
+  // Two unclaimed rows of one work naming the same version: which one it is
+  // cannot be told here, so neither is claimed.
+  const unclaimedTwin = exists(
+    tx
+      .select({ id: twin.id })
+      .from(twin)
+      .where(
+        and(
+          eq(twin.sourceId, legislationDocuments.sourceId),
+          eq(twin.eli, legislationDocuments.eli),
+          eq(twin.language, legislationDocuments.language),
+          sql`${twin.id} <> ${legislationDocuments.id}`,
+          isNull(twin.publisherExpressionId),
+          sql`(${twin.metadata}->>'versionIri') = ${versionIri}`,
+        ),
+      ),
+  );
+  // Another row of the work already carries the id.
+  const claimedSibling = exists(
+    tx
+      .select({ id: sibling.id })
+      .from(sibling)
+      .where(
+        and(
+          eq(sibling.sourceId, legislationDocuments.sourceId),
+          eq(sibling.eli, legislationDocuments.eli),
+          eq(sibling.language, legislationDocuments.language),
+          sql`${sibling.publisherExpressionId} = ${publisherId}`,
+        ),
+      ),
+  );
+  // An id that does not fit the column would fail the whole page, and every
+  // later run with it.
+  const skipReason = sql<string | null>`CASE
+    WHEN ${namespace} IS NULL THEN 'no-namespace'
+    WHEN coalesce(${versionIri}, '') = '' THEN 'no-version-iri'
+    WHEN length(${publisherId}) > ${PUBLISHER_ID_MAX_LENGTH} THEN 'oversized-id'
+    WHEN ${unclaimedTwin} OR ${claimedSibling} THEN 'ambiguous-id'
+  END`;
+
+  const unclaimed = await tx
+    .select({ id: legislationDocuments.id, skipReason })
+    .from(legislationDocuments)
     .where(
       and(
         cursor === null ? undefined : gt(legislationDocuments.id, cursor),
         lte(legislationDocuments.id, last),
-        sql`${namespace} IS NOT NULL`,
         isNull(legislationDocuments.publisherExpressionId),
-        sql`coalesce(${versionIri}, '') <> ''`,
-        // An id that does not fit the column would fail the whole page, and
-        // every later run with it; such a row is left for the census.
-        sql`length(${publisherId}) <= ${PUBLISHER_ID_MAX_LENGTH}`,
-        // Two unclaimed rows of one work naming the same version: which one
-        // it is cannot be told here, so neither is claimed.
-        notExists(
-          tx
-            .select({ id: twin.id })
-            .from(twin)
-            .where(
-              and(
-                eq(twin.sourceId, legislationDocuments.sourceId),
-                eq(twin.eli, legislationDocuments.eli),
-                eq(twin.language, legislationDocuments.language),
-                sql`${twin.id} <> ${legislationDocuments.id}`,
-                isNull(twin.publisherExpressionId),
-                sql`(${twin.metadata}->>'versionIri') = ${versionIri}`,
-              ),
-            ),
-        ),
-        notExists(
-          tx
-            .select({ id: sibling.id })
-            .from(sibling)
-            .where(
-              and(
-                eq(sibling.sourceId, legislationDocuments.sourceId),
-                eq(sibling.eli, legislationDocuments.eli),
-                eq(sibling.language, legislationDocuments.language),
-                sql`${sibling.publisherExpressionId} = ${publisherId}`,
-              ),
-            ),
-        ),
       ),
-    )
-    .returning({ id: legislationDocuments.id });
-  return { type: "page", last, claimed: claimed.length };
+    );
+  const skipped = unclaimed.flatMap(({ id, skipReason: reason }) =>
+    reason === null
+      ? []
+      : [
+          {
+            reason: isSkipReason(reason)
+              ? reason
+              : panic("Unknown expression id skip reason", { reason }),
+            documentId: id,
+          },
+        ],
+  );
+  const claimable = unclaimed
+    .filter(({ skipReason: reason }) => reason === null)
+    .map(({ id }) => id);
+
+  const claimed =
+    claimable.length === 0
+      ? []
+      : await tx
+          .update(legislationDocuments)
+          // An identity attachment, not an edit: `updated_at` keeps its value.
+          .set({
+            publisherExpressionId: publisherId,
+            updatedAt: sql`${legislationDocuments.updatedAt}`,
+          })
+          .where(
+            and(
+              inArray(legislationDocuments.id, claimable),
+              isNull(legislationDocuments.publisherExpressionId),
+              // Re-checked in the write: a writer may have stored the id since.
+              not(claimedSibling),
+            ),
+          )
+          .returning({ id: legislationDocuments.id });
+  return { type: "page", last, claimed: claimed.length, skipped };
 };
 
 /**
@@ -159,6 +252,9 @@ export const createLegislationExpressionIdBackfill =
     let cursor = backfillCursor(job.payload);
     let claimed = 0;
     let pages = 0;
+    const skippedByReason = new Map<ExpressionIdSkipReason, number>(
+      EXPRESSION_ID_SKIP_REASONS.map((reason) => [reason, 0]),
+    );
     let status: "progress" | "cycle-complete" = "progress";
 
     while (pages < pagesPerRun) {
@@ -188,12 +284,37 @@ export const createLegislationExpressionIdBackfill =
       pages += 1;
       claimed += outcome.claimed;
       cursor = outcome.last;
+      for (const reason of EXPRESSION_ID_SKIP_REASONS) {
+        const documentIds = outcome.skipped
+          .filter((skip) => skip.reason === reason)
+          .map(({ documentId }) => documentId);
+        if (documentIds.length === 0) {
+          continue;
+        }
+        skippedByReason.set(
+          reason,
+          (skippedByReason.get(reason) ?? 0) + documentIds.length,
+        );
+        logger.warn("scheduler.legislation_expression_ids_skipped", {
+          "legislationExpressionIds.reason": reason,
+          "legislationExpressionIds.count": documentIds.length,
+          "legislationExpressionIds.documentIds": documentIds
+            .slice(0, LOGGED_SKIP_IDS)
+            .join(","),
+        });
+      }
     }
 
     // audit: skip — bounded identity repair derived from stored publisher IRIs;
     // scheduler_job_runs provides the durable operator trail.
     logger.info("scheduler.legislation_expression_ids_backfilled", {
       "legislationExpressionIds.claimed": claimed,
+      ...Object.fromEntries(
+        [...skippedByReason].map(([reason, count]) => [
+          SKIP_SUMMARY_KEYS[reason],
+          count,
+        ]),
+      ),
       "legislationExpressionIds.pages": pages,
       "legislationExpressionIds.status": status,
     });
