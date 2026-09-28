@@ -288,7 +288,7 @@ function ContactDetailPage() {
         </section>
 
         {contact.type === "person" && (
-          <ContactPersonDetailsEditor contact={contact} />
+          <ContactPersonDetailsEditor contact={contact} key={contact.id} />
         )}
 
         {/* Communication */}
