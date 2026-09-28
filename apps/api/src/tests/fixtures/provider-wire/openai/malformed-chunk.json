@@ -25,6 +25,7 @@
   ],
   "expect": {
     "outcome": "error",
-    "errorKind": "unknown"
+    "errorKind": "unknown",
+    "usageAfterFailure": "The Responses API reports usage in response.completed, after the event that fails the run."
   }
 }

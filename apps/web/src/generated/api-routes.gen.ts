@@ -10971,3357 +10971,6 @@ export type WebRoutes = {
         };
       };
     };
-    workspaces: (Tc1a2e5b1a7 & {
-      ":workspaceId": {
-        events: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: Response;
-              401: never;
-              404: "Not Found";
-              422: {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              };
-              500: never;
-            };
-          };
-        };
-      };
-    } & {
-      get: {
-        body: Record<never, never>;
-        params: T6d90fb7f32;
-        query: Record<never, never>;
-        headers: Record<never, never>;
-        response: {
-          200: {
-            workspaces: Array<{
-              id: Teb5c753062;
-              name: string;
-              reference: string;
-              clientId: Ta197d6f640;
-              color: T432e07d100;
-              leadUserId: T432e07d100;
-              lastActivityAt: string;
-              createdAt: string;
-              client: (null | {
-                id: T938d9cc2e1;
-                displayName: string;
-                responsibleAttorneyName: T432e07d100;
-              });
-              entityCount: number;
-              openTaskCount: number;
-              nextDeadline: T432e07d100;
-              members: Array<{
-                workspaceId: Teb5c753062;
-                userId: string;
-                userEmail: string;
-                userName: string;
-                userImage: T432e07d100;
-                lastActivity: T4124e1264c;
-              }>;
-            }>;
-          };
-          400: Tc642053948;
-          401: Tc642053948;
-          402: Tc642053948;
-          403: T82c7fa9c31;
-          404: Tc642053948;
-          409: Tc642053948;
-          413: Tc642053948;
-          422: (Tc642053948 | {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          });
-          428: Tc642053948;
-          429: Tc642053948;
-          500: Tc642053948;
-          502: Tc642053948;
-          503: Tc642053948;
-        };
-      };
-    } & {
-      navigation: {
-        get: {
-          body: Record<never, never>;
-          params: T6d90fb7f32;
-          query: {
-            cursor?: string;
-            limit?: number;
-            statusScope?: "active" | "active-and-archived";
-          };
-          headers: Record<never, never>;
-          response: {
-            200: {
-              items: Array<T77769e1af9>;
-              limit: number;
-              nextCursor: T432e07d100;
-              workspaces: Array<T77769e1af9>;
-            };
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      put: {
-        body: {
-          clientId?: T938d9cc2e1;
-          memberUserIds?: Array<string>;
-          name: string;
-          id: Teb5c753062;
-          filePropertyName: string;
-        };
-        params: T6d90fb7f32;
-        query: Record<never, never>;
-        headers: Record<never, never>;
-        response: {
-          200: {
-            id: Teb5c753062;
-          };
-          400: Tc642053948;
-          401: Tc642053948;
-          402: Tc642053948;
-          403: T82c7fa9c31;
-          404: Tc642053948;
-          409: Tc642053948;
-          413: Tc642053948;
-          422: (Tc642053948 | {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          });
-          428: Tc642053948;
-          429: Tc642053948;
-          500: Tc642053948;
-          502: Tc642053948;
-          503: Tc642053948;
-        };
-      };
-    } & {
-      active: {
-        get: {
-          body: Record<never, never>;
-          params: T6d90fb7f32;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              lastActiveWorkspaceId: T432e07d100;
-            };
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        get: {
-          body: Record<never, never>;
-          params: T59dcde539e;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              name: string;
-              status: T9c6eb40403;
-              reference: string;
-              id: Teb5c753062;
-              lastActivityAt: string;
-              createdAt: string;
-              billingReference: T432e07d100;
-              color: T432e07d100;
-              organizationId: T087d298a25;
-              clientId: Ta197d6f640;
-              leadUserId: T432e07d100;
-              stampedVersionCount: number;
-              client: (null | {
-                type: Te287bedd42;
-                id: T938d9cc2e1;
-                displayName: string;
-                color: T432e07d100;
-              });
-            };
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: T3b5822b18f;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        workflow: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                running: T1bdf39f14a;
-                run: (null | {
-                  completed: number;
-                  errorCode: T432e07d100;
-                  executionVersion: number;
-                  finishedAt: T4124e1264c;
-                  id: (string & valibot_Brand<"SafeId"> & {
-                    readonly __safeIdType?: "extractionRun";
-                  });
-                  scope: ("workspace" | "properties" | "entities" | "cells");
-                  startedAt: T4124e1264c;
-                  status: ("failed" | "running" | "skipped" | "completed" | "planning" | "finalizing");
-                  total: number;
-                });
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        workflow: {
-          start: {
-            post: {
-              body: {
-                entityIds?: Array<T9a509045a7>;
-                entityIdsOrder?: Array<T9a509045a7>;
-                propertyIds?: Array<T80d841ed63>;
-                serviceTier?: "standard" | "flex";
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  status: ("skipped" | "started" | "already-running");
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        workflow: {
-          "target-count": {
-            post: {
-              body: {
-                entityIds?: Array<T9a509045a7>;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  count: number;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "cell-retry": {
-          post: {
-            body: {
-              entityId: T9a509045a7;
-              propertyId: T80d841ed63;
-            };
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                status: ("failed" | "skipped" | "started" | "already-running");
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        justifications: {
-          query: {
-            post: {
-              body: {
-                entityIds: Array<T9a509045a7>;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: Array<{
-                  id: Tea019afe5d;
-                  fieldId: T1c7a854487;
-                  content: Tb8d6cfe011;
-                  boundingBoxes: (null | Te08ba39d3b);
-                  fileFieldIds: Array<T1c7a854487>;
-                }>;
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "bounding-boxes": {
-          post: {
-            body: {
-              justificationId: Tea019afe5d;
-            };
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                boxes: Array<Tfccf1c1167>;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        infosoud: {
-          courts: {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  courts: Array<{
-                    code: string;
-                    name: string;
-                  }>;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        infosoud: {
-          lookup: {
-            post: {
-              body: {
-                courtCode: string;
-                spisZn: string;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  caseMark: string;
-                  court: string;
-                  courtCode: string;
-                  eventCount: number;
-                  events: Array<{
-                    cancelled: T1bdf39f14a;
-                    caseMark: string;
-                    courtCode: string;
-                    date: T432e07d100;
-                    isRelatedCase: T1bdf39f14a;
-                    label: string;
-                    order: number;
-                    type: string;
-                  }>;
-                  eventsTruncated: T1bdf39f14a;
-                  hearings: Array<{
-                    cancelled: Teff106c9af;
-                    date: T432e07d100;
-                    hearingType: T432e07d100;
-                    judge: T432e07d100;
-                    private: Teff106c9af;
-                    result: T432e07d100;
-                    room: T432e07d100;
-                    scheduledAt: T432e07d100;
-                    time: T432e07d100;
-                  }>;
-                  hearingsTruncated: T1bdf39f14a;
-                  parentCourt: T432e07d100;
-                  relatedCases: Array<{
-                    caseMark: string;
-                    courtCode: string;
-                  }>;
-                  relatedCasesTruncated: T1bdf39f14a;
-                  status: T432e07d100;
-                  statusDate: T432e07d100;
-                  validTo: T432e07d100;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        infosoud: {
-          "import-agenda": {
-            post: {
-              body: {
-                courtCode: string;
-                spisZn: string;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  created: number;
-                  skipped: number;
-                  total: number;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        activity: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: {
-              cursor?: string;
-              limit?: number;
-            };
-            headers: Record<never, never>;
-            response: {
-              200: {
-                items: Array<{
-                  activityAt: string;
-                  entityKind: T219ebda4a4;
-                  fileName: T432e07d100;
-                  id: string;
-                  mimeType: T432e07d100;
-                  status: T432e07d100;
-                  title: string;
-                  type: "entity";
-                } | {
-                  activityAt: string;
-                  id: string;
-                  title: string;
-                  type: "thread";
-                }>;
-                limit: number;
-                nextCursor: T432e07d100;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        overview: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                entityCount: number;
-                documentCount: number;
-                taskCount: number;
-                recentEntities: Array<{
-                  entityId: T9a509045a7;
-                  name: string;
-                  kind: T219ebda4a4;
-                  status: T432e07d100;
-                  priority: T432e07d100;
-                  listItemType: Tbf94b8914e;
-                  dueDate: T432e07d100;
-                  mimeType: T432e07d100;
-                  fieldId: T432e07d100;
-                  propertyId: T432e07d100;
-                  pdfFileId: T432e07d100;
-                  encrypted: T1bdf39f14a;
-                  createdAt: string;
-                  updatedAt: T432e07d100;
-                  createdBy: T432e07d100;
-                  createdByImage: T432e07d100;
-                  createdByDeletedAt: T432e07d100;
-                  assignedTo: T432e07d100;
-                  assignedToImage: T432e07d100;
-                  assignedToDeletedAt: T432e07d100;
-                }>;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "search-preview": {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                upcomingAgenda: Array<{
-                  id: T9a509045a7;
-                  name: string;
-                  dueDate: string;
-                }>;
-                recentDocuments: Array<{
-                  id: T9a509045a7;
-                  name: string;
-                  updatedAt: string;
-                }>;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        overview: {
-          activity: {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: {
-                cursor?: string;
-                limit?: number;
-                action?: "all" | "update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove";
-                category?: "all" | "court" | "matter" | "documents" | "tasks" | "team" | "automation";
-                from?: string;
-                actorId?: string;
-                toExclusive?: string;
-              };
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  items: Array<{
-                    action: ("update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove");
-                    activityAt: string;
-                    approval: {
-                      status: ("pending" | "approved" | "not_required" | "rejected");
-                      user: T2609ebaa39;
-                    };
-                    category: ("court" | "matter" | "documents" | "tasks" | "team" | "automation");
-                    id: T0beb2a0a9f;
-                    performer: (T976b70d646 | {
-                      name: T432e07d100;
-                      type: ("agent" | "service");
-                    });
-                    renameOnly: T1bdf39f14a;
-                    runId: T432e07d100;
-                    target: {
-                      color: T432e07d100;
-                      deleted: T1bdf39f14a;
-                      encrypted: Teff106c9af;
-                      entityId: T432e07d100;
-                      fieldId: T432e07d100;
-                      id: string;
-                      kind: ("message" | "document" | "court" | "matter" | "folder" | "task" | "link" | "playbook" | "team" | "documentReviewRun" | "automation" | "translationRun");
-                      mimeType: T432e07d100;
-                      name: T432e07d100;
-                      pdfFileId: T432e07d100;
-                      propertyId: T432e07d100;
-                    };
-                    trigger: {
-                      source: T432e07d100;
-                      type: ("direct" | "webhook" | "user_dispatch" | "agent_delegation" | "schedule" | "credential" | "system");
-                      user: T2609ebaa39;
-                    };
-                  }>;
-                  limit: number;
-                  nextCursor: T432e07d100;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        overview: {
-          activity: {
-            actors: {
-              get: {
-                body: Record<never, never>;
-                params: {
-                  workspaceId: Tb9596e18eb;
-                };
-                query: {
-                  search?: string;
-                  cursor?: string;
-                  limit?: number;
-                };
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    items: Array<{
-                      deletedAt: T432e07d100;
-                      id: string;
-                      image: T432e07d100;
-                      name: T432e07d100;
-                    }>;
-                    limit: number;
-                    nextCursor: T432e07d100;
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tc642053948;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        overview: {
-          activity: {
-            export: {
-              get: {
-                body: Record<never, never>;
-                params: {
-                  workspaceId: Tb9596e18eb;
-                };
-                query: {
-                  action?: "all" | "update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove";
-                  category?: "all" | "court" | "matter" | "documents" | "tasks" | "team" | "automation";
-                  from?: string;
-                  actorId?: string;
-                  toExclusive?: string;
-                  format: ("json" | "csv");
-                };
-                headers: Record<never, never>;
-                response: {
-                  200: Response;
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tc642053948;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        post: {
-          body: {
-            name?: string;
-            reference?: string;
-            billingReference?: null | string;
-            color?: null | string;
-            clientId?: T938d9cc2e1;
-            leadUserId?: null | string;
-            promote?: {
-              memberUserIds?: Array<string>;
-              clientId: T938d9cc2e1;
-            };
-          };
-          params: T59dcde539e;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {};
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        duplicate: {
-          post: {
-            body: {
-              includeContent: T1bdf39f14a;
-            };
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                workspaceId: Teb5c753062;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        active: {
-          post: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {};
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        delete: {
-          body: Record<never, never>;
-          params: T59dcde539e;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {};
-            400: Tc642053948;
-            401: Tc642053948;
-            402: Tc642053948;
-            403: T82c7fa9c31;
-            404: Tc642053948;
-            409: Tc642053948;
-            413: Tc642053948;
-            422: (Tc642053948 | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: Tc642053948;
-            429: Tc642053948;
-            500: Tc642053948;
-            502: Tc642053948;
-            503: Tc642053948;
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        archive: {
-          post: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                success: true;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        contacts: {
-          get: {
-            body: Record<never, never>;
-            params: Td2977c7b72;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: Array<{
-                id: Ta28b1867ef;
-                workspaceId: Teb5c753062;
-                createdAt: string;
-                contactId: T938d9cc2e1;
-                role: T8e2a10c549;
-                isPrimary: T1bdf39f14a;
-                notes: T432e07d100;
-                organizationId: T087d298a25;
-                contact: (null | {
-                  type: Te287bedd42;
-                  id: T938d9cc2e1;
-                  displayName: string;
-                  color: T432e07d100;
-                });
-              }>;
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        contacts: {
-          put: {
-            body: {
-              isPrimary?: false | true;
-              notes?: null | string;
-              contactId: T938d9cc2e1;
-              role: T8e2a10c549;
-            };
-            params: Td2977c7b72;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Ta28b1867ef;
-                workspaceId: Teb5c753062;
-                createdAt: string;
-                contactId: T938d9cc2e1;
-                role: T8e2a10c549;
-                isPrimary: T1bdf39f14a;
-                notes: T432e07d100;
-                organizationId: T087d298a25;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        contacts: {
-          ":workspaceContactId": {
-            delete: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-                workspaceContactId: Ta28b1867ef;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: Ta28b1867ef;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "anonymization-terms": {
-          get: {
-            body: Record<never, never>;
-            params: Te350a1ab11;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                entries: Array<{
-                  id: Tf9d14dced5;
-                  label: string;
-                  canonical: string;
-                  variants: Array<string>;
-                  enabled: T1bdf39f14a;
-                  createdBy: T432e07d100;
-                  createdAt: string;
-                }>;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "anonymization-terms": {
-          put: {
-            body: {
-              entries: Array<{
-                variants?: Array<string>;
-                canonical: string;
-                label: string;
-              }>;
-            };
-            params: Te350a1ab11;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                inserted: number;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "anonymization-terms": {
-          ":entryId": {
-            delete: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-                entryId: Tf9d14dced5;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  success: true;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "anonymization-allowlist": {
-          get: {
-            body: Record<never, never>;
-            params: T599434ec07;
-            query: {
-              entityId?: T9a509045a7;
-            };
-            headers: Record<never, never>;
-            response: {
-              200: {
-                entries: Array<{
-                  id: T8091e6bfed;
-                  scope: Ta6ace2bae9;
-                  workspaceId: Ta6ace2bae9;
-                  entityId: T6b73348afa;
-                  label: string;
-                  canonical: string;
-                  createdBy: T432e07d100;
-                  createdAt: string;
-                }>;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "anonymization-allowlist": {
-          put: {
-            body: {
-              entityId?: T9a509045a7;
-              canonical: string;
-              scope: ("document" | "workspace");
-              label: string;
-            };
-            params: T599434ec07;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                inserted: number;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "anonymization-allowlist": {
-          ":entryId": {
-            delete: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-                entryId: T8091e6bfed;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  success: true;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        members: {
-          get: {
-            body: Record<never, never>;
-            params: Tbecb65774d;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: Array<{
-                id: T6f65fd94a6;
-                createdAt: string;
-                userId: string;
-                user: (null | {
-                  name: string;
-                  email: string;
-                  id: string;
-                  image: T432e07d100;
-                });
-              }>;
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        members: {
-          put: {
-            body: {
-              userId: string;
-            };
-            params: Tbecb65774d;
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: T6f65fd94a6;
-                userId: string;
-                createdAt: string;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tc642053948;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        members: {
-          ":userId": {
-            delete: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-                userId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T6f65fd94a6;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tc642053948;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        unarchive: {
-          post: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: string;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                success: true;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tb62d3ee375;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        playbooks: T6d90fb7f32;
-      };
-    } & {
-      ":workspaceId": {
-        playbooks: {
-          ":playbookId": {
-            run: {
-              post: {
-                body: {
-                  projection: ("none" | "columns");
-                };
-                params: {
-                  workspaceId: Tb9596e18eb;
-                  playbookId: T6ebb5b60ba;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    runPropertyCount: number;
-                    documentRunCount: number;
-                    documentsWithoutRun: number;
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        playbooks: {
-          "auto-run": {
-            post: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  playbooksRun: number;
-                  runPropertyCount: number;
-                  documentRunCount: number;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": T6d90fb7f32;
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          sources: {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: string;
-              };
-              query: {
-                cursor?: string;
-                limit?: number;
-                q?: string;
-              };
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  items: Array<{
-                    entityId: T9a509045a7;
-                    fileFieldId: T1c7a854487;
-                    name: string;
-                    fileName: string;
-                  }>;
-                  nextCursor: T432e07d100;
-                  limit: number;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          positions: {
-            post: {
-              body: Tae327b658e;
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  positions: Array<T5d4fc8c82b>;
-                  skipped: Array<T9f51aef7c3>;
-                  parties: Array<T03f9b9c11b>;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          positions: {
-            stream: {
-              post: {
-                body: Tae327b658e;
-                params: {
-                  workspaceId: string;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: Response;
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          parties: {
-            post: {
-              body: {
-                target: {
-                  entityId: T9a509045a7;
-                  fileFieldId: T1c7a854487;
-                };
-              };
-              params: {
-                workspaceId: string;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  entityVersionId: T116a5c37c8;
-                  parties: Array<T03f9b9c11b>;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          runs: {
-            post: {
-              body: {
-                confirmedUnits?: number;
-                target: {
-                  entityId: T9a509045a7;
-                  fileFieldId: T1c7a854487;
-                };
-                perspective: {
-                  type: "neutral";
-                } | {
-                  name: T432e07d100;
-                  type: "party";
-                  role: string;
-                };
-                positions: Array<{
-                  guidance?: string;
-                  issue: string;
-                  mode: "extract";
-                  ask: {
-                    content: Tec60471056;
-                    question: string;
-                  };
-                  enabled: T1bdf39f14a;
-                  sourceId: string;
-                } | {
-                  check?: {
-                    kind: "presence";
-                    expectation: Ta258bd6696;
-                  } | {
-                    kind: "constraint";
-                    condition: stll_conditions_ConditionNode;
-                  };
-                  guidance?: string;
-                  negotiation?: {
-                    escalation?: string;
-                    rationale?: string;
-                    talkingPoints?: Array<string>;
-                  };
-                  purpose?: string;
-                  issue: string;
-                  mode: "graded";
-                  standard: {
-                    source: "tiers";
-                    tiers: {
-                      acceptable: {
-                        ideal?: {
-                          clauseVersion?: number;
-                          source: "clause";
-                          clauseId: string;
-                        } | {
-                          text: string;
-                          source: "inline";
-                        };
-                        rules: Array<Tf9ac86bc44>;
-                      };
-                      fallback: {
-                        entries: Array<{
-                          label?: string;
-                          text: string;
-                          id: string;
-                        }>;
-                      };
-                      notAcceptable: {
-                        rules: Array<Tf9ac86bc44>;
-                      };
-                    };
-                  } | {
-                    source: "reference";
-                    passages: Array<{
-                      id: string;
-                      workspaceId: string;
-                      entityId: string;
-                      entityVersionId: string;
-                      fileFieldId: string;
-                      blockId: string;
-                    }>;
-                    termKind: T03c56de23b;
-                  };
-                  ask: {
-                    derived?: {
-                      content: Tec60471056;
-                      question: string;
-                      rulesHash: string;
-                    };
-                    mode: "auto";
-                  } | {
-                    mode: "manual";
-                    content: Tec60471056;
-                    question: string;
-                  };
-                  enabled: T1bdf39f14a;
-                  severity: T0a46fb6ba4;
-                  sourceId: string;
-                }>;
-                playbookId: Te2ec8e0b17;
-                skipped: Array<{
-                  reason: {
-                    kind: "deal-specific-value";
-                  } | {
-                    kind: "structural";
-                  } | {
-                    kind: "lower-weight";
-                  } | {
-                    kind: "other";
-                    text: string;
-                  };
-                  subject: string;
-                }>;
-                references: Array<{
-                  workspaceId: Teb5c753062;
-                  entityId: T9a509045a7;
-                  fileFieldId: T1c7a854487;
-                }>;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  runId: Teb3fcd8ef4;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          runs: {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: {
-                cursor?: string;
-                limit?: number;
-                includeLatest?: false | true;
-                entityId: T9a509045a7;
-                fileFieldId: T1c7a854487;
-              };
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  latest: (null | T149c4eb383);
-                  items: Array<{
-                    id: Teb3fcd8ef4;
-                    status: T97123e865d;
-                    errorCode: Tdf3afab53d;
-                    entityVersionId: T116a5c37c8;
-                    total: number;
-                    completed: number;
-                    createdAt: string;
-                    finishedAt: T432e07d100;
-                    decisionCounts: Tb1ed7519f1;
-                    basis: {
-                      playbookName: T432e07d100;
-                      playbookProvenance: Tb2d33c80ac;
-                      referenceCount: number;
-                      perspectiveRole: T432e07d100;
-                    };
-                  }>;
-                  nextCursor: T432e07d100;
-                  limit: number;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          runs: {
-            ":runId": {
-              get: {
-                body: Record<never, never>;
-                params: {
-                  workspaceId: Tb9596e18eb;
-                  runId: Teb3fcd8ef4;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: T149c4eb383;
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          runs: {
-            ":runId": {
-              export: {
-                get: {
-                  body: Record<never, never>;
-                  params: {
-                    workspaceId: Tb9596e18eb;
-                    runId: Teb3fcd8ef4;
-                  };
-                  query: {
-                    format: Tf7b6a1b7cb;
-                  };
-                  headers: Record<never, never>;
-                  response: {
-                    200: Response;
-                    400: Tc642053948;
-                    401: Tc642053948;
-                    402: Tc642053948;
-                    403: T82c7fa9c31;
-                    404: Tb62d3ee375;
-                    409: Tc642053948;
-                    413: Tc642053948;
-                    422: (Tc642053948 | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: Tc642053948;
-                    429: Tc642053948;
-                    500: Tc642053948;
-                    502: Tc642053948;
-                    503: Tc642053948;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-reviews": {
-          findings: {
-            ":findingId": {
-              patch: {
-                body: {
-                  flags?: Array<T6afe23e121>;
-                  applicationStatus?: "applied";
-                  decision: Te078108f79;
-                };
-                params: {
-                  workspaceId: Tb9596e18eb;
-                  findingId: T92357156ac;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    id: T92357156ac;
-                    runId: Teb3fcd8ef4;
-                    decision: Te078108f79;
-                    flags: Array<T6afe23e121>;
-                    decidedBy: T432e07d100;
-                    decidedAt: T432e07d100;
-                    applicationStatus: T5dbcd4218d;
-                    appliedBy: T432e07d100;
-                    appliedAt: T432e07d100;
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-translations": T6d90fb7f32;
-      };
-    } & {
-      ":workspaceId": {
-        "document-translations": {
-          prepare: {
-            post: {
-              body: {
-                entityId: T9a509045a7;
-                fieldId: T1c7a854487;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  entityVersionId: T116a5c37c8;
-                  hasComments: T1bdf39f14a;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-translations": {
-          runs: {
-            post: {
-              body: {
-                commentPolicy?: "original" | "original-and-translated" | "translated";
-                output: "translated";
-                entityId: T9a509045a7;
-                fieldId: T1c7a854487;
-                engine: "deepl";
-                targetLang: T9a881e7ede;
-              } | {
-                commentPolicy?: "original" | "original-and-translated" | "translated";
-                output: T88eaf34343;
-                entityId: T9a509045a7;
-                fieldId: T1c7a854487;
-                entityVersionId: T116a5c37c8;
-                engine: "ai";
-                targetLang: T9a881e7ede;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  type: "commentPolicyRequired";
-                } | {
-                  type: "started";
-                  runId: Tfcf09c4c62;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "document-translations": {
-          runs: {
-            ":runId": {
-              get: {
-                body: Record<never, never>;
-                params: {
-                  workspaceId: Tb9596e18eb;
-                  runId: Tfcf09c4c62;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    run: {
-                      id: Tfcf09c4c62;
-                      status: ("failed" | "cancelled" | "completed" | "queued" | "preparing" | "translating" | "assembling" | "validating");
-                      errorCode: (null | "internal" | "unsupported_format" | "document_unresolved" | "document_changed" | "unsupported_review_markup" | "provider_unavailable" | "translation_failed" | "format_validation_failed");
-                      output: T88eaf34343;
-                      engine: ("ai" | "deepl");
-                      total: number;
-                      completed: number;
-                      warnings: Array<string>;
-                      outputEntityId: T6b73348afa;
-                      outputFieldId: Tdb872dbe7d;
-                      outputFileName: T432e07d100;
-                      createdAt: string;
-                      startedAt: T4124e1264c;
-                      finishedAt: T4124e1264c;
-                    };
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "bilingual-translations": T6d90fb7f32;
-      };
-    } & {
-      ":workspaceId": {
-        "bilingual-translations": {
-          prepare: {
-            post: {
-              body: {
-                entityId: T9a509045a7;
-                fieldId: T1c7a854487;
-                targetLang: string;
-                sourceLang: string;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  entityVersionId: T116a5c37c8;
-                  rows: Array<{
-                    rowId: string;
-                    ordinal: number;
-                    kind: Tba98ee81e0;
-                    inTable: T1bdf39f14a;
-                    tableLayout: (null | "inline" | "stacked");
-                    sourceParaId: T432e07d100;
-                    sourceText: string;
-                  } & {
-                    disposition: Tc2ec057ae0;
-                    dispositionOrigin: ("default" | "rule" | "user" | "model");
-                  }>;
-                  glossary: Array<{
-                    source: string;
-                    target: string;
-                    sourceForms: Array<string>;
-                    targetForms: Array<string>;
-                    origin: T488ab33bc2;
-                  }>;
-                  droppedRows: number;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "bilingual-translations": {
-          runs: {
-            post: {
-              body: {
-                entityId: T9a509045a7;
-                fieldId: T1c7a854487;
-                entityVersionId: T116a5c37c8;
-                rows: Array<{
-                  disposition: Tc2ec057ae0;
-                  rowId: string;
-                }>;
-                targetLang: string;
-                sourceLang: string;
-                glossary: Array<{
-                  origin: T488ab33bc2;
-                  source: string;
-                  target: string;
-                  sourceForms: Array<string>;
-                  targetForms: Array<string>;
-                }>;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  runId: T4d9ac44155;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        "bilingual-translations": {
-          runs: {
-            ":runId": {
-              get: {
-                body: Record<never, never>;
-                params: {
-                  workspaceId: Tb9596e18eb;
-                  runId: T4d9ac44155;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    run: {
-                      id: T4d9ac44155;
-                      status: T97123e865d;
-                      errorCode: (null | "internal" | "ai_unavailable" | "enqueue_failed" | "document_unresolved" | "document_changed" | "translation_failed" | "not_bilingual" | "apply_failed");
-                      entityId: T9a509045a7;
-                      fileFieldId: T1c7a854487;
-                      entityVersionId: T116a5c37c8;
-                      outputEntityVersionId: T82d662a0f0;
-                      sourceLang: string;
-                      targetLang: string;
-                      total: number;
-                      completed: number;
-                      createdAt: string;
-                      startedAt: T4124e1264c;
-                      finishedAt: T4124e1264c;
-                    };
-                    rows: Array<{
-                      rowId: string;
-                      ordinal: number;
-                      kind: Tba98ee81e0;
-                      disposition: Tc2ec057ae0;
-                      status: ("pending" | "failed" | "translated");
-                      warnings: Array<string>;
-                      sourceText: string;
-                      targetText: T432e07d100;
-                    }>;
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        reports: T6d90fb7f32;
-      };
-    } & {
-      ":workspaceId": {
-        reports: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              workspaceId: Tb9596e18eb;
-            };
-            query: {
-              cursor?: string;
-              limit?: number;
-            };
-            headers: Record<never, never>;
-            response: {
-              200: {
-                items: Array<{
-                  status: Tb60b7c14cd;
-                  id: Tb60a03a607;
-                  mode: T7d5dbe7dfc;
-                  resultEntityId: T6b73348afa;
-                  resultFieldId: Tdb872dbe7d;
-                } & {
-                  createdAt: string;
-                  downloadAvailable: T1bdf39f14a;
-                }>;
-                nextCursor: T432e07d100;
-                limit: number;
-              };
-              400: Tc642053948;
-              401: Tc642053948;
-              402: Tc642053948;
-              403: T82c7fa9c31;
-              404: Tb62d3ee375;
-              409: Tc642053948;
-              413: Tc642053948;
-              422: (Tc642053948 | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: Tc642053948;
-              429: Tc642053948;
-              500: Tc642053948;
-              502: Tc642053948;
-              503: Tc642053948;
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        reports: {
-          templates: {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  builtins: Array<{
-                    key: string;
-                    name: string;
-                    cloneable: T1bdf39f14a;
-                  }>;
-                  stored: Array<{
-                    id: T1173055df0;
-                    name: string;
-                  }>;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        reports: {
-          templates: {
-            "clone-builtin": {
-              post: {
-                body: {
-                  key: string;
-                };
-                params: {
-                  workspaceId: Tb9596e18eb;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    templateId: T1173055df0;
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        reports: {
-          export: {
-            post: {
-              body: {
-                format?: "docx" | "pdf";
-                aiNarrative?: false | true;
-                mode: T7d5dbe7dfc;
-                templateRef: {
-                  type: "builtin";
-                  key: string;
-                } | {
-                  type: "stored";
-                  templateId: T1173055df0;
-                };
-                viewId: Tf962ada343;
-              };
-              params: {
-                workspaceId: Tb9596e18eb;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  exportId: Tb60a03a607;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        reports: {
-          ":exportId": {
-            get: {
-              body: Record<never, never>;
-              params: {
-                workspaceId: Tb9596e18eb;
-                exportId: Tb60a03a607;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  status: Tb60b7c14cd;
-                  error: T432e07d100;
-                  resultEntityId: T6b73348afa;
-                  resultFieldId: Tdb872dbe7d;
-                  downloadUrl: T432e07d100;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        flows: {
-          runs: T6d90fb7f32;
-        };
-      };
-    } & {
-      ":workspaceId": {
-        flows: {
-          runs: {
-            post: {
-              body: {
-                confirmedUnits?: number;
-                definitionId: Tb47b7b98fd;
-                inputEntityIds: Array<T9a509045a7>;
-              };
-              params: Te27c9d3a2b;
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  runId: T61122d2719;
-                  status: Tac2a3266c6;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        flows: {
-          runs: {
-            get: {
-              body: Record<never, never>;
-              params: Te27c9d3a2b;
-              query: {
-                status?: never;
-                cursor?: string;
-                limit?: number;
-              };
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  items: Array<{
-                    id: T61122d2719;
-                    definitionId: T5a7c3abed7;
-                    name: string;
-                    status: Tac2a3266c6;
-                    currentStepIndex: number;
-                    stepCount: number;
-                    triggerType: Teef0e50364;
-                    startedAt: T432e07d100;
-                    finishedAt: T432e07d100;
-                    createdAt: string;
-                  }>;
-                  nextCursor: T432e07d100;
-                  limit: number;
-                };
-                400: Tc642053948;
-                401: Tc642053948;
-                402: Tc642053948;
-                403: T82c7fa9c31;
-                404: Tb62d3ee375;
-                409: Tc642053948;
-                413: Tc642053948;
-                422: (Tc642053948 | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: Tc642053948;
-                429: Tc642053948;
-                500: Tc642053948;
-                502: Tc642053948;
-                503: Tc642053948;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        flows: {
-          runs: {
-            ":runId": {
-              get: {
-                body: Record<never, never>;
-                params: Ta276f1b49a;
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    id: T61122d2719;
-                    definitionId: T5a7c3abed7;
-                    name: string;
-                    steps: Array<Tc82c428863>;
-                    status: Tac2a3266c6;
-                    currentStepIndex: number;
-                    triggerSource: {
-                      type: "manual";
-                      userId: string;
-                    } | {
-                      type: "schedule";
-                    } | {
-                      type: "file-upload";
-                      entityId: string;
-                    };
-                    inputEntityIds: Array<T9a509045a7>;
-                    error: T432e07d100;
-                    startedAt: T432e07d100;
-                    finishedAt: T432e07d100;
-                    createdAt: string;
-                    stepRuns: Array<{
-                      index: number;
-                      kind: ("ai" | "review-gate" | "create-document");
-                      status: ("pending" | "failed" | "running" | "skipped" | "awaiting_review" | "completed");
-                      output: (null | {
-                        kind: "ai";
-                        markdown: string;
-                      } | {
-                        kind: "review-gate";
-                        decision: T579e5557db;
-                        userId: string;
-                        note: T432e07d100;
-                      } | {
-                        kind: "create-document";
-                        entityId: string;
-                      });
-                      error: T432e07d100;
-                      reviewTaskEntityId: T6b73348afa;
-                      startedAt: T432e07d100;
-                      finishedAt: T432e07d100;
-                    }>;
-                  };
-                  400: Tc642053948;
-                  401: Tc642053948;
-                  402: Tc642053948;
-                  403: T82c7fa9c31;
-                  404: Tb62d3ee375;
-                  409: Tc642053948;
-                  413: Tc642053948;
-                  422: (Tc642053948 | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: Tc642053948;
-                  429: Tc642053948;
-                  500: Tc642053948;
-                  502: Tc642053948;
-                  503: Tc642053948;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        flows: {
-          runs: {
-            ":runId": {
-              review: {
-                post: {
-                  body: {
-                    note?: null | string;
-                    decision: T579e5557db;
-                  };
-                  params: Ta276f1b49a;
-                  query: Record<never, never>;
-                  headers: Record<never, never>;
-                  response: {
-                    200: {
-                      runId: T61122d2719;
-                      status: Tac2a3266c6;
-                    };
-                    400: Tc642053948;
-                    401: Tc642053948;
-                    402: Tc642053948;
-                    403: T82c7fa9c31;
-                    404: Tb62d3ee375;
-                    409: Tc642053948;
-                    413: Tc642053948;
-                    422: (Tc642053948 | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: Tc642053948;
-                    429: Tc642053948;
-                    500: Tc642053948;
-                    502: Tc642053948;
-                    503: Tc642053948;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":workspaceId": {
-        flows: {
-          runs: {
-            ":runId": {
-              cancel: {
-                post: {
-                  body: Record<never, never>;
-                  params: Ta276f1b49a;
-                  query: Record<never, never>;
-                  headers: Record<never, never>;
-                  response: {
-                    200: {
-                      runId: T61122d2719;
-                      status: Tac2a3266c6;
-                    };
-                    400: Tc642053948;
-                    401: Tc642053948;
-                    402: Tc642053948;
-                    403: T82c7fa9c31;
-                    404: Tb62d3ee375;
-                    409: Tc642053948;
-                    413: Tc642053948;
-                    422: (Tc642053948 | {
-                      type: "validation";
-                      on: string;
-                      summary?: string;
-                      message?: string;
-                      found?: unknown;
-                      property?: string;
-                      expected?: string;
-                    });
-                    428: Tc642053948;
-                    429: Tc642053948;
-                    500: Tc642053948;
-                    502: Tc642053948;
-                    503: Tc642053948;
-                  };
-                };
-              };
-            };
-          };
-        };
-      };
-    });
     signals: {
       get: {
         body: Record<never, never>;
@@ -14946,7 +11595,7 @@ export type WebRoutes = {
               createIfMissing: T1bdf39f14a;
             }>;
             name: string;
-            id: Tf962ada343;
+            id: T8f903df76e;
             layout: T75ecb21f44;
           };
           params: T628ff2d974;
@@ -14955,7 +11604,7 @@ export type WebRoutes = {
           response: {
             200: {
               version: 1;
-              id: Tf962ada343;
+              id: T8f903df76e;
               name: string;
               layout: T75ecb21f44;
               position: number;
@@ -14990,7 +11639,7 @@ export type WebRoutes = {
         reorder: {
           post: {
             body: {
-              viewIds: Array<Tf962ada343>;
+              viewIds: Array<T8f903df76e>;
             };
             params: {
               workspaceId: string;
@@ -15082,7 +11731,7 @@ export type WebRoutes = {
               };
               params: {
                 workspaceId: Tb9596e18eb;
-                viewId: Tf962ada343;
+                viewId: T8f903df76e;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -15125,14 +11774,14 @@ export type WebRoutes = {
                 };
                 params: {
                   workspaceId: Tb9596e18eb;
-                  viewId: Tf962ada343;
+                  viewId: T8f903df76e;
                 };
                 query: Record<never, never>;
                 headers: Record<never, never>;
                 response: {
                   200: {
                     version: 1;
-                    id: Tf962ada343;
+                    id: T8f903df76e;
                     name: string;
                     layout: T75ecb21f44;
                     position: number;
@@ -15174,10 +11823,10 @@ export type WebRoutes = {
                 body: Record<never, never>;
                 params: {
                   workspaceId: Tb9596e18eb;
-                  viewId: Tf962ada343;
+                  viewId: T8f903df76e;
                 };
                 query: {
-                  format: Tf7b6a1b7cb;
+                  format: T4f2edfc7d3;
                 };
                 headers: Record<never, never>;
                 response: {
@@ -15217,7 +11866,7 @@ export type WebRoutes = {
               body: Record<never, never>;
               params: {
                 workspaceId: Tb9596e18eb;
-                viewId: Tf962ada343;
+                viewId: T8f903df76e;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -15847,7 +12496,7 @@ export type WebRoutes = {
         response: {
           200: {
             items: Array<{
-              id: T6ebb5b60ba;
+              id: T5d41208c2a;
               name: string;
               description: T432e07d100;
               status: Teb4507dfaa;
@@ -15904,7 +12553,7 @@ export type WebRoutes = {
             } | {
               check?: {
                 kind: "presence";
-                expectation: Ta258bd6696;
+                expectation: T7bcf2fefec;
               } | {
                 kind: "constraint";
                 condition: stll_conditions_ConditionNode;
@@ -15953,7 +12602,7 @@ export type WebRoutes = {
                   fileFieldId: string;
                   blockId: string;
                 }>;
-                termKind: T03c56de23b;
+                termKind: T936e2da003;
               };
               ask: {
                 derived?: {
@@ -15968,7 +12617,7 @@ export type WebRoutes = {
                 question: string;
               };
               enabled: T1bdf39f14a;
-              severity: T0a46fb6ba4;
+              severity: Tc35aa9c89d;
               sourceId: string;
             }>;
             version: 3;
@@ -16055,7 +12704,7 @@ export type WebRoutes = {
           response: {
             200: {
               items: Array<{
-                id: T6ebb5b60ba;
+                id: T5d41208c2a;
                 name: string;
                 description: T432e07d100;
                 status: Teb4507dfaa;
@@ -16131,14 +12780,14 @@ export type WebRoutes = {
           body: {
             name?: string;
             workspaceId: Teb5c753062;
-            runId: Teb3fcd8ef4;
+            runId: T5fbe4cc4df;
           };
           params: T6d90fb7f32;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
             200: {
-              id: T6ebb5b60ba;
+              id: T5d41208c2a;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -16176,11 +12825,11 @@ export type WebRoutes = {
               positionDecisions: {
                 [key: string]: Tc479176c61;
               };
-              id: T6ebb5b60ba;
+              id: T5d41208c2a;
               name: string;
               description: T432e07d100;
               scope: (null | T4d0c38f22c);
-              positions: T50a09487e3;
+              positions: T9d79bd0ace;
               status: Teb4507dfaa;
               approvedAt: T432e07d100;
               createdAt: string;
@@ -16236,7 +12885,7 @@ export type WebRoutes = {
               } | {
                 check?: {
                   kind: "presence";
-                  expectation: Ta258bd6696;
+                  expectation: T7bcf2fefec;
                 } | {
                   kind: "constraint";
                   condition: stll_conditions_ConditionNode;
@@ -16285,7 +12934,7 @@ export type WebRoutes = {
                     fileFieldId: string;
                     blockId: string;
                   }>;
-                  termKind: T03c56de23b;
+                  termKind: T936e2da003;
                 };
                 ask: {
                   derived?: {
@@ -16300,7 +12949,7 @@ export type WebRoutes = {
                   question: string;
                 };
                 enabled: T1bdf39f14a;
-                severity: T0a46fb6ba4;
+                severity: Tc35aa9c89d;
                 sourceId: string;
               }>;
               version: 3;
@@ -16465,7 +13114,7 @@ export type WebRoutes = {
                 body: Record<never, never>;
                 params: {
                   version: number;
-                  playbookId: T6ebb5b60ba;
+                  playbookId: T5d41208c2a;
                 };
                 query: Record<never, never>;
                 headers: Record<never, never>;
@@ -16556,11 +13205,11 @@ export type WebRoutes = {
         response: {
           200: {
             items: Array<{
-              id: Tb47b7b98fd;
+              id: Tb0f9859073;
               name: string;
               description: T432e07d100;
               enabled: T1bdf39f14a;
-              triggerType: Teef0e50364;
+              triggerType: T293029d273;
               stepCount: number;
               createdAt: string;
               updatedAt: string;
@@ -16599,7 +13248,7 @@ export type WebRoutes = {
         headers: Record<never, never>;
         response: {
           200: {
-            id: Tb47b7b98fd;
+            id: Tb0f9859073;
           };
           400: Tc642053948;
           401: Tc642053948;
@@ -16633,10 +13282,10 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              id: Tb47b7b98fd;
+              id: Tb0f9859073;
               name: string;
               description: T432e07d100;
-              steps: Array<Tc82c428863>;
+              steps: Array<T0c865b04cd>;
               trigger: {
                 type: "manual";
               } | {
@@ -16690,7 +13339,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              id: Tb47b7b98fd;
+              id: Tb0f9859073;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -16963,7 +13612,7 @@ export type WebRoutes = {
                 401: Tc642053948;
                 402: Tc642053948;
                 403: T82c7fa9c31;
-                404: T3b5822b18f;
+                404: Tf2819b9961;
                 409: Tc642053948;
                 413: Tc642053948;
                 422: (Tc642053948 | {
@@ -17026,7 +13675,7 @@ export type WebRoutes = {
                 401: Tc642053948;
                 402: Tc642053948;
                 403: T82c7fa9c31;
-                404: T3b5822b18f;
+                404: Tf2819b9961;
                 409: Tc642053948;
                 413: Tc642053948;
                 422: {
@@ -17151,7 +13800,7 @@ export type WebRoutes = {
                 401: Tc642053948;
                 402: Tc642053948;
                 403: T82c7fa9c31;
-                404: T3b5822b18f;
+                404: Tf2819b9961;
                 409: Tc642053948;
                 413: Tc642053948;
                 422: (Tc642053948 | {
@@ -17193,7 +13842,7 @@ export type WebRoutes = {
                 401: Tc642053948;
                 402: Tc642053948;
                 403: T82c7fa9c31;
-                404: T3b5822b18f;
+                404: Tf2819b9961;
                 409: Tc642053948;
                 413: Tc642053948;
                 422: ("Unprocessable Content" | {
@@ -17253,7 +13902,7 @@ export type WebRoutes = {
                 401: Tc642053948;
                 402: Tc642053948;
                 403: T82c7fa9c31;
-                404: T3b5822b18f;
+                404: Tf2819b9961;
                 409: Tc642053948;
                 413: Tc642053948;
                 422: (Tc642053948 | {
@@ -17870,7 +14519,7 @@ export type WebRoutes = {
                   createdAt: string;
                   items: Array<{
                     ref: string;
-                    id: T95a4a01f59;
+                    id: Td884408413;
                   }>;
                 };
                 400: Tc642053948;
@@ -17918,7 +14567,7 @@ export type WebRoutes = {
               response: {
                 200: {
                   items: Array<{
-                    id: T95a4a01f59;
+                    id: Td884408413;
                     opPayload: unknown;
                     comment: T432e07d100;
                     severity: T6e7137c176;
@@ -17964,7 +14613,7 @@ export type WebRoutes = {
             "reject-pending": {
               patch: {
                 body: {
-                  suggestionIds: Array<T95a4a01f59>;
+                  suggestionIds: Array<Td884408413>;
                 };
                 params: {
                   workspaceId: Tb9596e18eb;
@@ -17974,7 +14623,7 @@ export type WebRoutes = {
                 headers: Record<never, never>;
                 response: {
                   200: {
-                    rejectedIds: Array<T95a4a01f59>;
+                    rejectedIds: Array<Td884408413>;
                   };
                   400: Tc642053948;
                   401: Tc642053948;
@@ -18020,7 +14669,7 @@ export type WebRoutes = {
                     params: {
                       workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
-                      suggestionId: T95a4a01f59;
+                      suggestionId: Td884408413;
                     };
                     query: Record<never, never>;
                     headers: Record<never, never>;
@@ -18069,7 +14718,7 @@ export type WebRoutes = {
                     params: {
                       workspaceId: Tb9596e18eb;
                       entityId: T9a509045a7;
-                      suggestionId: T95a4a01f59;
+                      suggestionId: Td884408413;
                     };
                     query: Record<never, never>;
                     headers: Record<never, never>;
@@ -20074,6 +16723,234 @@ export type WebRoutes = {
       };
     };
     "organization-settings": {
+      correspondence: {
+        "allowed-senders": {
+          get: {
+            body: Record<never, never>;
+            params: T6d90fb7f32;
+            query: {
+              cursor?: string;
+              limit?: number;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  id: T172b4688a1;
+                  address: string;
+                  scope: T070172c9cc;
+                  approvedBy: T432e07d100;
+                  approvedAt: string;
+                  revokedAt: T4124e1264c;
+                  matterIds: Array<Teb5c753062>;
+                  active: T1bdf39f14a;
+                }>;
+                nextCursor: T432e07d100;
+                limit: number;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      correspondence: {
+        "allowed-senders": {
+          post: {
+            body: {
+              matterIds?: Array<Teb5c753062>;
+              scope: T070172c9cc;
+              address: string;
+            };
+            params: T6d90fb7f32;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T172b4688a1;
+                address: string;
+                kind: "shared_mailbox";
+                scope: T070172c9cc;
+                matterIds: Array<Teb5c753062>;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+      };
+    } & {
+      correspondence: {
+        "allowed-senders": {
+          ":senderId": {
+            delete: {
+              body: Record<never, never>;
+              params: {
+                senderId: T172b4688a1;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T172b4688a1;
+                  revoked: T1bdf39f14a;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      correspondence: {
+        "allowed-senders": {
+          ":senderId": {
+            scope: {
+              post: {
+                body: {
+                  matterId: Teb5c753062;
+                };
+                params: {
+                  senderId: T172b4688a1;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    added: T1bdf39f14a;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tc642053948;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      correspondence: {
+        "allowed-senders": {
+          ":senderId": {
+            scope: {
+              delete: {
+                body: {
+                  matterId: Teb5c753062;
+                };
+                params: {
+                  senderId: T172b4688a1;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    removed: T1bdf39f14a;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tc642053948;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
       get: {
         body: Record<never, never>;
         params: T6d90fb7f32;
@@ -20127,17 +17004,17 @@ export type WebRoutes = {
                 readonly source: "public";
               } | {
                 readonly registry: Tb3a8582d6b;
-                readonly configuration: T837d6a04e7;
+                readonly configuration: T42c9a3f033;
                 readonly status: "ready";
                 readonly source: "organization";
               } | {
                 readonly registry: Tb3a8582d6b;
-                readonly configuration: T837d6a04e7;
+                readonly configuration: T42c9a3f033;
                 readonly status: "ready";
                 readonly source: "deployment";
               } | {
                 readonly registry: Tb3a8582d6b;
-                readonly configuration: T837d6a04e7;
+                readonly configuration: T42c9a3f033;
                 readonly status: "configuration-required";
                 readonly source: null;
               }>;
@@ -20170,7 +17047,7 @@ export type WebRoutes = {
       "business-registry-credentials": {
         post: {
           body: {
-            registry: Taa1b35a86b;
+            registry: T9b94653bb5;
             credential: string;
           };
           params: T6d90fb7f32;
@@ -20210,7 +17087,7 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T6d90fb7f32;
           query: {
-            registry: Taa1b35a86b;
+            registry: T9b94653bb5;
           };
           headers: Record<never, never>;
           response: {
@@ -20444,18 +17321,18 @@ export type WebRoutes = {
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
-            200: ((Tb26813d017 & {
+            200: ((Tb12e5afa18 & {
               configured: false;
-            }) | (Tb26813d017 & {
+            }) | (Tb12e5afa18 & {
               configured: true;
               providers: Array<{
-                provider: Tf822306fb6;
+                provider: T80c536d9e5;
                 apiKeyMasked: string;
                 endpoint?: undefined | string;
                 apiVersion?: undefined | string;
-                region: T342c6c1fea;
+                region: Ta87ba949ea;
               }>;
-              overrideModels: T971aac1483;
+              overrideModels: Td93601a5a5;
               decision: (null | {
                 provider: "typesafe";
                 apiKeyMasked: string;
@@ -20496,10 +17373,10 @@ export type WebRoutes = {
               provider: "typesafe";
             };
             overrideModels: {
-              chat: Tfd3c8010a2;
-              pdf: Tfd3c8010a2;
-              fast: Tfd3c8010a2;
-              reasoning: Tfd3c8010a2;
+              chat: T154c971bc9;
+              pdf: T154c971bc9;
+              fast: T154c971bc9;
+              reasoning: T154c971bc9;
             };
             providers: Array<{
               region?: "global";
@@ -20515,11 +17392,11 @@ export type WebRoutes = {
               providers: Array<{
                 endpoint?: string;
                 apiVersion?: string;
-                provider: Tf822306fb6;
+                provider: T80c536d9e5;
                 apiKeyMasked: string;
-                region: T342c6c1fea;
+                region: Ta87ba949ea;
               }>;
-              overrideModels: T971aac1483;
+              overrideModels: Td93601a5a5;
               decision: (null | {
                 provider: "typesafe";
                 apiKeyMasked: string;
@@ -20633,7 +17510,7 @@ export type WebRoutes = {
             } | {
               configured: true;
               apiKeyMasked: string;
-              tier: T33933638b8;
+              tier: T97b6eaa59a;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -20671,7 +17548,7 @@ export type WebRoutes = {
           response: {
             200: {
               apiKeyMasked: string;
-              tier: T33933638b8;
+              tier: T97b6eaa59a;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -20741,8 +17618,8 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              search: T7870a2de7e;
-              fetch: T7870a2de7e;
+              search: T466f4538c8;
+              fetch: T466f4538c8;
             };
             400: Tc642053948;
             401: Tc642053948;
@@ -20772,7 +17649,7 @@ export type WebRoutes = {
       "web-search-key": {
         post: {
           body: {
-            kind: T114f58ccca;
+            kind: Td4fc00dc44;
             apiKey: string;
           };
           params: T6d90fb7f32;
@@ -20780,7 +17657,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              kind: T114f58ccca;
+              kind: Td4fc00dc44;
               apiKeyMasked: string;
             };
             400: Tc642053948;
@@ -20811,14 +17688,14 @@ export type WebRoutes = {
       "web-search-key": {
         delete: {
           body: {
-            kind: T114f58ccca;
+            kind: Td4fc00dc44;
           };
           params: T6d90fb7f32;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
             200: {
-              kind: T114f58ccca;
+              kind: Td4fc00dc44;
               deleted: T1bdf39f14a;
             };
             400: Tc642053948;
@@ -20857,7 +17734,7 @@ export type WebRoutes = {
               entries: Array<{
                 canonical: string;
                 enabled: T1bdf39f14a;
-                id: Tf9d14dced5;
+                id: T219a6b3e18;
                 label: string;
                 variants: Array<string>;
               }>;
@@ -21710,7 +18587,7 @@ export type WebRoutes = {
         response: {
           200: {
             items: Array<{
-              id: T0beb2a0a9f;
+              id: T8f3b89135e;
               createdAt: string;
               action: string;
               resourceType: string;
@@ -22942,12 +19819,6 @@ export type WebRoutes = {
                 post_claim_scopes?: Array<string>;
                 requiredFields?: Array<T196b4403fb>;
               } | {
-                readonly message: "Case-law sitemap bucket shards exceed sitemap index capacity.";
-              } | {
-                readonly message: "Case-law sitemap bucket rows missing for natural shard.";
-              } | {
-                readonly message: "Case-law sitemap bucket exceeds shard capacity.";
-              } | {
                 readonly message: "Case-law sitemap shard count exceeds sitemap index capacity.";
               };
               502: Tc642053948;
@@ -23525,7 +20396,7 @@ export type WebRoutes = {
                       completedAt: string;
                       retrieved: T1bdf39f14a;
                       rationale: string;
-                      justification: Tb8d6cfe011;
+                      justification: Tfeedd6cbe6;
                     });
                     failureReason: (null | "decision_unavailable" | "no_text" | "model_error" | "missing_answer" | "wrong_type" | "run_error");
                     updatedAt: string;
@@ -25704,7 +22575,7 @@ export type WebRoutes = {
       reorder: {
         post: {
           body: {
-            viewIds: Array<Tf962ada343>;
+            viewIds: Array<T8f903df76e>;
           };
           params: T6d90fb7f32;
           query: Record<never, never>;
@@ -26813,7 +23684,7 @@ export type WebRoutes = {
                       }>;
                     }>;
                   };
-                  status: Tb60b7c14cd;
+                  status: Tda543c9cf7;
                   errorCode: T0803d60764;
                   pipelineVersion: number;
                   modelRef: T432e07d100;
@@ -27177,7 +24048,7 @@ export type WebRoutes = {
                   response: {
                     200: {
                       items: Array<{
-                        id: T0beb2a0a9f;
+                        id: T8f3b89135e;
                         action: string;
                         actorName: T432e07d100;
                         changes: Tab67d2a75b;
@@ -27649,7 +24520,7 @@ export type WebRoutes = {
             response: {
               200: {
                 entityId: T9a509045a7;
-                fieldId: Tdb872dbe7d;
+                fieldId: Taaceee9a83;
                 name: string;
               };
               400: Tc642053948;
@@ -29438,7 +26309,7 @@ export type WebRoutes = {
                   currentVersionId: T116a5c37c8;
                   currentVersionCreatedAt: string;
                   currentVersionReference: T432e07d100;
-                  extractionFileFieldId: Tdb872dbe7d;
+                  extractionFileFieldId: Taaceee9a83;
                   fields: Array<{
                     id: T1c7a854487;
                     propertyId: T80d841ed63;
@@ -29472,6 +26343,3547 @@ export type WebRoutes = {
         });
       };
     });
+    workspaces: {
+      active: {
+        get: {
+          body: Record<never, never>;
+          params: T6d90fb7f32;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              lastActiveWorkspaceId: T432e07d100;
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+      get: {
+        body: Record<never, never>;
+        params: T6d90fb7f32;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            workspaces: Array<{
+              id: Teb5c753062;
+              name: string;
+              reference: string;
+              clientId: Tdd73eae172;
+              color: T432e07d100;
+              leadUserId: T432e07d100;
+              lastActivityAt: string;
+              createdAt: string;
+              client: (null | {
+                id: T938d9cc2e1;
+                displayName: string;
+                responsibleAttorneyName: T432e07d100;
+              });
+              entityCount: number;
+              openTaskCount: number;
+              nextDeadline: T432e07d100;
+              members: Array<{
+                workspaceId: Teb5c753062;
+                userId: string;
+                userEmail: string;
+                userName: string;
+                userImage: T432e07d100;
+                lastActivity: T4124e1264c;
+              }>;
+            }>;
+          };
+          400: Tc642053948;
+          401: Tc642053948;
+          402: Tc642053948;
+          403: T82c7fa9c31;
+          404: Tc642053948;
+          409: Tc642053948;
+          413: Tc642053948;
+          422: (Tc642053948 | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: Tc642053948;
+          429: Tc642053948;
+          500: Tc642053948;
+          502: Tc642053948;
+          503: Tc642053948;
+        };
+      };
+      navigation: {
+        get: {
+          body: Record<never, never>;
+          params: T6d90fb7f32;
+          query: {
+            cursor?: string;
+            limit?: number;
+            statusScope?: "active" | "active-and-archived";
+          };
+          headers: Record<never, never>;
+          response: {
+            200: {
+              items: Array<Td0d1507e00>;
+              limit: number;
+              nextCursor: T432e07d100;
+              workspaces: Array<Td0d1507e00>;
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+      put: {
+        body: {
+          clientId?: T938d9cc2e1;
+          memberUserIds?: Array<string>;
+          name: string;
+          id: Teb5c753062;
+          filePropertyName: string;
+        };
+        params: T6d90fb7f32;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            id: Teb5c753062;
+          };
+          400: Tc642053948;
+          401: Tc642053948;
+          402: Tc642053948;
+          403: T82c7fa9c31;
+          404: Tc642053948;
+          409: Tc642053948;
+          413: Tc642053948;
+          422: (Tc642053948 | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: Tc642053948;
+          429: Tc642053948;
+          500: Tc642053948;
+          502: Tc642053948;
+          503: Tc642053948;
+        };
+      };
+    } & {
+      ":workspaceId": {
+        active: {
+          post: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {};
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        overview: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                entityCount: number;
+                documentCount: number;
+                taskCount: number;
+                recentEntities: Array<{
+                  entityId: T9a509045a7;
+                  name: string;
+                  kind: T219ebda4a4;
+                  status: T432e07d100;
+                  priority: T432e07d100;
+                  listItemType: Tbf94b8914e;
+                  dueDate: T432e07d100;
+                  mimeType: T432e07d100;
+                  fieldId: T432e07d100;
+                  propertyId: T432e07d100;
+                  pdfFileId: T432e07d100;
+                  encrypted: T1bdf39f14a;
+                  createdAt: string;
+                  updatedAt: T432e07d100;
+                  createdBy: T432e07d100;
+                  createdByImage: T432e07d100;
+                  createdByDeletedAt: T432e07d100;
+                  assignedTo: T432e07d100;
+                  assignedToImage: T432e07d100;
+                  assignedToDeletedAt: T432e07d100;
+                }>;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          activity: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: {
+                cursor?: string;
+                limit?: number;
+                action?: "all" | "update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove";
+                category?: "correspondence" | "all" | "court" | "matter" | "documents" | "tasks" | "team" | "automation";
+                from?: string;
+                actorId?: string;
+                toExclusive?: string;
+              };
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  items: Array<{
+                    action: ("update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove");
+                    activityAt: string;
+                    approval: {
+                      status: ("pending" | "approved" | "not_required" | "rejected");
+                      user: Tb126aa754f;
+                    };
+                    category: ("correspondence" | "court" | "matter" | "documents" | "tasks" | "team" | "automation");
+                    id: T8f3b89135e;
+                    performer: (T65731e9912 | {
+                      name: T432e07d100;
+                      type: ("agent" | "service");
+                    });
+                    renameOnly: T1bdf39f14a;
+                    runId: T432e07d100;
+                    target: {
+                      color: T432e07d100;
+                      deleted: T1bdf39f14a;
+                      encrypted: Teff106c9af;
+                      entityId: T432e07d100;
+                      fieldId: T432e07d100;
+                      id: string;
+                      kind: ("message" | "correspondence" | "document" | "court" | "matter" | "folder" | "task" | "link" | "playbook" | "team" | "documentReviewRun" | "automation" | "translationRun");
+                      mimeType: T432e07d100;
+                      name: T432e07d100;
+                      pdfFileId: T432e07d100;
+                      propertyId: T432e07d100;
+                    };
+                    trigger: {
+                      source: T432e07d100;
+                      type: ("direct" | "webhook" | "user_dispatch" | "agent_delegation" | "schedule" | "credential" | "system");
+                      user: Tb126aa754f;
+                    };
+                  }>;
+                  limit: number;
+                  nextCursor: T432e07d100;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          activity: {
+            actors: {
+              get: {
+                body: Record<never, never>;
+                params: {
+                  workspaceId: Tb9596e18eb;
+                };
+                query: {
+                  search?: string;
+                  cursor?: string;
+                  limit?: number;
+                };
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    items: Array<{
+                      deletedAt: T432e07d100;
+                      id: string;
+                      image: T432e07d100;
+                      name: T432e07d100;
+                    }>;
+                    limit: number;
+                    nextCursor: T432e07d100;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tc642053948;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        } & {
+          activity: {
+            export: {
+              get: {
+                body: Record<never, never>;
+                params: {
+                  workspaceId: Tb9596e18eb;
+                };
+                query: {
+                  action?: "all" | "update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove";
+                  category?: "correspondence" | "all" | "court" | "matter" | "documents" | "tasks" | "team" | "automation";
+                  from?: string;
+                  actorId?: string;
+                  toExclusive?: string;
+                  format: ("json" | "csv");
+                };
+                headers: Record<never, never>;
+                response: {
+                  200: Response;
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tc642053948;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
+        contacts: {
+          get: {
+            body: Record<never, never>;
+            params: Tb0a345f6fe;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: Array<{
+                id: T62c6faab99;
+                workspaceId: Teb5c753062;
+                createdAt: string;
+                contactId: T938d9cc2e1;
+                role: T8e2a10c549;
+                isPrimary: T1bdf39f14a;
+                notes: T432e07d100;
+                organizationId: T087d298a25;
+                contact: (null | {
+                  type: Te287bedd42;
+                  id: T938d9cc2e1;
+                  displayName: string;
+                  color: T432e07d100;
+                });
+              }>;
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          put: {
+            body: {
+              isPrimary?: false | true;
+              notes?: null | string;
+              contactId: T938d9cc2e1;
+              role: T8e2a10c549;
+            };
+            params: Tb0a345f6fe;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T62c6faab99;
+                workspaceId: Teb5c753062;
+                createdAt: string;
+                contactId: T938d9cc2e1;
+                role: T8e2a10c549;
+                isPrimary: T1bdf39f14a;
+                notes: T432e07d100;
+                organizationId: T087d298a25;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          ":workspaceContactId": {
+            delete: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                workspaceContactId: T62c6faab99;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T62c6faab99;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        members: {
+          get: {
+            body: Record<never, never>;
+            params: Teac20fb6dd;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: Array<{
+                id: T2678860087;
+                createdAt: string;
+                userId: string;
+                user: (null | {
+                  name: string;
+                  email: string;
+                  id: string;
+                  image: T432e07d100;
+                });
+              }>;
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          put: {
+            body: {
+              userId: string;
+            };
+            params: Teac20fb6dd;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T2678860087;
+                userId: string;
+                createdAt: string;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          ":userId": {
+            delete: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                userId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T2678860087;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        delete: {
+          body: Record<never, never>;
+          params: Tf9882e3602;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {};
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+        infosoud: {
+          courts: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  courts: Array<{
+                    code: string;
+                    name: string;
+                  }>;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          lookup: {
+            post: {
+              body: {
+                courtCode: string;
+                spisZn: string;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  caseMark: string;
+                  court: string;
+                  courtCode: string;
+                  eventCount: number;
+                  events: Array<{
+                    cancelled: T1bdf39f14a;
+                    caseMark: string;
+                    courtCode: string;
+                    date: T432e07d100;
+                    isRelatedCase: T1bdf39f14a;
+                    label: string;
+                    order: number;
+                    type: string;
+                  }>;
+                  eventsTruncated: T1bdf39f14a;
+                  hearings: Array<{
+                    cancelled: Teff106c9af;
+                    date: T432e07d100;
+                    hearingType: T432e07d100;
+                    judge: T432e07d100;
+                    private: Teff106c9af;
+                    result: T432e07d100;
+                    room: T432e07d100;
+                    scheduledAt: T432e07d100;
+                    time: T432e07d100;
+                  }>;
+                  hearingsTruncated: T1bdf39f14a;
+                  parentCourt: T432e07d100;
+                  relatedCases: Array<{
+                    caseMark: string;
+                    courtCode: string;
+                  }>;
+                  relatedCasesTruncated: T1bdf39f14a;
+                  status: T432e07d100;
+                  statusDate: T432e07d100;
+                  validTo: T432e07d100;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          "import-agenda": {
+            post: {
+              body: {
+                courtCode: string;
+                spisZn: string;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  created: number;
+                  skipped: number;
+                  total: number;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        justifications: {
+          query: {
+            post: {
+              body: {
+                entityIds: Array<T9a509045a7>;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: Array<{
+                  id: Tc0a0b9eaf7;
+                  fieldId: T1c7a854487;
+                  content: Tfeedd6cbe6;
+                  boundingBoxes: (null | T54b28eec99);
+                  fileFieldIds: Array<T1c7a854487>;
+                }>;
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        activity: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: {
+              cursor?: string;
+              limit?: number;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  activityAt: string;
+                  entityKind: T219ebda4a4;
+                  fileName: T432e07d100;
+                  id: string;
+                  mimeType: T432e07d100;
+                  status: T432e07d100;
+                  title: string;
+                  type: "entity";
+                } | {
+                  activityAt: string;
+                  id: string;
+                  title: string;
+                  type: "thread";
+                }>;
+                limit: number;
+                nextCursor: T432e07d100;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        events: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: Response;
+              401: never;
+              404: "Not Found";
+              422: {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              };
+              500: never;
+            };
+          };
+        };
+        get: {
+          body: Record<never, never>;
+          params: Tf9882e3602;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              name: string;
+              status: T4410deedb0;
+              reference: string;
+              id: Teb5c753062;
+              lastActivityAt: string;
+              createdAt: string;
+              billingReference: T432e07d100;
+              color: T432e07d100;
+              organizationId: T087d298a25;
+              clientId: Tdd73eae172;
+              leadUserId: T432e07d100;
+              stampedVersionCount: number;
+              client: (null | {
+                type: Te287bedd42;
+                id: T938d9cc2e1;
+                displayName: string;
+                color: T432e07d100;
+              });
+            };
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tf2819b9961;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+        workflow: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                running: T1bdf39f14a;
+                run: (null | {
+                  completed: number;
+                  errorCode: T432e07d100;
+                  executionVersion: number;
+                  finishedAt: T4124e1264c;
+                  id: (string & valibot_Brand<"SafeId"> & {
+                    readonly __safeIdType?: "extractionRun";
+                  });
+                  scope: ("workspace" | "properties" | "entities" | "cells");
+                  startedAt: T4124e1264c;
+                  status: ("failed" | "running" | "skipped" | "completed" | "planning" | "finalizing");
+                  total: number;
+                });
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          start: {
+            post: {
+              body: {
+                entityIds?: Array<T9a509045a7>;
+                entityIdsOrder?: Array<T9a509045a7>;
+                propertyIds?: Array<T80d841ed63>;
+                serviceTier?: "standard" | "flex";
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  status: ("skipped" | "started" | "already-running");
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          "target-count": {
+            post: {
+              body: {
+                entityIds?: Array<T9a509045a7>;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  count: number;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        "cell-retry": {
+          post: {
+            body: {
+              entityId: T9a509045a7;
+              propertyId: T80d841ed63;
+            };
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                status: ("failed" | "skipped" | "started" | "already-running");
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        "bounding-boxes": {
+          post: {
+            body: {
+              justificationId: Tc0a0b9eaf7;
+            };
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                boxes: Array<Tb28832bdc0>;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        "search-preview": {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                upcomingAgenda: Array<{
+                  id: T9a509045a7;
+                  name: string;
+                  dueDate: string;
+                }>;
+                recentDocuments: Array<{
+                  id: T9a509045a7;
+                  name: string;
+                  updatedAt: string;
+                }>;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        duplicate: {
+          post: {
+            body: {
+              includeContent: T1bdf39f14a;
+            };
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                workspaceId: Teb5c753062;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        archive: {
+          post: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                success: true;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        "anonymization-terms": {
+          get: {
+            body: Record<never, never>;
+            params: T5d54a9300c;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                entries: Array<{
+                  id: T219a6b3e18;
+                  label: string;
+                  canonical: string;
+                  variants: Array<string>;
+                  enabled: T1bdf39f14a;
+                  createdBy: T432e07d100;
+                  createdAt: string;
+                }>;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          put: {
+            body: {
+              entries: Array<{
+                variants?: Array<string>;
+                canonical: string;
+                label: string;
+              }>;
+            };
+            params: T5d54a9300c;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                inserted: number;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          ":entryId": {
+            delete: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                entryId: T219a6b3e18;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  success: true;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        "anonymization-allowlist": {
+          get: {
+            body: Record<never, never>;
+            params: T320f688fed;
+            query: {
+              entityId?: T9a509045a7;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                entries: Array<{
+                  id: Tccac6833b7;
+                  scope: Ta6ace2bae9;
+                  workspaceId: Ta6ace2bae9;
+                  entityId: T6b73348afa;
+                  label: string;
+                  canonical: string;
+                  createdBy: T432e07d100;
+                  createdAt: string;
+                }>;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          put: {
+            body: {
+              entityId?: T9a509045a7;
+              canonical: string;
+              scope: ("document" | "workspace");
+              label: string;
+            };
+            params: T320f688fed;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                inserted: number;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          ":entryId": {
+            delete: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                entryId: Tccac6833b7;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  success: true;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        unarchive: {
+          post: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: string;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                success: true;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tb62d3ee375;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        };
+        playbooks: {
+          ":playbookId": {
+            run: {
+              post: {
+                body: {
+                  projection: ("none" | "columns");
+                };
+                params: {
+                  workspaceId: Tb9596e18eb;
+                  playbookId: T5d41208c2a;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    runPropertyCount: number;
+                    documentRunCount: number;
+                    documentsWithoutRun: number;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        } & {
+          "auto-run": {
+            post: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  playbooksRun: number;
+                  runPropertyCount: number;
+                  documentRunCount: number;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        "document-reviews": {
+          sources: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: string;
+              };
+              query: {
+                cursor?: string;
+                limit?: number;
+                q?: string;
+              };
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  items: Array<{
+                    entityId: T9a509045a7;
+                    fileFieldId: T1c7a854487;
+                    name: string;
+                    fileName: string;
+                  }>;
+                  nextCursor: T432e07d100;
+                  limit: number;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          positions: {
+            post: {
+              body: T719fc86199;
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  positions: Array<T7ac9f30ede>;
+                  skipped: Array<T222fe4dc18>;
+                  parties: Array<T8f393d77f4>;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          positions: {
+            stream: {
+              post: {
+                body: T719fc86199;
+                params: {
+                  workspaceId: string;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: Response;
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        } & {
+          parties: {
+            post: {
+              body: {
+                target: {
+                  entityId: T9a509045a7;
+                  fileFieldId: T1c7a854487;
+                };
+              };
+              params: {
+                workspaceId: string;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  entityVersionId: T116a5c37c8;
+                  parties: Array<T8f393d77f4>;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            post: {
+              body: {
+                confirmedUnits?: number;
+                target: {
+                  entityId: T9a509045a7;
+                  fileFieldId: T1c7a854487;
+                };
+                perspective: {
+                  type: "neutral";
+                } | {
+                  name: T432e07d100;
+                  type: "party";
+                  role: string;
+                };
+                positions: Array<{
+                  guidance?: string;
+                  issue: string;
+                  mode: "extract";
+                  ask: {
+                    content: T44cf8d708e;
+                    question: string;
+                  };
+                  enabled: T1bdf39f14a;
+                  sourceId: string;
+                } | {
+                  check?: {
+                    kind: "presence";
+                    expectation: T7bcf2fefec;
+                  } | {
+                    kind: "constraint";
+                    condition: stll_conditions_ConditionNode;
+                  };
+                  guidance?: string;
+                  negotiation?: {
+                    escalation?: string;
+                    rationale?: string;
+                    talkingPoints?: Array<string>;
+                  };
+                  purpose?: string;
+                  issue: string;
+                  mode: "graded";
+                  standard: {
+                    source: "tiers";
+                    tiers: {
+                      acceptable: {
+                        ideal?: {
+                          clauseVersion?: number;
+                          source: "clause";
+                          clauseId: string;
+                        } | {
+                          text: string;
+                          source: "inline";
+                        };
+                        rules: Array<T8af9afbfaa>;
+                      };
+                      fallback: {
+                        entries: Array<{
+                          label?: string;
+                          text: string;
+                          id: string;
+                        }>;
+                      };
+                      notAcceptable: {
+                        rules: Array<T8af9afbfaa>;
+                      };
+                    };
+                  } | {
+                    source: "reference";
+                    passages: Array<{
+                      id: string;
+                      workspaceId: string;
+                      entityId: string;
+                      entityVersionId: string;
+                      fileFieldId: string;
+                      blockId: string;
+                    }>;
+                    termKind: T936e2da003;
+                  };
+                  ask: {
+                    derived?: {
+                      content: T44cf8d708e;
+                      question: string;
+                      rulesHash: string;
+                    };
+                    mode: "auto";
+                  } | {
+                    mode: "manual";
+                    content: T44cf8d708e;
+                    question: string;
+                  };
+                  enabled: T1bdf39f14a;
+                  severity: Tc35aa9c89d;
+                  sourceId: string;
+                }>;
+                playbookId: T138153ff13;
+                skipped: Array<{
+                  reason: {
+                    kind: "deal-specific-value";
+                  } | {
+                    kind: "structural";
+                  } | {
+                    kind: "lower-weight";
+                  } | {
+                    kind: "other";
+                    text: string;
+                  };
+                  subject: string;
+                }>;
+                references: Array<{
+                  workspaceId: Teb5c753062;
+                  entityId: T9a509045a7;
+                  fileFieldId: T1c7a854487;
+                }>;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  runId: T5fbe4cc4df;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: {
+                cursor?: string;
+                limit?: number;
+                includeLatest?: false | true;
+                entityId: T9a509045a7;
+                fileFieldId: T1c7a854487;
+              };
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  latest: (null | T64ed8d24fd);
+                  items: Array<{
+                    id: T5fbe4cc4df;
+                    status: T18ac9196eb;
+                    errorCode: Tb95e2630ec;
+                    entityVersionId: T116a5c37c8;
+                    total: number;
+                    completed: number;
+                    createdAt: string;
+                    finishedAt: T432e07d100;
+                    decisionCounts: Tde566c04a0;
+                    basis: {
+                      playbookName: T432e07d100;
+                      playbookProvenance: Tc23d7333db;
+                      referenceCount: number;
+                      perspectiveRole: T432e07d100;
+                    };
+                  }>;
+                  nextCursor: T432e07d100;
+                  limit: number;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            ":runId": {
+              get: {
+                body: Record<never, never>;
+                params: {
+                  workspaceId: Tb9596e18eb;
+                  runId: T5fbe4cc4df;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: T64ed8d24fd;
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        } & {
+          runs: {
+            ":runId": {
+              export: {
+                get: {
+                  body: Record<never, never>;
+                  params: {
+                    workspaceId: Tb9596e18eb;
+                    runId: T5fbe4cc4df;
+                  };
+                  query: {
+                    format: T4f2edfc7d3;
+                  };
+                  headers: Record<never, never>;
+                  response: {
+                    200: Response;
+                    400: Tc642053948;
+                    401: Tc642053948;
+                    402: Tc642053948;
+                    403: T82c7fa9c31;
+                    404: Tb62d3ee375;
+                    409: Tc642053948;
+                    413: Tc642053948;
+                    422: (Tc642053948 | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: Tc642053948;
+                    429: Tc642053948;
+                    500: Tc642053948;
+                    502: Tc642053948;
+                    503: Tc642053948;
+                  };
+                };
+              };
+            };
+          };
+        } & {
+          findings: {
+            ":findingId": {
+              patch: {
+                body: {
+                  flags?: Array<T6afe23e121>;
+                  applicationStatus?: "applied";
+                  decision: Tab12c777f3;
+                };
+                params: {
+                  workspaceId: Tb9596e18eb;
+                  findingId: T85a92a070d;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    id: T85a92a070d;
+                    runId: T5fbe4cc4df;
+                    decision: Tab12c777f3;
+                    flags: Array<T6afe23e121>;
+                    decidedBy: T432e07d100;
+                    decidedAt: T432e07d100;
+                    applicationStatus: Td5685e61f2;
+                    appliedBy: T432e07d100;
+                    appliedAt: T432e07d100;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
+        "document-translations": {
+          prepare: {
+            post: {
+              body: {
+                entityId: T9a509045a7;
+                fieldId: T1c7a854487;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  entityVersionId: T116a5c37c8;
+                  hasComments: T1bdf39f14a;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            post: {
+              body: {
+                commentPolicy?: "original" | "original-and-translated" | "translated";
+                output: "translated";
+                entityId: T9a509045a7;
+                fieldId: T1c7a854487;
+                engine: "deepl";
+                targetLang: T8e5a2589a3;
+              } | {
+                commentPolicy?: "original" | "original-and-translated" | "translated";
+                output: T7201011666;
+                entityId: T9a509045a7;
+                fieldId: T1c7a854487;
+                entityVersionId: T116a5c37c8;
+                engine: "ai";
+                targetLang: T8e5a2589a3;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  type: "commentPolicyRequired";
+                } | {
+                  type: "started";
+                  runId: T6385a50a63;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            ":runId": {
+              get: {
+                body: Record<never, never>;
+                params: {
+                  workspaceId: Tb9596e18eb;
+                  runId: T6385a50a63;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    run: {
+                      id: T6385a50a63;
+                      status: ("failed" | "cancelled" | "completed" | "queued" | "preparing" | "translating" | "assembling" | "validating");
+                      errorCode: (null | "internal" | "unsupported_format" | "document_unresolved" | "document_changed" | "unsupported_review_markup" | "provider_unavailable" | "translation_failed" | "format_validation_failed");
+                      output: T7201011666;
+                      engine: ("ai" | "deepl");
+                      total: number;
+                      completed: number;
+                      warnings: Array<string>;
+                      outputEntityId: T6b73348afa;
+                      outputFieldId: Taaceee9a83;
+                      outputFileName: T432e07d100;
+                      createdAt: string;
+                      startedAt: T4124e1264c;
+                      finishedAt: T4124e1264c;
+                    };
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
+        "bilingual-translations": {
+          prepare: {
+            post: {
+              body: {
+                entityId: T9a509045a7;
+                fieldId: T1c7a854487;
+                targetLang: string;
+                sourceLang: string;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  entityVersionId: T116a5c37c8;
+                  rows: Array<{
+                    rowId: string;
+                    ordinal: number;
+                    kind: Tb8e2b01fba;
+                    inTable: T1bdf39f14a;
+                    tableLayout: (null | "inline" | "stacked");
+                    sourceParaId: T432e07d100;
+                    sourceText: string;
+                  } & {
+                    disposition: T70b4858b6c;
+                    dispositionOrigin: ("default" | "rule" | "user" | "model");
+                  }>;
+                  glossary: Array<{
+                    source: string;
+                    target: string;
+                    sourceForms: Array<string>;
+                    targetForms: Array<string>;
+                    origin: T81f09c4ac1;
+                  }>;
+                  droppedRows: number;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            post: {
+              body: {
+                entityId: T9a509045a7;
+                fieldId: T1c7a854487;
+                entityVersionId: T116a5c37c8;
+                rows: Array<{
+                  disposition: T70b4858b6c;
+                  rowId: string;
+                }>;
+                targetLang: string;
+                sourceLang: string;
+                glossary: Array<{
+                  origin: T81f09c4ac1;
+                  source: string;
+                  target: string;
+                  sourceForms: Array<string>;
+                  targetForms: Array<string>;
+                }>;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  runId: T7886a41b06;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            ":runId": {
+              get: {
+                body: Record<never, never>;
+                params: {
+                  workspaceId: Tb9596e18eb;
+                  runId: T7886a41b06;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    run: {
+                      id: T7886a41b06;
+                      status: T18ac9196eb;
+                      errorCode: (null | "internal" | "ai_unavailable" | "enqueue_failed" | "document_unresolved" | "document_changed" | "translation_failed" | "not_bilingual" | "apply_failed");
+                      entityId: T9a509045a7;
+                      fileFieldId: T1c7a854487;
+                      entityVersionId: T116a5c37c8;
+                      outputEntityVersionId: T82d662a0f0;
+                      sourceLang: string;
+                      targetLang: string;
+                      total: number;
+                      completed: number;
+                      createdAt: string;
+                      startedAt: T4124e1264c;
+                      finishedAt: T4124e1264c;
+                    };
+                    rows: Array<{
+                      rowId: string;
+                      ordinal: number;
+                      kind: Tb8e2b01fba;
+                      disposition: T70b4858b6c;
+                      status: ("pending" | "failed" | "translated");
+                      warnings: Array<string>;
+                      sourceText: string;
+                      targetText: T432e07d100;
+                    }>;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        };
+        reports: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: {
+              cursor?: string;
+              limit?: number;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  status: Tda543c9cf7;
+                  id: T95767817af;
+                  mode: Ta3ea552bc4;
+                  resultEntityId: T6b73348afa;
+                  resultFieldId: Taaceee9a83;
+                } & {
+                  createdAt: string;
+                  downloadAvailable: T1bdf39f14a;
+                }>;
+                nextCursor: T432e07d100;
+                limit: number;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tb62d3ee375;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          templates: {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  builtins: Array<{
+                    key: string;
+                    name: string;
+                    cloneable: T1bdf39f14a;
+                  }>;
+                  stored: Array<{
+                    id: T1173055df0;
+                    name: string;
+                  }>;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          templates: {
+            "clone-builtin": {
+              post: {
+                body: {
+                  key: string;
+                };
+                params: {
+                  workspaceId: Tb9596e18eb;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    templateId: T1173055df0;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        } & {
+          export: {
+            post: {
+              body: {
+                format?: "docx" | "pdf";
+                aiNarrative?: false | true;
+                mode: Ta3ea552bc4;
+                templateRef: {
+                  type: "builtin";
+                  key: string;
+                } | {
+                  type: "stored";
+                  templateId: T1173055df0;
+                };
+                viewId: T8f903df76e;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  exportId: T95767817af;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          ":exportId": {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                exportId: T95767817af;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  status: Tda543c9cf7;
+                  error: T432e07d100;
+                  resultEntityId: T6b73348afa;
+                  resultFieldId: Taaceee9a83;
+                  downloadUrl: T432e07d100;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+        flows: {
+          runs: T6d90fb7f32;
+        } & {
+          runs: {
+            post: {
+              body: {
+                confirmedUnits?: number;
+                definitionId: Tb0f9859073;
+                inputEntityIds: Array<T9a509045a7>;
+              };
+              params: Tf047069c7d;
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  runId: T61122d2719;
+                  status: T8df8b40007;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            get: {
+              body: Record<never, never>;
+              params: Tf047069c7d;
+              query: {
+                status?: never;
+                cursor?: string;
+                limit?: number;
+              };
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  items: Array<{
+                    id: T61122d2719;
+                    definitionId: T9d50a02575;
+                    name: string;
+                    status: T8df8b40007;
+                    currentStepIndex: number;
+                    stepCount: number;
+                    triggerType: T293029d273;
+                    startedAt: T432e07d100;
+                    finishedAt: T432e07d100;
+                    createdAt: string;
+                  }>;
+                  nextCursor: T432e07d100;
+                  limit: number;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tb62d3ee375;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          runs: {
+            ":runId": {
+              get: {
+                body: Record<never, never>;
+                params: T5dfc05d566;
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    id: T61122d2719;
+                    definitionId: T9d50a02575;
+                    name: string;
+                    steps: Array<T0c865b04cd>;
+                    status: T8df8b40007;
+                    currentStepIndex: number;
+                    triggerSource: {
+                      type: "manual";
+                      userId: string;
+                    } | {
+                      type: "schedule";
+                    } | {
+                      type: "file-upload";
+                      entityId: string;
+                    };
+                    inputEntityIds: Array<T9a509045a7>;
+                    error: T432e07d100;
+                    startedAt: T432e07d100;
+                    finishedAt: T432e07d100;
+                    createdAt: string;
+                    stepRuns: Array<{
+                      index: number;
+                      kind: ("ai" | "review-gate" | "create-document");
+                      status: ("pending" | "failed" | "running" | "skipped" | "awaiting_review" | "completed");
+                      output: (null | {
+                        kind: "ai";
+                        markdown: string;
+                      } | {
+                        kind: "review-gate";
+                        decision: T0eef49f1a0;
+                        userId: string;
+                        note: T432e07d100;
+                      } | {
+                        kind: "create-document";
+                        entityId: string;
+                      });
+                      error: T432e07d100;
+                      reviewTaskEntityId: T6b73348afa;
+                      startedAt: T432e07d100;
+                      finishedAt: T432e07d100;
+                    }>;
+                  };
+                  400: Tc642053948;
+                  401: Tc642053948;
+                  402: Tc642053948;
+                  403: T82c7fa9c31;
+                  404: Tb62d3ee375;
+                  409: Tc642053948;
+                  413: Tc642053948;
+                  422: (Tc642053948 | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: Tc642053948;
+                  429: Tc642053948;
+                  500: Tc642053948;
+                  502: Tc642053948;
+                  503: Tc642053948;
+                };
+              };
+            };
+          };
+        } & {
+          runs: {
+            ":runId": {
+              review: {
+                post: {
+                  body: {
+                    note?: null | string;
+                    decision: T0eef49f1a0;
+                  };
+                  params: T5dfc05d566;
+                  query: Record<never, never>;
+                  headers: Record<never, never>;
+                  response: {
+                    200: {
+                      runId: T61122d2719;
+                      status: T8df8b40007;
+                    };
+                    400: Tc642053948;
+                    401: Tc642053948;
+                    402: Tc642053948;
+                    403: T82c7fa9c31;
+                    404: Tb62d3ee375;
+                    409: Tc642053948;
+                    413: Tc642053948;
+                    422: (Tc642053948 | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: Tc642053948;
+                    429: Tc642053948;
+                    500: Tc642053948;
+                    502: Tc642053948;
+                    503: Tc642053948;
+                  };
+                };
+              };
+            };
+          };
+        } & {
+          runs: {
+            ":runId": {
+              cancel: {
+                post: {
+                  body: Record<never, never>;
+                  params: T5dfc05d566;
+                  query: Record<never, never>;
+                  headers: Record<never, never>;
+                  response: {
+                    200: {
+                      runId: T61122d2719;
+                      status: T8df8b40007;
+                    };
+                    400: Tc642053948;
+                    401: Tc642053948;
+                    402: Tc642053948;
+                    403: T82c7fa9c31;
+                    404: Tb62d3ee375;
+                    409: Tc642053948;
+                    413: Tc642053948;
+                    422: (Tc642053948 | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: Tc642053948;
+                    429: Tc642053948;
+                    500: Tc642053948;
+                    502: Tc642053948;
+                    503: Tc642053948;
+                  };
+                };
+              };
+            };
+          };
+        };
+        post: {
+          body: {
+            name?: string;
+            reference?: string;
+            billingReference?: null | string;
+            color?: null | string;
+            clientId?: T938d9cc2e1;
+            leadUserId?: null | string;
+            promote?: {
+              memberUserIds?: Array<string>;
+              clientId: T938d9cc2e1;
+            };
+          };
+          params: Tf9882e3602;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {};
+            400: Tc642053948;
+            401: Tc642053948;
+            402: Tc642053948;
+            403: T82c7fa9c31;
+            404: Tc642053948;
+            409: Tc642053948;
+            413: Tc642053948;
+            422: (Tc642053948 | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: Tc642053948;
+            429: Tc642053948;
+            500: Tc642053948;
+            502: Tc642053948;
+            503: Tc642053948;
+          };
+        };
+      };
+    };
+  };
+};
+
+export type CorrespondenceRoutes = {
+  v1: {
+    workspaces: {
+      ":workspaceId": {
+        correspondence: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              workspaceId: Tb9596e18eb;
+            };
+            query: {
+              cursor?: string;
+              limit?: number;
+            };
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  authenticatedSender: T885b6f310f;
+                  intake: "direct";
+                  originalSignature: null;
+                  id: T370ca7e6a2;
+                  subject: string;
+                  from: T7b812a9d2f;
+                  to: Array<T7b812a9d2f>;
+                  cc: Array<T7b812a9d2f>;
+                  receivedAt: string;
+                  sentAt: T4124e1264c;
+                  handlingState: T5d4e7133d0;
+                  assigneeId: T432e07d100;
+                } | {
+                  authenticatedSender: T885b6f310f;
+                  intake: "forwarded_inline";
+                  originalSignature: T63617348ad;
+                  id: T370ca7e6a2;
+                  subject: string;
+                  from: T7b812a9d2f;
+                  to: Array<T7b812a9d2f>;
+                  cc: Array<T7b812a9d2f>;
+                  receivedAt: string;
+                  sentAt: T4124e1264c;
+                  handlingState: T5d4e7133d0;
+                  assigneeId: T432e07d100;
+                } | {
+                  authenticatedSender: T885b6f310f;
+                  intake: "forwarded_attachment";
+                  originalSignature: T7011ead233;
+                  id: T370ca7e6a2;
+                  subject: string;
+                  from: T7b812a9d2f;
+                  to: Array<T7b812a9d2f>;
+                  cc: Array<T7b812a9d2f>;
+                  receivedAt: string;
+                  sentAt: T4124e1264c;
+                  handlingState: T5d4e7133d0;
+                  assigneeId: T432e07d100;
+                }>;
+                nextCursor: T432e07d100;
+                limit: number;
+              };
+              400: Tc642053948;
+              401: Tc642053948;
+              402: Tc642053948;
+              403: T82c7fa9c31;
+              404: Tc642053948;
+              409: Tc642053948;
+              413: Tc642053948;
+              422: (Tc642053948 | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: Tc642053948;
+              429: Tc642053948;
+              500: Tc642053948;
+              502: Tc642053948;
+              503: Tc642053948;
+            };
+          };
+        } & {
+          address: {
+            get: {
+              body: Record<never, never>;
+              params: T1569dd66b2;
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  address: T432e07d100;
+                  setupHint: T432e07d100;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          address: {
+            post: {
+              body: Record<never, never>;
+              params: T1569dd66b2;
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  address: string;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          address: {
+            delete: {
+              body: Record<never, never>;
+              params: T1569dd66b2;
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  address: null;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          ":correspondenceId": {
+            get: {
+              body: Record<never, never>;
+              params: {
+                workspaceId: Tb9596e18eb;
+                correspondenceId: T370ca7e6a2;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  record: {
+                    authenticatedSender: T885b6f310f;
+                    intake: "direct";
+                    originalSignature: null;
+                    id: T370ca7e6a2;
+                    direction: T0e6dcd2aae;
+                    channel: "email";
+                    messageId: T432e07d100;
+                    from: T7b812a9d2f;
+                    to: Array<T7b812a9d2f>;
+                    cc: Array<T7b812a9d2f>;
+                    subject: string;
+                    sentAt: T4124e1264c;
+                    receivedAt: string;
+                    inReplyTo: T432e07d100;
+                    references: Array<string>;
+                    bodyText: string;
+                    bodyHtml: T432e07d100;
+                    handlingState: T5d4e7133d0;
+                    assigneeId: T432e07d100;
+                    createdAt: string;
+                    updatedAt: string;
+                  } | {
+                    authenticatedSender: T885b6f310f;
+                    intake: "forwarded_inline";
+                    originalSignature: T63617348ad;
+                    id: T370ca7e6a2;
+                    direction: T0e6dcd2aae;
+                    channel: "email";
+                    messageId: T432e07d100;
+                    from: T7b812a9d2f;
+                    to: Array<T7b812a9d2f>;
+                    cc: Array<T7b812a9d2f>;
+                    subject: string;
+                    sentAt: T4124e1264c;
+                    receivedAt: string;
+                    inReplyTo: T432e07d100;
+                    references: Array<string>;
+                    bodyText: string;
+                    bodyHtml: T432e07d100;
+                    handlingState: T5d4e7133d0;
+                    assigneeId: T432e07d100;
+                    createdAt: string;
+                    updatedAt: string;
+                  } | {
+                    authenticatedSender: T885b6f310f;
+                    intake: "forwarded_attachment";
+                    originalSignature: T7011ead233;
+                    id: T370ca7e6a2;
+                    direction: T0e6dcd2aae;
+                    channel: "email";
+                    messageId: T432e07d100;
+                    from: T7b812a9d2f;
+                    to: Array<T7b812a9d2f>;
+                    cc: Array<T7b812a9d2f>;
+                    subject: string;
+                    sentAt: T4124e1264c;
+                    receivedAt: string;
+                    inReplyTo: T432e07d100;
+                    references: Array<string>;
+                    bodyText: string;
+                    bodyHtml: T432e07d100;
+                    handlingState: T5d4e7133d0;
+                    assigneeId: T432e07d100;
+                    createdAt: string;
+                    updatedAt: string;
+                  };
+                  filers: Array<{
+                    type: "user";
+                    userId: string;
+                    userName: T432e07d100;
+                    userStatus: Tafa5c1e05b;
+                    filedAt: string;
+                    allowedSenderId?: never;
+                    address?: never;
+                    approvedBy?: never;
+                    approvedByName?: never;
+                    approvedByStatus?: never;
+                  } | {
+                    type: "shared_mailbox";
+                    allowedSenderId: T172b4688a1;
+                    address: string;
+                    approvedBy: string;
+                    approvedByName: T432e07d100;
+                    approvedByStatus: Tafa5c1e05b;
+                    filedAt: string;
+                    userId?: never;
+                    userName?: never;
+                    userStatus?: never;
+                  }>;
+                  attachments: Array<{
+                    entityId: T9a509045a7;
+                    filename: string;
+                    mediaType: string;
+                    byteSize: number;
+                    scanVerdict: ("unknown" | "clean" | "infected");
+                  }>;
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        } & {
+          ":correspondenceId": {
+            patch: {
+              body: {
+                handlingState?: "new" | "handled";
+                assigneeId?: null | Tc81f44a4a0;
+              };
+              params: {
+                workspaceId: Tb9596e18eb;
+                correspondenceId: T370ca7e6a2;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  record: {
+                    authenticatedSender: T885b6f310f;
+                    intake: "direct";
+                    originalSignature: null;
+                    id: T370ca7e6a2;
+                    direction: T0e6dcd2aae;
+                    channel: "email";
+                    messageId: T432e07d100;
+                    from: T7b812a9d2f;
+                    to: Array<T7b812a9d2f>;
+                    cc: Array<T7b812a9d2f>;
+                    subject: string;
+                    sentAt: T4124e1264c;
+                    receivedAt: string;
+                    inReplyTo: T432e07d100;
+                    references: Array<string>;
+                    bodyText: string;
+                    bodyHtml: T432e07d100;
+                    handlingState: T5d4e7133d0;
+                    assigneeId: T432e07d100;
+                    createdAt: string;
+                    updatedAt: string;
+                  } | {
+                    authenticatedSender: T885b6f310f;
+                    intake: "forwarded_inline";
+                    originalSignature: T63617348ad;
+                    id: T370ca7e6a2;
+                    direction: T0e6dcd2aae;
+                    channel: "email";
+                    messageId: T432e07d100;
+                    from: T7b812a9d2f;
+                    to: Array<T7b812a9d2f>;
+                    cc: Array<T7b812a9d2f>;
+                    subject: string;
+                    sentAt: T4124e1264c;
+                    receivedAt: string;
+                    inReplyTo: T432e07d100;
+                    references: Array<string>;
+                    bodyText: string;
+                    bodyHtml: T432e07d100;
+                    handlingState: T5d4e7133d0;
+                    assigneeId: T432e07d100;
+                    createdAt: string;
+                    updatedAt: string;
+                  } | {
+                    authenticatedSender: T885b6f310f;
+                    intake: "forwarded_attachment";
+                    originalSignature: T7011ead233;
+                    id: T370ca7e6a2;
+                    direction: T0e6dcd2aae;
+                    channel: "email";
+                    messageId: T432e07d100;
+                    from: T7b812a9d2f;
+                    to: Array<T7b812a9d2f>;
+                    cc: Array<T7b812a9d2f>;
+                    subject: string;
+                    sentAt: T4124e1264c;
+                    receivedAt: string;
+                    inReplyTo: T432e07d100;
+                    references: Array<string>;
+                    bodyText: string;
+                    bodyHtml: T432e07d100;
+                    handlingState: T5d4e7133d0;
+                    assigneeId: T432e07d100;
+                    createdAt: string;
+                    updatedAt: string;
+                  };
+                };
+                400: Tc642053948;
+                401: Tc642053948;
+                402: Tc642053948;
+                403: T82c7fa9c31;
+                404: Tc642053948;
+                409: Tc642053948;
+                413: Tc642053948;
+                422: (Tc642053948 | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: Tc642053948;
+                429: Tc642053948;
+                500: Tc642053948;
+                502: Tc642053948;
+                503: Tc642053948;
+              };
+            };
+          };
+        };
+      };
+    };
   };
 };
 
@@ -31632,39 +32044,39 @@ export type ChatUITools = {
   };
 };
 
-export type AskManual = Te18c7397cc;
+export type AskManual = Td16c97f5eb;
 
-export type DeterministicCheck = (T4c3f591341 | T8f8a3ed733);
+export type DeterministicCheck = (T6fb210660a | T3c3a9e3afa);
 
-export type FallbackEntry = T6134405b04;
+export type FallbackEntry = T2b27760672;
 
 export type GlobalSearchHit = Tafda8a9ee4;
 
-export type GradedPosition = Tf9d55cf19d;
+export type GradedPosition = T5aa2d5db44;
 
-export type IdealLanguage = (Td0e4afd336 | T2c788257c8);
+export type IdealLanguage = (T87016d2e67 | T05fb5540ba);
 
 export type LegalListSourceLocator = T0cd9410d68;
 
-export type Negotiation = T62188807d3;
+export type Negotiation = T29a6008096;
 
 export type PlaybookScope = T4d0c38f22c;
 
 export type PlaybookTrigger = ("manual" | "onClassified");
 
-export type Position = T5d4fc8c82b;
+export type Position = T7ac9f30ede;
 
 export type PositionDecisionSummary = Tc479176c61;
 
-export type PositionSeverity = T0a46fb6ba4;
+export type PositionSeverity = Tc35aa9c89d;
 
-export type PositionStandard = T73f271d728;
+export type PositionStandard = T252880e15d;
 
-export type PositionStandardSource = T7d5b6398be;
+export type PositionStandardSource = T3ba1c9c241;
 
-export type ReferencePassage = T2f1b6312a1;
+export type ReferencePassage = T83dd62c4c4;
 
-export type TierRule = Tad34918dcf;
+export type TierRule = Te14e6e8fb7;
 
 export type ViewLayout = T75ecb21f44;
 
@@ -31801,13 +32213,6 @@ type T0290f4b244 = {
 
 type T0367ebd283 = "matters" | "all-chats";
 
-type T03c56de23b = "language" | "presence" | "parameter" | "enumeration";
-
-type T03f9b9c11b = {
-  role: string;
-  name: T432e07d100;
-};
-
 type T04754cf4d9 = null | string | number | Array<string>;
 
 type T047ab24e12 = {
@@ -31819,6 +32224,11 @@ type T047ab24e12 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type T05fb5540ba = {
+  text: string;
+  source: "inline";
+};
 
 type T06188f12f1 = {
   readonly input: Td220c5b82e;
@@ -31843,6 +32253,8 @@ type T06fc334600 = {
   href: string;
   mention: string;
 };
+
+type T070172c9cc = "organization" | "matters";
 
 type T079c62d0d0 = {
   status: "not-covered";
@@ -31882,8 +32294,6 @@ type T09ea2c2c78 = {
   readonly value: Td69e9e71d3;
   readonly issues?: undefined;
 };
-
-type T0a46fb6ba4 = "medium" | "high" | "low" | "blocker";
 
 type T0a4e688576 = {
   status: "unconfigured";
@@ -31951,10 +32361,6 @@ type T0bc71347dc = {
   errors?: undefined | Array<Tc78d41b768>;
 };
 
-type T0beb2a0a9f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "auditLog";
-};
-
 type T0bf624198d = {
   id: T594988174f;
   name: string;
@@ -31973,33 +32379,19 @@ type T0c520e01bf = {
   output?: T6f8ede9820;
 } & Te4ad2efe8c;
 
-type T0c8f4cf1e2 = {
-  type: "file";
-  version: 1;
+type T0c865b04cd = {
+  kind: "ai";
+  name: string;
+  prompt: string;
+  includeDocuments: T1bdf39f14a;
 } | {
-  type: "text";
-  version: 1;
+  kind: "review-gate";
+  name: string;
+  instructions: string;
 } | {
-  type: T7985261e0e;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: T432e07d100;
-} | {
-  type: "date";
-  version: 1;
-} | {
-  type: "int";
-  version: 1;
-} | {
-  type: "money";
-  version: 1;
-  currency: T432e07d100;
-} | {
-  type: "person";
-  version: 1;
+  kind: "create-document";
+  name: string;
+  documentTitle: string;
 };
 
 type T0cd9410d68 = {
@@ -32010,7 +32402,7 @@ type T0cd9410d68 = {
 } | {
   type: "pdf-page";
   pageNumber: number;
-  boundingBoxes?: undefined | Te08ba39d3b;
+  boundingBoxes?: undefined | T54b28eec99;
 };
 
 type T0d213827f5 = {
@@ -32027,6 +32419,8 @@ type T0de167a39e = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type T0e6dcd2aae = "out" | "in";
 
 type T0eb9f816ff = {
   workspaceId?: Teb5c753062;
@@ -32060,6 +32454,8 @@ type T0eb9f816ff = {
   resume: Array<T7c9c034721>;
 };
 
+type T0eef49f1a0 = "approved" | "rejected";
+
 type T0f57aba9b8 = "decision" | "instruction" | "fact" | "preference" | "relationship";
 
 type T0f5d4b903b = {
@@ -32077,7 +32473,10 @@ type T109fc089ae = {
   relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
 };
 
-type T114f58ccca = "search" | "fetch";
+type T11114dc572 = {
+  provider: T80c536d9e5;
+  modelId: string;
+};
 
 type T1168738ff9 = {
   readonly input: any;
@@ -32129,6 +32528,8 @@ type T1313862f74 = {
   output?: unknown;
 } & Te4ad2efe8c;
 
+type T138153ff13 = null | T5d41208c2a;
+
 type T138c3f8370 = {
   value: string;
   label?: string;
@@ -32165,145 +32566,24 @@ type T14093082e6 = "Bad Request" | {
   requiredFields?: Array<T196b4403fb>;
 };
 
-type T149c4eb383 = {
-  run: {
-    decisionCounts: Tb1ed7519f1;
-    playbookStale: T1bdf39f14a;
-    playbookMissing: T1bdf39f14a;
-    basis: {
-      references: Array<{
-        workspaceId: Teb5c753062;
-        entityId: T9a509045a7;
-        entityVersionId: T116a5c37c8;
-        fileFieldId: T1c7a854487;
-      } & {
-        workspaceName: T432e07d100;
-        name: T432e07d100;
-        contentSha256: T432e07d100;
-      }>;
-      playbook: {
-        definitionId: Te2ec8e0b17;
-        versionId: (null | (string & valibot_Brand<"SafeId"> & {
-          readonly __safeIdType?: "playbookDefinitionVersion";
-        }));
-        provenance: Tb2d33c80ac;
-        definitionSnapshot: {
-          name: string;
-          positions: T50a09487e3;
-        };
-      };
-      perspective: {
-        type: "neutral";
-      } | {
-        type: "party";
-      } & T03f9b9c11b;
-    };
-    createdAt: string;
-    startedAt: T432e07d100;
-    finishedAt: T432e07d100;
-    id: Teb3fcd8ef4;
-    status: T97123e865d;
-    errorCode: Tdf3afab53d;
-    entityId: T9a509045a7;
-    fileFieldId: T1c7a854487;
-    entityVersionId: T116a5c37c8;
-    contentSha256: string;
-    skipped: Array<T9f51aef7c3>;
-    total: number;
-    completed: number;
-    pipelineVersion: number;
-  };
-  findings: Array<{
-    id: T92357156ac;
-    positionId: string;
-    positionTitle: string;
-    outcome: T432e07d100;
-    payload: {
-      finding: {
-        positionId: string;
-        issue: string;
-        severity: T0a46fb6ba4;
-        standardSource: T7d5b6398be;
-        verdict: (null | "fallback" | "missing" | "compliant" | "deviation" | "additional" | "not-applicable");
-        delta: {
-          kind: "parameter";
-          target: T602ddca6f8;
-          standard: T602ddca6f8;
-        } | {
-          kind: "enumeration";
-          items: Array<{
-            label: string;
-            inTarget: T1bdf39f14a;
-            inStandard: T1bdf39f14a;
-            citation: (null | T84093f1fc9);
-          }>;
-        } | {
-          kind: "presence";
-          term: string;
-          inTarget: T1bdf39f14a;
-          inStandard: T1bdf39f14a;
-        } | {
-          kind: "language";
-        };
-        extracted: (null | {
-          value: string;
-          text: string;
-        });
-        rationale: T432e07d100;
-        matchedRef?: Te831c71c90 | Tc0c55e9cf5;
-        consensus?: "mixed" | "single" | "consistent";
-        impact?: "unknown" | "neutral" | "favourable" | "unfavourable";
-        explanation?: {
-          type: "comparison";
-          text: string;
-        } | {
-          type: "insufficient-evidence";
-        };
-        recommendation?: null | string;
-        citations: Array<T84093f1fc9>;
-        referenceCitations?: Array<{
-          fileFieldId: T1c7a854487;
-          passages: Array<{
-            id: string;
-            blockId: string;
-          }>;
-        }>;
-        fix: (null | {
-          kind: "replaceInBlock";
-          blockId: string;
-          find: string;
-          replace: string;
-        } | {
-          kind: "replaceBlock";
-          blockId: string;
-          text: string;
-        } | {
-          kind: "insertAfterBlock";
-          blockId: string;
-          text: string;
-        });
-      } & {
-        referenceDetail?: "withheld";
-      };
-    };
-    decision: Te078108f79;
-    flags: Array<T6afe23e121>;
-    decidedBy: T432e07d100;
-    decidedAt: T432e07d100;
-    applicationStatus: T5dbcd4218d;
-    appliedBy: T432e07d100;
-    appliedAt: T432e07d100;
-    suggestionId: (null | T95a4a01f59);
-  }>;
-};
+type T14a6119a55 = "none" | "unknown" | "pass" | "fail";
 
 type T15125483db = {
-  playbookId: T6ebb5b60ba;
+  playbookId: T5d41208c2a;
 };
 
 type T151c8c8adf = {
   readonly input: T64efadf7d1;
   readonly output: Tc69524a13b;
+};
+
+type T154c971bc9 = {
+  modelId: string;
+  provider: Ta0f85a4b95;
+};
+
+type T1569dd66b2 = {
+  workspaceId: Tb9596e18eb;
 };
 
 type T15adbce323 = {
@@ -32364,7 +32644,13 @@ type T16953276e4 = {
   text: string;
 };
 
+type T172b4688a1 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "correspondenceAllowedSender";
+};
+
 type T1754ed2395 = 1 | 2 | 3 | 4 | 5 | 6;
+
+type T18ac9196eb = "failed" | "cancelled" | "running" | "completed" | "queued";
 
 type T18f8f5f7e8 = {
   entityId: string;
@@ -32495,6 +32781,35 @@ type T1c7a854487 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "field";
 };
 
+type T1d7c2dd626 = {
+  type: "file";
+  version: 1;
+} | {
+  type: "text";
+  version: 1;
+} | {
+  type: T7985261e0e;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: T432e07d100;
+} | {
+  type: "date";
+  version: 1;
+} | {
+  type: "int";
+  version: 1;
+} | {
+  type: "money";
+  version: 1;
+  currency: T432e07d100;
+} | {
+  type: "person";
+  version: 1;
+};
+
 type T1db05d7243 = {
   type: "unsupported";
   version: 1;
@@ -32605,11 +32920,29 @@ type T20e2e4a545 = {
 
 type T2172217511 = null | string | number | false | true | T15adbce323 | Array<T2172217511>;
 
+type T219a6b3e18 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "anonymizationBlacklistEntry";
+};
+
 type T219ebda4a4 = "message" | "document" | "folder" | "task" | "link";
 
 type T21bb8cfb40 = "other" | "work" | "personal";
 
 type T21e83da7dc = "failed" | "no-backend" | "below-floor";
+
+type T222fe4dc18 = {
+  subject: string;
+  reason: {
+    kind: "deal-specific-value";
+  } | {
+    kind: "structural";
+  } | {
+    kind: "lower-weight";
+  } | {
+    kind: "other";
+    text: string;
+  };
+};
 
 type T22668e5fed = {
   packId: string;
@@ -32631,12 +32964,40 @@ type T24df5d72b3 = {
   version: 1;
 };
 
+type T252880e15d = {
+  source: "tiers";
+  tiers: {
+    acceptable: {
+      ideal?: T87016d2e67 | T05fb5540ba;
+      rules: Array<Te14e6e8fb7>;
+    };
+    fallback: {
+      entries: Array<T2b27760672>;
+    };
+    notAcceptable: {
+      rules: Array<Te14e6e8fb7>;
+    };
+  };
+} | {
+  source: "reference";
+  passages: Array<T83dd62c4c4>;
+  termKind: T936e2da003;
+};
+
 type T25d1a44208 = {
   readonly input: T126fdd24cb;
   readonly output: Tef51a766c6;
 };
 
-type T2609ebaa39 = null | T976b70d646;
+type T2613d339fd = {
+  kind: "fallback";
+  label?: string;
+  text: string;
+};
+
+type T2678860087 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "workspaceMember";
+};
 
 type T26b94a592c = T563feb80fd | T708bf95724;
 
@@ -32670,9 +33031,17 @@ type T28f55fc43c = null | Array<{
   text: string;
 }>;
 
+type T293029d273 = "manual" | "schedule" | "file-upload";
+
 type T2985b4f624 = {
   readonly value: Record<never, never>;
   readonly issues?: undefined;
+};
+
+type T29a6008096 = {
+  escalation?: string;
+  rationale?: string;
+  talkingPoints?: Array<string>;
 };
 
 type T29dbcb6703 = {
@@ -32704,6 +33073,12 @@ type T2a67644a3a = {
 
 type T2b12d7c01e = {
   readonly [key: string]: never;
+};
+
+type T2b27760672 = {
+  label?: string;
+  text: string;
+  id: string;
 };
 
 type T2b4af5b5ce = {
@@ -32755,11 +33130,6 @@ type T2c696a83bf = {
   metadata?: {
     [key: string]: any;
   };
-};
-
-type T2c788257c8 = {
-  text: string;
-  source: "inline";
 };
 
 type T2c8d30ce61 = {
@@ -32839,15 +33209,6 @@ type T2f09c082c1 = {
   version: 1;
 };
 
-type T2f1b6312a1 = {
-  id: string;
-  workspaceId: string;
-  entityId: string;
-  entityVersionId: string;
-  fileFieldId: string;
-  blockId: string;
-};
-
 type T2f4709c888 = {
   readonly input: T93f05f2bc9;
   readonly output: T355e36f9c1;
@@ -32910,6 +33271,10 @@ type T31d2159604 = {
 
 type T31e574e5a2 = "global" | "at" | "de" | "eu" | "sk" | "cz";
 
+type T320f688fed = {
+  workspaceId: Tb9596e18eb;
+};
+
 type T322c3dd90a = {
   readonly input: T4c2454b604;
   readonly output: T665ac097fb;
@@ -32929,10 +33294,6 @@ type T337589194f = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
-
-type T33933638b8 = "free" | "pro";
-
-type T342c6c1fea = "global" | "ch" | "eu";
 
 type T3432cdf68d = {
   readonly input: Taa8bbb5904;
@@ -32960,6 +33321,10 @@ type T37001f6d72 = {
   model: string;
   inputFingerprint: string;
   tree: Array<T94e2de2165>;
+};
+
+type T370ca7e6a2 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "correspondence";
 };
 
 type T379e05dc19 = {
@@ -33014,24 +33379,11 @@ type T3a3428dc33 = {
 
 type T3a5770ff6b = null | "none" | "max" | "medium" | "high" | "low" | "minimal" | "xhigh";
 
-type T3b5822b18f = "Not Found" | {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tddcaa6c051>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T79fba9c913;
-  error?: string;
-  claim?: T6662e6acc7;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T196b4403fb>;
+type T3ba1c9c241 = "reference" | "tiers";
+
+type T3c3a9e3afa = {
+  kind: "constraint";
+  condition: stll_conditions_ConditionNode;
 };
 
 type T3cde614388 = string & valibot_Brand<"SafeId"> & {
@@ -33162,6 +33514,8 @@ type T4275dec338 = {
   sendMode: Tbbd6b6f3b5;
 };
 
+type T42c9a3f033 = "api-key" | "user-agent";
+
 type T430389cc7f = {
   targetMessageId: string;
   messages: Array<{
@@ -33248,6 +33602,37 @@ type T4410c591d7 = {
   slug: T432e07d100;
 };
 
+type T4410deedb0 = "active" | "archived" | "deleting";
+
+type T44cf8d708e = {
+  type: "file";
+  version: 1;
+} | {
+  type: "text";
+  version: 1;
+} | {
+  type: T7985261e0e;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: T432e07d100;
+} | {
+  type: "date";
+  version: 1;
+} | {
+  type: "int";
+  version: 1;
+} | {
+  type: "money";
+  version: 1;
+  currency: T432e07d100;
+} | {
+  type: "person";
+  version: 1;
+};
+
 type T44ea42e2fe = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillProposal";
 };
@@ -33285,6 +33670,15 @@ type T459c229135 = {
 type T461fdaff11 = {
   readonly value: T4afcfc8d51;
   readonly issues?: undefined;
+};
+
+type T466f4538c8 = {
+  configured: false;
+  platformFallback: T1bdf39f14a;
+} | {
+  configured: true;
+  apiKeyMasked: string;
+  platformFallback: T1bdf39f14a;
 };
 
 type T46ab7251d5 = {
@@ -33370,8 +33764,6 @@ type T4859fbb7f4 = {
   registryUrl: string;
 };
 
-type T488ab33bc2 = "user" | "proposed" | "detected";
-
 type T48d20b01ee = {
   readonly input: T66a06dbd45;
   readonly output: T4afcfc8d51;
@@ -33440,11 +33832,6 @@ type T4c01853e6a = "preserve" | "decimal" | "hierarchicalDecimal" | "lowerLetter
 type T4c2454b604 = {
   lawId: string;
   blockId: string;
-};
-
-type T4c3f591341 = {
-  kind: "presence";
-  expectation: Ta258bd6696;
 };
 
 type T4c4fff0216 = null | Array<(T3ed4bbeee3 & {
@@ -33543,15 +33930,13 @@ type T4d93baa3cf = {
   readonly output: Tc6f587c6bd;
 };
 
-type T4d9ac44155 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "bilingualTranslationRun";
-};
-
 type T4eb7f27086 = {
   kind: "attorney";
   ref: Tcdd0e1e285;
   field: ("name" | "email");
 };
+
+type T4f2edfc7d3 = "docx" | "xlsx" | "csv";
 
 type T4f778d673c = null | T500eb4106c;
 
@@ -33572,11 +33957,6 @@ type T507f1fccd1 = {
   kind: "party";
   role: T8e2a10c549;
   field: T8854c1a08e;
-};
-
-type T50a09487e3 = {
-  items: Array<T5d4fc8c82b>;
-  version: 3;
 };
 
 type T50cb7e6cbb = "Desktop edit session source file is no longer available." | "Desktop edit session not found." | "Desktop editing moved to another device. This local copy is preserved." | `File validation failed: ${string}` | "Workspace is not active" | "Desktop edit session is already closed." | "Desktop edit session file type changed while finalizing." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Base entity version not found.";
@@ -33606,6 +33986,11 @@ type T522ec82615 = {
   scope?: undefined | "workspace" | "user";
 };
 
+type T52485bfcc5 = {
+  blockId: string;
+  text: string;
+};
+
 type T527969c00a = {
   skillName: string;
   path: string;
@@ -33625,6 +34010,11 @@ type T53430f009c = string & valibot_Brand<"SafeId"> & {
 };
 
 type T53a42b0477 = "decision" | "statute";
+
+type T54b28eec99 = {
+  version: 1;
+  boxes: Array<Tb28832bdc0>;
+};
 
 type T54bf6fc207 = {
   value: T432e07d100;
@@ -33712,8 +34102,6 @@ type T576f555b24 = {
   labelKey: T9fe3112f57;
 };
 
-type T579e5557db = "approved" | "rejected";
-
 type T58d852de3d = "included" | "held";
 
 type T594988174f = string & valibot_Brand<"SafeId"> & {
@@ -33748,10 +34136,6 @@ type T596c558ecb = {
   status: "error";
 };
 
-type T599434ec07 = {
-  workspaceId: Tb9596e18eb;
-};
-
 type T59a8dbef95 = {
   stored: number;
   storedAsOf: string;
@@ -33780,15 +34164,34 @@ type T59c3f5062f = {
   mention: string;
 };
 
-type T59dcde539e = {
-  workspaceId: Tb9596e18eb;
-};
-
 type T5a51f85bbe = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "pendingUpload";
 };
 
-type T5a7c3abed7 = null | Tb47b7b98fd;
+type T5aa2d5db44 = {
+  check?: T6fb210660a | T3c3a9e3afa;
+  guidance?: string;
+  negotiation?: T29a6008096;
+  purpose?: string;
+  issue: string;
+  mode: "graded";
+  standard: T252880e15d;
+  ask: {
+    derived?: {
+      content: Tfcce4260b1;
+      question: string;
+      rulesHash: string;
+    };
+    mode: "auto";
+  } | {
+    mode: "manual";
+    content: Tfcce4260b1;
+    question: string;
+  };
+  enabled: T1bdf39f14a;
+  severity: Tc35aa9c89d;
+  sourceId: string;
+};
 
 type T5af6308a18 = {
   url: string;
@@ -33864,14 +34267,11 @@ type T5d1f74b178 = {
   }>;
 };
 
-type T5d4fc8c82b = {
-  guidance?: string;
-  issue: string;
-  mode: "extract";
-  ask: Te18c7397cc;
-  enabled: T1bdf39f14a;
-  sourceId: string;
-} | Tf9d55cf19d;
+type T5d41208c2a = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "playbookDefinition";
+};
+
+type T5d4e7133d0 = "new" | "handled";
 
 type T5d51195633 = null | {
   premises: T432e07d100;
@@ -33886,6 +34286,10 @@ type T5d51195633 = null | {
   textAddress: T432e07d100;
 };
 
+type T5d54a9300c = {
+  workspaceId: Tb9596e18eb;
+};
+
 type T5dab5448de = {
   readonly value: any;
   readonly issues?: undefined;
@@ -33897,7 +34301,10 @@ type T5dba4beb60 = null | {
   retrievedAt?: undefined | string;
 };
 
-type T5dbcd4218d = "pending" | "applied";
+type T5dfc05d566 = {
+  workspaceId: Tb9596e18eb;
+  runId: T61122d2719;
+};
 
 type T5e1768906f = {
   code: Tb4bdb2e8b2;
@@ -33910,7 +34317,7 @@ type T5f6659d695 = {
   id: Tf1edb394fb;
   entityId: T9a509045a7;
   fileFieldId: T1c7a854487;
-  status: Tb60b7c14cd;
+  status: Tda543c9cf7;
   errorCode: T0803d60764;
   entityVersionId: T116a5c37c8;
   listId: T6709dca913;
@@ -33926,11 +34333,8 @@ type T5f6659d695 = {
   };
 };
 
-type T602ddca6f8 = null | {
-  text: string;
-  value: T688f6f1190;
-  unit: T432e07d100;
-  citation: T84093f1fc9;
+type T5fbe4cc4df = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentReviewRun";
 };
 
 type T60d8f391f8 = {
@@ -33944,24 +34348,12 @@ type T61122d2719 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "flowRun";
 };
 
-type T6134405b04 = {
-  label?: string;
-  text: string;
-  id: string;
-};
-
 type T614d75882e = {
   type: "error";
   version: 1;
 };
 
 type T61574ed5e2 = null | T3cde614388;
-
-type T62188807d3 = {
-  escalation?: string;
-  rationale?: string;
-  talkingPoints?: Array<string>;
-};
 
 type T628ff2d974 = {
   workspaceId: string;
@@ -33977,6 +34369,18 @@ type T62aafd0a7e = {
   output?: T3d16f860ff | T5e1768906f;
 } & Te4ad2efe8c;
 
+type T62c6faab99 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "workspaceContact";
+};
+
+type T63617348ad = {
+  status: "unverified";
+};
+
+type T6385a50a63 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentTranslationRun";
+};
+
 type T63c4458d83 = {
   type: "headingSection";
   story: "main";
@@ -33989,6 +34393,138 @@ type T645caae274 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateRecipe";
 };
 
+type T64ed8d24fd = {
+  run: {
+    decisionCounts: Tde566c04a0;
+    playbookStale: T1bdf39f14a;
+    playbookMissing: T1bdf39f14a;
+    basis: {
+      references: Array<{
+        workspaceId: Teb5c753062;
+        entityId: T9a509045a7;
+        entityVersionId: T116a5c37c8;
+        fileFieldId: T1c7a854487;
+      } & {
+        workspaceName: T432e07d100;
+        name: T432e07d100;
+        contentSha256: T432e07d100;
+      }>;
+      playbook: {
+        definitionId: T138153ff13;
+        versionId: (null | (string & valibot_Brand<"SafeId"> & {
+          readonly __safeIdType?: "playbookDefinitionVersion";
+        }));
+        provenance: Tc23d7333db;
+        definitionSnapshot: {
+          name: string;
+          positions: T9d79bd0ace;
+        };
+      };
+      perspective: {
+        type: "neutral";
+      } | {
+        type: "party";
+      } & T8f393d77f4;
+    };
+    createdAt: string;
+    startedAt: T432e07d100;
+    finishedAt: T432e07d100;
+    id: T5fbe4cc4df;
+    status: T18ac9196eb;
+    errorCode: Tb95e2630ec;
+    entityId: T9a509045a7;
+    fileFieldId: T1c7a854487;
+    entityVersionId: T116a5c37c8;
+    contentSha256: string;
+    skipped: Array<T222fe4dc18>;
+    total: number;
+    completed: number;
+    pipelineVersion: number;
+  };
+  findings: Array<{
+    id: T85a92a070d;
+    positionId: string;
+    positionTitle: string;
+    outcome: T432e07d100;
+    payload: {
+      finding: {
+        positionId: string;
+        issue: string;
+        severity: Tc35aa9c89d;
+        standardSource: T3ba1c9c241;
+        verdict: (null | "fallback" | "missing" | "compliant" | "deviation" | "additional" | "not-applicable");
+        delta: {
+          kind: "parameter";
+          target: Te756937605;
+          standard: Te756937605;
+        } | {
+          kind: "enumeration";
+          items: Array<{
+            label: string;
+            inTarget: T1bdf39f14a;
+            inStandard: T1bdf39f14a;
+            citation: (null | T52485bfcc5);
+          }>;
+        } | {
+          kind: "presence";
+          term: string;
+          inTarget: T1bdf39f14a;
+          inStandard: T1bdf39f14a;
+        } | {
+          kind: "language";
+        };
+        extracted: (null | {
+          value: string;
+          text: string;
+        });
+        rationale: T432e07d100;
+        matchedRef?: T2613d339fd | T85e9f65dcb;
+        consensus?: "mixed" | "single" | "consistent";
+        impact?: "unknown" | "neutral" | "favourable" | "unfavourable";
+        explanation?: {
+          type: "comparison";
+          text: string;
+        } | {
+          type: "insufficient-evidence";
+        };
+        recommendation?: null | string;
+        citations: Array<T52485bfcc5>;
+        referenceCitations?: Array<{
+          fileFieldId: T1c7a854487;
+          passages: Array<{
+            id: string;
+            blockId: string;
+          }>;
+        }>;
+        fix: (null | {
+          kind: "replaceInBlock";
+          blockId: string;
+          find: string;
+          replace: string;
+        } | {
+          kind: "replaceBlock";
+          blockId: string;
+          text: string;
+        } | {
+          kind: "insertAfterBlock";
+          blockId: string;
+          text: string;
+        });
+      } & {
+        referenceDetail?: "withheld";
+      };
+    };
+    decision: Tab12c777f3;
+    flags: Array<T6afe23e121>;
+    decidedBy: T432e07d100;
+    decidedAt: T432e07d100;
+    applicationStatus: Td5685e61f2;
+    appliedBy: T432e07d100;
+    appliedAt: T432e07d100;
+    suggestionId: (null | Td884408413);
+  }>;
+};
+
 type T64efadf7d1 = {
   query: string;
   limit?: undefined | number;
@@ -33996,6 +34532,14 @@ type T64efadf7d1 = {
 
 type T65289db29c = {
   workspaceId: string;
+};
+
+type T65731e9912 = {
+  deletedAt: T432e07d100;
+  id: string;
+  image: T432e07d100;
+  name: T432e07d100;
+  type: "user";
 };
 
 type T65e2c35ff8 = {
@@ -34191,7 +34735,7 @@ type T6e3baa4852 = {
 type T6e7137c176 = "medium" | "high" | "low" | "unspecified";
 
 type T6e770422e4 = {
-  flowId: Tb47b7b98fd;
+  flowId: Tb0f9859073;
 };
 
 type T6e91e475a3 = "highlight" | "underline" | "squiggly" | "strikethrough";
@@ -34203,17 +34747,9 @@ type T6eaa0a5371 = {
   status: "ok";
 };
 
-type T6ebb5b60ba = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "playbookDefinition";
-};
-
 type T6f4f928320 = {
   readonly input: T97154a1463;
   readonly output: T381fa8ea96;
-};
-
-type T6f65fd94a6 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "workspaceMember";
 };
 
 type T6f80be7133 = "draft" | "accepted" | "rejected" | "proposed";
@@ -34231,6 +34767,11 @@ type T6f8ede9820 = {
     excerpt: string;
     createdAt: string;
   }>;
+};
+
+type T6fb210660a = {
+  kind: "presence";
+  expectation: T7bcf2fefec;
 };
 
 type T6ffeb8632f = {
@@ -34268,6 +34809,13 @@ type T6ffeb8632f = {
   error?: never;
 };
 
+type T7011ead233 = {
+  status: "unverified";
+} | {
+  status: "verified";
+  domain: string;
+};
+
 type T7020765e60 = {
   query: string;
   jurisdiction: T31e574e5a2;
@@ -34290,7 +34838,110 @@ type T708bf95724 = {
   readonly message: string;
 };
 
+type T70b4858b6c = "keep" | "inline" | "translate";
+
 type T70d0bdd159 = "daily" | "weekly" | "monthly";
+
+type T719fc86199 = {
+  target: {
+    entityId: T9a509045a7;
+    fileFieldId: T1c7a854487;
+  };
+  perspective: {
+    type: "neutral";
+  } | {
+    name: T432e07d100;
+    type: "party";
+    role: string;
+  };
+  references: Array<{
+    workspaceId: Teb5c753062;
+    entityId: T9a509045a7;
+    fileFieldId: T1c7a854487;
+  }>;
+  seededPositions: Array<{
+    guidance?: string;
+    issue: string;
+    mode: "extract";
+    ask: {
+      content: T1d7c2dd626;
+      question: string;
+    };
+    enabled: T1bdf39f14a;
+    sourceId: string;
+  } | {
+    check?: {
+      kind: "presence";
+      expectation: T7bcf2fefec;
+    } | {
+      kind: "constraint";
+      condition: stll_conditions_ConditionNode;
+    };
+    guidance?: string;
+    negotiation?: {
+      escalation?: string;
+      rationale?: string;
+      talkingPoints?: Array<string>;
+    };
+    purpose?: string;
+    issue: string;
+    mode: "graded";
+    standard: {
+      source: "tiers";
+      tiers: {
+        acceptable: {
+          ideal?: {
+            clauseVersion?: number;
+            source: "clause";
+            clauseId: string;
+          } | {
+            text: string;
+            source: "inline";
+          };
+          rules: Array<Tfca66e7448>;
+        };
+        fallback: {
+          entries: Array<{
+            label?: string;
+            text: string;
+            id: string;
+          }>;
+        };
+        notAcceptable: {
+          rules: Array<Tfca66e7448>;
+        };
+      };
+    } | {
+      source: "reference";
+      passages: Array<{
+        id: string;
+        workspaceId: string;
+        entityId: string;
+        entityVersionId: string;
+        fileFieldId: string;
+        blockId: string;
+      }>;
+      termKind: T936e2da003;
+    };
+    ask: {
+      derived?: {
+        content: T1d7c2dd626;
+        question: string;
+        rulesHash: string;
+      };
+      mode: "auto";
+    } | {
+      mode: "manual";
+      content: T1d7c2dd626;
+      question: string;
+    };
+    enabled: T1bdf39f14a;
+    severity: Tc35aa9c89d;
+    sourceId: string;
+  }>;
+};
+
+type T7201011666 = "translated" | "bilingual";
 
 type T7201685168 = {
   savedSearchId: T594988174f;
@@ -34328,26 +34979,6 @@ type T73ca6eeca2 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
-
-type T73f271d728 = {
-  source: "tiers";
-  tiers: {
-    acceptable: {
-      ideal?: Td0e4afd336 | T2c788257c8;
-      rules: Array<Tad34918dcf>;
-    };
-    fallback: {
-      entries: Array<T6134405b04>;
-    };
-    notAcceptable: {
-      rules: Array<Tad34918dcf>;
-    };
-  };
-} | {
-  source: "reference";
-  passages: Array<T2f1b6312a1>;
-  termKind: T03c56de23b;
-};
 
 type T74114cb775 = {
   title: string;
@@ -34490,21 +35121,6 @@ type T775e6ec31b = {
   sha256Hex: string;
 };
 
-type T77769e1af9 = {
-  client: (null | {
-    id: T938d9cc2e1;
-    displayName: string;
-  });
-  defaultViewId: (null | Tf962ada343);
-  id: Teb5c753062;
-  name: string;
-  reference: string;
-  clientId: Ta197d6f640;
-  color: T432e07d100;
-  status: T9c6eb40403;
-  lastActivityAt: string;
-};
-
 type T78000c7c99 = {
   name: string;
   source: string;
@@ -34514,16 +35130,11 @@ type T780bacb7ad = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatThread";
 };
 
-type T7870a2de7e = {
-  configured: false;
-  platformFallback: T1bdf39f14a;
-} | {
-  configured: true;
-  apiKeyMasked: string;
-  platformFallback: T1bdf39f14a;
-};
-
 type T7881dfbb44 = "draft" | "approved" | "billed" | "written_off";
+
+type T7886a41b06 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "bilingualTranslationRun";
+};
 
 type T789685d80e = null | (T5d1f74b178 & {
   version: 1;
@@ -34585,6 +35196,15 @@ type T7a92932f06 = {
   description: string;
 };
 
+type T7ac9f30ede = {
+  guidance?: string;
+  issue: string;
+  mode: "extract";
+  ask: Td16c97f5eb;
+  enabled: T1bdf39f14a;
+  sourceId: string;
+} | T5aa2d5db44;
+
 type T7b30d8cb42 = {
   type: "tool-call";
   id: string;
@@ -34616,6 +35236,11 @@ type T7b50fc6047 = {
 } & Te4ad2efe8c;
 
 type T7b52b1c160 = "overview" | "table" | "filesystem" | "kanban" | "calendar" | "timeline" | "avt";
+
+type T7b812a9d2f = {
+  address: string;
+  name: T432e07d100;
+};
 
 type T7bba2468e2 = T2430547df2 | {
   documentPending: T1bdf39f14a;
@@ -34741,6 +35366,8 @@ type T7bba2468e2 = T2430547df2 | {
   fulltext: T432e07d100;
 };
 
+type T7bcf2fefec = "required" | "restricted";
+
 type T7bed1fb5ad = {
   id: T82d2fa2fc8;
   createdBy: T432e07d100;
@@ -34752,7 +35379,7 @@ type T7bed1fb5ad = {
 };
 
 type T7c243e5baa = {
-  id: T6ebb5b60ba;
+  id: T5d41208c2a;
   outcome: ("created" | "existing");
 };
 
@@ -34814,10 +35441,6 @@ type T7d2603043e = null | {
   roomId?: unknown;
 };
 
-type T7d5b6398be = "reference" | "tiers";
-
-type T7d5dbe7dfc = "workspace" | "download";
-
 type T7d9d93bde2 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatMessage";
 };
@@ -34875,9 +35498,7 @@ type T8021ae6e25 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "rateEntry";
 };
 
-type T8091e6bfed = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "anonymizationAllowlistEntry";
-};
+type T80c536d9e5 = "google" | "openrouter" | "openai" | "azure_foundry" | "anthropic" | "bedrock" | "mistral" | "openai_compatible" | "huggingface";
 
 type T80d841ed63 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "property";
@@ -34892,6 +35513,8 @@ type T8138772153 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type T81f09c4ac1 = "user" | "proposed" | "detected";
 
 type T81fff8a53f = "medium" | "high" | "low";
 
@@ -34958,8 +35581,6 @@ type T8378cc1469 = {
   output?: unknown;
 } & Te4ad2efe8c;
 
-type T837d6a04e7 = "api-key" | "user-agent";
-
 type T8387742e1c = {
   query: string;
   results: Array<{
@@ -34970,9 +35591,13 @@ type T8387742e1c = {
   }>;
 };
 
-type T84093f1fc9 = {
+type T83dd62c4c4 = {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  entityVersionId: string;
+  fileFieldId: string;
   blockId: string;
-  text: string;
 };
 
 type T846b0784de = {
@@ -35033,6 +35658,16 @@ type T85823ecceb = {
   };
 };
 
+type T85a92a070d = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentReviewFinding";
+};
+
+type T85e9f65dcb = {
+  kind: "redLine";
+  ruleId: string;
+  text: string;
+};
+
 type T8649aae095 = {
   skillId: T7fc3acf5ac;
   skillName: string;
@@ -35059,6 +35694,12 @@ type T86963b5528 = {
 
 type T8696d09f3f = {
   workspaceId: string;
+};
+
+type T87016d2e67 = {
+  clauseVersion?: number;
+  source: "clause";
+  clauseId: string;
 };
 
 type T87284c6919 = {
@@ -35122,14 +35763,21 @@ type T881614816e = "year" | "month" | "week" | "day";
 
 type T8854c1a08e = "email" | "displayName" | "firstName" | "lastName" | "organizationName" | "address" | "phone" | "addressStreet" | "addressCity" | "addressPostalCode" | "addressCountry" | "registrationNumber" | "taxId" | "iban" | "bic" | "dataBox";
 
+type T885b6f310f = {
+  spf: T14a6119a55;
+  dkim: T14a6119a55;
+  dmarc: T14a6119a55;
+  alignedIdentifier: T432e07d100;
+} & {
+  address: string;
+};
+
 type T888302d360 = {
   type: "date";
   version: 1;
 };
 
 type T888e660ed8 = "task" | "deadline";
-
-type T88eaf34343 = "translated" | "bilingual";
 
 type T88f3735ffa = {
   country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
@@ -35182,6 +35830,11 @@ type T8a3caedfda = {
     question: string;
     answer: string;
   }>;
+};
+
+type T8af9afbfaa = {
+  text: string;
+  id: string;
 };
 
 type T8b5d0b1391 = {
@@ -35248,7 +35901,11 @@ type T8dc306df33 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListGenerationCandidate";
 };
 
+type T8df8b40007 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
+
 type T8e2a10c549 = "other" | "opposing_party" | "opposing_counsel" | "co_counsel" | "witness" | "expert_witness" | "third_party" | "judge" | "mediator";
+
+type T8e5a2589a3 = "AR" | "BG" | "DE" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "LT" | "LV" | "NL" | "PL" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "ZH" | "CS" | "DA" | "EN-GB" | "EL" | "JA" | "KO" | "NB" | "PT-PT" | "UK" | "ZH-HANS" | "ZH-HANT" | "EN-US" | "PT-BR" | "ES-419";
 
 type T8e8f463ae0 = "error" | "warning";
 
@@ -35257,9 +35914,17 @@ type T8f20de5010 = {
   reason: string;
 };
 
-type T8f8a3ed733 = {
-  kind: "constraint";
-  condition: stll_conditions_ConditionNode;
+type T8f393d77f4 = {
+  role: string;
+  name: T432e07d100;
+};
+
+type T8f3b89135e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "auditLog";
+};
+
+type T8f903df76e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "workspaceView";
 };
 
 type T8fa1810fff = {
@@ -35327,10 +35992,6 @@ type T916c6c1f8b = {
   }>;
 };
 
-type T92357156ac = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentReviewFinding";
-};
-
 type T92b1e52bb0 = {
   title: string;
   markdown: string;
@@ -35343,6 +36004,8 @@ type T92db42caf4 = null | {
   country: T432e07d100;
   textAddress: T432e07d100;
 };
+
+type T936e2da003 = "language" | "presence" | "parameter" | "enumeration";
 
 type T9372e54e9c = {
   readonly input: Ta2cb9f1c54;
@@ -35415,6 +36078,10 @@ type T95752d89bb = string | {
   message: string;
 };
 
+type T95767817af = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "reportExport";
+};
+
 type T958623bd0c = {
   type: "tool-call";
   id: string;
@@ -35424,10 +36091,6 @@ type T958623bd0c = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
-
-type T95a4a01f59 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "docxSuggestion";
-};
 
 type T960ebb008d = {
   readonly "~standard": {
@@ -35508,8 +36171,6 @@ type T96412b8318 = {
   id: Td90f3cb611;
 };
 
-type T97123e865d = "failed" | "cancelled" | "running" | "completed" | "queued";
-
 type T97154a1463 = {
   results: Array<{
     index: number;
@@ -35522,22 +36183,9 @@ type T97154a1463 = {
   }>;
 };
 
-type T971aac1483 = {
-  chat: Tab86be84f5;
-  pdf: Tab86be84f5;
-  fast: Tab86be84f5;
-  reasoning: Tab86be84f5;
-};
-
 type T97430ff0f7 = null | Array<string>;
 
-type T976b70d646 = {
-  deletedAt: T432e07d100;
-  id: string;
-  image: T432e07d100;
-  name: T432e07d100;
-  type: "user";
-};
+type T97b6eaa59a = "free" | "pro";
 
 type T97bcfef591 = {
   readonly value: T1e5042e1c4;
@@ -35557,7 +36205,7 @@ type T980f887156 = {
 };
 
 type T9871c1e63a = {
-  viewId: Tf962ada343;
+  viewId: T8f903df76e;
 };
 
 type T98812161df = {
@@ -35634,18 +36282,16 @@ type T9a509045a7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "entity";
 };
 
-type T9a881e7ede = "AR" | "BG" | "DE" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "LT" | "LV" | "NL" | "PL" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "ZH" | "CS" | "DA" | "EN-GB" | "EL" | "JA" | "KO" | "NB" | "PT-PT" | "UK" | "ZH-HANS" | "ZH-HANT" | "EN-US" | "PT-BR" | "ES-419";
-
 type T9ab85afc3e = {
   name: string;
   source: string;
 };
 
+type T9b94653bb5 = "companies-house" | "denue" | "edgar";
+
 type T9c01826163 = {
   readonly __safeIdType?: "workspace";
 };
-
-type T9c6eb40403 = "active" | "archived" | "deleting";
 
 type T9ccef839a9 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateCategory";
@@ -35659,9 +36305,16 @@ type T9cedc91781 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "folioCollabRoom";
 };
 
+type T9d50a02575 = null | Tb0f9859073;
+
 type T9d6eb42931 = {
   readonly type: "workspace";
   readonly id: stll_api_contract_SafeId<"workspace">;
+};
+
+type T9d79bd0ace = {
+  items: Array<T7ac9f30ede>;
+  version: 3;
 };
 
 type T9d9802fdcb = {
@@ -36153,20 +36806,6 @@ type T9e7bea1f40 = {
   name: string;
 };
 
-type T9f51aef7c3 = {
-  subject: string;
-  reason: {
-    kind: "deal-specific-value";
-  } | {
-    kind: "structural";
-  } | {
-    kind: "lower-weight";
-  } | {
-    kind: "other";
-    text: string;
-  };
-};
-
 type T9f9de186a2 = {
   type: "tool-call";
   id: string;
@@ -36216,26 +36855,13 @@ type Ta130d275b4 = {
 
 type Ta189dcf2fe = "timeout" | "client-disconnected";
 
-type Ta197d6f640 = null | T938d9cc2e1;
-
 type Ta24f5c3087 = {
   readonly input: T2c9a2b8de1;
   readonly output: Tf79cee9ca8;
 };
 
-type Ta258bd6696 = "required" | "restricted";
-
 type Ta273032f6f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillResource";
-};
-
-type Ta276f1b49a = {
-  workspaceId: Tb9596e18eb;
-  runId: T61122d2719;
-};
-
-type Ta28b1867ef = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "workspaceContact";
 };
 
 type Ta291bca56d = "yellow" | "green" | "sky" | "violet" | "red";
@@ -36286,6 +36912,8 @@ type Ta3d11202d8 = {
     marginRightPt: number;
   };
 };
+
+type Ta3ea552bc4 = "workspace" | "download";
 
 type Ta3eb1f794b = {
   type: "tool-call";
@@ -36352,26 +36980,25 @@ type Ta7d8e78679 = {
   folderRef: string;
 };
 
+type Ta87ba949ea = "global" | "ch" | "eu";
+
 type Ta8b78a42c5 = "unknown" | "disabled" | "current" | "delayed" | "stalled";
 
 type Ta95272d8d2 = {
   workspaceId: string;
 };
 
-type Taa1b35a86b = "companies-house" | "denue" | "edgar";
-
 type Taa8bbb5904 = {
   date: string;
 };
 
+type Taaceee9a83 = null | T1c7a854487;
+
+type Tab12c777f3 = "open" | "accepted" | "dismissed";
+
 type Tab56697f3b = null | "email" | "manual" | "calendar" | "infosoud" | "import" | "api";
 
 type Tab67d2a75b = null | T8ff44a5c87;
-
-type Tab86be84f5 = {
-  provider: Tf822306fb6;
-  modelId: string;
-};
 
 type Tab9b292a50 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListClaim";
@@ -36386,8 +37013,6 @@ type Tabdd33f23f = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
-
-type Tac2a3266c6 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
 
 type Tac5e0997d1 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "expense";
@@ -36421,11 +37046,6 @@ type Tad1c33f9ec = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
-
-type Tad34918dcf = {
-  text: string;
-  id: string;
-};
 
 type Tad35539127 = {
   type: "tool-call";
@@ -36471,105 +37091,6 @@ type Tad8a18f823 = {
   readonly message: string;
 };
 
-type Tae327b658e = {
-  target: {
-    entityId: T9a509045a7;
-    fileFieldId: T1c7a854487;
-  };
-  perspective: {
-    type: "neutral";
-  } | {
-    name: T432e07d100;
-    type: "party";
-    role: string;
-  };
-  references: Array<{
-    workspaceId: Teb5c753062;
-    entityId: T9a509045a7;
-    fileFieldId: T1c7a854487;
-  }>;
-  seededPositions: Array<{
-    guidance?: string;
-    issue: string;
-    mode: "extract";
-    ask: {
-      content: T0c8f4cf1e2;
-      question: string;
-    };
-    enabled: T1bdf39f14a;
-    sourceId: string;
-  } | {
-    check?: {
-      kind: "presence";
-      expectation: Ta258bd6696;
-    } | {
-      kind: "constraint";
-      condition: stll_conditions_ConditionNode;
-    };
-    guidance?: string;
-    negotiation?: {
-      escalation?: string;
-      rationale?: string;
-      talkingPoints?: Array<string>;
-    };
-    purpose?: string;
-    issue: string;
-    mode: "graded";
-    standard: {
-      source: "tiers";
-      tiers: {
-        acceptable: {
-          ideal?: {
-            clauseVersion?: number;
-            source: "clause";
-            clauseId: string;
-          } | {
-            text: string;
-            source: "inline";
-          };
-          rules: Array<Tebf70ccf13>;
-        };
-        fallback: {
-          entries: Array<{
-            label?: string;
-            text: string;
-            id: string;
-          }>;
-        };
-        notAcceptable: {
-          rules: Array<Tebf70ccf13>;
-        };
-      };
-    } | {
-      source: "reference";
-      passages: Array<{
-        id: string;
-        workspaceId: string;
-        entityId: string;
-        entityVersionId: string;
-        fileFieldId: string;
-        blockId: string;
-      }>;
-      termKind: T03c56de23b;
-    };
-    ask: {
-      derived?: {
-        content: T0c8f4cf1e2;
-        question: string;
-        rulesHash: string;
-      };
-      mode: "auto";
-    } | {
-      mode: "manual";
-      content: T0c8f4cf1e2;
-      question: string;
-    };
-    enabled: T1bdf39f14a;
-    severity: T0a46fb6ba4;
-    sourceId: string;
-  }>;
-};
-
 type Tae3e80d4df = {
   fileNumber: string;
   court: T432e07d100;
@@ -36607,6 +37128,8 @@ type Taf8c16946a = {
   state: Tf85ca6744e;
   output?: any;
 } & Te4ad2efe8c;
+
+type Tafa5c1e05b = "active" | "deleted";
 
 type Tafda8a9ee4 = (T27402211cc & {
   type: T219ebda4a4;
@@ -36673,6 +37196,14 @@ type Tb09958ae39 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "taskAssignee";
 };
 
+type Tb0a345f6fe = {
+  workspaceId: Tb9596e18eb;
+};
+
+type Tb0f9859073 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "flowDefinition";
+};
+
 type Tb100969417 = {
   type: "tool-call";
   id: string;
@@ -36682,6 +37213,13 @@ type Tb100969417 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
+
+type Tb126aa754f = null | T65731e9912;
+
+type Tb12e5afa18 = {
+  instanceProvisioned: T1bdf39f14a;
+  decisionInstanceProvisioned: T1bdf39f14a;
+};
 
 type Tb13bfff6df = {
   readonly input: Tf87d0b824c;
@@ -36700,21 +37238,18 @@ type Tb183ddee4b = {
 
 type Tb1a0b480e2 = "person" | "company-id" | "tax-id";
 
-type Tb1ed7519f1 = {
-  open: number;
-  accepted: number;
-  dismissed: number;
-};
-
 type Tb1fcbf5ca4 = {
   items: Array<Te3ba023acf>;
   nextCursor: T432e07d100;
   limit: number;
 };
 
-type Tb26813d017 = {
-  instanceProvisioned: T1bdf39f14a;
-  decisionInstanceProvisioned: T1bdf39f14a;
+type Tb28832bdc0 = {
+  pageNumber: number;
+  yMin: number;
+  xMin: number;
+  yMax: number;
+  xMax: number;
 };
 
 type Tb2ae6e53e6 = {
@@ -36729,17 +37264,11 @@ type Tb2c7942b11 = {
   spisZn: string;
 };
 
-type Tb2d33c80ac = "draft" | "approved" | "ephemeral";
-
 type Tb368e5ae56 = {
   status: "ready";
 };
 
 type Tb3a8582d6b = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
-
-type Tb47b7b98fd = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "flowDefinition";
-};
 
 type Tb4bdb2e8b2 = "cancelled" | "disconnected" | "budget-exceeded" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-changed" | "tab-closed" | "timed-out" | "unsupported-page";
 
@@ -36766,12 +37295,6 @@ type Tb5eb32574f = {
   output?: unknown;
 } & Te4ad2efe8c;
 
-type Tb60a03a607 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "reportExport";
-};
-
-type Tb60b7c14cd = "failed" | "running" | "completed" | "queued";
-
 type Tb62d3ee375 = "Not Found" | Tc642053948;
 
 type Tb63d3fa983 = {
@@ -36789,44 +37312,9 @@ type Tb8b5b0c6b3 = {
   message: string;
 };
 
-type Tb8d6cfe011 = {
-  version: 1;
-  blocks: Array<{
-    kind: "pdf-bates";
-    fileFieldId: T1c7a854487;
-    statements: Array<{
-      text: string;
-      citations: Array<{
-        bates: string;
-        pageNumber: number;
-      }>;
-    }>;
-  } | {
-    kind: "docx-folio";
-    fileFieldId: T1c7a854487;
-    statements: Array<{
-      text: string;
-      citations: Array<{
-        citationStatus: "verified";
-        blockId: string;
-        text: string;
-      } | {
-        citationStatus: "unverified";
-        text: string;
-      }>;
-    }>;
-  } | {
-    kind: "playbook-verdict";
-    rationale: string;
-    matchedRef?: Te831c71c90 | Tc0c55e9cf5;
-  } | {
-    kind: "decision-passage";
-    anchorId: string;
-    excerpt: string;
-  }>;
-};
-
 type Tb8da856bb4 = null | "reviewed" | "disputed";
+
+type Tb8e2b01fba = "table" | "paragraph" | "heading" | "listItem";
 
 type Tb907617eea = {
   type: "tool-call";
@@ -36839,6 +37327,8 @@ type Tb907617eea = {
 } & Te4ad2efe8c;
 
 type Tb9596e18eb = string & valibot_Brand<"SafeId"> & T9c01826163;
+
+type Tb95e2630ec = null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "playbook_check_failed" | "reference_check_failed" | "enqueue_failed";
 
 type Tb985d60808 = {
   operations: Array<unknown>;
@@ -36859,8 +37349,6 @@ type Tba62cffc90 = {
   state: Tf85ca6744e;
   output?: T66a06dbd45;
 } & Te4ad2efe8c;
-
-type Tba98ee81e0 = "table" | "paragraph" | "heading" | "listItem";
 
 type Tba9914ae60 = {
   readonly input: {
@@ -36910,10 +37398,6 @@ type Tbe97c83005 = {
   output?: unknown;
 } & Te4ad2efe8c;
 
-type Tbecb65774d = {
-  workspaceId: Tb9596e18eb;
-};
-
 type Tbf94b8914e = null | "issue" | "task" | "fact" | "requirement" | "event";
 
 type Tbf9ef52639 = {
@@ -36935,15 +37419,13 @@ type Tbfcb6ae0d3 = {
   readonly issues?: undefined;
 };
 
+type Tc0a0b9eaf7 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "justification";
+};
+
 type Tc0af96215a = {
   readonly value: T846b0784de;
   readonly issues?: undefined;
-};
-
-type Tc0c55e9cf5 = {
-  kind: "redLine";
-  ruleId: string;
-  text: string;
 };
 
 type Tc13989dabb = {
@@ -36961,17 +37443,19 @@ type Tc1a2e5b1a7 = {
   ":workspaceId": T6d90fb7f32;
 };
 
+type Tc23d7333db = "draft" | "approved" | "ephemeral";
+
 type Tc2754df8d9 = {
   documentTypeId: T307eb7347f;
 };
-
-type Tc2ec057ae0 = "keep" | "inline" | "translate";
 
 type Tc3216d78f8 = "none" | "br_cpf_cnpj";
 
 type Tc33c7b536f = {
   documentId: Td90f3cb611;
 };
+
+type Tc35aa9c89d = "medium" | "high" | "low" | "blocker";
 
 type Tc3a09169de = {
   type: "tool-call";
@@ -37192,21 +37676,6 @@ type Tc81f44a4a0 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "user";
 };
 
-type Tc82c428863 = {
-  kind: "ai";
-  name: string;
-  prompt: string;
-  includeDocuments: T1bdf39f14a;
-} | {
-  kind: "review-gate";
-  name: string;
-  instructions: string;
-} | {
-  kind: "create-document";
-  name: string;
-  documentTitle: string;
-};
-
 type Tc83d8b9f37 = {
   skillName: string;
   path: string;
@@ -37275,6 +37744,10 @@ type Tcc80affb43 = {
   defaultFormatSource: (null | "organization" | "user");
 };
 
+type Tccac6833b7 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "anonymizationAllowlistEntry";
+};
+
 type Tccbcb316fa = {
   url: string;
   title?: undefined | string;
@@ -37306,18 +37779,32 @@ type Tce28b0606f = {
 
 type Td06876de99 = T24da1e86c5 | T8cd5b388a4;
 
+type Td0d1507e00 = {
+  client: (null | {
+    id: T938d9cc2e1;
+    displayName: string;
+  });
+  defaultViewId: (null | T8f903df76e);
+  id: Teb5c753062;
+  name: string;
+  reference: string;
+  clientId: Tdd73eae172;
+  color: T432e07d100;
+  status: T4410deedb0;
+  lastActivityAt: string;
+};
+
 type Td0d20fc706 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawJudge";
 };
 
-type Td0e4afd336 = {
-  clauseVersion?: number;
-  source: "clause";
-  clauseId: string;
-};
-
 type Td120f37682 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "mcpUserConnection";
+};
+
+type Td16c97f5eb = {
+  content: Tfcce4260b1;
+  question: string;
 };
 
 type Td1c0c1b0e3 = {
@@ -37343,10 +37830,6 @@ type Td23efda0c9 = null | stll_conditions_CompareNode | stll_conditions_Predicat
 
 type Td29492c5e7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListColumn";
-};
-
-type Td2977c7b72 = {
-  workspaceId: Tb9596e18eb;
 };
 
 type Td2f2107b0f = "failed" | "cancelled" | "review" | "running" | "queued" | "committed";
@@ -37380,6 +37863,8 @@ type Td4b7fddf97 = {
   readonly issues?: undefined;
 };
 
+type Td4fc00dc44 = "search" | "fetch";
+
 type Td50e30d0f1 = {
   readonly value: T0bc71347dc;
   readonly issues?: undefined;
@@ -37389,6 +37874,8 @@ type Td519ee5a29 = {
   countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
   isPrimary: T1bdf39f14a;
 };
+
+type Td5685e61f2 = "pending" | "applied";
 
 type Td57aa52c29 = {
   status: "connecting";
@@ -37448,6 +37935,10 @@ type Td7e844e938 = {
 
 type Td86049e571 = null | stll_money_CentsAmount;
 
+type Td884408413 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "docxSuggestion";
+};
+
 type Td8b1ef5d5f = "date" | "text" | "person" | "file" | "single-select" | "multi-select" | "int" | "money";
 
 type Td9037df773 = {
@@ -37461,15 +37952,22 @@ type Td90f3cb611 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legislationDocument";
 };
 
+type Td93601a5a5 = {
+  chat: T11114dc572;
+  pdf: T11114dc572;
+  fast: T11114dc572;
+  reasoning: T11114dc572;
+};
+
 type Td9b2117be5 = {
   workspaceId: string;
 };
 
+type Tda543c9cf7 = "failed" | "running" | "completed" | "queued";
+
 type Tdaa282e677 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalReaderAnnotation";
 };
-
-type Tdb872dbe7d = null | T1c7a854487;
 
 type Tdbc99a28d8 = {
   type: "tool-call";
@@ -37633,6 +38131,8 @@ type Tdd30a41adc = {
   currency: T432e07d100;
 };
 
+type Tdd73eae172 = null | T938d9cc2e1;
+
 type Tdd7653bfae = {
   neutral: number;
   negative: number;
@@ -37650,6 +38150,12 @@ type Tdda1650864 = {
 type Tddcaa6c051 = {
   path: string;
   message: string;
+};
+
+type Tde566c04a0 = {
+  open: number;
+  accepted: number;
+  dismissed: number;
 };
 
 type Tde69c6096b = {
@@ -37710,8 +38216,6 @@ type Tde6b741d2c = {
   output?: unknown;
 } & Te4ad2efe8c;
 
-type Tdf3afab53d = null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "playbook_check_failed" | "reference_check_failed" | "enqueue_failed";
-
 type Tdf8a0dc6ac = T8cd5b388a4 | (T24da1e86c5 & {
   readonly truncated: T1bdf39f14a;
 }) | {
@@ -37720,22 +38224,15 @@ type Tdf8a0dc6ac = T8cd5b388a4 | (T24da1e86c5 & {
   readonly omitted: number;
 };
 
-type Te078108f79 = "open" | "accepted" | "dismissed";
-
-type Te08ba39d3b = {
-  version: 1;
-  boxes: Array<Tfccf1c1167>;
-};
-
 type Te1221ee9e8 = {
   success: false;
   message: string;
   errors?: undefined | Array<Tf953808cbe>;
 };
 
-type Te18c7397cc = {
-  content: Tfcce4260b1;
-  question: string;
+type Te14e6e8fb7 = {
+  text: string;
+  id: string;
 };
 
 type Te1e0bd9183 = {
@@ -37762,21 +38259,11 @@ type Te1e0bd9183 = {
   decisions: number;
 };
 
-type Te27c9d3a2b = {
-  workspaceId: Tb9596e18eb;
-};
-
 type Te287bedd42 = "organization" | "person";
 
 type Te2e7aaef1d = {
   readonly value: T381fa8ea96;
   readonly issues?: undefined;
-};
-
-type Te2ec8e0b17 = null | T6ebb5b60ba;
-
-type Te350a1ab11 = {
-  workspaceId: Tb9596e18eb;
 };
 
 type Te35800633c = {
@@ -37917,6 +38404,13 @@ type Te73195d9c3 = {
   noteId: number;
 };
 
+type Te756937605 = null | {
+  text: string;
+  value: T688f6f1190;
+  unit: T432e07d100;
+  citation: T52485bfcc5;
+};
+
 type Te802d84b37 = {
   type: "tool-call";
   id: string;
@@ -37926,12 +38420,6 @@ type Te802d84b37 = {
   state: Tf85ca6744e;
   output?: unknown;
 } & Te4ad2efe8c;
-
-type Te831c71c90 = {
-  kind: "fallback";
-  label?: string;
-  text: string;
-};
 
 type Te8478104bf = "Bad Gateway" | {
   code?: string;
@@ -37985,10 +38473,6 @@ type Te993ddb640 = {
   output?: unknown;
 } & Te4ad2efe8c;
 
-type Tea019afe5d = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "justification";
-};
-
 type Tea3eb4808d = {
   folder: {
     folderRef: string;
@@ -38028,8 +38512,8 @@ type Tea3eb4808d = {
   }>;
 };
 
-type Teb3fcd8ef4 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentReviewRun";
+type Teac20fb6dd = {
+  workspaceId: Tb9596e18eb;
 };
 
 type Teb4507dfaa = "draft" | "approved";
@@ -38075,40 +38559,6 @@ type Tebdd535303 = {
 
 type Tebea30474d = "all" | "columns";
 
-type Tebf70ccf13 = {
-  text: string;
-  id: string;
-};
-
-type Tec60471056 = {
-  type: "file";
-  version: 1;
-} | {
-  type: "text";
-  version: 1;
-} | {
-  type: T7985261e0e;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: T432e07d100;
-} | {
-  type: "date";
-  version: 1;
-} | {
-  type: "int";
-  version: 1;
-} | {
-  type: "money";
-  version: 1;
-  currency: T432e07d100;
-} | {
-  type: "person";
-  version: 1;
-};
-
 type Tec7940d497 = {
   kind: "firm";
   field: "name";
@@ -38130,8 +38580,6 @@ type Tede2d5a69f = {
   id: string;
 };
 
-type Teef0e50364 = "manual" | "schedule" | "file-upload";
-
 type Tef51a766c6 = {
   subagents: Array<{
     task: string;
@@ -38146,6 +38594,10 @@ type Tefbda21c4c = "draft" | "finalized" | "sent" | "paid" | "void";
 type Tefd05507c2 = "user" | "system" | "assistant";
 
 type Teff106c9af = null | false | true;
+
+type Tf047069c7d = {
+  workspaceId: Tb9596e18eb;
+};
 
 type Tf0ef540b72 = {
   readonly input: Record<never, never>;
@@ -38187,13 +38639,33 @@ type Tf272474a81 = {
   type: "timeline";
 };
 
+type Tf2819b9961 = "Not Found" | {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tddcaa6c051>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T79fba9c913;
+  error?: string;
+  claim?: T6662e6acc7;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T196b4403fb>;
+};
+
 type Tf38d7a3340 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clauseCategory";
 };
 
 type Tf4ac35b786 = {
   version: 1;
-  id: Tf962ada343;
+  id: T8f903df76e;
   name: string;
   layout: T75ecb21f44;
   position: number;
@@ -38281,8 +38753,6 @@ type Tf79cee9ca8 = {
   action: "go-back";
 };
 
-type Tf7b6a1b7cb = "docx" | "xlsx" | "csv";
-
 type Tf7f2d88b62 = {
   url: string;
   title?: undefined | string;
@@ -38299,8 +38769,6 @@ type Tf7f6807a9c = {
   ref: string;
   role: string;
 };
-
-type Tf822306fb6 = "google" | "openrouter" | "openai" | "azure_foundry" | "anthropic" | "bedrock" | "mistral" | "openai_compatible" | "huggingface";
 
 type Tf827555920 = {
   name: string;
@@ -38356,10 +38824,6 @@ type Tf953808cbe = {
   line?: undefined | number;
 };
 
-type Tf962ada343 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "workspaceView";
-};
-
 type Tf96cb8149e = {
   readonly error: "Not Found";
 };
@@ -38369,38 +38833,8 @@ type Tf9791990e8 = {
   readonly issues?: undefined;
 };
 
-type Tf9ac86bc44 = {
-  text: string;
-  id: string;
-};
-
-type Tf9d14dced5 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "anonymizationBlacklistEntry";
-};
-
-type Tf9d55cf19d = {
-  check?: T4c3f591341 | T8f8a3ed733;
-  guidance?: string;
-  negotiation?: T62188807d3;
-  purpose?: string;
-  issue: string;
-  mode: "graded";
-  standard: T73f271d728;
-  ask: {
-    derived?: {
-      content: Tfcce4260b1;
-      question: string;
-      rulesHash: string;
-    };
-    mode: "auto";
-  } | {
-    mode: "manual";
-    content: Tfcce4260b1;
-    question: string;
-  };
-  enabled: T1bdf39f14a;
-  severity: T0a46fb6ba4;
-  sourceId: string;
+type Tf9882e3602 = {
+  workspaceId: Tb9596e18eb;
 };
 
 type Tfa384bd983 = {
@@ -38420,6 +38854,11 @@ type Tfb9effd8c9 = {
   eli?: undefined | false | true;
 };
 
+type Tfca66e7448 = {
+  text: string;
+  id: string;
+};
+
 type Tfcce4260b1 = {
   type: "file";
   version: 1;
@@ -38430,23 +38869,6 @@ type Tfcce4260b1 = {
 } | {
   type: "person";
   version: 1;
-};
-
-type Tfccf1c1167 = {
-  pageNumber: number;
-  yMin: number;
-  xMin: number;
-  yMax: number;
-  xMax: number;
-};
-
-type Tfcf09c4c62 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentTranslationRun";
-};
-
-type Tfd3c8010a2 = {
-  modelId: string;
-  provider: Ta0f85a4b95;
 };
 
 type Tfd3efc6c3f = {
@@ -38509,6 +38931,43 @@ type Tfe81175840 = {
   requiredFields?: Array<T196b4403fb>;
 } | {
   readonly message: "Legislation document not found";
+};
+
+type Tfeedd6cbe6 = {
+  version: 1;
+  blocks: Array<{
+    kind: "pdf-bates";
+    fileFieldId: T1c7a854487;
+    statements: Array<{
+      text: string;
+      citations: Array<{
+        bates: string;
+        pageNumber: number;
+      }>;
+    }>;
+  } | {
+    kind: "docx-folio";
+    fileFieldId: T1c7a854487;
+    statements: Array<{
+      text: string;
+      citations: Array<{
+        citationStatus: "verified";
+        blockId: string;
+        text: string;
+      } | {
+        citationStatus: "unverified";
+        text: string;
+      }>;
+    }>;
+  } | {
+    kind: "playbook-verdict";
+    rationale: string;
+    matchedRef?: T2613d339fd | T85e9f65dcb;
+  } | {
+    kind: "decision-passage";
+    anchorId: string;
+    excerpt: string;
+  }>;
 };
 
 type Tff67652b63 = string & valibot_Brand<"SafeId"> & {

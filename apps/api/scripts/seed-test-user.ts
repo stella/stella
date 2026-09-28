@@ -20,7 +20,7 @@
 
 import { panic } from "better-result";
 import { and, eq, inArray, or } from "drizzle-orm";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
@@ -477,7 +477,12 @@ async function seed() {
   mkdirSync(outDir, { recursive: true });
 
   const outPath = path.resolve(outDir, "storage-state.json");
-  await Bun.write(outPath, JSON.stringify(storageState, null, 2));
+  // The cookie is a live owner session: readable by this user only. `mode`
+  // applies on creation, so an older world-readable file is tightened too.
+  writeFileSync(outPath, JSON.stringify(storageState, null, 2), {
+    mode: 0o600,
+  });
+  chmodSync(outPath, 0o600);
   console.log("Wrote storage state to:", outPath);
 
   console.log("\nDone. Playwright MCP will auto-load the");

@@ -62,6 +62,9 @@ describe("legacyActivityCategory", () => {
     expect(
       legacyActivityCategory(AUDIT_RESOURCE_TYPE.WORKSPACE, null, false),
     ).toBe("matter");
+    expect(
+      legacyActivityCategory(AUDIT_RESOURCE_TYPE.CORRESPONDENCE, null, false),
+    ).toBe("correspondence");
   });
 
   test("keeps legacy task version and field events in Tasks", () => {
@@ -229,6 +232,11 @@ describe("activity target sources", () => {
     );
 
     expect(automationTargets).toEqual([AUDIT_RESOURCE_TYPE.FLOW_RUN]);
+    expect(
+      ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[
+        AUDIT_RESOURCE_TYPE.CORRESPONDENCE
+      ],
+    ).toBe("correspondence");
     expect(
       ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE[
         AUDIT_RESOURCE_TYPE.DOCUMENT_REVIEW_RUN
