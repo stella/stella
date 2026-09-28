@@ -1,14 +1,17 @@
+type GeneratorCheck =
+  | { check: readonly string[]; checkedBy?: never; unchecked?: never }
+  | { check: null; checkedBy: string; unchecked?: never }
+  | { check: null; checkedBy?: never; unchecked: string };
+
 export type Generator = {
   id: string;
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
-  check: readonly string[] | null;
-  checkedBy?: string;
   autofix: boolean;
   after: readonly string[];
-};
+} & GeneratorCheck;
 
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
@@ -34,12 +37,14 @@ export const GENERATORS = [
       "docs/capability-coverage.md",
     ],
     inputs: [
+      "apps/api/src/**",
       "apps/api/src/handlers/**",
       "apps/api/src/mcp/**",
       "apps/api/src/lib/capability-transport*",
       "apps/api/scripts/export-capability-catalog.ts",
       "apps/api/scripts/lib/**",
       "packages/cli/src/**",
+      "packages/**",
       ".oxfmtrc.json",
     ],
     write: ["bun", "apps/api/scripts/export-capability-catalog.ts"],
@@ -112,10 +117,12 @@ export const GENERATORS = [
     id: "mcp-surface",
     outputs: ["apps/api/mcp-surface-baseline.json"],
     inputs: [
+      "apps/api/src/**",
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
       "apps/api/scripts/mcp-surface-baseline.ts",
       "packages/api-contract/**",
+      "packages/**",
     ],
     write: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--write"],
     check: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--check"],
@@ -398,7 +405,8 @@ export const GENERATORS = [
     inputs: ["apps/desktop/src-tauri/src/types.rs"],
     write: ["bun", "--filter", "@stll/desktop", "rpc:generate"],
     check: null,
-    checkedBy: "Test",
+    unchecked:
+      "Desktop Rust tests exercise the binding; no dedicated byte check runs in CI",
     autofix: false,
     after: [],
   },
@@ -435,7 +443,7 @@ export const GENERATORS = [
     ],
     write: ["bun", "--filter", "@stll/template-packs", "generate"],
     check: null,
-    checkedBy: "Test",
+    unchecked: "Package tests check both manifests without a dedicated CI step",
     autofix: false,
     after: [],
   },
@@ -481,7 +489,8 @@ export const GENERATORS = [
     inputs: ["scripts/generate-snowball-stemmers.ts"],
     write: ["bun", "run", "generate:snowball-stemmers", "--write"],
     check: null,
-    checkedBy: "Test",
+    unchecked:
+      "Conformance tests exercise the stemmers without regenerating them in CI",
     autofix: false,
     after: [],
   },
@@ -491,7 +500,7 @@ export const GENERATORS = [
     inputs: ["packages/infosoud/scripts/extract-codes.ts"],
     write: ["bun", "--filter", "@stll/infosoud", "extract:codes"],
     check: null,
-    checkedBy: "Test",
+    unchecked: "Network extraction has no offline CI check",
     autofix: false,
     after: [],
   },
@@ -501,7 +510,8 @@ export const GENERATORS = [
     inputs: ["packages/mojibake/scripts/extract-exemplars.ts"],
     write: ["bun", "--filter", "@stll/mojibake", "extract:exemplars"],
     check: null,
-    checkedBy: "Test",
+    unchecked:
+      "Package tests check the pinned exemplar table without a dedicated CI step",
     autofix: false,
     after: [],
   },
@@ -517,7 +527,8 @@ export const GENERATORS = [
     ],
     write: ["bun", "--cwd=apps/api", "run", "gen:chat-transcripts"],
     check: null,
-    checkedBy: "Test",
+    unchecked:
+      "Integration tests exercise recordings without a dedicated CI output check",
     autofix: false,
     after: [],
   },
@@ -535,8 +546,7 @@ export const GENERATORS = [
     ],
     inputs: [".ai/manifest.json", ".ai/local/**", ".ai/shared"],
     write: ["bun", "run", "sync-ai"],
-    check: null,
-    checkedBy: "Check AI prompt sync",
+    check: ["bash", ".ai/shared/scripts/sync-ai-skills.sh", "--check", "."],
     autofix: false,
     after: [],
   },

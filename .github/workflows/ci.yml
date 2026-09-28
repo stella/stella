@@ -334,8 +334,10 @@ jobs:
                 web_build_required=true
                 ;;
             esac
+            # The route-tree generator reads the web package script and config
+            # as well as the route sources; all must trigger its drift guard.
             case "$file" in
-              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/src/routeTree.gen.ts|bun.lock)
+              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/package.json|apps/web/src/routeTree.gen.ts|bun.lock)
                 route_tree_required=true
                 ;;
             esac
@@ -984,17 +986,19 @@ jobs:
         # docs/module-ownership.md is rendered from the same table, so this
         # check fails when the doc is stale, an id repeats, or a path a row
         # names has moved. Regenerate: `bun scripts/ownership.ts --write`.
-        run: bun run check:module-ownership
+        run: bun scripts/ownership.ts --check
 
       - name: Design token docs
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # DESIGN.md's semantic token table and font stack are rendered from
         # packages/ui/src/styles/theme.css, so a token change that skips the
         # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
-        run: bun run check:design-tokens
+        run: bun scripts/design-tokens-doc.ts --check
 
       - name: Generated files manifest guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Guard A registers tracked generated files; Guard B checks the
+        # manifest entries with offline checks against committed outputs.
         run: |
           bun scripts/generated-files-guard.ts --guard-a
           bun scripts/generated-files-guard.ts --guard-b

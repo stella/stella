@@ -219,6 +219,7 @@ describe("derived-file regeneration boundary", () => {
     ).text();
     const restrictionStep = job.indexOf("- name: Restrict regenerated changes");
     const fetchStep = job.indexOf("- name: Fetch changed paths");
+    const checkoutStep = job.indexOf("- name: Checkout pull request head");
     const planStep = job.indexOf("- name: Match generator inputs");
     const runStep = job.indexOf("- name: Regenerate selected files");
     expect(job).toContain("scripts/autofix-plan.ts plan");
@@ -231,7 +232,13 @@ describe("derived-file regeneration boundary", () => {
       "IFS='|' read -r -a generated <<< \"$GENERATOR_ALLOWED\"",
     );
     expect(fetchStep).toBeGreaterThanOrEqual(0);
-    expect(planStep).toBeGreaterThan(fetchStep);
+    expect(checkoutStep).toBeGreaterThan(fetchStep);
+    expect(planStep).toBeGreaterThan(checkoutStep);
+    expect(job.slice(checkoutStep, planStep)).toContain(
+      "sparse-checkout-cone-mode: false",
+    );
+    expect(job.slice(checkoutStep, planStep)).toContain("/scripts/");
+    expect(job.slice(checkoutStep, planStep)).toContain("/package.json");
     expect(runStep).toBeGreaterThan(planStep);
     expect(restrictionStep).toBeGreaterThan(runStep);
     expect(job.slice(fetchStep, planStep)).toContain("GH_TOKEN:");
@@ -275,6 +282,47 @@ describe("derived-file regeneration boundary", () => {
         expect(generator.checkedBy).toBeDefined();
         expect(ci).toContain(`- name: ${generator.checkedBy ?? ""}`);
       }
+    }
+  });
+
+  test("each named CI guard runs its generator command or check form", async () => {
+    const ci = await Bun.file(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+    ).text();
+    for (const generator of orderGenerators(GENERATORS)) {
+      if (!generator.checkedBy) {
+        continue;
+      }
+      const marker = `- name: ${generator.checkedBy}\n`;
+      const start = ci.indexOf(marker);
+      expect(start, generator.id).toBeGreaterThanOrEqual(0);
+      const next = ci.indexOf("\n      - name:", start + marker.length);
+      const step = ci.slice(start, next === -1 ? undefined : next);
+      const runStart = step.indexOf("\n        run:");
+      expect(runStart, generator.id).toBeGreaterThanOrEqual(0);
+      const commands = new Set(
+        step
+          .slice(runStart)
+          .split("\n")
+          .map((line) => line.trim().replace(/^run: /u, "")),
+      );
+      const write: readonly string[] = generator.write;
+      const check = write.includes("--write")
+        ? write.map((part) => (part === "--write" ? "--check" : part))
+        : [...write, "--check"];
+      const render = (argv: readonly string[]) => {
+        const cwd = argv.at(1);
+        if (cwd?.startsWith("--cwd=")) {
+          return `(cd ${cwd.slice("--cwd=".length)} && bun ${argv.slice(2).join(" ")})`;
+        }
+        return argv.join(" ");
+      };
+      expect(
+        [write, check].some(
+          (argv) => commands.has(argv.join(" ")) || commands.has(render(argv)),
+        ),
+        `${generator.id}: ${generator.checkedBy}`,
+      ).toBe(true);
     }
   });
 

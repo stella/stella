@@ -103,12 +103,12 @@ export const routeGeneratorVersionsMatch = (
   direct === pluginVersion &&
   resolved === `@tanstack/router-generator@${direct}`;
 
-const checkRouteGeneratorVersion = async () => {
+export const checkRouteGeneratorVersion = async (root = ROOT) => {
   const webPackage: unknown = await Bun.file(
-    new URL("apps/web/package.json", ROOT),
+    new URL("apps/web/package.json", root),
   ).json();
   const lock: unknown = Bun.JSONC.parse(
-    await Bun.file(new URL("bun.lock", ROOT)).text(),
+    await Bun.file(new URL("bun.lock", root)).text(),
   );
   if (
     !isRecord(webPackage) ||
@@ -120,7 +120,7 @@ const checkRouteGeneratorVersion = async () => {
   }
   const direct = webPackage["devDependencies"]["@tanstack/router-generator"];
   const script = Bun.file(
-    new URL("apps/web/scripts/generate-route-tree.ts", ROOT),
+    new URL("apps/web/scripts/generate-route-tree.ts", root),
   );
   if (!(await script.exists())) {
     panic("The route-tree generator script is missing");
@@ -159,8 +159,11 @@ const checkManifest = async () => {
       panic(`Invalid generator entry: ${generator.id}`);
     }
     ids.add(generator.id);
-    if (generator.check === null && !generator.checkedBy) {
-      panic(`Generator ${generator.id} has no check or named guard`);
+    if (
+      generator.check === null &&
+      !(generator.checkedBy?.trim() || generator.unchecked?.trim())
+    ) {
+      panic(`Generator ${generator.id} has no check or unchecked reason`);
     }
     for (const block of generator.blocks ?? []) {
       if (

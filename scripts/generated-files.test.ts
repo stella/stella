@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import nodePath from "node:path";
+import { pathToFileURL } from "node:url";
 
 import {
   GENERATORS,
@@ -10,6 +14,7 @@ import {
   orderGenerators,
 } from "./generated-files";
 import {
+  checkRouteGeneratorVersion,
   isGeneratedCandidate,
   isRegisteredGeneratedFile,
   isUnregisteredGeneratedFile,
@@ -103,6 +108,46 @@ test("the route generator pin matches the plugin's resolved generator", () => {
   ).toBe(false);
 });
 
+test("the route generator guard rejects missing script and direct pin", async () => {
+  const directory = await mkdtemp(
+    nodePath.join(tmpdir(), "route-generator-guard-"),
+  );
+  const web = nodePath.join(directory, "apps/web");
+  const root = pathToFileURL(`${directory}/`);
+  try {
+    await mkdir(nodePath.join(web, "scripts"), { recursive: true });
+    await writeFile(
+      nodePath.join(web, "package.json"),
+      '{"devDependencies":{}}',
+    );
+    await writeFile(
+      nodePath.join(directory, "bun.lock"),
+      JSON.stringify({
+        packages: {
+          "@tanstack/router-generator": ["@tanstack/router-generator@1.167.38"],
+          "@tanstack/router-plugin": [
+            "@tanstack/router-plugin@1.168.40",
+            "",
+            { dependencies: { "@tanstack/router-generator": "1.167.38" } },
+          ],
+        },
+      }),
+    );
+    await expect(checkRouteGeneratorVersion(root)).rejects.toThrow(
+      "The route-tree generator script is missing",
+    );
+    await writeFile(
+      nodePath.join(web, "scripts/generate-route-tree.ts"),
+      "export {};\n",
+    );
+    await expect(checkRouteGeneratorVersion(root)).rejects.toThrow(
+      "The direct router-generator pin is missing",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
   expect(
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
@@ -110,6 +155,15 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     ),
   ).toEqual(["module-ownership", "route-tree"]);
   expect(generatorsForFiles(["docs/unrelated.md"])).toEqual([]);
+  for (const file of [
+    "apps/api/src/lib/format.ts",
+    "packages/time/src/format.ts",
+  ]) {
+    const selected = new Set(generatorsForFiles([file]).map(({ id }) => id));
+    for (const id of ["capability-catalog", "cli-registry", "mcp-surface"]) {
+      expect(selected.has(id), `${file} selects ${id}`).toBe(true);
+    }
+  }
   const ordered = orderGenerators(
     generatorsForFiles(["apps/api/src/handlers/example.ts"]),
   );
@@ -272,6 +326,7 @@ test("lint selection derives generated outputs from the manifest", () => {
     false,
   );
   expect(isChangedLintPath("apps/web/src/routes/new.gen.ts")).toBe(true);
+  expect(isChangedLintPath("apps/web/public/prepaint-init.js")).toBe(true);
   expect(
     isChangedLintPath(
       "apps/api/src/lib/legal-search/morphology/snowball/__fixtures__/vocabulary.ts",
@@ -301,6 +356,18 @@ test("CI path cases stay pinned to the manifest", () => {
     );
     expect(casePatternsAfter(marker).toSorted(), id).toEqual(inputs.toSorted());
   }
+});
+
+test("route-tree CI scope covers every manifest input and output", () => {
+  const routeTree = generator("route-tree");
+  const paths = [...routeTree.inputs, ...routeTree.outputs].map((glob) =>
+    glob.replace(/\/\*\*$/u, "/*"),
+  );
+  expect(
+    casePatternsAfter(
+      "# The route-tree generator reads the web package script",
+    ).toSorted(),
+  ).toEqual(paths.toSorted());
 });
 
 test("CI diff path guards stay pinned to manifest outputs", () => {
