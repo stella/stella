@@ -105,7 +105,7 @@ const idFor = (label: string): SafeId<"caseLawDecision"> => {
 
 type InsertDecisionOptions = Seed & {
   documentUrl?: string;
-  sourceHash?: string;
+  sourceHash?: string | undefined;
 };
 
 const insertDecision = async (seed: InsertDecisionOptions): Promise<void> => {
