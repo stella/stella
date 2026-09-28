@@ -568,6 +568,7 @@ const ComposerSkillsSubmenu = ({
 
   const availability = useComposerSkillAvailability({
     chat,
+    enabled,
     organizationId: activeOrganizationId,
   });
   // Only skills no chat can run leave the menu; one this chat alone cannot

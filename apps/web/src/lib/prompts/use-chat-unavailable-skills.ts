@@ -60,9 +60,12 @@ export const useChatUnavailableSkillIds = (
  */
 export const useComposerSkillAvailability = ({
   chat,
+  enabled,
   organizationId,
 }: {
   chat: ComposerSkillChatContext | undefined;
+  /** Fetch only while the menu is open; a cached answer still reads. */
+  enabled: boolean;
   organizationId: string;
 }): ChatSkillMenuAvailability => {
   const anonymized = useOptionalChatAnonymized(chat?.threadRef);
@@ -74,7 +77,7 @@ export const useComposerSkillAvailability = ({
   const known = query !== null;
   const { data } = useQuery({
     ...chatUnavailableSkillsOptions(organizationId, query ?? undefined),
-    enabled: known,
+    enabled: enabled && known,
   });
   // A chat not known yet reads no answer, not the widest chat's cached one.
   return useMemo(

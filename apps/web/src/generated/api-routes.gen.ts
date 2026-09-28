@@ -21158,7 +21158,7 @@ export type WebRoutes = {
                     });
                   }>;
                   totalDecisions: T588d0ee653;
-                  totalEvents: number;
+                  estimatedTotalEvents: number;
                   failures24h: number;
                 };
                 400: T9a51b7d2bc;
