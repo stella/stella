@@ -92,7 +92,8 @@ export type CollectionSpec = {
  * default, not proof of identity: a later decision may discuss the earlier
  * law, so a consumer lets a citation that names its act (number, year) take
  * precedence over it. Both bounds are half-open ISO dates; an entry without
- * bounds applies at any date. A consumer should not apply an entry to a
+ * bounds applies at any date where no bounded entry of the same spelling
+ * does, and to an undated decision. A consumer should not apply an entry to a
  * decision dated before the year its act was issued.
  */
 export type CitedWindow = {
@@ -123,10 +124,25 @@ export type ActTitleSpec = CitedWindow &
 type SuccessionOptions = {
   spellings: readonly string[];
   older: WorkIdentifier;
+  /** The day the older act took effect, where later than its year of issue. */
+  olderFrom?: string;
   newer: WorkIdentifier;
   /** The day the newer act took effect. */
   on: string;
 };
+
+/** The older act's entry: from its own start, where stated, until `on`. */
+const olderEntry = ({
+  older,
+  olderFrom,
+  on,
+  spellings,
+}: SuccessionOptions): ActTitleSpec => ({
+  spellings,
+  identifier: older,
+  ...(olderFrom === undefined ? {} : { citedFrom: olderFrom }),
+  citedUntil: on,
+});
 
 /**
  * A name two acts bore in turn: the older is the default reading until the
@@ -134,14 +150,32 @@ type SuccessionOptions = {
  * outright (`z roku 1965`, `č. 65/1965 Sb.`) identifies the older one after
  * the switch regardless.
  */
-export const succession = ({
-  newer,
-  older,
-  on,
-  spellings,
-}: SuccessionOptions): readonly ActTitleSpec[] => [
-  { spellings, identifier: older, citedUntil: on },
-  { spellings, identifier: newer, citedFrom: on },
+export const succession = (
+  options: SuccessionOptions,
+): readonly ActTitleSpec[] => [
+  olderEntry(options),
+  {
+    spellings: options.spellings,
+    identifier: options.newer,
+    citedFrom: options.on,
+  },
+];
+
+/**
+ * A name whose older bearer is the default reading only for decisions dated
+ * before the newer act took effect; the newer act carries no window. An
+ * undated decision, and every decision after the switch, read the newer act
+ * from the text rather than by date. Fits codes replaced long before the case
+ * law read (`trestní zákon`: 86/1950 Sb. until 1962, then 140/1961 Sb.) and a
+ * name courts only lent the older act informally (`daňový řád`). Use
+ * `succession` where later decisions still discuss the older act under the
+ * name.
+ */
+export const priorWindowed = (
+  options: SuccessionOptions,
+): readonly ActTitleSpec[] => [
+  olderEntry(options),
+  { spellings: options.spellings, identifier: options.newer },
 ];
 
 /** How a provision path renders as the publisher's deep-link anchor. */
