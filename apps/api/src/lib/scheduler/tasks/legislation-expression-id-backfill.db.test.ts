@@ -44,25 +44,46 @@ const iri = (n: number) =>
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
+/** One scheduled run; true when it asked to be followed at once. */
 const run = async (
   task: SchedulerTask,
   taskLogger: typeof logger = logger,
-): Promise<void> => {
+): Promise<boolean> => {
   const job = (
     await db.select().from(schedulerJobs).where(eq(schedulerJobs.id, JOB_ID))
   ).at(0);
   if (!job) {
     return panic("expected the scheduler job");
   }
+  let continued = false;
   await task({
     db: asTestRaw<SchedulerDb>(db),
     job,
     payload: job.payload,
     runId: createSafeId<"schedulerJobRun">(),
-    scheduleContinuation: () => undefined,
+    scheduleContinuation: () => {
+      continued = true;
+    },
     signal: new AbortController().signal,
     logger: taskLogger,
   });
+  return continued;
+};
+
+/**
+ * Runs until the task stops asking to continue: the rest of the current pass.
+ * Bounded, so a task that never stops fails here instead of hanging.
+ */
+const runPass = async (
+  task: SchedulerTask = createLegislationExpressionIdBackfill(),
+  taskLogger: typeof logger = logger,
+): Promise<number> => {
+  for (let runs = 1; runs <= 100; runs += 1) {
+    if (!(await run(task, taskLogger))) {
+      return runs;
+    }
+  }
+  return panic("the backfill never finished its pass");
 };
 
 type LogLine = { message: string; attributes: Record<string, unknown> };
@@ -166,12 +187,10 @@ describe("legislation expression id backfill", () => {
     await insertLegacy(7, { sourceId: UNNAMESPACED_SOURCE_ID });
     const ids = [1, 2, 3, 4, 5, 6, 7].map(documentId);
 
-    const onePagePerRun = createLegislationExpressionIdBackfill({
-      pageRows: 2,
-      pagesPerRun: 1,
-    });
+    const twoRowPages = createLegislationExpressionIdBackfill({ pageRows: 2 });
 
-    await run(onePagePerRun);
+    // A page that leaves rows behind it asks for the next run at once.
+    expect(await run(twoRowPages)).toBe(true);
     expect(await cursor()).toBe(documentId(2));
     expect(await idsOf(ids)).toEqual([
       `esel:${iri(1)}`,
@@ -184,14 +203,11 @@ describe("legislation expression id backfill", () => {
     ]);
 
     // The next run resumes after the committed cursor, not from the start.
-    await run(onePagePerRun);
+    await run(twoRowPages);
     expect(await cursor()).toBe(documentId(4));
 
-    const toTheEnd = createLegislationExpressionIdBackfill({
-      pageRows: 2,
-      pagesPerRun: 10,
-    });
-    await run(toTheEnd);
+    // Pages 5-6 and 7, then the end of the table, which asks for nothing more.
+    expect(await runPass(twoRowPages)).toBe(3);
     expect(await cursor()).toBeNull();
     const claimed = [
       `esel:${iri(1)}`,
@@ -205,7 +221,7 @@ describe("legislation expression id backfill", () => {
     expect(await idsOf(ids)).toEqual(claimed);
 
     // A second full pass changes nothing.
-    await run(toTheEnd);
+    await runPass(twoRowPages);
     expect(await idsOf(ids)).toEqual(claimed);
   });
 
@@ -221,7 +237,7 @@ describe("legislation expression id backfill", () => {
         .where(eq(legislationDocuments.id, documentId(8)));
     const before = await unchanged();
 
-    await run(createLegislationExpressionIdBackfill());
+    await runPass();
 
     expect(await idsOf([documentId(8)])).toEqual([`esel:${iri(8)}`]);
     expect(await unchanged()).toEqual(before);
@@ -244,7 +260,7 @@ describe("legislation expression id backfill", () => {
       metadata: { versionIri: iri(10) },
     });
 
-    await run(createLegislationExpressionIdBackfill());
+    await runPass();
 
     expect(await idsOf([documentId(9), documentId(10)])).toEqual([
       `esel:${iri(10)}`,
@@ -270,7 +286,7 @@ describe("legislation expression id backfill", () => {
     await insertLegacy(15);
 
     // The rows around them are still claimed: nothing poisons the page.
-    await run(createLegislationExpressionIdBackfill());
+    await runPass();
 
     expect(await idsOf([12, 13, 14, 15].map(documentId))).toEqual([
       null,
@@ -282,7 +298,7 @@ describe("legislation expression id backfill", () => {
     // Nothing is left behind silently: each skipped row is named with its
     // reason, and the run's totals count it.
     const { lines, logger: recording } = recordingLogger();
-    await run(createLegislationExpressionIdBackfill(), recording);
+    await runPass(createLegislationExpressionIdBackfill(), recording);
     const skips = lines.filter(
       ({ message }) =>
         message === "scheduler.legislation_expression_ids_skipped",
@@ -318,7 +334,7 @@ describe("legislation expression id backfill", () => {
 
   test("the writer finds a row the backfill claimed first, by its id", async () => {
     await insertLegacy(11);
-    await run(createLegislationExpressionIdBackfill());
+    await runPass();
 
     const scopedDb: ScopedDb = async (callback) =>
       await db.transaction(async (tx) => await callback(asTestRaw(tx)));

@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
@@ -29,13 +30,14 @@ export const BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK =
   "legislation.backfillExpressionIds" as const;
 
 type BackfillBounds = {
-  /** Rows one page walks, in id order. */
+  /** Rows one run walks, in id order, in one transaction. */
   pageRows: number;
-  /** Pages one run commits before it yields; each is its own transaction. */
-  pagesPerRun: number;
 };
 
-const DEFAULT_BOUNDS: BackfillBounds = { pageRows: 1000, pagesPerRun: 10 };
+const DEFAULT_BOUNDS: BackfillBounds = { pageRows: 1000 };
+
+/** A page that left more of the table behind it; the next follows at once. */
+const CONTINUATION_DELAY_MS = 1000;
 
 /** `legislation_documents.publisher_expression_id` is `varchar(1024)`. */
 const PUBLISHER_ID_MAX_LENGTH = 1024;
@@ -237,63 +239,46 @@ const claimExpressionIdPageTx = async (
  *
  * Recurring and never gating: writers built before the id existed keep
  * inserting rows without it until they drain, so a finished pass is not a
- * finished backfill. Each page commits with its cursor; after the last page
- * the cursor resets and the next pass starts over, which finds nothing to do
+ * finished backfill. Each run commits one page with its cursor and, while the
+ * table goes on, asks for the next run at once; after the last page the cursor
+ * resets and the next scheduled pass starts over, which finds nothing to do
  * once every writer supplies ids. Completion is read from the rows (no null
  * ids left), not from this task.
  */
 export const createLegislationExpressionIdBackfill =
-  ({ pageRows, pagesPerRun }: BackfillBounds = DEFAULT_BOUNDS): SchedulerTask =>
-  async ({ db, job, logger, signal }) => {
+  ({ pageRows }: BackfillBounds = DEFAULT_BOUNDS): SchedulerTask =>
+  async ({ db, job, logger, scheduleContinuation, signal }) => {
+    signal.throwIfAborted();
     const leaseToken =
       job.lockedBy ??
       panic("Legislation expression id backfill requires a scheduler lease");
-    let cursor = backfillCursor(job.payload);
-    let claimed = 0;
-    let pages = 0;
-    const skippedByReason = new Map<ExpressionIdSkipReason, number>(
-      EXPRESSION_ID_SKIP_REASONS.map((reason) => [reason, 0]),
-    );
-    let status: "progress" | "cycle-complete" = "progress";
-
-    while (pages < pagesPerRun) {
-      signal.throwIfAborted();
-      const pageCursor = cursor;
-      const outcome = await db.transaction(async (tx) => {
-        const page = await claimExpressionIdPageTx(tx, pageCursor, pageRows);
-        // Checkpoint in the page's own transaction: a crash replays the page,
-        // which claims nothing twice, and never skips it.
-        await tx
-          .update(schedulerJobs)
-          .set({
-            payload: { cursor: page.type === "page" ? page.last : null },
-          })
-          .where(
-            and(
-              eq(schedulerJobs.id, job.id),
-              eq(schedulerJobs.lockedBy, leaseToken),
-            ),
-          );
-        return page;
-      });
-      if (outcome.type === "cycle-complete") {
-        status = "cycle-complete";
-        break;
-      }
-      pages += 1;
-      claimed += outcome.claimed;
-      cursor = outcome.last;
-      for (const reason of EXPRESSION_ID_SKIP_REASONS) {
-        const documentIds = outcome.skipped
-          .filter((skip) => skip.reason === reason)
-          .map(({ documentId }) => documentId);
-        if (documentIds.length === 0) {
-          continue;
-        }
-        skippedByReason.set(
-          reason,
-          (skippedByReason.get(reason) ?? 0) + documentIds.length,
+    const cursor = backfillCursor(job.payload);
+    const page = await db.transaction(async (tx) => {
+      const claimedPage = await claimExpressionIdPageTx(tx, cursor, pageRows);
+      // Checkpoint in the page's own transaction: a crash replays the page,
+      // which claims nothing twice, and never skips it.
+      await tx
+        .update(schedulerJobs)
+        .set({
+          payload: {
+            cursor: claimedPage.type === "page" ? claimedPage.last : null,
+          },
+        })
+        .where(
+          and(
+            eq(schedulerJobs.id, job.id),
+            eq(schedulerJobs.lockedBy, leaseToken),
+          ),
         );
+      return claimedPage;
+    });
+
+    const skipped = page.type === "page" ? page.skipped : [];
+    for (const reason of EXPRESSION_ID_SKIP_REASONS) {
+      const documentIds = skipped
+        .filter((skip) => skip.reason === reason)
+        .map(({ documentId }) => documentId);
+      if (documentIds.length > 0) {
         logger.warn("scheduler.legislation_expression_ids_skipped", {
           "legislationExpressionIds.reason": reason,
           "legislationExpressionIds.count": documentIds.length,
@@ -307,16 +292,25 @@ export const createLegislationExpressionIdBackfill =
     // audit: skip — bounded identity repair derived from stored publisher IRIs;
     // scheduler_job_runs provides the durable operator trail.
     logger.info("scheduler.legislation_expression_ids_backfilled", {
-      "legislationExpressionIds.claimed": claimed,
+      "legislationExpressionIds.claimed":
+        page.type === "page" ? page.claimed : 0,
       ...Object.fromEntries(
-        [...skippedByReason].map(([reason, count]) => [
+        EXPRESSION_ID_SKIP_REASONS.map((reason) => [
           SKIP_SUMMARY_KEYS[reason],
-          count,
+          skipped.filter((skip) => skip.reason === reason).length,
         ]),
       ),
-      "legislationExpressionIds.pages": pages,
-      "legislationExpressionIds.status": status,
+      "legislationExpressionIds.status":
+        page.type === "page" ? "progress" : "cycle-complete",
     });
+
+    if (page.type === "page" && !signal.aborted) {
+      scheduleContinuation(
+        new Date(
+          Temporal.Now.instant().epochMilliseconds + CONTINUATION_DELAY_MS,
+        ),
+      );
+    }
   };
 
 export const backfillLegislationExpressionIds =
