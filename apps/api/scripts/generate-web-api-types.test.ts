@@ -209,4 +209,24 @@ describe("nameAliases", () => {
     expect(ab.A).not.toBe(ab.B);
     expect(named(["B", "A"])).toEqual(ab);
   });
+
+  test("hashes a densely recursive component without unfolding its paths", () => {
+    // Every member refers to every member: unfolding each path from each
+    // member would take factorial time.
+    const size = 16;
+    const ids = Array.from({ length: size }, (_, id) => id);
+    const nodes = ids.map((id) => ({
+      body: `{ k${id}: ${ids.map((other) => TOKEN(other)).join(" | ")} }`,
+      references: 2,
+      recursive: true,
+    }));
+    const edges = [
+      ...ids.map((id) => ({ from: undefined, to: id, path: "R/|" })),
+      ...ids.flatMap((id) =>
+        ids.map((other) => ({ from: id, to: other, path: `k${id}/|` })),
+      ),
+    ];
+    const names = nameAliases(nodes, edges);
+    expect(new Set(names.values()).size).toBe(size);
+  });
 });

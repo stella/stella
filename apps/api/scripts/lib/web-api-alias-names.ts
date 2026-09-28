@@ -142,22 +142,26 @@ export const canonicalPaths = (
   );
 };
 
+const childrenOf = (node: AliasGraphNode): number[] =>
+  [...node.body.matchAll(TOKEN)].map((match) => Number(match[1]));
+
 /**
  * The strongly connected components of the graph formed by the tokens in
- * node bodies (Tarjan, iterative). Two nodes share a component when each
- * reaches the other.
+ * node bodies (Tarjan, iterative): two nodes share one when each reaches the
+ * other. Components come out after every component they reach, and
+ * `componentOf` maps a node to its index in that order.
  */
-const componentsOf = (nodes: readonly AliasGraphNode[]): number[] => {
-  const children = nodes.map((node) =>
-    [...node.body.matchAll(TOKEN)].map((match) => Number(match[1])),
-  );
+const componentsOf = (
+  nodes: readonly AliasGraphNode[],
+): { components: number[][]; componentOf: number[] } => {
+  const children = nodes.map(childrenOf);
   const index: (number | undefined)[] = Array.from({ length: nodes.length });
   const low: number[] = Array.from({ length: nodes.length }, () => 0);
-  const component: number[] = Array.from({ length: nodes.length }, () => -1);
+  const componentOf: number[] = Array.from({ length: nodes.length }, () => -1);
+  const components: number[][] = [];
   const stack: number[] = [];
   const onStack = new Set<number>();
   let nextIndex = 0;
-  let nextComponent = 0;
   for (const [start] of nodes.entries()) {
     if (index[start] !== undefined) {
       continue;
@@ -192,72 +196,68 @@ const componentsOf = (nodes: readonly AliasGraphNode[]): number[] => {
         low[parent.id] = Math.min(low[parent.id] ?? 0, low[frame.id] ?? 0);
       }
       if (low[frame.id] === index[frame.id]) {
+        const members: number[] = [];
         for (;;) {
           const member = stack.pop() ?? panic("tarjan stack underflow");
           onStack.delete(member);
-          component[member] = nextComponent;
+          componentOf[member] = components.length;
+          members.push(member);
           if (member === frame.id) {
             break;
           }
         }
-        nextComponent += 1;
+        components.push(members);
       }
     }
   }
-  return component;
+  return { components, componentOf };
 };
 
 /**
  * A hash of everything a node prints, nested nodes included, so two nodes
- * share it only when they print the same type. A cycle back to a node still
- * being hashed is written as its distance up the stack, so a recursive node
- * hashes as the tree unfolded from it. A cached hash is that unfolding too,
- * so it stands in only for a node outside every cycle through the stack: a
- * node of such a cycle is unfolded again from where it is reached, or the
- * hash would depend on which member of the cycle was hashed first.
+ * share it only when they print the same type. A node is hashed with its
+ * strongly connected component: the component's bodies in the order they are
+ * first reached from the node, a reference inside the component written as
+ * that position and one outside it as the target's hash, computed first. That
+ * depends on neither node numbering nor which member of a cycle is hashed
+ * first, and costs one walk of the component per member rather than one per
+ * path through it.
  */
 const structuralHashes = (nodes: readonly AliasGraphNode[]) => {
-  const component = componentsOf(nodes);
-  const cache = new Map<number, string>();
-  const stack: number[] = [];
-  const componentsOnStack = new Map<number, number>();
-  const visit = (id: number): { hash: string; outermost: number } => {
-    const onStack = stack.lastIndexOf(id);
-    if (onStack !== -1) {
-      return { hash: `^${stack.length - 1 - onStack}`, outermost: onStack };
+  const { components, componentOf } = componentsOf(nodes);
+  const hashes: string[] = Array.from({ length: nodes.length }, () => "");
+  for (const [component, members] of components.entries()) {
+    for (const entry of members) {
+      const order = [entry];
+      const position = new Map([[entry, 0]]);
+      const bodies: string[] = [];
+      // `order` grows while it is walked; an array iterator reads its length
+      // on every step, so the walk reaches every member.
+      for (const id of order) {
+        const node = nodes[id] ?? panic(`missing node ${id}`);
+        bodies.push(
+          node.body.replaceAll(TOKEN, (_match, rawId: string) => {
+            const child = Number(rawId);
+            if (componentOf[child] !== component) {
+              return `\uE000=${hashes[child] ?? panic(`missing node ${child}`)}\uE000`;
+            }
+            let at = position.get(child);
+            if (at === undefined) {
+              at = order.length;
+              position.set(child, at);
+              order.push(child);
+            }
+            return `\uE000#${at}\uE000`;
+          }),
+        );
+      }
+      hashes[entry] = createHash("sha256")
+        .update(bodies.join("\uE001"))
+        .digest("hex");
     }
-    const own = component[id] ?? panic(`missing component ${id}`);
-    const cached = cache.get(id);
-    if (cached !== undefined && !componentsOnStack.has(own)) {
-      return { hash: cached, outermost: Number.POSITIVE_INFINITY };
-    }
-    const depth = stack.length;
-    stack.push(id);
-    componentsOnStack.set(own, (componentsOnStack.get(own) ?? 0) + 1);
-    let outermost = Number.POSITIVE_INFINITY;
-    const body = (nodes[id] ?? panic(`missing node ${id}`)).body.replaceAll(
-      TOKEN,
-      (_match, rawId: string) => {
-        const nested = visit(Number(rawId));
-        outermost = Math.min(outermost, nested.outermost);
-        return `\uE000${nested.hash}\uE000`;
-      },
-    );
-    stack.pop();
-    const remaining = (componentsOnStack.get(own) ?? 1) - 1;
-    if (remaining === 0) {
-      componentsOnStack.delete(own);
-    } else {
-      componentsOnStack.set(own, remaining);
-    }
-    const hash = createHash("sha256").update(body).digest("hex");
-    if (outermost >= depth) {
-      cache.set(id, hash);
-      return { hash, outermost: Number.POSITIVE_INFINITY };
-    }
-    return { hash, outermost };
-  };
-  return (id: number): string => visit(id).hash;
+  }
+  return (id: number): string =>
+    hashes[id] ?? panic(`web-api alias names: node ${id}`);
 };
 
 /** Whether a path ends at a union or intersection member position. */
