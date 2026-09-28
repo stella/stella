@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 const migration = async () =>
@@ -53,18 +54,30 @@ test("saved narratives are isolated by user and active organization for CRUD", a
       narrative_language: "cs-CZ",
     },
   ]);
-  await expect(
-    db.query(
-      "INSERT INTO saved_time_narratives (id, organization_id, user_id, name, narrative) VALUES ($1, 'org-a', 'user-b', 'Hidden', 'Secret')",
-      [otherId],
-    ),
-  ).rejects.toThrow(/row-level security/u);
-  await expect(
-    db.query(
-      "INSERT INTO saved_time_narratives (id, organization_id, user_id, name, narrative) VALUES ($1, 'org-b', 'user-a', 'Hidden', 'Secret')",
-      [otherOrgId],
-    ),
-  ).rejects.toThrow(/row-level security/u);
+  const foreignUserInsert = await Result.tryPromise({
+    try: () =>
+      db.query(
+        "INSERT INTO saved_time_narratives (id, organization_id, user_id, name, narrative) VALUES ($1, 'org-a', 'user-b', 'Hidden', 'Secret')",
+        [otherId],
+      ),
+    catch: (cause) => cause,
+  });
+  expect(foreignUserInsert.isErr()).toBe(true);
+  if (foreignUserInsert.isErr()) {
+    expect(String(foreignUserInsert.error)).toMatch(/row-level security/u);
+  }
+  const foreignOrgInsert = await Result.tryPromise({
+    try: () =>
+      db.query(
+        "INSERT INTO saved_time_narratives (id, organization_id, user_id, name, narrative) VALUES ($1, 'org-b', 'user-a', 'Hidden', 'Secret')",
+        [otherOrgId],
+      ),
+    catch: (cause) => cause,
+  });
+  expect(foreignOrgInsert.isErr()).toBe(true);
+  if (foreignOrgInsert.isErr()) {
+    expect(String(foreignOrgInsert.error)).toMatch(/row-level security/u);
+  }
   await db.exec("RESET ROLE;");
   await db.query(
     "INSERT INTO saved_time_narratives (id, organization_id, user_id, name, narrative) VALUES ($1, 'org-a', 'user-b', 'Other user', 'Private')",
