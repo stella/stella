@@ -3048,3 +3048,92 @@ test("a settlement release whose successor already settled the revisions release
     { status: "settled", leaseToken: null },
   ]);
 });
+
+const rejectionMessages = (error: unknown): string[] => {
+  const messages: string[] = [];
+  let current: unknown = error;
+  while (current instanceof Error) {
+    messages.push(current.message);
+    current = current.cause;
+  }
+  return messages;
+};
+
+test("an erasure outlives the deletion of its canonical row", async () => {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(caseLawDecisions)
+      .set({ projectionEpoch: 2n })
+      .where(eq(caseLawDecisions.id, DECISION_ID));
+    await tx
+      .update(corpusIndexProjectionStates)
+      .set({
+        desiredAction: "erase",
+        desiredEpoch: 2n,
+        desiredFingerprint: null,
+        desiredIndexId: null,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
+  });
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, DECISION_ID));
+
+  const erasureNow = new Date("2032-03-04T05:06:07.000Z");
+  await setDatabaseClock(erasureNow);
+  const applied = await withDatabaseClock(
+    async (tx) =>
+      await advanceCorpusProjectionErasuresTx(tx, {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 10,
+      }),
+  );
+  expect(applied).toMatchObject({
+    claimedCount: 1,
+    appliedEntityIds: [DECISION_ID],
+  });
+  expect(
+    await db
+      .select({
+        action: corpusIndexProjectionStates.appliedAction,
+        epoch: corpusIndexProjectionStates.appliedEpoch,
+        updatedAt: corpusIndexProjectionStates.updatedAt,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID)),
+  ).toEqual([{ action: "erase", epoch: 2n, updatedAt: erasureNow }]);
+
+  // Without a canonical row nothing may change what the state desires, and
+  // no state may be created for it.
+  const revived: unknown = await db
+    .update(corpusIndexProjectionStates)
+    .set({
+      desiredAction: "upsert",
+      desiredEpoch: 3n,
+      desiredFingerprint: SECOND_FINGERPRINT,
+      desiredIndexId: INDEX_ID,
+    })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID))
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejectionMessages(revived)).toContain(
+    "corpus index desired epoch must match the canonical row",
+  );
+  const inserted: unknown = await db
+    .insert(corpusIndexProjectionStates)
+    .values({
+      family: "case_law",
+      generation: "case_law_v5",
+      entityId: ERASE_DECISION_ID,
+      desiredAction: "erase",
+      desiredEpoch: 1n,
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejectionMessages(inserted)).toContain(
+    "corpus index desired epoch must match the canonical row",
+  );
+});
