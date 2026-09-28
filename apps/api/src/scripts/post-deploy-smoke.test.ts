@@ -15,6 +15,23 @@ import {
   streamPrefixHasMeaningfulFrame,
 } from "@/api/scripts/post-deploy-smoke";
 
+describe("post-deploy smoke module graph", () => {
+  test("loads without the app environment", () => {
+    const moduleUrl = new URL("post-deploy-smoke.ts", import.meta.url).href;
+    const imported = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        "-e",
+        `await import(${JSON.stringify(moduleUrl)})`,
+      ],
+      env: { HOME: process.env["HOME"], PATH: process.env["PATH"] },
+    });
+
+    expect(imported.stderr.toString()).toBe("");
+    expect(imported.exitCode).toBe(0);
+  });
+});
+
 describe("isServerError", () => {
   test("only 5xx counts as a server error", () => {
     expect(isServerError(200)).toBe(false);
