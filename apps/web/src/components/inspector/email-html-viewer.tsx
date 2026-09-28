@@ -11,6 +11,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
+import { textMarkClass } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
@@ -44,6 +45,13 @@ import {
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
+
+/** A header field a citation points at wears the active text mark. */
+const ACTIVE_CITATION_CLASS = textMarkClass({
+  variant: "fill",
+  tone: "warning",
+  state: "active",
+});
 
 type EmailHtmlViewerProps = {
   entityId: string;
@@ -315,7 +323,7 @@ export const EmailHtmlViewer = ({
           className={cn(
             "text-foreground text-base font-semibold text-balance",
             activeCitationBlockId === EMAIL_HEADER_CITATION_ID.subject &&
-              "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
+              ACTIVE_CITATION_CLASS,
           )}
           data-stella-email-anchor={EMAIL_HEADER_CITATION_ID.subject}
         >
@@ -339,7 +347,7 @@ export const EmailHtmlViewer = ({
               className={cn(
                 "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
                 activeCitationBlockId === EMAIL_HEADER_CITATION_ID.date &&
-                  "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
+                  ACTIVE_CITATION_CLASS,
               )}
               data-stella-email-anchor={EMAIL_HEADER_CITATION_ID.date}
             >
@@ -499,8 +507,7 @@ const EmailParticipantRow = ({
     <div
       className={cn(
         "text-muted-foreground grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3",
-        activeCitationBlockId === citationBlockId &&
-          "bg-highlight text-highlight-foreground ring-highlight-foreground/30 ring-2 ring-offset-2",
+        activeCitationBlockId === citationBlockId && ACTIVE_CITATION_CLASS,
       )}
       data-stella-email-anchor={citationBlockId}
     >

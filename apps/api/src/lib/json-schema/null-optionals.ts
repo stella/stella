@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { isDeepStrictEqual } from "node:util";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -72,15 +73,163 @@ const branchCouldMatch = (
   );
 };
 
+const jsonTypeOf = (value: unknown): string => {
+  if (value === null) {
+    return "null";
+  }
+  if (isUnknownArray(value)) {
+    return "array";
+  }
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? "integer" : "number";
+  }
+  return typeof value;
+};
+
+const typeTakes = (type: unknown, value: unknown): boolean => {
+  if (type === undefined) {
+    return true;
+  }
+  const types = isUnknownArray(type) ? type : [type];
+  const valueType = jsonTypeOf(value);
+  return (
+    types.includes(valueType) ||
+    (valueType === "integer" && types.includes("number"))
+  );
+};
+
+/**
+ * Whether `value` has a shape `schema` takes: its types, enums, constants,
+ * required and closed object fields, read through unions, objects and arrays.
+ * A placeholder (null, "") fits anywhere, since it is what is being judged,
+ * and string constraints and references are left to validation.
+ */
+const shapeTakes = (schema: unknown, value: unknown): boolean => {
+  if (!isRecord(schema) || value === null || value === "") {
+    return true;
+  }
+  for (const keyword of UNION_KEYWORDS) {
+    const branches = schema[keyword];
+    if (
+      isUnknownArray(branches) &&
+      !branches.some((branch) => shapeTakes(branch, value))
+    ) {
+      return false;
+    }
+  }
+  // An enum or constant applies to the whole value, an object's too.
+  const enumValues = schema["enum"];
+  if (isUnknownArray(enumValues)) {
+    return enumValues.some((allowed) => isDeepStrictEqual(allowed, value));
+  }
+  if ("const" in schema) {
+    return isDeepStrictEqual(schema["const"], value);
+  }
+  if (!typeTakes(schema["type"], value)) {
+    return false;
+  }
+  if (isUnknownArray(value)) {
+    return arrayShapeTakes(schema, value);
+  }
+  return !isRecord(value) || objectShapeTakes(schema, value);
+};
+
+const arrayShapeTakes = (
+  schema: Record<string, unknown>,
+  value: readonly unknown[],
+): boolean => {
+  const { maxItems, minItems } = schema;
+  if (typeof minItems === "number" && value.length < minItems) {
+    return false;
+  }
+  if (typeof maxItems === "number" && value.length > maxItems) {
+    return false;
+  }
+  const items = schema["items"];
+  return !isRecord(items) || value.every((entry) => shapeTakes(items, entry));
+};
+
+/**
+ * Whether a field the object does not declare by name fits it: every
+ * `patternProperties` schema its name matches applies, and a name matching
+ * none falls to `additionalProperties`. A pattern that does not compile
+ * decides nothing.
+ */
+const extraFieldTakes = (
+  schema: Record<string, unknown>,
+  key: string,
+  entry: unknown,
+): boolean => {
+  const patternProperties = schema["patternProperties"];
+  let matched = false;
+  if (isRecord(patternProperties)) {
+    for (const [pattern, childSchema] of Object.entries(patternProperties)) {
+      const matches = matchesPattern(pattern, key);
+      if (matches === undefined) {
+        return true;
+      }
+      if (matches) {
+        matched = true;
+        if (!shapeTakes(childSchema, entry)) {
+          return false;
+        }
+      }
+    }
+  }
+  if (matched) {
+    return true;
+  }
+  const additionalProperties = schema["additionalProperties"];
+  if (additionalProperties === false) {
+    return entry === null || entry === "";
+  }
+  return shapeTakes(additionalProperties, entry);
+};
+
+const objectShapeTakes = (
+  schema: Record<string, unknown>,
+  value: Record<string, unknown>,
+): boolean => {
+  const required = schema["required"];
+  if (
+    isUnknownArray(required) &&
+    !required.every((name) => typeof name !== "string" || name in value)
+  ) {
+    return false;
+  }
+  const properties = isRecord(schema["properties"]) ? schema["properties"] : {};
+  return Object.entries(value).every(([key, entry]) =>
+    key in properties
+      ? shapeTakes(properties[key], entry)
+      : extraFieldTakes(schema, key, entry),
+  );
+};
+
 /**
  * A union node declares nothing itself: its members do. Without reading them,
  * an optional null inside a discriminated member (an array of `mode` variants)
- * reached validation and was refused.
+ * reached validation and was refused. Of the members no discriminator rules
+ * out, those whose shape takes the value are the ones it was written for; a
+ * member it cannot fit must not keep a null the fitting one refuses. When
+ * none fits (a lenient value, coerced later), every such member still counts.
  */
+const matchedBranches = new WeakMap<
+  Record<string, unknown>,
+  WeakMap<Record<string, unknown>, Record<string, unknown>[]>
+>();
+
 const matchingUnionBranches = (
   schema: Record<string, unknown>,
   value: Record<string, unknown>,
 ): Record<string, unknown>[] => {
+  const bySchema =
+    matchedBranches.get(schema) ??
+    new WeakMap<Record<string, unknown>, Record<string, unknown>[]>();
+  matchedBranches.set(schema, bySchema);
+  const known = bySchema.get(value);
+  if (known !== undefined) {
+    return known;
+  }
   const matching: Record<string, unknown>[] = [];
   for (const keyword of UNION_KEYWORDS) {
     const branches = schema[keyword];
@@ -93,7 +242,10 @@ const matchingUnionBranches = (
       }
     }
   }
-  return matching;
+  const fitting = matching.filter((branch) => shapeTakes(branch, value));
+  const matched = fitting.length > 0 ? fitting : matching;
+  bySchema.set(value, matched);
+  return matched;
 };
 
 const requiredNamesOf = (
@@ -190,6 +342,25 @@ const refusesPlaceholder = (
   );
 };
 
+/** The item schemas a union node's array members, nested ones too, declare. */
+const unionItemSchemas = (
+  schema: Record<string, unknown>,
+  value: readonly unknown[],
+): unknown[] => {
+  const members = UNION_KEYWORDS.flatMap((keyword) => {
+    const branches = schema[keyword];
+    return (isUnknownArray(branches) ? branches : []).filter(isRecord);
+  });
+  // Only a member that takes the array (its length, its items' shape) is one
+  // it was written for; when none does, every member still counts.
+  const fitting = members.filter((member) => shapeTakes(member, value));
+  return (fitting.length > 0 ? fitting : members).flatMap((member) =>
+    member["items"] === undefined
+      ? unionItemSchemas(member, value)
+      : [member["items"]],
+  );
+};
+
 const omitAbsentPlaceholders = (
   schema: unknown,
   value: unknown,
@@ -202,16 +373,19 @@ const omitAbsentPlaceholders = (
   if (items !== undefined && isUnknownArray(value)) {
     return value.map((entry) => omitAbsentPlaceholders(items, entry, isAbsent));
   }
-  // An array under a union node is declared by its array members.
+  // An array under a union node is declared by its array members, whose item
+  // schemas are alternatives too: read one after another, a member refusing
+  // a null would drop it where a sibling member declares it.
   if (isUnknownArray(value)) {
-    let current: unknown = value;
-    for (const keyword of UNION_KEYWORDS) {
-      const branches = schema[keyword];
-      for (const branch of isUnknownArray(branches) ? branches : []) {
-        current = omitAbsentPlaceholders(branch, current, isAbsent);
-      }
+    const itemSchemas = unionItemSchemas(schema, value);
+    if (itemSchemas.length === 0) {
+      return value;
     }
-    return current;
+    const itemSchema =
+      itemSchemas.length === 1 ? itemSchemas[0] : { anyOf: itemSchemas };
+    return value.map((entry) =>
+      omitAbsentPlaceholders(itemSchema, entry, isAbsent),
+    );
   }
   if (!isRecord(value)) {
     return value;

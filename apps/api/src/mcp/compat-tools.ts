@@ -313,8 +313,8 @@ export const COMPAT_TOOL_DEFINITIONS = [
     description:
       "Search knowledge across accessible matters using the OpenAI-compatible " +
       "search tool shape. Where this deployment enables the public legal corpus, the same " +
-      "query also returns case-law decisions and statutes for the jurisdictions the " +
-      `organization practises in. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim.`,
+      "query also returns case-law decisions and statutes from every jurisdiction the corpus " +
+      `holds, the organization's practice jurisdictions first. ${COMPAT_ID_VOCABULARY} Pass an id back to fetch verbatim.`,
     inputSchema: compatSearchArgsSchema,
     name: "search",
     scope: "stella:search",
@@ -438,7 +438,7 @@ const handleCompatSearchTool: McpToolHandler<
     ? decodeCompatSearchCursor(cursor)
     : matterOnlyPosition(cursor);
   if (position === null) {
-    return compatSearchCursorError();
+    return compatSearchCursorError(cursor ?? "");
   }
 
   const matter =

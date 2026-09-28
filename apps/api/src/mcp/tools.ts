@@ -28,14 +28,18 @@ import {
 import {
   agentInputValidationError,
   normalizeObjectInputAtBoundary,
+  withInputNotes,
 } from "@/api/mcp/input-normalization";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
 } from "@/api/mcp/static-tool-definitions";
+import { scopeToolResultToSurface } from "@/api/mcp/surface-tool-mentions";
 import type {
+  InternalToolResult,
   McpToolDefinition,
   McpToolInputSchema,
+  RuntimeMcpToolOutputContract,
   ToolScope,
 } from "@/api/mcp/tool-types";
 import {
@@ -229,6 +233,15 @@ export const handleMcpToolCall = async ({
   mode?: McpMode;
   toolName: string;
 }): Promise<CallToolResult> => {
+  // Every Stella-owned envelope leaves through this one serializer, so a hint
+  // (the pipeline's own, or a mode-blind handler's) never names a tool the
+  // serving surface does not list.
+  const serializeForSurface = (
+    result: InternalToolResult,
+    outputContract?: RuntimeMcpToolOutputContract,
+  ): CallToolResult =>
+    serializeToolResult(scopeToolResultToSurface(result, mode), outputContract);
+
   const gatewayResult = await dispatchGatewayToolCall({
     args,
     context,
@@ -244,20 +257,20 @@ export const handleMcpToolCall = async ({
     // violation answers with the same internal_error envelope.
     const serialized = Result.try({
       try: () =>
-        serializeToolResult(
+        serializeForSurface(
           gatewayResult.result,
           resolveMcpToolOutputContract(toolName),
         ),
       catch: (error) => error,
     });
     return Result.isError(serialized)
-      ? internalErrorResult(toolName, serialized.error)
+      ? internalErrorResult(mode, toolName, serialized.error)
       : serialized.value;
   }
 
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
-    return serializeToolResult(
+    return serializeForSurface(
       structuredErrorResult({
         code: "unknown_tool",
         message: `Unknown tool: ${toolName}`,
@@ -275,7 +288,7 @@ export const handleMcpToolCall = async ({
     toolName === "invoke_capability" &&
     !isDocumentsMcpCapabilityAllowed(args)
   ) {
-    return serializeToolResult(
+    return serializeForSurface(
       structuredErrorResult({
         code: "feature_disabled",
         message:
@@ -289,7 +302,7 @@ export const handleMcpToolCall = async ({
   // surface hides it, and this closes the guess-the-name bypass so the gate
   // holds on both the advertisement and the dispatch path.
   if (!isMcpToolFeatureEnabled(staticTool.feature)) {
-    return serializeToolResult(
+    return serializeForSurface(
       structuredErrorResult({
         code: "feature_disabled",
         message: FEATURE_DISABLED_MESSAGE,
@@ -304,7 +317,7 @@ export const handleMcpToolCall = async ({
   });
   if (unknownArgs) {
     const keys = unknownArgs.undeclared.map((entry) => entry.key);
-    return serializeToolResult(
+    return serializeForSurface(
       structuredErrorResult({
         code: "validation_error",
         message: `Unknown parameter${keys.length === 1 ? "" : "s"}: ${keys.join(", ")}`,
@@ -318,12 +331,13 @@ export const handleMcpToolCall = async ({
   }
 
   const normalized = normalizeObjectInputAtBoundary({
+    access: staticTool.access,
     exactProperties: ["confirm", "validate_only"],
     schema: staticTool.inputSchema,
     value: args,
   });
   if (!normalized.ok) {
-    return serializeToolResult(
+    return serializeForSurface(
       agentInputValidationError({
         failure: normalized,
         subject: `${toolName} arguments`,
@@ -331,6 +345,7 @@ export const handleMcpToolCall = async ({
     );
   }
   const normalizedArgs = normalized.value;
+  const inputNotes = normalized.notes;
 
   // Resolve confirmation from the registry's canonical behavior.
   // Capability-catalog and upstream tools defer the final decision to their
@@ -344,10 +359,10 @@ export const handleMcpToolCall = async ({
       })
     : null;
   if (unconfirmable !== null) {
-    return serializeToolResult(unconfirmable);
+    return serializeForSurface(unconfirmable);
   }
   if (confirmation.required && normalizedArgs["confirm"] !== true) {
-    return serializeToolResult(
+    return serializeForSurface(
       structuredErrorResult({
         code: "confirmation_required",
         message: confirmation.message,
@@ -358,7 +373,7 @@ export const handleMcpToolCall = async ({
 
   const handler = getStaticMcpToolHandler(toolName, mode);
   if (!handler) {
-    return serializeToolResult(
+    return serializeForSurface(
       structuredErrorResult({
         code: "unknown_tool",
         message: `Unknown tool: ${toolName}`,
@@ -398,12 +413,15 @@ export const handleMcpToolCall = async ({
               ?.loadAnonymizationGazetteerEntriesByWorkspace,
         },
       );
-      return serializeToolResult(finalized, outputContract);
+      return withInputNotes(
+        serializeForSurface(finalized, outputContract),
+        inputNotes,
+      );
     },
     catch: (error) => error,
   });
   if (Result.isError(finished)) {
-    return internalErrorResult(toolName, finished.error);
+    return internalErrorResult(mode, toolName, finished.error);
   }
   return finished.value;
 };
@@ -414,15 +432,19 @@ export const handleMcpToolCall = async ({
  * exception for observability.
  */
 const internalErrorResult = (
+  mode: McpMode,
   toolName: string,
   error: unknown,
 ): CallToolResult => {
   captureError(error, { source: "mcp", toolName });
   return serializeToolResult(
-    structuredErrorResult({
-      code: "internal_error",
-      message: "Tool execution failed",
-      hint: MCP_INTERNAL_ERROR_HINT,
-    }),
+    scopeToolResultToSurface(
+      structuredErrorResult({
+        code: "internal_error",
+        message: "Tool execution failed",
+        hint: MCP_INTERNAL_ERROR_HINT,
+      }),
+      mode,
+    ),
   );
 };

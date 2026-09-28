@@ -51,10 +51,33 @@
   --vscode-button-secondaryHoverBackground: var(--accent);
   --vscode-button-secondaryBorder: var(--border);
 
-  --vscode-editor-findMatchBackground: var(--highlight);
-  --vscode-editor-findMatchBorder: var(--ring);
-  --vscode-editor-findMatchHighlightBackground: var(--highlight);
+  /* The search-hit mark of `@stll/ui/text-mark`: a warning wash, stronger
+     with a ring of the same hue on the current match. */
+  --vscode-editor-findMatchBackground: color-mix(
+    in oklab,
+    var(--warning) 45%,
+    transparent
+  );
+  --vscode-editor-findMatchBorder: var(--warning);
+  --vscode-editor-findMatchHighlightBackground: color-mix(
+    in oklab,
+    var(--warning) 30%,
+    transparent
+  );
 
   min-height: 100%;
   padding-block: 0.75rem;
+}
+
+.dark .md-editor.md-theme-stella {
+  --vscode-editor-findMatchBackground: color-mix(
+    in oklab,
+    var(--warning) 35%,
+    transparent
+  );
+  --vscode-editor-findMatchHighlightBackground: color-mix(
+    in oklab,
+    var(--warning) 20%,
+    transparent
+  );
 }

@@ -1,14 +1,18 @@
-A chat stream that ends without a finish_reason, or with finish_reason error,
-ends in a RUN_ERROR (code incomplete-stream) instead of finishing as stop or
-content_filter. That RUN_ERROR, and the one the catch reports, carry the
-usage the stream reported before it failed. Upstream PR to be opened; remove
-when released.
+1. A chat stream that ends without a finish_reason, or with finish_reason
+   error, ends in a RUN_ERROR (code incomplete-stream) instead of finishing
+   as stop or content_filter. That RUN_ERROR, and the one the catch reports,
+   carry the usage the stream reported before it failed. Upstream PR to be
+   opened; remove when released.
+2. The terminal event carries the choice's finish_reason as
+   metadata.providerStopReason, so the service decides every finish reason from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
+   of reading an unhandled one as "stop". Remove when upstream exposes the
+   raw reason.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 62d6348462ff673af7777ae5a616dd9de0081c3a..b5ae9f8eddbb41e5a05f11ddb4fffc4199b98591 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
-@@ -748,7 +748,29 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+@@ -748,7 +748,29 @@
  						content: accumulatedReasoning
  					};
  				}
@@ -39,7 +43,15 @@ index 62d6348462ff673af7777ae5a616dd9de0081c3a..b5ae9f8eddbb41e5a05f11ddb4fffc41
  				const finalUsage = buildOpenRouterUsage(lastUsage);
  				yield {
  					type: EventType.RUN_FINISHED,
-@@ -766,6 +788,7 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+@@ -760,12 +782,14 @@
+ 						...finalUsage,
+ 						...extractUsageCost(lastUsage)
+ 					} },
+-					finishReason
++					finishReason,
++					metadata: { providerStopReason: pendingFinishReason ?? null }
+ 				};
+ 			}
  		} catch (error) {
  			const errorPayload = toRunErrorPayload(error, `${this.name}.processStreamChunks failed`);
  			const rawEvent = toRunErrorRawEvent(error);
@@ -47,7 +59,7 @@ index 62d6348462ff673af7777ae5a616dd9de0081c3a..b5ae9f8eddbb41e5a05f11ddb4fffc41
  			options.logger.errors(`${this.name}.processStreamChunks fatal`, {
  				error: errorPayload,
  				source: `${this.name}.processStreamChunks`
-@@ -777,6 +800,10 @@ var OpenRouterTextAdapter = class extends BaseTextAdapter {
+@@ -777,6 +801,10 @@
  				message: errorPayload.message,
  				...errorPayload.code !== void 0 && { code: errorPayload.code },
  				...rawEvent !== void 0 && { rawEvent },

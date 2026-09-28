@@ -1,0 +1,22 @@
+<?xml version="1.0" standalone="yes"?>
+<sdnList xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/XML">
+  <publshInformation><Publish_Date>09/14/2026</Publish_Date><Record_Count>2</Record_Count></publshInformation>
+  <sdnEntry>
+    <uid>90001</uid><firstName>Mariam</firstName><lastName>HASSAN</lastName><sdnType>Individual</sdnType>
+    <programList><program>NS-PLC</program></programList>
+    <akaList><aka><uid>90002</uid><type>a.k.a.</type><category>strong</category><firstName>Maryam</firstName><lastName>HASSAN</lastName></aka></akaList>
+    <dateOfBirthList>
+      <dateOfBirthItem><uid>90003</uid><dateOfBirth>01 Dec 1952 to 31 Dec 1952</dateOfBirth><mainEntry>true</mainEntry></dateOfBirthItem>
+      <dateOfBirthItem><uid>90004</uid><dateOfBirth>1960 to 1962</dateOfBirth><mainEntry>false</mainEntry></dateOfBirthItem>
+    </dateOfBirthList>
+    <nationalityList><nationality><uid>90005</uid><country>Palestinian</country><mainEntry>true</mainEntry></nationality></nationalityList>
+  </sdnEntry>
+  <sdnEntry>
+    <uid>90006</uid><lastName>EAST VALLEY HOLDINGS</lastName><sdnType>Entity</sdnType>
+    <programList><program>SSI</program></programList>
+    <idList>
+      <id><uid>90007</uid><idType>Registration ID</idType><idNumber>REG-98765</idNumber></id>
+      <id><uid>90008</uid><idType>Website</idType><idNumber>east.example</idNumber></id>
+    </idList>
+  </sdnEntry>
+</sdnList>
