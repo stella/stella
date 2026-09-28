@@ -15,6 +15,7 @@ export type ScanOccurrence = {
   indexCond: string | null;
   filter: string | null;
   rows: number | null;
+  limitAbove: boolean;
   subplans: readonly {
     position: string;
     name: string | null;
@@ -31,6 +32,11 @@ export type AccessPath = Pick<
     | { alias: string; position?: never; occurrence?: never }
     | { occurrence: number; position?: never; alias?: never }
   );
+
+export type HeapFetchMitigation =
+  | { type: "batched"; pageSize: number }
+  | { type: "snapshot"; relation: string }
+  | { type: "heapFetchBudget"; rows: number; reason: string };
 
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
 
@@ -148,7 +154,7 @@ export const explainRoot = (explained: unknown): PlanNode => {
 /** Each physical relation scan keeps its structural path, including UNION arms. */
 export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
   const scans: ScanOccurrence[] = [];
-  const visit = (node: PlanNode, position: string) => {
+  const visit = (node: PlanNode, position: string, limitAbove: boolean) => {
     const relation = field(node, "Relation Name");
     const nodeType = field(node, "Node Type");
     if (relation !== null && nodeType?.includes("Scan")) {
@@ -163,15 +169,61 @@ export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
         indexCond,
         filter: field(node, "Filter"),
         rows: typeof rows === "number" ? rows : null,
+        limitAbove,
         subplans: subplansOf(node, position),
       });
     }
+    const childHasLimitAbove = limitAbove || nodeType === "Limit";
     for (const [index, child] of childPlans(node).entries()) {
-      visit(child, `${position}/${index}`);
+      visit(child, `${position}/${index}`, childHasLimitAbove);
     }
   };
-  visit(root, "root");
+  visit(root, "root", false);
   return scans;
+};
+
+/** Unbounded covering scans can visit heap pages when visibility bits are clear. */
+export const heapFetchRiskViolations = (
+  scans: readonly ScanOccurrence[],
+  scanClass: "point" | "page" | "aggregate",
+  mitigation?: HeapFetchMitigation,
+): string[] => {
+  const riskyScans = scans.filter(
+    ({ relation, nodeType, limitAbove }) =>
+      guardedTables.has(relation) &&
+      nodeType === "Index Only Scan" &&
+      !limitAbove &&
+      scanClass !== "point",
+  );
+  if (mitigation === undefined) {
+    return riskyScans.map(
+      ({ position, relation }) =>
+        `${position}: heap-fetch risk on ${relation}: declare one mitigation`,
+    );
+  }
+  switch (mitigation.type) {
+    case "batched":
+      return Number.isSafeInteger(mitigation.pageSize) &&
+        mitigation.pageSize > 0
+        ? []
+        : ["batched heap-fetch mitigation needs a positive page size"];
+    case "snapshot":
+      if (!scans.some(({ relation }) => relation === mitigation.relation)) {
+        return [
+          `snapshot heap-fetch mitigation does not read ${mitigation.relation}`,
+        ];
+      }
+      return riskyScans.map(
+        ({ position, relation }) =>
+          `${position}: snapshot mitigation does not cover ${relation}`,
+      );
+    case "heapFetchBudget":
+      return Number.isFinite(mitigation.rows) &&
+        mitigation.rows >= 0 &&
+        mitigation.reason.trim().length > 0
+        ? []
+        : ["heap-fetch budget needs a nonnegative number and a reason"];
+  }
 };
 
 /** The workspace access view appears as `aw` over its base tables in EXPLAIN. */

@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import {
   accessPathViolations,
   explainRoot,
+  heapFetchRiskViolations,
   scanOccurrences,
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
@@ -106,6 +107,84 @@ test("keeps repeated relation scans distinct by structural position", () => {
   ).toContain(
     "root/0: expected Index Scan/other_idx, got Index Only Scan/case_law_decisions_ecli_idx on case_law_decisions",
   );
+});
+
+test("recognizes a LIMIT directly above a covering scan", () => {
+  const scans = scanOccurrences({
+    "Node Type": "Limit",
+    Plans: [
+      {
+        "Node Type": "Index Only Scan",
+        "Relation Name": "case_law_decisions",
+        "Index Name": "case_law_decisions_sitemap_shard_idx",
+      },
+    ],
+  });
+  expect(scans[0]?.limitAbove).toBe(true);
+  expect(heapFetchRiskViolations(scans, "page")).toEqual([]);
+});
+
+test("recognizes a LIMIT above a join on the scan's path", () => {
+  const scans = scanOccurrences({
+    "Node Type": "Limit",
+    Plans: [
+      {
+        "Node Type": "Nested Loop",
+        Plans: [
+          {
+            "Node Type": "Index Only Scan",
+            "Relation Name": "case_law_decisions",
+            "Index Name": "case_law_decisions_sitemap_shard_idx",
+          },
+        ],
+      },
+    ],
+  });
+  expect(scans[0]?.limitAbove).toBe(true);
+  expect(heapFetchRiskViolations(scans, "aggregate")).toEqual([]);
+});
+
+test("flags an unbounded covering scan but leaves an Index Scan alone", () => {
+  const scans = scanOccurrences({
+    "Node Type": "Append",
+    Plans: [
+      {
+        "Node Type": "Index Only Scan",
+        "Relation Name": "case_law_decisions",
+        "Index Name": "case_law_decisions_sitemap_shard_idx",
+      },
+      {
+        "Node Type": "Index Scan",
+        "Relation Name": "case_law_decisions",
+        "Index Name": "case_law_decisions_pkey",
+      },
+    ],
+  });
+  expect(scans.map(({ limitAbove }) => limitAbove)).toEqual([false, false]);
+  expect(heapFetchRiskViolations(scans, "aggregate")).toEqual([
+    "root/0: heap-fetch risk on case_law_decisions: declare one mitigation",
+  ]);
+  expect(heapFetchRiskViolations(scans, "point")).toEqual([]);
+  expect(
+    heapFetchRiskViolations(scans, "aggregate", {
+      type: "heapFetchBudget",
+      rows: 100,
+      reason: "bounded source",
+    }),
+  ).toEqual([]);
+  expect(
+    heapFetchRiskViolations(
+      [
+        ...scans,
+        ...scanOccurrences({
+          "Node Type": "Seq Scan",
+          "Relation Name": "statute_sitemap_shards",
+        }),
+      ],
+      "aggregate",
+      { type: "snapshot", relation: "statute_sitemap_shards" },
+    ),
+  ).toEqual(["root/0: snapshot mitigation does not cover case_law_decisions"]);
 });
 
 test("uses bitmap child index conditions for the heap scan", () => {

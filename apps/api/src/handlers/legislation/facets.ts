@@ -15,7 +15,10 @@ import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -65,30 +68,36 @@ export const readLegislationFacets = async (
   country: string,
 ): Promise<LegislationFacets> =>
   await legislationDb(async (tx) => {
-    const documentType = await tx
-      .select({
-        value: sql<string>`${legislationDocuments.documentType}`,
-        count: sql<number>`count(*)::integer`,
-      })
-      .from(legislationDocuments)
-      .innerJoin(
-        legislationSources,
-        eq(legislationSources.id, legislationDocuments.sourceId),
-      )
-      .where(
-        and(
-          publishedLegislationDocument,
-          eq(legislationDocuments.country, country),
-          isLatestOpenedVersionOfWorkAt(sql`CURRENT_DATE`),
-          sql`${legislationDocuments.documentType} <> ''`,
-        ),
-      )
-      .groupBy(legislationDocuments.documentType)
-      .orderBy(sql`count(*) DESC`, legislationDocuments.documentType)
-      .limit(DOCUMENT_TYPE_BUCKET_LIMIT);
-
+    const documentType = await buildLegislationFacetsQuery(tx, country);
     return { documentType };
   });
+
+/** Builds the bounded production aggregation used by the legislation facets. */
+export const buildLegislationFacetsQuery = (
+  tx: LegislationReadTransaction,
+  country: string,
+) =>
+  tx
+    .select({
+      value: sql<string>`${legislationDocuments.documentType}`,
+      count: sql<number>`count(*)::integer`,
+    })
+    .from(legislationDocuments)
+    .innerJoin(
+      legislationSources,
+      eq(legislationSources.id, legislationDocuments.sourceId),
+    )
+    .where(
+      and(
+        publishedLegislationDocument,
+        eq(legislationDocuments.country, country),
+        isLatestOpenedVersionOfWorkAt(sql`CURRENT_DATE`),
+        sql`${legislationDocuments.documentType} <> ''`,
+      ),
+    )
+    .groupBy(legislationDocuments.documentType)
+    .orderBy(sql`count(*) DESC`, legislationDocuments.documentType)
+    .limit(DOCUMENT_TYPE_BUCKET_LIMIT);
 
 type LegislationFacetsLoad = {
   legislationDb: LegislationReadDb;

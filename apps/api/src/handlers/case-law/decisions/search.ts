@@ -1072,7 +1072,7 @@ type DecisionRowsQueryOptions = {
  * language versions of one judgment, and the request's filters are applied in
  * SQL rather than read back.
  */
-const candidateDecisionRowsQuery = (
+export const candidateDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
   { filters, ids }: DecisionRowsQueryOptions,
 ) =>
@@ -1101,7 +1101,7 @@ type CandidateDecisionRow = Awaited<
  * publisher summary and the identifier aggregate are the expensive parts, and
  * a page of ten is the only place they are wanted.
  */
-const pageDecisionRowsQuery = (
+export const pageDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
   { filters, ids }: DecisionRowsQueryOptions,
 ) =>
@@ -1146,8 +1146,19 @@ type HydratedDecisionRows = Map<string, CandidateDecisionRow | null>;
  * emits publisher text re-proves the row is still servable rather than
  * inheriting the candidate read's answer.
  */
-const caseLawSearchRowFilters = (
-  body: SearchDecisionsBody,
+type CaseLawSearchRowFilterBody = Pick<
+  SearchDecisionsBody,
+  | "country"
+  | "court"
+  | "dateFrom"
+  | "dateTo"
+  | "decisionType"
+  | "sourceId"
+  | "language"
+>;
+
+export const caseLawSearchRowFilters = (
+  body: CaseLawSearchRowFilterBody,
   generation: string,
 ): SQL[] => {
   const filters: SQL[] = [
