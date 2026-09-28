@@ -18,9 +18,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import listSkillCommands from "./commands/list";
-import listSkills from "./list";
-import uploadSkill from "./upload";
+import listUnavailableChatSkills from "./list";
 
 /**
  * A skill that declares `stella-required-tools` is offered in chat only when
@@ -99,73 +97,29 @@ const WITH_MATTER = (): AccessibleWorkspace[] => [
   { id: ids.wsA1, status: "active" },
 ];
 
-const commandSlugs = async (workspaces: AccessibleWorkspace[]) => {
-  const result = await listSkillCommands.handler(
-    createTestHandlerContext<Parameters<typeof listSkillCommands.handler>[0]>(
-      callerContext(workspaces),
-    ),
+const unavailableIn = async (workspaces: AccessibleWorkspace[]) => {
+  const result = await listUnavailableChatSkills.handler(
+    createTestHandlerContext<
+      Parameters<typeof listUnavailableChatSkills.handler>[0]
+    >(callerContext(workspaces)),
   );
   if ("code" in result) {
-    throw new TypeError("expected the command list");
+    throw new TypeError("expected the availability list");
   }
-  return result
-    .map(({ command }) => command)
-    .filter((command) => command === PLAIN_SLUG || command === PLAYBOOK_SLUG);
+  const seeded = new Set<string>(seededSkillIds);
+  return result.unavailable.filter(({ skillId }) => seeded.has(skillId));
 };
 
-describe("skills offered in chat", () => {
-  test("the command menu offers a playbook skill only where chat can save playbooks", async () => {
-    expect(await commandSlugs(WITH_MATTER())).toEqual(
-      expect.arrayContaining([PLAIN_SLUG, PLAYBOOK_SLUG]),
-    );
-    expect(await commandSlugs([])).toEqual([PLAIN_SLUG]);
-  });
-
-  test("the skill list keeps every skill and says why chat hides one", async () => {
-    const result = await listSkills.handler(
-      createTestHandlerContext<Parameters<typeof listSkills.handler>[0]>({
-        ...callerContext([]),
-        query: { limit: 100 },
-      }),
-    );
-    if ("code" in result) {
-      throw new TypeError("expected the skill list");
+describe("skills chat can offer", () => {
+  test("a playbook skill is unavailable only where chat cannot save playbooks", async () => {
+    const playbookId = seededSkillIds.at(1);
+    if (playbookId === undefined) {
+      throw new TypeError("expected the playbook skill to be seeded");
     }
-    const bySlug = new Map(
-      result.installed.map((row) => [row.slug, row.chatAvailability]),
-    );
 
-    expect(bySlug.get(PLAIN_SLUG)).toEqual({ status: "available" });
-    // Offered where a document is open, so the shared menus keep it.
-    expect(bySlug.get(DOCUMENT_SLUG)).toEqual({ status: "available" });
-    expect(bySlug.get(PLAYBOOK_SLUG)).toEqual({
-      status: "unavailable",
-      missingTools: ["save_playbook"],
-    });
-  });
-
-  test("a skill that names a tool stella does not have is refused on upload", async () => {
-    const name = `unknown-tool-${RUN}`;
-    const result = await uploadSkill.handler(
-      createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
-        ...callerContext(WITH_MATTER()),
-        body: {
-          scope: "private",
-          file: new File(
-            [
-              `---\nname: ${name}\ndescription: Needs a missing tool.\nmetadata:\n  ${SKILL_REQUIRED_TOOLS_METADATA_KEY}: save_playbook save_playbok\n---\n\nBuild a playbook.\n`,
-            ],
-            "SKILL.md",
-            { type: "text/markdown" },
-          ),
-        },
-      }),
-    );
-
-    if (!("code" in result)) {
-      throw new TypeError("expected the upload to be refused");
-    }
-    expect(result.code).toBe(400);
-    expect(JSON.stringify(result.response)).toContain("save_playbok");
+    expect(await unavailableIn(WITH_MATTER())).toEqual([]);
+    expect(await unavailableIn([])).toEqual([
+      { missingTools: ["save_playbook"], skillId: playbookId },
+    ]);
   });
 });

@@ -49,7 +49,6 @@ describe("catalogue removal", () => {
 
 const commonFields = (): Omit<CatalogueSkill, "kind"> => ({
   author: "Stella",
-  chatAvailability: null,
   chatSkillId: null,
   cost: "free",
   description: "Entry.",

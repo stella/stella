@@ -16,11 +16,6 @@ type SlashShortcutRow = Pick<
 
 type SlashSkillRow = {
   body?: string | null;
-  /**
-   * The server's decision whether a chat can offer this skill: one that
-   * needs a tool the chat lacks is `unavailable` and never offered here.
-   */
-  chatAvailability: { status: "available" | "unavailable" };
   description: string;
   enabled: boolean;
   id: string;
@@ -74,9 +69,17 @@ export const skillPagesForChips = (
   }
 };
 
+/**
+ * Ids of the skills chat cannot offer, as the server decided them
+ * (`chatUnavailableSkillsOptions`): a skill that needs a tool chat lacks is
+ * never offered in a menu.
+ */
+export type UnavailableSkillIds = ReadonlySet<string>;
+
 type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
   skillPages: readonly SlashSkillPage[] | undefined;
+  unavailableSkillIds: UnavailableSkillIds;
   /**
    * Reserved-command availability context. Reserved commands only have
    * submit handling on the chat composers, so `null`/absent keeps them out
@@ -89,6 +92,7 @@ type BuildChatSlashItemsInput = {
 export const buildChatSlashItems = ({
   shortcuts,
   skillPages,
+  unavailableSkillIds,
   reservedCommands = null,
 }: BuildChatSlashItemsInput): SlashItem[] => {
   const commandItems: SlashItem[] = reservedCommands
@@ -111,6 +115,7 @@ export const buildChatSlashItems = ({
 
   const skillItems: SlashItem[] = getChatVisibleInstalledSkillRows(
     skillPages,
+    unavailableSkillIds,
   ).map((row) => ({
     kind: "skill" as const,
     skill: {
@@ -127,6 +132,7 @@ export const buildChatSlashItems = ({
 
 export const commandShortcutRowsFromSkillPages = (
   skillPages: readonly SlashSkillPage[] | undefined,
+  unavailableSkillIds: UnavailableSkillIds,
 ): SlashShortcutRow[] => {
   const rows: SlashShortcutRow[] = [];
   const installedRows = skillPages
@@ -136,7 +142,7 @@ export const commandShortcutRowsFromSkillPages = (
   for (const row of installedRows) {
     if (
       !row.enabled ||
-      !isOfferedInChat(row) ||
+      unavailableSkillIds.has(row.id) ||
       !row.command ||
       row.body === null ||
       !row.body
@@ -157,6 +163,7 @@ export const commandShortcutRowsFromSkillPages = (
 
 const getChatVisibleInstalledSkillRows = (
   skillPages: readonly SlashSkillPage[] | undefined,
+  unavailableSkillIds: UnavailableSkillIds,
 ): SlashSkillRow[] => {
   const installedRows = skillPages
     ? skillPages.flatMap((page) => page.installed)
@@ -176,7 +183,7 @@ const getChatVisibleInstalledSkillRows = (
   // list so the same skill doesn't appear twice in the menu. A skill the
   // chat cannot finish is dropped after the cap, as the backend does.
   const chatMetadataRows = chatVisibleEnabled.filter(
-    (row) => !row.command && isOfferedInChat(row),
+    (row) => !row.command && !unavailableSkillIds.has(row.id),
   );
 
   for (const row of chatMetadataRows) {
@@ -189,9 +196,6 @@ const getChatVisibleInstalledSkillRows = (
 
   return visibleRows;
 };
-
-const isOfferedInChat = (row: SlashSkillRow): boolean =>
-  row.chatAvailability.status === "available";
 
 const compareChatInstalledSkillRows = (
   left: SlashSkillRow,

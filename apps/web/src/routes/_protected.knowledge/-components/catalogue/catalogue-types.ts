@@ -51,15 +51,6 @@ type CommonFields = {
 
 export type CatalogueSkill = CommonFields & {
   kind: "skill";
-  /**
-   * Whether chat offers this installed skill, as the server decides it. An
-   * `unavailable` skill needs tools chat does not have (`missingTools`), so
-   * the chat menus leave it out. `null` when the skill is not installed.
-   */
-  chatAvailability:
-    | { status: "available" }
-    | { status: "unavailable"; missingTools: readonly string[] }
-    | null;
 };
 
 export type CatalogueMcp = CommonFields & {

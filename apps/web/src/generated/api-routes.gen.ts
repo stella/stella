@@ -7636,6 +7636,44 @@ export type WebRoutes = {
         };
       };
     } & {
+      "skill-availability": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              unavailable: Array<{
+                missingTools: ReadonlyArray<string>;
+                skillId: string;
+              }>;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
       "improve-prompt": {
         post: {
           body: {
@@ -15842,7 +15880,7 @@ export type WebRoutes = {
               chatSkillId: Tbe0400fa4c;
               installedConnectorSlug: Tbe0400fa4c;
               enabled: T44e2cd4568;
-            } & T56525d272f | {
+            } | {
               tags: Array<T85c0da56d3>;
               kind: "skill";
               description: string;
@@ -15871,7 +15909,7 @@ export type WebRoutes = {
               chatSkillId: Tbe0400fa4c;
               installedConnectorSlug: Tbe0400fa4c;
               enabled: T44e2cd4568;
-            } & T56525d272f | {
+            } | {
               tags: Array<T85c0da56d3>;
               kind: "mcp";
               url: string;
@@ -15902,7 +15940,7 @@ export type WebRoutes = {
               chatSkillId: Tbe0400fa4c;
               installedConnectorSlug: Tbe0400fa4c;
               enabled: T44e2cd4568;
-            } & T56525d272f | {
+            } | {
               tags: Array<T85c0da56d3>;
               kind: "native-tool";
               url?: undefined | string;
@@ -15931,7 +15969,7 @@ export type WebRoutes = {
               chatSkillId: Tbe0400fa4c;
               installedConnectorSlug: Tbe0400fa4c;
               enabled: T44e2cd4568;
-            } & T56525d272f>;
+            }>;
             practiceJurisdictions: Array<T21e7b1b9fc>;
           };
           400: T9a51b7d2bc;
@@ -16753,1447 +16791,6 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: Response;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    };
-    skills: {
-      get: {
-        body: Record<never, never>;
-        params: T5e3ac29766;
-        query: {
-          cursor?: string;
-          limit?: number;
-        };
-        headers: Record<never, never>;
-        response: {
-          200: {
-            canManageTeam: Tfddd645dc8;
-            installed: Array<{
-              chatAvailability: (Tb3b8903519 | T46784e6e02);
-              id: T8ff9f6d126;
-              scope: T7906e8b72f;
-              origin: T10a86d9f45;
-              slug: string;
-              name: string;
-              description: string;
-              version: Tbe0400fa4c;
-              license: Tbe0400fa4c;
-              compatibility: Tbe0400fa4c;
-              sourceUrl: Tbe0400fa4c;
-              contentHash: string;
-              enabled: Tfddd645dc8;
-              command: Tbe0400fa4c;
-              body: Tbe0400fa4c;
-              userId: string;
-              createdAt: string;
-            }>;
-            limit: number;
-            nextCursor: Tbe0400fa4c;
-          };
-          400: T9a51b7d2bc;
-          401: T9a51b7d2bc;
-          402: T9a51b7d2bc;
-          403: Tddfcdef857;
-          404: T9a51b7d2bc;
-          409: T9a51b7d2bc;
-          413: T9a51b7d2bc;
-          422: (T9a51b7d2bc | {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          });
-          428: T9a51b7d2bc;
-          429: T9a51b7d2bc;
-          500: T9a51b7d2bc;
-          502: T9a51b7d2bc;
-          503: T9a51b7d2bc;
-        };
-      };
-    } & {
-      commands: {
-        get: {
-          body: Record<never, never>;
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: Array<{
-              id: T8ff9f6d126;
-              scope: T7906e8b72f;
-              name: string;
-              description: string;
-              command: Tbe0400fa4c;
-              body: string;
-            }>;
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        get: {
-          body: Record<never, never>;
-          params: {
-            skillId: T8ff9f6d126;
-          };
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              resources: Array<{
-                id: T32a2c3700a;
-                path: string;
-                kind: Tc18269d27b;
-                sizeBytes: number;
-                content: string;
-              }>;
-              id: T8ff9f6d126;
-              scope: T7906e8b72f;
-              origin: T10a86d9f45;
-              userId: string;
-              slug: string;
-              name: string;
-              description: string;
-              version: Tbe0400fa4c;
-              license: Tbe0400fa4c;
-              compatibility: Tbe0400fa4c;
-              sourceUrl: Tbe0400fa4c;
-              contentHash: string;
-              enabled: Tfddd645dc8;
-              body: string;
-              command: Tbe0400fa4c;
-              createdAt: string;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      post: {
-        body: {
-          command?: string;
-          name: string;
-          body: string;
-          scope: T7906e8b72f;
-          description: string;
-        };
-        params: T5e3ac29766;
-        query: Record<never, never>;
-        headers: Record<never, never>;
-        response: {
-          200: {
-            id: T8ff9f6d126;
-          };
-          400: T9a51b7d2bc;
-          401: T9a51b7d2bc;
-          402: T9a51b7d2bc;
-          403: Tddfcdef857;
-          404: T9a51b7d2bc;
-          409: T9a51b7d2bc;
-          413: T9a51b7d2bc;
-          422: (T9a51b7d2bc | {
-            type: "validation";
-            on: string;
-            summary?: string;
-            message?: string;
-            found?: unknown;
-            property?: string;
-            expected?: string;
-          });
-          428: T9a51b7d2bc;
-          429: T9a51b7d2bc;
-          500: T9a51b7d2bc;
-          502: T9a51b7d2bc;
-          503: T9a51b7d2bc;
-        };
-      };
-    } & {
-      "from-blueprint": {
-        post: {
-          body: {
-            scope: T7906e8b72f;
-            blueprintId: ("blank" | "answer-from-sources" | "check-against-rules" | "intake-to-draft");
-          };
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              id: T8ff9f6d126;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      upload: {
-        post: {
-          body: {
-            scope: T7906e8b72f;
-            file: File;
-          };
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              skippedFiles: Array<Td56234f3f1>;
-              id: T8ff9f6d126;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      "import-url": {
-        post: {
-          body: {
-            url: string;
-            scope: T7906e8b72f;
-          };
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              skippedFiles: Array<Td56234f3f1>;
-              id: T8ff9f6d126;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      "discover-url": {
-        post: {
-          body: {
-            url: string;
-          };
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              commitSha: Tbe0400fa4c;
-              invalidSkillCount: number;
-              repositoryUrl: Tbe0400fa4c;
-              skills: Array<{
-                compatibility: Tbe0400fa4c;
-                description: string;
-                integrity: {
-                  type: "content-hash";
-                  value: string;
-                } | {
-                  type: "github-commit";
-                  entrypointHash: string;
-                  sourceUrl: string;
-                  value: string;
-                };
-                license: Tbe0400fa4c;
-                name: string;
-                path: Tbe0400fa4c;
-                sourceUrl: string;
-                version: Tbe0400fa4c;
-              }>;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      "import-urls": {
-        post: {
-          body: {
-            scope: T7906e8b72f;
-            items: Array<{
-              sourceUrl: string;
-              integrity: {
-                value: string;
-                type: "content-hash";
-              } | {
-                value: string;
-                type: "github-commit";
-                sourceUrl: string;
-                entrypointHash: string;
-              };
-            }>;
-          };
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              failed: Array<{
-                code: ("fetch_failed" | "install_failed" | "integrity_conflict" | "integrity_mismatch" | "name_conflict" | "source_changed" | "team_limit_reached" | "user_limit_reached");
-                sourceUrl: string;
-              }>;
-              installed: Array<{
-                id: string;
-                skippedFiles: Array<Td56234f3f1>;
-                sourceUrl: string;
-              }>;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      "generate-draft": {
-        post: {
-          body: {
-            feedback?: string;
-            examples?: string;
-            previousDraft?: string;
-            previousResources?: Array<{
-              path: string;
-              content: string;
-            }>;
-            intent: string;
-          };
-          params: T5e3ac29766;
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              markdown: string;
-              resources: Array<{
-                content: string;
-                path: string;
-              }>;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        patch: {
-          body: {
-            name?: string;
-            body?: string;
-            description?: string;
-            version?: null | string;
-            enabled?: false | true;
-            command?: null | string;
-          };
-          params: {
-            skillId: T8ff9f6d126;
-          };
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              id: T8ff9f6d126;
-            };
-            400: T9a51b7d2bc;
-            401: T9a51b7d2bc;
-            402: T9a51b7d2bc;
-            403: Tddfcdef857;
-            404: T9a51b7d2bc;
-            409: T9a51b7d2bc;
-            413: T9a51b7d2bc;
-            422: (T9a51b7d2bc | {
-              type: "validation";
-              on: string;
-              summary?: string;
-              message?: string;
-              found?: unknown;
-              property?: string;
-              expected?: string;
-            });
-            428: T9a51b7d2bc;
-            429: T9a51b7d2bc;
-            500: T9a51b7d2bc;
-            502: T9a51b7d2bc;
-            503: T9a51b7d2bc;
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        resources: {
-          patch: {
-            body: {
-              path: string;
-              content: string;
-            };
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: T32a2c3700a;
-                skillId: T8ff9f6d126;
-                path: string;
-                kind: Tc18269d27b;
-                content: string;
-                sizeBytes: number;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        resources: {
-          post: {
-            body: {
-              kind?: "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
-              path: string;
-              content: string;
-            };
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: T32a2c3700a;
-                skillId: T8ff9f6d126;
-                path: string;
-                kind: Tc18269d27b;
-                content: string;
-                sizeBytes: number;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        resources: {
-          delete: {
-            body: {
-              path: string;
-            };
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                ok: Tfddd645dc8;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        resources: {
-          rename: {
-            post: {
-              body: {
-                oldPath: string;
-                newPath: string;
-              };
-              params: {
-                skillId: T8ff9f6d126;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T32a2c3700a;
-                  skillId: T8ff9f6d126;
-                  path: string;
-                  kind: Tc18269d27b;
-                  content: string;
-                  sizeBytes: number;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        resources: {
-          upload: {
-            post: {
-              body: {
-                path: string;
-                file: File;
-              };
-              params: {
-                skillId: T8ff9f6d126;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T32a2c3700a;
-                  skillId: T8ff9f6d126;
-                  path: string;
-                  kind: Tc18269d27b;
-                  content: string;
-                  sizeBytes: number;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        resources: {
-          rewrite: {
-            post: {
-              body: {
-                path: string;
-                prompt: string;
-              };
-              params: {
-                skillId: T8ff9f6d126;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  content: string;
-                  path: string;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        revisions: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                items: Array<{
-                  id: T6e37e01eb4;
-                  revisionNumber: number;
-                  contentHash: string;
-                  createdBy: Tbe0400fa4c;
-                  createdAt: string;
-                  updatedAt: string;
-                }>;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        revisions: {
-          ":revisionId": {
-            get: {
-              body: Record<never, never>;
-              params: {
-                skillId: T8ff9f6d126;
-                revisionId: T6e37e01eb4;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T6e37e01eb4;
-                  skillId: T8ff9f6d126;
-                  revisionNumber: number;
-                  body: string;
-                  contentHash: string;
-                  createdBy: Tbe0400fa4c;
-                  createdAt: string;
-                  updatedAt: string;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        proposals: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                items: Array<{
-                  id: T06c45cc300;
-                  baseRevisionId: T6e37e01eb4;
-                  baseIsCurrent: Tfddd645dc8;
-                  summary: string;
-                  status: Tf8218060a3;
-                  authorId: Tbe0400fa4c;
-                  reviewerId: Tbe0400fa4c;
-                  decidedAt: Tdf2b0d1150;
-                  resultRevisionId: T4866a24af7;
-                  createdAt: string;
-                  updatedAt: string;
-                }>;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        proposals: {
-          ":proposalId": {
-            get: {
-              body: Record<never, never>;
-              params: {
-                skillId: T8ff9f6d126;
-                proposalId: T06c45cc300;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  baseIsCurrent: Tfddd645dc8;
-                  id: T06c45cc300;
-                  skillId: T8ff9f6d126;
-                  baseRevisionId: T6e37e01eb4;
-                  body: string;
-                  summary: string;
-                  status: Tf8218060a3;
-                  authorId: Tbe0400fa4c;
-                  reviewerId: Tbe0400fa4c;
-                  decidedAt: Tdf2b0d1150;
-                  resultRevisionId: T4866a24af7;
-                  createdAt: string;
-                  updatedAt: string;
-                  baseBody: string;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        proposals: {
-          post: {
-            body: {
-              body?: string;
-              summary?: string;
-            };
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: T06c45cc300;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        proposals: {
-          "from-comments": {
-            post: {
-              body: {
-                instructions?: string;
-                commentIds?: Array<Tf42adc792b>;
-              };
-              params: {
-                skillId: T8ff9f6d126;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T06c45cc300;
-                  summary: string;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        proposals: {
-          ":proposalId": {
-            patch: {
-              body: {
-                body?: string;
-                status?: "draft" | "proposed";
-                summary?: string;
-              };
-              params: {
-                skillId: T8ff9f6d126;
-                proposalId: T06c45cc300;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: T06c45cc300;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        proposals: {
-          ":proposalId": {
-            review: {
-              post: {
-                body: {
-                  allowStale?: false | true;
-                  decision: Tdce31e5530;
-                };
-                params: {
-                  skillId: T8ff9f6d126;
-                  proposalId: T06c45cc300;
-                };
-                query: Record<never, never>;
-                headers: Record<never, never>;
-                response: {
-                  200: {
-                    id: T06c45cc300;
-                    status: Tdce31e5530;
-                    resultRevisionId: T4866a24af7;
-                  };
-                  400: T9a51b7d2bc;
-                  401: T9a51b7d2bc;
-                  402: T9a51b7d2bc;
-                  403: Tddfcdef857;
-                  404: T9a51b7d2bc;
-                  409: T9a51b7d2bc;
-                  413: T9a51b7d2bc;
-                  422: (T9a51b7d2bc | {
-                    type: "validation";
-                    on: string;
-                    summary?: string;
-                    message?: string;
-                    found?: unknown;
-                    property?: string;
-                    expected?: string;
-                  });
-                  428: T9a51b7d2bc;
-                  429: T9a51b7d2bc;
-                  500: T9a51b7d2bc;
-                  502: T9a51b7d2bc;
-                  503: T9a51b7d2bc;
-                };
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        proposals: {
-          ":proposalId": {
-            delete: {
-              body: Record<never, never>;
-              params: {
-                skillId: T8ff9f6d126;
-                proposalId: T06c45cc300;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  ok: Tfddd645dc8;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        comments: {
-          get: {
-            body: Record<never, never>;
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                items: Array<{
-                  readonly id: Tf42adc792b;
-                  readonly revisionId: T6e37e01eb4;
-                  readonly proposalId: (null | T06c45cc300);
-                  readonly rangeStart: number;
-                  readonly rangeEnd: number;
-                  readonly anchorText: string;
-                  readonly body: string;
-                  readonly authorId: Tbe0400fa4c;
-                  readonly resolvedAt: Tdf2b0d1150;
-                  readonly resolvedBy: Tbe0400fa4c;
-                  readonly createdAt: string;
-                }>;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        comments: {
-          post: {
-            body: {
-              revisionId?: T6e37e01eb4;
-              proposalId?: T06c45cc300;
-              body: string;
-              rangeStart: number;
-              rangeEnd: number;
-            };
-            params: {
-              skillId: T8ff9f6d126;
-            };
-            query: Record<never, never>;
-            headers: Record<never, never>;
-            response: {
-              200: {
-                id: Tf42adc792b;
-              };
-              400: T9a51b7d2bc;
-              401: T9a51b7d2bc;
-              402: T9a51b7d2bc;
-              403: Tddfcdef857;
-              404: T9a51b7d2bc;
-              409: T9a51b7d2bc;
-              413: T9a51b7d2bc;
-              422: (T9a51b7d2bc | {
-                type: "validation";
-                on: string;
-                summary?: string;
-                message?: string;
-                found?: unknown;
-                property?: string;
-                expected?: string;
-              });
-              428: T9a51b7d2bc;
-              429: T9a51b7d2bc;
-              500: T9a51b7d2bc;
-              502: T9a51b7d2bc;
-              503: T9a51b7d2bc;
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        comments: {
-          ":commentId": {
-            patch: {
-              body: {
-                resolved: Tfddd645dc8;
-              };
-              params: {
-                skillId: T8ff9f6d126;
-                commentId: Tf42adc792b;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  id: Tf42adc792b;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        comments: {
-          ":commentId": {
-            delete: {
-              body: Record<never, never>;
-              params: {
-                skillId: T8ff9f6d126;
-                commentId: Tf42adc792b;
-              };
-              query: Record<never, never>;
-              headers: Record<never, never>;
-              response: {
-                200: {
-                  ok: Tfddd645dc8;
-                };
-                400: T9a51b7d2bc;
-                401: T9a51b7d2bc;
-                402: T9a51b7d2bc;
-                403: Tddfcdef857;
-                404: T9a51b7d2bc;
-                409: T9a51b7d2bc;
-                413: T9a51b7d2bc;
-                422: (T9a51b7d2bc | {
-                  type: "validation";
-                  on: string;
-                  summary?: string;
-                  message?: string;
-                  found?: unknown;
-                  property?: string;
-                  expected?: string;
-                });
-                428: T9a51b7d2bc;
-                429: T9a51b7d2bc;
-                500: T9a51b7d2bc;
-                502: T9a51b7d2bc;
-                503: T9a51b7d2bc;
-              };
-            };
-          };
-        };
-      };
-    } & {
-      ":skillId": {
-        delete: {
-          body: Record<never, never>;
-          params: {
-            skillId: T8ff9f6d126;
-          };
-          query: Record<never, never>;
-          headers: Record<never, never>;
-          response: {
-            200: {
-              id: T8ff9f6d126;
-            };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
             402: T9a51b7d2bc;
@@ -22306,6 +20903,1446 @@ export type WebRoutes = {
                 503: T9a51b7d2bc;
               };
             };
+          };
+        };
+      };
+    };
+    skills: {
+      get: {
+        body: Record<never, never>;
+        params: T5e3ac29766;
+        query: {
+          cursor?: string;
+          limit?: number;
+        };
+        headers: Record<never, never>;
+        response: {
+          200: {
+            canManageTeam: Tfddd645dc8;
+            installed: Array<{
+              id: T8ff9f6d126;
+              scope: T7906e8b72f;
+              origin: T10a86d9f45;
+              slug: string;
+              name: string;
+              description: string;
+              version: Tbe0400fa4c;
+              license: Tbe0400fa4c;
+              compatibility: Tbe0400fa4c;
+              sourceUrl: Tbe0400fa4c;
+              contentHash: string;
+              enabled: Tfddd645dc8;
+              command: Tbe0400fa4c;
+              body: Tbe0400fa4c;
+              userId: string;
+              createdAt: string;
+            }>;
+            limit: number;
+            nextCursor: Tbe0400fa4c;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      commands: {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: Array<{
+              id: T8ff9f6d126;
+              scope: T7906e8b72f;
+              name: string;
+              description: string;
+              command: Tbe0400fa4c;
+              body: string;
+            }>;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        get: {
+          body: Record<never, never>;
+          params: {
+            skillId: T8ff9f6d126;
+          };
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              resources: Array<{
+                id: T32a2c3700a;
+                path: string;
+                kind: Tc18269d27b;
+                sizeBytes: number;
+                content: string;
+              }>;
+              id: T8ff9f6d126;
+              scope: T7906e8b72f;
+              origin: T10a86d9f45;
+              userId: string;
+              slug: string;
+              name: string;
+              description: string;
+              version: Tbe0400fa4c;
+              license: Tbe0400fa4c;
+              compatibility: Tbe0400fa4c;
+              sourceUrl: Tbe0400fa4c;
+              contentHash: string;
+              enabled: Tfddd645dc8;
+              body: string;
+              command: Tbe0400fa4c;
+              createdAt: string;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      post: {
+        body: {
+          command?: string;
+          name: string;
+          body: string;
+          scope: T7906e8b72f;
+          description: string;
+        };
+        params: T5e3ac29766;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            id: T8ff9f6d126;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      "from-blueprint": {
+        post: {
+          body: {
+            scope: T7906e8b72f;
+            blueprintId: ("blank" | "answer-from-sources" | "check-against-rules" | "intake-to-draft");
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: T8ff9f6d126;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      upload: {
+        post: {
+          body: {
+            scope: T7906e8b72f;
+            file: File;
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              skippedFiles: Array<Td56234f3f1>;
+              id: T8ff9f6d126;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      "import-url": {
+        post: {
+          body: {
+            url: string;
+            scope: T7906e8b72f;
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              skippedFiles: Array<Td56234f3f1>;
+              id: T8ff9f6d126;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      "discover-url": {
+        post: {
+          body: {
+            url: string;
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              commitSha: Tbe0400fa4c;
+              invalidSkillCount: number;
+              repositoryUrl: Tbe0400fa4c;
+              skills: Array<{
+                compatibility: Tbe0400fa4c;
+                description: string;
+                integrity: {
+                  type: "content-hash";
+                  value: string;
+                } | {
+                  type: "github-commit";
+                  entrypointHash: string;
+                  sourceUrl: string;
+                  value: string;
+                };
+                license: Tbe0400fa4c;
+                name: string;
+                path: Tbe0400fa4c;
+                sourceUrl: string;
+                version: Tbe0400fa4c;
+              }>;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      "import-urls": {
+        post: {
+          body: {
+            scope: T7906e8b72f;
+            items: Array<{
+              sourceUrl: string;
+              integrity: {
+                value: string;
+                type: "content-hash";
+              } | {
+                value: string;
+                type: "github-commit";
+                sourceUrl: string;
+                entrypointHash: string;
+              };
+            }>;
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              failed: Array<{
+                code: ("fetch_failed" | "install_failed" | "integrity_conflict" | "integrity_mismatch" | "name_conflict" | "source_changed" | "team_limit_reached" | "user_limit_reached");
+                sourceUrl: string;
+              }>;
+              installed: Array<{
+                id: string;
+                skippedFiles: Array<Td56234f3f1>;
+                sourceUrl: string;
+              }>;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      "generate-draft": {
+        post: {
+          body: {
+            feedback?: string;
+            examples?: string;
+            previousDraft?: string;
+            previousResources?: Array<{
+              path: string;
+              content: string;
+            }>;
+            intent: string;
+          };
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              markdown: string;
+              resources: Array<{
+                content: string;
+                path: string;
+              }>;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        patch: {
+          body: {
+            name?: string;
+            body?: string;
+            description?: string;
+            version?: null | string;
+            enabled?: false | true;
+            command?: null | string;
+          };
+          params: {
+            skillId: T8ff9f6d126;
+          };
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: T8ff9f6d126;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        resources: {
+          patch: {
+            body: {
+              path: string;
+              content: string;
+            };
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T32a2c3700a;
+                skillId: T8ff9f6d126;
+                path: string;
+                kind: Tc18269d27b;
+                content: string;
+                sizeBytes: number;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        resources: {
+          post: {
+            body: {
+              kind?: "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
+              path: string;
+              content: string;
+            };
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T32a2c3700a;
+                skillId: T8ff9f6d126;
+                path: string;
+                kind: Tc18269d27b;
+                content: string;
+                sizeBytes: number;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        resources: {
+          delete: {
+            body: {
+              path: string;
+            };
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                ok: Tfddd645dc8;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        resources: {
+          rename: {
+            post: {
+              body: {
+                oldPath: string;
+                newPath: string;
+              };
+              params: {
+                skillId: T8ff9f6d126;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T32a2c3700a;
+                  skillId: T8ff9f6d126;
+                  path: string;
+                  kind: Tc18269d27b;
+                  content: string;
+                  sizeBytes: number;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        resources: {
+          upload: {
+            post: {
+              body: {
+                path: string;
+                file: File;
+              };
+              params: {
+                skillId: T8ff9f6d126;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T32a2c3700a;
+                  skillId: T8ff9f6d126;
+                  path: string;
+                  kind: Tc18269d27b;
+                  content: string;
+                  sizeBytes: number;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        resources: {
+          rewrite: {
+            post: {
+              body: {
+                path: string;
+                prompt: string;
+              };
+              params: {
+                skillId: T8ff9f6d126;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  content: string;
+                  path: string;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        revisions: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  id: T6e37e01eb4;
+                  revisionNumber: number;
+                  contentHash: string;
+                  createdBy: Tbe0400fa4c;
+                  createdAt: string;
+                  updatedAt: string;
+                }>;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        revisions: {
+          ":revisionId": {
+            get: {
+              body: Record<never, never>;
+              params: {
+                skillId: T8ff9f6d126;
+                revisionId: T6e37e01eb4;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T6e37e01eb4;
+                  skillId: T8ff9f6d126;
+                  revisionNumber: number;
+                  body: string;
+                  contentHash: string;
+                  createdBy: Tbe0400fa4c;
+                  createdAt: string;
+                  updatedAt: string;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        proposals: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  id: T06c45cc300;
+                  baseRevisionId: T6e37e01eb4;
+                  baseIsCurrent: Tfddd645dc8;
+                  summary: string;
+                  status: Tf8218060a3;
+                  authorId: Tbe0400fa4c;
+                  reviewerId: Tbe0400fa4c;
+                  decidedAt: Tdf2b0d1150;
+                  resultRevisionId: T4866a24af7;
+                  createdAt: string;
+                  updatedAt: string;
+                }>;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        proposals: {
+          ":proposalId": {
+            get: {
+              body: Record<never, never>;
+              params: {
+                skillId: T8ff9f6d126;
+                proposalId: T06c45cc300;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  baseIsCurrent: Tfddd645dc8;
+                  id: T06c45cc300;
+                  skillId: T8ff9f6d126;
+                  baseRevisionId: T6e37e01eb4;
+                  body: string;
+                  summary: string;
+                  status: Tf8218060a3;
+                  authorId: Tbe0400fa4c;
+                  reviewerId: Tbe0400fa4c;
+                  decidedAt: Tdf2b0d1150;
+                  resultRevisionId: T4866a24af7;
+                  createdAt: string;
+                  updatedAt: string;
+                  baseBody: string;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        proposals: {
+          post: {
+            body: {
+              body?: string;
+              summary?: string;
+            };
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: T06c45cc300;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        proposals: {
+          "from-comments": {
+            post: {
+              body: {
+                instructions?: string;
+                commentIds?: Array<Tf42adc792b>;
+              };
+              params: {
+                skillId: T8ff9f6d126;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T06c45cc300;
+                  summary: string;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        proposals: {
+          ":proposalId": {
+            patch: {
+              body: {
+                body?: string;
+                status?: "draft" | "proposed";
+                summary?: string;
+              };
+              params: {
+                skillId: T8ff9f6d126;
+                proposalId: T06c45cc300;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T06c45cc300;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        proposals: {
+          ":proposalId": {
+            review: {
+              post: {
+                body: {
+                  allowStale?: false | true;
+                  decision: Tdce31e5530;
+                };
+                params: {
+                  skillId: T8ff9f6d126;
+                  proposalId: T06c45cc300;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    id: T06c45cc300;
+                    status: Tdce31e5530;
+                    resultRevisionId: T4866a24af7;
+                  };
+                  400: T9a51b7d2bc;
+                  401: T9a51b7d2bc;
+                  402: T9a51b7d2bc;
+                  403: Tddfcdef857;
+                  404: T9a51b7d2bc;
+                  409: T9a51b7d2bc;
+                  413: T9a51b7d2bc;
+                  422: (T9a51b7d2bc | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: T9a51b7d2bc;
+                  429: T9a51b7d2bc;
+                  500: T9a51b7d2bc;
+                  502: T9a51b7d2bc;
+                  503: T9a51b7d2bc;
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        proposals: {
+          ":proposalId": {
+            delete: {
+              body: Record<never, never>;
+              params: {
+                skillId: T8ff9f6d126;
+                proposalId: T06c45cc300;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  ok: Tfddd645dc8;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        comments: {
+          get: {
+            body: Record<never, never>;
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                items: Array<{
+                  readonly id: Tf42adc792b;
+                  readonly revisionId: T6e37e01eb4;
+                  readonly proposalId: (null | T06c45cc300);
+                  readonly rangeStart: number;
+                  readonly rangeEnd: number;
+                  readonly anchorText: string;
+                  readonly body: string;
+                  readonly authorId: Tbe0400fa4c;
+                  readonly resolvedAt: Tdf2b0d1150;
+                  readonly resolvedBy: Tbe0400fa4c;
+                  readonly createdAt: string;
+                }>;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        comments: {
+          post: {
+            body: {
+              revisionId?: T6e37e01eb4;
+              proposalId?: T06c45cc300;
+              body: string;
+              rangeStart: number;
+              rangeEnd: number;
+            };
+            params: {
+              skillId: T8ff9f6d126;
+            };
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tf42adc792b;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        comments: {
+          ":commentId": {
+            patch: {
+              body: {
+                resolved: Tfddd645dc8;
+              };
+              params: {
+                skillId: T8ff9f6d126;
+                commentId: Tf42adc792b;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: Tf42adc792b;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        comments: {
+          ":commentId": {
+            delete: {
+              body: Record<never, never>;
+              params: {
+                skillId: T8ff9f6d126;
+                commentId: Tf42adc792b;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  ok: Tfddd645dc8;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":skillId": {
+        delete: {
+          body: Record<never, never>;
+          params: {
+            skillId: T8ff9f6d126;
+          };
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: T8ff9f6d126;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
           };
         };
       };
@@ -34434,11 +34471,6 @@ type T466db84340 = {
   spisZn: string;
 };
 
-type T46784e6e02 = {
-  status: "unavailable";
-  missingTools: ReadonlyArray<string>;
-};
-
 type T4750c1f7ee = "user" | "proposed" | "detected";
 
 type T47f7828fc7 = null | T6993bee61f;
@@ -34830,10 +34862,6 @@ type T5535a308b3 = string & valibot_Brand<"SafeId"> & {
 type T561c958713 = {
   code?: string;
   message: string;
-};
-
-type T56525d272f = {
-  chatAvailability: (null | Tb3b8903519 | T46784e6e02);
 };
 
 type T565e9250b1 = {
@@ -37671,10 +37699,6 @@ type Tb2f04eed16 = {
   requiredFields?: Array<T81694d3f69>;
 } | {
   readonly message: string;
-};
-
-type Tb3b8903519 = {
-  status: "available";
 };
 
 type Tb3b9f88be6 = {

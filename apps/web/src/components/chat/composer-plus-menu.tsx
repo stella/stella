@@ -86,6 +86,7 @@ import {
   mcpConnectorsOptions,
   skillsOptions,
 } from "@/lib/knowledge/queries";
+import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -414,18 +415,20 @@ const ComposerSkillsSubmenu = ({
     enabled,
   });
 
+  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
   const shortcutRows = useMemo(
-    () => commandShortcutRowsFromSkillPages(data?.pages),
-    [data?.pages],
+    () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
+    [data?.pages, unavailableSkillIds],
   );
   const items = useMemo(
     () =>
       buildChatSlashItems({
         shortcuts: shortcutRows,
         skillPages: data?.pages,
+        unavailableSkillIds,
         reservedCommands: reservedCommands ?? null,
       }),
-    [reservedCommands, shortcutRows, data?.pages],
+    [reservedCommands, shortcutRows, data?.pages, unavailableSkillIds],
   );
 
   const query = search.trim().toLowerCase();

@@ -9,11 +9,6 @@ import {
   AGENT_SKILL_SCOPES,
   type AgentSkillScope,
 } from "@/api/db/schema";
-import { resolveCallerChatSkillAvailability } from "@/api/handlers/skills/chat-availability";
-import {
-  SKILL_TOOL_AVAILABILITY_STATUS,
-  type SkillToolAvailability,
-} from "@/api/lib/agent-skills/required-tools";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -50,10 +45,6 @@ const config = {
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   query: listSkillsQuerySchema,
 } satisfies HandlerConfig;
-
-const AVAILABLE: SkillToolAvailability = {
-  status: SKILL_TOOL_AVAILABILITY_STATUS.available,
-};
 
 type SkillCursor = {
   enabled: boolean;
@@ -93,16 +84,7 @@ const decodeSkillCursor = (cursor: string): SkillCursor | null => {
 
 const listSkills = createSafeRootHandler(
   config,
-  async function* ({
-    getAccessibleWorkspaces,
-    memberRole,
-    orgAIConfig,
-    query,
-    safeDb,
-    scopedDb,
-    session,
-    user,
-  }) {
+  async function* ({ safeDb, session, user, memberRole, query }) {
     const limit = query.limit ?? LIMITS.agentSkillsPageSizeDefault;
 
     const visibilityFilter = and(
@@ -167,7 +149,6 @@ const listSkills = createSafeRootHandler(
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
             command: agentSkills.command,
-            metadata: agentSkills.metadata,
             body: sql<string | null>`
               case
                 when ${agentSkills.command} is not null then ${agentSkills.body}
@@ -195,27 +176,9 @@ const listSkills = createSafeRootHandler(
         encodePaginationCursor([item.enabled, item.scope, item.name, item.id]),
     });
 
-    const chatAvailability = yield* Result.await(
-      resolveCallerChatSkillAvailability({
-        context: {
-          getAccessibleWorkspaces,
-          memberRole,
-          organizationId: session.activeOrganizationId,
-          orgAIConfig,
-          safeDb,
-          scopedDb,
-          userId: user.id,
-        },
-        skills: installedPage.items,
-      }),
-    );
-
     return Result.ok({
       canManageTeam: isOrganizationManagementRole(memberRole.role),
-      installed: installedPage.items.map(({ metadata: _metadata, ...row }) => ({
-        ...row,
-        chatAvailability: chatAvailability.get(row.id) ?? AVAILABLE,
-      })),
+      installed: installedPage.items,
       limit: installedPage.limit,
       nextCursor: installedPage.nextCursor,
     });
