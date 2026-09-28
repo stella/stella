@@ -59,6 +59,8 @@ type ThreadScripts = {
   onStall: () => void;
   /** What each of the thread's model calls produced, in order. */
   produced: ProducedStep[];
+  /** The prompt of every model call the thread made, in order. */
+  prompts: string[][];
   queue: ScriptedRun[];
   /** The model calls not yet taken by `takeRequests`, as handed to the
    *  provider. */
@@ -77,6 +79,7 @@ const newThreadScripts = (): ThreadScripts => {
     modelOptions: [],
     onStall: () => undefined,
     produced: [],
+    prompts: [],
     queue: [],
     requests: [],
     stalled: Promise.resolve(undefined),
@@ -140,6 +143,30 @@ const recordToolResults = (
   }
 };
 
+/**
+ * A model call's prompt as the provider reads it, one entry per message: no
+ * ids or timestamps beyond the tool-call ids the provider pairs results by,
+ * and each tool result up to key order, as `resultIdentity` reads it.
+ */
+const promptOf = (messages: readonly ModelMessage[]): string[] =>
+  messages.map((message) =>
+    stableStringify(
+      toJsonValue({
+        content:
+          message.role === "tool"
+            ? resultIdentity(message.content)
+            : message.content,
+        role: message.role,
+        toolCallId: message.toolCallId,
+        toolCalls: message.toolCalls?.map((call) => ({
+          arguments: call.function.arguments,
+          id: call.id,
+          name: call.function.name,
+        })),
+      }),
+    ),
+  );
+
 const threads = new Map<string, ThreadScripts>();
 /** Per run: the script it took and the next iteration to answer. */
 const runs = new Map<string, { index: number; run: ScriptedRun }>();
@@ -188,6 +215,7 @@ const adapter: AnyTextAdapter = {
     });
     if (scripts !== undefined) {
       recordToolResults(scripts, messages);
+      scripts.prompts.push(promptOf(messages));
     }
     if (
       threadId === undefined ||
@@ -295,6 +323,10 @@ export const installScriptedProvider = () => {
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: string): readonly unknown[] =>
       scriptsOf(threadId).modelOptions,
+    /** The prompt of each of `threadId`'s model calls so far, one entry per
+     *  message. */
+    promptsOf: (threadId: string): readonly (readonly string[])[] =>
+      scriptsOf(threadId).prompts,
     /** `threadId`'s model calls since the last call, as handed to the
      *  provider, cleared on read. */
     takeRequests: (threadId: string): ProviderRequest[] =>

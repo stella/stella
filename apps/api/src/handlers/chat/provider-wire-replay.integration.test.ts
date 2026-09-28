@@ -95,6 +95,7 @@ afterAll(async () => {
  *  conversation's script. */
 const replayedModel = (): HarnessModel => ({
   modelOptionsOf: () => [],
+  promptsOf: () => [],
   restore: () => undefined,
   script: (_threadId, ...runs) => {
     expect(runs).toEqual([]);

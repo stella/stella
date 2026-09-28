@@ -93,6 +93,8 @@ const ASK_USER_ARGUMENTS = JSON.stringify({
 const ASK_USER_ANSWER = {
   answers: [{ answer: "Buyer", question: "Which side?" }],
 };
+/** Arguments the plain tool's input schema rejects. */
+const REJECTED_TOOL_ARGUMENTS = JSON.stringify({ template_id: 42 });
 const DRAFT_ARGUMENTS = JSON.stringify({
   name: "Mutual NDA",
   source: "@title Mutual NDA\n\nThe parties keep each other's information.",
@@ -106,10 +108,11 @@ const DRAFT_RESULT = {
 
 /**
  * What a model call asks for: a server call the loop runs at once, an
- * approval card, an ask-user card, or a client call the page answers on its
- * own, with no card (a drafted document).
+ * approval card, an ask-user card, a client call the page answers on its
+ * own, with no card (a drafted document), or a server call whose input the
+ * tool's schema rejects, which the loop answers at once with the error.
  */
-type CallKind = "approval" | "ask-user" | "client" | "plain";
+type CallKind = "approval" | "ask-user" | "client" | "plain" | "rejected";
 type StepShape = {
   calls: CallKind[];
   /** Read only on a step without calls: the answer hit the output limit. */
@@ -132,7 +135,8 @@ const isFailure = (shape: RunShape): shape is FailureShape =>
  */
 type Decision = "approve" | "approve-all" | "deny";
 
-const isInteraction = (kind: CallKind): boolean => kind !== "plain";
+const isInteraction = (kind: CallKind): boolean =>
+  kind !== "plain" && kind !== "rejected";
 /** Whether the call waits on a card the user answers. */
 const hasCard = (kind: CallKind): boolean =>
   kind === "approval" || kind === "ask-user";
@@ -215,6 +219,13 @@ const scriptedCall = (kind: CallKind, toolCallId: string) => {
     case "plain": {
       return {
         arguments: PLAIN_TOOL_ARGUMENTS,
+        toolCallId,
+        toolName: PLAIN_TOOL_NAME,
+      };
+    }
+    case "rejected": {
+      return {
+        arguments: REJECTED_TOOL_ARGUMENTS,
         toolCallId,
         toolName: PLAIN_TOOL_NAME,
       };
@@ -447,6 +458,23 @@ const findLedgerViolations = async (real: Real): Promise<OracleViolation[]> => {
     ),
   ];
 };
+
+/** `chat.provider.prefix-stable` over a thread's model calls, in order. */
+const prefixBreaksOf = (
+  prompts: readonly (readonly string[])[],
+): OracleViolation[] =>
+  violationsOf(
+    CHAT_ORACLE.providerPrefixStable,
+    prompts.slice(1).flatMap((prompt, index) => {
+      const previous = prompts[index] ?? [];
+      const offset = previous.findIndex(
+        (message, at) => prompt[at] !== message,
+      );
+      return offset === -1
+        ? []
+        : [{ call: index + 1, next: prompt, offset, previous }];
+    }),
+  );
 
 const syncModel = (model: Model, ledger: Ledger) => {
   const pendingKinds = ledger.pending.map((id) => kindOf(ledger, id));
@@ -1129,10 +1157,10 @@ const findUncoveredActions = async (
 
 // --- Generators -----------------------------------------------------------
 
-/** A step's calls: server calls the loop runs at once, calls that wait on
- *  the user, or client calls the page answers on its own. */
+/** A step's calls: server calls the loop runs or rejects at once, calls that
+ *  wait on the user, or client calls the page answers on its own. */
 const callsArb = fc.oneof(
-  fc.array(fc.constant<CallKind>("plain"), { maxLength: 4 }),
+  fc.array(fc.constantFrom<CallKind>("plain", "rejected"), { maxLength: 4 }),
   fc.array(fc.constantFrom<CallKind>("approval", "ask-user"), {
     maxLength: 4,
     minLength: 1,
@@ -1141,7 +1169,13 @@ const callsArb = fc.oneof(
 );
 /** A step's calls in any mix, as a model may make them. */
 const mixedCallsArb = fc.array(
-  fc.constantFrom<CallKind>("plain", "approval", "ask-user", "client"),
+  fc.constantFrom<CallKind>(
+    "plain",
+    "rejected",
+    "approval",
+    "ask-user",
+    "client",
+  ),
   { maxLength: 4, minLength: 1 },
 );
 
@@ -1746,6 +1780,64 @@ describe("a conversation's live view", () => {
         expect(model.pendingKinds).toEqual(["client"]);
         await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
         await new ReloadPage().run(model, real);
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test(
+    "keeps a turn whose model corrects a tool input the tool rejected",
+    async () => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [
+            [
+              { ...STEP, calls: ["rejected"] },
+              { ...STEP, calls: ["plain"] },
+              { ...STEP, text: true },
+            ],
+          ],
+          "List the templates",
+        ).run(model, real);
+        // The fixture must reach the fault: the model saw the rejection as
+        // the call's error result and went on to a stored answer.
+        const [rejected] = real.ledger.calls;
+        const stored = (
+          await real.harness.readThreadMessages(real.threadId)
+        ).flatMap(({ parts }) =>
+          parts.filter(
+            (part) => part.type === "tool-call" && part.id === rejected?.id,
+          ),
+        );
+        expect(stored).toEqual([
+          expect.objectContaining({
+            output: { error: expect.stringContaining("Input validation") },
+            state: "error",
+          }),
+        ]);
+        await new ReloadPage().run(model, real);
+        // The next request reads the rejected call and its error as stored.
+        await new SendUserMessage([TEXT_ANSWER], "Anything else?").run(
+          model,
+          real,
+        );
+        const prompts = real.harness.promptsOf(real.threadId);
+        // The fixture must reach the fault: three model calls in the turn
+        // that recovered, then the next request's, which is handed the
+        // rejection as the call's result.
+        expect(prompts).toHaveLength(4);
+        expect(
+          prompts[3]?.filter(
+            (message) =>
+              message.includes(`"toolCallId":"${rejected?.id ?? ""}"`) &&
+              message.includes("Input validation failed"),
+          ),
+        ).toHaveLength(1);
+        expect(prefixBreaksOf(prompts)).toEqual([]);
       } finally {
         closeConversation(conversation);
       }

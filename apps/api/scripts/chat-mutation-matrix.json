@@ -871,6 +871,20 @@
       "oracle": "chat.live.equals-reload"
     },
     {
+      "id": "rejected-input-call-kept",
+      "fix": "#4068",
+      "behaviour": "A call the engine answered with an error is stored as a failed call whatever its input, so a turn whose model recovers from input the tool's schema rejected stores the whole turn instead of failing to persist it.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-schema.ts",
+      "search": "  if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === \"error\") {\n    return validateErrorToolCallPart({ part, tool });\n  }",
+      "replace": "  if (\n    TOOL_CALL_OUTPUT_VALIDATION[part.state] === \"error\" &&\n    tool !== undefined &&\n    Result.isOk(validateToolCallInput({ part, tool }))\n  ) {\n    return validateErrorToolCallPart({ part, tool });\n  }",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps a turn whose model corrects a tool input the tool rejected"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
       "id": "transcript-closing-results-join-their-step",
       "fix": "#4006",
       "behaviour": "A result the engine history adds to close a call of an ended turn joins its step's results, so the step's calls stay in one model message and every one of them is answered right after it.",
