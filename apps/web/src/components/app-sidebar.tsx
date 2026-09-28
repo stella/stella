@@ -1487,12 +1487,11 @@ const MatterItem = ({
         {isExpanded ? (
           <div id={`matter-activity-${ws.id}`}>
             {showTimesheetLink && (
-              <SidebarMenuSub className="border-0">
+              <SidebarMenuSub>
                 <SidebarMenuSubItem>
                   <MatterActivityRow>
                     <Link
                       activeProps={{ "data-active": true }}
-                      from="/_protected"
                       params={{ workspaceId: ws.id }}
                       to="/workspaces/$workspaceId/timesheets"
                     >
