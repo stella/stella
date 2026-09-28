@@ -133,6 +133,24 @@ describe("prose scoping", () => {
     ).toBeUndefined();
   });
 
+  // A surface without the feedback tools still gets a step it can take.
+  test("the scoped internal-error hint keeps a recovery step", () => {
+    const scoped = scopeToolResultToSurface(
+      toolUtils.structuredErrorResult({
+        code: "internal_error",
+        message: "Tool execution failed",
+        hint: toolUtils.MCP_INTERNAL_ERROR_HINT,
+      }),
+      "law",
+    );
+    expect(scoped.status === "error" && scoped.error).toEqual({
+      type: "structured",
+      code: "internal_error",
+      message: "Tool execution failed",
+      hint: "This is a server-side failure; changing the arguments will not fix it. Tell the human this step failed on the server, then continue without it.",
+    });
+  });
+
   test("a scoped error drops the hint key rather than serving an empty one", () => {
     const result = toolUtils.structuredErrorResult({
       code: "internal_error",

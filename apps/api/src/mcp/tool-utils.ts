@@ -499,10 +499,11 @@ export const errorResult = (message: string): InternalToolErrorResult => ({
  *
  * One step per sentence: the dispatch boundary drops each sentence naming a
  * tool the serving surface does not list (`scopeToolResultToSurface`), so a
- * surface without the feedback tools keeps the first sentence alone.
+ * surface without the feedback tools keeps the first two: what failed, and
+ * the step every caller can still take.
  */
 export const MCP_INTERNAL_ERROR_HINT =
-  "This is a server-side failure; changing the arguments will not fix it. If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.";
+  "This is a server-side failure; changing the arguments will not fix it. Tell the human this step failed on the server, then continue without it. If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.";
 
 /**
  * Hint for a backing service that is temporarily unreachable. Same

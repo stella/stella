@@ -545,7 +545,9 @@ describe("compat search reaching the public corpus", () => {
           args: { query: "promlčení" },
           context: createContext({
             practiceJurisdictions: [{ countryCode: "JP", isPrimary: true }],
-            searchProvider: surface.searchProvider,
+            ...(surface.searchProvider === undefined
+              ? {}
+              : { searchProvider: surface.searchProvider }),
           }),
           handler: surface.handler,
           mode: surface.mode,

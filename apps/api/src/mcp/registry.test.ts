@@ -89,8 +89,10 @@ describe("MCP tool registry", () => {
         source.anonymized.description !== undefined
           ? source.anonymized.description
           : source.description;
+      // A description with no sentence left to keep is served whole.
       expect(projected.description).toBe(
-        scopeProseToSurface(expectedDescription, anonymizedVocabulary),
+        scopeProseToSurface(expectedDescription, anonymizedVocabulary) ??
+          expectedDescription,
       );
     }
   });
