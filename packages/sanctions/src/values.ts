@@ -53,13 +53,15 @@ export const parseIsoDate = (
 };
 
 /** A listed birth date given to the day. */
+type DayBirthDate = Extract<BirthDate, { precision: "day" }>;
+
 export const parseDayBirthDate = (
   source: SanctionsSource,
   value: string,
   circa: boolean,
-): Result<BirthDate, SanctionsListParseError> =>
-  parseIsoDate(source, value).map(({ year, month, day }): BirthDate => ({
-    precision: "day",
+): Result<DayBirthDate, SanctionsListParseError> =>
+  parseIsoDate(source, value).map(({ year, month, day }) => ({
+    precision: "day" as const,
     year,
     month,
     day,
