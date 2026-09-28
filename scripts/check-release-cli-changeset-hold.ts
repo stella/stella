@@ -105,7 +105,7 @@ const gitOutput = (args: readonly string[], root: string): string => {
   return result.stdout;
 };
 
-/** Changesets this pull request adds that name @stll/cli. */
+/** Changesets this pull request adds or edits that name @stll/cli. */
 export const readAddedCliChangesets = (
   root: string,
   base: string,
@@ -120,7 +120,7 @@ export const readAddedCliChangesets = (
       "--no-renames",
       "--name-only",
       "-z",
-      "--diff-filter=A",
+      "--diff-filter=AM",
       mergeBase,
       "HEAD",
       "--",

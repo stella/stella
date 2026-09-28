@@ -164,6 +164,23 @@ describe("release CLI changeset hold integration", () => {
     });
   });
 
+  test("counts a pending changeset the pull request edits to name the CLI", () => {
+    withGitFixture((root) => {
+      writeFileSync(
+        path.join(root, ".changeset/other-base.md"),
+        OTHER_CHANGESET,
+      );
+      commitAll(root, "another pending entry");
+      runGit(root, ["branch", "-f", "base"]);
+      writeFileSync(path.join(root, ".changeset/other-base.md"), CLI_CHANGESET);
+      commitAll(root, "edit");
+
+      expect(readAddedCliChangesets(root, "base")).toEqual([
+        ".changeset/other-base.md",
+      ]);
+    });
+  });
+
   test("ignores a CLI changeset already pending on the base", () => {
     withGitFixture((root) => {
       commitAll(root, "no changesets");

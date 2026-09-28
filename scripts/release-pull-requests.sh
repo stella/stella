@@ -39,7 +39,10 @@ if [[ -n "$number" && ! "$number" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+# The search narrows the listing to release titles on the server, so the limit
+# counts candidates only, never unrelated open pull requests.
 releases=$(gh pr list --repo "$repo" --state open --base main \
+  --search '"chore: release v" in:title' \
   --limit 100 --json number,title,isDraft,isCrossRepository \
   --jq '[
     .[]

@@ -75,8 +75,6 @@ jobs:
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
-      release_open_other: ${{ steps.release.outputs.open_other }}
-      release_is_current: ${{ steps.release.outputs.current_is_release }}
     steps:
       - name: Resolve suite depth
         id: depth
@@ -179,36 +177,6 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-
-      # A CLI changeset that lands while a release pull request is open leaves
-      # the release a CLI change it did not version, and the release coupling
-      # guard then ejects the release from the queue. ci-checks holds such a
-      # pull request instead; this step tells it whether a release is open and
-      # whether the pull request under test is that release.
-      - name: Look for an open release
-        if: >-
-          steps.check.outputs.trusted == 'true'
-          && (github.event_name == 'pull_request'
-          || github.event_name == 'merge_group')
-        id: release
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
-          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
-          REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          number="$PULL_REQUEST_NUMBER"
-          if [[ "$EVENT_NAME" == "merge_group" ]]; then
-            if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
-              echo "::error::Merge group head ref does not name a pull request: $MERGE_GROUP_HEAD_REF"
-              exit 1
-            fi
-            number="${BASH_REMATCH[1]}"
-          fi
-          bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number" \
-            >> "$GITHUB_OUTPUT"
 
       - name: Check changed file scope
         if: >-
@@ -608,6 +576,8 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+      # Release PR state for the release CLI changeset hold.
+      pull-requests: read
 
     steps:
       - name: Checkout
@@ -834,14 +804,30 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
-          IS_RELEASE: ${{ needs.ci-plan.outputs.release_is_current }}
-          OPEN_RELEASES: ${{ needs.ci-plan.outputs.release_open_other }}
-        run: >-
-          bun scripts/check-release-cli-changeset-hold.ts
-          --base "origin/$BASE_REF"
-          --event "$EVENT_NAME"
-          --open-releases "$OPEN_RELEASES"
-          --is-release "$IS_RELEASE"
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Read the release state here, right before the decision: a release
+          # opened while this run was queued must still hold the pull request.
+          number="$PULL_REQUEST_NUMBER"
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+            if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+              echo "::error::Merge group head ref does not name a pull request: $MERGE_GROUP_HEAD_REF"
+              exit 1
+            fi
+            number="${BASH_REMATCH[1]}"
+          fi
+          state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
+          open_other=$(sed -n 's/^open_other=//p' <<<"$state")
+          current_is_release=$(sed -n 's/^current_is_release=//p' <<<"$state")
+          bun scripts/check-release-cli-changeset-hold.ts \
+            --base "origin/$BASE_REF" \
+            --event "$EVENT_NAME" \
+            --open-releases "$open_other" \
+            --is-release "$current_is_release"
 
       - name: CLI contract changeset guard
         if: >-

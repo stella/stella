@@ -10,7 +10,7 @@ trap 'rm -rf "$stub_dir"' EXIT
 
 cat > "$stub_dir/gh" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "${STUB_RELEASES:-}"
+printf '%s\n' "${STELLA_TEST_RELEASE_NUMBERS:-}"
 EOF
 chmod +x "$stub_dir/gh"
 
@@ -19,7 +19,7 @@ expect_output() {
   local name="$1" releases="$2" expected="$3"
   shift 3
   local actual
-  actual="$(STUB_RELEASES="$releases" PATH="$stub_dir:$PATH" bash "$subject" "$@")"
+  actual="$(STELLA_TEST_RELEASE_NUMBERS="$releases" PATH="$stub_dir:$PATH" bash "$subject" "$@")"
   if [[ "$actual" != "$expected" ]]; then
     echo "FAIL $name"
     echo "  expected: $expected"
@@ -39,7 +39,7 @@ expect_output "the pull request is the release" "4014" \
 expect_output "counts every release without a number" "4014 4020" \
   $'open_other=2\ncurrent_is_release=false' --repo stella/stella
 
-if STUB_RELEASES="" PATH="$stub_dir:$PATH" bash "$subject" --repo stella/stella --number abc >/dev/null 2>&1; then
+if STELLA_TEST_RELEASE_NUMBERS="" PATH="$stub_dir:$PATH" bash "$subject" --repo stella/stella --number abc >/dev/null 2>&1; then
   echo "FAIL rejects a non-numeric --number"
   failures=$((failures + 1))
 else
