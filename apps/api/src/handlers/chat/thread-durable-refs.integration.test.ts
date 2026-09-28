@@ -201,7 +201,7 @@ const read = async (conversation: Conversation, readIn: ReadIn) => {
       break;
     default:
       readIn satisfies never;
-      return expect.unreachable(`Unhandled read: ${String(readIn)}`);
+      expect.unreachable(`Unhandled read: ${String(readIn)}`);
   }
   await settled(conversation);
 };
