@@ -1,3 +1,4 @@
+import type { UnhandledException } from "better-result";
 import { Result, TaggedError } from "better-result";
 
 class SourceFileUnavailableError extends TaggedError(
@@ -16,10 +17,12 @@ type OpenSourceFileArgs = {
 export const openSourceFile = async ({
   load,
   navigate,
-}: OpenSourceFileArgs) => {
+}: OpenSourceFileArgs): Promise<
+  Result<void, SourceFileUnavailableError | UnhandledException>
+> => {
   const loaded = await Result.tryPromise(load);
   if (Result.isError(loaded)) {
-    return loaded;
+    return Result.err(loaded.error);
   }
   const file = loaded.value.fields.find(
     (field) => field.content.type === "file",
