@@ -282,7 +282,7 @@ const findStoredLosses = ({
 }: {
   after: SavedStateRows;
   before: SavedStateRows;
-  continuedMessageId: string;
+  continuedMessageId: string | null;
 }): OracleViolation[] => {
   const findings: unknown[] = [];
   const afterMessages = new Map(
@@ -326,23 +326,23 @@ const findStoredLosses = ({
   return violationsOf(PAST_RELEASE, findings);
 };
 
+/** Per oracle that can report a defect a release stored: the finding's
+ *  field naming the tool call. */
+const DEFECT_NAME_FIELDS: ReadonlyMap<string, string> = new Map([
+  [CHAT_ORACLE.persistedCallsSettled, "toolCallId"],
+  [CHAT_ORACLE.liveToolPartsOnce, "key"],
+]);
+
 /** The stored defect a harness finding names, as a fixture declares it:
  *  `<oracle> <tool call>`. */
 const storedDefectOf = ({ detail, oracle }: OracleViolation): string | null => {
   if (!isRecord(detail)) {
     return null;
   }
-  switch (oracle) {
-    case CHAT_ORACLE.persistedCallsSettled: {
-      return `${oracle} ${String(detail["toolCallId"])}`;
-    }
-    case CHAT_ORACLE.liveToolPartsOnce: {
-      return `${oracle} ${String(detail["key"])}`;
-    }
-    default: {
-      return null;
-    }
-  }
+  // Only these two oracles report a defect a release stored; any other
+  // finding is never inherited.
+  const name = DEFECT_NAME_FIELDS.get(oracle);
+  return name === undefined ? null : `${oracle} ${String(detail[name])}`;
 };
 
 /** Runs `step`; a throw is a finding of the past-release oracle. */
@@ -389,10 +389,10 @@ const continueSavedThread = async (
       return { executions: harness.executions, violations };
     }
     const before = await dumpSavedState(testDb, threadId);
-    const continued =
-      (before.chat_turns ?? []).find(
-        (turn) => turn["status"] === "awaiting-user",
-      )?.["assistant_message_id"] ?? null;
+    const owner = (before.chat_turns ?? []).find(
+      (turn) => turn["status"] === "awaiting-user",
+    )?.["assistant_message_id"];
+    const continued = typeof owner === "string" ? owner : null;
 
     violations.push(
       ...(await attempt("reload", async () =>
@@ -494,7 +494,7 @@ const continueSavedThread = async (
       ...findStoredLosses({
         after,
         before,
-        continuedMessageId: String(continued),
+        continuedMessageId: continued,
       }),
       ...(await attempt("reload after", async () =>
         findServedLosses(
