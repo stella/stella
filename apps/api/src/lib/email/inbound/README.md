@@ -17,6 +17,8 @@ Addresses use 32 random bytes encoded as 64 lowercase hexadecimal characters.
 - Provider verdicts are out-of-band metadata. Authenticate the notification
   publisher before calling `receiveSesInboundMail`. Configure its allowed S3
   bucket and key prefix; the adapter verifies both before fetching bytes.
+  Provider DMARC counts only when the notification's single `From` header has
+  the same domain as the parsed author.
 - A verified primary address or verified alias requires current matter access.
   An approved shared mailbox requires current organization or matter scope.
   Its filer is the mailbox; documents have no human creator. The approval's

@@ -155,7 +155,7 @@ const normalizeMailbox = (address: Address): string | null => {
   return mailbox;
 };
 
-const parseOneMailbox = (value: string): string | null => {
+export const parseOneMailbox = (value: string): string | null => {
   const addresses = addressParser(value, { flatten: true });
   const address = addresses.at(0);
   return addresses.length === 1 && address ? normalizeMailbox(address) : null;
@@ -283,10 +283,13 @@ const checkRaw = (raw: Uint8Array): Result<number, InboundMessageError> => {
       break;
     }
   }
-  if (headerEnd < 0) {
-    return fail("headersTooLarge");
+  if (headerEnd >= 0) {
+    return Result.ok(headerEnd);
   }
-  return Result.ok(headerEnd);
+  // RFC 5322 allows a message with headers and no body, so no separator line.
+  return raw.byteLength <= INBOUND_MAIL_LIMITS.headerBytes
+    ? Result.ok(raw.byteLength)
+    : fail("headersTooLarge");
 };
 
 const rawDateHeader = (raw: Uint8Array, headerEnd: number): string | null => {

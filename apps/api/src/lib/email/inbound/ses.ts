@@ -17,19 +17,26 @@ import {
   type InboundDeliveryStore,
 } from "@/api/lib/email/inbound/ingest";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
+import { parseOneMailbox } from "@/api/lib/email/inbound/message";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const SES_STATUS = ["PASS", "FAIL", "GRAY", "PROCESSING_FAILED"] as const;
 const verdict = v.object({ status: v.picklist(SES_STATUS) });
 const boundedString = v.pipe(v.string(), v.maxLength(1024));
 // SES owns this extensible envelope. Strip fields we do not store, especially
-// subjects, header snapshots, and provider-added diagnostic text.
+// subjects, header snapshots, and provider-added diagnostic text. The author
+// header is kept only to bind the DMARC verdict to the domain SES evaluated.
 const sesDeliverySchema = v.object({
   notificationType: v.literal("Received"),
   mail: v.object({
     messageId: v.pipe(v.string(), v.regex(/^[a-zA-Z0-9-]{1,256}$/u)),
     source: boundedString,
     timestamp: v.pipe(v.string(), v.isoTimestamp()),
+    commonHeaders: v.optional(
+      v.object({
+        from: v.optional(v.pipe(v.array(boundedString), v.maxLength(2))),
+      }),
+    ),
   }),
   receipt: v.object({
     recipients: v.pipe(
@@ -245,6 +252,14 @@ export const readSesInboundDelivery = async ({
   if (object.value.byteLength > INBOUND_MAIL_LIMITS.rawBytes) {
     return oversized();
   }
+  // SES evaluates DMARC against its own reading of the From header. A parser
+  // differential must not let its verdict for one domain authorise another.
+  const providerFrom = mail.commonHeaders?.from ?? [];
+  const providerAuthor =
+    providerFrom.length === 1
+      ? parseOneMailbox(providerFrom.at(0) ?? "")
+      : null;
+  const providerDomain = providerAuthor && mailboxDomain(providerAuthor);
   const verify: MailVerifier = async ({ fromAddress }) => {
     const fromDomain = mailboxDomain(fromAddress);
     if (!fromDomain) {
@@ -254,24 +269,27 @@ export const readSesInboundDelivery = async ({
         ),
       );
     }
+    // A verdict for another domain is a permanent failure, not a retry.
+    const verdictOf = ({ status }: { status: SesStatus }): MailAuthResult =>
+      providerDomain === fromDomain ? AUTH_RESULT[status] : "fail";
     return await Promise.resolve(
       Result.ok({
         source: "provider",
         evidence: "provider-dmarc",
         fromDomain,
         spf: {
-          result: AUTH_RESULT[receipt.spfVerdict.status],
+          result: verdictOf(receipt.spfVerdict),
           domain: null,
           alignment: "relaxed",
         },
         dkim: [
           {
-            result: AUTH_RESULT[receipt.dkimVerdict.status],
+            result: verdictOf(receipt.dkimVerdict),
             domain: null,
             alignment: "relaxed",
           },
         ],
-        dmarc: AUTH_RESULT[receipt.dmarcVerdict.status],
+        dmarc: verdictOf(receipt.dmarcVerdict),
       } satisfies MailAuthentication),
     );
   };

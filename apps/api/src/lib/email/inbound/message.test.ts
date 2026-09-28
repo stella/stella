@@ -432,6 +432,23 @@ describe("inbound MIME normalization", () => {
     expect(absent.outerSender).toBeNull();
   });
 
+  test("accepts a message with headers and no body", async () => {
+    const parsed = await parseValidInboundMessage(
+      bytes(`${baseHeaders.replace(/\n/gu, "\r\n")}\r\n`),
+    );
+    expect(parsed.outerSender).toBe("member@example.test");
+    expect(parsed.message.from).toBe("member@example.test");
+  });
+
+  test("still rejects headers without a separator past the header limit", async () => {
+    const raw = bytes(
+      `${baseHeaders.replace(/\n/gu, "\r\n")}\r\nX-Padding: ${"a".repeat(INBOUND_MAIL_LIMITS.headerBytes)}\r\n`,
+    );
+    expect(await parseInboundMessageError(raw)).toMatchObject({
+      reason: "headersTooLarge",
+    } satisfies Partial<InboundMessageError>);
+  });
+
   test("rejects oversized raw messages and dangerous attachment names", async () => {
     const oversized = new Uint8Array(INBOUND_MAIL_LIMITS.rawBytes + 1);
     expect(await parseInboundMessageError(oversized)).toMatchObject({

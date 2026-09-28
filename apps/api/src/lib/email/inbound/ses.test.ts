@@ -17,6 +17,7 @@ const event = {
     messageId: "delivery-1",
     source: "member@example.com",
     timestamp: "2026-09-26T12:00:00.000Z",
+    commonHeaders: { from: ["Member <member@example.com>"] },
   },
   receipt: {
     recipients: ["token@inbound.example.com"],
@@ -82,6 +83,38 @@ test.each(["FAIL", "GRAY", "PROCESSING_FAILED"])(
     if (auth.isErr()) {
       return;
     }
+    expect(hasAlignedAuthentication(auth.value, "member@example.com")).toBe(
+      false,
+    );
+  },
+);
+
+test.each([
+  ["another domain", { from: ["Other <member@attacker.test>"] }],
+  ["two authors", { from: ["member@example.com", "member@attacker.test"] }],
+  ["no author", { from: [] }],
+  ["no headers", undefined],
+])(
+  "a provider DMARC pass for %s does not authenticate the parsed author",
+  async (_label, commonHeaders) => {
+    const delivery = await read({
+      ...event,
+      mail: { ...event.mail, commonHeaders },
+    });
+    expect(delivery.isOk() && delivery.value.status).toBe("received");
+    if (delivery.isErr() || delivery.value.status !== "received") {
+      return;
+    }
+    const auth = await delivery.value.verify({
+      raw,
+      envelope: delivery.value.envelope,
+      fromAddress: "member@example.com",
+    });
+    expect(auth.isOk()).toBe(true);
+    if (auth.isErr()) {
+      return;
+    }
+    expect(auth.value.dmarc).toBe("fail");
     expect(hasAlignedAuthentication(auth.value, "member@example.com")).toBe(
       false,
     );
