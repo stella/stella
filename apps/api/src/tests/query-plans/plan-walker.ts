@@ -26,7 +26,11 @@ export type AccessPath = Pick<
   ScanOccurrence,
   "relation" | "nodeType" | "index"
 > &
-  ({ position: string; alias?: never } | { alias: string; position?: never });
+  (
+    | { position: string; alias?: never; occurrence?: never }
+    | { alias: string; position?: never; occurrence?: never }
+    | { occurrence: number; position?: never; alias?: never }
+  );
 
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
 
@@ -244,10 +248,21 @@ export const accessPathViolations = (
   const actualGuarded = scans.filter((scan) =>
     guardedTables.has(scan.relation),
   );
-  const matches = (scan: ScanOccurrence, path: AccessPath): boolean =>
-    path.position === undefined
-      ? scan.alias === path.alias
-      : scan.position === path.position;
+  const matches = (scan: ScanOccurrence, path: AccessPath): boolean => {
+    if (path.position !== undefined) {
+      return scan.position === path.position;
+    }
+    if (path.alias !== undefined) {
+      return scan.alias === path.alias;
+    }
+    // The occurrence is the relation's zero-based DFS position in this plan.
+    return (
+      scan.relation === path.relation &&
+      actualGuarded
+        .filter((candidate) => candidate.relation === scan.relation)
+        .indexOf(scan) === path.occurrence
+    );
+  };
   for (const scan of actualGuarded) {
     const targets = expected.filter((path) => matches(scan, path));
     const target = targets.at(0);
@@ -284,7 +299,7 @@ export const accessPathViolations = (
     const matching = actualGuarded.filter((scan) => matches(scan, path));
     if (matching.length !== 1) {
       violations.push(
-        `${path.position ?? path.alias}: expected one ${path.relation} scan, found ${matching.length}`,
+        `${path.position ?? path.alias ?? `${path.relation}[${path.occurrence}]`}: expected one ${path.relation} scan, found ${matching.length}`,
       );
     }
   }

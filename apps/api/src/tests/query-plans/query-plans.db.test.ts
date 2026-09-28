@@ -126,6 +126,12 @@ test(
         (entry) => entry.id === "case-law.ecli-identity",
       ) ?? panic("ECLI query is absent from the plan registry");
     const unionScans = await explain(union.role, union.build);
+    expect(unionScans.some(({ nodeType }) => nodeType === "Seq Scan")).toBe(
+      false,
+    );
+    const indexes = unionScans.map(({ index }) => index);
+    expect(indexes).toContain("case_law_decisions_ecli_idx");
+    expect(indexes).toContain("case_law_decision_identifiers_lookup_idx");
     expect(
       accessPathViolations(
         unionScans,

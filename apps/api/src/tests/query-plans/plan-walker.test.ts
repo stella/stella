@@ -59,6 +59,27 @@ test("keeps repeated relation scans distinct by structural position", () => {
       false,
     ),
   ).toEqual([]);
+  expect(
+    accessPathViolations(
+      scans,
+      [
+        {
+          occurrence: 0,
+          relation: "case_law_decisions",
+          nodeType: "Index Only Scan",
+          index: "case_law_decisions_ecli_idx",
+        },
+        {
+          occurrence: 1,
+          relation: "case_law_decisions",
+          nodeType: "Index Scan",
+          index: "case_law_decisions_pkey",
+        },
+      ],
+      "point",
+      false,
+    ),
+  ).toEqual([]);
 });
 
 test("uses bitmap child index conditions for the heap scan", () => {
@@ -182,4 +203,37 @@ test("excludes only the authorization subplan from residual checks", () => {
       false,
     ),
   ).toContain("root: residual subplan without index condition");
+});
+
+test("the workspace authorization subplan is excluded on its own", () => {
+  const scans = scanOccurrences({
+    "Node Type": "Index Scan",
+    "Relation Name": "case_law_decisions",
+    Alias: "case_law_decisions",
+    "Index Name": "case_law_decisions_country_date_idx",
+    Filter: "(hashed SubPlan 1)",
+    Plans: [
+      {
+        "Node Type": "Subquery Scan",
+        "Parent Relationship": "SubPlan",
+        "Subplan Name": "SubPlan 1",
+        Alias: "stella_authorized_workspaces",
+      },
+    ],
+  });
+  expect(
+    accessPathViolations(
+      scans,
+      [
+        {
+          alias: "case_law_decisions",
+          relation: "case_law_decisions",
+          nodeType: "Index Scan",
+          index: "case_law_decisions_country_date_idx",
+        },
+      ],
+      "point",
+      false,
+    ),
+  ).toEqual([]);
 });

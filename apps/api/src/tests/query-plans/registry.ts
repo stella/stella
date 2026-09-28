@@ -6,6 +6,7 @@ import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readine
 import type { Transaction } from "@/api/db/root";
 import { decisionTextPresenceQuery } from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsQuery } from "@/api/handlers/case-law/decisions/list";
+import { decisionIdsByIdentityQuery } from "@/api/handlers/case-law/decisions/search";
 import {
   getShardConditions,
   sitemapShardDecisionsQuery,
@@ -14,7 +15,6 @@ import { sitemapBucketCountsQuery } from "@/api/lib/case-law/sitemap-shard-refre
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
-import { ecliUnionFixtureQuery } from "@/api/tests/query-plans/ecli-fixtures";
 import type { AccessPath } from "@/api/tests/query-plans/plan-walker";
 import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";
 
@@ -52,13 +52,22 @@ export const QUERY_PLAN_REGISTRY = [
     id: "case-law.ecli-identity",
     class: "point",
     role: "public-law-reader",
-    build: (tx) => ecliUnionFixtureQuery(tx),
+    build: (tx) =>
+      decisionIdsByIdentityQuery({
+        country: QUERY_PLAN_SAMPLE.caseLaw.country,
+        identity: {
+          type: "identifier",
+          kind: "ecli",
+          value: QUERY_PLAN_SAMPLE.caseLaw.sharedEcli,
+        },
+        tx,
+      }),
     seed: "case-law",
     status: { type: "active" },
     contract: {
       scans: [
         {
-          alias: "ecli_decisions",
+          occurrence: 0,
           relation: "case_law_decisions",
           nodeType: "Bitmap Heap Scan",
           index: "case_law_decisions_ecli_idx",
@@ -70,7 +79,7 @@ export const QUERY_PLAN_REGISTRY = [
           index: "case_law_decision_identifiers_lookup_idx",
         },
         {
-          alias: "case_law_decisions",
+          occurrence: 1,
           relation: "case_law_decisions",
           nodeType: "Index Only Scan",
           index: "case_law_decisions_pkey",
