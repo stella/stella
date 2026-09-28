@@ -1,0 +1,5 @@
+[install]
+# Bun reads only the bunfig.toml of the directory it installs in, so this
+# lockfile does not inherit the root's 5-day release-age quarantine. Keep the
+# same value; scripts/check-standalone-lockfiles.ts fails when they differ.
+minimumReleaseAge = 432_000

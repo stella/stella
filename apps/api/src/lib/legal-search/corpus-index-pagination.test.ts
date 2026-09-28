@@ -646,6 +646,56 @@ describe("document paging survives the passage fan-out", () => {
   });
 });
 
+describe("split legislation stays one hit across cursor pages", () => {
+  test("each act appears once even when several passages match", async () => {
+    const acts = ["act-a", "act-b", "act-c", "act-d"];
+    // Split acts can have many matching passages. Interleaving the hits also
+    // ensures grouping does not depend on passages being adjacent.
+    engineHits = [0, 1, 2].flatMap(() =>
+      acts.map((documentId) => ({ document_id: documentId })),
+    );
+
+    const readLegislationPage = async (parsedCursor: SearchCursor | null) =>
+      await readCorpusIndexSearchPage({
+        cluster: "q09",
+        indexId: "legislation_v2",
+        query: "text:ustanovení",
+        limit: 2,
+        order: RELEVANCE_ORDER,
+        parsedCursor,
+        snippetFields: [],
+        extractId: (hit: CorpusIndexHit) =>
+          typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+        extractSnippet: () => null,
+        unseenScoreUpperBound: () => 0,
+        rankCandidates: async (candidates) => ({
+          context: null,
+          ranked: candidates.map((candidate) => ({
+            id: candidate.id,
+            score: candidate.score,
+            lexicalScore: candidate.score,
+            citationAuthority: 0,
+          })),
+        }),
+      });
+
+    const seen: string[] = [];
+    let cursor: SearchCursor | null = null;
+    for (const expectedIds of [acts.slice(0, 2), acts.slice(2)]) {
+      const page = await readLegislationPage(cursor);
+      expect(page.pageRanked.map((hit) => hit.id)).toEqual(expectedIds);
+      seen.push(...page.pageRanked.map((hit) => hit.id));
+      cursor = page.nextCursor;
+      if (cursor === null) {
+        break;
+      }
+    }
+
+    expect(seen).toEqual(acts);
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+});
+
 /**
  * The ranker may fold several candidates into one hit (the language versions
  * of one judgment). The page must then hold `limit` folded hits, and a folded

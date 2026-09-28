@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -21,6 +21,7 @@ import {
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { rowHoldsDocumentFor } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
 import {
   observedDocketOf,
@@ -109,6 +110,14 @@ export const observeDecision = ({
     docket.type === "trimmed"
       ? [observed.caseNumber, input.caseNumber.replace(DANGEROUS_CHARS, "")]
       : [observed.caseNumber];
+  // An adapter maps its source's court to a directory id and rejects what the
+  // directory does not admit before a result gets here. One that reaches the
+  // write path unresolved is an adapter defect, and writing it would store a
+  // court the index cannot partition, so the run stops on it.
+  const courtId = resolveDecisionCourtId(observed);
+  if (Result.isError(courtId)) {
+    return panic(courtId.error.message, courtId.error);
+  }
   const rejectedDecisionDate =
     observed.decisionDate === undefined ? input.decisionDate : undefined;
   if (rejectedDecisionDate !== undefined) {

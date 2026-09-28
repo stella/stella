@@ -175,6 +175,18 @@ describe("driver errors that reached the caller unwrapped", () => {
 });
 
 describe("pgErrorFields", () => {
+  it("includes a Bun connection code without a SQLSTATE", () => {
+    const driver = new SQL.PostgresError("idle", {
+      code: "ERR_POSTGRES_IDLE_TIMEOUT",
+    });
+    const fields = pgErrorFields(
+      new DrizzleQueryError("query failed", [], driver),
+    );
+    expect(fields["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_IDLE_TIMEOUT",
+    );
+    expect(fields["error.cause.pg_code"]).toBeUndefined();
+  });
   it("surfaces the SQLSTATE from a DrizzleQueryError-wrapped PostgresError", () => {
     const error = new DrizzleQueryError(
       "query failed",

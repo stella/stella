@@ -64,6 +64,7 @@ import {
   confirmationUnavailableResult,
   cursorInput,
   DEFAULT_LIST_LIMIT,
+  didYouMean,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   getWorkspaceStatus,
@@ -72,6 +73,7 @@ import {
   notFoundResult,
   nullAsAbsent,
   oauthScopeRecoveryHint,
+  quoteToolName,
   structuredErrorResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -952,7 +954,7 @@ const featureDisabledResult = (
 const hintForUnknownId = (id: string): string => {
   const suggestions = closestToolNames(id, CATALOG_IDS);
   return suggestions.length > 0
-    ? `Did you mean: ${suggestions.join(", ")}? Call list_capabilities to browse the full set.`
+    ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
     : "Call list_capabilities to browse available capability ids.";
 };
 

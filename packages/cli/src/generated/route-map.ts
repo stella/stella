@@ -552,7 +552,7 @@ export const generatedRouteMap: RouteNode = {
                 cursor: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 1330,
+                  maxLength: 1623,
                   description:
                     "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
                 },
@@ -8643,7 +8643,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "case-law", "ingestion-get"],
                 capabilityId: "case-law.ingestion.get",
                 description:
-                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). Requires organization audit-log access.",
+                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
                 access: "read",
                 flags: [],
                 inputOnly: [],

@@ -65,8 +65,10 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
+  didYouMean,
   MCP_INTERNAL_ERROR_HINT,
   oauthScopeRecoveryHint,
+  quoteToolName,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -718,7 +720,7 @@ export const createMcpHttpRequestHandler = ({
           message: `Unknown tool: ${formatUnknownToolName(toolName)}`,
           hint:
             suggestions.length > 0
-              ? `No such tool. Did you mean: ${suggestions.join(", ")}? Call tools/list for the full set.`
+              ? `No such tool. ${didYouMean(suggestions.map(quoteToolName))} Call tools/list for the full set.`
               : "No such tool. Call tools/list for the tools available to this session.",
         });
       }

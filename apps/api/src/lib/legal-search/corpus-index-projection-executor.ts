@@ -8,14 +8,16 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
-import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import type {
   CorpusIndexClient,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
-import { buildCorpusProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
+import {
+  buildCorpusProjectionDocuments,
+  legislationV2NeedsPassages,
+} from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
@@ -43,6 +45,9 @@ import {
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
+  type CorpusProjectionAppendAbandonResult,
+  startCorpusProjectionMultipartAppendTx,
+  continueCorpusProjectionAppendPartTx,
   type CorpusProjectionReservationFailure,
   type CorpusProjectionIntentLease,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
@@ -380,19 +385,34 @@ const loadCorpusProjectionPayload = async (
     read: readCorpusText,
     rereadStoredKey: async () => (await current())?.textS3Key ?? null,
   });
-  if (material.family === "legislation" || material.astS3Key === null) {
+  if (material.astS3Key === null) {
     return { text: await textPromise, ast: null };
   }
-  const astPromise = readCorpusAtAuthoritativePointer({
-    storedKey: material.astS3Key,
-    read: readCorpusAst,
-    rereadStoredKey: async () => {
-      const replacement = await current();
-      return replacement?.family === "case_law" ? replacement.astS3Key : null;
-    },
-  });
-  const [text, ast] = await settleBoth(textPromise, astPromise);
-  return { text, ast };
+  const storedAstPointer = material.astS3Key;
+  const loadAst = async () =>
+    await readCorpusAtAuthoritativePointer({
+      storedKey: storedAstPointer,
+      read: readCorpusAst,
+      rereadStoredKey: async () => {
+        const replacement = await current();
+        return replacement?.astS3Key ?? null;
+      },
+    });
+  if (material.family === "case_law") {
+    const [text, ast] = await settleBoth(textPromise, loadAst());
+    return { text, ast };
+  }
+  const text = await textPromise;
+  if (
+    !legislationV2NeedsPassages({
+      input: material.input,
+      text,
+      revision: material.lease.intentId,
+    })
+  ) {
+    return { text, ast: null };
+  }
+  return { text, ast: await loadAst() };
 };
 
 type PreparedProjectionEntry = {
@@ -401,6 +421,7 @@ type PreparedProjectionEntry = {
   indexId: string;
   ndjson: string;
   ndjsonBytes: number;
+  parts: readonly string[];
   leaseExpiresAtMs: number;
   appendMode: CorpusProjectionIntentLease["appendMode"];
 };
@@ -434,6 +455,7 @@ type ProjectionAppendPart = {
   ndjsonBytes: number;
   leaseExpiresAtMs: number;
   appendMode?: CorpusProjectionIntentLease["appendMode"];
+  parts?: readonly string[];
 };
 
 type ProjectionAppendTail<Entry extends ProjectionAppendPart> = {
@@ -491,6 +513,19 @@ export const advanceCorpusProjectionAppendTails = <
     const group = byIndex.get(indexId) ?? panic("Lost projection entry group");
     for (const entry of group) {
       let tail = nextTails.get(indexId);
+      if (entry.parts !== undefined && entry.parts.length > 1) {
+        if (tail !== undefined) {
+          flush.push(tail);
+          nextTails.delete(indexId);
+        }
+        flush.push({
+          indexId,
+          entries: [entry],
+          ndjsonBytes: entry.ndjsonBytes,
+          earliestLeaseExpiresAtMs: entry.leaseExpiresAtMs,
+        });
+        continue;
+      }
       if (
         tail !== undefined &&
         (tail.entries.length >= CORPUS_PROJECTION_APPEND_MAX_REVISIONS ||
@@ -545,44 +580,34 @@ const prepareProjectionEntry = (
   material: CorpusProjectionMaterial,
   payload: Awaited<ReturnType<typeof loadCorpusProjectionPayload>>,
 ): Result<PreparedProjectionEntry, PreparedProjectionFailure> => {
-  // The `catch` mapper is what keeps the thrown error itself: the one-argument
-  // form wraps the cause, and the `instanceof ChunkBudgetError` below — the
-  // difference between blocking one oversized revision and panicking the whole
-  // cycle — would never match again.
-  const built = Result.try({
-    catch: (cause: unknown) => cause,
-    try: () => {
-      switch (material.family) {
-        case "case_law":
-          return buildCorpusProjectionDocuments({
-            family: material.family,
-            manifest: material.manifest,
-            input: material.input,
-            payload,
-            revision: material.lease.intentId,
-          });
-        case "legislation":
-          return buildCorpusProjectionDocuments({
-            family: material.family,
-            manifest: material.manifest,
-            input: material.input,
-            payload,
-            revision: material.lease.intentId,
-          });
-        default:
-          material satisfies never;
-          return panic(`Unhandled material: ${String(material)}`);
-      }
-    },
-  });
-  if (built.isErr()) {
-    if (built.error instanceof ChunkBudgetError) {
-      return Result.err({
-        kind: "revision_too_large",
-        message: "projection payload exceeds the structural build ceiling",
-      });
+  const built = (() => {
+    switch (material.family) {
+      case "case_law":
+        return buildCorpusProjectionDocuments({
+          family: material.family,
+          manifest: material.manifest,
+          input: material.input,
+          payload,
+          revision: material.lease.intentId,
+        });
+      case "legislation":
+        return buildCorpusProjectionDocuments({
+          family: material.family,
+          manifest: material.manifest,
+          input: material.input,
+          payload,
+          revision: material.lease.intentId,
+        });
+      default:
+        material satisfies never;
+        return panic(`Unhandled material: ${String(material)}`);
     }
-    return panic("Corpus projection builder violated its manifest contract");
+  })();
+  if (built.isErr()) {
+    return Result.err({
+      kind: "revision_too_large",
+      message: "projection payload exceeds the structural build ceiling",
+    });
   }
   const entry = {
     revision: material.lease.intentId,
@@ -599,8 +624,8 @@ const prepareProjectionEntry = (
     return panic(planned.error.message);
   }
   const request = planned.value.at(0);
-  if (request === undefined || planned.value.length !== 1) {
-    return panic("One projection revision did not produce one append request");
+  if (request === undefined) {
+    return panic("Projection revision did not produce an append request");
   }
   return Result.ok({
     material,
@@ -608,6 +633,7 @@ const prepareProjectionEntry = (
     indexId: material.lease.indexId,
     ndjson: request.ndjson,
     ndjsonBytes: Buffer.byteLength(request.ndjson, "utf-8") + 1,
+    parts: planned.value.map(({ ndjson }) => ndjson),
     leaseExpiresAtMs: material.lease.leaseExpiresAt.getTime(),
     appendMode: material.lease.appendMode,
   });
@@ -657,6 +683,68 @@ const addCancellation = (
   result.leaseLost += cancellation.leaseLost;
 };
 
+const recordAbandonedAppendResults = (
+  result: CorpusProjectionAppendCycleResult,
+  abandoned: {
+    cleanupPending: number;
+    leaseLost: number;
+    blocked: readonly CorpusProjectionAppendAbandonResult[];
+  },
+): void => {
+  result.unknownCleanupPending += abandoned.cleanupPending;
+  result.blocked += abandoned.blocked.length;
+  result.leaseLost += abandoned.leaseLost;
+  for (const outcome of abandoned.blocked) {
+    if (outcome.status === "blocked") {
+      logger.warn("corpus_projection.append_blocked", {
+        entity: outcome.entityId,
+        kind: outcome.kind,
+        attempts: outcome.attempts,
+      });
+    }
+  }
+};
+
+type CorpusProjectionAppendFault = "document" | "engine";
+
+const logAppendFailure = ({
+  indexId,
+  documents,
+  revisionCount,
+  error,
+}: {
+  indexId: string;
+  documents: number;
+  revisionCount: number;
+  error: CorpusIndexError;
+}): { fault: CorpusProjectionAppendFault; stopForEngine: boolean } => {
+  const engineFault =
+    error.rejection === "transient" ||
+    error.cause !== undefined ||
+    (error.status !== undefined &&
+      error.status !== 400 &&
+      error.status !== 413 &&
+      error.status !== 422);
+  // A batch 500 may come from one document. Isolate its members without
+  // charging them, then charge a singleton 500 as an unknown outcome.
+  const fault: CorpusProjectionAppendFault =
+    !engineFault || error.status === 500 ? "document" : "engine";
+  const stopForEngine =
+    engineFault && !(error.status === 500 && revisionCount === 1);
+  let event = "corpus_projection.append_unknown";
+  if (stopForEngine) {
+    event = "corpus_projection.engine_unavailable";
+  } else if (error.rejection === "definite") {
+    event = "corpus_projection.append_rejected";
+  }
+  logger.warn(event, {
+    indexId,
+    documents,
+    ...errorFingerprint(error),
+  });
+  return { fault, stopForEngine };
+};
+
 type ProcessPreparedRequestsOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
@@ -681,6 +769,33 @@ const processPreparedRequests = async ({
   const request = requests.at(requestIndex);
   if (request === undefined) {
     return "completed";
+  }
+  const multipart =
+    request.entries.length === 1 ? request.entries.at(0) : undefined;
+  if (multipart !== undefined && multipart.parts.length > 1) {
+    const laterLeases = requests
+      .slice(requestIndex + 1)
+      .flatMap(({ entries }) => entries.map(({ material }) => material.lease));
+    const status = await processMultipartEntry({
+      runInTransaction,
+      client,
+      commitMode,
+      entry: multipart,
+      unattemptedLeases: [...laterLeases, ...unattemptedLeases],
+      result,
+    });
+    if (status !== "completed") {
+      return status;
+    }
+    return await processPreparedRequests({
+      runInTransaction,
+      client,
+      commitMode,
+      requests,
+      requestIndex: requestIndex + 1,
+      unattemptedLeases,
+      result,
+    });
   }
   // Start one physical request as a batch. Its shared timestamp is read from
   // PostgreSQL only after all state locks are held, immediately before
@@ -740,29 +855,11 @@ const processPreparedRequests = async ({
   );
   if (appended.isErr()) {
     const error: CorpusIndexError = appended.error;
-    const engineFault =
-      error.rejection === "transient" ||
-      error.cause !== undefined ||
-      (error.status !== undefined &&
-        error.status !== 400 &&
-        error.status !== 413 &&
-        error.status !== 422);
-    // A batch 500 may be caused by one document, so isolate its members
-    // without charging them. A singleton 500 then counts as an unknown
-    // document outcome and cannot loop without bound.
-    const documentFault = !engineFault || error.status === 500;
-    const stopForEngine =
-      engineFault && !(error.status === 500 && started.length === 1);
-    let event = "corpus_projection.append_unknown";
-    if (stopForEngine) {
-      event = "corpus_projection.engine_unavailable";
-    } else if (error.rejection === "definite") {
-      event = "corpus_projection.append_rejected";
-    }
-    logger.warn(event, {
+    const failure = logAppendFailure({
       indexId: request.indexId,
       documents: started.length,
-      ...errorFingerprint(error),
+      revisionCount: started.length,
+      error,
     });
     const abandoned = await runInTransaction(async (tx) => {
       const outcomes = await mapSequentially(
@@ -773,7 +870,7 @@ const processPreparedRequests = async ({
             leaseToken: preparedEntry.material.lease.leaseToken,
             errorMessage: error.message,
             rejection: error.rejection,
-            fault: documentFault ? "document" : "engine",
+            fault: failure.fault,
           }),
       );
       return {
@@ -785,18 +882,7 @@ const processPreparedRequests = async ({
           .length,
       };
     });
-    result.unknownCleanupPending += abandoned.cleanupPending;
-    result.blocked += abandoned.blocked.length;
-    result.leaseLost += abandoned.leaseLost;
-    for (const outcome of abandoned.blocked) {
-      if (outcome.status === "blocked") {
-        logger.warn("corpus_projection.append_blocked", {
-          entity: outcome.entityId,
-          kind: outcome.kind,
-          attempts: outcome.attempts,
-        });
-      }
-    }
+    recordAbandonedAppendResults(result, abandoned);
     const laterLeases = requests
       .slice(requestIndex + 1)
       .flatMap(({ entries: laterEntries }) =>
@@ -813,15 +899,13 @@ const processPreparedRequests = async ({
         errorMessage: "projection append stopped after an unknown request",
       }),
     );
-    if (stopForEngine) {
+    if (failure.stopForEngine) {
       result.status = "engine_unavailable";
+      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
     } else if (abandoned.blocked.length > 0) {
       result.status = "append_blocked";
     } else {
       result.status = "append_unknown";
-    }
-    if (stopForEngine) {
-      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
     }
     return result.status;
   }
@@ -873,6 +957,187 @@ const processPreparedRequests = async ({
     unattemptedLeases,
     result,
   });
+};
+
+type ProcessMultipartEntryOptions = {
+  runInTransaction: ProjectionTransactionRunner;
+  client: ProjectionAppendClient;
+  commitMode: CorpusProjectionAppendCommitMode;
+  entry: PreparedProjectionEntry;
+  unattemptedLeases: readonly CorpusProjectionIntentLease[];
+  result: CorpusProjectionAppendCycleResult;
+};
+
+const processMultipartEntry = async ({
+  runInTransaction,
+  client,
+  commitMode,
+  entry,
+  unattemptedLeases,
+  result,
+}: ProcessMultipartEntryOptions): Promise<
+  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
+> => {
+  const lease = entry.material.lease;
+  const stop = async ({
+    errorMessage,
+    rejection = "unknown",
+    fault = "document",
+    stopForEngine = false,
+  }: {
+    errorMessage: string;
+    rejection?: CorpusIndexError["rejection"];
+    fault?: CorpusProjectionAppendFault;
+    stopForEngine?: boolean;
+  }): Promise<"append_unknown" | "append_blocked" | "engine_unavailable"> => {
+    const outcome = await runInTransaction(
+      async (tx) =>
+        await abandonCorpusProjectionAppendTx(tx, {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          errorMessage,
+          rejection,
+          fault,
+        }),
+    );
+    switch (outcome.status) {
+      case "cleanup_pending":
+        result.unknownCleanupPending += 1;
+        break;
+      case "blocked":
+        result.blocked += 1;
+        logger.warn("corpus_projection.append_blocked", {
+          entity: outcome.entityId,
+          kind: outcome.kind,
+          attempts: outcome.attempts,
+        });
+        break;
+      case "lease_lost":
+        result.leaseLost += 1;
+        break;
+      default:
+        outcome satisfies never;
+        panic(`Unhandled multipart abandon: ${String(outcome)}`);
+    }
+    addCancellation(
+      result,
+      await cancelReservations({
+        runInTransaction,
+        leases: unattemptedLeases,
+        errorMessage: "projection append stopped after a multipart request",
+      }),
+    );
+    if (stopForEngine) {
+      result.status = "engine_unavailable";
+      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
+    } else if (outcome.status === "blocked") {
+      result.status = "append_blocked";
+    } else {
+      result.status = "append_unknown";
+    }
+    return result.status;
+  };
+  const appendPart = async (
+    partIndex: number,
+  ): Promise<
+    | "completed"
+    | "skipped"
+    | "append_unknown"
+    | "append_blocked"
+    | "engine_unavailable"
+  > => {
+    const ndjson = entry.parts.at(partIndex);
+    if (ndjson === undefined) {
+      return "completed";
+    }
+    const started = await measured(
+      async () =>
+        await runInTransaction(async (tx) =>
+          partIndex === 0
+            ? await startCorpusProjectionMultipartAppendTx(tx, lease)
+            : await continueCorpusProjectionAppendPartTx(tx, lease),
+        ),
+      (elapsedMs) => {
+        result.timing.storeCommitMs += elapsedMs;
+      },
+    );
+    if (started !== "started") {
+      if (partIndex > 0) {
+        return await stop({
+          errorMessage: "projection multipart append lost its lease",
+        });
+      }
+      if (started === "stale_cancelled") {
+        result.cancelled += 1;
+      } else {
+        result.leaseLost += 1;
+      }
+      return "skipped";
+    }
+    result.requestCount += 1;
+    const appended = await measured(
+      async () =>
+        await ingestCorpusProjectionRequest(client, {
+          commitMode,
+          indexId: entry.indexId,
+          ndjson,
+        }),
+      (elapsedMs) => {
+        result.timing.ingestMs += elapsedMs;
+      },
+    );
+    if (appended.isErr()) {
+      const failure = logAppendFailure({
+        indexId: entry.indexId,
+        documents: entry.documentCount,
+        revisionCount: 1,
+        error: appended.error,
+      });
+      return await stop({
+        errorMessage: appended.error.message,
+        rejection: appended.error.rejection,
+        fault: failure.fault,
+        stopForEngine: failure.stopForEngine,
+      });
+    }
+    return await appendPart(partIndex + 1);
+  };
+  const appendStatus = await appendPart(0);
+  if (appendStatus === "skipped") {
+    return "completed";
+  }
+  if (appendStatus !== "completed") {
+    return appendStatus;
+  }
+  const committed = await measured(
+    async () =>
+      await runInTransaction(
+        async (tx) =>
+          await commitCorpusProjectionAppendTx(tx, {
+            intentId: lease.intentId,
+            leaseToken: lease.leaseToken,
+            documentCount: entry.documentCount,
+          }),
+      ),
+    (elapsedMs) => {
+      result.timing.storeCommitMs += elapsedMs;
+    },
+  );
+  switch (committed.status) {
+    case "applied":
+      result.applied += 1;
+      break;
+    case "stale_cleanup_pending":
+      result.staleCleanupPending += 1;
+      break;
+    case "lease_lost":
+      result.leaseLost += 1;
+      break;
+    default:
+      committed satisfies never;
+      panic(`Unhandled multipart commit: ${String(committed)}`);
+  }
+  return "completed";
 };
 
 type ProcessPreparedStreamOptions = {

@@ -13,6 +13,7 @@ import {
   buildCaseLawDecisionAppUrl,
   buildCaseLawDecisionUrl,
   closestToolNames,
+  didYouMean,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   ISO_DATE_SCHEMA,
@@ -594,6 +595,25 @@ describe("closestToolNames", () => {
     expect(
       closestToolNames("matter", candidates, 2).length,
     ).toBeLessThanOrEqual(2);
+  });
+
+  test("matches a name spelled as a chat script function or in another case", () => {
+    for (const spelling of [
+      "external_list_matters",
+      "listMatters",
+      "LIST_MATTERS",
+      "list-matters",
+    ]) {
+      expect(closestToolNames(spelling, candidates).at(0)).toBe("list_matters");
+    }
+  });
+});
+
+describe("didYouMean", () => {
+  test("offers one name, several, or nothing", () => {
+    expect(didYouMean(["`a`"])).toBe("Did you mean `a`?");
+    expect(didYouMean(["`a`", "`b`"])).toBe("Did you mean one of `a`, `b`?");
+    expect(didYouMean([])).toBe("");
   });
 });
 

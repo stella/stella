@@ -48,6 +48,8 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools as getChatToolsWithPin } from "@/api/handlers/chat/tools/chat-tools";
 import { CREATE_MATTER_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import { CODE_MODE_EXECUTE_TOOL_NAME } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { awaitSandboxAdmissionIdle } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { REVIEW_FOLDER_CONSISTENCY_TOOL_NAME } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   ADD_COMMENT_TOOL_NAME,
@@ -67,6 +69,10 @@ import {
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
+import {
+  createSubagentProposalBuffer,
+  projectToolMapForSubagent,
+} from "@/api/handlers/chat/tools/subagent-tools";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import {
@@ -2546,5 +2552,48 @@ describe("registry write tool approval policy", () => {
       expect(tool.needsApproval, name).toBe(true);
       expect(getChatToolPolicy(tool).kind, name).toBe("mutation");
     }
+  });
+});
+
+describe("a subagent's code-mode script", () => {
+  test("is told a tool its projection dropped is unavailable, not that it can call it directly", async () => {
+    const full = getChatTools({
+      ...autoApplyBaseArgs,
+      memberRole: "owner",
+      editApplyMode: "manual",
+      delegationDepth: 1,
+    });
+    const tools = getChatTools({
+      ...autoApplyBaseArgs,
+      memberRole: "owner",
+      editApplyMode: "manual",
+      delegationDepth: 1,
+      projectToolSet: (registered) =>
+        projectToolMapForSubagent(
+          registered,
+          createSubagentProposalBuffer().sink,
+        ),
+    });
+    // The fixture reaches the fault: the full set offers the client-only
+    // tool, the subagent's projection drops it.
+    expect(Object.keys(full)).toContain("create-document");
+    expect(Object.keys(tools)).not.toContain("create-document");
+    const execute =
+      tools[CODE_MODE_EXECUTE_TOOL_NAME]?.execute ??
+      expect.unreachable("execute_typescript has no execute");
+
+    const output = await execute({
+      typescriptCode: `return await create_document({ name: "Memo" });`,
+    });
+    await awaitSandboxAdmissionIdle();
+
+    expect(output).toMatchObject({
+      success: false,
+      error: {
+        name: "not-a-script-function",
+        message:
+          "`create-document` is not available in this chat (subagents cannot call it). Continue without it.",
+      },
+    });
   });
 });

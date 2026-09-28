@@ -5,7 +5,9 @@ import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   chunkDocument,
+  chunkLegislationDocument,
   formatHeadingPath,
+  LEGISLATION_PASSAGE_TEXT_MAX_BYTES,
 } from "@/api/lib/corpus-index/chunking";
 
 /**
@@ -90,6 +92,115 @@ const generateBlocks = (seed: number): Block[] => {
 
 const nonBlank = (blocks: readonly Block[]): Block[] =>
   blocks.filter((block) => block.plainText.trim().length > 0);
+
+const legislationChunks = (
+  fallbackText: string,
+  ast: DocumentAst | null = null,
+) => chunkLegislationDocument({ ast, fallbackText });
+
+const expectLegislationBudget = (texts: readonly string[]) => {
+  for (const text of texts) {
+    expect(Buffer.byteLength(text, "utf-8")).toBeLessThanOrEqual(
+      LEGISLATION_PASSAGE_TEXT_MAX_BYTES,
+    );
+  }
+};
+
+describe("chunkLegislationDocument preserves and bounds legislation", () => {
+  test("passages concatenate to the exact source and remain deterministic", () => {
+    const source = `${"Začátek zákona.\n\n".repeat(45_000)}${"Konec zákona.\n".repeat(45_000)}`;
+
+    const first = legislationChunks(source);
+    const second = legislationChunks(source);
+    const texts = first.map(({ text }) => text);
+
+    expect(texts.join("")).toBe(source);
+    expect(second).toEqual(first);
+    expectLegislationBudget(texts);
+  });
+
+  test("cuts multibyte text on UTF-8 boundaries within the byte budget", () => {
+    const source = "ž".repeat(LEGISLATION_PASSAGE_TEXT_MAX_BYTES + 17);
+    const chunks = legislationChunks(source);
+
+    expect(chunks.map(({ text }) => text).join("")).toBe(source);
+    expect(chunks.length).toBeGreaterThan(1);
+    expectLegislationBudget(chunks.map(({ text }) => text));
+  });
+
+  test("prefers the shallowest eligible AST heading boundary", () => {
+    const opening = "úvodní text ".repeat(50_000);
+    const nestedHeading = "Pododdíl";
+    const nestedBody = "obsah ".repeat(20_000);
+    const shallowHeading = "Hlava druhá";
+    const finalBody = "ustanovení ".repeat(50_000);
+    const source = [
+      opening,
+      nestedHeading,
+      nestedBody,
+      shallowHeading,
+      finalBody,
+    ].join("\n\n");
+    const ast = astOf([
+      paragraph(0, opening),
+      heading(1, 3, nestedHeading),
+      paragraph(2, nestedBody),
+      heading(3, 1, shallowHeading),
+      paragraph(4, finalBody),
+    ]);
+
+    const chunks = legislationChunks(source, ast);
+
+    expect(chunks.map(({ text }) => text).join("")).toBe(source);
+    expect(chunks.at(0)?.text).toBe(
+      source.slice(0, source.indexOf(shallowHeading)),
+    );
+    expect(chunks.at(1)?.headingPath).toEqual([shallowHeading]);
+    expectLegislationBudget(chunks.map(({ text }) => text));
+  });
+
+  test("splits a flat oversized table block without losing text", () => {
+    const tableText = `${"\u00a7 1\tPravidlo právního předpisu\n".repeat(40_000)}${"závěrečné ustanovení ".repeat(20_000)}`;
+    const table = {
+      id: "table-1",
+      anchorId: "table-1",
+      type: "table",
+      rows: [],
+      plainText: tableText,
+    } satisfies Block;
+    const ast = astOf([table]);
+
+    const chunks = legislationChunks(tableText, ast);
+
+    expect(chunks.map(({ text }) => text).join("")).toBe(tableText);
+    expect(chunks.length).toBeGreaterThan(1);
+    expectLegislationBudget(chunks.map(({ text }) => text));
+  });
+
+  test("uses paragraph boundaries when no AST is available", () => {
+    const source = `${"první odstavec zákona ".repeat(30_000)}\n\n${"druhý odstavec zákona ".repeat(30_000)}`;
+
+    const chunks = legislationChunks(source);
+
+    expect(chunks.map(({ text }) => text).join("")).toBe(source);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every(({ anchorId }) => anchorId === null)).toBe(true);
+    expectLegislationBudget(chunks.map(({ text }) => text));
+  });
+
+  test("streams dense fallback boundaries across a large source", () => {
+    const source = "x\n\n".repeat(4 * 1024 * 1024);
+    const startedAt = performance.now();
+    const chunks = legislationChunks(source);
+    const elapsedMs = performance.now() - startedAt;
+    const texts = chunks.map(({ text }) => text);
+
+    expect(elapsedMs).toBeLessThan(20_000);
+    expect(texts.join("")).toBe(source);
+    expect(chunks.length).toBeGreaterThan(8);
+    expectLegislationBudget(texts);
+  });
+});
 
 describe("chunkDocument preserves the document", () => {
   test("concatenated passages reproduce the block text exactly, for any shape", () => {

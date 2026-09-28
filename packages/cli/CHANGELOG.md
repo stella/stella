@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 2.2.1
+
+### Patch Changes
+
+- [#4031](https://github.com/stella/stella/pull/4031) [`1005aef`](https://github.com/stella/stella/commit/1005aefe1a9fc73311c34e120c781946cf0ba6cb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add saved time narrative capabilities to the CLI route catalog.
+
 ## 2.2.0
 
 ### Minor Changes

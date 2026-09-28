@@ -45,7 +45,7 @@ export type CorpusProjectionMaterial =
       family: "legislation";
       manifest: Extract<CorpusIndexManifest, { family: "legislation" }>;
       input: ReturnType<typeof legislationProjectionInputFromCanonical>;
-      astS3Key: null;
+      astS3Key: string | null;
     });
 
 export type CorpusProjectionMaterialRejection = {
@@ -240,6 +240,7 @@ const readCaseLawMaterials = async (
       redactedAt: caseLawDecisions.redactedAt,
       caseNumber: caseLawDecisions.caseNumber,
       court: caseLawDecisions.court,
+      courtId: caseLawDecisions.courtId,
       decisionDate: caseLawDecisions.decisionDate,
       ecli: caseLawDecisions.ecli,
       // Read for `publisherSummaryOf` only. The decision's AST is not read
@@ -337,6 +338,7 @@ const readLegislationMaterials = async (
       eli: legislationDocuments.eli,
       projectionEpoch: legislationDocuments.projectionEpoch,
       textS3Key: legislationDocuments.textS3Key,
+      astS3Key: legislationDocuments.astS3Key,
       sourceDescriptor: legislationSources.descriptor,
     })
     .from(legislationDocuments)
@@ -356,7 +358,7 @@ const readLegislationMaterials = async (
         manifest,
         input,
         textS3Key,
-        astS3Key: null,
+        astS3Key: row.astS3Key,
       }),
     };
   });

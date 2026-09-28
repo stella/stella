@@ -226,6 +226,7 @@ beforeAll(
         sourceId: fixture.sourceId,
         caseNumber: `${String(index)} C ${String(index)}/2020`,
         court: "Krajský soud",
+        courtId: countryOf(fixture) === "USA" ? "scotus" : null,
         country: countryOf(fixture),
         language: { CZE: "cs", POL: "pl", USA: "en" }[countryOf(fixture)],
         decisionDate: fixture.decisionDate,
