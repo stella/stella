@@ -5,6 +5,7 @@ import { DAY_IN_MS } from "@stll/time";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -53,15 +54,6 @@ type ArrivalsRead = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-/** Drivers disagree: bun-sql returns the rows, pglite wraps them in `{ rows }`. */
-const rowsOf = (result: unknown): Record<string, unknown>[] => {
-  let rows: unknown = result;
-  if (!Array.isArray(result) && isRecord(result)) {
-    rows = result["rows"];
-  }
-  return Array.isArray(rows) ? rows.filter(isRecord) : [];
-};
-
 const toCount = (value: unknown): number => {
   const count = Number(value);
   return Number.isFinite(count) ? count : 0;
@@ -79,7 +71,8 @@ const readStatementTimeout = async (
   const result: unknown = await tx.execute(
     sql`SELECT current_setting('statement_timeout') AS statement_timeout`,
   );
-  const value = rowsOf(result).at(0)?.["statement_timeout"];
+  const row = executedRows(result).at(0);
+  const value = isRecord(row) ? row["statement_timeout"] : undefined;
   return typeof value === "string" ? value : null;
 };
 
@@ -125,8 +118,9 @@ export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
       );
     }
 
+    const rows = executedRows(result).filter(isRecord);
     return new Map(
-      rowsOf(result).flatMap((row) => {
+      rows.flatMap((row) => {
         const sourceId = row["source_id"];
         if (typeof sourceId !== "string") {
           return [];
