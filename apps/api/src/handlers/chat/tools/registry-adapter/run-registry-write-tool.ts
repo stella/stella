@@ -15,6 +15,7 @@ import {
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
+import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
@@ -234,6 +235,15 @@ export const runRegistryWriteTool = async (
         }).error,
       ),
     );
+  }
+
+  const needsMatter = matterRequiredResult({
+    args: normalized.value,
+    context,
+    toolName,
+  });
+  if (needsMatter !== null) {
+    return Result.err(toRegistryChatToolError(needsMatter.error));
   }
 
   const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({

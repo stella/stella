@@ -30,6 +30,7 @@ import {
   normalizeObjectInputAtBoundary,
   withInputNotes,
 } from "@/api/mcp/input-normalization";
+import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
@@ -346,6 +347,17 @@ export const handleMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
+
+  // Before confirmation: asking a human to approve a call that cannot run
+  // would only defer the same answer.
+  const needsMatter = matterRequiredResult({
+    args: normalizedArgs,
+    context,
+    toolName,
+  });
+  if (needsMatter !== null) {
+    return serializeForSurface(needsMatter);
+  }
 
   // Resolve confirmation from the registry's canonical behavior.
   // Capability-catalog and upstream tools defer the final decision to their
