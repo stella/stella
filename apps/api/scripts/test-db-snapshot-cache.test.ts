@@ -245,7 +245,7 @@ test("abort stops a cache-lock wait promptly", async () => {
   const started = Date.now();
   let builds = 0;
   try {
-    const error = await acquireCachedSnapshot({
+    const rejection = await acquireCachedSnapshot({
       cacheDir,
       key,
       build: async (filePath) => {
@@ -261,7 +261,7 @@ test("abort stops a cache-lock wait promptly", async () => {
       },
       (error: unknown) => error,
     );
-    expect(error).toBeInstanceOf(SnapshotBuildError);
+    expect(rejection).toBeInstanceOf(SnapshotBuildError);
     expect(Date.now() - started).toBeLessThan(1000);
     expect(builds).toBe(0);
   } finally {
@@ -383,7 +383,7 @@ test("builder failure cleans partial output and pruning removes old temp files",
   const root = fixture();
   const cacheDir = path.join(root, "cache");
   const failedKey = "7".repeat(64);
-  const error = await acquireCachedSnapshot({
+  const rejection = await acquireCachedSnapshot({
     cacheDir,
     key: failedKey,
     build: async (filePath) => {
@@ -400,7 +400,7 @@ test("builder failure cleans partial output and pruning removes old temp files",
     },
     (error: unknown) => error,
   );
-  expect(error).toBeInstanceOf(SnapshotBuildError);
+  expect(rejection).toBeInstanceOf(SnapshotBuildError);
   expect(readdirSync(cacheDir).some((name) => name.includes(".tmp-"))).toBe(
     false,
   );
