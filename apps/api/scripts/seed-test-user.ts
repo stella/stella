@@ -31,7 +31,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
-import { recordNewOrganizationAccessState } from "@/api/lib/organization-access-state";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 
 import {
   ALL_TEST_USER_IDS,

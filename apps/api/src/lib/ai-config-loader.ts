@@ -26,7 +26,7 @@ import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { mayUseInstanceModels } from "@/api/lib/organization-access-state";
+import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";
 
 /** The one capability the loaders need: a single `organization_settings` select. */
 export type OrgSettingsReader = Pick<Transaction, "select">;

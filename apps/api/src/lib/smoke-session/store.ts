@@ -21,11 +21,11 @@ import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { logger } from "@/api/lib/observability/logger";
-import { recordNewOrganizationAccessState } from "@/api/lib/organization-access-state";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 
 const SMOKE_PRINCIPAL = {
   default: "default",

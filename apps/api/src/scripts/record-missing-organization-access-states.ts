@@ -10,7 +10,7 @@
  * changed, so re-running is safe.
  */
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { recordMissingOrganizationAccessStates } from "@/api/lib/organization-access-state";
+import { recordMissingOrganizationAccessStates } from "@/api/lib/usage/organization-access-state";
 
 const db = openMaintenanceDb({ readOnly: false });
 await db.transaction(

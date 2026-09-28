@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 
-import { recordMissingOrganizationAccessStatesWhileUnenforced } from "@/api/lib/organization-access-state";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { recordMissingOrganizationAccessStatesWhileUnenforced } from "@/api/lib/usage/organization-access-state";
 
 export const RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK =
   "organizations.recordMissingAccessStates" as const;

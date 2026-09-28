@@ -43,7 +43,7 @@ import {
   endOrganizationEvaluation,
   recordMissingOrganizationAccessStatesWhileUnenforced,
   recordNewOrganizationAccessState,
-} from "@/api/lib/organization-access-state";
+} from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,

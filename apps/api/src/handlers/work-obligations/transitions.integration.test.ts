@@ -19,6 +19,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import acknowledgeWorkObligation from "@/api/handlers/work-obligations/acknowledgements/create";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
@@ -168,6 +169,7 @@ const contextBase = (userId: SafeId<"user">) => {
     createAuditRecorder: () => recordAuditEvent,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request("https://example.test/work-obligations"),

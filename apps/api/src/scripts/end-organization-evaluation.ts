@@ -9,8 +9,8 @@
 import { panic } from "better-result";
 
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { endOrganizationEvaluation } from "@/api/lib/organization-access-state";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
+import { endOrganizationEvaluation } from "@/api/lib/usage/organization-access-state";
 
 const [rawOrganizationId, ...rest] = process.argv.slice(2);
 const organizationId =

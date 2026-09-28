@@ -6,6 +6,7 @@ import { CHAT_TITLE_SOURCE, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -122,6 +123,7 @@ const createContext = ({
       id === ids.wsA1 ? { id: ids.wsA1, status: "active" } : null,
     memberRole: { role: "owner" },
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     params: { threadId },
     promptCachingEnabled: false,
     query: workspaceId ? { workspaceId } : {},
