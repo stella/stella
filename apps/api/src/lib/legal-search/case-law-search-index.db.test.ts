@@ -201,6 +201,42 @@ test(
 );
 
 test(
+  "the backfill finds stale text and missing preview passages once each",
+  async () => {
+    const previewId = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "31 Cdo 100/2023",
+      country: "CZE",
+      court: "Nejvyšší soud",
+      fulltext: "Krátký text pro náhled.",
+      id: previewId,
+      language: "cs",
+      sourceId,
+    });
+    expect(
+      Result.isOk(await indexDecision(previewId, scopedDb, resolveConfig)),
+    ).toBe(true);
+
+    await db
+      .update(caseLawSearchDocuments)
+      .set({ updatedAt: new Date("2000-01-01T00:00:00Z") })
+      .where(eq(caseLawSearchDocuments.decisionId, shortId));
+    await db
+      .delete(caseLawSearchDocumentPreviewPassages)
+      .where(eq(caseLawSearchDocumentPreviewPassages.decisionId, previewId));
+
+    const result = await backfillSearchIndex(scopedDb, 4, resolveConfig);
+    expect(result).toMatchObject({ found: 2, indexed: 2 });
+    const restored = await db
+      .select({ id: caseLawSearchDocumentPreviewPassages.decisionId })
+      .from(caseLawSearchDocumentPreviewPassages)
+      .where(eq(caseLawSearchDocumentPreviewPassages.decisionId, previewId));
+    expect(restored.length).toBeGreaterThan(0);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
   "the backfill indexes every missing decision and counts only the ones that landed",
   async () => {
     // More decisions than the backfill runs at once, so the count has to

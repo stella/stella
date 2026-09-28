@@ -9,6 +9,7 @@ import {
 } from "@stll/folio-core";
 import { readBilingualDocx } from "@stll/folio-core/server";
 
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -143,6 +144,7 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: true,
     request: new Request("http://localhost/entities/test/bilingual"),
     route: "/entities/:workspaceId/bilingual",

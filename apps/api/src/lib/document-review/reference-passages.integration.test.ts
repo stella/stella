@@ -15,6 +15,7 @@ import { inArray } from "drizzle-orm";
 import { documentReviewReferencePassages } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import readDocumentReviewPassages from "@/api/handlers/document-reviews/read-passages";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -51,6 +52,7 @@ const rootHandlerContext = (safeDb: ReturnType<typeof createSafeDb>) => ({
   getWorkspaceAccess: async () => null,
   memberRole: { role: "owner" as const },
   orgAIConfig: null,
+  orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/document-reviews/passages"),

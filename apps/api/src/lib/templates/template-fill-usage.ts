@@ -8,6 +8,8 @@
  * endpoint-module-to-endpoint-module import.
  */
 
+import { panic, Result } from "better-result";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
@@ -78,7 +80,7 @@ type TemplateFillAiWiringArgs = {
 };
 
 type TemplateFillAiWiring = {
-  assertUsageAvailable: () => Promise<HandlerError<402 | 500> | null>;
+  assertUsageAvailable: () => Promise<HandlerError<402 | 403 | 500> | null>;
   aiCollaborators: () => Promise<AiFillCollaborators>;
 };
 
@@ -100,8 +102,12 @@ export const buildTemplateFillAiWiring = ({
   feature,
   documentLanguages,
 }: TemplateFillAiWiringArgs): TemplateFillAiWiring => {
-  let configPromise: Promise<OrgAIConfig | null> | undefined;
-  const orgAIConfig = async (): Promise<OrgAIConfig | null> => {
+  let configPromise:
+    | Promise<Result<OrgAIConfig | null, HandlerError<403>>>
+    | undefined;
+  const orgAIConfig = async (): Promise<
+    Result<OrgAIConfig | null, HandlerError<403>>
+  > => {
     configPromise ??= scopedDb(
       async (tx) => await loadOrgAIConfig(tx, organizationId),
     );
@@ -109,15 +115,26 @@ export const buildTemplateFillAiWiring = ({
   };
 
   return {
-    assertUsageAvailable: async () =>
-      await assertTemplateFillUsage({
-        orgAIConfig: await orgAIConfig(),
+    assertUsageAvailable: async () => {
+      const config = await orgAIConfig();
+      if (Result.isError(config)) {
+        return config.error;
+      }
+      return await assertTemplateFillUsage({
+        orgAIConfig: config.value,
         organizationId,
         userId,
         safeDb,
-      }),
+      });
+    },
     aiCollaborators: async () => {
-      const config = await orgAIConfig();
+      const configResult = await orgAIConfig();
+      if (Result.isError(configResult)) {
+        // The fill service builds collaborators only after this wiring's
+        // preflight passed, and the preflight returns this same refusal.
+        return panic("template fill AI collaborators built past a refusal");
+      }
+      const config = configResult.value;
       const shared = {
         orgAIConfig: config,
         organizationId,

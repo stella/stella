@@ -132,6 +132,7 @@ export const publicLawDatabaseRolePermissionsSql = (
   const requiredColumns = grantedColumns.filter(
     ({ grant }) => grant === "required",
   );
+  // sql-perf-allow: small table pg_catalog and information_schema role metadata
   return sql`
       WITH required(relation, column_name) AS (
         ${columnTupleSource(requiredColumns)}

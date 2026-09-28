@@ -472,6 +472,18 @@ export const envApiServerSchema = {
   /** Enables pre-flight usage-limit enforcement when true. */
   USAGE_ENFORCEMENT_ENABLED: featureFlagSchema,
 
+  /**
+   * Enforces the persisted per-organization access state: organizations
+   * recorded as self-managed-keys, or whose evaluation period is over, never
+   * fall back to the instance model provider.
+   */
+  FEATURE_ORG_ACCESS_STATE: featureFlagSchema,
+
+  /** Length of an organization's evaluation period, in days. */
+  ORG_EVALUATION_PERIOD_DAYS: v.optional(
+    v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
 
@@ -556,11 +568,13 @@ type EnvApiInvariantInput = {
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
   MICROSOFT_AUTH_CLIENT_SECRET?: string | undefined;
   MICROSOFT_AUTH_TENANT_ID?: string | undefined;
+  ORG_EVALUATION_PERIOD_DAYS?: number | undefined;
   PUBLIC_URL?: string | undefined;
   REPORT_SPECS_DIR?: string | undefined;
   REPORT_SPECS_S3_PREFIX?: string | undefined;
@@ -578,11 +592,13 @@ export const envApiInvariantViolation = ({
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
+  FEATURE_ORG_ACCESS_STATE,
   FRONTEND_URL,
   GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
   MICROSOFT_AUTH_CLIENT_SECRET,
   MICROSOFT_AUTH_TENANT_ID,
+  ORG_EVALUATION_PERIOD_DAYS,
   PUBLIC_URL,
   REPORT_SPECS_DIR,
   REPORT_SPECS_S3_PREFIX,
@@ -632,6 +648,9 @@ export const envApiInvariantViolation = ({
   }
   if (USE_MOCK_AI && !localDevOpen) {
     return "USE_MOCK_AI is only supported in local development and tests.";
+  }
+  if (FEATURE_ORG_ACCESS_STATE && ORG_EVALUATION_PERIOD_DAYS === undefined) {
+    return "ORG_EVALUATION_PERIOD_DAYS is required when FEATURE_ORG_ACCESS_STATE is true.";
   }
   if (
     (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&

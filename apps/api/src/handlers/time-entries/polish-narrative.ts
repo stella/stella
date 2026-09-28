@@ -73,8 +73,8 @@ const polishTimeEntryNarrative = createSafeHandler(
     }
 
     const organizationId = session.activeOrganizationId;
-    const { orgAIConfig, promptCachingEnabled } = await scopedDb(
-      async (tx) => await loadOrgAISettings(tx, organizationId),
+    const { orgAIConfig, promptCachingEnabled } = yield* Result.await(
+      scopedDb(async (tx) => await loadOrgAISettings(tx, organizationId)),
     );
 
     yield* requireTanStackAIAvailableForRole({

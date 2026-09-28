@@ -256,6 +256,10 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Ingestion-side mirror upload intents; not a public read.",
   },
+  "apps/api/src/lib/legal-search/case-law-legacy-reference-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Predicate fragment only; issues no query.",
+  },
   "apps/api/src/lib/legal-search/case-law-search-index.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
