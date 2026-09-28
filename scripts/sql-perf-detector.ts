@@ -38,12 +38,7 @@ const GROUP_EXPRESSION =
 const GROUP_NON_COLUMNS =
   /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower|cast|text|year|month|day|from|for|as|null|true|false|now|current_date|current_timestamp)\b/giu;
 const SQL_STRING = /'(?:''|[^'])*'/gu;
-const SQL_COLUMN = String.raw`(?:[a-z_][\w."]*|__SQL_EXPR_\d+__)`;
-const SQL_ROW = String.raw`\(\s*${SQL_COLUMN}(?:\s*,\s*${SQL_COLUMN})+\s*\)`;
-const SQL_OR_SUBQUERY = new RegExp(
-  String.raw`\bOR\b\s*\(*\s*(?:(?:NOT\s+)?EXISTS\s*\(|(?:${SQL_COLUMN}|${SQL_ROW})\s*(?:(?:NOT\s+)?IN|=\s*ANY)\s*\(\s*(?:SELECT\b|__SQL_EXPR_(?<selectIndex>\d+)__))`,
-  "giu",
-);
+const SQL_PREDICATE_TOKEN = /__SQL_EXPR_\d+__|[a-z_][\w."]*|[(),=]/giu;
 const S3_KEY = /(?:\b[a-z][\w]*_s3_key\b|\b[a-z][\w]*S3Key\b)/iu;
 const REASON =
   /^(?:small table\s+[a-z][\w.]*\b|index\s+[a-z][\w.]*\b|bounded by\s+\S[\s\S]*)/iu;
@@ -104,7 +99,10 @@ const drizzleImports = (file: ts.SourceFile): DrizzleImports => {
       continue;
     }
     const bindings = statement.importClause?.namedBindings;
-    if (statement.importClause?.isTypeOnly || bindings === undefined) {
+    if (
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+      bindings === undefined
+    ) {
       continue;
     }
     if (ts.isNamespaceImport(bindings)) {
@@ -289,6 +287,114 @@ const hasSelectBuilder = (
   return found;
 };
 
+type SqlPredicateToken = { value: string; start: number; depth: number };
+
+const SQL_PREDICATE_BOUNDARIES = new Set([
+  "AND",
+  "OR",
+  "WHERE",
+  "ON",
+  "HAVING",
+  "ORDER",
+  "GROUP",
+  "LIMIT",
+  "UNION",
+  "JOIN",
+  "FROM",
+]);
+
+const sqlOrSubqueryOffsets = (
+  visible: string,
+  expressions: ts.Expression[],
+  bindings: ConstBindings,
+  file: ts.SourceFile,
+): number[] => {
+  const tokens: SqlPredicateToken[] = [];
+  let depth = 0;
+  for (const match of visible.matchAll(SQL_PREDICATE_TOKEN)) {
+    const value = match[0].toUpperCase();
+    if (value === ")") {
+      depth = Math.max(0, depth - 1);
+    }
+    tokens.push({ value, start: match.index, depth });
+    if (value === "(") {
+      depth += 1;
+    }
+  }
+
+  const hasSubquery = (start: number, end: number): boolean => {
+    for (let index = start; index < end; index += 1) {
+      const token = tokens[index];
+      const next = tokens[index + 1];
+      if (token?.value === "EXISTS" && next?.value === "(") {
+        return true;
+      }
+      if (
+        (token?.value !== "IN" && token?.value !== "ANY") ||
+        next?.value !== "(" ||
+        (token.value === "ANY" && tokens[index - 1]?.value !== "=")
+      ) {
+        continue;
+      }
+      let first = index + 2;
+      while (tokens[first]?.value === "(") {
+        first += 1;
+      }
+      const operand = tokens[first]?.value;
+      if (operand === "SELECT") {
+        return true;
+      }
+      if (operand?.startsWith("__SQL_EXPR_") && operand.endsWith("__")) {
+        const expression = expressions[Number(operand.slice(11, -2))];
+        if (
+          expression !== undefined &&
+          hasSelectBuilder(expression, bindings, file)
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const offsets: number[] = [];
+  for (const [index, token] of tokens.entries()) {
+    if (token.value !== "OR") {
+      continue;
+    }
+    let start = index;
+    while (start > 0) {
+      const previous = tokens[start - 1];
+      if (
+        previous === undefined ||
+        previous.depth < token.depth ||
+        (previous.depth === token.depth &&
+          SQL_PREDICATE_BOUNDARIES.has(previous.value))
+      ) {
+        break;
+      }
+      start -= 1;
+    }
+    let end = index + 1;
+    while (end < tokens.length) {
+      const following = tokens[end];
+      if (
+        following === undefined ||
+        following.depth < token.depth ||
+        (following.depth === token.depth &&
+          SQL_PREDICATE_BOUNDARIES.has(following.value))
+      ) {
+        break;
+      }
+      end += 1;
+    }
+    if (hasSubquery(start, index) || hasSubquery(index + 1, end)) {
+      offsets.push(token.start);
+    }
+  }
+  return offsets;
+};
+
 type SubqueryOperandContext = {
   imports: DrizzleImports;
   bindings: ConstBindings;
@@ -320,7 +426,7 @@ const hasSubqueryOperand = (
       return true;
     }
     if (
-      name === "inArray" &&
+      (name === "inArray" || name === "notInArray") &&
       value.arguments[1] !== undefined &&
       hasSelectBuilder(value.arguments[1], bindings, file)
     ) {
@@ -555,8 +661,10 @@ export const reportSqlPerfOrColumns = (
             .slice(match.index + match[0].length)
             .split(/\b(?:AND|OR|ORDER|GROUP|LIMIT|HAVING)\b/iu)
             .at(0) ?? "";
+        // SQL identifiers are shorter than this bound; it also keeps a long
+        // nonmatching token from making the report-only scan backtrack.
         const columnPattern =
-          /(__SQL_EXPR_\d+__|[a-z_][\w.]*)\s*(?:=|<>|!=|<=|>=|<|>|(?:NOT\s+)?I?LIKE\b|IN\s*\()/giu;
+          /(__SQL_EXPR_\d+__|[a-z_][\w.]{0,255})\s*(?:=|<>|!=|<=|>=|<|>|(?:NOT\s+)?I?LIKE\b|IN\s*\()/giu;
         const leftColumn = [...left.matchAll(columnPattern)].at(-1)?.[1];
         const rightColumn = [...right.matchAll(columnPattern)].at(0)?.[1];
         if (
@@ -764,20 +872,13 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       return;
     }
     const { sql, offsets, expressions } = sqlParts(file, node.template);
-    for (const match of sqlWithoutLiterals(sql).matchAll(SQL_OR_SUBQUERY)) {
-      const selectIndex = match.groups?.selectIndex;
-      const selectExpression =
-        selectIndex === undefined
-          ? undefined
-          : expressions[Number(selectIndex)];
-      if (
-        selectIndex !== undefined &&
-        (selectExpression === undefined ||
-          !hasSelectBuilder(selectExpression, bindings, file))
-      ) {
-        continue;
-      }
-      add("or-subquery", offsets[match.index] ?? node.getStart(file), node);
+    for (const index of sqlOrSubqueryOffsets(
+      sqlWithoutLiterals(sql),
+      expressions,
+      bindings,
+      file,
+    )) {
+      add("or-subquery", offsets[index] ?? node.getStart(file), node);
     }
     for (const match of /\bCHECK\s*\(/iu.test(sql) ? [] : sql.matchAll(LIKE)) {
       const index = match.index;

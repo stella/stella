@@ -221,6 +221,14 @@ test("flags the decision identity OR/subquery shape", () => {
   expect(kinds(source)).toEqual(["or-subquery"]);
 });
 
+test("flags Drizzle negative membership with a select operand", () => {
+  const source = [
+    'import { eq, notInArray, or } from "drizzle-orm";',
+    "or(eq(caseLawDecisions.ecli, value), notInArray(caseLawDecisions.id, tx.select({ id: identifiers.decisionId }).from(identifiers)));",
+  ].join("\n");
+  expect(kinds(source)).toEqual(["or-subquery"]);
+});
+
 test("flags aliased Drizzle imports but not unrelated functions with the same names", () => {
   expect(
     kinds(
@@ -270,6 +278,14 @@ test.each([
   "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR id = ANY (SELECT decision_id FROM case_law_decision_identifiers)`",
   "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR (id, country) IN (SELECT decision_id, country FROM case_law_decision_identifiers)`",
 ])("flags SQL-text OR/subquery: %s", (source) => {
+  expect(kinds(source)).toEqual(["or-subquery"]);
+});
+
+test.each([
+  "sql`SELECT id FROM case_law_decisions WHERE EXISTS (SELECT 1 FROM case_law_decision_identifiers) OR status = ${status}`",
+  "sql`SELECT id FROM case_law_decisions WHERE id IN (SELECT decision_id FROM case_law_decision_identifiers) OR status = ${status}`",
+  "sql`SELECT id FROM case_law_decisions WHERE id NOT IN (SELECT decision_id FROM case_law_decision_identifiers) OR status = ${status}`",
+])("flags SQL-text subqueries left of OR: %s", (source) => {
   expect(kinds(source)).toEqual(["or-subquery"]);
 });
 

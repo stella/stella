@@ -1,4 +1,14 @@
-import { and, eq, ilike, inArray, like, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  ilike,
+  inArray,
+  like,
+  notExists,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { unionAll } from "drizzle-orm/pg-core";
 
 declare const term: string;
@@ -69,6 +79,15 @@ export const sqlAny = sql`SELECT id FROM case_law_decisions WHERE ecli = ${term}
 // oxlint-disable-next-line sql-perf/sql-perf -- fixture: SQL text tuple subquery
 export const sqlTupleIn = sql`SELECT id FROM case_law_decisions WHERE ecli = ${term} OR (id, country) IN (SELECT decision_id, country FROM case_law_decision_identifiers)`;
 
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: left SQL EXISTS operand
+export const leftExistsOr = sql`SELECT id FROM case_law_decisions WHERE EXISTS (SELECT 1 FROM case_law_decision_identifiers) OR ecli = ${term}`;
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: left SQL IN operand
+export const leftInOr = sql`SELECT id FROM case_law_decisions WHERE id IN (SELECT decision_id FROM case_law_decision_identifiers) OR ecli = ${term}`;
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: left SQL NOT IN operand
+export const leftNotInOr = sql`SELECT id FROM case_law_decisions WHERE id NOT IN (SELECT decision_id FROM case_law_decision_identifiers) OR ecli = ${term}`;
+
 // oxlint-disable-next-line sql-perf/sql-perf -- fixture: raw SQL EXISTS operand
 export const rawExistsOr = or(
   eq(caseLawDecisions.id, term),
@@ -79,6 +98,15 @@ export const rawExistsOr = or(
 export const rawSelectOr = or(
   eq(caseLawDecisions.id, term),
   sql`id IN (SELECT decision_id FROM case_law_decision_identifiers)`,
+);
+
+// oxlint-disable-next-line sql-perf/sql-perf -- fixture: negative membership select operand
+export const negativeMembershipOr = or(
+  eq(caseLawDecisions.ecli, term),
+  notInArray(
+    caseLawDecisions.id,
+    tx.select({ id: identifiers.decisionId }).from(identifiers),
+  ),
 );
 
 // oxlint-disable-next-line sql-perf/sql-perf -- fixture: notExists operand
