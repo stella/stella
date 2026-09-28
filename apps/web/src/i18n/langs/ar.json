@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "مثال: قياسي 2025"
     },
     "revertToDraft": "الإعادة إلى مسودة",
+    "savedNarratives": {
+      "empty": "احفظ وصفًا لاستخدامه مرة أخرى.",
+      "save": "حفظ الوصف",
+      "title": "الأوصاف المحفوظة"
+    },
     "selectMatter": "اختر ملفًا قانونيًا...",
     "selectMatterToStart": "اختر ملفًا قانونيًا لبدء توقيت الوقت",
     "selectedCount": "{count, plural, zero {لا شيء محدد} one {محدد واحد} two {محددان} few {# محددة} many {# محددًا} other {# محدد}}",
@@ -884,6 +889,7 @@
       "apiKey": "مفتاح API",
       "none": "بدون إعداد"
     },
+    "skillNeedsUnavailableTools": "غير معروضة في الدردشة. تحتاج إلى أداة غير متوفرة هناك: {tools}",
     "toolNames": {
       "anonymize": "إخفاء الهوية",
       "createDocx": "إنشاء DOCX",
@@ -1624,6 +1630,7 @@
     "profile": "الملف الشخصي",
     "properties": "الخصائص",
     "queued": "قيد الانتظار",
+    "reason": "السبب",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
     "refresh": "تحديث",
@@ -1949,6 +1956,19 @@
     "deliveredBy": "تم التسليم بواسطة <address>{sender}</address>",
     "deliveredByAuthenticated": "تم التسليم بواسطة <address>{sender}</address> · تمت المصادقة",
     "deliveryAuthentication": "مصادقة التسليم",
+    "drops": {
+      "authenticationHint": "اطلب من مسؤول البريد الإلكتروني لدى المرسل إعداد <protocol>SPF</protocol> و<protocol>DKIM</protocol> و<protocol>DMARC</protocol> لنطاق الإرسال.",
+      "reasons": {
+        "attachmentRejected": "تم رفض المرفق",
+        "authenticationFailed": "فشلت مصادقة التسليم",
+        "malformedMessage": "تعذّرت قراءة الرسالة",
+        "messageTooLarge": "الرسالة كبيرة جدًا",
+        "revokedAddress": "تم إلغاء عنوان البريد الإلكتروني",
+        "unauthorizedSender": "المرسل غير مخوّل",
+        "unknownRecipient": "مستلم غير معروف"
+      },
+      "title": "الرسائل المرفوضة"
+    },
     "empty": "لا توجد مراسلات بعد.",
     "filers": "مقدمو المراسلات",
     "forwardedBy": "تمت إعادة التوجيه بواسطة <address>{sender}</address>",
@@ -5183,7 +5203,6 @@
         "signedDescriptionNoVersion": "تم حفظ التوقيع كإصدار جديد.",
         "signedTitle": "تم توقيع ملف PDF",
         "stampLocation": "المكان",
-        "stampReason": "السبب",
         "stampRejectedDescription": "تعذّر وضع الختم في هذا الموضع. ضعه مرة أخرى ثم أعد المحاولة.",
         "stampSignedBy": "موقّع رقميًا من",
         "stampTextUnrenderableDescription": "لا يمكن عرض السبب أو المكان في ختم مرئي. غيّر النص أو استخدم توقيعًا غير مرئي.",

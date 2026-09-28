@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { CopyIcon, CopyPlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -19,6 +18,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { CopyIcon, CopyPlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";

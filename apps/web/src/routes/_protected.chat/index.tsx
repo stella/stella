@@ -13,18 +13,18 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
-  BookOpenIcon,
   HistoryIcon,
   MessageSquareIcon,
   Minimize2Icon,
   PinIcon,
   PlusIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
+  SkillIcon,
+} from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -637,7 +637,7 @@ function ChatIndex() {
             search={{ kind: "skill" }}
             to="/knowledge/tools"
           >
-            <BookOpenIcon className="size-4" />
+            <SkillIcon className="size-4" />
             {t("chat.landing.skills")}
           </Link>
         }
@@ -645,7 +645,7 @@ function ChatIndex() {
         {suggestedSkills.length > 0 ? (
           suggestedSkills.map((prompt) => (
             <LandingButton
-              icon={<SlashPromptIcon />}
+              icon={<SkillIcon className="size-4" />}
               key={prompt.id}
               meta={prompt.body}
               onClick={() => selectPrompt(prompt)}
@@ -734,7 +734,3 @@ type PinnedMatter = {
   /** Drives the right-click menu's add-member affordance and header. */
   client: { displayName: string } | null;
 };
-
-const SlashPromptIcon = () => (
-  <span className="font-mono text-[13px] leading-none">/</span>
-);

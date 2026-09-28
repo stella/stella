@@ -2,6 +2,20 @@ import type { ReactElement } from "react";
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import type {
+  DirectiveRange,
+  TemplatePreviewSpan,
+  TemplatePreviewValue,
+} from "@stll/folio-react";
+import { displayLanguageName } from "@stll/locales";
+import type { DeterministicFieldConfig } from "@stll/template-conditions";
+import {
+  assertNever,
+  renderDeterministicFieldValue,
+} from "@stll/template-conditions";
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   BookmarkIcon,
@@ -17,21 +31,7 @@ import {
   SigmaIcon,
   SplitIcon,
   TextQuoteIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type {
-  DirectiveRange,
-  TemplatePreviewSpan,
-  TemplatePreviewValue,
-} from "@stll/folio-react";
-import { displayLanguageName } from "@stll/locales";
-import type { DeterministicFieldConfig } from "@stll/template-conditions";
-import {
-  assertNever,
-  renderDeterministicFieldValue,
-} from "@stll/template-conditions";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import {
   Menu,

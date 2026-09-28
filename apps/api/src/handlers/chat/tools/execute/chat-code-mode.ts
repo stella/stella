@@ -11,14 +11,22 @@ import {
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
 
+import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
 
 import {
   EAGER_CHAT_READ_TOOLS,
   toDocumentedChatReads,
 } from "@/api/handlers/chat/tools/execute/documented-chat-reads";
-import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
+import {
+  createStellaIsolateDriver,
+  type CreateStellaIsolateDriverProps,
+} from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import { DEFAULT_SANDBOX_LIMITS } from "@/api/handlers/chat/tools/execute/sandbox/limits";
+import {
+  buildScriptCallGuide,
+  type ScriptCallCatalog,
+} from "@/api/handlers/chat/tools/execute/script-call-guide";
 import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
@@ -61,18 +69,19 @@ import {
  * to the `RegistryReadToolName` union (no cast); the ref-field map then decides
  * chat projectability per tool.
  */
-const chatProjectableReadToolNames = (): readonly RegistryReadToolName[] => {
-  const names: RegistryReadToolName[] = [];
-  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-    if (definition.access !== "read") {
-      continue;
+export const chatProjectableReadToolNames =
+  (): readonly RegistryReadToolName[] => {
+    const names: RegistryReadToolName[] = [];
+    for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+      if (definition.access !== "read") {
+        continue;
+      }
+      if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
+        names.push(definition.name);
+      }
     }
-    if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
-      names.push(definition.name);
-    }
-  }
-  return names;
-};
+    return names;
+  };
 
 /**
  * The `execute_typescript` runner that Stella's sandbox owns unchanged. Passed to
@@ -170,6 +179,8 @@ export type ChatCodeModeReadRunner = (
 type CreateChatCodeModeSurfaceProps = {
   concurrencyKey: string;
   documentedReads: readonly RegistryReadToolName[];
+  /** Tells a script that called a name it cannot the call to make instead. */
+  nameGuide?: CreateStellaIsolateDriverProps["nameGuide"];
   runReadTool: ChatCodeModeReadRunner;
 };
 
@@ -180,10 +191,14 @@ type CreateChatCodeModeSurfaceProps = {
 export const createChatCodeModeSurface = ({
   concurrencyKey,
   documentedReads,
+  nameGuide,
   runReadTool,
 }: CreateChatCodeModeSurfaceProps): CreateCodeModeResult =>
   createCodeMode({
-    driver: createStellaIsolateDriver({ concurrencyKey }),
+    driver: createStellaIsolateDriver({
+      concurrencyKey,
+      ...(nameGuide === undefined ? {} : { nameGuide }),
+    }),
     tools: buildChatReadTools({
       documentedReads,
       runReadTool: async (toolName, args) =>
@@ -191,6 +206,65 @@ export const createChatCodeModeSurface = ({
     }),
     ...CODE_MODE_RUNTIME_CONFIG,
   });
+
+/** The prefix code mode gives every tool it exposes to a script. */
+const SCRIPT_FUNCTION_PREFIX = "external_";
+
+/**
+ * Every chat read by its script name: registry `access: "read"` handlers,
+ * which run without an approval. Only these may ever run in place of a call
+ * a script misspelled.
+ */
+const CHAT_SCRIPT_READ_FUNCTIONS: ReadonlySet<string> = new Set(
+  chatProjectableReadToolNames().map(
+    (toolName) => `${SCRIPT_FUNCTION_PREFIX}${toolName}`,
+  ),
+);
+
+/** Every tool Stella has, to tell "not offered here" from "not a tool". */
+const KNOWN_TOOL_NAMES: readonly string[] = [
+  ...new Set([
+    ...DEFAULT_MCP_TOOL_DEFINITIONS.map(({ name }) => name),
+    ...Object.keys(BUILT_IN_CHAT_TOOL_POLICY_KINDS),
+  ]),
+];
+
+/** What a turn offers besides scripts, known once its tool set is built. */
+export type ChatScriptCallTools = {
+  /** Every tool the turn offers as a direct tool call. */
+  directTools: readonly string[];
+  /** Why a tool is off in this turn, where the turn knows. */
+  unavailableReasons: ReadonlyMap<string, string>;
+};
+
+type ChatScriptCallCatalogProps = {
+  bindingNames: readonly string[];
+  turnTools: ChatScriptCallTools;
+};
+
+/** The script-call catalog of one `execute_typescript` run in a chat turn. */
+export const chatScriptCallCatalog = ({
+  bindingNames,
+  turnTools,
+}: ChatScriptCallCatalogProps): ScriptCallCatalog => {
+  const readFunctions = bindingNames.filter((name) =>
+    CHAT_SCRIPT_READ_FUNCTIONS.has(name),
+  );
+  const offered = new Set([
+    ...turnTools.directTools,
+    ...readFunctions.map((name) => name.slice(SCRIPT_FUNCTION_PREFIX.length)),
+  ]);
+  return {
+    readFunctions,
+    directTools: turnTools.directTools,
+    unavailableTools: new Map(
+      KNOWN_TOOL_NAMES.filter((name) => !offered.has(name)).map((name) => [
+        name,
+        turnTools.unavailableReasons.get(name),
+      ]),
+    ),
+  };
+};
 
 type BuildChatCodeModeProps = Omit<
   ChatRegistryContextDeps,
@@ -200,13 +274,20 @@ type BuildChatCodeModeProps = Omit<
   documentedReads: readonly RegistryReadToolName[];
   refRegistry: ChatRefRegistry;
   toolDefectMemo: ChatToolDefectMemo;
+  /** Read when a script runs, after the turn's tool set is complete. */
+  scriptCallTools: () => ChatScriptCallTools;
 };
 
 export const buildChatCodeMode = (
   props: BuildChatCodeModeProps,
 ): CreateCodeModeResult => {
-  const { documentedReads, refRegistry, toolDefectMemo, ...contextDeps } =
-    props;
+  const {
+    documentedReads,
+    refRegistry,
+    scriptCallTools,
+    toolDefectMemo,
+    ...contextDeps
+  } = props;
   const context = buildMcpContextFromChat(contextDeps);
 
   return createChatCodeModeSurface({
@@ -236,6 +317,12 @@ export const buildChatCodeMode = (
       }
       return result.value;
     },
+    // A script that calls a direct tool, an unprefixed read or a tool this
+    // chat does not offer is told the call to make instead.
+    nameGuide: (bindingNames) =>
+      buildScriptCallGuide(
+        chatScriptCallCatalog({ bindingNames, turnTools: scriptCallTools() }),
+      ),
   });
 };
 

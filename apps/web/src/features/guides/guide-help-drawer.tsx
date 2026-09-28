@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { BookOpenIcon, MailIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -8,6 +7,7 @@ import {
 } from "@stll/api-contract";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
+import { BookTextIcon, MailIcon } from "@stll/ui/icons";
 import {
   Sheet,
   SheetFooter,
@@ -274,7 +274,7 @@ const GuideSupportFooter = () => {
           size="sm"
           variant="secondary"
         >
-          <BookOpenIcon />
+          <BookTextIcon />
           {t("common.documentation")}
         </Button>
       </div>

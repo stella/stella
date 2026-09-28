@@ -462,7 +462,9 @@ const resolveFilePropertyId = async ({
   };
 };
 
-type CompareToolInput = v.InferOutput<typeof COMPARE_DOCUMENTS_INPUT_SCHEMA>;
+export type CompareToolInput = v.InferOutput<
+  typeof COMPARE_DOCUMENTS_INPUT_SCHEMA
+>;
 
 const changeCountsByKind = (
   changes: readonly { kind: string }[],

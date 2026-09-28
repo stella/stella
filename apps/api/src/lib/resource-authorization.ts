@@ -22,6 +22,7 @@ type ResourceAuthorizationOwner =
   | "rates"
   | "reports"
   | "saved_searches"
+  | "saved_time_narratives"
   | "style_sets"
   | "templates"
   | "time_entries"
@@ -127,6 +128,11 @@ export const RESOURCE_AUTHORIZATION_DISPOSITION = {
   [RESOURCE_TYPE.SAVED_SEARCH]: {
     type: "domain_policy",
     owner: "saved_searches",
+  },
+  [RESOURCE_TYPE.SELLER_PROFILE]: { type: "domain_policy", owner: "billing" },
+  [RESOURCE_TYPE.SAVED_TIME_NARRATIVE]: {
+    type: "domain_policy",
+    owner: "saved_time_narratives",
   },
   [RESOURCE_TYPE.STYLE_SET]: { type: "domain_policy", owner: "style_sets" },
   [RESOURCE_TYPE.TEMPLATE]: { type: "domain_policy", owner: "templates" },

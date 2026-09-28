@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "p. ej. Estándar 2025"
     },
     "revertToDraft": "Volver a borrador",
+    "savedNarratives": {
+      "empty": "Guarda una descripción para volver a usarla.",
+      "save": "Guardar descripción",
+      "title": "Descripciones guardadas"
+    },
     "selectMatter": "Seleccione un asunto...",
     "selectMatterToStart": "Seleccione un asunto para iniciar el temporizador",
     "selectedCount": "{count, plural, one {# seleccionado} other {# seleccionados}}",
@@ -884,6 +889,7 @@
       "apiKey": "Clave de API",
       "none": "Sin configuración"
     },
+    "skillNeedsUnavailableTools": "No se ofrece en el chat. Necesita una herramienta que allí no está disponible: {tools}",
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Crear DOCX",
@@ -1624,6 +1630,7 @@
     "profile": "Perfil",
     "properties": "Propiedades",
     "queued": "En cola",
+    "reason": "Motivo",
     "reconnecting": "Reconectando…",
     "reference": "Referencia",
     "refresh": "Actualizar",
@@ -1949,6 +1956,19 @@
     "deliveredBy": "Entregado por <address>{sender}</address>",
     "deliveredByAuthenticated": "Entregado por <address>{sender}</address> · autenticado",
     "deliveryAuthentication": "Autenticación de la entrega",
+    "drops": {
+      "authenticationHint": "Pida al administrador del correo del remitente que configure <protocol>SPF</protocol>, <protocol>DKIM</protocol> y <protocol>DMARC</protocol> para el dominio de envío.",
+      "reasons": {
+        "attachmentRejected": "Archivo adjunto rechazado",
+        "authenticationFailed": "Error de autenticación de la entrega",
+        "malformedMessage": "No se pudo leer el mensaje",
+        "messageTooLarge": "Mensaje demasiado grande",
+        "revokedAddress": "Dirección de correo revocada",
+        "unauthorizedSender": "Remitente no autorizado",
+        "unknownRecipient": "Destinatario desconocido"
+      },
+      "title": "Entregas rechazadas"
+    },
     "empty": "Todavía no hay correspondencia.",
     "filers": "Remitentes",
     "forwardedBy": "Reenviado por <address>{sender}</address>",
@@ -5183,7 +5203,6 @@
         "signedDescriptionNoVersion": "La firma se guardó como una nueva versión.",
         "signedTitle": "PDF firmado",
         "stampLocation": "Lugar",
-        "stampReason": "Motivo",
         "stampRejectedDescription": "No se puede colocar el sello ahí. Vuelve a colocarlo e inténtalo de nuevo.",
         "stampSignedBy": "Firmado digitalmente por",
         "stampTextUnrenderableDescription": "El motivo o el lugar no se pueden mostrar en un sello visible. Cambia el texto o usa una firma invisible.",

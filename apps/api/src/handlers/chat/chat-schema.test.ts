@@ -17,6 +17,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   createChatAttachmentPart,
   chatMessageContentFromMessage,
+  chatMessageFromPersisted,
   isChatPart,
   toChatMessageContent,
   toPersistableChatMessage,
@@ -2075,6 +2076,90 @@ describe("validateMessage", () => {
 
     expectInvalidChatMessage(result);
   });
+
+  test.each([
+    [
+      "input the tool's schema rejects",
+      "search-documents",
+      '{"query":123}',
+      { input: { query: 123 } },
+    ],
+    ["arguments that are not JSON", "search-documents", '{"query":', {}],
+    ["arguments that are a JSON primitive", "search-documents", "42", {}],
+    [
+      "rejected input spaced unlike its JSON",
+      "search-documents",
+      '{ "query": 123 }',
+      {},
+    ],
+    [
+      "a tool the run does not register",
+      "made-up-tool",
+      '{"query":"contract"}',
+      { input: { query: "contract" } },
+    ],
+  ] as const)(
+    "keeps a call the engine answered with an error for %s, as the model sent it",
+    (_label, name, sentArguments, stored) => {
+      const error = "Input validation failed";
+      const sentCall: unknown = {
+        type: "tool-call",
+        id: "tool-call-1",
+        name,
+        arguments: sentArguments,
+        output: { error },
+        state: "error",
+      };
+      const result = validateToolCallParts({
+        message: {
+          id: chatMessageId("msg_rejected_tool_input"),
+          role: "assistant",
+          parts: [
+            isChatPart(sentCall)
+              ? sentCall
+              : expect.unreachable("The sent call must be a chat part"),
+            {
+              type: "tool-result",
+              toolCallId: "tool-call-1",
+              content: JSON.stringify({ error }),
+              error,
+              state: "error",
+            },
+          ],
+        },
+        tools: searchTools,
+      });
+      const parts = Result.isOk(result)
+        ? result.value
+        : expect.unreachable(result.error.message);
+      // A name outside the registered catalog is not a typed chat part, so
+      // the stored calls are compared as plain values.
+      const expected: unknown = {
+        type: "tool-call",
+        id: "tool-call-1",
+        name,
+        arguments: sentArguments,
+        ...stored,
+        output: { error },
+        state: "error",
+      };
+      const validatedCall: unknown = parts[0];
+      expect(validatedCall).toEqual(expected);
+
+      // Stored and read back, the call still says what the model sent.
+      const message = toPersistableChatMessage({
+        id: chatMessageId("msg_rejected_tool_input"),
+        role: "assistant",
+        parts,
+      });
+      const reloadedCall: unknown = chatMessageFromPersisted({
+        content: chatMessageContentFromMessage(message),
+        id: message.id,
+        role: message.role,
+      }).parts[0];
+      expect(reloadedCall).toEqual(expected);
+    },
+  );
 
   test("accepts tool results that match the paired tool output", async () => {
     const result = await validateMessage({

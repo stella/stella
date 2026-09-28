@@ -1,15 +1,16 @@
-import { Suspense, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { toISODate } from "@/components/workspaces/entity-utils";
+import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
@@ -28,6 +29,18 @@ import {
   getTimeEntryDateBounds,
   isTimeEntryDateAllowed,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-date.logic";
+
+const RateManagementDialog = lazy(async () => {
+  const module =
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog");
+  return { default: module.RateManagementDialog };
+});
+
+const BillingCodesDialog = lazy(async () => {
+  const module =
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog");
+  return { default: module.BillingCodesDialog };
+});
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
@@ -99,6 +112,10 @@ const TimesheetSkeleton = () => (
 function TimesheetsPage() {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
+  const canManageRates = usePermissions({ rate: ["create"] });
+  const canManageBillingCodes = usePermissions({ billingCode: ["create"] });
+  const [rateDialogOpen, setRateDialogOpen] = useState(false);
+  const [codesDialogOpen, setCodesDialogOpen] = useState(false);
   const format = useFormatter();
   const workspaceId = Route.useParams({
     select: (params) => params.workspaceId,
@@ -121,6 +138,24 @@ function TimesheetsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <h1 className="text-sm font-medium">{tBilling("timesheets")}</h1>
         <div className="flex flex-wrap items-center gap-2">
+          {canManageRates && (
+            <Button
+              onClick={() => setRateDialogOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              {tBilling("rates.rates")}
+            </Button>
+          )}
+          {canManageBillingCodes && (
+            <Button
+              onClick={() => setCodesDialogOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              {tBilling("codes.manageCodes")}
+            </Button>
+          )}
           <Button
             onClick={() =>
               setDate(
@@ -181,6 +216,22 @@ function TimesheetsPage() {
           />
         </Suspense>
       </div>
+      <Suspense fallback={null}>
+        {rateDialogOpen && (
+          <RateManagementDialog
+            onOpenChange={setRateDialogOpen}
+            open
+            workspaceId={workspaceId}
+          />
+        )}
+        {codesDialogOpen && (
+          <BillingCodesDialog
+            onOpenChange={setCodesDialogOpen}
+            open
+            workspaceId={workspaceId}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

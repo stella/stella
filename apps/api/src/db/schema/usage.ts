@@ -308,6 +308,95 @@ export const usageEntitlements = p.pgTable(
   ],
 );
 
+/**
+ * How an organization may reach the instance model provider.
+ * `self_managed_keys` is recorded once for organizations that existed before
+ * the state was enforced: they run only on their own keys. An evaluation
+ * period is started at most once per organization and ends by time or by an
+ * explicit end; neither `evaluation_ended` nor `self_managed_keys` ever
+ * returns to `evaluation_period`.
+ */
+export const ORGANIZATION_ACCESS_STATE = {
+  selfManagedKeys: "self_managed_keys",
+  evaluationPeriod: "evaluation_period",
+  evaluationEnded: "evaluation_ended",
+} as const;
+
+const ORGANIZATION_ACCESS_STATES = [
+  ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+  ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+  ORGANIZATION_ACCESS_STATE.evaluationEnded,
+] as const;
+
+const currentUserOwnsOrganizationAccessStates = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_access_states'::regclass)`;
+
+export const organizationAccessStates = p.pgTable(
+  "organization_access_states",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    state: p.text({ enum: ORGANIZATION_ACCESS_STATES }).notNull(),
+    evaluationStartedAt: timestamptz("evaluation_started_at"),
+    evaluationEndsAt: timestamptz("evaluation_ends_at"),
+    evaluationEndedAt: timestamptz("evaluation_ended_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  () => [
+    // Each state admits exactly one shape of evaluation columns, so a row
+    // cannot claim an evaluation it never started or end one twice.
+    p.check(
+      "organization_access_states_shape",
+      sql`((state = 'self_managed_keys' AND evaluation_started_at IS NULL AND evaluation_ends_at IS NULL AND evaluation_ended_at IS NULL) OR (state = 'evaluation_period' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NULL) OR (state = 'evaluation_ended' AND evaluation_ends_at > evaluation_started_at AND evaluation_ended_at IS NOT NULL)) IS TRUE`,
+    ),
+    // Written only by system paths on the owner connection (organization
+    // creation, operator transitions); members read their own row.
+    p.pgPolicy("organization_access_states_owner_select", {
+      for: "select",
+      to: "public",
+      using: currentUserOwnsOrganizationAccessStates,
+    }),
+    p.pgPolicy("organization_access_states_owner_insert", {
+      for: "insert",
+      to: "public",
+      withCheck: currentUserOwnsOrganizationAccessStates,
+    }),
+    p.pgPolicy("organization_access_states_owner_update", {
+      for: "update",
+      to: "public",
+      using: currentUserOwnsOrganizationAccessStates,
+      withCheck: currentUserOwnsOrganizationAccessStates,
+    }),
+    p.pgPolicy("organization_access_states_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("organization_access_states_no_insert", {
+      as: "restrictive",
+      for: "insert",
+      to: stella,
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("organization_access_states_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("organization_access_states_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
+  ],
+);
+
 export const usageAllocations = p.pgTable(
   "usage_allocations",
   {

@@ -2,14 +2,6 @@ import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import {
-  BuildingIcon,
-  LockIcon,
-  PlusIcon,
-  TrashIcon,
-  UserIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
@@ -26,6 +18,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import {
+  BuildingIcon,
+  LockIcon,
+  PlusIcon,
+  TrashIcon,
+  UserIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

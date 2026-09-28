@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ChevronDownIcon } from "lucide-react";
-
 import { Button } from "../components/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../components/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
+import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { resolveFacetOverflow } from "./facet-bar.logic";
 import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";

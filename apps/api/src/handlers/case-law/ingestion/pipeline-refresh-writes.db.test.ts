@@ -119,6 +119,7 @@ type StoredRow = {
   updatedAt: string;
   observationOrder: string | null;
   mirrorStatus: string;
+  sourceHash: string | null;
   contentHash: string | null;
   textKey: string | null;
   holdsInlineText: boolean;
@@ -131,6 +132,7 @@ const storedRow = async (caseNumber: string): Promise<StoredRow> => {
            updated_at::text AS updated_at,
            source_observation_order::text AS observation_order,
            corpus_mirror_status,
+           source_hash,
            content_hash,
            text_s3_key,
            fulltext IS NOT NULL AS holds_inline_text,
@@ -151,6 +153,8 @@ const storedRow = async (caseNumber: string): Promise<StoredRow> => {
         ? record["observation_order"]
         : null,
     mirrorStatus: String(record["corpus_mirror_status"]),
+    sourceHash:
+      typeof record["source_hash"] === "string" ? record["source_hash"] : null,
     contentHash:
       typeof record["content_hash"] === "string"
         ? record["content_hash"]
@@ -456,6 +460,90 @@ test("a document arriving for a document-less decision is still written", async 
   expect(await citationHeaders(decisionRow?.id ?? "")).toHaveLength(1);
 });
 
+test("a matching source hash refreshes a row whose stored document was removed", async () => {
+  const caseNumber = "30 Cdo 301/2024";
+  const document = withDocument(caseNumber, "same-page");
+  await ingest(document, canonical);
+  const first = await storedRow(caseNumber);
+  expect(first.sourceHash).toBe(document.rawHash);
+  expect(first.contentHash).not.toBeNull();
+  await db
+    .update(caseLawDecisions)
+    .set({
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    })
+    .where(sql`${caseLawDecisions.id} = ${first.id}::uuid`);
+  const textless = await storedRow(caseNumber);
+  expect(textless.contentHash).toBeNull();
+  expect(textless.textKey).toBeNull();
+  expect(textless.sourceHash).toBe(document.rawHash);
+
+  const refreshed = await ingest(document, canonical);
+  const restored = await storedRow(caseNumber);
+  expect(restored.observationOrder).toBe(String(refreshed));
+  expect(restored.contentHash).toBe(first.contentHash);
+  expect(restored.textKey).toBe(first.textKey);
+});
+
+test("a matching source hash restores sections-only content", async () => {
+  const caseNumber = "30 Cdo 304/2024";
+  const document = {
+    ...withDocument(caseNumber, "sections-only"),
+    fulltext: undefined,
+    sections: [{ index: 0, type: "ruling", title: null, text: PRECEDENT }],
+  } satisfies IngestionResult;
+  await ingest(document, canonical);
+  const first = await storedRow(caseNumber);
+  expect(first.contentHash).not.toBeNull();
+  await db
+    .update(caseLawDecisions)
+    .set({
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+    })
+    .where(sql`${caseLawDecisions.id} = ${first.id}::uuid`);
+
+  const refreshed = await ingest(document, canonical);
+  const restored = await storedRow(caseNumber);
+  expect(restored.observationOrder).toBe(String(refreshed));
+  expect(restored.contentHash).toBe(first.contentHash);
+  expect(restored.textKey).toBe(first.textKey);
+});
+
+test.each([
+  ["canonical", canonical],
+  ["postgres-only", postgresOnly],
+] as const)(
+  "a matching source hash still skips stored text (%s)",
+  async (mode, corpus) => {
+    const caseNumber =
+      mode === "postgres-only" ? "30 Cdo 303/2024" : "30 Cdo 302/2024";
+    const document = withDocument(caseNumber, "same-page");
+    await ingest(document, corpus);
+    const first = await storedRow(caseNumber);
+    if (mode === "postgres-only") {
+      expect(first.contentHash).toBeNull();
+      expect(first.holdsInlineText).toBe(true);
+    } else {
+      expect(first.contentHash).not.toBeNull();
+    }
+    const packsBefore = transferred.length;
+
+    const observed = await ingest(document, corpus);
+    const unchanged = await storedRow(caseNumber);
+    expect(unchanged.observationOrder).toBe(String(observed));
+    expect(unchanged.contentHash).toBe(first.contentHash);
+    expect(unchanged.textKey).toBe(first.textKey);
+    expect(unchanged.updatedAt).toBe(first.updatedAt);
+    expect(transferred.length).toBe(packsBefore);
+  },
+);
+
 test("a refresh that moves the decision's language re-settles its kept citations", async () => {
   // Kept rows keep their answer unless something reopens them, and the citing
   // language is one of the things the answer depends on: it picks which
@@ -537,4 +625,53 @@ test("a payload replaced between the read and the write is planned again", async
   expect(second.mirrorStatus).toBe("settled");
   // Planned against what the row then held, so the document went back in.
   expect(transferred.length).toBeGreaterThan(packsBefore);
+});
+
+test("a directory jurisdiction's decision is written with its court id, and every other without one", async () => {
+  const usa = (rawHash: string): IngestionResult => ({
+    ...withDocument("No. 19-1392", rawHash),
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+  });
+  const courtIdOf = async (caseNumber: string) =>
+    (
+      await db
+        .select({ courtId: caseLawDecisions.courtId })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.caseNumber, caseNumber))
+    ).map(({ courtId }) => courtId);
+
+  await ingest(usa("page-v1"), canonical);
+  await ingest(withDocument("30 Cdo 900/2024", "page-v1"), canonical);
+  expect(await courtIdOf("No. 19-1392")).toEqual(["scotus"]);
+  expect(await courtIdOf("30 Cdo 900/2024")).toEqual([null]);
+
+  // A refresh that states the same court id is not a change of the row.
+  const first = await storedRow("No. 19-1392");
+  await ingest(usa("page-v2"), canonical);
+  expect((await storedRow("No. 19-1392")).updatedAt).toBe(first.updatedAt);
+
+  // A result that reaches the write path without its court id is an adapter
+  // defect; nothing is written for it.
+  const { courtId: _courtId, ...unresolved } = usa("page-v3");
+  const rejection: unknown = await processDecision({
+    input: { ...unresolved, caseNumber: "No. 20-1" },
+    observationOrder: 1000n,
+    sourceId,
+    scopedDb,
+    observedAt: new Date(Date.UTC(2026, 8, 23, 13)),
+    refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus: canonical,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toMatchObject({
+    message: expect.stringContaining(
+      "Decision court identity rejected for USA: missing",
+    ),
+  });
+  expect(await courtIdOf("No. 20-1")).toEqual([]);
 });

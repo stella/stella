@@ -3,15 +3,6 @@ import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import {
-  AlertTriangleIcon,
-  ChevronDownIcon,
-  LandmarkIcon,
-  PencilIcon,
-  PlusIcon,
-  TrashIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -28,6 +19,15 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import {
+  AlertTriangleIcon,
+  ChevronDownIcon,
+  LandmarkIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
@@ -500,7 +500,7 @@ const PrefillBadge = ({ snippet }: { snippet?: string | null | undefined }) => {
         <span className="text-muted-foreground ms-1 inline-flex align-middle" />
       }
     >
-      <WandSparklesIcon
+      <AiActionIcon
         aria-label={t("templates.prefillBadgeLabel")}
         className="size-3.5"
       />
@@ -568,7 +568,7 @@ const AiAdaptHint = ({ show }: { show: boolean }) => {
   }
   return (
     <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
-      <WandSparklesIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
       {t("templates.aiAdaptHint")}
     </p>
   );

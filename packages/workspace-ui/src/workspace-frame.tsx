@@ -2,8 +2,6 @@
 
 import type { ComponentProps, ReactElement, ReactNode } from "react";
 
-import { PanelLeftIcon } from "lucide-react";
-
 import {
   ApplicationRail,
   ApplicationRailButton,
@@ -14,6 +12,7 @@ import {
 } from "@stll/ui/application-rail";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { PanelLeftIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
   SIDE_RAIL_ICON_BUTTON_SIZE,

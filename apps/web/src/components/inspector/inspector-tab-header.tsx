@@ -1,11 +1,11 @@
 import type { MouseEvent, ReactNode } from "react";
 
-import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";

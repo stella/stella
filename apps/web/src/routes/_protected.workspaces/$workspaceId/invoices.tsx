@@ -10,10 +10,10 @@ import {
   useMatch,
   useNavigate,
 } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PlusIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 

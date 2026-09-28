@@ -32,12 +32,12 @@ import type { RefObject } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import {

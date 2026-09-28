@@ -31,9 +31,17 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { CORPUS_PROJECTION_APPEND_COMMIT_MODE } from "@/api/lib/legal-search/corpus-index-projection-engine";
+import {
+  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  planCorpusProjectionAppendRequests,
+} from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import {
+  classifyCorpusProjectionReservationFailureTx,
+  reserveCorpusProjectionIntentsTx,
+} from "@/api/lib/legal-search/corpus-index-projection-store";
 import { CORPUS_TRANSFER_MAX_BYTES } from "@/api/lib/legal-search/corpus-storage";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -199,4 +207,116 @@ test("unreadable payloads are persisted as they are read, not once the batch dra
   expect(transactionCount).toBeGreaterThanOrEqual(
     2 + REVISIONS / READ_CONCURRENCY,
   );
+});
+
+test("a planner-rejected cap-plus-one revision is persisted as blocked", async () => {
+  const reservedAt = new Date("2026-08-25T13:00:00.000Z");
+  const row = documentRow(REVISIONS + 1);
+  await db.insert(legislationDocuments).values(row);
+  const descriptor = deriveCorpusIndexProjectionDescriptor(
+    MANIFEST,
+    legislationProjectionInputFromCanonical({
+      documentId: row.id,
+      sourceId: row.sourceId,
+      jurisdiction: row.country,
+      language: row.language,
+      documentType: row.documentType,
+      contentHash: row.contentHash,
+      title: row.title,
+      status: row.status,
+      effectiveDate: row.effectiveDate,
+      versionValidFrom: row.versionValidFrom,
+      versionValidTo: row.versionValidTo,
+      eli: row.eli,
+      sourceDescriptor: null,
+    }),
+  );
+  if (descriptor.action !== "upsert") {
+    panic("Seeded legislation row is not projectable");
+  }
+  await db.insert(corpusIndexProjectionStates).values({
+    family: TARGET.family,
+    generation: TARGET.generation,
+    entityId: String(row.id),
+    desiredAction: "upsert",
+    desiredEpoch: EPOCH,
+    desiredFingerprint: descriptor.fingerprint,
+    desiredIndexId: descriptor.indexId,
+    updatedAt: reservedAt,
+  });
+
+  const lease = (
+    await db.transaction(
+      async (tx) =>
+        await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+          family: TARGET.family,
+          generation: TARGET.generation,
+          scope: { type: "subjects", entityIds: [row.id] },
+          limit: 1,
+          leaseMs: 60_000,
+          testNow: reservedAt,
+          newIntentId: () =>
+            toSafeId<"corpusIndexProjectionIntent">(
+              "0198e331-e578-7000-8000-0000000003a1",
+            ),
+          newLeaseToken: () => "0198e331-e578-7000-8000-0000000003a2",
+        }),
+    )
+  ).at(0);
+  if (lease === undefined) {
+    panic("Expected cap-plus-one revision reservation");
+  }
+
+  const plan = planCorpusProjectionAppendRequests([
+    {
+      revision: lease.intentId,
+      documents: [
+        {
+          document_id: String(row.id),
+          projection_revision: lease.intentId,
+          text: "x".repeat(
+            CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES + 1,
+          ),
+        },
+      ],
+    },
+  ]);
+  expect(plan.isErr()).toBe(true);
+  if (plan.isOk()) {
+    panic("Cap-plus-one revision unexpectedly planned");
+  }
+  expect(plan.error.code).toBe("revision_too_large");
+
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await classifyCorpusProjectionReservationFailureTx(
+          asTestRaw<Transaction>(tx),
+          {
+            intentId: lease.intentId,
+            leaseToken: lease.leaseToken,
+            failure: {
+              status: "blocked",
+              kind: "revision_too_large",
+              message: plan.error.message,
+            },
+            testNow: reservedAt,
+          },
+        ),
+    ),
+  ).toBe("blocked");
+
+  const [state] = await db
+    .select({
+      workStatus: corpusIndexProjectionStates.workStatus,
+      failureAttempts: corpusIndexProjectionStates.failureAttempts,
+      lastFailureKind: corpusIndexProjectionStates.lastFailureKind,
+    })
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, String(row.id)));
+  expect(state).toEqual({
+    workStatus: "blocked",
+    failureAttempts: 1,
+    lastFailureKind: "revision_too_large",
+  });
 });

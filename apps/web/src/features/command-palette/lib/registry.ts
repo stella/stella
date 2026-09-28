@@ -1,4 +1,9 @@
-import { MessageSquare, Plus, Upload, SquareCheck } from "lucide-react";
+import {
+  MessageSquareIcon as MessageSquare,
+  PlusIcon as Plus,
+  UploadIcon as Upload,
+  SquareCheckIcon as SquareCheck,
+} from "@stll/ui/icons";
 
 import type { CommandAction } from "./types";
 

@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "pl. Standard 2025"
     },
     "revertToDraft": "Visszaállítás tervezetre",
+    "savedNarratives": {
+      "empty": "Mentse a leírást későbbi használatra.",
+      "save": "Leírás mentése",
+      "title": "Mentett leírások"
+    },
     "selectMatter": "Válasszon ügyet...",
     "selectMatterToStart": "Válasszon ügyet az időmérés indításához",
     "selectedCount": "{count, plural, one {# kijelölve} other {# kijelölve}}",
@@ -884,6 +889,7 @@
       "apiKey": "API-kulcs",
       "none": "Nincs beállítás"
     },
+    "skillNeedsUnavailableTools": "A csevegésben nem jelenik meg. Olyan eszközt igényel, amely ott nem érhető el: {tools}",
     "toolNames": {
       "anonymize": "Anonimizálás",
       "createDocx": "DOCX létrehozása",
@@ -1624,6 +1630,7 @@
     "profile": "Profil",
     "properties": "Tulajdonságok",
     "queued": "Sorba állítva",
+    "reason": "Ok",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
     "refresh": "Frissítés",
@@ -1949,6 +1956,19 @@
     "deliveredBy": "Kézbesítette: <address>{sender}</address>",
     "deliveredByAuthenticated": "Kézbesítette: <address>{sender}</address> · hitelesítve",
     "deliveryAuthentication": "Kézbesítés hitelesítése",
+    "drops": {
+      "authenticationHint": "Kérje meg a feladó levelezési rendszergazdáját az <protocol>SPF</protocol>, <protocol>DKIM</protocol> és <protocol>DMARC</protocol> beállítására a küldő domainhez.",
+      "reasons": {
+        "attachmentRejected": "Elutasított melléklet",
+        "authenticationFailed": "A kézbesítés hitelesítése sikertelen",
+        "malformedMessage": "Az üzenet nem olvasható",
+        "messageTooLarge": "Az üzenet túl nagy",
+        "revokedAddress": "Visszavont e-mail-cím",
+        "unauthorizedSender": "Nem jogosult feladó",
+        "unknownRecipient": "Ismeretlen címzett"
+      },
+      "title": "Elutasított kézbesítések"
+    },
     "empty": "Még nincs levelezés.",
     "filers": "Benyújtók",
     "forwardedBy": "Továbbította: <address>{sender}</address>",
@@ -5183,7 +5203,6 @@
         "signedDescriptionNoVersion": "Az aláírás új verzióként lett mentve.",
         "signedTitle": "A PDF alá van írva",
         "stampLocation": "Hely",
-        "stampReason": "Ok",
         "stampRejectedDescription": "A bélyegzőt nem lehet oda elhelyezni. Helyezd el újra, és próbáld meg ismét.",
         "stampSignedBy": "Digitálisan aláírta",
         "stampTextUnrenderableDescription": "Az ok vagy a hely nem jeleníthető meg látható bélyegzőben. Módosítsd a szöveget, vagy használj láthatatlan aláírást.",

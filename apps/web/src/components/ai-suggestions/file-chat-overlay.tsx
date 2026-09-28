@@ -30,7 +30,6 @@ import {
 } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
@@ -66,6 +65,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
+import { LoaderCircleIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";

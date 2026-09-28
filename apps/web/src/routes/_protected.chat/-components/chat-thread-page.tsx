@@ -9,11 +9,11 @@ import {
 } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { Minimize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button, buttonVariants } from "@stll/ui/button";
+import { Minimize2Icon, PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

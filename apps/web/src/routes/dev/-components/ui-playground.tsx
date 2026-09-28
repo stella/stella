@@ -1,30 +1,6 @@
 import { useRef, useState } from "react";
 import type * as React from "react";
 
-import {
-  AlignJustifyIcon,
-  ArrowRightIcon,
-  ArchiveIcon,
-  BellIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  Clock3Icon,
-  ClockIcon,
-  CogIcon,
-  CopyIcon,
-  FileTextIcon,
-  FilterIcon,
-  LinkIcon,
-  ListIcon,
-  MailIcon,
-  Rows2Icon,
-  Rows3Icon,
-  SearchIcon,
-  ShieldIcon,
-  Trash2Icon,
-  UserIcon,
-  WrapTextIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -99,6 +75,30 @@ import {
   FrameTitle,
 } from "@stll/ui/frame";
 import { HexColorPicker } from "@stll/ui/hex-color-picker";
+import {
+  AlignJustifyIcon,
+  ArrowRightIcon,
+  ArchiveIcon,
+  BellIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  Clock3Icon,
+  ClockIcon,
+  CogIcon,
+  CopyIcon,
+  FileTextIcon,
+  FilterIcon,
+  LinkIcon,
+  ListIcon,
+  MailIcon,
+  Rows2Icon,
+  Rows3Icon,
+  SearchIcon,
+  ShieldIcon,
+  Trash2Icon,
+  UserIcon,
+  WrapTextIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   InputGroup,

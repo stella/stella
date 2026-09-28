@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "piem. Standarta 2025"
     },
     "revertToDraft": "Atgriezt kā melnrakstu",
+    "savedNarratives": {
+      "empty": "Saglabājiet aprakstu, lai to izmantotu vēlreiz.",
+      "save": "Saglabāt aprakstu",
+      "title": "Saglabātie apraksti"
+    },
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "selectedCount": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
@@ -884,6 +889,7 @@
       "apiKey": "API atslēga",
       "none": "Nav jāiestata"
     },
+    "skillNeedsUnavailableTools": "Tērzēšanā netiek piedāvāta. Nepieciešams rīks, kas tur nav pieejams: {tools}",
     "toolNames": {
       "anonymize": "Anonimizēt",
       "createDocx": "Izveidot DOCX",
@@ -1624,6 +1630,7 @@
     "profile": "Profils",
     "properties": "Rekvizīti",
     "queued": "Rindā",
+    "reason": "Iemesls",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
@@ -1949,6 +1956,19 @@
     "deliveredBy": "Piegādāja <address>{sender}</address>",
     "deliveredByAuthenticated": "Piegādāja <address>{sender}</address> · autentificēts",
     "deliveryAuthentication": "Piegādes autentifikācija",
+    "drops": {
+      "authenticationHint": "Lūdziet sūtītāja e-pasta administratoram konfigurēt <protocol>SPF</protocol>, <protocol>DKIM</protocol> un <protocol>DMARC</protocol> sūtīšanas domēnam.",
+      "reasons": {
+        "attachmentRejected": "Pielikums noraidīts",
+        "authenticationFailed": "Piegādes autentifikācija neizdevās",
+        "malformedMessage": "Ziņojumu neizdevās nolasīt",
+        "messageTooLarge": "Ziņojums ir pārāk liels",
+        "revokedAddress": "E-pasta adrese ir atsaukta",
+        "unauthorizedSender": "Sūtītājam nav atļaujas",
+        "unknownRecipient": "Nezināms saņēmējs"
+      },
+      "title": "Noraidītās piegādes"
+    },
     "empty": "Sarakstes vēl nav.",
     "filers": "Iesniedzēji",
     "forwardedBy": "Pārsūtīja <address>{sender}</address>",
@@ -5183,7 +5203,6 @@
         "signedDescriptionNoVersion": "Paraksts saglabāts kā jauna versija.",
         "signedTitle": "PDF parakstīts",
         "stampLocation": "Vieta",
-        "stampReason": "Iemesls",
         "stampRejectedDescription": "Zīmogu tur nevar novietot. Novietojiet to vēlreiz un mēģiniet vēlreiz.",
         "stampSignedBy": "Digitāli parakstījis",
         "stampTextUnrenderableDescription": "Iemeslu vai vietu nevar parādīt redzamā zīmogā. Mainiet tekstu vai izmantojiet neredzamu parakstu.",

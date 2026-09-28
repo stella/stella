@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import { CheckIcon, SearchIcon, StarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
 import type { CountryCode } from "@stll/country-codes";
+import { CheckIcon, SearchIcon, StarIcon } from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,

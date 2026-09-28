@@ -192,6 +192,9 @@ runs:
 
     - name: Seed deterministic marketing content
       shell: bash
+      env:
+        NODE_ENV: development
+        STELLA_LOCAL_DEV: "1"
       run: bun --filter @stll/api db:seed-dev
 
     - name: Capture marketing screenshots

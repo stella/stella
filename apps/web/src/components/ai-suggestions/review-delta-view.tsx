@@ -1,10 +1,10 @@
 import { type PropsWithChildren, useId, useState } from "react";
 
 import { panic } from "better-result";
-import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { ReviewAlignedPair } from "@/components/ai-suggestions/review-aligned-pair";

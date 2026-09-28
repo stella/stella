@@ -3,16 +3,6 @@ import type { PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
-import {
-  CogIcon,
-  DownloadIcon,
-  FileTextIcon,
-  PencilIcon,
-  PlusIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-  UploadIcon,
-} from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -29,6 +19,16 @@ import {
 } from "@stll/ui/dialog";
 import { FileInput } from "@stll/ui/file-input";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  CogIcon,
+  DownloadIcon,
+  FileTextIcon,
+  PencilIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+  UploadIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 

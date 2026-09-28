@@ -14,5 +14,10 @@ export {
   readSkillResource,
 } from "./loader";
 export type { SkillMetadata, SkillResource, StellaSkill } from "./loader";
+export {
+  readSkillRequiredTools,
+  SKILL_REQUIRED_TOOLS_MAX,
+  SKILL_REQUIRED_TOOLS_METADATA_KEY,
+} from "./required-tools";
 export { getSkillResourceKind } from "./resource-kinds";
 export type { SkillResourceKind } from "./resource-kinds";

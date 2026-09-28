@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { ImageIcon, ImageOffIcon, RotateCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ImageIcon, ImageOffIcon, RotateCcwIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import {

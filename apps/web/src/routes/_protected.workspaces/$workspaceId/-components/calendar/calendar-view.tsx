@@ -3,11 +3,11 @@ import type { UIEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";

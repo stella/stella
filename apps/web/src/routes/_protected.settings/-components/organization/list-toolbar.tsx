@@ -1,11 +1,11 @@
 import { useState } from "react";
 
 import { getRouteApi } from "@tanstack/react-router";
-import { SearchIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { SearchIcon } from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,

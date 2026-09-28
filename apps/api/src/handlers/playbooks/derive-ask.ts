@@ -240,15 +240,17 @@ export const deriveAutoAsks = async (
 
   const items = [...positions.items];
 
-  // A stored config that did not decrypt reads as `orgAIConfig: null`, which
-  // would resolve to the instance provider: the org's derivations would run on
-  // the shared key and be metered there. Make no call instead, and persist as
-  // a failed derivation does (`derived` absent, dropping any stale value), so
-  // the save is kept and the next one derives once the config reads again.
-  if (deps.orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-    logger.warn("Playbook auto-ASK derivation skipped: AI config unreadable", {
+  // A stored config that did not decrypt, or an org barred from the instance
+  // provider, reads as `orgAIConfig: null`, which would resolve to the
+  // instance provider: the org's derivations would run on the shared key and
+  // be metered there. Make no call instead, and persist as a failed derivation
+  // does (`derived` absent, dropping any stale value), so the save is kept and
+  // the next one derives once the config is usable.
+  if (deps.orgAIConfigStatus !== ORG_AI_CONFIG_STATUS.ok) {
+    logger.warn("Playbook auto-ASK derivation skipped: AI config unusable", {
       organization_id: deps.organizationId,
       feature: "playbook.derive-ask",
+      status: deps.orgAIConfigStatus,
     });
     for (const { index, position } of pending) {
       items[index] = { ...position, ask: { mode: "auto" } };

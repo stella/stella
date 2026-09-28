@@ -1,5 +1,7 @@
 import { useRef } from "react";
 
+import { useTranslations } from "use-intl";
+
 import {
   ListXIcon,
   Maximize2Icon,
@@ -7,9 +9,7 @@ import {
   PenLineIcon,
   XIcon,
   XSquareIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
+} from "@stll/ui/icons";
 import { MenuItem, MenuSeparator } from "@stll/ui/menu";
 
 import { requestInspectorRename } from "@/components/inspector/inspector-actions";

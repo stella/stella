@@ -198,7 +198,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 1330,
+          "maxLength": 1623,
           "description": "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId."
         },
         "court": {
@@ -4266,9 +4266,23 @@
         },
         "narrative": {
           "type": "string",
-          "minLength": 1,
+          "minLength": 0,
           "maxLength": 10000,
           "description": "Description of the work; required when creating"
+        },
+        "narrative_language": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "BCP-47 language tag for the narrative; pass null to clear"
         },
         "invoice_narrative": {
           "anyOf": [
@@ -4664,7 +4678,7 @@
       }
     },
     "name": "manage_organization",
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, and document processing. Manage provider secrets in the dashboard.",
+    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id. update_org_settings controls matter numbering, prompt caching, document processing, and time policy. Manage provider secrets in the dashboard.",
     "inputSchema": {
       "type": "object",
       "required": ["action"],
@@ -4705,6 +4719,33 @@
           "enum": ["off", "searchable-text"],
           "type": "string",
           "description": "Set automatic PDF searchable-text extraction for the organization (update_org_settings)"
+        },
+        "time_minimum_unit_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "description": "Minimum time increment in minutes; must divide 60 (update_org_settings)"
+        },
+        "time_edit_window_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Days a timekeeper may edit an entry (update_org_settings)"
+        },
+        "time_locked_through_month": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+        },
+        "time_narrative_required": {
+          "type": "boolean",
+          "description": "Require a narrative on time entries (update_org_settings)"
         },
         "confirm": {
           "type": "boolean",

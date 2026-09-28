@@ -18,6 +18,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// With its extension: oxlint.config.ts loads this file under Node's resolver.
+import { formattedLikeRepository } from "./generated-artifacts.ts";
+
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
 export type AllowedFile = {
@@ -387,6 +390,11 @@ export const OWNERSHIP = [
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
         },
         {
+          path: "apps/api/src/lib/rate-limit/action-admission.ts",
+          reason:
+            "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
+        },
+        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
@@ -668,6 +676,11 @@ export const OWNERSHIP = [
             "Rebuilds persisted bindings when expanding saved messages so refs from another turn are rebound or neutralized.",
         },
         {
+          path: "apps/api/src/handlers/chat/skill-availability/offered-tools.ts",
+          reason:
+            "Builds a new chat's tool set only to read its tool names for skill availability; no tool runs and the registry never leaves that build.",
+        },
+        {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
           reason:
             "Rebuilds persisted bindings to turn saved transcript refs into durable links before storing memories.",
@@ -783,6 +796,17 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "invoice-document",
+    capability:
+      "Invoice, advance, and credit note totals and Czech payment payloads",
+    owner: ["packages/invoicing/"],
+    summary:
+      "The package rounds VAT per line, sums document and rate totals in " +
+      "branded minor units, and returns SPAYD text for payable documents. " +
+      "QR matrix rendering remains with callers.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "text-folding",
     capability: "Diacritic and ASCII folding for search and slugs",
     owner: ["packages/text-normalize/"],
@@ -856,6 +880,21 @@ export const OWNERSHIP = [
       "arithmetic. Elapsed-time math uses the duration constants. The date " +
       "lint rules route callers here and reserve legacy `Date` for named " +
       "library boundaries. See [Temporal conventions](temporal.md).",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "runtime-mode",
+    capability:
+      "Server runtime mode: strict, or open to local development capabilities",
+    owner: ["packages/runtime-mode/"],
+    summary:
+      "`@stll/runtime-mode` is the one reader of `NODE_ENV` and " +
+      "`STELLA_LOCAL_DEV`. A process is open only with a local `NODE_ENV`, " +
+      "`STELLA_LOCAL_DEV=1` and a build that is not a release; an opt-in it " +
+      "cannot honour fails startup. Each app resolves the mode once (the API " +
+      "in `apps/api/src/runtime-mode.ts`) and every local development " +
+      "capability checks it. The `runtime-mode-keys` lint rule keeps the two " +
+      "keys inside this owner.",
     enforcement: { kind: "none" },
   },
   {
@@ -1286,8 +1325,11 @@ export const validateOwnership = (
   return problems;
 };
 
-const main = (argv: readonly string[]): number => {
-  const rendered = renderOwnershipDocument(OWNERSHIP);
+const main = async (argv: readonly string[]): Promise<number> => {
+  const rendered = await formattedLikeRepository(
+    renderOwnershipDocument(OWNERSHIP),
+    "md",
+  );
   const docFile = path.join(REPO_ROOT, DOC_PATH);
 
   if (argv.includes("--write")) {
@@ -1322,5 +1364,5 @@ const main = (argv: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }

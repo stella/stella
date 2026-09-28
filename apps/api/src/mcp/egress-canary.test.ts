@@ -106,7 +106,9 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 const templateDecideConditionsLogicMock = mock();
-const loadOrgAIConfigMock = mock(async () => await Promise.resolve(null));
+const loadOrgAIConfigMock = mock(
+  async () => await Promise.resolve(Result.ok(null)),
+);
 
 const { finalizeToolEgress } = await import("@/api/mcp/egress");
 const { serializeToolResult } = await import("@/api/mcp/tool-utils");

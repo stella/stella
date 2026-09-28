@@ -10,23 +10,17 @@
  *
  * Usage:
  *   bun apps/api/src/scripts/adapter-health.ts
- *   bun apps/api/src/scripts/adapter-health.ts --json
- *   bun apps/api/src/scripts/adapter-health.ts --since 24h
+ *   bun apps/api/src/scripts/adapter-health.ts --all --json
+ *   bun apps/api/src/scripts/adapter-health.ts --adapter cz-ns
+ *   bun apps/api/src/scripts/adapter-health.ts --adapter cz-ns --json
+ *   bun apps/api/src/scripts/adapter-health.ts --adapter cz-ns --since 24h
  */
 
 import { panic } from "better-result";
-import { count, eq, gt, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import {
-  caseLawCitations,
-  caseLawDecisions,
-  caseLawSearchDocuments,
-  caseLawSources,
-} from "@/api/db/schema";
-import {
-  listAdapterKeys,
-  loadAdapterByKey,
-} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import { caseLawSources } from "@/api/db/schema";
+import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 import {
@@ -38,7 +32,10 @@ import {
   createUnrecognizedSourceReporter,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
-import { isRecord } from "@/api/lib/type-guards";
+import {
+  CHECKED_FIELDS,
+  readAdapterHealthMetrics,
+} from "@/api/scripts/adapter-health-query";
 
 // This tool only reads; the read-only session makes that a property of every
 // transaction rather than a promise, and takes no maintenance lane.
@@ -136,33 +133,6 @@ type HealthReport = {
 
 // ── Config ──────────────────────────────────────────────
 
-/** Fields to check for completeness, mapped to Drizzle columns. */
-const FIELD_COLUMN_MAP = {
-  ecli: caseLawDecisions.ecli,
-  decision_date: caseLawDecisions.decisionDate,
-  decision_type: caseLawDecisions.decisionType,
-  fulltext: caseLawDecisions.fulltext,
-  source_url: caseLawDecisions.sourceUrl,
-  document_url: caseLawDecisions.documentUrl,
-  source_hash: caseLawDecisions.sourceHash,
-} as const;
-const CHECKED_FIELDS = [
-  "ecli",
-  "decision_date",
-  "decision_type",
-  "fulltext",
-  "source_url",
-  "document_url",
-  "source_hash",
-] as const satisfies readonly (keyof typeof FIELD_COLUMN_MAP)[];
-
-type MissingCheckedField = Exclude<
-  keyof typeof FIELD_COLUMN_MAP,
-  (typeof CHECKED_FIELDS)[number]
->;
-
-true satisfies MissingCheckedField extends never ? true : never;
-
 /** Adapter is "stuck" if no growth in this many hours. */
 const STUCK_THRESHOLD_HOURS = 12;
 
@@ -197,12 +167,28 @@ const parseWindowArg = (args: readonly string[]): number => {
   return 24;
 };
 
-// ── Source total fetchers ────────────────────────────────
-
-type SourceTotal = {
-  adapterKey: string;
-  remoteTotal: number | null;
+const parseAdapterArg = (args: readonly string[]): string | null => {
+  const index = args.indexOf("--adapter");
+  const value = index === -1 ? undefined : args.at(index + 1)?.trim();
+  return value && !value.startsWith("--") && value.length <= 64 ? value : null;
 };
+
+type ReportScope = { type: "all" } | { type: "adapter"; adapterKey: string };
+
+const parseReportScope = (args: readonly string[]): ReportScope => {
+  const adapterKey = parseAdapterArg(args);
+  if (args.includes("--all") && args.includes("--adapter")) {
+    return panic("Pass --all or --adapter <key>, not both.");
+  }
+  if (args.includes("--adapter") && adapterKey === null) {
+    return panic("Pass a valid --adapter <key>.");
+  }
+  return adapterKey === null
+    ? { type: "all" }
+    : { type: "adapter", adapterKey };
+};
+
+// ── Source total fetchers ────────────────────────────────
 
 /**
  * The denominator this report prints beside a held count, or null where there
@@ -228,34 +214,43 @@ const remoteTotalOf = (answer: SourceTotalCount): number | null => {
 };
 
 /**
- * Fetch the total available decisions from each court
- * website via the adapter's `getTotalCount` method.
- * Each fetch is independent and has its own timeout.
+ * Fetch the named adapter's publisher total with its own timeout.
  * A key with no registered adapter returns null.
  */
-const getSourceTotals = async (): Promise<SourceTotal[]> => {
-  const keys = listAdapterKeys();
-
-  return await Promise.all(
-    keys.map(async (adapterKey: string) => {
-      try {
-        const adapter = await loadAdapterByKey(adapterKey);
-        if (!adapter) {
-          return { adapterKey, remoteTotal: null };
-        }
-        const signal = AbortSignal.timeout(SOURCE_TOTAL_TIMEOUT);
-        return {
-          adapterKey,
-          remoteTotal: remoteTotalOf(await adapter.getTotalCount(signal)),
-        };
-      } catch {
-        return { adapterKey, remoteTotal: null };
-      }
-    }),
-  );
+const getSourceTotal = async (adapterKey: string): Promise<number | null> => {
+  try {
+    const adapter = await loadAdapterByKey(adapterKey);
+    if (!adapter) {
+      return null;
+    }
+    const signal = AbortSignal.timeout(SOURCE_TOTAL_TIMEOUT);
+    return remoteTotalOf(await adapter.getTotalCount(signal));
+  } catch {
+    return null;
+  }
 };
 
 // ── Queries ─────────────────────────────────────────────
+
+const SOURCE_SELECTION = {
+  id: caseLawSources.id,
+  adapterKey: caseLawSources.adapterKey,
+  name: caseLawSources.name,
+  enabled: caseLawSources.enabled,
+  syncCursor: caseLawSources.syncCursor,
+  lastSyncAt: caseLawSources.lastSyncAt,
+} as const;
+
+const getSource = async (adapterKey: string) => {
+  const [source] = await rootDb.transaction(async (tx) =>
+    tx
+      .select(SOURCE_SELECTION)
+      .from(caseLawSources)
+      .where(eq(caseLawSources.adapterKey, adapterKey))
+      .limit(1),
+  );
+  return source ?? panic(`No case-law source has adapter key ${adapterKey}.`);
+};
 
 const getSources = async () =>
   await boundedAll({
@@ -265,120 +260,20 @@ const getSources = async () =>
     query: async (limit) =>
       await rootDb.transaction(async (tx) =>
         tx
-          .select({
-            id: caseLawSources.id,
-            adapterKey: caseLawSources.adapterKey,
-            name: caseLawSources.name,
-            enabled: caseLawSources.enabled,
-            syncCursor: caseLawSources.syncCursor,
-            lastSyncAt: caseLawSources.lastSyncAt,
-          })
+          .select(SOURCE_SELECTION)
           .from(caseLawSources)
           .orderBy(caseLawSources.adapterKey)
           .limit(limit),
       ),
   });
 
-const getDecisionCounts = async () =>
-  await rootDb.transaction(async (tx) =>
-    tx
-      .select({
-        sourceId: caseLawDecisions.sourceId,
-        total: count(),
-      })
-      .from(caseLawDecisions)
-      .groupBy(caseLawDecisions.sourceId),
-  );
-
-const getGrowthCounts = async (sinceDate: Date) =>
-  await rootDb.transaction(async (tx) =>
-    tx
-      .select({
-        sourceId: caseLawDecisions.sourceId,
-        inserted: count(),
-      })
-      .from(caseLawDecisions)
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-      .where(gt(caseLawDecisions.createdAt, sinceDate))
-      .groupBy(caseLawDecisions.sourceId),
-  );
-
-const getSearchIndexCoverage = async () =>
-  await rootDb.transaction(async (tx) =>
-    tx
-      .select({
-        sourceId: caseLawDecisions.sourceId,
-        isIndexed:
-          sql<boolean>`${caseLawSearchDocuments.decisionId} IS NOT NULL`.as(
-            "is_indexed",
-          ),
-        cnt: count(),
-      })
-      .from(caseLawDecisions)
-      .leftJoin(
-        caseLawSearchDocuments,
-        eq(caseLawDecisions.id, caseLawSearchDocuments.decisionId),
-      )
-      .groupBy(
-        caseLawDecisions.sourceId,
-        sql`${caseLawSearchDocuments.decisionId} IS NOT NULL`,
-      ),
-  );
-
-const getCitationStats = async () =>
-  await rootDb.transaction(async (tx) =>
-    tx
-      .select({
-        sourceId: caseLawDecisions.sourceId,
-        total: count(),
-        resolved:
-          sql<number>`COUNT(*) FILTER (WHERE ${caseLawCitations.citedDecisionId} IS NOT NULL)`.as(
-            "resolved",
-          ),
-      })
-      .from(caseLawCitations)
-      .innerJoin(
-        caseLawDecisions,
-        eq(caseLawCitations.citingDecisionId, caseLawDecisions.id),
-      )
-      .groupBy(caseLawDecisions.sourceId),
-  );
-
-/**
- * Single query: counts non-null/non-empty values for all
- * checked fields per source, avoiding N+1 per-field queries.
- */
-const getAllFieldCoverage = async () => {
-  const fieldColumns = Object.fromEntries(
-    CHECKED_FIELDS.map((field) => {
-      const col = FIELD_COLUMN_MAP[field];
-      return [
-        field,
-        sql<number>`COUNT(*) FILTER (WHERE ${col} IS NOT NULL AND ${col}::text != '')`.as(
-          field,
-        ),
-      ];
-    }),
-  );
-
-  return await rootDb.transaction(async (tx) =>
-    tx
-      .select({
-        sourceId: caseLawDecisions.sourceId,
-        total: count(),
-        ...fieldColumns,
-      })
-      .from(caseLawDecisions)
-      .groupBy(caseLawDecisions.sourceId),
-  );
-};
-
 const parseFieldCoverage = (
-  row: Record<string, unknown>,
+  fields: ReadonlyMap<(typeof CHECKED_FIELDS)[number], number>,
   total: number,
 ): FieldCoverage[] =>
   CHECKED_FIELDS.map((field) => {
-    const present = Number(row[field] ?? 0);
+    const present =
+      fields.get(field) ?? panic(`Missing adapter health field ${field}.`);
     return {
       field,
       total,
@@ -389,120 +284,58 @@ const parseFieldCoverage = (
 
 // ── Main ────────────────────────────────────────────────
 
-const buildReport = async (windowHours: number): Promise<HealthReport> => {
+const buildReport = async (
+  windowHours: number,
+  scope: ReportScope,
+): Promise<HealthReport> => {
   const now = new Date();
   const sinceDate = new Date(now.getTime() - windowHours * 3_600_000);
+  const sources =
+    scope.type === "all"
+      ? await getSources()
+      : [await getSource(scope.adapterKey)];
 
-  // Run independent queries in parallel
-  const [
-    sources,
-    decisionCounts,
-    growthCounts,
-    searchIndexRows,
-    citationRows,
-    fieldCoverageRows,
-    sourceTotals,
-  ] = await Promise.all([
-    getSources(),
-    getDecisionCounts(),
-    getGrowthCounts(sinceDate),
-    getSearchIndexCoverage(),
-    getCitationStats(),
-    getAllFieldCoverage(),
-    getSourceTotals(),
-  ]);
-
-  // Index by sourceId for fast lookup
-  const countMap = new Map<string, number>(
-    decisionCounts.map((r: { sourceId: string; total: number }) => [
-      r.sourceId,
-      r.total,
-    ]),
-  );
-  const growthMap = new Map<string, number>(
-    growthCounts.map((r: { sourceId: string; inserted: number }) => [
-      r.sourceId,
-      r.inserted,
-    ]),
-  );
-
-  // Search index: { sourceId → { indexed, notIndexed } }
-  const searchMap = new Map<string, { indexed: number; notIndexed: number }>();
-  for (const row of searchIndexRows) {
-    const entry = searchMap.get(row.sourceId) ?? {
-      indexed: 0,
-      notIndexed: 0,
-    };
-    if (row.isIndexed) {
-      entry.indexed = row.cnt;
-    } else {
-      entry.notIndexed = row.cnt;
-    }
-    searchMap.set(row.sourceId, entry);
-  }
-
-  // Citations: { sourceId → { total, resolved } }
-  const citationMap = new Map<string, { total: number; resolved: number }>(
-    citationRows.map(
-      (r: { sourceId: string; total: number; resolved: number }) => [
-        r.sourceId,
-        { total: r.total, resolved: r.resolved },
-      ],
-    ),
-  );
-
-  // Field coverage: { sourceId → row }
-  const fieldCoverageMap = new Map(
-    fieldCoverageRows.map(
-      (r: { sourceId: string; total: number } & Record<string, unknown>) => [
-        r.sourceId,
-        r,
-      ],
-    ),
-  );
-
-  // Remote totals: { adapterKey → remoteTotal }
-  const sourceTotalMap = new Map<string, number | null>(
-    sourceTotals.map((r: SourceTotal) => [r.adapterKey, r.remoteTotal]),
-  );
-
-  // Build per-adapter reports
   const adapters: AdapterReport[] = [];
   const reportUnrecognizedSource = createUnrecognizedSourceReporter(
     "case_law.adapter_health",
   );
 
-  for (const source of sources) {
-    const total = countMap.get(source.id) ?? 0;
-    const inserted = growthMap.get(source.id) ?? 0;
-    const si = searchMap.get(source.id) ?? {
-      indexed: 0,
-      notIndexed: 0,
+  // Finish a source's local metrics and remote probe before the next source.
+  const addSourceReport = async (index: number): Promise<void> => {
+    const source = sources.at(index);
+    if (source === undefined) {
+      return;
+    }
+    const metrics = await readAdapterHealthMetrics({
+      db: rootDb,
+      sourceId: source.id,
+      sinceDate,
+    });
+    const remoteTotal = await getSourceTotal(source.adapterKey);
+    const total = metrics.total;
+    const inserted = metrics.inserted;
+    const si = {
+      indexed: metrics.indexed,
+      notIndexed: total - metrics.indexed,
     };
-    const cit = citationMap.get(source.id) ?? {
-      total: 0,
-      resolved: 0,
+    const cit = {
+      total: metrics.citationTotal,
+      resolved: metrics.citationResolved,
     };
 
     const hoursSinceSync = source.lastSyncAt
       ? (now.getTime() - source.lastSyncAt.getTime()) / 3_600_000
       : null;
 
-    const fcRow = fieldCoverageMap.get(source.id);
-    const fcRecord = isRecord(fcRow) ? fcRow : undefined;
-    const fields = fcRecord ? parseFieldCoverage(fcRecord, total) : [];
+    const fields = parseFieldCoverage(metrics.fields, total);
 
     // Derive fulltext coverage from field coverage
     const fulltextField = fields.find((f) => f.field === "fulltext");
     const withFulltext = fulltextField?.present ?? 0;
     const withoutFulltext = total - withFulltext;
 
-    // Registry membership, decided per row. `sourceTotalMap` is keyed off the
-    // registry, so without this an unregistered key and a registered adapter
-    // whose probe returned nothing both read as `remoteTotal: null` — the
-    // first is a source nothing will ever ingest into, the second is a
-    // transient. Reported as an issue and stamped on the row rather than left
-    // to be inferred from a hole in the table.
+    // A missing registry adapter and a failed total probe both report null;
+    // membership remains explicit so the operator can tell them apart.
     const membership = sourceRegistryMembership(source.adapterKey);
     const adapterRegistered = membership.type === "registered";
     if (!adapterRegistered) {
@@ -510,7 +343,6 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
     }
 
     // Remote source total
-    const remoteTotal = sourceTotalMap.get(source.adapterKey) ?? null;
     const coveragePct =
       remoteTotal !== null && remoteTotal > 0
         ? Math.round((total / remoteTotal) * 1000) / 10
@@ -611,7 +443,9 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
       fields,
       issues,
     });
-  }
+    await addSourceReport(index + 1);
+  };
+  await addSourceReport(0);
 
   // Summary
   const totalDecisions = adapters.reduce((sum, a) => sum + a.totalDecisions, 0);
@@ -722,7 +556,7 @@ if (import.meta.main) {
   const windowHours = parseWindowArg(args);
 
   try {
-    const report = await buildReport(windowHours);
+    const report = await buildReport(windowHours, parseReportScope(args));
 
     if (jsonMode) {
       console.log(JSON.stringify(report, null, 2));

@@ -1,11 +1,11 @@
 import type * as React from "react";
 
 import { panic } from "better-result";
-import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";

@@ -54,11 +54,17 @@ export const CHAT_ORACLE = {
   clientNoErrors: "chat.client.no-errors",
   /** Every scripted model run was requested, and no request went unscripted. */
   providerScriptsConsumed: "chat.provider.scripts-consumed",
+  /** Every request handed to a provider answers each tool call exactly once,
+   *  right after the message making it, with no result for a call it does
+   *  not hold; each signed thinking block stays, once and in order, first on
+   *  the message holding the calls it was produced with. */
+  providerTranscriptSettled: "chat.provider.transcript-settled",
   /** Every model request of a thread begins with the whole prompt of the
-   *  one before it, so the provider's prompt cache holds. */
+   *  one before it: its tools, system prompt and messages, in cache order
+   *  (`chat-prompt-prefix.ts`), so the provider's prompt cache holds. */
   providerPrefixStable: "chat.provider.prefix-stable",
   /** Once a turn is over, every later model call of the thread is handed
-   *  each of its tool results the same way (up to key order): a request
+   *  each of its tool results in the same text: a request
    *  reads the earlier turns as stored, as the next one will. */
   providerResultsStable: "chat.provider.results-stable",
   /** The cards on screen and the interactions stored are exactly the ones the
@@ -71,6 +77,10 @@ export const CHAT_ORACLE = {
   /** Every action the page offers on the live view is one the conversation
    *  model's commands may take there. */
   modelCoversPageActions: "chat.model.covers-page-actions",
+  /** A code-mode script that calls a direct tool gets back that tool's name
+   *  and the instruction to call it outside the script, never a bare
+   *  "not defined" the model reads as a missing tool. */
+  codeModeMisplacedCallExplained: "chat.code-mode.misplaced-call-explained",
   // Reported by the web app's rendered replay of recorded conversations
   // (`apps/web/src/components/chat/recorded-conversations.dom.test.tsx`).
   /** The rendered page shows what the stored thread says: open cards,

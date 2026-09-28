@@ -161,6 +161,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
       excludedChatTools: [],
       id: skillId,
       origin: "authored",
+      requiredTools: [],
       resources: [{ kind: "reference", path: "references/checklist.md" }],
       source: "installed",
       toolName: "fixture",

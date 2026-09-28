@@ -3,9 +3,9 @@
 import * as React from "react";
 
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
-import { ChevronsUpDownIcon, XIcon } from "lucide-react";
 
 import { containedHandler } from "../hooks/use-contained-handler";
+import { ChevronsUpDownIcon, XIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";

@@ -9,9 +9,9 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Temporal } from "temporal-polyfill/full";
 
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import type { OverlayLayer } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { getLocaleWeekInfo, getWeekendDays } from "../lib/week";

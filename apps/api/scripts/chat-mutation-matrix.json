@@ -526,8 +526,8 @@
       "behaviour": "The engine is handed an ended turn's open calls with a result, so it runs the model instead of asking the client about them again.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
-      "search": "    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&",
-      "replace": "    false &&",
+      "search": "      !ENGINE_ASKS_CLIENT_AGAIN[part.state]",
+      "replace": "      true",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "continues a fork taken while a question waits"
@@ -546,7 +546,7 @@
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
       },
-      "oracle": "chat.provider.results-stable"
+      "oracle": "chat.provider.transcript-settled"
     },
     {
       "id": "superseding-turn-opens-with-stored-message",
@@ -703,6 +703,62 @@
       "oracle": "chat.provider-wire.finish"
     },
     {
+      "id": "unlisted-stop-answer-finishes",
+      "fix": "#4053",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet finishes when the step wrote an answer and called no tool, instead of failing the turn.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "    : \"unrecognized\";",
+      "replace": "    : \"failed\";",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract anthropic unlisted-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-silent-fails",
+      "fix": "#4053",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet fails when the step wrote nothing the user sees, instead of finishing as an empty answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "      if (!answered || leftCalls || chunk.type === EventType.RUN_ERROR) {",
+      "replace": "      if (leftCalls || chunk.type === EventType.RUN_ERROR) {",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "finishes a step that wrote an answer and called no tool, else fails it, on every provider"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-shorthand-call-fails",
+      "fix": "#4053",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet fails when the step called a tool in the shorthand chunk shape, instead of finishing with the call dropped.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "      chunk.type === EventType.TOOL_CALL_START ||\n      chunk.type === EventType.TOOL_CALL_CHUNK;",
+      "replace": "      chunk.type === EventType.TOOL_CALL_START;",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "finishes a step that wrote an answer and called no tool, else fails it, on every provider"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-adapter-failure-kept",
+      "fix": "#4053",
+      "behaviour": "A failure the adapter reported with a stop reason no SDK lists yet (an incomplete response) stays a failure even after text was written.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "      if (!answered || leftCalls || chunk.type === EventType.RUN_ERROR) {",
+      "replace": "      if (!answered || leftCalls) {",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "keeps a failure the adapter reported, answer or not"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
       "id": "split-multibyte-character-decoded",
       "fix": "#4002",
       "behaviour": "A multi-byte character cut across two reads of a stream decodes as the character, not as replacement characters.",
@@ -736,8 +792,8 @@
       "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
       "status": "active",
       "file": "src/handlers/chat/provider-history.ts",
-      "search": "      messages: answerHistoryCallsInTheirStep(messages),",
-      "replace": "      messages,",
+      "search": "      messages: answerHistoryCallsInTheirStep(withoutRepeatedCalls(messages)),",
+      "replace": "      messages: withoutRepeatedCalls(messages),",
       "scenario": {
         "file": "src/handlers/chat/approval-answer-order.test.ts",
         "test": "keeps a denial ahead of the approved call it was answered with"
@@ -773,6 +829,20 @@
       "oracle": "chat.ledger.pending"
     },
     {
+      "id": "denied-step-ends-at-its-recorded-step",
+      "fix": "#4038",
+      "behaviour": "A step whose every call was denied ends where the next step's first call records a step of its own, so its answers go right after it even when no text separates the two steps.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "  while (callOfSameStep(call, parts[end])) {",
+      "replace": "  while (parts[end]?.type === \"tool-call\") {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "answers each call right after its own step in every request"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
       "id": "reader-decodes-v2-envelope",
       "fix": "saved-state",
       "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
@@ -787,6 +857,62 @@
       "oracle": "chat.persisted.past-release-loads"
     },
     {
+      "id": "prompt-prefix-system-stable",
+      "fix": "#4007",
+      "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    ...systemPromptsPatch({ caching, model, system: baseSystem }),",
+      "replace": "    ...systemPromptsPatch({ caching, model, system: `${baseSystem}\\nRequest time: ${String(performance.now())}` }),",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "prompt-prefix-tools-stable-on-the-wire",
+      "fix": "#4007",
+      "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }),",
+      "replace": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }).toSorted(() => Math.random() - 0.5),",
+      "scenario": {
+        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
+        "test": "anthropic: a tool call reaches its card, runs once approved, and the answer reloads"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-json-keys-sorted",
+      "fix": "#4007",
+      "behaviour": "A tool call's arguments and a tool result reach the model with their JSON keys in one order, so the call and result rebuilt from the stored thread on its next request repeat them byte for byte.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "        patch.messages = sortedToolJson;",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-arguments-canonical-spacing",
+      "fix": "#4007",
+      "behaviour": "A tool call's arguments reach the model as compact JSON with sorted keys however the model spaced them, as the stored input is written back on every later request.",
+      "status": "active",
+      "file": "src/handlers/chat/tool-json-key-order.ts",
+      "search": "    const args = toolArgumentsWithSortedKeys(call.function.arguments);",
+      "replace": "    const args = withSortedJsonKeys(call.function.arguments);",
+      "scenario": {
+        "file": "src/handlers/chat/tool-json-key-order.test.ts",
+        "test": "of a call's arguments reach the model alike however the model spaced them"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
       "id": "snapshot-reasoning-keeps-its-step",
       "fix": "#4017",
       "behaviour": "The page takes each reasoning message of an interrupt snapshot as a thinking part with its own step, so the run that continues the answer adds its reasoning beside the earlier step's instead of overwriting it.",
@@ -799,6 +925,104 @@
         "test": "keeps the first step's reasoning when the answer continues after an approval"
       },
       "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "rejected-input-call-kept",
+      "fix": "#4068",
+      "behaviour": "A call the engine answered with an error is stored as a failed call whatever its input, so a turn whose model recovers from input the tool's schema rejected stores the whole turn instead of failing to persist it.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-schema.ts",
+      "search": "  if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === \"error\") {\n    return validateErrorToolCallPart({ part, tool });\n  }",
+      "replace": "  if (\n    TOOL_CALL_OUTPUT_VALIDATION[part.state] === \"error\" &&\n    tool !== undefined &&\n    Result.isOk(validateToolCallInput({ part, tool }))\n  ) {\n    return validateErrorToolCallPart({ part, tool });\n  }",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps a turn whose model corrects a tool input the tool rejected"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "transcript-closing-results-join-their-step",
+      "fix": "#4006",
+      "behaviour": "A result the engine history adds to close a call of an ended turn joins its step's results, so the step's calls stay in one model message and every one of them is answered right after it.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "replace": "    closed.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace a thought-out mixed batch that still waits"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-denial-answered-in-its-step",
+      "fix": "#4006",
+      "behaviour": "A denied call in a step its message goes on past is answered in that step's results in the provider request, not at the end of the message.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "    if (answer !== undefined && at < parts.length) {",
+      "replace": "    if (answer !== undefined && at < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "replays a denied call's answer before the later steps of its message"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-thinking-keeps-its-step",
+      "fix": "#4006",
+      "behaviour": "A replayed message keeps each signed thinking block in place, on the step that produced it.",
+      "status": "active",
+      "file": "src/handlers/chat/third-party-boundary.ts",
+      "search": "      if (isProviderVisibleChatPart(part)) {\n        parts.push(part);\n      }",
+      "replace": "      if (isProviderVisibleChatPart(part)) {\n        if (part.type === \"thinking\") {\n          parts.unshift(part);\n        } else {\n          parts.push(part);\n        }\n      }",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "replays each step's signed thinking on its own step"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-repeated-call-sent-once",
+      "fix": "#4006",
+      "behaviour": "A tool call a stored thread repeats in later messages is sent to the provider once, in the first message holding it.",
+      "status": "active",
+      "file": "src/handlers/chat/provider-history.ts",
+      "search": "    if (repeated.size === 0) {",
+      "replace": "    if (repeated.size >= 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
+        "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "stored-result-content-stable",
+      "fix": "#4007",
+      "behaviour": "The result that closes a call of a turn that already ended exists only for the model and is rebuilt on every request, so it reads the same each time instead of changing an earlier turn's result.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "replace": "    stepResults.push(errorToolResult(part.id, `${UNRESOLVED_CALL_ERROR} ${String(performance.now())}`));",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an ask-user card that still waits"
+      },
+      "oracle": "chat.provider.results-stable"
+    },
+    {
+      "id": "code-mode-misplaced-call-explained",
+      "fix": "#4083",
+      "behaviour": "A code-mode script that calls a direct tool gets back the tool's name and the instruction to call it outside the script, instead of a bare ReferenceError.",
+      "status": "active",
+      "file": "src/handlers/chat/tools/execute/chat-code-mode.ts",
+      "search": "    nameGuide: (bindingNames) =>\n      buildScriptCallGuide(\n        chatScriptCallCatalog({ bindingNames, turnTools: scriptCallTools() }),\n      ),\n",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/code-mode-misplaced-call.integration.test.ts",
+        "test": "is told to call it directly, and the turn completes with the direct call"
+      },
+      "oracle": "chat.code-mode.misplaced-call-explained"
     }
   ]
 }

@@ -3,8 +3,8 @@
 import type * as React from "react";
 
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { ChevronRightIcon } from "lucide-react";
 
+import { ChevronRightIcon } from "../icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { DirectionalIcon } from "./directional-icon";

@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import { env } from "@/api/env";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { LIMITS } from "@/api/lib/limits";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const readHandlerSource = async (file: string) =>
@@ -13,9 +16,10 @@ const readHandlerSource = async (file: string) =>
 
 describe("public statute routes", () => {
   test("serves nothing while the public-law feature is off", async () => {
-    const previousIsDev = env.isDev;
     const previousFeature = env.FEATURE_PUBLIC_LAW;
-    env.isDev = false;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
     env.FEATURE_PUBLIC_LAW = false;
 
     try {
@@ -25,7 +29,7 @@ describe("public statute routes", () => {
 
       expect(response.status).toBe(404);
     } finally {
-      env.isDev = previousIsDev;
+      restoreRuntimeMode();
       env.FEATURE_PUBLIC_LAW = previousFeature;
     }
   });

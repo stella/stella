@@ -249,7 +249,7 @@ describe("settling a turn whose generation fails after the stream opened", () =>
       .where(eq(chatTurns.threadId, threadId));
     expect(turns).toHaveLength(1);
     expect(turns.at(0)).toMatchObject({
-      failureCode: "internal",
+      failureCode: "persistence",
       failureRetryable: true,
       status: "failed",
     });

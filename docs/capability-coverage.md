@@ -383,6 +383,26 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `reports.templates.list` | read   | stella:read          | —       | generic invoke → `stella capability reports templates-list` |
 | `reports.views.export`   | write  | stella:matters_write | —       | generic invoke → `stella capability reports views-export`   |
 
+## saved-time-narratives
+
+| Capability                     | Access             | Scope                | Feature              | Reachable via                                                     |
+| ------------------------------ | ------------------ | -------------------- | -------------------- | ----------------------------------------------------------------- |
+| `saved-time-narratives.create` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives create` |
+| `saved-time-narratives.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives delete` |
+| `saved-time-narratives.list`   | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives list`   |
+| `saved-time-narratives.update` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives update` |
+
+## seller-profiles
+
+| Capability                       | Access | Scope                | Feature | Reachable via                                                       |
+| -------------------------------- | ------ | -------------------- | ------- | ------------------------------------------------------------------- |
+| `seller-profiles.archive`        | write  | stella:billing_write | —       | generic invoke → `stella capability seller-profiles archive`        |
+| `seller-profiles.create`         | write  | stella:billing_write | —       | generic invoke → `stella capability seller-profiles create`         |
+| `seller-profiles.default.update` | write  | stella:billing_write | —       | generic invoke → `stella capability seller-profiles default-update` |
+| `seller-profiles.get`            | read   | stella:read          | —       | generic invoke → `stella capability seller-profiles get`            |
+| `seller-profiles.list`           | read   | stella:read          | —       | generic invoke → `stella capability seller-profiles list`           |
+| `seller-profiles.update`         | write  | stella:billing_write | —       | generic invoke → `stella capability seller-profiles update`         |
+
 ## signals
 
 | Capability                   | Access | Scope                | Feature | Reachable via                                                   |
@@ -598,13 +618,13 @@ mechanics, and similar), not gaps in coverage.
 | Reason                 | Count |
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
-| assistant_chat         | 15    |
+| assistant_chat         | 16    |
 | auth_plumbing          | 9     |
 | billing_ui             | 1     |
 | chat_thread_ui         | 2     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
-| document_processing    | 24    |
+| document_processing    | 25    |
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
@@ -618,4 +638,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 182
+Total: 184

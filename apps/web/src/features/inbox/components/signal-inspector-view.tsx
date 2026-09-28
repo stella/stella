@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { AlertCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { SIGNAL_KIND } from "@stll/api-contract/signals";
 import type { SignalEvidence } from "@stll/api-contract/signals";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { AlertCircleIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";

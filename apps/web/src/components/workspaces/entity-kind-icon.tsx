@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+
 import {
   CircleDashedIcon,
   FileIcon,
@@ -7,8 +8,7 @@ import {
   LinkIcon,
   ListTodoIcon,
   MailIcon,
-} from "lucide-react";
-
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";

@@ -171,7 +171,7 @@ password. Transactional email is optional. To add email OTP, invitations, or
 security mail, configure either the documented SMTP variables or SES variables
 together. The template does not point at an unbundled local SMTP service.
 
-Mock AI is rejected when `NODE_ENV` is `production` or `staging`. The profile
+Mock AI is available only to local development processes. The profile
 sets `USE_MOCK_AI="false"` and `REQUIRE_PERSONAL_AI_KEY="true"`; organizations
 provide an AI provider key in Settings. An operator may instead configure a
 real instance-wide provider in `deploy/selfhost/.env`.
@@ -248,6 +248,7 @@ Compose model, migrate, then start the three declared services. Run the web SSR
 server separately as described above.
 
 <!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->
+
 ```bash
 bun run selfhost:doctor
 docker compose --env-file deploy/selfhost/.env \
@@ -258,6 +259,7 @@ docker compose --env-file deploy/selfhost/.env \
 docker compose --env-file deploy/selfhost/.env \
   -f docker-compose.selfhost.yml up -d
 ```
+
 <!-- END GENERATED SELF-HOST RUN COMMANDS -->
 
 `STELLA_API_IMAGE` has no default. Copy the digest-qualified API reference from

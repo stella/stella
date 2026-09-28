@@ -1,6 +1,7 @@
 import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 import { createTimeEntryHandler } from "./time-entry-insert";
@@ -29,10 +30,11 @@ const createTimeEntryBodySchema = t.Object({
     description: "Minutes worked (whole minutes)",
   }),
   narrative: t.String({
-    minLength: 1,
+    minLength: 0,
     maxLength: 10_000,
     description: "Description of the work",
   }),
+  narrativeLanguage: t.Optional(narrativeLanguageSchema),
   billable: t.Optional(
     t.Boolean({ description: "Whether the entry is billable to the client" }),
   ),
@@ -69,6 +71,7 @@ const createTimeEntry = createSafeHandler(
     safeDb,
     session,
     workspaceId,
+    memberRole,
     user,
     body,
     recordAuditEvent,
@@ -78,6 +81,7 @@ const createTimeEntry = createSafeHandler(
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,
+      memberRole,
       recordAuditEvent,
       body,
     });

@@ -4,8 +4,11 @@ import type * as React from "react";
 
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
-import { ChevronRight, MoreHorizontal } from "lucide-react";
 
+import {
+  ChevronRightIcon as ChevronRight,
+  MoreHorizontalIcon as MoreHorizontal,
+} from "../icons";
 import { cn } from "../lib/utils";
 import { DirectionalIcon } from "./directional-icon";
 

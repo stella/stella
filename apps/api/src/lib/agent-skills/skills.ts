@@ -7,6 +7,7 @@ import {
   loadSkill,
   readDocumentedChatReads,
   readExcludedChatTools,
+  readSkillRequiredTools,
   readSkillResource,
 } from "@stll/skills";
 import type { SkillMetadata, SkillResource } from "@stll/skills";
@@ -125,6 +126,8 @@ export type ActiveSkillContext = {
   documentedChatReads: readonly string[];
   /** `stella-chat-excluded-tools`, as declared. */
   excludedChatTools: readonly string[];
+  /** `stella-required-tools`, as declared. */
+  requiredTools: readonly string[];
   resources: SkillResource[];
   toolName: string;
   version: string | null;
@@ -186,6 +189,7 @@ export const resolveActiveSkillContext = async ({
     excludedChatTools: readExcludedChatTools(skill.metadata),
     id: null,
     origin: CHAT_SKILL_SOURCE.builtIn,
+    requiredTools: readSkillRequiredTools(skill.metadata),
     resources: skill.resources,
     source: CHAT_SKILL_SOURCE.builtIn,
     toolName: skill.name,
@@ -288,6 +292,7 @@ const resolveInstalledActiveSkill = async ({
     excludedChatTools: readExcludedChatTools(skill.metadata),
     id: skill.id,
     origin: skill.origin,
+    requiredTools: readSkillRequiredTools(skill.metadata),
     resources: resources.value,
     source: CHAT_SKILL_SOURCE.installed,
     toolName: skill.slug,

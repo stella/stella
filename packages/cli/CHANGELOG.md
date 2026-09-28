@@ -1,5 +1,31 @@
 # @stll/cli
 
+## 2.2.1
+
+### Patch Changes
+
+- [#4031](https://github.com/stella/stella/pull/4031) [`1005aef`](https://github.com/stella/stella/commit/1005aefe1a9fc73311c34e120c781946cf0ba6cb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add saved time narrative capabilities to the CLI route catalog.
+
+## 2.2.0
+
+### Minor Changes
+
+- [#4060](https://github.com/stella/stella/pull/4060) [`9f1fdc2`](https://github.com/stella/stella/commit/9f1fdc270698327ffee100b0ff3141b413023514) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add issuer profile commands and IBAN validation for billing account details.
+
+## 2.1.2
+
+### Patch Changes
+
+- [#4024](https://github.com/stella/stella/pull/4024) [`feffab3`](https://github.com/stella/stella/commit/feffab369d1e8c336b8dbe08b95e550df53990dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose organization time policy fields through the generated capability catalog.
+
+## 2.1.1
+
+### Patch Changes
+
+- [#3927](https://github.com/stella/stella/pull/3927) [`bcfe443`](https://github.com/stella/stella/commit/bcfe4434f8ac4706ceba7f32bcbd9c2f99b36636) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify delivery authentication and asserted headers in correspondence capability descriptions.
+
+- [#3972](https://github.com/stella/stella/pull/3972) [`5509280`](https://github.com/stella/stella/commit/550928031b4777226a3e211398057c32d04912ed) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists items-list` describes each item's first source (document id, document name, locator).
+
 ## 2.1.0
 
 ### Minor Changes

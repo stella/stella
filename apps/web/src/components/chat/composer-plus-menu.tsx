@@ -9,21 +9,21 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import type { Editor } from "@tiptap/core";
 import { Result } from "better-result";
-import {
-  AtSignIcon,
-  BookOpenIcon,
-  CpuIcon,
-  MessageSquarePlusIcon,
-  PaperclipIcon,
-  PlusIcon,
-  ServerIcon,
-} from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
+import {
+  AtSignIcon,
+  CpuIcon,
+  MessageSquarePlusIcon,
+  PaperclipIcon,
+  PlusIcon,
+  ServerIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuCheckboxItem,
@@ -87,6 +87,7 @@ import {
   mcpConnectorsOptions,
   skillsOptions,
 } from "@/lib/knowledge/queries";
+import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -445,18 +446,20 @@ const ComposerSkillsMenu = ({
     enabled,
   });
 
+  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
   const shortcutRows = useMemo(
-    () => commandShortcutRowsFromSkillPages(data?.pages),
-    [data?.pages],
+    () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
+    [data?.pages, unavailableSkillIds],
   );
   const items = useMemo(
     () =>
       buildChatSlashItems({
         shortcuts: shortcutRows,
         skillPages: data?.pages,
+        unavailableSkillIds,
         reservedCommands: reservedCommands ?? null,
       }),
-    [reservedCommands, shortcutRows, data?.pages],
+    [reservedCommands, shortcutRows, data?.pages, unavailableSkillIds],
   );
 
   const query = search.trim().toLowerCase();
@@ -512,7 +515,7 @@ const ComposerSkillsMenu = ({
           handleSelect(item);
         }}
       >
-        <BookOpenIcon className="mt-0.5 self-start" />
+        <SkillIcon className="mt-0.5 self-start" />
         <span className="min-w-0 flex-1">
           <BidiText as="span" className="block truncate text-sm">
             {itemName(item)}
@@ -596,7 +599,7 @@ const ComposerSkillsMenu = ({
       <MenuSubTrigger
         {...guideAnchor(GUIDE_ANCHORS.chatMenuSkills, host.guideAnchorsEnabled)}
       >
-        <BookOpenIcon />
+        <SkillIcon />
         {label}
       </MenuSubTrigger>
       <MenuSubPopup className="w-72">{content}</MenuSubPopup>

@@ -1,6 +1,12 @@
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
 configureTestDatabaseEnvironment();
+// The API suites and the tooling that loads the API graph (catalog export,
+// route guards) exercise local development capabilities, which require an
+// explicit runtime opt-in. `bun test` already sets NODE_ENV=test. A test of
+// strict behaviour switches the mode through `setRuntimeModeForTesting`.
+process.env.NODE_ENV ??= "development";
+process.env["STELLA_LOCAL_DEV"] ??= "1";
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
 process.env["S3_BUCKET"] ??= "stella";
 process.env["S3_REGION"] ??= "us-east-1";

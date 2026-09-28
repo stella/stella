@@ -922,7 +922,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
-    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
     name: SEARCH_CASE_LAW_TOOL,
     scope: "stella:search",
@@ -958,7 +958,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
-    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
     name: LOOKUP_CASE_LAW_TOOL,
     scope: "stella:read",
@@ -1012,7 +1012,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
-    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_case_law_decision",
     scope: "stella:read",
@@ -1047,7 +1047,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
-    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    // surface the public routes gate behind the same feature flag.
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_case_law_citations",
     scope: "stella:read",

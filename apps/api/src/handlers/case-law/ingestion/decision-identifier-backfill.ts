@@ -28,6 +28,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -133,16 +134,6 @@ type DecisionIdentifierBackfillOptions = {
   onProgress?: (progress: DecisionIdentifierBackfillProgress) => void;
 };
 
-const rowsOf = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
-
 const numberOf = (value: unknown): number => {
   const number = Number(value ?? 0);
   return Number.isSafeInteger(number) && number >= 0
@@ -157,7 +148,7 @@ const isBackfillPhase = (
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES.some((phase) => phase === value);
 
 const readCheckpoint = (result: unknown): BackfillCheckpoint | null => {
-  const row = rowsOf(result).at(0);
+  const row = executedRows(result).at(0);
   if (row === undefined) {
     return null;
   }
@@ -257,14 +248,14 @@ const reconcileRewrittenAt = async (
 
 /** Ids the identifier rewrite actually changed, branded for the projection. */
 const rewrittenDecisionIds = (result: unknown): SafeId<"caseLawDecision">[] =>
-  rowsOf(result).flatMap((row) =>
+  executedRows(result).flatMap((row) =>
     isRecord(row) && typeof row["id"] === "string"
       ? [brandPersistedCaseLawDecisionId(row["id"])]
       : [],
   );
 
 const readDecisionRows = (result: unknown): DecisionRow[] =>
-  rowsOf(result).flatMap((row) =>
+  executedRows(result).flatMap((row) =>
     isRecord(row) &&
     typeof row["id"] === "string" &&
     typeof row["caseNumber"] === "string"
@@ -287,7 +278,7 @@ type CitationRow = {
 };
 
 const readCitationRows = (result: unknown): CitationRow[] =>
-  rowsOf(result).flatMap((row) =>
+  executedRows(result).flatMap((row) =>
     isRecord(row) &&
     typeof row["id"] === "string" &&
     typeof row["citationText"] === "string" &&
@@ -316,7 +307,7 @@ type StoredIdentifierRow = {
 };
 
 const readStoredIdentifierRows = (result: unknown): StoredIdentifierRow[] =>
-  rowsOf(result).flatMap((row) =>
+  executedRows(result).flatMap((row) =>
     isRecord(row) &&
     typeof row["decisionId"] === "string" &&
     typeof row["type"] === "string" &&
@@ -835,7 +826,7 @@ const countPendingTypedCitations = async (
   rootDb: CaseLawRootHandle,
 ): Promise<number> =>
   await rootDb.transaction(async (tx) => {
-    const row = rowsOf(
+    const row = executedRows(
       await tx.execute(sql`
       SELECT count(*) AS count FROM case_law_citations
       WHERE identifier_type IS NOT NULL

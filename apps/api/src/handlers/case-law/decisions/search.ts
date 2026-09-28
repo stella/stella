@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
@@ -59,7 +60,7 @@ import type {
 import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import {
   courtTierSqlFromMap,
-  courtWeightFromMap,
+  decisionCourtWeight,
   flattenCourtWeightEntries,
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
@@ -119,11 +120,11 @@ import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
-import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
-  corpusIndexRoute,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+  courtPartitionsForCourtFilter,
+  type CorpusIndexGroupContract,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
@@ -182,12 +183,20 @@ import type {
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
+
+/** A scoped search reached an index group that is not attested yet. */
+const corpusIndexGroupNotReady = failureSink({
+  event: "case_law.search.index_group_not_ready",
+  expected: [],
+});
 
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
@@ -423,16 +432,13 @@ export const caseLawSearchPlan = ({
   // a property of the row and the query, not of the page, so the keyset cursor
   // stays valid across pages.
   const representativeFilter = sql`
-    (
-      m.language_group_key IS NULL
-      OR NOT EXISTS (
+      NOT EXISTS (
         SELECT 1
         FROM matched sibling
         WHERE sibling.language_group_key = m.language_group_key
           AND (sibling.sort_key, sibling.decision_id)
             > (m.sort_key, m.decision_id)
       )
-    )
   `;
 
   const hitsQuery = sql`
@@ -835,6 +841,8 @@ const searchPostgresDecisions = async (
 type CorpusIndexQueryOptions = {
   body: SearchDecisionsBody;
   jurisdictionClause: string | undefined;
+  /** The contract of the one index a scoped read targets, else null. */
+  contract: CorpusIndexGroupContract | null;
   fields: CaseLawCorpusQueryFields;
   expand?: CorpusTermExpander | undefined;
   /**
@@ -850,6 +858,7 @@ type CorpusIndexQueryOptions = {
 const buildCorpusIndexQuery = ({
   body,
   jurisdictionClause,
+  contract,
   fields,
   expand,
   functionWords,
@@ -861,6 +870,7 @@ const buildCorpusIndexQuery = ({
     legalAlternatives,
     filters: {
       court: body.court,
+      courtPartitions: courtPartitionsForCourtFilter(contract, body.court),
       dateFrom: body.dateFrom,
       dateTo: body.dateTo,
       documentType: body.decisionType,
@@ -918,6 +928,7 @@ type ResolveCorpusIndexQueryOptions = {
   body: SearchDecisionsBody;
   generation: string;
   jurisdictionClause: string | undefined;
+  contract: CorpusIndexGroupContract | null;
   functionWords: ReadonlySet<string> | null;
   legalAlternatives: LegalAlternatives;
 };
@@ -939,6 +950,7 @@ const resolveCorpusIndexQuery = async ({
   body,
   generation,
   jurisdictionClause,
+  contract,
   functionWords,
   legalAlternatives: alternatives,
 }: ResolveCorpusIndexQueryOptions): Promise<ResolvedCorpusIndexQuery> => {
@@ -959,6 +971,7 @@ const resolveCorpusIndexQuery = async ({
       const query = buildCorpusIndexQuery({
         body,
         jurisdictionClause,
+        contract,
         fields,
         expand,
         functionWords,
@@ -989,6 +1002,7 @@ const resolveCorpusIndexQuery = async ({
         buildCorpusIndexQuery({
           body: bodyWithoutFacetFilter(body, facet),
           jurisdictionClause,
+          contract,
           fields,
           expand,
           // The same exclusion the page was built with: a facet counted over
@@ -1062,6 +1076,8 @@ const candidateDecisionRowsQuery = (
       // match that resolves it, since court names repeat across borders.
       court: caseLawDecisions.court,
       country: caseLawDecisions.country,
+      // A directory court is ranked by its id, not by its name.
+      courtId: caseLawDecisions.courtId,
       languageGroupKey: caseLawDecisions.languageGroupKey,
     })
     .from(caseLawDecisions)
@@ -1354,10 +1370,7 @@ export const rehydrateCaseLawCandidates = async ({
   const courtTierById = new Map<string, number>();
   for (const [id, row] of byId) {
     authorityById.set(id, row.citationAuthority);
-    courtTierById.set(
-      id,
-      courtWeightFromMap(courtWeights, row.court, row.country).tier,
-    );
+    courtTierById.set(id, decisionCourtWeight(courtWeights, row).tier);
   }
 
   // Candidates missing from Postgres (index/DB drift) are dropped. Every
@@ -1393,6 +1406,71 @@ type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
  * the citator resolves by, and the ECLI as published. Bounded by the page
  * size: past that the entry names a list, not a decision.
  */
+type DecisionIdsByIdentityQueryOptions = {
+  country: string | undefined;
+  identity: DecisionIdentity;
+  tx: CaseLawPublicReadTransaction;
+};
+
+/** The identity read itself, exported so a plan test can EXPLAIN it. */
+export const decisionIdsByIdentityQuery = ({
+  country,
+  identity,
+  tx,
+}: DecisionIdsByIdentityQueryOptions) => {
+  // An ECLI also matches the other spellings a decision declares as
+  // identifiers. The two sources are unioned into one id set, as the
+  // identity lookup does: OR-ing a column test with a subquery test leaves
+  // the planner no index for either side, and it scans the whole table.
+  const identityPredicate =
+    identity.kind === "ecli"
+      ? inArray(
+          caseLawDecisions.id,
+          unionAll(
+            tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(
+                inArray(caseLawDecisions.ecli, [
+                  identity.value,
+                  identity.value.toUpperCase(),
+                ]),
+              ),
+            tx
+              .select({ id: caseLawDecisionIdentifiers.decisionId })
+              .from(caseLawDecisionIdentifiers)
+              .where(
+                and(
+                  eq(
+                    caseLawDecisionIdentifiers.type,
+                    DECISION_IDENTIFIER_TYPES.ECLI,
+                  ),
+                  eq(
+                    caseLawDecisionIdentifiers.normalizedValue,
+                    normalizeDecisionIdentifierValue(
+                      DECISION_IDENTIFIER_TYPES.ECLI,
+                      identity.value,
+                    ),
+                  ),
+                ),
+              ),
+          ),
+        )
+      : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
+  return tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        identityPredicate,
+        country === undefined
+          ? undefined
+          : eq(caseLawDecisions.country, country),
+      ),
+    )
+    .limit(LIMITS.caseLawSearchPageSizeMax);
+};
+
 type FindDecisionIdsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string | undefined;
@@ -1408,53 +1486,9 @@ export const findDecisionIdsByIdentity = async ({
 }: FindDecisionIdsByIdentityOptions): Promise<SafeId<"caseLawDecision">[]> => {
   const rows = await timeDbRead(
     async () =>
-      await caseLawDb((tx) => {
-        // An ECLI also matches the other spellings a decision declares as
-        // identifiers, read as a set so the planner keeps the identifier
-        // index, as the identity lookup does.
-        const identityPredicate =
-          identity.kind === "ecli"
-            ? or(
-                inArray(caseLawDecisions.ecli, [
-                  identity.value,
-                  identity.value.toUpperCase(),
-                ]),
-                inArray(
-                  caseLawDecisions.id,
-                  tx
-                    .select({ id: caseLawDecisionIdentifiers.decisionId })
-                    .from(caseLawDecisionIdentifiers)
-                    .where(
-                      and(
-                        eq(
-                          caseLawDecisionIdentifiers.type,
-                          DECISION_IDENTIFIER_TYPES.ECLI,
-                        ),
-                        eq(
-                          caseLawDecisionIdentifiers.normalizedValue,
-                          normalizeDecisionIdentifierValue(
-                            DECISION_IDENTIFIER_TYPES.ECLI,
-                            identity.value,
-                          ),
-                        ),
-                      ),
-                    ),
-                ),
-              )
-            : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
-        return tx
-          .select({ id: caseLawDecisions.id })
-          .from(caseLawDecisions)
-          .where(
-            and(
-              identityPredicate,
-              country === undefined
-                ? undefined
-                : eq(caseLawDecisions.country, country),
-            ),
-          )
-          .limit(LIMITS.caseLawSearchPageSizeMax);
-      }),
+      await caseLawDb((tx) =>
+        decisionIdsByIdentityQuery({ country, identity, tx }),
+      ),
   );
   return rows.map((row) => row.id);
 };
@@ -1726,13 +1760,22 @@ export const searchCorpusIndexDecisions = async (
     });
   };
 
-  const serving = await dbTimer.time(
+  const target = await dbTimer.time(
     CASE_LAW_SEARCH_DB_READ.servingGeneration,
     async () =>
       await caseLawDb(
-        async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+        async (tx) =>
+          await readServingCorpusIndexTargetTx(tx, {
+            family: "case_law",
+            jurisdiction: body.country,
+          }),
       ),
   );
+  if (Result.isError(target)) {
+    observeFailure(target.error, { sink: corpusIndexGroupNotReady });
+    return status(503, { message: "Search is temporarily unavailable" });
+  }
+  const { serving, route, contract, cursorTarget } = target.value;
   const generation = serving.generation;
   // Asserted before any engine work: every decision count this branch reports
   // is a cardinality over this field, so a generation that cannot aggregate
@@ -1844,16 +1887,15 @@ export const searchCorpusIndexDecisions = async (
   }
 
   // Scoped query → that country's index, plus a jurisdiction clause when that
-  // index holds other countries; unscoped → the generation glob.
-  const { indexId, jurisdictionClause } = corpusIndexRoute(
-    requireCorpusIndexManifest("case_law", generation),
-    body.country,
-  );
+  // index holds other countries; unscoped → every index of the generation a
+  // read may reach (`corpusIndexReadTarget`).
+  const { indexId, jurisdictionClause } = route;
 
   const { facetQueries, resolved } = await resolveCorpusIndexQuery({
     body,
     generation,
     jurisdictionClause,
+    contract,
     functionWords: interpretation.functionWords,
     legalAlternatives: interpretation.legalAlternatives,
   });
@@ -1880,6 +1922,7 @@ export const searchCorpusIndexDecisions = async (
     isStaleCorpusSearchCursor(parsedCursor, {
       dictionary: resolved.dictionary,
       sort,
+      target: cursorTarget,
     })
   ) {
     return status(400, { message: "Invalid cursor" });
@@ -1969,6 +2012,7 @@ export const searchCorpusIndexDecisions = async (
       : encodeCorpusSearchCursor({
           ...searchPage.nextCursor,
           dictionary: resolved.dictionary,
+          target: cursorTarget,
         });
 
   // A row the candidate read saw and this one no longer answers for was

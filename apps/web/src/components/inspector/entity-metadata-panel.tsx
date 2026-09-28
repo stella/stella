@@ -13,11 +13,11 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { Sparkles } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
+import { SparklesIcon as Sparkles } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

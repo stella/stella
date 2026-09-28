@@ -161,6 +161,8 @@ export const LIMITS = {
   styleSetsCount: 100,
   styleSetsPageSizeDefault: 50,
   styleSetsPageSizeMax: 100,
+  sellerProfilesPageSizeDefault: 50,
+  sellerProfilesPageSizeMax: 100,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
   templateRecipesCount: 100,
@@ -298,7 +300,6 @@ export const LIMITS = {
   workspaceActivityPageSizeMax: 10,
   activeTimersPerUser: 1,
   timeEntryMaxAgeDays: 90,
-  billingIncrementMinutes: 6,
   /** Two activity signals closer than this belong to one suggested entry. */
   timeSuggestionMergeGapMinutes: 15,
   /** Engaged time assumed after the last observed signal of a cluster. */
@@ -360,6 +361,7 @@ export const LIMITS = {
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
+  savedTimeNarrativesPerUser: 100,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
    *  cannot blow up the index; the headline only reads the first

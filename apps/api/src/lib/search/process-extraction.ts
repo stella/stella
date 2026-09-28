@@ -198,6 +198,7 @@ export const persistNativeExtractionProjection = async (
       return "source_cancelled";
     }
 
+    // sql-perf-allow: index document_processing_runs_workspace_entity_created_idx for one entity/version and LIMIT 1
     const persisted = await tx.execute<PersistedNativeExtractionProjection>(sql`
         WITH manual_projection_ownership AS MATERIALIZED (
           SELECT 1

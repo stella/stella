@@ -34,6 +34,7 @@ import {
   formatAnnotationsForPrompt,
   buildActiveTemplatePrompt,
   buildChatPromptCacheKey,
+  buildContextMatterScopeSection,
   buildGlobalPrompt,
   buildGlobalPromptParts,
   buildCorpusOnlyCaseLawSection,
@@ -41,6 +42,7 @@ import {
   buildWorkspacePromptParts,
   buildWorkspacePromptText,
   extractTitle,
+  NO_MATTER_SCOPE_SECTION,
 } from "./chat-prompt";
 import type {
   ChatCacheStablePrefix,
@@ -688,6 +690,7 @@ describe("chat prompt builders", () => {
       excludedChatTools: [],
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
+      requiredTools: [],
       resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
       source: "installed",
       toolName: "active-workflow",
@@ -718,6 +721,7 @@ describe("chat prompt builders", () => {
       excludedChatTools: [],
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
+      requiredTools: [],
       resources: [],
       source: "installed",
       toolName: "active-workflow",
@@ -1526,5 +1530,29 @@ describe("extractTitle", () => {
     ] satisfies ChatMessage["parts"];
 
     expect(extractTitle(parts)).toBe("hello world");
+  });
+});
+
+describe("matter scope with no matter yet", () => {
+  test("tells the model to offer a matter before a matter write", () => {
+    const section = buildContextMatterScopeSection({
+      contextMatterIds: [],
+      hasReachableMatter: false,
+      refRegistry: createChatRefRegistry(),
+      scope: "global",
+    });
+    expect(section).toBe(NO_MATTER_SCOPE_SECTION);
+    expect(section).toContain("ask-user");
+  });
+
+  test("keeps the discovery guidance once a matter is reachable", () => {
+    const section = buildContextMatterScopeSection({
+      contextMatterIds: [],
+      hasReachableMatter: true,
+      refRegistry: createChatRefRegistry(),
+      scope: "global",
+    });
+    expect(section).not.toBe(NO_MATTER_SCOPE_SECTION);
+    expect(section).toContain("No matters are pinned");
   });
 });

@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { PanelRightIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
   InspectorRailIconButton,

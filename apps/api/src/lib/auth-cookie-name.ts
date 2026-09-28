@@ -21,6 +21,7 @@
  */
 
 import { env } from "@/api/env";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * The prefix used outside dev. Passed to better-auth explicitly rather than
@@ -49,10 +50,10 @@ type AuthCookiePolicy = {
  * worktree so two local APIs cannot read each other's cookies.
  */
 export const authCookiePolicy = (): AuthCookiePolicy => ({
-  cookiePrefix: env.isDev
+  cookiePrefix: isLocalDevOpen()
     ? (env.BETTER_AUTH_COOKIE_PREFIX ?? STELLA_DEV_PREFIX)
     : PRODUCTION_PREFIX,
-  useSecureCookies: !env.isDev,
+  useSecureCookies: !isLocalDevOpen(),
 });
 
 /**

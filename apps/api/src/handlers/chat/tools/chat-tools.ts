@@ -25,7 +25,10 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
-import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
+import {
+  COUNTERPARTY_CHECK_TOOL_NAME,
+  createCounterpartyCheckTools,
+} from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -35,8 +38,12 @@ import type { ExcludableChatToolName } from "@/api/handlers/chat/tools/excluded-
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
+  type ChatScriptCallTools,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
+import {
+  createFolderConsistencyReviewTools,
+  REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   createFolioAgentDocTools,
   createSuggestChangesTools,
@@ -73,7 +80,11 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
-import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools";
+import {
+  createWebSearchTools,
+  FETCH_URL_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+} from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -304,7 +315,7 @@ type BuiltInChatToolPolicyName =
   | keyof BuiltInChatTools
   | CurrentSkillEditToolName;
 
-type GetChatToolsProps = {
+export type GetChatToolsProps = {
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
   memoryEnabled?: boolean | undefined;
   safeDb: SafeDb;
@@ -463,6 +474,12 @@ type GetChatToolsProps = {
    */
   delegationDepth?: number | undefined;
   /**
+   * Narrows the finished tool set before it is returned (a subagent's
+   * projection). Applied here rather than by the caller so what a code-mode
+   * script is told it can call directly is the set the loop really holds.
+   */
+  projectToolSet?: ((tools: ChatToolMap) => ChatToolMap) | undefined;
+  /**
    * Which DOCX-edit review mode this turn uses; defaults to
    * `DEFAULT_CHAT_EDIT_APPLY_MODE` ("auto": AI edits auto-apply as
    * tracked changes by default). Picks which `suggest_changes` variant is
@@ -602,6 +619,28 @@ true satisfies Exclude<
   ? true
   : never;
 
+/**
+ * The active skill's chat declarations as a turn's tool set honours them. The
+ * streaming set applies both; the validation set ignores both, since neither
+ * a read's laziness nor a withheld tool changes how a persisted call parses.
+ */
+const honouredSkillDeclarations = ({
+  activeSkillContext,
+  forValidation,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null | undefined;
+  forValidation: boolean;
+}): Pick<
+  ActiveChatSkillContext,
+  "documentedChatReads" | "excludedChatTools"
+> =>
+  forValidation || !activeSkillContext
+    ? { documentedChatReads: [], excludedChatTools: [] }
+    : {
+        documentedChatReads: activeSkillContext.documentedChatReads,
+        excludedChatTools: activeSkillContext.excludedChatTools,
+      };
+
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     memoryEnabled = env.FEATURE_AI_MEMORY,
@@ -645,6 +684,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     usageLane,
   } = props;
   const forValidation = purpose === CHAT_TOOL_SET_PURPOSE.validation;
+  const skillDeclarations = honouredSkillDeclarations({
+    activeSkillContext,
+    forValidation,
+  });
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -680,17 +723,21 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // active skill's documented reads are eager on the streaming set only; the
   // validation set ignores them, as it ignores the exclusion below, since
   // laziness does not change a tool's schema.
+  // A script run reads the turn's finished tool set (assigned at the end), so
+  // a script that calls a direct tool is told to call it directly.
+  let scriptCallTools: ChatScriptCallTools = {
+    directTools: [],
+    unavailableReasons: new Map(),
+  };
   const executionTools = buildChatCodeModeTools({
-    documentedReads:
-      forValidation || !activeSkillContext
-        ? []
-        : activeSkillContext.documentedChatReads,
+    documentedReads: skillDeclarations.documentedChatReads,
     memberRole,
     organizationId,
     recordAuditEvent,
     refRegistry,
     safeDb,
     scopedDb,
+    scriptCallTools: () => scriptCallTools,
     toolDefectMemo,
     toolWorkspaceIds,
     userId,
@@ -993,27 +1040,26 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
 
   // Registry write projections: per-call mutation tools (save/delete/etc.),
-  // each behind approval. Gated on a non-empty workspace set exactly like the
-  // hand-written workspace mutation tool (`createWorkspaceTools`), so
-  // anonymous/public surfaces with no accessible workspace never receive write
-  // tools. Real per-workspace statuses are threaded through so the handlers'
-  // `ensureActiveWorkspace` gate keeps archived matters read-only.
-  const registryWriteTools =
-    toolWorkspaceIds.length === 0
-      ? {}
-      : buildChatWriteTools({
-          memberRole,
-          organizationId,
-          pinServerValidatedWorkspaceId,
-          recordAuditEvent,
-          refRegistry,
-          safeDb,
-          scopedDb,
-          toolDefectMemo,
-          toolWorkspaceIds,
-          userId,
-          workspaceStatusById,
-        });
+  // each behind approval. Registered whatever the caller's matter count: an
+  // organization with no matter yet still manages its library, templates,
+  // contacts and settings, and creates its first matter here. A write that
+  // acts inside a matter answers with a recoverable needs-a-matter result
+  // (`matterRequiredResult`) instead of disappearing. Role checks stay in the
+  // handlers. Real per-workspace statuses are threaded through so the
+  // handlers' `ensureActiveWorkspace` gate keeps archived matters read-only.
+  const registryWriteTools = buildChatWriteTools({
+    memberRole,
+    organizationId,
+    pinServerValidatedWorkspaceId,
+    recordAuditEvent,
+    refRegistry,
+    safeDb,
+    scopedDb,
+    toolDefectMemo,
+    toolWorkspaceIds,
+    userId,
+    workspaceStatusById,
+  });
 
   // Delegation is capped at one level: a subagent's own toolset (built by
   // re-invoking `getChatTools` at `delegationDepth + 1`) never registers
@@ -1026,21 +1072,18 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const delegationDepth = props.delegationDepth ?? 0;
   const subagentTools = areSubagentToolsRegistered({
     delegationDepth,
-    excludedChatTools: forValidation
-      ? undefined
-      : activeSkillContext?.excludedChatTools,
+    excludedChatTools: skillDeclarations.excludedChatTools,
   })
     ? createSpawnSubagentsTool({
         buildSubagentToolset: (proposalSink) =>
-          projectToolMapForSubagent(
-            getChatTools({
-              ...props,
-              browserClient: undefined,
-              hasActiveDocxEditClient: false,
-              delegationDepth: delegationDepth + 1,
-            }),
-            proposalSink,
-          ),
+          getChatTools({
+            ...props,
+            browserClient: undefined,
+            hasActiveDocxEditClient: false,
+            delegationDepth: delegationDepth + 1,
+            projectToolSet: (tools) =>
+              projectToolMapForSubagent(tools, proposalSink),
+          }),
         organizationId,
         orgAIConfig,
         safeDb,
@@ -1052,7 +1095,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       })
     : {};
 
-  return applyChatToolPolicies({
+  const registered = applyChatToolPolicies({
     policyKinds,
     tools: {
       ...orgTools,
@@ -1080,6 +1123,27 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...subagentTools,
     },
   });
+  const tools = props.projectToolSet?.(registered) ?? registered;
+  scriptCallTools = {
+    directTools: Object.keys(tools),
+    unavailableReasons: new Map([
+      ...(thirdPartyBoundary.type === "raw"
+        ? []
+        : [
+            COUNTERPARTY_CHECK_TOOL_NAME,
+            REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+          ].map((name) => [name, "anonymized mode is on"] as const)),
+      ...(webResearchAvailable
+        ? []
+        : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
+            (name) => [name, "web research is off for this chat"] as const,
+          )),
+      ...Object.keys(registered)
+        .filter((name) => !(name in tools))
+        .map((name) => [name, "subagents cannot call it"] as const),
+    ]),
+  };
+  return tools;
 };
 
 type GetChatValidationToolsProps = Omit<

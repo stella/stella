@@ -7,16 +7,16 @@
 import * as React from "react";
 
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
   FilterIcon,
   FlagIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";

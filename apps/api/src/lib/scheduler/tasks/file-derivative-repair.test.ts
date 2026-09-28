@@ -47,7 +47,7 @@ import {
 const { testDb, ids } = await getRlsFixture();
 
 type QueuedJob = {
-  data: { derivativeFileId?: string; fieldId: string };
+  data: { derivativeFileId?: string; fieldId: string; userId?: string | null };
   name: string;
   opts: { jobId: string };
 };
@@ -114,6 +114,7 @@ const PNG_MIME_TYPE = "image/png";
 
 type SeedFieldOptions = {
   createdAt?: Date;
+  createdBy?: SafeId<"user"> | null;
   mimeType?: string;
   pdfDerivative?: Extract<FieldContent, { type: "file" }>["pdfDerivative"];
   pdfFileId?: string | null;
@@ -132,6 +133,7 @@ const seededEntityIds: SafeId<"entity">[] = [];
  */
 const seedFileField = async ({
   createdAt = SETTLED_AT,
+  createdBy = ids.userA1,
   mimeType = RTF_MIME_TYPE,
   pdfDerivative = { status: "pending" },
   pdfFileId = null,
@@ -148,7 +150,7 @@ const seedFileField = async ({
     workspaceId: ids.wsA1,
     kind: "document",
     name: "Derivative repair document",
-    createdBy: ids.userA1,
+    createdBy,
   });
   await testDb.insert(entityVersions).values({
     id: entityVersionId,
@@ -307,6 +309,20 @@ describe("file derivative repair", () => {
     expect(await readDerivativeStatus(freshUpload)).toEqual({
       status: "pending",
     });
+  });
+
+  test("requeues service-owned files with null attribution", async () => {
+    const fieldId = await seedFileField({ createdBy: null });
+
+    await runRepair();
+
+    expect(
+      queued.map(({ data }) => ({
+        fieldId: data.fieldId,
+        userId: data.userId,
+      })),
+    ).toEqual([{ fieldId, userId: null }]);
+    expect(await readDerivativeStatus(fieldId)).toEqual({ status: "pending" });
   });
 
   test("reclaims a retained job id so the retry is not swallowed", async () => {
