@@ -63,6 +63,10 @@ export const PROVIDER_WIRE_SCENARIOS = {
    *  on: a paused turn, a tool call it could not form, a failure
    *  mid-response. */
   "unusable-stop": { outcome: "error", recordable: false },
+  /** The provider ends the response with a stop reason its SDK does not
+   *  list yet: an answer the step wrote stands, a tool call it left to run
+   *  does not. */
+  "unlisted-stop": { outcome: "either", recordable: false },
 } as const satisfies Record<
   string,
   { outcome: "either" | "error" | "finished"; recordable: boolean }
