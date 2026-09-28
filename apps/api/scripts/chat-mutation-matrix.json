@@ -564,7 +564,7 @@
     },
     {
       "id": "snapshot-reasoning-keeps-its-step",
-      "fix": "#TBD",
+      "fix": "#4017",
       "behaviour": "The page takes each reasoning message of an interrupt snapshot as a thinking part with its own step, so the run that continues the answer adds its reasoning beside the earlier step's instead of overwriting it.",
       "status": "active",
       "file": "../web/src/features/chat/chat-snapshot-history.ts",
