@@ -21,6 +21,7 @@
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
+import { parseBunLockText } from "./bun-lock-text";
 import {
   applyReplacements,
   directPropertyValue,
@@ -183,11 +184,7 @@ export type ResolutionGraph = {
  * The one loading path both the guard and the fixer read: the root manifest's
  * override maps plus every range bun.lock records for the graph.
  *
- * bun.lock is JSON-with-trailing-commas ("JSONC"-flavored), so a plain
- * JSON.parse fails on it. Trailing commas only ever appear directly before a
- * closing `}`/`]` and cannot occur inside bun.lock's string values, so
- * stripping them is a safe, structure-preserving normalize (same approach as
- * scripts/check-lockfile-workspace-versions.ts).
+ * bun.lock is JSON with trailing commas; see parseBunLockText.
  */
 export const loadResolutionGraph = async (
   root: string,
@@ -197,9 +194,7 @@ export const loadResolutionGraph = async (
     Bun.file(path.join(root, "bun.lock")).text(),
   ]);
   const rootManifest: unknown = JSON.parse(manifestText);
-  const parsedLock: unknown = JSON.parse(
-    lockText.replace(/,(\s*[}\]])/gu, "$1"),
-  );
+  const parsedLock = parseBunLockText(lockText);
   if (!isRecord(rootManifest)) {
     throw new ResolutionRangesError(
       "package.json did not parse into an object",
