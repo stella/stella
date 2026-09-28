@@ -395,18 +395,116 @@
       "oracle": "chat.provider-wire.tool-input"
     },
     {
+      "id": "tool-input-array-union-items-are-alternatives",
+      "fix": "maintenance",
+      "behaviour": "Tool input under a union of arrays reads its items against the members' item schemas as alternatives, so a null one member declares is kept.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "      itemSchemas.length === 1 ? itemSchemas[0] : { anyOf: itemSchemas };",
+      "replace": "      itemSchemas[0];",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a null one array member's items declare stays, though a sibling member's refuse it"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-fits-value",
+      "fix": "maintenance",
+      "behaviour": "Tool input under a union reads its placeholders against the branches whose shape takes the value, so a branch the value cannot fit does not keep a null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  const matched = fitting.length > 0 ? fitting : matching;",
+      "replace": "  const matched = matching;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a null is omitted though a sibling branch the value cannot fit declares it"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-const-applies-whole",
+      "fix": "maintenance",
+      "behaviour": "A union branch whose object constant the tool input does not equal is not one it fits, so it keeps no null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "    return isDeepStrictEqual(schema[\"const\"], value);",
+      "replace": "    return typeof value === \"object\" || schema[\"const\"] === value;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a sibling branch whose constant the value does not equal keeps no null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-patterns-name-fields",
+      "fix": "maintenance",
+      "behaviour": "A closed union branch with patternProperties refuses a field no pattern names, so it keeps no null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  if (matched) {",
+      "replace": "  if (matched || isRecord(patternProperties)) {",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a closed sibling branch whose patterns do not name a field keeps no null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-array-member-fits-array",
+      "fix": "maintenance",
+      "behaviour": "Only union array members that take the whole array lend their item schemas to reading its placeholders.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  const fitting = members.filter((member) => shapeTakes(member, value));",
+      "replace": "  const fitting = members;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "an array member too short for the array keeps no null in its items"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
       "id": "stream-ends-in-one-terminal-event",
       "fix": "maintenance",
-      "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
+      "behaviour": "A provider stream that stops before its terminal event ends in a run error, also from an adapter that reports no terminal event of its own.",
       "status": "active",
       "file": "src/lib/chat/provider-stream-contract.ts",
       "search": "if (!ended && signal?.aborted !== true) {\n    yield runError(options.model, {",
       "replace": "if (false) {\n    yield runError(options.model, {",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
-        "test": "anthropic early-eof"
+        "test": "a cut-off stream an adapter leaves unended"
       },
       "oracle": "chat.provider-wire.one-terminal"
+    },
+    {
+      "id": "openai-tool-schema-strict",
+      "fix": "maintenance",
+      "behaviour": "The OpenAI adapter offers a tool whose schema strict mode accepts as a strict tool.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/openai-base/dist/esm/tools/function-tool.js",
+      "search": "\t\tparameters: jsonSchema,\n\t\tstrict: true",
+      "replace": "\t\tparameters: jsonSchema,\n\t\tstrict: false",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openai tool-call"
+      },
+      "oracle": "chat.provider-wire.request-shape"
+    },
+    {
+      "id": "wire-request-shape-reads-init-headers",
+      "fix": "maintenance",
+      "behaviour": "A request's shape is read from what fetch sends, with the init's headers over the request's.",
+      "status": "active",
+      "file": "src/tests/helpers/provider-wire-replay.ts",
+      "search": "? new Request(input, init)",
+      "replace": "? input",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "a header fetch's init overrides is the header the request is pinned by"
+      },
+      "oracle": "chat.provider-wire.request-shape"
     },
     {
       "id": "new-message-resets-interrupts",
@@ -439,7 +537,7 @@
     {
       "id": "run-continues-stored-thread",
       "fix": "#3885",
-      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it.",
+      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it, so it reads a replaced call the way every later request does.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
       "search": "message.id === supersededMessage.id",
@@ -448,7 +546,7 @@
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
       },
-      "oracle": "chat.live.equals-reload"
+      "oracle": "chat.provider.results-stable"
     },
     {
       "id": "superseding-turn-opens-with-stored-message",
@@ -526,13 +624,13 @@
       "behaviour": "A turn the user stops mid-stream stores no call that reads as waiting on the user, whether or not its input finished streaming.",
       "status": "active",
       "file": "src/handlers/chat/chat-message-persistence.ts",
-      "search": "  outcome.type === \"cancelled\"\n    ? cancelAssistantMessage({ message, reason: outcome.reason })\n    : settleTerminalAssistantMessage(message, outcome);",
+      "search": "  isCutShortOutcome(outcome)\n    ? cutShortAssistantMessage({ message, outcome })\n    : settleTerminalAssistantMessage(message, outcome);",
       "replace": "  settleTerminalAssistantMessage(message, outcome);",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "stops an answer while it streams (before-tool-end)"
       },
-      "oracle": "chat.persisted.pending-owned"
+      "oracle": "chat.persisted.calls-settled"
     },
     {
       "id": "run-independent-of-request",
@@ -589,6 +687,76 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "approval-answer-in-its-step",
+      "fix": "#4020",
+      "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "    if (answer !== undefined && at < parts.length) {",
+      "replace": "    if (answer !== undefined && at < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "stays answered right after its step when the model asks for a call after a denial"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "approval-answer-in-its-step-dispatched",
+      "fix": "#4020",
+      "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
+      "status": "active",
+      "file": "src/handlers/chat/provider-history.ts",
+      "search": "      messages: answerHistoryCallsInTheirStep(messages),",
+      "replace": "      messages,",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "keeps a denial ahead of the approved call it was answered with"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "interrupted-closes-cut-off-calls",
+      "fix": "#3994",
+      "behaviour": "A turn a dropped connection cuts off stores no call that reads as waiting on the user.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "  isCutShortOutcome(outcome)\n",
+      "replace": "  outcome.type === \"cancelled\"\n",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (before-tool-end)"
+      },
+      "oracle": "chat.persisted.calls-settled"
+    },
+    {
+      "id": "waits-only-on-handed-out-interrupts",
+      "fix": "#3994",
+      "behaviour": "A run waits on the user only for a call among the interrupts it handed out, never for a server call cut off before it ran.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    interruptToolCallIds.has(toolCallId),",
+      "replace": "    interruptToolCallIds.size >= 0 || toolCallId === \"\",",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (after-tool-end)"
+      },
+      "oracle": "chat.ledger.pending"
+    },
+    {
+      "id": "reader-decodes-v2-envelope",
+      "fix": "saved-state",
+      "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-parts.ts",
+      "search": "  if (content.version === 3) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "replace": "  if (content.version >= 2) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "scenario": {
+        "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
+        "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
+      },
+      "oracle": "chat.persisted.past-release-loads"
     }
   ]
 }

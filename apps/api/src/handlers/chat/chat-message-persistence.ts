@@ -15,7 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
-  cancelAssistantMessage,
+  cutShortAssistantMessage,
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
@@ -33,6 +33,7 @@ import {
   ChatTurnUnsettledToolCallError,
   findDroppedParts,
   findUnsettledToolCallsForOutcome,
+  isCutShortOutcome,
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
@@ -435,9 +436,9 @@ type FinalizedTurn = {
 };
 
 /**
- * The terminal message as its outcome stores it. A cancelled turn closes
+ * The terminal message as its outcome stores it. A cut-short turn closes
  * every call that can no longer run or be answered
- * (`cancelAssistantMessage`), whether it waited on the user or was cut off
+ * (`cutShortAssistantMessage`), whether it waited on the user or was cut off
  * mid-stream; any other outcome keeps what the run produced under its
  * settlement rules.
  */
@@ -445,8 +446,8 @@ const endTerminalAssistantMessage = (
   message: PersistableTerminalAssistantMessage,
   outcome: ChatTurnOutcome,
 ): PersistableTerminalAssistantMessage =>
-  outcome.type === "cancelled"
-    ? cancelAssistantMessage({ message, reason: outcome.reason })
+  isCutShortOutcome(outcome)
+    ? cutShortAssistantMessage({ message, outcome })
     : settleTerminalAssistantMessage(message, outcome);
 
 /**

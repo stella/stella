@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>stella desktop</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      /* The dialog centres while it fits and scrolls from its top when a
+         long name or translation makes it taller than the window. */
+      body {
+        background: #1c1c1e;
+        color: #f5f5f7;
+        display: flex;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        height: 100vh;
+        overflow-y: auto;
+        justify-content: center;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .dialog {
+        margin: auto;
+        max-width: 390px;
+        padding: 28px 24px 20px;
+        width: 100%;
+      }
+      .mark {
+        align-items: center;
+        background: #2c2c2e;
+        border: 1px solid #48484a;
+        border-radius: 12px;
+        color: #f5f5f7;
+        display: flex;
+        font-size: 20px;
+        font-weight: 600;
+        height: 48px;
+        justify-content: center;
+        margin: 0 auto 18px;
+        width: 48px;
+      }
+      .title {
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.35;
+        margin-bottom: 8px;
+        text-align: center;
+      }
+      .subtitle {
+        color: #a1a1a6;
+        font-size: 13px;
+        line-height: 1.45;
+        margin-bottom: 18px;
+        text-align: center;
+      }
+      .details {
+        background: #2c2c2e;
+        border: 1px solid #3a3a3c;
+        border-radius: 8px;
+        display: grid;
+        gap: 10px;
+        margin-bottom: 16px;
+        padding: 12px;
+      }
+      .label {
+        color: #8e8e93;
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        margin-bottom: 3px;
+        text-transform: uppercase;
+      }
+      .value {
+        color: #f5f5f7;
+        display: block;
+        font-size: 12px;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+      .picker {
+        display: block;
+        margin-bottom: 18px;
+      }
+      .identity-details {
+        color: #a1a1a6;
+        display: block;
+        font-size: 11px;
+        line-height: 1.4;
+        margin-top: 6px;
+        overflow-wrap: anywhere;
+      }
+      select {
+        background: #2c2c2e;
+        border: 1px solid #3a3a3c;
+        border-radius: 8px;
+        color: #f5f5f7;
+        font-family: inherit;
+        font-size: 13px;
+        padding: 8px 10px;
+        width: 100%;
+      }
+      .status {
+        font-size: 13px;
+        line-height: 1.45;
+        margin-bottom: 18px;
+        text-align: center;
+      }
+      .status[data-tone="error"] {
+        color: #ff453a;
+      }
+      .status[data-tone="success"] {
+        color: #30d158;
+      }
+      .status-detail {
+        color: #a1a1a6;
+        display: block;
+        font-size: 11px;
+        margin-top: 4px;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        flex: 1;
+        font-size: 14px;
+        font-weight: 500;
+        padding: 10px 16px;
+        transition: opacity 0.15s;
+      }
+      button:hover {
+        opacity: 0.86;
+      }
+      button:active {
+        opacity: 0.72;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+      .cancel {
+        background: #2c2c2e;
+        border: 1px solid #3a3a3c;
+        color: #f5f5f7;
+      }
+      .sign {
+        background: #0a84ff;
+        color: #fff;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      @media (prefers-color-scheme: light) {
+        body {
+          background: #f2f2f7;
+          color: #1c1c1e;
+        }
+        .mark,
+        .details,
+        .cancel,
+        select {
+          background: #fff;
+          border-color: #d1d1d6;
+          color: #1c1c1e;
+        }
+        .subtitle,
+        .label,
+        .identity-details {
+          color: #636366;
+        }
+        .value {
+          color: #1c1c1e;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="dialog">
+      <div class="mark">§</div>
+      <h1 class="title" id="title"></h1>
+      <p class="subtitle" id="subtitle"></p>
+      <div class="details">
+        <p>
+          <span class="label" id="documentLabel"></span>
+          <span class="value" id="documentName"></span>
+        </p>
+        <p>
+          <span class="label" id="versionLabel"></span>
+          <span class="value" id="versionNumber"></span>
+        </p>
+        <p>
+          <span class="label" id="workspaceLabel"></span>
+          <span class="value" id="workspaceName"></span>
+        </p>
+        <p>
+          <span class="label" id="serverLabel"></span>
+          <span class="value" id="apiOrigin"></span>
+        </p>
+        <p>
+          <span class="label" id="appearanceLabel"></span>
+          <span class="value" id="appearance"></span>
+        </p>
+      </div>
+      <label class="picker" hidden id="picker">
+        <span class="label" id="certificateLabel"></span>
+        <select id="identities"></select>
+        <span class="identity-details" dir="auto" id="identityDetails"></span>
+      </label>
+      <p class="status" hidden id="status"></p>
+      <div class="actions">
+        <button class="cancel" id="cancelBtn"></button>
+        <button class="sign" hidden id="signBtn"></button>
+      </div>
+    </main>
+    <script>
+      // Everything the dialog renders arrives in the URL hash, set by Rust
+      // when it opens the window: the certificates to choose from, the
+      // document it is about, and the wording, so the dialog carries no
+      // strings of its own and speaks whatever language the rest of the app
+      // is running in. The session token stays in Rust and never reaches
+      // this page.
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const strings = JSON.parse(params.get("strings") || "{}");
+      const state = JSON.parse(params.get("state") || '"unsupportedPlatform"');
+      const identities = JSON.parse(params.get("identities") || "[]");
+
+      document.documentElement.lang = params.get("lang") || "en";
+      document.documentElement.dir = params.get("dir") || "ltr";
+      document.title = strings.pdfSignWindowTitle || "";
+
+      const element = (id) => document.getElementById(id);
+      const setText = (id, text) => {
+        element(id).textContent = text || "";
+      };
+
+      setText("title", strings.pdfSignTitle);
+      setText("documentLabel", strings.pdfSignDocument);
+      setText("versionLabel", strings.pdfSignVersion);
+      setText("workspaceLabel", strings.pdfSignMatter);
+      setText("serverLabel", strings.pdfSignServer);
+      setText("appearanceLabel", strings.pdfSignAppearance);
+      const stampPage = params.get("stampPage");
+      setText(
+        "appearance",
+        stampPage
+          ? (strings.pdfSignStampOnPage || "").replace(
+              "{pageNumber}",
+              stampPage,
+            )
+          : strings.pdfSignInvisible,
+      );
+      setText("certificateLabel", strings.pdfSignCertificate);
+      setText("cancelBtn", strings.cancel);
+      setText("signBtn", strings.pdfSignSign);
+
+      // Document, matter and certificate names arrive in whichever script
+      // they were written in; isolating them keeps the bidi algorithm from
+      // reordering their punctuation into the surrounding layout.
+      for (const [id, value] of [
+        ["documentName", params.get("documentName")],
+        ["versionNumber", params.get("versionNumber")],
+        ["workspaceName", params.get("workspaceName")],
+        ["apiOrigin", params.get("apiOrigin")],
+      ]) {
+        const node = element(id);
+        node.dir = "auto";
+        node.textContent = value || "";
+      }
+
+      const status = element("status");
+      // `detail`, when given, is a code for support: shown small, beneath the
+      // sentence, never in place of it.
+      const showStatus = (text, tone, detail) => {
+        status.textContent = text || "";
+        if (detail) {
+          const line = document.createElement("span");
+          line.className = "status-detail";
+          line.dir = "auto";
+          line.textContent = (strings.pdfSignErrorCode || "").replace(
+            "{code}",
+            detail,
+          );
+          status.append(line);
+        }
+        status.dataset["tone"] = tone;
+        status.hidden = false;
+      };
+
+      // Every failure arrives as a code and the catalogue key Rust chose for
+      // it; the wording is always the dialog's own, in the app's language. A
+      // code without wording of its own shows the generic sentence with the
+      // code beneath it.
+      const GENERIC_ERROR_KEY = "pdfSignErrors.generic";
+      const failureText = (result) => {
+        const key = result.messageKey || GENERIC_ERROR_KEY;
+        const text = strings[key] || strings[GENERIC_ERROR_KEY];
+        return {
+          detail:
+            key === GENERIC_ERROR_KEY || !strings[key] ? result.code : null,
+          text,
+        };
+      };
+
+      // Issuer and expiry tell apart certificates with the same holder, the
+      // usual case once a card has been renewed.
+      const expiryFormat = new Intl.DateTimeFormat(params.get("lang") || "en", {
+        dateStyle: "medium",
+        timeZone: "UTC",
+      });
+      const describeIdentity = (identity) => {
+        const parts = [];
+        if (identity.issuer) {
+          parts.push(`${strings.pdfSignIssuer || ""} ${identity.issuer}`);
+        }
+        const expires = new Date(`${identity.expiresOn}T00:00:00Z`);
+        if (!Number.isNaN(expires.getTime())) {
+          parts.push(
+            `${strings.pdfSignExpires || ""} ${expiryFormat.format(expires)}`,
+          );
+        }
+        return parts.join(" · ");
+      };
+      const showIdentityDetails = () => {
+        const selected = identities.find(
+          (identity) => identity.id === element("identities").value,
+        );
+        setText("identityDetails", selected ? describeIdentity(selected) : "");
+      };
+
+      if (state === "ready") {
+        setText("subtitle", strings.pdfSignSubtitle);
+        for (const identity of identities) {
+          const option = document.createElement("option");
+          option.value = identity.id;
+          option.textContent = identity.label;
+          element("identities").append(option);
+        }
+        element("identities").addEventListener("change", showIdentityDetails);
+        showIdentityDetails();
+        element("picker").hidden = false;
+        element("signBtn").hidden = false;
+      } else if (state === "noIdentities") {
+        showStatus(strings.pdfSignNoIdentities, "error");
+      } else if (state === "keychainUnavailable") {
+        showStatus(
+          strings[params.get("stateMessage")] || strings[GENERIC_ERROR_KEY],
+          "error",
+        );
+      } else {
+        showStatus(strings.pdfSignUnsupported, "error");
+      }
+
+      const respond = (body) =>
+        window.__TAURI_INTERNALS__
+          ? window.__TAURI_INTERNALS__.invoke("pdf_sign_respond", {
+              response: body,
+            })
+          : Promise.resolve({ status: "cancelled" });
+
+      // Every window close is Rust's: a webview cannot close a window it did
+      // not open, and Rust is the side that knows when the session is
+      // settled. A failure leaves the window up so the message can be read,
+      // with the remaining button now closing it.
+      const offerToClose = (message, detail) => {
+        showStatus(message, "error", detail);
+        setText("cancelBtn", strings.close);
+        element("cancelBtn").disabled = false;
+      };
+
+      // After a failure the API kept the signature for, the primary button
+      // finalizes again with it: the keychain is not asked a second time.
+      let retrying = false;
+      let retryExpiry = null;
+      // The retry lasts only as long as the session: once Rust stops waiting
+      // for it, the dialog says the session ended and offers only to close.
+      const offerToRetry = (message, detail, retryWithinMs) => {
+        retrying = true;
+        showStatus(message, "error", detail);
+        setText("signBtn", strings.pdfSignRetry);
+        setText("cancelBtn", strings.cancel);
+        element("signBtn").disabled = false;
+        element("cancelBtn").disabled = false;
+        clearTimeout(retryExpiry);
+        retryExpiry = setTimeout(() => {
+          retrying = false;
+          element("signBtn").hidden = true;
+          offerToClose(strings["pdfSignErrors.sessionEnded"]);
+        }, retryWithinMs);
+      };
+
+      const renderOutcome = (result) => {
+        if (result && result.status === "signed") {
+          showStatus(
+            (strings.pdfSignSigned || "").replace(
+              "{versionNumber}",
+              String(result.versionNumber),
+            ),
+            "success",
+          );
+          return;
+        }
+        if (result && result.status === "failed") {
+          const { detail, text } = failureText(result);
+          if (typeof result.retryWithinMs === "number") {
+            offerToRetry(text, detail, result.retryWithinMs);
+            return;
+          }
+          element("signBtn").hidden = true;
+          offerToClose(text, detail);
+        }
+      };
+
+      element("signBtn").addEventListener("click", () => {
+        clearTimeout(retryExpiry);
+        element("signBtn").disabled = true;
+        element("cancelBtn").disabled = true;
+        element("picker").hidden = true;
+        showStatus(strings.pdfSignSigning, "pending");
+        respond(
+          retrying
+            ? { action: "retry" }
+            : { action: "sign", identityId: element("identities").value },
+        ).then(renderOutcome, () => offerToClose(strings[GENERIC_ERROR_KEY]));
+      });
+
+      element("cancelBtn").addEventListener("click", () => {
+        element("cancelBtn").disabled = true;
+        element("signBtn").disabled = true;
+        respond({ action: "cancel" });
+      });
+    </script>
+  </body>
+</html>

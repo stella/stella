@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { and, asc, eq, lte, sql } from "drizzle-orm";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+
 import type { Transaction } from "@/api/db/root";
 import { chatTurns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -11,6 +13,7 @@ export const REAP_OWNERLESS_CHAT_TURNS_TASK =
 
 /** Turns ended per run; a larger backlog continues on the next run. */
 const REAP_BATCH_SIZE = 100;
+const REAP_CONCURRENCY = 4;
 
 /**
  * End every running chat turn whose owner stopped renewing its lease (its
@@ -45,19 +48,25 @@ export const createReapOwnerlessChatTurnsTask =
       )
       .orderBy(asc(chatTurns.leaseExpiresAt))
       .limit(REAP_BATCH_SIZE);
-    let visited = 0;
-    for (const { threadId } of expired) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can change between awaited transactions.
-      if (signal.aborted) {
-        break;
-      }
-      await db.transaction(
-        async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
-      );
-      visited += 1;
-    }
+    const processed = await mapWithConcurrency({
+      items: expired,
+      limit: REAP_CONCURRENCY,
+      operation: async ({ threadId }) => {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can change between awaited transactions.
+        if (signal.aborted) {
+          return 0;
+        }
+        await db.transaction(
+          async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),
+        );
+        return 1;
+      },
+    });
     logger.info("scheduler.chat_turns_reaped", {
       "chatTurns.expired": expired.length,
-      "chatTurns.threadsVisited": visited,
+      "chatTurns.threadsVisited": processed.reduce(
+        (visited, count) => visited + count,
+        0,
+      ),
     });
   };

@@ -9,7 +9,53 @@
     {
       "request": {
         "method": "POST",
-        "path": "/v1/responses"
+        "path": "/v1/responses",
+        "shape": {
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json"
+          },
+          "body": {
+            "max_output_tokens": 128000,
+            "service_tier": "default",
+            "model": "gpt-6-sol",
+            "input": [
+              {
+                "type": "message",
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "[prompt]"
+                  }
+                ]
+              }
+            ],
+            "tools": [
+              {
+                "type": "function",
+                "name": "mcp__external__delete",
+                "description": "Delete a draft by name.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": ["string", "null"],
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["name", "note"],
+                  "additionalProperties": false
+                },
+                "strict": true
+              }
+            ],
+            "stream": true
+          }
+        }
       },
       "response": {
         "status": 429,

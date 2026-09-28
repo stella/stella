@@ -622,7 +622,7 @@ const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
 const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
   name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
 
-type AwaitingUserInteraction = Extract<
+export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
   { type: "awaiting-user" }
 >["interaction"];
