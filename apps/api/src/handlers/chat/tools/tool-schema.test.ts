@@ -2509,7 +2509,7 @@ describe("registry write tool approval policy", () => {
     expect(tool.description).toContain(TEMPLATE_FIELD_REFERENCE_URI);
   });
 
-  test("no write tools are registered when the workspace set is empty", () => {
+  test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
       orgAIConfig: null,
       memberRole: "owner",
@@ -2538,7 +2538,12 @@ describe("registry write tool approval policy", () => {
     });
 
     for (const name of projectedWriteNames) {
-      expect(tools, name).not.toHaveProperty(name);
+      const tool = tools[name];
+      if (!tool) {
+        throw new Error(`Projected write tool ${name} was not registered`);
+      }
+      expect(tool.needsApproval, name).toBe(true);
+      expect(getChatToolPolicy(tool).kind, name).toBe("mutation");
     }
   });
 });

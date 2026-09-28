@@ -2105,6 +2105,7 @@ export const createSendMessage = (
           activeStatute: body.activeStatute,
           activeTemplate: body.activeTemplate,
           contextMatterIds: effectiveContextMatterIds,
+          hasReachableMatter: toolWorkspaceIds.length > 0,
           memberRole,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
@@ -2658,6 +2659,7 @@ type PrepareChatContextProps = {
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
+  hasReachableMatter: boolean;
   memberRole: { role: string };
   latestMentions: readonly ChatMention[];
   latestUserMessageId: string;
@@ -2702,6 +2704,7 @@ const prepareChatContext = async ({
   activeStatute,
   activeTemplate,
   contextMatterIds,
+  hasReachableMatter,
   memberRole,
   latestMentions,
   latestUserMessageId,
@@ -2738,6 +2741,7 @@ const prepareChatContext = async ({
         activeStatute,
         activeTemplate,
         contextMatterIds,
+        hasReachableMatter,
         memberRole,
         organizationId,
         practiceJurisdictions,
