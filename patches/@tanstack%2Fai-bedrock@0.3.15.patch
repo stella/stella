@@ -1,12 +1,15 @@
 1. Converse's RUN_ERROR carries rawEvent (toRunErrorRawEvent), as the other
-   adapters' do since TanStack/ai#985; it had none, so the provider status was
-   lost. Upstream PR to be opened. Remove when an @tanstack/ai-bedrock release
-   does it.
-2. The terminal event carries messageStop's stopReason as
-   metadata.providerStopReason (null when the stream ended without one), so the
-   service decides every stop reason from the SDK's StopReason union
-   (apps/api/src/lib/chat/provider-stop-reasons.ts). Remove when upstream
-   exposes the raw reason.
+   adapters' do since TanStack/ai#985; it had none, so the provider status
+   was lost. Upstream PR to be opened; remove when released.
+2. A Converse stream that ends without messageStop throws (code
+   incomplete-stream), so chatStream reports a RUN_ERROR instead of finishing
+   the cut-off answer as stop. Upstream PR to be opened; remove when released.
+3. The terminal event carries messageStop's stopReason (null when it has
+   none) as
+   metadata.providerStopReason, so the service decides every stop reason from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
+   of reading an unhandled one as "stop". Remove when upstream exposes the
+   raw reason.
 
 diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-text.js
 --- a/dist/esm/adapters/converse-text.js
@@ -55,11 +58,20 @@ diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-pr
  			finishReason = stopReason === "tool_use" ? "tool_calls" : stopReason === "max_tokens" ? "length" : stopReason === "content_filtered" ? "content_filter" : "stop";
  			continue;
  		}
-@@ -213,7 +215,8 @@
+@@ -207,13 +209,16 @@
+ 		timestamp: Date.now()
+ 	};
+ 	yield* closeReasoning();
++	// A stream with no messageStop was cut off: the adapter's catch reports it.
++	if (finishReason === void 0) throw Object.assign(new Error("The Converse stream ended before messageStop."), { code: "incomplete-stream" });
+ 	yield {
+ 		type: EventType.RUN_FINISHED,
+ 		runId,
  		threadId,
  		timestamp: Date.now(),
- 		finishReason: finishReason ?? "stop",
+-		finishReason: finishReason ?? "stop",
 -		...usage && { usage }
++		finishReason,
 +		...usage && { usage },
 +		metadata: { providerStopReason }
  	};

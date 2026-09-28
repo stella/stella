@@ -1,24 +1,30 @@
 1. Backport of TanStack/ai#1494 (issue #1447): a Responses stream that ends
    without a terminal event reports a RUN_ERROR with code incomplete-stream
-   instead of an invented RUN_FINISHED.
-   Remove when @tanstack/openai-base >= 0.12.0 is installed.
-2. The terminal event carries the response's incomplete reason, or else its
-   status, as metadata.providerStopReason, so the service decides every
-   outcome from the SDK's unions (apps/api/src/lib/chat/provider-stop-reasons.ts).
-   Remove when upstream exposes the raw reason.
-3. The RUN_ERROR of an incomplete or failed response carries the response's
-   usage, which it dropped. Upstream PR to be opened; remove when released.
+   instead of an invented RUN_FINISHED. Remove with @tanstack/openai-base
+   >= 0.12.0.
+2. The RUN_ERROR for response.incomplete carries the response's usage, so a
+   reply cut off at max_output_tokens still reports what it spent. Upstream
+   PR to be opened; remove when released.
+3. The terminal event carries the response's incomplete reason, or else its
+   status, as
+   metadata.providerStopReason, so the service decides every outcome from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
+   of reading an unhandled one as "stop". Remove when upstream exposes the
+   raw reason.
 
 diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
 --- a/dist/esm/adapters/responses-text.js
 +++ b/dist/esm/adapters/responses-text.js
-@@ -771,7 +771,9 @@
+@@ -768,10 +768,12 @@
+ 						timestamp: Date.now(),
+ 						message: errorMessage,
+ 						...errorCode !== void 0 && { code: errorCode },
++						...chunk.response.usage && { usage: buildResponsesUsage(chunk.response.usage) },
  						error: {
  							message: errorMessage,
  							...errorCode !== void 0 && { code: errorCode }
 -						}
 +						},
-+						...chunk.response.usage && { usage: buildResponsesUsage(chunk.response.usage) },
 +						metadata: { providerStopReason: chunk.response.incomplete_details?.reason ?? chunk.response.status ?? null }
  					};
  					runFinishedEmitted = true;

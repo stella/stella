@@ -5,11 +5,15 @@
    RUN_ERROR forwards them as rawEvent, as the SDK-based adapters do since
    TanStack/ai#985. The rethrow after RUN_ERROR is upstream's (tested) and
    stays. Upstream PR to be opened; remove when released.
-3. The terminal event carries the choice's finish_reason as
-   metadata.providerStopReason (null when the stream ended without one), so the
-   service decides every finish reason (model_length and error included) from
-   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts). Remove
-   when upstream exposes the raw reason.
+3. A stream that ends without a finish_reason ends in a RUN_ERROR (code
+   incomplete-stream) instead of finishing as stop, and a data line that is
+   not JSON fails the run instead of being skipped with a warning. Upstream
+   PR to be opened; remove when released.
+4. The terminal event carries the choice's finish_reason as
+   metadata.providerStopReason, so the service decides every finish reason (model_length and error included) from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
+   of reading an unhandled one as "stop". Remove when upstream exposes the
+   raw reason.
 
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
 --- a/dist/esm/adapters/text.js
@@ -66,17 +70,30 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  					});
  				}
  			}
-@@ -361,7 +365,8 @@
+@@ -354,14 +358,18 @@
+ 					});
+ 				}
+ 				hasEmittedRunFinished = true;
++				// No chunk carried a finish_reason: the stream was cut off.
+ 				yield asChunk({
+-					type: "RUN_FINISHED",
++					type: "RUN_ERROR",
+ 					runId: aguiState.runId,
+-					threadId: aguiState.threadId,
  					model: lastChunkModel,
  					timestamp,
- 					usage: void 0,
+-					usage: void 0,
 -					finishReason: hasEmittedToolCall ? "tool_calls" : "stop"
-+					finishReason: hasEmittedToolCall ? "tool_calls" : "stop",
-+					metadata: { providerStopReason: null }
++					message: "The provider stream ended before a finish reason.",
++					code: "incomplete-stream",
++					error: {
++						message: "The provider stream ended before a finish reason.",
++						code: "incomplete-stream"
++					}
  				});
  			}
  		} catch (error) {
-@@ -415,7 +420,7 @@
+@@ -415,7 +423,7 @@
  	* parses the SSE stream manually, bypassing the SDK's Zod validation which
  	* rejects streaming tool call chunks that omit `name` in argument deltas.
  	*/
@@ -85,7 +102,7 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
  		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
  		const body = this.toWireBody(params);
-@@ -427,11 +432,19 @@
+@@ -427,11 +435,19 @@
  		const response = await fetch(url, {
  			method: "POST",
  			headers,
@@ -107,3 +124,16 @@ diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
  		}
  		if (!response.body) throw new Error("Mistral API returned a response with no body. This may indicate a proxy or runtime that does not support streaming.");
  		const reader = response.body.getReader();
+@@ -453,10 +469,8 @@
+ 					try {
+ 						parsed = JSON.parse(data);
+ 					} catch (e) {
+-						if (e instanceof SyntaxError) {
+-							console.warn(`[mistral] skipped unparseable SSE chunk: ${data.slice(0, 200)}`);
+-							continue;
+-						}
++						// A chunk that does not parse lost part of the answer.
++						if (e instanceof SyntaxError) throw Object.assign(new Error("Mistral stream carried a chunk that is not JSON."), { cause: e });
+ 						throw e;
+ 					}
+ 					if (parsed && typeof parsed === "object" && "error" in parsed && !("choices" in parsed)) {

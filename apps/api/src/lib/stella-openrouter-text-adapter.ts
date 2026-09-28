@@ -5,7 +5,12 @@ import type {
   OpenRouterConfig,
 } from "@tanstack/ai-openrouter";
 
+import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
+
 type OpenRouterModel = Parameters<typeof createOpenRouterText>[0];
+type OpenRouterTextOptions = Parameters<
+  OpenRouterTextAdapter<OpenRouterModel>["chatStream"]
+>[0];
 
 const DATA_URL_PREFIX = "data:";
 
@@ -31,6 +36,21 @@ const documentFilename = (part: ContentPart): string | undefined => {
  * remains on the stable upstream adapter.
  */
 export class StellaOpenRouterTextAdapter extends OpenRouterTextAdapter<OpenRouterModel> {
+  // Some routes treat every declared tool field as one to fill, and write ""
+  // or invented text into an optional one. On the wire an optional field
+  // also admits null, so the model can say "not set"; the stream contract
+  // reads each call against the declared schema, which drops that null.
+  protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    return super.mapOptionsToRequest({
+      ...options,
+      tools: options.tools?.map((tool) =>
+        tool.inputSchema === undefined
+          ? tool
+          : { ...tool, inputSchema: withOptionalsNullable(tool.inputSchema) },
+      ),
+    });
+  }
+
   protected override convertContentPart(part: ContentPart) {
     if (part.type !== "document") {
       return super.convertContentPart(part);
