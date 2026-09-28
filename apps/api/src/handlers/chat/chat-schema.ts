@@ -53,7 +53,7 @@ import type {
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withNullsOmitted } from "@/api/lib/json-value";
@@ -1529,7 +1529,7 @@ const validateToolCallInput = ({
   tool,
 }: {
   part: ChatToolCallPart;
-  tool: ChatToolMap[string];
+  tool: ChatTool;
 }): Result<unknown, HandlerError<400>> => {
   const argumentsResult = parseToolArguments(part.arguments);
   if (Result.isError(argumentsResult)) {
@@ -1573,17 +1573,19 @@ const validateToolCallInput = ({
  * handed that error, so the call is turn data whatever its input: the model
  * may have sent arguments the tool's schema rejects, or named a tool the run
  * does not register, and then gone on to recover. Input the schema accepts is
- * stored canonical, as for any call. Other input is stored as the model sent
- * it: `arguments` verbatim, since every later request replays exactly those
- * to the model, and `input` as their JSON, or left out when they are not
- * JSON. The error output itself must still be well formed.
+ * stored canonical, as for any call. Other input is stored exactly as the
+ * model sent it, since every later request replays it to the model: `input`
+ * holds it only when it is a JSON object whose text is the `arguments`
+ * verbatim, and is left out otherwise (a primitive, other spacing, text that
+ * is not JSON), so the raw `arguments` are what gets stored. The error output
+ * itself must still be well formed.
  */
 const validateErrorToolCallPart = ({
   part,
   tool,
 }: {
   part: ChatToolCallPart;
-  tool: ChatToolMap[string] | undefined;
+  tool: ChatTool | undefined;
 }): Result<ValidatedToolCallPart, HandlerError<400>> => {
   const errorOutputResult = validateToolCallErrorOutput(part);
   if (Result.isError(errorOutputResult)) {
@@ -1592,20 +1594,34 @@ const validateErrorToolCallPart = ({
   const error = errorOutputResult.value;
   const canonicalInput =
     tool === undefined ? undefined : validateToolCallInput({ part, tool });
-  const sentInput =
+  const input =
     canonicalInput !== undefined && Result.isOk(canonicalInput)
-      ? canonicalInput
-      : parseToolArguments(part.arguments);
+      ? { type: "present" as const, value: canonicalInput.value }
+      : verbatimToolInput(part.arguments);
   const { input: _input, output: _output, ...call } = part;
   const candidate: unknown = {
     ...call,
-    ...(Result.isOk(sentInput) ? { input: sentInput.value } : {}),
+    ...(input.type === "present" ? { input: input.value } : {}),
     ...(error === undefined ? {} : { output: { error } }),
   };
   if (!isChatPart(candidate) || candidate.type !== "tool-call") {
     return panic("A failed chat tool call violates the tool-call contract");
   }
   return Result.ok({ type: "error", name: part.name, error, part: candidate });
+};
+
+/** `argumentsText` as an input object, when the object's JSON is exactly
+ *  that text, so storing the object loses nothing of what the model sent. */
+const verbatimToolInput = (
+  argumentsText: string,
+): { type: "absent" } | { type: "present"; value: object } => {
+  const parsed = Result.try((): unknown => parseJsonUnknown(argumentsText));
+  return Result.isOk(parsed) &&
+    typeof parsed.value === "object" &&
+    parsed.value !== null &&
+    JSON.stringify(parsed.value) === argumentsText
+    ? { type: "present", value: parsed.value }
+    : { type: "absent" };
 };
 
 const validateToolCallErrorOutput = (
