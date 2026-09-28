@@ -305,9 +305,14 @@ test(
     await db
       .delete(caseLawDecisions)
       .where(eq(caseLawDecisions.caseNumber, "1 Cdo 1/2020"));
-    expect(
-      refreshCaseLawSitemapShards(refreshDb, { signal: aborted.signal }),
-    ).rejects.toThrow("SchedulerAborted");
+    const failure = await refreshCaseLawSitemapShards(refreshDb, {
+      signal: aborted.signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect(String(failure)).toContain("SchedulerAborted");
     expect(await snapshot()).toEqual(before);
   },
   DB_TEST_TIMEOUT_MS,
@@ -328,41 +333,58 @@ test("every refresh statement is budgeted under the pool's idle timeout", () => 
   expect(sitemapRefreshBudget(0).statementTimeoutMs).toBe(30_000);
 });
 
-test(
-  "each refresh transaction sets its budget before it reads or writes",
-  async () => {
-    const dialect = new PgDialect();
-    const transactions: string[][] = [];
-    const recording = {
-      transaction: async (work: (tx: unknown) => Promise<unknown>) =>
-        await db.transaction(async (tx) => {
-          const sent: string[] = [];
-          transactions.push(sent);
-          return await work(
-            new Proxy(tx, {
-              get: (target, property, receiver) =>
-                property === "execute"
-                  ? async (query: SQL) => {
-                      sent.push(dialect.sqlToQuery(query).sql.trim());
-                      return await target.execute(query);
-                    }
-                  : Reflect.get(target, property, receiver),
-            }),
-          );
-        }),
-    };
-    // SAFETY: forwards every call to the PGlite handle, recording the raw
-    // statements each transaction sends through `execute`.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- recording wrapper around the test handle
-    const recordingDb = recording as unknown as RefreshDb;
+/**
+ * The test handle, with every statement each transaction sends through
+ * `execute` recorded, and `onExecute` called before it runs.
+ */
+const recordingRefreshDb = (
+  onExecute: (statement: string) => void = () => {},
+) => {
+  const dialect = new PgDialect();
+  const transactions: string[][] = [];
+  const recording = {
+    transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+      await db.transaction(async (tx) => {
+        const sent: string[] = [];
+        transactions.push(sent);
+        return await work(
+          new Proxy(tx, {
+            get: (target, property, receiver) =>
+              property === "execute"
+                ? async (query: SQL) => {
+                    const statement = dialect.sqlToQuery(query).sql.trim();
+                    sent.push(statement);
+                    onExecute(statement);
+                    return await target.execute(query);
+                  }
+                : Reflect.get(target, property, receiver),
+          }),
+        );
+      }),
+  };
+  // SAFETY: forwards every call to the PGlite handle, recording the raw
+  // statements each transaction sends through `execute`.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- recording wrapper around the test handle
+  return { db: recording as unknown as RefreshDb, transactions };
+};
 
-    await refreshCaseLawSitemapShards(recordingDb, {
-      pageSize: SMALL_PAGE_SIZE * 10,
+test(
+  "the walk reads one snapshot, and each transaction sets its budget before it reads or writes",
+  async () => {
+    const recorded = recordingRefreshDb();
+
+    const outcome = await refreshCaseLawSitemapShards(recorded.db, {
+      pageSize: SMALL_PAGE_SIZE,
       poolIdleTimeoutS: 20,
     });
 
-    expect(transactions.length).toBeGreaterThan(2);
-    for (const sent of transactions) {
+    // Every page in one read-only snapshot, then the swap.
+    expect(outcome.pages).toBeGreaterThan(2);
+    expect(recorded.transactions).toHaveLength(2);
+    expect(recorded.transactions[0]?.[0]).toBe(
+      "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
+    );
+    for (const sent of recorded.transactions) {
       const budgetAt = sent.indexOf("SET LOCAL statement_timeout = '10000ms'");
       expect(budgetAt).toBeGreaterThanOrEqual(0);
       expect(
@@ -371,6 +393,35 @@ test(
           .every((statement) => statement.startsWith("SET ")),
       ).toBe(true);
     }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a run aborted while it writes the snapshot rolls the write back",
+  async () => {
+    await refreshCaseLawSitemapShards(refreshDb);
+    const before = await snapshot();
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.caseNumber, "2 Cdo 2/2020"));
+    const lease = new AbortController();
+    // The lease is lost after the new snapshot is inserted, before commit.
+    const recorded = recordingRefreshDb((statement) => {
+      if (statement.startsWith("INSERT INTO")) {
+        lease.abort();
+      }
+    });
+
+    const failure = await refreshCaseLawSitemapShards(recorded.db, {
+      signal: lease.signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    expect(String(failure)).toContain("SchedulerAborted");
+    expect(await snapshot()).toEqual(before);
   },
   DB_TEST_TIMEOUT_MS,
 );

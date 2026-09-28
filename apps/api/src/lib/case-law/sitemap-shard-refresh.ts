@@ -41,9 +41,6 @@ export const SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
  */
 export const SITEMAP_REFRESH_PAGE_SIZE = 20_000;
 
-/** Rows per INSERT when the new snapshot is written. */
-const SNAPSHOT_INSERT_CHUNK = 1000;
-
 /** Both budgets in milliseconds. */
 export type SitemapRefreshBudget = {
   lockTimeoutMs: number;
@@ -240,19 +237,15 @@ type MonthCounts = Map<string, BucketCount>;
 /** `country|year|month` to its buckets' counts. */
 type CountryMonths = Map<string, MonthCounts>;
 
-type PageOutcome = { cursor: SitemapRefreshCursor | null };
-
-const readPage = async (
-  db: RefreshDb,
-  budget: SitemapRefreshBudget,
+/**
+ * Add one page's counts to the running totals and answer where the next page
+ * resumes, or null once the phase is walked to its end.
+ */
+const accumulatePage = (
   months: CountryMonths,
-  page: Parameters<typeof sitemapRefreshPageSql>[0],
-): Promise<PageOutcome> => {
-  const rows = await db.transaction(async (tx) => {
-    await tx.execute(sql`SET TRANSACTION READ ONLY`);
-    await setTransactionBudget(tx, budget);
-    return executedRows(await tx.execute(sitemapRefreshPageSql(page)));
-  });
+  country: string,
+  rows: unknown[],
+): SitemapRefreshCursor | null => {
   let cursor: SitemapRefreshCursor | null = null;
   for (const raw of rows) {
     const row = v.parse(pageRowSchema, raw);
@@ -271,7 +264,7 @@ const readPage = async (
     ) {
       continue;
     }
-    const monthKey = `${page.country}|${row.year}|${row.month}`;
+    const monthKey = `${country}|${row.year}|${row.month}`;
     const buckets = months.get(monthKey) ?? new Map<string, BucketCount>();
     months.set(monthKey, buckets);
     const counted = buckets.get(row.bucket);
@@ -283,8 +276,54 @@ const readPage = async (
       total: (counted?.total ?? 0) + row.total,
     });
   }
-  return { cursor };
+  return cursor;
 };
+
+const throwIfAborted = (signal: AbortSignal | undefined): void => {
+  if (signal?.aborted) {
+    panic("SchedulerAborted");
+  }
+};
+
+/**
+ * Walk every public country's sitemap index entries, a page per statement,
+ * inside one read-only REPEATABLE READ transaction: each statement is short,
+ * and every page reads the same snapshot, so a decision updated or re-dated
+ * during the walk cannot move past the cursor and be counted twice or skipped.
+ */
+const countSitemapMonths = async (
+  db: RefreshDb,
+  budget: SitemapRefreshBudget,
+  pageSize: number,
+  signal: AbortSignal | undefined,
+): Promise<{ months: CountryMonths; pages: number }> =>
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
+    );
+    await setTransactionBudget(tx, budget);
+    const months: CountryMonths = new Map();
+    let pages = 0;
+    for (const country of PUBLIC_CASE_LAW_COUNTRIES) {
+      for (const phase of ["dated", "undated"] as const) {
+        let cursor: SitemapRefreshCursor | null = null;
+        do {
+          throwIfAborted(signal);
+          const page = sitemapRefreshPageSql({
+            country,
+            cursor,
+            pageSize,
+            phase,
+          });
+          // db-await-in-loop: a keyset walk; each page resumes after the previous page's last index entry
+          const rows = executedRows(await tx.execute(page));
+          cursor = accumulatePage(months, country, rows);
+          pages += 1;
+        } while (cursor !== null);
+      }
+    }
+    return { months, pages };
+  });
 
 type ShardRow = typeof caseLawSitemapShards.$inferInsert;
 
@@ -336,6 +375,7 @@ const swapSnapshot = async (
   db: RefreshDb,
   { statementTimeoutMs }: SitemapRefreshBudget,
   rows: ShardRow[],
+  signal: AbortSignal | undefined,
 ): Promise<void> => {
   await db.transaction(async (tx) => {
     // The lock wait covers an overlapping refresh's swap, itself bounded by
@@ -348,12 +388,36 @@ const swapSnapshot = async (
       sql`LOCK TABLE ${caseLawSitemapShards} IN SHARE ROW EXCLUSIVE MODE`,
     );
     await tx.delete(caseLawSitemapShards).where(sql`true`);
-    for (let start = 0; start < rows.length; start += SNAPSHOT_INSERT_CHUNK) {
-      // db-await-in-loop: bounded chunks of one snapshot, written in order inside its swap transaction
-      await tx
-        .insert(caseLawSitemapShards)
-        .values(rows.slice(start, start + SNAPSHOT_INSERT_CHUNK));
-    }
+    // One statement for the whole snapshot, sent as one JSON document: its
+    // size is bounded by the index entry limit, where a VALUES list would be
+    // bounded by the bind-parameter limit. `::text::jsonb` so the driver binds
+    // text rather than encoding the JSON string a second time.
+    const snapshot = JSON.stringify(
+      rows.map((row) => ({
+        bucket: row.bucket,
+        country: row.country,
+        last_modified_at: row.lastModifiedAt.toISOString(),
+        month: row.month,
+        total: row.total,
+        year: row.year,
+      })),
+    );
+    await tx.execute(sql`
+      INSERT INTO ${caseLawSitemapShards}
+        (country, year, month, bucket, total, last_modified_at)
+      SELECT country, year, month, bucket, total, last_modified_at
+      FROM jsonb_to_recordset(${snapshot}::text::jsonb) AS shard(
+        country varchar,
+        year varchar,
+        month varchar,
+        bucket varchar,
+        total integer,
+        last_modified_at timestamptz
+      )
+    `);
+    // A run whose lease was lost or whose deadline passed while it wrote
+    // rolls back here rather than replacing a newer run's snapshot.
+    throwIfAborted(signal);
   });
 };
 
@@ -361,13 +425,11 @@ const swapSnapshot = async (
  * Recount the public sitemap shards and replace the snapshot the public index
  * reads.
  *
- * The count is a walk of the sitemap index in pages, each its own short,
- * read-only statement under its own timeout, so no statement's work grows
- * with the corpus. The counts accumulate here and are written in one swap at
- * the end: an aborted or failed walk leaves the previous snapshot in place.
- * Pages are separate snapshots, so a decision written during the walk may be
- * counted in either state; the snapshot is approximate by as much as it is
- * already stale between refreshes, which the split threshold leaves room for.
+ * The count is a walk of the sitemap index in pages, each its own short
+ * statement under its own timeout, so no statement's work grows with the
+ * corpus, and all of them read one snapshot. The counts accumulate here and
+ * are written in one swap at the end: an aborted or failed walk leaves the
+ * previous snapshot in place.
  *
  * The index read refuses a snapshot it cannot serve, so an over-capacity
  * count is logged here rather than withheld.
@@ -389,29 +451,16 @@ export const refreshCaseLawSitemapShards = async (
     return panic("Sitemap refresh page size must be a positive integer");
   }
   const budget = sitemapRefreshBudget(poolIdleTimeoutS);
-  const months: CountryMonths = new Map();
-  let pages = 0;
-  for (const country of PUBLIC_CASE_LAW_COUNTRIES) {
-    for (const phase of ["dated", "undated"] as const) {
-      let cursor: SitemapRefreshCursor | null = null;
-      do {
-        if (signal?.aborted) {
-          panic("SchedulerAborted");
-        }
-        // db-await-in-loop: each page resumes after the previous page's last index entry
-        ({ cursor } = await readPage(db, budget, months, {
-          country,
-          cursor,
-          pageSize,
-          phase,
-        }));
-        pages += 1;
-      } while (cursor !== null);
-    }
-  }
+  const { months, pages } = await countSitemapMonths(
+    db,
+    budget,
+    pageSize,
+    signal,
+  );
 
+  throwIfAborted(signal);
   const rows = shardRows(months);
-  await swapSnapshot(db, budget, rows);
+  await swapSnapshot(db, budget, rows, signal);
 
   let largestShard = 0;
   for (const row of rows) {
