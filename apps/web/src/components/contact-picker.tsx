@@ -2,7 +2,6 @@ import { useState } from "react";
 import type * as React from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -16,6 +15,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "@stll/ui/icons";
 
 import { contactPickerSearchOptions } from "@/components/contact-picker-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

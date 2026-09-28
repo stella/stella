@@ -1,5 +1,4 @@
-import { SearchIcon } from "lucide-react";
-
+import { SearchIcon } from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,

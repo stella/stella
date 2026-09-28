@@ -1,7 +1,6 @@
 import type { PropsWithChildren } from "react";
 
-import { UploadIcon } from "lucide-react";
-
+import { UploadIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";

@@ -13,16 +13,20 @@
  * the whole module graph.
  */
 
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
+
 import { env } from "@/api/env";
+import { runtimeMode } from "@/api/runtime-mode";
 
 type FeatureFlagSource = {
-  isDev: boolean;
+  runtimeMode: RuntimeMode;
   flags: Readonly<Record<string, unknown>>;
 };
 
 /**
  * Pure core (unit-testable without env mocking): enabled when the entry
- * carries no flag, the deployment is dev, or the named flag is exactly `true`.
+ * carries no flag, local development access is open, or the named flag is
+ * exactly `true`.
  * The entry's `feature` string is untrusted generated JSON, so anything that
  * is not a `FEATURE_*` key holding boolean true fails closed — a stale or
  * mistyped flag in the artifact can never silently un-gate a capability.
@@ -31,7 +35,7 @@ export const featureEnabledIn = (
   feature: string | undefined,
   source: FeatureFlagSource,
 ): boolean => {
-  if (feature === undefined || source.isDev) {
+  if (feature === undefined || source.runtimeMode.mode === RUNTIME_MODE.open) {
     return true;
   }
   return feature.startsWith("FEATURE_") && source.flags[feature] === true;
@@ -40,4 +44,5 @@ export const featureEnabledIn = (
 /** The runtime gate, bound to the deployment env. */
 export const isCapabilityFeatureEnabled = (
   feature: string | undefined,
-): boolean => featureEnabledIn(feature, { isDev: env.isDev, flags: env });
+): boolean =>
+  featureEnabledIn(feature, { runtimeMode: runtimeMode(), flags: env });

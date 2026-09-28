@@ -17,6 +17,7 @@ import {
   createChatAttachmentPart,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -742,6 +743,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
         getWorkspaceAccess: async () => await Promise.resolve(null),
         memberRole: { role: "owner" },
         orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         params: { threadId: newThreadId },
         promptCachingEnabled: false,
         query: {},
@@ -807,6 +809,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
       getWorkspaceAccess: async () => await Promise.resolve(null),
       memberRole: { role: "owner" },
       orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       params: { threadId: newThreadId },
       promptCachingEnabled: false,
       query: {},
@@ -830,6 +833,7 @@ test("a thread that was never forked reports no provenance", async () => {
       getWorkspaceAccess: async () => await Promise.resolve(null),
       memberRole: { role: "owner" },
       orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       params: { threadId: source.threadId },
       promptCachingEnabled: false,
       query: {},

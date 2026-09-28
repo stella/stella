@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
-import { analyzeSqlPerf } from "./sql-perf-detector";
+import { analyzeSqlPerf, reportSqlPerfOrColumns } from "./sql-perf-detector";
 import { isSqlPerfSource, SQL_PERF_LINT_FILES } from "./sql-perf-scope.ts";
 
 export const SQL_PERF_BASELINE_PATH = BASELINE_PATHS.sqlPerf;
@@ -28,7 +28,9 @@ export const countSqlPerfHits = (source: string, filename: string): number => {
       .join("\n");
     return panic(errors);
   }
-  return result.hits.length;
+  // The OR/subquery ban starts at zero; existing per-file allowances cover
+  // only the kinds that were present when the baseline was introduced.
+  return result.hits.filter((hit) => hit.kind !== "or-subquery").length;
 };
 
 export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
@@ -50,6 +52,22 @@ export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
       left.localeCompare(right),
     ),
   );
+};
+
+export const scanSqlPerfOrColumns = (root: string): string[] => {
+  const sites: string[] = [];
+  for (const glob of SOURCE_GLOBS) {
+    for (const file of new Bun.Glob(glob).scanSync(root)) {
+      if (!isSqlPerfSource(file)) {
+        continue;
+      }
+      const source = readFileSync(path.join(root, file), "utf-8");
+      for (const { line, column } of reportSqlPerfOrColumns(source, file)) {
+        sites.push(`${file}:${line}:${column}`);
+      }
+    }
+  }
+  return sites.toSorted();
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -226,6 +244,14 @@ const writeBaseline = (root: string, counts: SqlPerfCounts): void => {
 const main = (): number => {
   const root = path.resolve(import.meta.dir, "..");
   const args = process.argv.slice(2);
+  if (args[0] === "--report" && args[1] === "or-columns" && args.length === 2) {
+    const sites = scanSqlPerfOrColumns(root);
+    for (const site of sites) {
+      console.log(site);
+    }
+    console.log(`OR across columns (report only): ${sites.length} sites.`);
+    return 0;
+  }
   const mode = args.includes("--write") ? "write" : "check";
   const current = scanSqlPerfCounts(root);
   const baselineExists = existsSync(path.join(root, SQL_PERF_BASELINE_PATH));

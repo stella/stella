@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { PanelRightIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";

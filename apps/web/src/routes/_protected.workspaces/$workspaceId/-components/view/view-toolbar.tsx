@@ -4,6 +4,11 @@ import { Fragment, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import type { PlaybookRunProjection } from "@stll/api-contract";
+import { fetchWithTimeout } from "@stll/fetch";
+import { Button } from "@stll/ui/button";
 import {
   AlignJustifyIcon,
   CalendarIcon,
@@ -15,14 +20,9 @@ import {
   Rows3Icon,
   SparklesIcon,
   UserIcon,
-  WandSparklesIcon,
+  AiActionIcon,
   WrapTextIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type { PlaybookRunProjection } from "@stll/api-contract";
-import { fetchWithTimeout } from "@stll/fetch";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuGroup,
@@ -725,7 +725,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
             detached(handleAutoRun(), "view-toolbar.auto-run");
           }}
         >
-          <WandSparklesIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
           <span className="flex flex-col">
             <span>{t("workspaces.playbooks.autoRun")}</span>
             <span className="text-muted-foreground text-xs">

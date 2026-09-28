@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { CheckIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";

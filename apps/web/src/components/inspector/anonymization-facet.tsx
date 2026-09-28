@@ -16,15 +16,6 @@ import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import {
-  ChevronDown,
-  ChevronRight,
-  Download,
-  ExternalLinkIcon,
-  EyeOff,
-  RotateCcw,
-  Trash2,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
@@ -37,6 +28,15 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import {
+  ChevronDownIcon as ChevronDown,
+  ChevronRightIcon as ChevronRight,
+  DownloadIcon as Download,
+  ExternalLinkIcon,
+  EyeOffIcon as EyeOff,
+  RotateCcwIcon as RotateCcw,
+  Trash2Icon as Trash2,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Menu,

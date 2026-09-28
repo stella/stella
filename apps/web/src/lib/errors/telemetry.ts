@@ -9,5 +9,5 @@ export class ClientTelemetryError extends TaggedError("ClientTelemetryError")<{
 }> {}
 
 export const logDevError = createDevErrorLogger({
-  isDev: import.meta.env.DEV,
+  echoErrors: import.meta.env.DEV,
 });

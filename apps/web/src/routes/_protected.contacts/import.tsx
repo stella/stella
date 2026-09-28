@@ -3,15 +3,6 @@ import type { RefObject } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import {
-  AlertTriangleIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  CheckCircle2Icon,
-  FileSpreadsheetIcon,
-  Loader2Icon,
-  UploadIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -33,6 +24,15 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckCircle2Icon,
+  FileSpreadsheetIcon,
+  Loader2Icon,
+  UploadIcon,
+} from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

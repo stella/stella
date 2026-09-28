@@ -7,7 +7,11 @@
  * rendering as a blank in a cell corner or a finding card.
  */
 
-import type { LucideIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import { REVIEW_FLAGS } from "@stll/api-contract";
+import type { ReviewFlag } from "@stll/api-contract";
+import type { LucideIcon } from "@stll/ui/icons";
 import {
   CheckCircle2Icon,
   CheckIcon,
@@ -15,11 +19,7 @@ import {
   MessageSquareWarningIcon,
   ShieldAlertIcon,
   StarIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { REVIEW_FLAGS } from "@stll/api-contract";
-import type { ReviewFlag } from "@stll/api-contract";
+} from "@stll/ui/icons";
 import { MenuItem } from "@stll/ui/menu";
 
 import type { TranslationKey } from "@/i18n/types";

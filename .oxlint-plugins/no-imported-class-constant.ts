@@ -19,6 +19,8 @@
 //   `className` on `div`, `span`, and other intrinsic elements;
 //   `className` on a component from anywhere but `@stll/ui` and its subpaths,
 //   which a neighbouring package such as `@stll/ui-kit` is not;
+//   `className` on an icon from `@stll/ui/icons`, a plain svg the caller
+//   styles, not a design-system component;
 //   `className={className}` forwarded from props, which is a parameter, not
 //   an import;
 //   `packages/ui/src/**`, where the design system composes its own constants.
@@ -42,6 +44,7 @@ import type { AstNode } from "./utils.ts";
 import { isAstNode, isIdentifier, isStringLiteral, jsxName } from "./utils.ts";
 
 const UI_MODULE = "@stll/ui";
+const ICON_MODULE = "@stll/ui/icons";
 
 /**
  * The design-system package itself or one of its subpaths. A bare prefix test
@@ -49,7 +52,8 @@ const UI_MODULE = "@stll/ui";
  * characters, such as `@stll/ui-kit/button`.
  */
 const isUiModule = (source: string): boolean =>
-  source === UI_MODULE || source.startsWith(`${UI_MODULE}/`);
+  source !== ICON_MODULE &&
+  (source === UI_MODULE || source.startsWith(`${UI_MODULE}/`));
 const CLASS_NAME_ATTRIBUTE = "className";
 const CLASS_COMPOSERS = new Set(["cn", "clsx"]);
 

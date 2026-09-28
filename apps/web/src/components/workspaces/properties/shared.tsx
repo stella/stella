@@ -1,7 +1,7 @@
-import { SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { SquareMinusIcon } from "@stll/ui/icons";
 import { PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 

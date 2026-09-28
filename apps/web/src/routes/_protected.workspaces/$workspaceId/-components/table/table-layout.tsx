@@ -5,10 +5,10 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import { SearchXIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { VIEW_SORTS_MAX } from "@stll/api-contract";
+import { SearchXIcon, TableIcon } from "@stll/ui/icons";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { toTableEntities } from "@/components/workspaces/entity-utils";

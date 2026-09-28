@@ -11,8 +11,8 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { flexRender } from "@tanstack/react-table";
-import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
+import { CheckIcon, GripVerticalIcon, MinusIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { SelectAllState } from "@/components/workspaces/table/select-all.logic";

@@ -19,7 +19,6 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
-import { ArrowDownIcon, ArrowUpIcon, EyeOffIcon, FileIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -32,6 +31,12 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  EyeOffIcon,
+  FileIcon,
+} from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";

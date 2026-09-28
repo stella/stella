@@ -5,7 +5,6 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
@@ -22,6 +21,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
+import { PencilIcon, PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";

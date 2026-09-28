@@ -62,7 +62,7 @@ export const fillPreviewLogic = async ({
   templateId,
   body: { values: parsed },
 }: FillPreviewLogicProps): Promise<
-  ResultType<FillPreviewResult, HandlerError<400 | 402 | 404 | 500>>
+  ResultType<FillPreviewResult, HandlerError<400 | 402 | 403 | 404 | 500>>
 > => {
   if (Object.values(parsed).some(containsNull)) {
     return Result.err(

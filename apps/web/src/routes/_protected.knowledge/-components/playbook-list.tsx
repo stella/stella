@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   ClipboardCheckIcon,
   Clock3Icon,
   PlusIcon,
   RotateCcwIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";

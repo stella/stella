@@ -401,12 +401,16 @@ const executeRun = async (
     return "extraction_failed";
   }
 
-  const config = await Result.tryPromise({
+  const configResult = await Result.tryPromise({
     try: async () => {
-      const { orgAIConfig, promptCachingEnabled } = await actor.scopedDb(
+      const settings = await actor.scopedDb(
         async (tx) => await loadOrgAISettings(tx, actor.organizationId),
       );
-      return {
+      if (Result.isError(settings)) {
+        return Result.err(settings.error);
+      }
+      const { orgAIConfig, promptCachingEnabled } = settings.value;
+      return Result.ok({
         orgAIConfig,
         model: getTanStackTextModelInfoForRole(
           VERIFICATION_MODEL_ROLE,
@@ -414,10 +418,11 @@ const executeRun = async (
           { organizationId: actor.organizationId },
         ),
         promptCachingEnabled,
-      };
+      });
     },
     catch: (cause) => cause,
   });
+  const config = Result.flatten(configResult);
   if (Result.isError(config)) {
     observeFailure(config.error, {
       sink: CONFIG_FAILED_SINK,

@@ -16,6 +16,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { createPublishAnnouncementEndpoint } from "@/api/handlers/notifications/announce";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -190,6 +191,7 @@ describe("announcement endpoint", () => {
         getWorkspaceAccess: async () => null,
         memberRole: { role: "member" },
         orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         promptCachingEnabled: false,
         recordAuditEvent,
         request: new Request("https://example.test/v1/notifications/announce"),

@@ -12,7 +12,6 @@
 import { useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
-import { CheckCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -25,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { CheckCheckIcon } from "@stll/ui/icons";
 
 import type { ReviewChange } from "@/components/ai-suggestions/review-bar.logic";
 import {

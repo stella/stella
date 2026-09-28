@@ -1,11 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 

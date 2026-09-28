@@ -8,6 +8,7 @@ import {
   workObligations,
   workspaceMembers,
 } from "@/api/db/schema";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -95,6 +96,7 @@ describe("updateWorkObligation", () => {
         createAuditRecorder: () => recordAuditEvent,
         memberRole: { role: "owner" },
         orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
@@ -222,6 +224,7 @@ describe("updateWorkObligation", () => {
         createAuditRecorder: () => recordAuditEvent,
         memberRole: { role: "owner" },
         orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
@@ -302,6 +305,7 @@ describe("updateWorkObligation", () => {
         createAuditRecorder: () => recordAuditEvent,
         memberRole: { role: "member" },
         orgAIConfig: null,
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,

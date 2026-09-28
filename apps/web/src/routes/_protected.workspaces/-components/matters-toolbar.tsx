@@ -1,5 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/shallow";
+
+import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
+import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -8,12 +13,7 @@ import {
   ListIcon,
   PlusIcon,
   SlidersHorizontalIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/shallow";
-
-import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Menu,

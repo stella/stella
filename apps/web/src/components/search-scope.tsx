@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-import { CheckIcon, ListFilterIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { CheckIcon, ListFilterIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 

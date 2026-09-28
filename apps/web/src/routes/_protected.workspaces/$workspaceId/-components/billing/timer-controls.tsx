@@ -1,11 +1,11 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { PlayIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { PlayIcon, SquareIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";

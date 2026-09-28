@@ -1,6 +1,6 @@
-import { CheckCircle2Icon, CircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { CheckCircle2Icon, CircleIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";

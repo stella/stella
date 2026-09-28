@@ -1,3 +1,4 @@
 import { env } from "@/api/env";
 
-export const isMockAI = () => env.USE_MOCK_AI;
+// "force" is on too; only `false` turns the mock off.
+export const isMockAI = (): boolean => env.USE_MOCK_AI !== false;

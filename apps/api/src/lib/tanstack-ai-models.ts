@@ -48,9 +48,8 @@ import {
   type OrgAIConfig,
   type OrgAIProviderConfig,
 } from "@/api/lib/ai-config";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -335,7 +334,8 @@ export const registerTanStackMockTextAdapterFactory = (
  */
 const activeMockTextAdapterFactory = ():
   | TanStackTextAdapterFactory
-  | undefined => (env.USE_MOCK_AI ? mockTextAdapterFactory : undefined);
+  | undefined =>
+  env.USE_MOCK_AI === false ? undefined : mockTextAdapterFactory;
 
 /**
  * Whether requests on the deployment's own provider are served by the mock
@@ -1010,11 +1010,12 @@ export const requireTanStackAIAvailableForRole = ({
   orgConfig: OrgAIConfig | null;
   role: ModelRole;
 }): Result<void, HandlerError> => {
-  // A stored config that did not decrypt is not the same as no config: the
-  // null below would otherwise resolve to the instance provider, running an
-  // org that configured its own key on the shared one and metering it there.
-  if (configStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+  // A stored config that did not decrypt, or an org barred from the instance
+  // provider, is not the same as no config: the null below would otherwise
+  // resolve to the instance provider and meter the work there.
+  const statusError = orgAIConfigStatusError(configStatus);
+  if (statusError) {
+    return Result.err(statusError);
   }
 
   if (!orgConfig) {

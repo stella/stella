@@ -145,6 +145,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
     "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts",
+    "forbid-process-env-outside-env-ts/runtime-mode-keys",
   ]),
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
@@ -930,6 +931,7 @@ export default defineConfig({
     "no-nanoid/no-nanoid": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
+    "no-direct-lucide-import/no-direct-lucide-import": "error",
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
     "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
     "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
@@ -1155,6 +1157,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
+    "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
@@ -3366,6 +3369,12 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/server.ts",
+              // The one reader of NODE_ENV and the local development opt-in.
+              "packages/runtime-mode/src/index.ts",
+              // The web server entrypoint reads its listen address from Bun's
+              // environment before any app module loads; the web app's env
+              // contract is the Vite build, not this process.
+              "apps/web/src/runtime.ts",
               "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
@@ -3390,6 +3399,9 @@ export default defineConfig({
               // e2e infra has no app env module to route through.
               "apps/web/e2e/agent/drive.ts",
               "apps/web/e2e/helpers/api.ts",
+              // Passes its own environment on to the correspondence seed,
+              // adding the local development opt-in seeds require.
+              "apps/web/e2e/helpers/correspondence.ts",
               // Reads E2E_API_URL (same contract as helpers/api.ts) and the
               // E2E_NETWORK_BASELINE write/rewrite mode switch; e2e infra has
               // no app env module to route through.
@@ -3408,6 +3420,28 @@ export default defineConfig({
               // to tune fast-check at assert time. Never imported by runtime
               // code, so there is no app env module to route through.
               "packages/property-testing/src/index.ts",
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // NODE_ENV and the local development opt-in are read by the runtime
+      // mode owner alone; everything else consumes the resolved mode.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
+      ],
+      rules: {
+        "forbid-process-env-outside-env-ts/runtime-mode-keys": [
+          "error",
+          {
+            allowedFiles: [
+              // The API test and tooling harness opts its processes in.
+              "apps/api/src/tests/setup-env.ts",
+              // The environment doctor picks which mode's env files to layer.
+              "scripts/env-tool.ts",
             ],
           },
         ],

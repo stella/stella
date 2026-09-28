@@ -12,7 +12,6 @@ import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { BookOpenCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -27,6 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { BookOpenCheckIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import {

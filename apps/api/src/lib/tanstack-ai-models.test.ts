@@ -13,6 +13,7 @@ import {
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
@@ -630,19 +631,32 @@ describe("TanStack text model resolution", () => {
     }
   });
 
-  test("an unreadable stored organization config is not treated as absent", () => {
-    // A stored config that failed to decrypt must not fall back to the
-    // shared instance provider, which would route the call somewhere the
-    // organization never configured.
-    const unreadable = requireTanStackAIAvailableForRole({
-      configStatus: ORG_AI_CONFIG_STATUS.unreadable,
-      orgConfig: null,
-      role: "chat",
-    });
+  test("a null organization config reaches the instance provider only with an ok status", () => {
+    // A stored config that failed to decrypt, or an organization barred from
+    // the instance provider, must not fall back to the shared instance
+    // provider, which would route the call somewhere the organization never
+    // configured.
+    const refusalStatus = {
+      ok: null,
+      unreadable: 503,
+      own_key_required: 403,
+    } as const satisfies Record<OrgAIConfigStatus, number | null>;
 
-    expect(unreadable.isErr()).toBe(true);
-    if (unreadable.isErr()) {
-      expect(unreadable.error.status).toBe(503);
+    for (const configStatus of Object.values(ORG_AI_CONFIG_STATUS)) {
+      const status = refusalStatus[configStatus];
+      if (status === null) {
+        continue;
+      }
+      const refused = requireTanStackAIAvailableForRole({
+        configStatus,
+        orgConfig: null,
+        role: "chat",
+      });
+
+      expect(refused.isErr()).toBe(true);
+      if (refused.isErr()) {
+        expect(refused.error.status).toBe(status);
+      }
     }
   });
 

@@ -6,9 +6,9 @@ import type { CSSProperties } from "react";
 import { panic } from "better-result";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
-import { PanelLeftIcon } from "lucide-react";
 
 import { useIsMobile } from "../hooks/use-mobile";
+import { PanelLeftIcon } from "../icons";
 import { Slot } from "../lib/slot";
 import { cn } from "../lib/utils";
 import { Button } from "./button";

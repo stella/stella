@@ -3,12 +3,17 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  legislationDocuments,
+  legislationSources,
+  statuteSitemapShards,
+} from "@/api/db/schema";
 import {
   listStatuteSitemapShardsHandler,
   listStatuteSitemapStatutesHandler,
 } from "@/api/handlers/legislation/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
+import { refreshStatuteSitemapShards } from "@/api/lib/legal-search/statute-sitemap-shard-refresh";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -23,7 +28,9 @@ import {
 // a source cleared for redistribution) may appear at all.
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
+let db: ReturnType<typeof drizzle>;
 let legislationDb: LegislationReadDb;
+let refreshDb: Parameters<typeof refreshStatuteSitemapShards>[0];
 
 const openSourceId = createSafeId<"legislationSource">();
 const closedSourceId = createSafeId<"legislationSource">();
@@ -55,7 +62,11 @@ const listStatutes = async (country: string, bucket?: string) => {
 beforeAll(
   async () => {
     client = await createTestPglite();
-    const db = drizzle({ client });
+    db = drizzle({ client });
+    // SAFETY: the embedded database implements the root handle's select and
+    // transaction surface used by the refresh.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite test handle stands in for the root pool
+    refreshDb = db as unknown as typeof refreshDb;
     await db.execute(sql.raw("SET TIME ZONE 'UTC'"));
 
     await db.insert(legislationSources).values([
@@ -238,11 +249,33 @@ test("the buckets partition a jurisdiction's Works exactly once", async () => {
 });
 
 test("the shard index lists one all-bucket shard per jurisdiction", async () => {
+  expect(await listStatuteSitemapShardsHandler(legislationDb)).toMatchObject({
+    items: [],
+  });
+  expect(await refreshStatuteSitemapShards(refreshDb)).toMatchObject({
+    shards: 1,
+  });
   const shards = await listStatuteSitemapShardsHandler(legislationDb);
   if (!("items" in shards)) {
     panic("Expected a statute sitemap shard index.");
   }
 
+  expect(shards.items).toEqual([
+    { bucket: "all", country: "cze", lastmod: "2026-03-04" },
+  ]);
+});
+
+test("the index only lists currently published jurisdictions", async () => {
+  await db.insert(statuteSitemapShards).values({
+    country: "SVK",
+    bucket: "all",
+    total: 1,
+    lastmod: "2026-01-15",
+  });
+  const shards = await listStatuteSitemapShardsHandler(legislationDb);
+  if (!("items" in shards)) {
+    panic("Expected a statute sitemap shard index.");
+  }
   expect(shards.items).toEqual([
     { bucket: "all", country: "cze", lastmod: "2026-03-04" },
   ]);

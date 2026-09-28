@@ -1,5 +1,10 @@
 import { panic, TaggedError } from "better-result";
 
+import {
+  providerWireFormatOf,
+  signedGeminiCallsOf,
+} from "@/api/tests/helpers/provider-request-transcript";
+import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import type {
   AwsEventStreamMessage,
   ProviderWireCassette,
@@ -350,6 +355,9 @@ export const installProviderWireReplay = () => {
   let options: ServeOptions = {};
   let unexpected: string[] = [];
   let requests: ReplayedRequest[] = [];
+  const transcripts: ProviderRequest[] = [];
+  // The signed calls the conversation's served answers made so far.
+  const signedCalls = new Map<string, string>();
 
   const replayFetch = async (
     input: string | URL | Request,
@@ -361,6 +369,20 @@ export const installProviderWireReplay = () => {
     );
     const path = cassetteRequestPath(url);
     const requestModel = requestModelOf(url, bodyText);
+    const format = providerWireFormatOf(url);
+    if (format !== null) {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(bodyText);
+      } catch {
+        // Unreadable: the transcript check reports it.
+      }
+      transcripts.push(
+        format === "gemini"
+          ? { body, format, signedCalls: new Map(signedCalls) }
+          : { body, format },
+      );
+    }
     const refuse = (reason: string): never => {
       unexpected.push(`${method} ${url.host}${path}: ${reason}`);
       requests.push({
@@ -424,6 +446,12 @@ export const installProviderWireReplay = () => {
       cursor += 1;
     }
     current.entry.served += 1;
+    const { body: answer } = current.entry.exchange.response;
+    if (format === "gemini" && answer.encoding === "text") {
+      for (const [id, signature] of signedGeminiCallsOf(answer.text)) {
+        signedCalls.set(id, signature);
+      }
+    }
     requests.push({
       body: bodyText,
       exchange: current.index,
@@ -472,6 +500,9 @@ export const installProviderWireReplay = () => {
     },
     /** Every request since the last `takeFindings`. */
     requests: (): readonly ReplayedRequest[] => requests,
+    /** The transcript-bearing requests since the last call, as sent,
+     *  cleared on read. */
+    takeRequests: (): ProviderRequest[] => transcripts.splice(0),
     /** Findings since the last call, cleared on read. */
     takeFindings: (): ProviderWireReplayFindings => {
       const findings = {

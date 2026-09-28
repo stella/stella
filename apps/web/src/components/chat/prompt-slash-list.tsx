@@ -4,6 +4,7 @@ import type { Ref } from "react";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { useTranslations } from "use-intl";
 
+import { CommandIcon, SkillIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
@@ -43,6 +44,16 @@ const getItemName = (item: SlashItem): string => {
     return item.skill.name;
   }
   return item.command.name;
+};
+
+// Each row carries the glyph of the chip it inserts, so a skill reads the same
+// in this menu, in the composer and in the sent message.
+const SlashItemIcon = ({ item }: { item: SlashItem }) => {
+  const className = "text-muted-foreground mt-0.5 size-3.5 shrink-0";
+  if (item.kind === "command") {
+    return <CommandIcon aria-hidden="true" className={className} />;
+  }
+  return <SkillIcon className={className} />;
 };
 
 type PromptSlashListHandle = ReturnType<
@@ -179,7 +190,7 @@ export const PromptSlashList = ({
                 return (
                   <button
                     className={cn(
-                      "block w-full rounded-sm px-2 py-1.5 text-start",
+                      "flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-start",
                       active
                         ? "bg-accent text-accent-foreground"
                         : "hover:bg-accent/50",
@@ -195,12 +206,15 @@ export const PromptSlashList = ({
                     onMouseEnter={() => setSelectedIndex(index)}
                     type="button"
                   >
-                    <p className="text-foreground text-xs font-medium">
-                      {getItemName(item)}
-                    </p>
-                    <p className="text-muted-foreground text-2xs line-clamp-2 leading-snug">
-                      {getItemSecondary(item)}
-                    </p>
+                    <SlashItemIcon item={item} />
+                    <span className="min-w-0 flex-1">
+                      <span className="text-foreground block text-xs font-medium">
+                        {getItemName(item)}
+                      </span>
+                      <span className="text-muted-foreground text-2xs line-clamp-2 leading-snug">
+                        {getItemSecondary(item)}
+                      </span>
+                    </span>
                   </button>
                 );
               })}

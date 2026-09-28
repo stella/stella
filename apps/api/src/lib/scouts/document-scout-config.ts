@@ -1,9 +1,4 @@
-type DocumentScoutEnvironment = {
-  FEATURE_INBOX_DOCUMENT_SCOUTS: boolean;
-  isDev: boolean;
-};
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
-export const documentScoutsEnabled = ({
-  FEATURE_INBOX_DOCUMENT_SCOUTS,
-  isDev,
-}: DocumentScoutEnvironment): boolean => isDev || FEATURE_INBOX_DOCUMENT_SCOUTS;
+export const documentScoutsEnabled = (featureEnabled: boolean): boolean =>
+  isLocalDevOpen() || featureEnabled;

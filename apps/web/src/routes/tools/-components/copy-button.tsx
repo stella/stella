@@ -1,11 +1,11 @@
 import { useState } from "react";
 
 import { Result } from "better-result";
-import { CheckIcon, CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
+import { CheckIcon, CopyIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";

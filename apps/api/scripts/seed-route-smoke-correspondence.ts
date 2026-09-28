@@ -11,12 +11,11 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { DEFAULT_ORG_ID } from "./seed-utils";
 
-if (process.env.NODE_ENV === "production") {
-  panic("Correspondence route-smoke fixtures cannot be seeded in production");
-}
+requireLocalDevOpen("Seeding");
 
 const [workspaceValue, correspondenceValue, subject] = v.parse(
   v.tuple([

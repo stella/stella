@@ -13,6 +13,7 @@ import {
   createDocumentCompareHandler,
   mapCompareDocxError,
 } from "@/api/handlers/documents/compare";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { DocumentSource } from "@/api/lib/document-source";
@@ -299,6 +300,7 @@ const createHarness = ({
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: true,
   });
 

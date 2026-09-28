@@ -2,9 +2,9 @@ import { TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
 import type * as RedisClientModule from "@/api/lib/redis-client";
 import { withTimeout } from "@/api/lib/with-timeout";
+import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
 const PUBLISHER_GATE_COMMAND_TIMEOUT_MS = 5000;
 
@@ -139,7 +139,9 @@ const defaultDependencies = (
   };
   return {
     redis: async () => {
-      if (!DEPLOYED_NODE_ENVS.has(process.env.NODE_ENV ?? "")) {
+      // Process-local pacing holds for one process only; every other process
+      // shares the Redis limiter.
+      if (isLocalDevOpen()) {
         return localRedis;
       }
       return await deployedGateClient();
@@ -151,14 +153,15 @@ const defaultDependencies = (
 /**
  * Whether a reservation is worth making at all.
  *
- * Under `bun test` every request is a stub, so a slot only buys wall clock —
- * and outside a deployment the gate paces off the process clock, which suites
+ * In a local test run every request is a stub, so a slot only buys wall clock —
+ * and in local development the gate paces off the process clock, which suites
  * move (`setSystemTime`): one set backwards parks a stubbed request until the
  * reservation it already made comes round, which is weeks. What a reservation
  * does is asserted through this module's injected dependencies instead.
+ * Every strict process reserves, whatever its NODE_ENV.
  */
 export const publisherGateReserves = (): boolean =>
-  process.env.NODE_ENV !== "test";
+  !(isLocalDevOpen() && isLocalTestRun());
 
 /** Redis answered a gate reservation with something other than a wait. */
 class PublisherGateReplyError extends TaggedError("PublisherGateReplyError")<{

@@ -6,16 +6,6 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-  RotateCcwIcon,
-  Rows3Icon,
-  SparklesIcon,
-  Trash2Icon,
-  TriangleAlertIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
@@ -31,6 +21,16 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  LoaderCircleIcon,
+  RotateCcwIcon,
+  Rows3Icon,
+  SparklesIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";

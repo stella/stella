@@ -1,3 +1,7 @@
+import { useTranslations } from "use-intl";
+
+import type { LoadedCatalogueEntry } from "@stll/catalogue";
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   BanknoteIcon,
@@ -8,11 +12,7 @@ import {
   UserIcon,
   XIcon,
   type LucideIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type { LoadedCatalogueEntry } from "@stll/catalogue";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import { featureEnabledIn } from "@/api/mcp/capability-feature";
 
 // The pure core is tested directly (no env/module mocking): the bound
@@ -7,7 +9,7 @@ import { featureEnabledIn } from "@/api/mcp/capability-feature";
 // mocks would bleed across test files in the same bun process.
 
 const PROD = {
-  isDev: false,
+  runtimeMode: { mode: RUNTIME_MODE.strict },
   flags: { FEATURE_TIME_BILLING: true, FEATURE_PUBLIC_LAW: false },
 };
 
@@ -21,9 +23,12 @@ describe("featureEnabledIn", () => {
     expect(featureEnabledIn("FEATURE_PUBLIC_LAW", PROD)).toBe(false);
   });
 
-  test("dev deployments see everything", () => {
+  test("local development sees everything", () => {
     expect(
-      featureEnabledIn("FEATURE_PUBLIC_LAW", { ...PROD, isDev: true }),
+      featureEnabledIn("FEATURE_PUBLIC_LAW", {
+        ...PROD,
+        runtimeMode: { mode: RUNTIME_MODE.open },
+      }),
     ).toBe(true);
   });
 
@@ -31,15 +36,18 @@ describe("featureEnabledIn", () => {
     // A stale/mistyped flag in the generated artifact must disable, never
     // silently un-gate.
     expect(featureEnabledIn("FEATURE_NO_SUCH_FLAG", PROD)).toBe(false);
-    expect(featureEnabledIn("isDev", { ...PROD, flags: { isDev: true } })).toBe(
-      false,
-    );
+    expect(
+      featureEnabledIn("localDevOpen", {
+        ...PROD,
+        flags: { localDevOpen: true },
+      }),
+    ).toBe(false);
     expect(featureEnabledIn("", PROD)).toBe(false);
     // A non-boolean flag value (e.g. the string "true" from a raw env) is not
     // an enabled flag.
     expect(
       featureEnabledIn("FEATURE_X", {
-        isDev: false,
+        runtimeMode: { mode: RUNTIME_MODE.strict },
         flags: { FEATURE_X: "true" },
       }),
     ).toBe(false);

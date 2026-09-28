@@ -18,12 +18,6 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { panic } from "better-result";
-import {
-  ChevronRightIcon,
-  LoaderIcon,
-  PanelRightIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -44,6 +38,12 @@ import {
   CommandList,
 } from "@stll/ui/command";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ChevronRightIcon,
+  LoaderIcon,
+  PanelRightIcon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { MenuSection } from "@stll/ui/menu-section";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -1781,7 +1781,7 @@ export const SearchDialog = ({
                   {refineSearchMutation.isPending ? (
                     <LoaderIcon className="size-4 animate-spin" />
                   ) : (
-                    <WandSparklesIcon className="size-4" />
+                    <AiActionIcon className="size-4" />
                   )}
                 </Button>
                 <SearchScopeFilter
