@@ -1,8 +1,9 @@
 import { Result, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import {
   createLazyRedisClient,
@@ -15,6 +16,14 @@ type RedisCommands = {
 };
 
 const REDIS_COMMAND_TIMEOUT_MS = 500;
+const RENEW_FAILURE = failureSink({
+  event: "action_admission.renew_failed",
+  expected: [],
+});
+const RELEASE_FAILURE = failureSink({
+  event: "action_admission.release_failed",
+  expected: [],
+});
 const admissionRedis = createLazyRedisClient(() =>
   createRedisClient({
     connectionTimeout: REDIS_COMMAND_TIMEOUT_MS,
@@ -257,7 +266,7 @@ export const withActionAdmission = async <T>({
       cancelScheduled = timing.schedule(() => {
         renewal = renew()
           .catch((error: unknown) => {
-            captureError(error, { source: "action-admission", phase: "renew" });
+            observeFailure(error, { sink: RENEW_FAILURE });
             loseLease();
           })
           .finally(() => {
@@ -286,7 +295,7 @@ export const withActionAdmission = async <T>({
       scheduleRenewal(Math.max(1, Math.floor(limits.leaseMs / 2)));
       return;
     }
-    captureError(result.error, { source: "action-admission", phase: "renew" });
+    observeFailure(result.error, { sink: RENEW_FAILURE });
     const remaining = leaseDeadline - timing.now();
     if (remaining <= 0) {
       loseLease();
@@ -320,10 +329,7 @@ export const withActionAdmission = async <T>({
     if (Result.isError(released)) {
       // The lease expires on its own. A release outage must not make a
       // completed action look retryable and invite duplicate side effects.
-      captureError(released.error, {
-        source: "action-admission",
-        phase: "release",
-      });
+      observeFailure(released.error, { sink: RELEASE_FAILURE });
     }
   }
   if (controller.signal.aborted) {
