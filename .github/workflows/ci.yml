@@ -1868,6 +1868,15 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Install the docs MCP server
+        # tsconfig.tooling.json typechecks .claude/mcp against the packages
+        # installed there, which are outside the root lockfile. Install them
+        # so this job checks the same graph a checkout with `bun run
+        # setup:mcp` has.
+        run: bash scripts/retry.sh bun run setup:mcp
+        env:
+          NPM_TOKEN: ""
+
       - name: Prepare environment
         run: |
           cd ./apps/api
