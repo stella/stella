@@ -39,7 +39,7 @@ const field = (node: PlanNode, name: string): string | null => {
   return typeof value === "string" ? value : null;
 };
 
-const childPlans = (node: PlanNode): PlanNode[] => {
+const childPlans = (node: PlanNode): readonly PlanNode[] => {
   const plans = node["Plans"];
   if (plans === undefined) {
     return [];
