@@ -24,6 +24,7 @@ export * from "./schema/document-translations";
 export * from "./schema/document-reviews";
 export * from "./schema/lists-verification";
 export * from "./schema/office-evidence";
+export * from "./schema/pdf-signing";
 export * from "./schema/flows";
 export * from "./schema/mcp";
 export * from "./schema/sharepoint";
@@ -37,6 +38,7 @@ export * from "./schema/usage";
 export * from "./schema/workflow";
 export * from "./schema/signals";
 export * from "./schema/notifications";
+export * from "./schema/correspondence";
 export * from "./schema/feedback";
 export * from "./schema/relations";
 export {

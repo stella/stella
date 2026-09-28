@@ -15,7 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
-  cancelAssistantMessage,
+  cutShortAssistantMessage,
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
@@ -33,6 +33,7 @@ import {
   ChatTurnUnsettledToolCallError,
   findDroppedParts,
   findUnsettledToolCallsForOutcome,
+  isCutShortOutcome,
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
@@ -63,7 +64,9 @@ import {
   type ChatThreadNamesRead,
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
@@ -433,9 +436,9 @@ type FinalizedTurn = {
 };
 
 /**
- * The terminal message as its outcome stores it. A cancelled turn closes
+ * The terminal message as its outcome stores it. A cut-short turn closes
  * every call that can no longer run or be answered
- * (`cancelAssistantMessage`), whether it waited on the user or was cut off
+ * (`cutShortAssistantMessage`), whether it waited on the user or was cut off
  * mid-stream; any other outcome keeps what the run produced under its
  * settlement rules.
  */
@@ -443,8 +446,8 @@ const endTerminalAssistantMessage = (
   message: PersistableTerminalAssistantMessage,
   outcome: ChatTurnOutcome,
 ): PersistableTerminalAssistantMessage =>
-  outcome.type === "cancelled"
-    ? cancelAssistantMessage({ message, reason: outcome.reason })
+  isCutShortOutcome(outcome)
+    ? cutShortAssistantMessage({ message, outcome })
     : settleTerminalAssistantMessage(message, outcome);
 
 /**
@@ -490,6 +493,11 @@ const settleHonouringStop = async <T, E extends { cause?: unknown }>(
     : settled;
 };
 
+const ANON_RESTORATION_CONFLICT_SINK = failureSink({
+  event: "chat.anon_restoration_conflict",
+  expected: [],
+});
+
 const mergeContinuationMetadata = ({
   owning,
   run,
@@ -502,10 +510,19 @@ const mergeContinuationMetadata = ({
     owning?.anonRestorations !== undefined &&
     run?.anonRestorations !== undefined
   ) {
-    merged.anonRestorations = mergeAnonRestorations(
+    const { conflicts, restorations } = mergeAnonRestorations(
       owning.anonRestorations,
       run.anonRestorations,
     );
+    if (conflicts > 0) {
+      observeFailure(
+        new TelemetryError({
+          message: "An anonymization placeholder named two originals",
+        }),
+        { sink: ANON_RESTORATION_CONFLICT_SINK },
+      );
+    }
+    merged.anonRestorations = restorations;
   }
   if (owning?.usage !== undefined && run?.usage !== undefined) {
     const reasoningTokens =

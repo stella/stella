@@ -956,9 +956,10 @@ describe("merging a message's anonymization restorations", () => {
       },
     );
 
-    expect(merged.pairs).toEqual([
+    expect(merged.restorations.pairs).toEqual([
       { placeholder: "[PERSON_1]", original: "Alice" },
       { placeholder: "[PERSON_2]", original: "Bob" },
     ]);
+    expect(merged.conflicts).toBe(1);
   });
 });

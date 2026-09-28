@@ -72,6 +72,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-types/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
@@ -134,6 +135,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
+  "packages/sanctions/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/time/src/**/*.ts",
@@ -178,6 +180,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack AI reads a chat tool's failure only from the error its server
   // function throws; tools keep `Result`s and raise through this one module.
   "apps/api/src/handlers/chat/tools/tool-failure.ts",
+  // Handed to LibPDF as a signer and a timestamp authority, which report a
+  // failure back through `pdf.sign` only by rejecting.
+  "apps/api/src/lib/files/pdf-signing/libpdf-callbacks.ts",
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.

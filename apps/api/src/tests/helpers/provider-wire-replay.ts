@@ -165,6 +165,7 @@ export type ReplayedRequest = {
   /** The body the SDK sent, as text. */
   body: string;
   exchange: number | "side" | null;
+  headers: Headers;
   model: string | null;
   path: string;
   url: string;
@@ -196,19 +197,35 @@ const requestModelOf = (url: URL, bodyText: string): string | null => {
   }
 };
 
+/**
+ * The request `fetch(input, init)` sends: `init` overrides what `input`
+ * carries, headers included. It takes over `input`'s body, so forward the
+ * returned request rather than `input`.
+ */
+export const effectiveRequest = (
+  input: string | URL | Request,
+  init: RequestInit | undefined,
+): Request =>
+  input instanceof Request
+    ? new Request(input, init)
+    : new Request(input.toString(), init);
+
 const readRequest = async (
   input: string | URL | Request,
   init: RequestInit | undefined,
 ) => {
-  const request =
-    input instanceof Request ? input : new Request(input.toString(), init);
+  const request = effectiveRequest(input, init);
   const url = new URL(request.url);
-  const bodyText =
-    init?.body !== undefined && init.body !== null
-      ? await new Response(init.body).text()
-      : await request.clone().text();
-  const signal = init?.signal ?? request.signal;
-  return { bodyText, method: init?.method ?? request.method, signal, url };
+  const bodyText = await request.text();
+  const signal =
+    init?.signal ?? (input instanceof Request ? input.signal : request.signal);
+  return {
+    bodyText,
+    headers: request.headers,
+    method: init?.method ?? request.method,
+    signal,
+    url,
+  };
 };
 
 /** Path and query as a cassette stores them: no credential parameters. */
@@ -304,7 +321,10 @@ export const installProviderWireReplay = () => {
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
-    const { bodyText, method, signal, url } = await readRequest(input, init);
+    const { bodyText, headers, method, signal, url } = await readRequest(
+      input,
+      init,
+    );
     const path = cassetteRequestPath(url);
     const requestModel = requestModelOf(url, bodyText);
     const refuse = (reason: string): never => {
@@ -312,6 +332,7 @@ export const installProviderWireReplay = () => {
       requests.push({
         body: bodyText,
         exchange: null,
+        headers,
         model: requestModel,
         path,
         url: url.toString(),
@@ -338,6 +359,7 @@ export const installProviderWireReplay = () => {
       requests.push({
         body: bodyText,
         exchange: "side",
+        headers,
         model: requestModel,
         path,
         url: url.toString(),
@@ -371,6 +393,7 @@ export const installProviderWireReplay = () => {
     requests.push({
       body: bodyText,
       exchange: current.index,
+      headers,
       model: requestModel,
       path,
       url: url.toString(),

@@ -197,7 +197,13 @@ const replayedModel = ({
       // Taking the replay's findings clears its requests.
       const { unconsumed, unexpected } = replay.takeFindings();
       recorded = 0;
-      return { unconsumedScripts: unconsumed, unscriptedCalls: unexpected };
+      // What the model is handed goes over the wire to a recorded answer, so
+      // the scripted provider's record of it has no counterpart here.
+      return {
+        changedToolResults: [],
+        unconsumedScripts: unconsumed,
+        unscriptedCalls: unexpected,
+      };
     },
   };
 };

@@ -89,8 +89,8 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
     anonymized: { exposure: "passthrough" },
     description:
       "Search the public legal corpus (case-law decisions and statutes) using " +
-      "the OpenAI-compatible search tool shape, over the jurisdictions the organization " +
-      `practises in. ${COMPAT_CORPUS_ID_VOCABULARY} Pass an id back to fetch verbatim. No ` +
+      "the OpenAI-compatible search tool shape, over every jurisdiction the corpus holds, " +
+      `the organization's practice jurisdictions first. ${COMPAT_CORPUS_ID_VOCABULARY} Pass an id back to fetch verbatim. No ` +
       "matter, document, contact or billing data is reachable here.",
     feature: "FEATURE_PUBLIC_LAW",
     inputSchema: lawCompatSearchArgsSchema,
@@ -129,7 +129,7 @@ const handleLawCompatSearchTool: McpToolHandler<
 
   const position = decodeCompatSearchCursor(cursor);
   if (position === null) {
-    return compatSearchCursorError();
+    return compatSearchCursorError(cursor ?? "");
   }
 
   const corpus = await searchCompatCorpus({

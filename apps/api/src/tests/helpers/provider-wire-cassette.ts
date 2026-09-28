@@ -123,11 +123,30 @@ const bodySchema = v.variant("encoding", [
   }),
 ]);
 
+/**
+ * The request as the adapter sent it, minus what varies between runs: the
+ * protocol headers (`PINNED_REQUEST_HEADERS`, never a credential or an SDK
+ * version), and the JSON body in the order it was written, with the prompt
+ * text replaced by `[prompt]`. Tool schemas, strict flags, message roles and
+ * part kinds, model options and cache markers all live in it.
+ */
+const requestShapeSchema = v.strictObject({
+  headers: headersSchema,
+  body: v.unknown(),
+});
+
+export type ProviderWireRequestShape = v.InferOutput<typeof requestShapeSchema>;
+
 const exchangeSchema = v.strictObject({
   request: v.strictObject({
     method: v.literal("POST"),
     /** Path and query, without credentials. */
     path: v.string(),
+    /** What the scenario's synthetic request must look like on the wire:
+     *  written by the recorder from the live request, and for a synthetic
+     *  cassette by `record:provider-cassettes --update-request-shapes`. The
+     *  replay test fails an exchange without one. */
+    shape: v.optional(requestShapeSchema),
   }),
   response: v.strictObject({
     status: v.pipe(v.number(), v.integer(), v.minValue(100), v.maxValue(599)),
@@ -166,6 +185,12 @@ const expectSchema = v.variant("outcome", [
   v.strictObject({
     outcome: v.literal("error"),
     errorKind: v.picklist(AI_ERROR_KINDS),
+    /** The usage the provider reported before the run failed, which the run
+     *  error carries. */
+    usage: v.optional(usageSchema),
+    /** Why a cassette whose body reports usage expects none on the run
+     *  error: the provider reports it only after the point the run fails. */
+    usageAfterFailure: v.optional(v.pipe(v.string(), v.minLength(1))),
   }),
 ]);
 
@@ -181,8 +206,8 @@ export const providerWireCassetteSchema = v.strictObject({
   /** Where a synthetic cassette's bytes come from. */
   basis: v.optional(v.string()),
   recordedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
-  /** The user prompt a recording sent: the recorder stores no request body,
-   *  so this is how a recording is tied to the prompt it answers. */
+  /** The user prompt a recording sent; its request shapes hold `[prompt]`
+   *  in its place. */
   prompt: v.optional(v.string()),
   /** The model the request named. */
   model: v.string(),
@@ -273,6 +298,38 @@ export const loadProviderWireCassettes = (): ProviderWireCassette[] => {
   }
   return cassettes;
 };
+
+/** A usage object in a provider's body: `usage` (OpenAI-style, Anthropic,
+ *  Bedrock's `metadata`) or Gemini's `usageMetadata`. */
+const USAGE_FIELD_PATTERN = /"(?:usage|usageMetadata)"\s*:\s*\{/u;
+
+const bodyText = (exchange: ProviderWireExchange): string =>
+  exchange.response.body.encoding === "text"
+    ? exchange.response.body.text
+    : JSON.stringify(exchange.response.body.messages);
+
+/**
+ * Error cassettes that decide nothing about the usage their body reports:
+ * each such cassette expects the usage its run error carries, or says why it
+ * carries none (`usageAfterFailure`); a cassette whose body reports no usage
+ * does neither.
+ */
+export const findUndecidedErrorUsage = (
+  cassettes: readonly ProviderWireCassette[],
+): string[] =>
+  cassettes.flatMap((cassette) => {
+    const { expect } = cassette;
+    if (expect.outcome !== "error") {
+      return [];
+    }
+    const reportsUsage = cassette.exchanges.some((exchange) =>
+      USAGE_FIELD_PATTERN.test(bodyText(exchange)),
+    );
+    const decisions =
+      (expect.usage === undefined ? 0 : 1) +
+      (expect.usageAfterFailure === undefined ? 0 : 1);
+    return decisions === (reportsUsage ? 1 : 0) ? [] : [cassetteKey(cassette)];
+  });
 
 /** Every provider × scenario pair that needs a cassette and has none. */
 export const findMissingCassettes = (

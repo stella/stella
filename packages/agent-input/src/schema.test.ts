@@ -277,3 +277,119 @@ describe("normalizeAgentInput", () => {
     });
   });
 });
+
+describe("placeholders, lists and bounded values at the schema walk", () => {
+  const SEARCH_SCHEMA = {
+    type: "object",
+    properties: {
+      query: { type: "string" },
+      source_id: { type: "string", format: "uuid" },
+      decision_id: { type: "string", format: "uuid" },
+      court: {
+        type: "string",
+        [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "filter" },
+      },
+      date_from: {
+        type: "string",
+        format: "date",
+        [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "date", bound: "start" },
+      },
+      date_to: {
+        type: "string",
+        format: "date",
+        [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "date", bound: "end" },
+      },
+      limit: {
+        type: "integer",
+        minimum: 1,
+        maximum: 20,
+        [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "number", range: "clamp" },
+      },
+      queries: { type: "array", items: { type: "string" } },
+      ids: { type: "array", items: { type: "string", format: "uuid" } },
+      eli: { type: "string", [AGENT_INPUT_NORMALIZATION_KEY]: { kind: "eli" } },
+    },
+    required: ["decision_id"],
+  } as const;
+
+  const READERS = { eli: { hosts: { cz: "https://www.e-sbirka.cz" } } };
+  const REAL_ID = "5f0c9d2e-8b7a-4c1d-9e3f-6a2b4c8d0e1f";
+
+  test("an optional placeholder is dropped with a note, a real value kept", () => {
+    const result = normalizeAgentInput({
+      schema: SEARCH_SCHEMA,
+      readers: READERS,
+      value: {
+        decision_id: REAL_ID.toUpperCase(),
+        source_id: "00000000-0000-0000-0000-000000000000",
+        court: "all",
+        date_from: "0001-01-01",
+        date_to: "2021-02",
+        limit: "500",
+        queries: "one phrasing, with a comma",
+        ids: `${REAL_ID}, ${REAL_ID}`,
+        eli: "/eli/cz/sb/2012/89",
+      },
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        decision_id: REAL_ID,
+        date_to: "2021-02-28",
+        limit: 20,
+        queries: ["one phrasing, with a comma"],
+        ids: [REAL_ID, REAL_ID],
+        eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+      },
+      notes: expect.any(Array),
+    });
+    // One note per value that was read rather than taken verbatim.
+    expect(result.ok && result.notes).toHaveLength(9);
+  });
+
+  test("a placeholder where a value is required asks", () => {
+    expect(
+      normalizeAgentInput({
+        schema: SEARCH_SCHEMA,
+        value: { decision_id: "00000000-0000-0000-0000-000000000000" },
+      }),
+    ).toMatchObject({
+      ok: false,
+      issues: [{ path: "decision_id", expected: "a real value" }],
+    });
+  });
+
+  test("a write asks about an optional placeholder instead of dropping it", () => {
+    expect(
+      normalizeAgentInput({
+        schema: SEARCH_SCHEMA,
+        placeholders: "ask",
+        value: {
+          decision_id: REAL_ID,
+          source_id: "00000000-0000-0000-0000-000000000000",
+        },
+      }),
+    ).toMatchObject({ ok: false, issues: [{ path: "source_id" }] });
+  });
+
+  test("a placeholder item in a list asks: a list has no optional slots", () => {
+    expect(
+      normalizeAgentInput({
+        schema: SEARCH_SCHEMA,
+        value: {
+          decision_id: REAL_ID,
+          ids: [REAL_ID, "00000000-0000-0000-0000-000000000000"],
+        },
+      }),
+    ).toMatchObject({ ok: false, issues: [{ path: "ids.1" }] });
+  });
+
+  test("an ELI field is left as sent when the surface supplies no reader", () => {
+    expect(
+      normalizeAgentInput({
+        schema: SEARCH_SCHEMA,
+        value: { decision_id: REAL_ID, eli: "/eli/cz/sb/2012/89" },
+      }),
+    ).toMatchObject({ ok: true, value: { eli: "/eli/cz/sb/2012/89" } });
+  });
+});

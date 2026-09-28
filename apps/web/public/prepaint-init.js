@@ -10,10 +10,10 @@
  * stay strict (script-src 'self') without needing 'unsafe-inline'
  * or per-script hashes.
  *
- * The root element is server-rendered as lang="en" dir="ltr" and carries
+ * The root element is server-rendered with an LTR lang/dir and carries
  * suppressHydrationWarning, so mutating it here does not produce a
- * hydration error. The i18n store re-applies the same values after it
- * rehydrates; this only moves the change earlier, before first paint.
+ * hydration error. The root document re-applies the same values once the
+ * locale loads; this only moves the change earlier, before first paint.
  */
 (function () {
   const el = document.documentElement;
@@ -110,7 +110,11 @@
 
   const lang = persisted || detected;
   if (lang && RTL_LOCALES.includes(lang)) {
-    el.lang = lang;
+    // A page that renders a document is marked in that document's language
+    // by the server; the interface locale only sets the direction there.
+    if (el.getAttribute("data-lang-source") !== "document") {
+      el.lang = lang;
+    }
     el.dir = "rtl";
   }
 })();

@@ -22,8 +22,10 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -494,16 +496,34 @@ const checkSeal = (root: string, runtime: DevRuntime) =>
   ) ?? fail("The seal check printed no status");
 
 const EVIDENCE_DIR = "evidence";
-const MANIFEST_FILE = "manifest.json";
+const MANIFEST_PATTERN = /^manifest-\d{20}-\d+\.json$/u;
 
 const evidencePath = (root: string, ...segments: string[]) =>
   path.join(root, DEV_STATE_DIR, EVIDENCE_DIR, ...segments);
 
+// Each drive run writes its own manifest, so concurrent runs never rewrite a
+// shared file. Names sort by write time, which keeps the latest record for a
+// path last.
 const readManifest = (root: string) => {
-  const manifestPath = evidencePath(root, MANIFEST_FILE);
-  return existsSync(manifestPath)
-    ? parseManifest(readFileSync(manifestPath, "utf-8"))
-    : [];
+  const dir = evidencePath(root);
+  if (!existsSync(dir)) {
+    return [];
+  }
+  return readdirSync(dir)
+    .filter((name) => MANIFEST_PATTERN.test(name))
+    .toSorted()
+    .flatMap((name) =>
+      parseManifest(readFileSync(path.join(dir, name), "utf-8")),
+    );
+};
+
+const writeRunManifest = (root: string, entries: readonly unknown[]) => {
+  const writtenAt = Temporal.Now.instant().epochNanoseconds;
+  const name = `manifest-${writtenAt.toString().padStart(20, "0")}-${String(process.pid)}.json`;
+  const target = evidencePath(root, name);
+  const temporary = `${target}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(entries, null, 2)}\n`);
+  renameSync(temporary, target);
 };
 
 // The driver writes captures; only this process records whether each may be
@@ -538,10 +558,7 @@ const drive = async (root: string, args: readonly string[]) => {
     }),
   );
   if (entries.length > 0) {
-    writeFileSync(
-      evidencePath(root, MANIFEST_FILE),
-      `${JSON.stringify([...readManifest(root), ...entries], null, 2)}\n`,
-    );
+    writeRunManifest(root, entries);
     const refused = entries.find((entry) => !entry.attachable);
     console.log(
       refused === undefined

@@ -83,6 +83,7 @@ export const makeRun = (
   pipelineVersion: 1,
   modelRef: null,
   requestedBy: null,
+  blocks: [],
   createdAt: "2026-09-01T09:00:00.000Z",
   startedAt: "2026-09-01T09:00:01.000Z",
   finishedAt: "2026-09-01T09:01:00.000Z",

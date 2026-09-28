@@ -24,6 +24,7 @@ import {
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import { PdfSignButton } from "@/components/inspector/pdf-sign-button";
 import type { DesktopOpenTarget } from "@/components/inspector/use-desktop-file-open";
 import Tooltip from "@/components/tooltip";
 import { detached } from "@/lib/detached";
@@ -100,17 +101,20 @@ type FileTabHeaderActionsProps = {
   children?: ReactNode;
   desktopEditTarget: Pick<DesktopOpenTarget, "fileType" | "propertyId"> | null;
   downloadRenditions: readonly DownloadRendition[];
+  /** The current PDF file the signer may sign, or `null` to offer no signing. */
+  pdfSignTarget: { propertyId: string } | null;
   tab: FileTab;
 };
 
 /**
- * Download and open-in-desktop-app, rendered by both the peek header and the
+ * Download, open-in-desktop-app and sign, rendered by both the peek header and the
  * full-view header so the two cannot drift apart.
  */
 export const FileTabHeaderActions = ({
   children,
   desktopEditTarget,
   downloadRenditions,
+  pdfSignTarget,
   tab,
 }: FileTabHeaderActionsProps) => {
   const startDownload = (variant: DownloadVariant) => {
@@ -139,6 +143,14 @@ export const FileTabHeaderActions = ({
           fieldId={tab.id}
           fileType={desktopEditTarget.fileType}
           propertyId={desktopEditTarget.propertyId}
+          workspaceId={tab.workspaceId}
+        />
+      ) : null}
+      {pdfSignTarget !== null ? (
+        <PdfSignButton
+          entityId={tab.entityId}
+          fieldId={tab.id}
+          propertyId={pdfSignTarget.propertyId}
           workspaceId={tab.workspaceId}
         />
       ) : null}

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
@@ -19,6 +19,7 @@ import {
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
 } from "@stll/api-contract/search";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -44,7 +45,10 @@ import {
   reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
-import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  bareCitationKey,
+  normalizeDecisionIdentifierValue,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { arrayOrEmpty } from "@/api/lib/array";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
@@ -1402,17 +1406,43 @@ export const findDecisionIdsByIdentity = async ({
   identity,
   timeDbRead = untimedDbRead,
 }: FindDecisionIdsByIdentityOptions): Promise<SafeId<"caseLawDecision">[]> => {
-  const identityPredicate =
-    identity.kind === "ecli"
-      ? inArray(caseLawDecisions.ecli, [
-          identity.value,
-          identity.value.toUpperCase(),
-        ])
-      : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
   const rows = await timeDbRead(
     async () =>
-      await caseLawDb((tx) =>
-        tx
+      await caseLawDb((tx) => {
+        // An ECLI also matches the other spellings a decision declares as
+        // identifiers, read as a set so the planner keeps the identifier
+        // index, as the identity lookup does.
+        const identityPredicate =
+          identity.kind === "ecli"
+            ? or(
+                inArray(caseLawDecisions.ecli, [
+                  identity.value,
+                  identity.value.toUpperCase(),
+                ]),
+                inArray(
+                  caseLawDecisions.id,
+                  tx
+                    .select({ id: caseLawDecisionIdentifiers.decisionId })
+                    .from(caseLawDecisionIdentifiers)
+                    .where(
+                      and(
+                        eq(
+                          caseLawDecisionIdentifiers.type,
+                          DECISION_IDENTIFIER_TYPES.ECLI,
+                        ),
+                        eq(
+                          caseLawDecisionIdentifiers.normalizedValue,
+                          normalizeDecisionIdentifierValue(
+                            DECISION_IDENTIFIER_TYPES.ECLI,
+                            identity.value,
+                          ),
+                        ),
+                      ),
+                    ),
+                ),
+              )
+            : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
+        return tx
           .select({ id: caseLawDecisions.id })
           .from(caseLawDecisions)
           .where(
@@ -1423,8 +1453,8 @@ export const findDecisionIdsByIdentity = async ({
                 : eq(caseLawDecisions.country, country),
             ),
           )
-          .limit(LIMITS.caseLawSearchPageSizeMax),
-      ),
+          .limit(LIMITS.caseLawSearchPageSizeMax);
+      }),
   );
   return rows.map((row) => row.id);
 };

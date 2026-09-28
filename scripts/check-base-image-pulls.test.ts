@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import * as v from "valibot";
 
 const GITHUB_URL = new URL("../.github/", import.meta.url);
 const PULL_SCRIPT = "scripts/pull-base-images.sh";
@@ -28,23 +27,47 @@ const WRAPPED_PULL =
 /** The registry pulls the workflows run today, counted like the builds. */
 const MINIMUM_PULL_SITES = 3;
 
-const Scalars = v.record(
-  v.string(),
-  v.union([v.string(), v.number(), v.boolean()]),
-);
-const StepSchema = v.object({
-  name: v.optional(v.string()),
-  uses: v.optional(v.string()),
-  run: v.optional(v.string()),
-  env: v.optional(Scalars),
-  with: v.optional(Scalars),
-});
-type Step = v.InferOutput<typeof StepSchema>;
-const Steps = v.array(StepSchema);
-const Workflow = v.object({
-  jobs: v.record(v.string(), v.object({ steps: v.optional(Steps) })),
-});
-const Action = v.object({ runs: v.object({ steps: v.optional(Steps) }) });
+// Parsed without a schema library: CI runs this file before installing
+// dependencies, on workflow-only changes.
+type Scalars = Record<string, string | number | boolean>;
+type Step = {
+  name?: string;
+  uses?: string;
+  run?: string;
+  env?: Scalars;
+  with?: Scalars;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isOptionalString = (value: unknown) =>
+  value === undefined || typeof value === "string";
+
+const isOptionalScalars = (value: unknown) =>
+  value === undefined ||
+  (isRecord(value) &&
+    Object.values(value).every((entry) =>
+      ["string", "number", "boolean"].includes(typeof entry),
+    ));
+
+const isStep = (value: unknown): value is Step =>
+  isRecord(value) &&
+  isOptionalString(value["name"]) &&
+  isOptionalString(value["uses"]) &&
+  isOptionalString(value["run"]) &&
+  isOptionalScalars(value["env"]) &&
+  isOptionalScalars(value["with"]);
+
+const stepsOf = (value: unknown, source: string): Step[] => {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value) || !value.every(isStep)) {
+    throw new Error(`${source}: steps do not have the expected shape`);
+  }
+  return value;
+};
 
 type StepList = { source: string; steps: Step[] };
 
@@ -55,17 +78,25 @@ const collectStepLists = async (): Promise<StepList[]> => {
   const root = fileURLToPath(GITHUB_URL);
   const lists: StepList[] = [];
   for (const file of new Bun.Glob("workflows/*.yml").scanSync({ cwd: root })) {
-    const { jobs } = v.parse(Workflow, await readYaml(file));
-    for (const [job, { steps = [] }] of Object.entries(jobs)) {
-      lists.push({ source: `${file} (${job})`, steps });
+    const workflow = await readYaml(file);
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    if (!isRecord(jobs)) {
+      throw new Error(`${file}: no jobs`);
+    }
+    for (const [job, definition] of Object.entries(jobs)) {
+      const source = `${file} (${job})`;
+      const steps = isRecord(definition) ? definition["steps"] : undefined;
+      lists.push({ source, steps: stepsOf(steps, source) });
     }
   }
   const actions = new Bun.Glob("actions/*/action.yml").scanSync({ cwd: root });
   for (const file of actions) {
-    const {
-      runs: { steps = [] },
-    } = v.parse(Action, await readYaml(file));
-    lists.push({ source: file, steps });
+    const action = await readYaml(file);
+    const runs = isRecord(action) ? action["runs"] : undefined;
+    if (!isRecord(runs)) {
+      throw new Error(`${file}: no runs`);
+    }
+    lists.push({ source: file, steps: stepsOf(runs["steps"], file) });
   }
   return lists.toSorted((a, b) => a.source.localeCompare(b.source));
 };

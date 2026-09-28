@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { caseLawCoverageOptions } from "@/features/case-law/queries/decisions";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -17,9 +18,6 @@ import {
 } from "@/routes/law/-law-coverage/coverage-page";
 
 const COVERAGE_PATH = "/law/coverage";
-
-/** What the page shows when the figures cannot be read at all. */
-const UNAVAILABLE = { message: "Coverage is unavailable" } as const;
 
 export const Route = createFileRoute("/law/coverage")({
   loader: ({ context: { queryClient } }) => {
@@ -42,7 +40,7 @@ export const Route = createFileRoute("/law/coverage")({
     return createPublicLawHead({
       description,
       jsonLd: createLegalCollectionJsonLd({
-        aboutName: "Case-law decisions",
+        t,
         canonicalUrl: createPublicLawCanonicalUrl(COVERAGE_PATH),
         description,
         kind: "caseLaw",
@@ -58,6 +56,7 @@ export const Route = createFileRoute("/law/coverage")({
 });
 
 function CaseLawCoverage() {
+  const t = useTranslations();
   const { data, isError } = useQuery(caseLawCoverageOptions());
 
   // Figures already on hand outrank a failed refetch: the query keeps its
@@ -67,7 +66,11 @@ function CaseLawCoverage() {
     return <CaseLawCoveragePage coverage={data} />;
   }
   if (isError) {
-    return <CaseLawCoveragePage coverage={UNAVAILABLE} />;
+    return (
+      <CaseLawCoveragePage
+        coverage={{ message: t("caseLaw.coverage.unavailable") }}
+      />
+    );
   }
   return <CaseLawCoveragePending />;
 }

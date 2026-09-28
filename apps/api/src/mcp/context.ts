@@ -132,6 +132,8 @@ export type McpRequestContext = {
     createPlaybookTableRuns?: typeof createPlaybookTableRuns;
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    /** Every court spelling one corpus country holds, for reading a court filter. */
+    readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;

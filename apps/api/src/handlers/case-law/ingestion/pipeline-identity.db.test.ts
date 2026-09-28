@@ -510,6 +510,133 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
     });
 
+    test("stores a keyed row under its docket without a trailing part marker", async () => {
+      await processDecision({
+        input: {
+          ...decisionAt("Trailing marker", "trailing-marker-document"),
+          caseNumber: "0T/44/2019- II.",
+          metadata: { caseNumber: "0T/44/2019- II." },
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+
+      const row = await db.query.caseLawDecisions.findFirst({
+        where: {
+          sourceId: { eq: sourceId },
+          sourceDocumentId: "trailing-marker-document",
+        },
+        columns: { caseNumber: true, citationKey: true, metadata: true },
+      });
+      expect(row?.caseNumber).toBe("0T/44/2019");
+      expect(row?.citationKey).toBe(bareCitationKey("0T/44/2019"));
+      // The publisher's spelling survives in the adapter's metadata.
+      expect(isRecord(row?.metadata) ? row.metadata["caseNumber"] : null).toBe(
+        "0T/44/2019- II.",
+      );
+      expect(await storedSlugs(["trailing-marker-document"])).toEqual([
+        "0t-44-2019",
+      ]);
+    });
+
+    test("adopts a legacy row stored under the publisher's uncut docket", async () => {
+      const caseNumber = "0T/45/2019- III.";
+      const legacyUrl = "https://publisher.test/uncut-docket";
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket", undefined),
+          caseNumber,
+          sourceUrl: legacyUrl,
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      // Keyed by its docket, the legacy row keeps the tail that may be all
+      // that separates it from a sibling.
+      const [legacyRow] = await docketRows(caseNumber);
+      expect(legacyRow?.sourceDocumentId).toBeNull();
+
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket", "uncut-docket-document"),
+          caseNumber,
+          legacySourceUrls: [legacyUrl],
+          rawHash: "hash-uncut-docket-identified",
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+
+      expect(await docketRows(caseNumber)).toEqual([]);
+      expect(await docketRows("0T/45/2019")).toEqual([
+        {
+          id: legacyRow?.id ?? expect.unreachable(),
+          sourceDocumentId: "uncut-docket-document",
+        },
+      ]);
+    });
+
+    test("proves each legacy candidate when the cut and uncut dockets both hold one", async () => {
+      const uncut = "0T/46/2019- II.";
+      const siblingUrl = "https://publisher.test/cut-docket-sibling";
+      const legacyUrl = "https://publisher.test/uncut-docket-legacy";
+      await processDecision({
+        input: {
+          ...decisionAt("Cut docket sibling", undefined),
+          caseNumber: "0T/46/2019",
+          sourceUrl: siblingUrl,
+        },
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket legacy", undefined),
+          caseNumber: uncut,
+          sourceUrl: legacyUrl,
+        },
+        observationOrder: 2n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:01.000Z"),
+      });
+      const [sibling] = await docketRows("0T/46/2019");
+      const [legacyRow] = await docketRows(uncut);
+
+      await processDecision({
+        input: {
+          ...decisionAt("Uncut docket legacy", "uncut-docket-legacy-document"),
+          caseNumber: uncut,
+          legacySourceUrls: [legacyUrl],
+          rawHash: "hash-uncut-docket-legacy-identified",
+        },
+        observationOrder: 3n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:02.000Z"),
+      });
+
+      expect(await docketRows(uncut)).toEqual([]);
+      expect(await docketRows("0T/46/2019")).toEqual([
+        {
+          id: legacyRow?.id ?? expect.unreachable(),
+          sourceDocumentId: "uncut-docket-legacy-document",
+        },
+        {
+          id: sibling?.id ?? expect.unreachable(),
+          sourceDocumentId: null,
+        },
+      ]);
+    });
+
     test("keeps a legacy row whose ECLI names a sibling under the docket", async () => {
       const caseNumber = "Pl.ÚS 19/01";
       const legacyUrl = "https://publisher.test/sibling-ecli-legacy";

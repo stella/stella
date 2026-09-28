@@ -41,6 +41,20 @@ const WINDOW_MODULES = {
   "src-tauri/capabilities/default.json": ["src/mainview/App.tsx"],
 } as const satisfies Record<string, readonly string[]>;
 
+/**
+ * The static prompt windows Rust opens: plain HTML with no shell behind it,
+ * so their capability is exactly the commands the page invokes and nothing
+ * else. Keyed by capability, as above.
+ */
+const DIALOG_WINDOWS = {
+  "src-tauri/capabilities/pdf-sign-dialog.json":
+    "src/mainview/pdf-sign-dialog.html",
+  "src-tauri/capabilities/selfhost-connect-dialog.json":
+    "src/mainview/selfhost-connect-dialog.html",
+  "src-tauri/capabilities/takeover-dialog.json":
+    "src/mainview/takeover-dialog.html",
+} as const satisfies Record<string, string>;
+
 const readSource = async (sourcePath: string) =>
   readFile(path.join(DESKTOP_ROOT, sourcePath), "utf-8");
 
@@ -113,6 +127,24 @@ describe("window Tauri capabilities", () => {
       for (const command of commands) {
         expect(permissions).toContain(`allow-${command.replaceAll("_", "-")}`);
       }
+    },
+  );
+
+  test.each(Object.entries(DIALOG_WINDOWS))(
+    "%s grants exactly the commands its dialog invokes",
+    async (capabilityPath, dialogPath) => {
+      const commands = invokedCommandsInSource(await readSource(dialogPath));
+      const permissions = await grantedCommands(capabilityPath);
+
+      expect(commands.length).toBeGreaterThan(0);
+      // Equality, not containment: a prompt that reaches the user outside the
+      // app's own window earns no permission it does not use.
+      const byName = (left: string, right: string) => left.localeCompare(right);
+      expect([...permissions].toSorted(byName)).toEqual(
+        [...new Set(commands)]
+          .map((command) => `allow-${command.replaceAll("_", "-")}`)
+          .toSorted(byName),
+      );
     },
   );
 });

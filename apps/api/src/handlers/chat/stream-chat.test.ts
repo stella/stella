@@ -11,6 +11,7 @@ import type {
   AnyTextAdapter,
   ModelMessage,
   StreamChunk,
+  TokenUsage,
   ToolCallPart,
   UIMessage,
 } from "@tanstack/ai";
@@ -35,6 +36,7 @@ import {
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
@@ -566,6 +568,80 @@ const persistCutTurn = async (cause: TurnCut) => {
     { abortSignal: abortController.signal, deadlineSignal: deadline.signal },
   );
 };
+
+/** A model call that fails after the provider reported usage, having
+ *  written `text` first (none when empty). */
+const createFailingAfterUsageAdapter = ({
+  text,
+  usage,
+}: {
+  text: string;
+  usage: TokenUsage;
+}): AnyTextAdapter => ({
+  kind: "text",
+  name: "failing-after-usage",
+  model: "failing-after-usage",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ runId, threadId }) {
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: runId ?? "run-1",
+      threadId: threadId ?? "thread-1",
+    } satisfies StreamChunk;
+    if (text !== "") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "provider-message-1",
+        role: "assistant",
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "provider-message-1",
+        delta: text,
+      } satisfies StreamChunk;
+    }
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "The provider stream ended with an error.",
+      code: "incomplete-stream",
+      usage,
+    } satisfies StreamChunk;
+  },
+  structuredOutput: () => {
+    throw new Error("Structured output is not part of this fixture");
+  },
+});
+
+describe("a turn whose model call fails after reporting usage", () => {
+  for (const text of ["", "The cass"]) {
+    test(`stores the usage on the failed turn's message (text: ${JSON.stringify(text)})`, async () => {
+      const usage = {
+        promptTokens: 24,
+        completionTokens: 2,
+        totalTokens: 26,
+      } satisfies TokenUsage;
+      const { finish } = await persistNativeInterruptTurn(
+        chat({
+          adapter: createFailingAfterUsageAdapter({ text, usage }),
+          messages: [{ role: "user", content: "Reply." }],
+          threadId: "thread-1",
+        }),
+      );
+
+      expect(finish?.outcome).toMatchObject({ type: "failed" });
+      expect(finish?.responseMessage.metadata).toMatchObject({
+        usage: chatMessageUsageFromTokenUsage(usage),
+      });
+    });
+  }
+});
 
 describe("a turn cut while the model was thinking", () => {
   test("settles as interrupted, not as a completion with no answer", async () => {
@@ -1267,6 +1343,18 @@ describe("outgoing chat stream message ids", () => {
             {
               type: EventType.RUN_FINISHED,
               finishReason: "tool_calls",
+              // The engine hands the call out as an interrupt either way; only
+              // its input decides whether the turn may wait on it.
+              outcome: {
+                type: "interrupt",
+                interrupts: [
+                  {
+                    id: `interrupt-${callChunks[0].toolCallId}`,
+                    reason: "tool_call",
+                    toolCallId: callChunks[0].toolCallId,
+                  },
+                ],
+              },
               runId: "run-1",
               threadId: "thread-1",
             },
@@ -3320,7 +3408,7 @@ describe("guarded model-ingress seam", () => {
     const system = "You are stella. Matter scope: mat_1.";
 
     const surfaces: GuardedChatSurfaces = {
-      messages: guardModelMessages({ messages, workspaceIds }),
+      messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
@@ -3351,6 +3439,15 @@ describe("guarded model-ingress seam", () => {
     // reach the provider dispatch
     const bypass: GuardedChatSurfaces = unguarded;
     void bypass;
+
+    const unanswered = {
+      ...surfaces,
+      messages: guardModelMessages({ messages, workspaceIds }),
+    };
+    // @ts-expect-error a history whose calls were not answered in their step
+    // must not reach the provider dispatch
+    const skippedAnswers: GuardedChatSurfaces = unanswered;
+    void skippedAnswers;
   });
 });
 
