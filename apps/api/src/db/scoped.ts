@@ -262,7 +262,6 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
   if (code === PG_ERROR.INSUFFICIENT_PRIVILEGE) {
     return new DatabaseRlsError({
       code,
-      driverCode,
       message: "Database row-level security rejected the request",
       cause,
     });
@@ -285,7 +284,6 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
       message: "Database query failed",
       cause,
       code,
-      driverCode,
     });
   }
 

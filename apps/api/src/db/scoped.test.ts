@@ -8,6 +8,7 @@ import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
+import { errorSystemFields } from "@/api/lib/errors/utils";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
@@ -65,7 +66,9 @@ describe("createSafeDb failure classification", () => {
       throw new TypeError("Expected a DatabaseError");
     }
     expect(error.code).toBe(PG_ERROR.SERIALIZATION_FAILURE);
-    expect(error.driverCode).toBe("ERR_POSTGRES_SERVER_ERROR");
+    expect(errorSystemFields(error)["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_SERVER_ERROR",
+    );
   });
 
   it("preserves a bare Bun idle code without SQLSTATE", async () => {
@@ -78,7 +81,9 @@ describe("createSafeDb failure classification", () => {
       throw new TypeError("Expected a DatabaseError");
     }
     expect(error.code).toBeUndefined();
-    expect(error.driverCode).toBe("ERR_POSTGRES_IDLE_TIMEOUT");
+    expect(errorSystemFields(error)["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_IDLE_TIMEOUT",
+    );
   });
 
   it("classifies an unwrapped privilege rejection as an RLS failure", async () => {

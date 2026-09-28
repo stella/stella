@@ -1,16 +1,5 @@
 import { panic, Result } from "better-result";
-import {
-  and,
-  asc,
-  count,
-  desc,
-  gt,
-  gte,
-  inArray,
-  lte,
-  max,
-  sql,
-} from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lte, max, sql } from "drizzle-orm";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
@@ -111,13 +100,13 @@ type IngestionStatus = {
   sources: SourceStatus[];
   /** Sum of the per-source counts; null while any source is uncounted. */
   totalDecisions: number | null;
-  totalEvents: number;
+  /** Planner estimate; table statistics can lag newly written events. */
+  estimatedTotalEvents: number;
   failures24h: number;
 };
 
 /** Error types reported per source, ranked by occurrences in the last day. */
 const TOP_ERROR_TYPES_PER_SOURCE = 3;
-const STATUS_READ_PAGE_SIZE = 5000;
 const STATUS_STATEMENT_TIMEOUT_MS = 30_000;
 
 /**
@@ -167,101 +156,75 @@ const requireAggregate = (
   aggregates.get(sourceId) ??
   panic(`Ingestion status read no aggregate slot for source ${sourceId}`);
 
-/** The source/identity index makes each page a bounded index walk. */
-const readReconciliationCounts = async ({
-  db,
-  sourceIds,
-  pageSize,
-}: {
-  db: Transaction;
-  sourceIds: SafeId<"caseLawSource">[];
-  pageSize: number;
-}): Promise<
-  Map<SafeId<"caseLawSource">, { parked: number; terminal: number }>
-> => {
-  const counts = new Map<
-    SafeId<"caseLawSource">,
-    { parked: number; terminal: number }
-  >();
-  let cursor:
-    | { sourceId: SafeId<"caseLawSource">; identityKey: string }
-    | undefined;
+/** Each source reads one event id from the covering source/time index. */
+export const latestIngestionEventsQuery = (
+  db: Transaction,
+  sourceIds: SafeId<"caseLawSource">[],
+) => {
+  const latest = db
+    .select({
+      id: caseLawIngestionEvents.id,
+    })
+    .from(caseLawIngestionEvents)
+    .where(eq(caseLawIngestionEvents.sourceId, caseLawSources.id))
+    .orderBy(
+      caseLawIngestionEvents.sourceId,
+      desc(caseLawIngestionEvents.finishedAt),
+      desc(caseLawIngestionEvents.id),
+    )
+    .limit(1)
+    .as("latest_ingestion_event_id");
 
-  while (sourceIds.length > 0) {
-    const rows = await db
-      .select({
-        sourceId: caseLawReconciliationItems.sourceId,
-        identityKey: caseLawReconciliationItems.identityKey,
-        status: caseLawReconciliationItems.status,
-      })
-      .from(caseLawReconciliationItems)
-      .where(
-        and(
-          inArray(caseLawReconciliationItems.sourceId, sourceIds),
-          cursor === undefined
-            ? undefined
-            : sql`(${caseLawReconciliationItems.sourceId}, ${caseLawReconciliationItems.identityKey}) > (${cursor.sourceId}, ${cursor.identityKey})`,
-        ),
-      )
-      .orderBy(
-        asc(caseLawReconciliationItems.sourceId),
-        asc(caseLawReconciliationItems.identityKey),
-      )
-      .limit(pageSize);
-
-    for (const row of rows) {
-      let sourceCounts = counts.get(row.sourceId);
-      if (sourceCounts === undefined) {
-        sourceCounts = { parked: 0, terminal: 0 };
-        counts.set(row.sourceId, sourceCounts);
-      }
-      if (row.status === RECONCILIATION_ITEM_STATUS.PARKED) {
-        sourceCounts.parked += 1;
-      } else {
-        sourceCounts.terminal += 1;
-      }
-    }
-
-    const last = rows.at(-1);
-    if (last === undefined || rows.length < pageSize) {
-      break;
-    }
-    cursor = { sourceId: last.sourceId, identityKey: last.identityKey };
-  }
-  return counts;
+  return db
+    .select({
+      sourceId: caseLawSources.id,
+      status: caseLawIngestionEvents.status,
+      inserted: caseLawIngestionEvents.inserted,
+      skipped: caseLawIngestionEvents.skipped,
+      durationMs: caseLawIngestionEvents.durationMs,
+      finishedAt: caseLawIngestionEvents.finishedAt,
+      errorMessage: caseLawIngestionEvents.errorMessage,
+    })
+    .from(caseLawSources)
+    .innerJoinLateral(latest, sql`true`)
+    .innerJoin(caseLawIngestionEvents, eq(caseLawIngestionEvents.id, latest.id))
+    .where(inArray(caseLawSources.id, sourceIds));
 };
 
-/** Count the append-only event ledger through its primary-key index. */
-const countIngestionEvents = async (
+/** The `(source_id, slice, status)` index covers both exact counts. */
+export const reconciliationCountsQuery = (
   db: Transaction,
-  pageSize: number,
-): Promise<number> => {
-  let cursor: (typeof caseLawIngestionEvents.$inferSelect)["id"] | undefined;
-  let total = 0;
-  while (true) {
-    const rows = await db
-      .select({ id: caseLawIngestionEvents.id })
-      .from(caseLawIngestionEvents)
-      .where(
-        cursor === undefined
-          ? undefined
-          : gt(caseLawIngestionEvents.id, cursor),
-      )
-      .orderBy(asc(caseLawIngestionEvents.id))
-      .limit(pageSize);
-    total += rows.length;
-    const last = rows.at(-1);
-    if (last === undefined || rows.length < pageSize) {
-      return total;
-    }
-    cursor = last.id;
-  }
+  sourceIds: SafeId<"caseLawSource">[],
+) => {
+  const counts = db
+    .select({
+      parked:
+        sql<number>`count(*) filter (where ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.PARKED})::int`.as(
+          "parked",
+        ),
+      terminal:
+        sql<number>`count(*) filter (where ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.TERMINAL})::int`.as(
+          "terminal",
+        ),
+    })
+    .from(caseLawReconciliationItems)
+    .where(eq(caseLawReconciliationItems.sourceId, caseLawSources.id))
+    .as("reconciliation_counts");
+
+  return db
+    .select({
+      sourceId: caseLawSources.id,
+      parked: counts.parked,
+      terminal: counts.terminal,
+    })
+    .from(caseLawSources)
+    .innerJoinLateral(counts, sql`true`)
+    .where(inArray(caseLawSources.id, sourceIds));
 };
 
 /**
  * Per-source summaries use grouped reads for recent, indexed windows. The
- * reconciliation ledger uses bounded index pages so no one statement scans
- * its entire lifetime.
+ * lifetime reconciliation counts use an index-only per-source aggregate.
  *
  * The reads run one after another rather than concurrently: a scoped-db
  * callback holds a single transaction connection, which carries one in-flight
@@ -272,13 +235,11 @@ const readSourceAggregates = async ({
   oneDayAgo,
   oneHourAgo,
   sourceIds,
-  pageSize,
 }: {
   db: Transaction;
   oneDayAgo: Date;
   oneHourAgo: Date;
   sourceIds: SafeId<"caseLawSource">[];
-  pageSize: number;
 }): Promise<SourceAggregates> => {
   if (sourceIds.length === 0) {
     return new Map();
@@ -352,23 +313,7 @@ const readSourceAggregates = async ({
     .orderBy(rankedFailures.sourceId, rankedFailures.rank)
     .limit(sourceIds.length * TOP_ERROR_TYPES_PER_SOURCE);
 
-  const lastEventRows = await db
-    .selectDistinctOn([caseLawIngestionEvents.sourceId], {
-      sourceId: caseLawIngestionEvents.sourceId,
-      status: caseLawIngestionEvents.status,
-      inserted: caseLawIngestionEvents.inserted,
-      skipped: caseLawIngestionEvents.skipped,
-      durationMs: caseLawIngestionEvents.durationMs,
-      finishedAt: caseLawIngestionEvents.finishedAt,
-      errorMessage: caseLawIngestionEvents.errorMessage,
-    })
-    .from(caseLawIngestionEvents)
-    .where(inArray(caseLawIngestionEvents.sourceId, sourceIds))
-    .orderBy(
-      caseLawIngestionEvents.sourceId,
-      desc(caseLawIngestionEvents.finishedAt),
-    )
-    .limit(sourceIds.length);
+  const lastEventRows = await latestIngestionEventsQuery(db, sourceIds);
 
   const coverageRows = await db
     .select({
@@ -387,11 +332,7 @@ const readSourceAggregates = async ({
     .where(inArray(caseLawCoverageSlices.sourceId, sourceIds))
     .groupBy(caseLawCoverageSlices.sourceId);
 
-  const reconciliationCounts = await readReconciliationCounts({
-    db,
-    sourceIds,
-    pageSize,
-  });
+  const reconciliationCounts = await reconciliationCountsQuery(db, sourceIds);
 
   const aggregates: SourceAggregates = new Map(
     sourceIds.map((sourceId) => [sourceId, emptyAggregate()]),
@@ -428,10 +369,10 @@ const readSourceAggregates = async ({
     aggregate.failedSlices = row.failedSlices;
     aggregate.lastCheckedAt = row.lastCheckedAt?.toISOString() ?? null;
   }
-  for (const [sourceId, counts] of reconciliationCounts) {
-    const aggregate = requireAggregate(aggregates, sourceId);
-    aggregate.parked = counts.parked;
-    aggregate.terminal = counts.terminal;
+  for (const row of reconciliationCounts) {
+    const aggregate = requireAggregate(aggregates, row.sourceId);
+    aggregate.parked = row.parked;
+    aggregate.terminal = row.terminal;
   }
 
   return aggregates;
@@ -439,15 +380,12 @@ const readSourceAggregates = async ({
 
 export const getIngestionStatus = async (
   scopedDb: ScopedDb,
-  options?: { pageSize?: number },
+  options?: { now?: Date },
 ): Promise<IngestionStatus> => {
-  const pageSize = options?.pageSize ?? STATUS_READ_PAGE_SIZE;
-  const oneHourAgo = new Date(
-    Temporal.Now.instant().epochMilliseconds - 60 * 60 * 1000,
-  );
-  const oneDayAgo = new Date(
-    Temporal.Now.instant().epochMilliseconds - DAY_IN_MS,
-  );
+  const now =
+    options?.now ?? new Date(Temporal.Now.instant().epochMilliseconds);
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const oneDayAgo = new Date(now.getTime() - DAY_IN_MS);
 
   return await scopedDb(async (db) => {
     await db.execute(
@@ -481,7 +419,6 @@ export const getIngestionStatus = async (
       oneDayAgo,
       oneHourAgo,
       sourceIds: sources.map((source) => source.id),
-      pageSize,
     });
 
     const sourceStatuses: SourceStatus[] = [];
@@ -537,17 +474,28 @@ export const getIngestionStatus = async (
       ? storedTotals.reduce((sum, total) => sum + total, 0)
       : null;
 
-    const totalEvents = await countIngestionEvents(db, pageSize);
+    const [eventEstimate] = await db
+      .select({
+        total: sql<number>`greatest(0, round(reltuples))::int`,
+      })
+      .from(sql`pg_class`)
+      .where(sql`oid = 'case_law_ingestion_events'::regclass`)
+      .limit(1);
+    const estimatedTotalEvents =
+      eventEstimate?.total ??
+      panic("Missing ingestion events table statistics");
 
     const [totalFailures] = await db
       .select({ total: count() })
       .from(caseLawIngestionFailures)
-      .where(gte(caseLawIngestionFailures.createdAt, oneDayAgo));
+      .where(
+        gte(caseLawIngestionFailures.createdAt, sql`${oneDayAgo}::timestamptz`),
+      );
 
     return {
       sources: sourceStatuses,
       totalDecisions,
-      totalEvents,
+      estimatedTotalEvents,
       failures24h: totalFailures?.total ?? 0,
     };
   });
@@ -561,7 +509,8 @@ const config = {
     "reports, decisions inserted in the last hour and last day, failures and " +
     "the top error types in the last day, the last ingestion event, and " +
     "standing reconciliation counts (slices surveyed, short slices, parked " +
-    "and terminal items). Requires organization audit-log access.",
+    "and terminal items). The fleet event total is an estimate from database " +
+    "statistics and may lag recent writes. Requires organization audit-log access.",
   // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate
   // this route used to carry as a route-level `onBeforeHandle`. Declaring it in
