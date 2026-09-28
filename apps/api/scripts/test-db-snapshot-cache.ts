@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import { createHash } from "node:crypto";
 import {
   accessSync,
@@ -19,9 +20,16 @@ import path from "node:path";
 const SNAPSHOT_FORMAT = "1";
 const LOCK_TIMEOUT_MS = 5 * 60_000;
 const STALE_LOCK_MS = 30 * 60_000;
+const STALE_TAKEOVER_MS = 10_000;
 const POLL_MS = 250;
 const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60_000;
+const MAX_TEMP_AGE_MS = 60 * 60_000;
 const MAX_CACHE_ENTRIES = 4;
+
+export class SnapshotBuildError extends TaggedError("SnapshotBuildError")<{
+  message: string;
+  exitCode: number;
+}> {}
 
 const errorCode = (error: unknown) =>
   error instanceof Error && "code" in error ? error.code : undefined;
@@ -38,15 +46,18 @@ export const snapshotInputPaths = (
   const transpiler = new Bun.Transpiler({ loader: "ts" });
   while (pending.length > 0) {
     const candidate = pending.pop();
-    if (
-      candidate === undefined ||
-      !path.isAbsolute(candidate) ||
-      candidate.split(path.sep).includes("node_modules")
-    ) {
+    if (candidate === undefined || !path.isAbsolute(candidate)) {
       continue;
     }
     const canonicalFile = realpathSync(candidate);
-    if (!canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)) {
+    if (
+      canonicalFile.split(path.sep).includes("node_modules") ||
+      !canonicalFile.startsWith(`${canonicalRoot}${path.sep}`)
+    ) {
+      // The installed location distinguishes dependency versions even when
+      // bun.lock has changed without a matching install in this checkout.
+      visited.add(candidate);
+      visited.add(canonicalFile);
       continue;
     }
     const filePath = path.join(
@@ -64,6 +75,28 @@ export const snapshotInputPaths = (
     for (const imported of transpiler.scanImports(source)) {
       const resolved = Bun.resolveSync(imported.path, path.dirname(filePath));
       pending.push(resolved);
+    }
+  }
+  const packageManifest = path.join(repositoryRoot, "package.json");
+  if (statSync(packageManifest, { throwIfNoEntry: false })?.isFile()) {
+    visited.add(packageManifest);
+  }
+  const patchRoot = path.join(repositoryRoot, "patches");
+  if (statSync(patchRoot, { throwIfNoEntry: false })?.isDirectory()) {
+    const directories = [patchRoot];
+    while (directories.length > 0) {
+      const directory = directories.pop();
+      if (directory === undefined) {
+        continue;
+      }
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const filePath = path.join(directory, entry.name);
+        if (entry.isDirectory()) {
+          directories.push(filePath);
+        } else if (entry.isFile()) {
+          visited.add(filePath);
+        }
+      }
     }
   }
 
@@ -94,12 +127,24 @@ export const snapshotInputPaths = (
 
 export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
   const hash = createHash("sha256");
+  const canonicalRoot = realpathSync(repositoryRoot);
   hash.update(SNAPSHOT_FORMAT);
   hash.update("\0");
   hash.update(Bun.version);
-  for (const filePath of snapshotInputPaths(repositoryRoot, entryPoint)) {
+  const inputs = snapshotInputPaths(repositoryRoot, entryPoint)
+    .map((filePath) => {
+      let identity = filePath;
+      if (filePath.startsWith(`${repositoryRoot}${path.sep}`)) {
+        identity = path.relative(repositoryRoot, filePath);
+      } else if (filePath.startsWith(`${canonicalRoot}${path.sep}`)) {
+        identity = path.relative(canonicalRoot, filePath);
+      }
+      return { filePath, identity };
+    })
+    .toSorted((a, b) => a.identity.localeCompare(b.identity));
+  for (const { filePath, identity } of inputs) {
     hash.update("\0");
-    hash.update(path.relative(repositoryRoot, filePath));
+    hash.update(identity);
     hash.update("\0");
     hash.update(readFileSync(filePath));
   }
@@ -206,6 +251,22 @@ const leaseSnapshot = (
 
 const prune = (cacheDir: string, currentKey: string) => {
   try {
+    for (const name of readdirSync(cacheDir)) {
+      const match = /^([a-f0-9]{64})\.(?:tar|sha256)\.tmp-/u.exec(name);
+      if (!match) {
+        continue;
+      }
+      const filePath = path.join(cacheDir, name);
+      if (
+        Date.now() - statSync(filePath).mtimeMs >= MAX_TEMP_AGE_MS &&
+        (match[1] === currentKey ||
+          !statSync(path.join(cacheDir, `${match[1]}.lock`), {
+            throwIfNoEntry: false,
+          }))
+      ) {
+        rmSync(filePath, { force: true });
+      }
+    }
     const entries = readdirSync(cacheDir)
       .filter((name) => /^[a-f0-9]{64}\.tar$/u.test(name))
       .map((name) => ({
@@ -301,6 +362,16 @@ export const acquireCachedSnapshot = async ({
           try {
             mkdirSync(takeoverDir, { mode: 0o700 });
           } catch {
+            try {
+              if (
+                Date.now() - statSync(takeoverDir).mtimeMs >=
+                STALE_TAKEOVER_MS
+              ) {
+                rmSync(takeoverDir, { recursive: true, force: true });
+              }
+            } catch {
+              // Another waiter may already have removed it.
+            }
             await Bun.sleep(POLL_MS);
             continue;
           }
@@ -337,15 +408,14 @@ export const acquireCachedSnapshot = async ({
           // Treat an unreadable entry exactly like a corrupt one.
         }
         if (!valid) {
+          rmSync(finalPath);
+          rmSync(path.join(cacheDir, `${key}.sha256`), { force: true });
+        } else {
           return {
-            status: "fallback",
-            reason: "cached snapshot is unreadable or corrupt",
+            status: "hit",
+            snapshot: leaseSnapshot(cacheDir, key, finalPath),
           };
         }
-        return {
-          status: "hit",
-          snapshot: leaseSnapshot(cacheDir, key, finalPath),
-        };
       }
       const temporaryPath = `${finalPath}.tmp-${process.pid}-${token}`;
       const digestPath = path.join(cacheDir, `${key}.sha256`);
@@ -375,6 +445,9 @@ export const acquireCachedSnapshot = async ({
       prune(cacheDir, key);
       return { status: "hit", snapshot };
     } catch (error) {
+      if (error instanceof SnapshotBuildError) {
+        throw error;
+      }
       return {
         status: "fallback",
         reason: `cache write failed: ${String(error)}`,

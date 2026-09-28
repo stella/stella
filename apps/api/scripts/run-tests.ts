@@ -27,6 +27,7 @@ import {
   snapshotCacheDir,
   snapshotDigest,
   snapshotKey,
+  SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 import {
   deriveTestLaneCount,
@@ -349,7 +350,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 const runSnapshotBuilder = async (snapshotPath: string): Promise<void> => {
   console.log("Building the PGlite test-database snapshot ...");
   if (runnerShutdown.signal.aborted) {
-    process.exit(1);
+    throw new SnapshotBuildError({
+      message: "PGlite snapshot build interrupted.",
+      exitCode: 1,
+    });
   }
   const builder = Bun.spawn({
     cmd: [
@@ -364,8 +368,10 @@ const runSnapshotBuilder = async (snapshotPath: string): Promise<void> => {
   });
   const builderExitCode = await awaitChild(builder);
   if (builderExitCode !== 0) {
-    console.error("PGlite snapshot build failed; aborting the test run.");
-    process.exit(builderExitCode);
+    throw new SnapshotBuildError({
+      message: "PGlite snapshot build failed; aborting the test run.",
+      exitCode: builderExitCode,
+    });
   }
 };
 
@@ -423,6 +429,9 @@ const buildTestDbSnapshot = async (): Promise<string> => {
       `PGlite snapshot cache unavailable (${result.reason}); building privately.`,
     );
   } catch (error) {
+    if (error instanceof SnapshotBuildError) {
+      throw error;
+    }
     printError(
       `PGlite snapshot cache unavailable (${String(error)}); building privately.`,
     );
@@ -435,7 +444,15 @@ const testProcessEnv: Record<string, string | undefined> = {
   [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
 };
 if (dbTests.length > 0 || moduleMockTests.length > 0) {
-  testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+  try {
+    testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+  } catch (error) {
+    if (error instanceof SnapshotBuildError) {
+      printError(error.message);
+      process.exit(error.exitCode);
+    }
+    throw error;
+  }
 }
 
 type PlannedTestBatch = {

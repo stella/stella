@@ -4,7 +4,9 @@ import {
   mkdtempSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -15,6 +17,7 @@ import {
   acquireCachedSnapshot,
   snapshotInputPaths,
   snapshotKey,
+  SnapshotBuildError,
 } from "./test-db-snapshot-cache";
 
 const temporaryRoots: string[] = [];
@@ -68,6 +71,67 @@ test("real snapshot closure contains schema modules and migration SQL", () => {
     path.join(root, "apps/api/src/tests/pglite-schema.ts"),
   );
   expect(inputs.some((file) => file.endsWith("/migration.sql"))).toBe(true);
+  for (const dependency of ["drizzle-kit", "drizzle-orm", "pglite"]) {
+    expect(
+      inputs.some(
+        (file) => file.includes("node_modules") && file.includes(dependency),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("patch contents invalidate the key without a lockfile change", () => {
+  const root = fixture();
+  const entry = path.join(root, "entry.ts");
+  const patchDir = path.join(root, "patches");
+  mkdirSync(patchDir);
+  const patch = path.join(patchDir, "drizzle-kit.patch");
+  writeFileSync(patch, "old DDL");
+  writeFileSync(
+    path.join(root, "package.json"),
+    JSON.stringify({
+      patchedDependencies: { "drizzle-kit@1": "patches/drizzle-kit.patch" },
+    }),
+  );
+  const before = snapshotKey(root, entry);
+  writeFileSync(patch, "new DDL");
+  expect(snapshotKey(root, entry)).not.toBe(before);
+  expect(readFileSync(path.join(root, "bun.lock"), "utf-8")).toBe("lock-v1");
+});
+
+test("installed dependency version invalidates the key with identical source and lockfile", () => {
+  const createInstall = (version: string) => {
+    const root = fixture();
+    writeFileSync(path.join(root, "entry.ts"), 'import "example";');
+    const packageDir = path.join(
+      root,
+      "node_modules/.bun",
+      `example@${version}`,
+      "node_modules/example",
+    );
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      path.join(packageDir, "package.json"),
+      '{"name":"example","version":"1.0.0","exports":"./index.js"}',
+    );
+    writeFileSync(path.join(packageDir, "index.js"), "export const value = 1;");
+    symlinkSync(
+      path.relative(path.join(root, "node_modules"), packageDir),
+      path.join(root, "node_modules/example"),
+    );
+    return root;
+  };
+  const oldRoot = createInstall("1");
+  const sameRoot = createInstall("1");
+  const newRoot = createInstall("2");
+  const oldInputs = snapshotInputPaths(oldRoot, path.join(oldRoot, "entry.ts"));
+  expect(oldInputs.some((file) => file.includes("example@1"))).toBe(true);
+  expect(snapshotKey(oldRoot, path.join(oldRoot, "entry.ts"))).toBe(
+    snapshotKey(sameRoot, path.join(sameRoot, "entry.ts")),
+  );
+  expect(snapshotKey(oldRoot, path.join(oldRoot, "entry.ts"))).not.toBe(
+    snapshotKey(newRoot, path.join(newRoot, "entry.ts")),
+  );
 });
 
 test("concurrent acquirers build once and both receive the final snapshot", async () => {
@@ -180,28 +244,105 @@ test("old lock is taken over even when its pid is live", async () => {
   }
 });
 
-test("corrupt cache entry falls back without deleting it", async () => {
+test("corrupt cache entry is rebuilt in place", async () => {
   const root = fixture();
   const cacheDir = path.join(root, "cache");
   const key = "d".repeat(64);
   mkdirSync(cacheDir);
   const finalPath = path.join(cacheDir, `${key}.tar`);
   writeFileSync(finalPath, "corrupt");
-  let built = false;
+  let builds = 0;
   const result = await acquireCachedSnapshot({
     cacheDir,
     key,
-    build: async () => {
-      built = true;
+    build: async (filePath) => {
+      builds += 1;
+      writeFileSync(filePath, "valid");
     },
-    validate: async () => false,
+    validate: async (filePath) => readFileSync(filePath, "utf-8") === "valid",
   });
-  expect(result).toEqual({
-    status: "fallback",
-    reason: "cached snapshot is unreadable or corrupt",
+  expect(result.status).toBe("hit");
+  if (result.status === "hit") {
+    result.snapshot.release();
+  }
+  expect(builds).toBe(1);
+  expect(readFileSync(finalPath, "utf-8")).toBe("valid");
+  expect(existsSync(path.join(cacheDir, `${key}.sha256`))).toBe(true);
+});
+
+test("builder failure cleans partial output and pruning removes old temp files", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  const failedKey = "7".repeat(64);
+  await expect(
+    acquireCachedSnapshot({
+      cacheDir,
+      key: failedKey,
+      build: async (filePath) => {
+        writeFileSync(filePath, "partial");
+        throw new SnapshotBuildError({
+          message: "builder failed",
+          exitCode: 1,
+        });
+      },
+      validate: async () => true,
+    }),
+  ).rejects.toThrow(SnapshotBuildError);
+  expect(readdirSync(cacheDir).some((name) => name.includes(".tmp-"))).toBe(
+    false,
+  );
+
+  const oldTar = path.join(cacheDir, `${failedKey}.tar.tmp-orphan`);
+  const oldDigest = path.join(cacheDir, `${failedKey}.sha256.tmp-orphan`);
+  for (const filePath of [oldTar, oldDigest]) {
+    writeFileSync(filePath, "partial");
+    const old = new Date(Date.now() - 2 * 60 * 60_000);
+    utimesSync(filePath, old, old);
+  }
+  const result = await acquireCachedSnapshot({
+    cacheDir,
+    key: "8".repeat(64),
+    build: async (filePath) => {
+      writeFileSync(filePath, "valid");
+    },
+    validate: async () => true,
   });
-  expect(built).toBe(false);
-  expect(readFileSync(finalPath, "utf-8")).toBe("corrupt");
+  expect(result.status).toBe("hit");
+  if (result.status === "hit") {
+    result.snapshot.release();
+  }
+  expect(existsSync(oldTar)).toBe(false);
+  expect(existsSync(oldDigest)).toBe(false);
+});
+
+test("old takeover directory is removed before stale-lock takeover", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  const key = "9".repeat(64);
+  const lockDir = path.join(cacheDir, `${key}.lock`);
+  const takeoverDir = `${lockDir}.takeover`;
+  mkdirSync(lockDir, { recursive: true });
+  writeFileSync(
+    path.join(lockDir, "owner"),
+    JSON.stringify({ pid: 99_999_999, started: 0, token: "dead" }),
+  );
+  mkdirSync(takeoverDir);
+  const old = new Date(Date.now() - 20_000);
+  utimesSync(takeoverDir, old, old);
+  const result = await acquireCachedSnapshot({
+    cacheDir,
+    key,
+    build: async (filePath) => {
+      writeFileSync(filePath, "valid");
+    },
+    validate: async () => true,
+    timeoutMs: 2000,
+  });
+  expect(result.status).toBe("hit");
+  if (result.status === "hit") {
+    result.snapshot.release();
+  }
+  expect(existsSync(takeoverDir)).toBe(false);
 });
 
 test("unwritable cache location falls back", async () => {
