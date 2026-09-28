@@ -89,6 +89,7 @@
     "check:knip-exports": "bun scripts/knip-exports-ratchet.ts --check",
     "check:design-tokens": "bun scripts/design-tokens-doc.ts --check",
     "check:module-ownership": "bun scripts/ownership.ts --check",
+    "check:standalone-lockfiles": "bun scripts/check-standalone-lockfiles.ts",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
     "check:result-consumption": "bun packages/scripts/src/result-consumption.ts",
     "check:db-await-in-loop": "bun scripts/db-await-in-loop.ts",

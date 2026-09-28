@@ -23,7 +23,11 @@ import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
-import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import {
+  getPgDriverErrorCode,
+  getPgErrorCode,
+  PG_ERROR,
+} from "@/api/lib/pg-error";
 
 import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
 
@@ -253,6 +257,7 @@ export const createIngestionDb =
 
 const toSafeDbError = (cause: unknown): SafeDbError => {
   const code = getPgErrorCode(cause);
+  const driverCode = getPgDriverErrorCode(cause);
 
   if (code === PG_ERROR.INSUFFICIENT_PRIVILEGE) {
     return new DatabaseRlsError({
@@ -270,7 +275,11 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
   // unhandled exception, which then never matches the retry predicate in
   // `safe-db.ts` that exists for exactly those codes. The wrapper still
   // classifies a query failure that carries no SQLSTATE.
-  if (code !== undefined || cause instanceof DrizzleQueryError) {
+  if (
+    code !== undefined ||
+    driverCode !== undefined ||
+    cause instanceof DrizzleQueryError
+  ) {
     return new DatabaseError({
       message: "Database query failed",
       cause,

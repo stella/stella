@@ -48,6 +48,8 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 const LOCAL_ONLY_GATES = new Set<string>([
   // Intentional contract regeneration writes reviewed fixtures; CI runs the read-only check.
   "STELLA_UPDATE_PLAN_CONTRACTS",
+  // Physical statistics are a local comparison; CI reports the synthetic profile.
+  "STELLA_QUERY_PLAN_SCALE_PROFILE",
 ]);
 
 // Live-API smoke suites not wired into a workflow. Remove an entry once its

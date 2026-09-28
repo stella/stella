@@ -6,6 +6,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import {
   createTestPglite,
@@ -27,15 +28,29 @@ import {
   PUBLIC_LAW_PLAN_DISPOSITION,
   QUERY_PLAN_REGISTRY,
 } from "@/api/tests/query-plans/registry";
-import { seedQueryPlanData } from "@/api/tests/query-plans/seed";
+import {
+  estimateHeapFetches,
+  injectScaleProfile,
+  SYNTHETIC_SCALE_PROFILE,
+} from "@/api/tests/query-plans/scale-profile";
+import type { ScaleProfile } from "@/api/tests/query-plans/scale-profile";
+import {
+  QUERY_PLAN_ROW_COUNT,
+  seedQueryPlanData,
+} from "@/api/tests/query-plans/seed";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const UPDATE_PLAN_CONTRACTS =
   process.env["STELLA_UPDATE_PLAN_CONTRACTS"] === "1";
+const SCALE_PROFILE =
+  process.env["STELLA_QUERY_PLAN_SCALE_PROFILE"] === "physical"
+    ? null
+    : SYNTHETIC_SCALE_PROFILE;
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
 const observedContracts: Record<string, { scans: AccessPath[] }> = {};
+const scanReport: string[] = [];
 
 const observedPaths = (scans: readonly ScanOccurrence[]): AccessPath[] =>
   scans
@@ -71,6 +86,12 @@ beforeAll(
 );
 
 afterAll(async () => {
+  process.stdout.write(
+    `\nQuery-plan scan estimates (${SCALE_PROFILE === null ? "physical" : "synthetic"} stats; heap-fetch upper bound per loop):\n` +
+      `query | position | relation | scan | index | rows | heap-fetch upper bound per loop | query matches contract\n${scanReport.join(
+        "\n",
+      )}\n`,
+  );
   if (UPDATE_PLAN_CONTRACTS) {
     if (Object.keys(observedContracts).length !== QUERY_PLAN_REGISTRY.length) {
       panic("Plan contract update did not observe every registry entry");
@@ -85,46 +106,65 @@ afterAll(async () => {
 
 type PlanRole = (typeof QUERY_PLAN_REGISTRY)[number]["role"];
 
-const explain = async (
+const explainOn =
+  (database: ReturnType<typeof drizzle>) =>
+  async (
+    role: PlanRole,
+    build: (tx: Transaction) => SQLWrapper,
+    planMode?: "covering-index",
+  ) => {
+    const run = async (roleTx: Transaction) => {
+      if (planMode === "covering-index") {
+        await roleTx.execute(sql`SET LOCAL enable_seqscan = off`);
+        await roleTx.execute(sql`SET LOCAL enable_bitmapscan = off`);
+        await roleTx.execute(sql`SET LOCAL seq_page_cost = 1000`);
+        await roleTx.execute(sql`SET LOCAL random_page_cost = 1000`);
+      }
+      const query = build(roleTx);
+      const result = await roleTx.execute(
+        sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`,
+      );
+      return scanOccurrences(explainRoot(result));
+    };
+
+    if (role === "root") {
+      return await database.transaction(async (rootTx) => {
+        // SAFETY: the PGlite transaction exposes the production root query surface.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the production root transaction
+        const tx = rootTx as unknown as Transaction;
+        return await run(tx);
+      });
+    }
+    return await withPublicLawReaderRole(database, async (roleTx) => {
+      // SAFETY: the role transaction exposes the production public-read select surface.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a production transaction
+      const tx = roleTx as unknown as Transaction;
+      return await run(tx);
+    });
+  };
+
+const explainPhysical = async (
   role: PlanRole,
   build: (tx: Transaction) => SQLWrapper,
   planMode?: "covering-index",
-) => {
-  const run = async (roleTx: Transaction) => {
-    if (planMode === "covering-index") {
-      await roleTx.execute(sql`SET LOCAL enable_seqscan = off`);
-      await roleTx.execute(sql`SET LOCAL enable_bitmapscan = off`);
-      await roleTx.execute(sql`SET LOCAL seq_page_cost = 1000`);
-      await roleTx.execute(sql`SET LOCAL random_page_cost = 1000`);
-    }
-    const query = build(roleTx);
-    const result = await roleTx.execute(
-      sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`,
-    );
-    return scanOccurrences(explainRoot(result));
-  };
+) => await explainOn(db)(role, build, planMode);
 
-  if (role === "root") {
-    return await db.transaction(async (rootTx) => {
-      // SAFETY: the PGlite transaction exposes the production root query surface.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction stands in for the production root transaction
-      const tx = rootTx as unknown as Transaction;
-      return await run(tx);
-    });
+test("every guarded table has the physical seed before statistics injection", async () => {
+  for (const table of PLAN_GUARD_TABLES) {
+    const row = executedRows(
+      await db.execute(sql`
+        SELECT count(*)::integer AS count FROM ${sql.identifier(table)}
+      `),
+    ).at(0);
+    expect(row).toMatchObject({ count: QUERY_PLAN_ROW_COUNT });
   }
-  return await withPublicLawReaderRole(db, async (roleTx) => {
-    // SAFETY: the role transaction exposes the production public-read select surface.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a production transaction
-    const tx = roleTx as unknown as Transaction;
-    return await run(tx);
-  });
-};
+});
 
 for (const entry of QUERY_PLAN_REGISTRY) {
   test(
     `${entry.id} checks its registered access path`,
     async () => {
-      const scans = await explain(
+      const scans = await explainPhysical(
         entry.role,
         entry.build,
         "planMode" in entry ? entry.planMode : undefined,
@@ -154,7 +194,10 @@ for (const entry of QUERY_PLAN_REGISTRY) {
 test(
   "the old ECLI OR shape fails while the UNION shape keeps both indexes",
   async () => {
-    const oldScans = await explain("public-law-reader", ecliOrFixtureQuery);
+    const oldScans = await explainPhysical(
+      "public-law-reader",
+      ecliOrFixtureQuery,
+    );
     const oldViolations = accessPathViolations(oldScans, [], "point", false);
     expect(
       oldViolations.some((violation) =>
@@ -166,7 +209,7 @@ test(
       QUERY_PLAN_REGISTRY.find(
         (entry) => entry.id === "case-law.ecli-identity",
       ) ?? panic("ECLI query is absent from the plan registry");
-    const unionScans = await explain(union.role, union.build);
+    const unionScans = await explainPhysical(union.role, union.build);
     expect(unionScans.some(({ nodeType }) => nodeType === "Seq Scan")).toBe(
       false,
     );
@@ -235,3 +278,61 @@ test("recognizes the workspace RLS subplan in its real role", async () => {
     );
   }
 });
+
+const reportRegistryScans = async (profile: ScaleProfile | null) => {
+  const reportClient = await createTestPglite();
+  try {
+    const reportDb = drizzle({ client: reportClient });
+    await seedQueryPlanData(reportDb);
+    if (profile !== null) {
+      await injectScaleProfile(reportDb, profile);
+    }
+    for (const entry of QUERY_PLAN_REGISTRY) {
+      const scans = await explainOn(reportDb)(
+        entry.role,
+        entry.build,
+        "planMode" in entry ? entry.planMode : undefined,
+      );
+      const matchesContract =
+        accessPathViolations(
+          scans,
+          entry.contract.scans,
+          entry.class,
+          "allowSeqScan" in entry.contract &&
+            entry.contract.allowSeqScan === true,
+        ).length === 0;
+      for (const scan of scans) {
+        if (!guardedTables.has(scan.relation)) {
+          continue;
+        }
+        scanReport.push(
+          [
+            entry.id,
+            scan.position,
+            scan.relation,
+            scan.nodeType,
+            scan.index ?? "none",
+            scan.rows ?? "unknown",
+            profile === null
+              ? "n/a"
+              : (estimateHeapFetches(scan, profile) ?? "n/a"),
+            matchesContract ? "yes" : "no",
+          ].join(" | "),
+        );
+      }
+    }
+  } finally {
+    await reportClient.close();
+  }
+};
+
+test(
+  "reports registry scan estimates",
+  async () => {
+    await reportRegistryScans(SCALE_PROFILE);
+    expect(scanReport.length).toBeGreaterThanOrEqual(
+      QUERY_PLAN_REGISTRY.length,
+    );
+  },
+  DB_TEST_TIMEOUT_MS,
+);

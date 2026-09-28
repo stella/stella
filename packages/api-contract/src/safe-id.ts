@@ -12,6 +12,7 @@ export type SafeIdType =
   | "anonymizationBlacklistEntry"
   | "auditLog"
   | "billingCode"
+  | "savedTimeNarrative"
   | "caseLawCitation"
   | "caseLawCitationReview"
   | "caseLawCitationResolutionCensusRun"

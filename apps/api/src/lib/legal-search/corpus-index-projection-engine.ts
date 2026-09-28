@@ -24,6 +24,8 @@ export const CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES =
   LIMITS.corpusIndexIngestMaxBytes;
 export const CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES =
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES - 512 * 1024;
+export const CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES =
+  LIMITS.corpusPayloadMaxDecompressedBytes;
 export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
@@ -149,6 +151,7 @@ export const planCorpusProjectionAppendRequests = (
       );
     }
     uniqueRevisions.add(entry.revision);
+    let revisionBytes = 0;
     for (const document of entry.documents) {
       if (
         document["projection_revision"] !== entry.revision ||
@@ -160,27 +163,42 @@ export const planCorpusProjectionAppendRequests = (
           revisions,
         );
       }
+      const lineBytes = Buffer.byteLength(JSON.stringify(document), "utf-8");
+      if (lineBytes > CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES) {
+        return invalidAppend(
+          "revision_too_large",
+          "one corpus projection document exceeds the single-document ceiling",
+          revisions,
+        );
+      }
+      revisionBytes += lineBytes + 1;
+      if (revisionBytes > CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES) {
+        return invalidAppend(
+          "revision_too_large",
+          "one corpus projection revision exceeds the append safety ceiling",
+          revisions,
+        );
+      }
     }
   }
 
   const requests = splitIngestRequests(
     entries.map((entry) => ({ row: entry, docs: [...entry.documents] })),
     CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+    {
+      maxSingleDocumentBytes:
+        CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+    },
   );
-  for (const request of requests) {
-    if (
-      Buffer.byteLength(request.ndjson, "utf-8") >
-      CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES
-    ) {
-      return invalidAppend(
-        "revision_too_large",
-        "one corpus projection revision exceeds the append safety ceiling",
-        revisions,
-      );
-    }
+  if (requests.isErr()) {
+    return invalidAppend(
+      "revision_too_large",
+      requests.error.message,
+      revisions,
+    );
   }
   return Result.ok(
-    requests.map(({ entries: requestEntries, ndjson }) => ({
+    requests.value.map(({ entries: requestEntries, ndjson }) => ({
       entries: requestEntries.map(({ row }) => row),
       ndjson,
     })),
@@ -205,6 +223,7 @@ export const appendCorpusProjectionBatch = async ({
     0,
   );
   const committedRevisions: ProjectionRevision[] = [];
+  const acceptedParts = new Set<ProjectionRevision>();
   const appendRequestAt = async (
     requestIndex: number,
   ): Promise<Result<void, CorpusProjectionAppendError>> => {
@@ -215,12 +234,21 @@ export const appendCorpusProjectionBatch = async ({
     const ingested = await client.ingestCommittedBatch(indexId, request.ndjson);
     if (ingested.isErr()) {
       const unknownOutcomeObservedAt = clock();
-      const unknownRevisions = request.entries.map(({ revision }) => revision);
-      const unattemptedRevisions = planned.value
-        .slice(requestIndex + 1)
-        .flatMap(({ entries: laterEntries }) =>
-          laterEntries.map(({ revision }) => revision),
-        );
+      const unknownRevisions = [
+        ...new Set([
+          ...acceptedParts,
+          ...request.entries.map(({ revision }) => revision),
+        ]),
+      ];
+      const unattemptedRevisions = [
+        ...new Set(
+          planned.value
+            .slice(requestIndex + 1)
+            .flatMap(({ entries: laterEntries }) =>
+              laterEntries.map(({ revision }) => revision),
+            ),
+        ).values(),
+      ].filter((revision) => !unknownRevisions.includes(revision));
       return Result.err(
         new CorpusProjectionAppendError({
           message: "corpus projection append outcome is partially unknown",
@@ -234,7 +262,22 @@ export const appendCorpusProjectionBatch = async ({
         }),
       );
     }
-    committedRevisions.push(...request.entries.map(({ revision }) => revision));
+    for (const { revision } of request.entries) {
+      acceptedParts.add(revision);
+    }
+    const laterRevisions = new Set(
+      planned.value
+        .slice(requestIndex + 1)
+        .flatMap(({ entries: laterEntries }) =>
+          laterEntries.map(({ revision }) => revision),
+        ),
+    );
+    for (const { revision } of request.entries) {
+      if (!laterRevisions.has(revision)) {
+        committedRevisions.push(revision);
+        acceptedParts.delete(revision);
+      }
+    }
     return appendRequestAt(requestIndex + 1);
   };
   const appendResult = await appendRequestAt(0);

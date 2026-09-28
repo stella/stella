@@ -217,6 +217,7 @@ const splitEntry = createSafeHandler(
             rateAtEntry: original.rateAtEntry,
             currency: original.currency,
             narrative: original.narrative,
+            narrativeLanguage: original.narrativeLanguage,
             invoiceNarrative: original.invoiceNarrative,
             billable: original.billable,
             noCharge: original.noCharge,
