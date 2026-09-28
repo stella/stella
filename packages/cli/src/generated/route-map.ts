@@ -4653,7 +4653,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: {},
                   description:
-                    "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given.",
+                    "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given.",
                 },
               },
             },
@@ -7679,8 +7679,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["capability", "invoke"],
             toolName: "invoke_capability",
-            description:
-              "Invoke one capability by id (from list_capabilities/describe_capability).",
+            description: "Invoke one capability by id.",
             flags: [
               {
                 flag: "--capability",
@@ -7688,7 +7687,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Capability id to invoke, as returned by list_capabilities.",
+                  "Capability id to invoke. Use an id list_capabilities returned.",
                 required: true,
               },
               {
@@ -7717,7 +7716,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Capability id to invoke, as returned by list_capabilities.",
+                    "Capability id to invoke. Use an id list_capabilities returned.",
                 },
                 input: {
                   type: "object",
@@ -29824,6 +29823,225 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "correspondence-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "correspondence-get"],
+                capabilityId: "matters.correspondence.get",
+                description:
+                  "Read one matter correspondence record with its filers and attachments.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--correspondence-id",
+                    prop: "correspondenceId",
+                    required: true,
+                    part: "params",
+                    partPath: "correspondenceId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "correspondenceId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        correspondenceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "correspondence-list"],
+                capabilityId: "matters.correspondence.list",
+                description:
+                  "List correspondence filed in a matter, newest received first.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "correspondence-update"],
+                capabilityId: "matters.correspondence.update",
+                description:
+                  "Update supplied handling fields of a matter correspondence record. Omitted fields stay unchanged; null assignee clears assignment.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--correspondence-id",
+                    prop: "correspondenceId",
+                    required: true,
+                    part: "params",
+                    partPath: "correspondenceId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--assignee-id",
+                    prop: "assigneeId",
+                    required: false,
+                    part: "body",
+                    partPath: "assigneeId",
+                  },
+                ],
+                inputOnly: ["body.handlingState"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        handlingState: {
+                          anyOf: [
+                            {
+                              const: "new",
+                              type: "string",
+                            },
+                            {
+                              const: "handled",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        assigneeId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "correspondenceId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        correspondenceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             create: {
               kind: "capability-leaf",
               spec: {
@@ -30826,6 +31044,322 @@ export const generatedRouteMap: RouteNode = {
                               },
                             },
                           },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-create",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.create",
+                description:
+                  "Approve a shared mailbox address for filing correspondence.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--address",
+                    prop: "address",
+                    required: true,
+                    part: "body",
+                    partPath: "address",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--matter-ids",
+                    prop: "matterIds",
+                    required: false,
+                    part: "body",
+                    partPath: "matterIds",
+                  },
+                ],
+                inputOnly: ["body.scope"],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["address", "scope"],
+                      properties: {
+                        address: {
+                          format: "email",
+                          minLength: 3,
+                          maxLength: 320,
+                          type: "string",
+                        },
+                        scope: {
+                          anyOf: [
+                            {
+                              const: "organization",
+                              type: "string",
+                            },
+                            {
+                              const: "matters",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        matterIds: {
+                          maxItems: 200,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-delete",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.delete",
+                description:
+                  "Revoke an approved shared mailbox sender while retaining its approval history.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--sender-id",
+                    prop: "senderId",
+                    required: true,
+                    part: "params",
+                    partPath: "senderId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["senderId"],
+                      properties: {
+                        senderId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-list",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.list",
+                description:
+                  "List approved and revoked shared mailbox senders for the active organization.",
+                access: "write",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-scope-add": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-scope-add",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.scope.add",
+                description:
+                  "Allow an approved shared mailbox to file correspondence for one matter.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--sender-id",
+                    prop: "senderId",
+                    required: true,
+                    part: "params",
+                    partPath: "senderId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "body",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["senderId"],
+                      properties: {
+                        senderId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-scope-remove": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-scope-remove",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.scope.remove",
+                description:
+                  "Remove one matter from a shared mailbox sender's filing scope.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--sender-id",
+                    prop: "senderId",
+                    required: true,
+                    part: "params",
+                    partPath: "senderId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "body",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["senderId"],
+                      properties: {
+                        senderId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
                         },
                       },
                     },

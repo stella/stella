@@ -2,7 +2,11 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { findDecisionIdsByIdentity } from "@/api/handlers/case-law/decisions/search";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -73,6 +77,13 @@ beforeAll(
         languageGroupKey: "identity-supreme",
       },
     ]);
+    // The other spelling the plenary decision declares.
+    await db.insert(caseLawDecisionIdentifiers).values({
+      decisionId: plenaryId,
+      type: "ecli",
+      value: "ECLI:CZ:US:2011:Pl.US.24.10",
+      normalizedValue: "czus2011plus2410",
+    });
   },
   { timeout: DB_TEST_TIMEOUT_MS },
 );
@@ -118,6 +129,19 @@ test("an ECLI resolves by equality regardless of the reader's case", async () =>
     },
   });
   expect(ids).toEqual([supremeId]);
+});
+
+test("an ECLI resolves by a spelling the decision declares as an identifier", async () => {
+  const ids = await findDecisionIdsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    identity: {
+      type: "identifier",
+      kind: "ecli",
+      value: "ECLI:CZ:US:2011:Pl.US.24.10",
+    },
+  });
+  expect(ids).toEqual([plenaryId]);
 });
 
 test("an identifier nobody holds, or held in another jurisdiction, resolves to nothing", async () => {

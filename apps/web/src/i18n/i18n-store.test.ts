@@ -16,6 +16,7 @@ import en from "@/i18n/langs/en.json";
 import { getAnalytics } from "@/lib/analytics/provider";
 
 type PrepaintOptions = {
+  attributes?: Readonly<Record<string, string>>;
   languages?: readonly string[];
   prefersDark?: boolean;
   storage?: Readonly<Record<string, string>>;
@@ -23,6 +24,7 @@ type PrepaintOptions = {
 };
 
 const runPrepaint = async ({
+  attributes = {},
   languages = [],
   prefersDark = false,
   storage = {},
@@ -35,6 +37,7 @@ const runPrepaint = async ({
   const documentElement = {
     lang: "en",
     dir: "ltr",
+    getAttribute: (name: string) => attributes[name] ?? null,
     classList: {
       add: (...tokens: string[]) => {
         for (const token of tokens) {
@@ -177,6 +180,16 @@ test("prepaint-init.js prefers the persisted locale", async () => {
   });
 
   expect(result.documentElement.lang).toBe("ar");
+  expect(result.documentElement.dir).toBe("rtl");
+});
+
+test("prepaint-init.js keeps a server-rendered document language", async () => {
+  const result = await runPrepaint({
+    attributes: { "data-lang-source": "document" },
+    languages: ["ar-SA"],
+  });
+
+  expect(result.documentElement.lang).toBe("en");
   expect(result.documentElement.dir).toBe("rtl");
 });
 

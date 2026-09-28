@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
@@ -216,15 +216,34 @@ const writeDecisionRow = async (
       }
 
       if (!preservesExistingDetail) {
+        // Observed identifiers are re-derived; declared aliases stay, and an
+        // observed identifier equal to one is already held by it.
         await tx
           .delete(caseLawDecisionIdentifiers)
-          .where(eq(caseLawDecisionIdentifiers.decisionId, existing.id));
-        await tx.insert(caseLawDecisionIdentifiers).values(
-          write.plan.identifierRows.map((identifier) => ({
-            decisionId: existing.id,
-            ...identifier,
-          })),
-        );
+          .where(
+            and(
+              eq(caseLawDecisionIdentifiers.decisionId, existing.id),
+              isNull(caseLawDecisionIdentifiers.declaredAt),
+            ),
+          );
+        await tx
+          .insert(caseLawDecisionIdentifiers)
+          .values(
+            write.plan.identifierRows.map((identifier) => ({
+              decisionId: existing.id,
+              ...identifier,
+            })),
+          )
+          // A declared alias the observation also derives takes the
+          // observed spelling and stays declared.
+          .onConflictDoUpdate({
+            target: [
+              caseLawDecisionIdentifiers.decisionId,
+              caseLawDecisionIdentifiers.type,
+              caseLawDecisionIdentifiers.normalizedValue,
+            ],
+            set: { value: sql`excluded.value` },
+          });
         await writeDecisionJudges(tx, write, existing.id);
       }
 

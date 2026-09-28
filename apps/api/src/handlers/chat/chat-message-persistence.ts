@@ -63,7 +63,9 @@ import {
   type ChatThreadNamesRead,
   recordChatThreadNamesOnTx,
 } from "@/api/lib/chat/thread-names";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
@@ -490,6 +492,11 @@ const settleHonouringStop = async <T, E extends { cause?: unknown }>(
     : settled;
 };
 
+const ANON_RESTORATION_CONFLICT_SINK = failureSink({
+  event: "chat.anon_restoration_conflict",
+  expected: [],
+});
+
 const mergeContinuationMetadata = ({
   owning,
   run,
@@ -502,10 +509,19 @@ const mergeContinuationMetadata = ({
     owning?.anonRestorations !== undefined &&
     run?.anonRestorations !== undefined
   ) {
-    merged.anonRestorations = mergeAnonRestorations(
+    const { conflicts, restorations } = mergeAnonRestorations(
       owning.anonRestorations,
       run.anonRestorations,
     );
+    if (conflicts > 0) {
+      observeFailure(
+        new TelemetryError({
+          message: "An anonymization placeholder named two originals",
+        }),
+        { sink: ANON_RESTORATION_CONFLICT_SINK },
+      );
+    }
+    merged.anonRestorations = restorations;
   }
   if (owning?.usage !== undefined && run?.usage !== undefined) {
     const reasoningTokens =

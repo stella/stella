@@ -804,6 +804,15 @@ const renderEmailBody = (
 export const renderEmailBodyHtml = (parsed: ParsedEmail): string =>
   renderEmailBody(parsed).bodyHtml;
 
+export const sanitizeEmailBodyHtml = (html: string): string => {
+  const $ = load(html);
+  sanitizeDom($);
+  $("head").prepend(
+    `<meta http-equiv="Content-Security-Policy" content="${EMAIL_PREVIEW_CSP}">`,
+  );
+  return $.html();
+};
+
 const getReferencedInlineContentIds = ($: CheerioApi): Set<string> => {
   const contentIds = new Set<string>();
   $("img").each((_, element) => {

@@ -52,6 +52,7 @@ import {
   type McpChallengeError,
 } from "@/api/mcp/metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import type {
   McpToolDefinition,
   McpToolFeatureFlag,
@@ -596,13 +597,13 @@ const retryableServerErrorResponse = () => {
  * handling a `tools/call` (e.g. a gateway load fault surfaced before dispatch).
  * Details never reach the caller; they are captured at the failure site.
  */
-const retryableToolErrorResult = (): CallToolResult =>
+const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
   mcpStructuredErrorResult({
     code: "internal_error",
     message:
       "The request could not be completed due to a temporary server error",
     retryable: true,
-    hint: MCP_INTERNAL_ERROR_HINT,
+    hint: scopeHintToSurface(MCP_INTERNAL_ERROR_HINT, mode),
   });
 
 export const createMcpHttpRequestHandler = ({
@@ -693,7 +694,7 @@ export const createMcpHttpRequestHandler = ({
         if (!(error instanceof McpGatewayLoadError)) {
           captureError(error, { phase: "tools/call", mode, source: "mcp" });
         }
-        return retryableToolErrorResult();
+        return retryableToolErrorResult(mode);
       }
       if (!definition) {
         // Suggest the closest names the caller can actually see (scope-filtered
