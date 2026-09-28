@@ -1503,12 +1503,15 @@ jobs:
       # and a merge gate that reads an empty check list as green merges
       # unverified code. Neither test ran in CI before.
       # Both scripts import `better-result`, so they need the dependency
-      # install above, which is itself conditional.
+      # install above, which is itself conditional. The review gate's
+      # evaluator decides whether a reviewed pull request may enter the
+      # queue, and fails open the same way if its verdict logic breaks.
       - name: Test migration ordering and merge gate logic
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bun test scripts/check-migration-order.test.ts
           bun test scripts/merge-bar.test.ts
+          bun test scripts/review-gate.test.ts scripts/review-gate-github.test.ts scripts/review-gate-workflows.test.ts
 
       # The live ordering check, against the branch this run merges into. In a
       # merge group that is main as it stands at merge time, so a migration
