@@ -6,6 +6,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { parseReviewGateConfig } from "./review-gate";
+
 const WORKFLOWS = path.join(import.meta.dirname, "..", ".github", "workflows");
 
 type Workflow = {
@@ -82,13 +84,25 @@ describe("the publisher", () => {
     expect(source).not.toMatch(/pull_request\.head\.(sha|ref)|head_ref/u);
   });
 
-  test("holds only the shadow-mode permissions: write checks, read the rest", () => {
+  // The token matches the configured mode, both ways: enforce mode's dequeue
+  // (a merge-queue write, like enqueuing) needs contents and pull-requests
+  // write, and shadow mode, which never dequeues, holds neither.
+  test("holds exactly the permissions its configured mode needs", () => {
+    const { mode } = parseReviewGateConfig(
+      Bun.YAML.parse(
+        readFileSync(
+          path.join(import.meta.dirname, "..", ".github", "review-gate.yml"),
+          "utf-8",
+        ),
+      ),
+    );
+    const access = mode === "enforce" ? "write" : "read";
     expect(publisher.permissions).toEqual({});
     for (const job of Object.values(publisher.jobs)) {
       expect(job.permissions).toEqual({
         checks: "write",
-        contents: "read",
-        "pull-requests": "read",
+        contents: access,
+        "pull-requests": access,
       });
     }
   });

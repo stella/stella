@@ -6,7 +6,9 @@
 #
 # mode:   shadow  - publish the check only.
 #         enforce - also dequeue a queued pull request whose verdict turns
-#                   to failure (needs the workflow's write permission).
+#                   to failure, once a fresh read right before the mutation
+#                   confirms it. Needs contents and pull-requests write on
+#                   the Review Gate workflow; a test holds the two together.
 # done:   what counts as a report. commit_status / check_run: that status or
 #         check run on the head commit, in one of the listed states. Any
 #         other terminal state is the reviewer erroring: the gate keeps

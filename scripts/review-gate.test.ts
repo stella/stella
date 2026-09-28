@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   affectedGroups,
+  confirmDequeue,
   decidePublish,
   decodeIdentity,
   encodeIdentity,
@@ -556,6 +557,27 @@ describe("dequeue", () => {
     expect(shouldDequeue("enforce", failing, true)).toBe(true);
     expect(shouldDequeue("enforce", failing, false)).toBe(false);
     expect(shouldDequeue("enforce", passing, true)).toBe(false);
+  });
+
+  const fresh = { queued: true, headSha: HEAD_SHA, threads: unresolved(1) };
+
+  test("a fresh read that still shows the offence confirms it", () => {
+    expect(confirmDequeue(failing, fresh)).toBe(true);
+    expect(
+      confirmDequeue(failing, { ...fresh, threads: { complete: false } }),
+    ).toBe(true);
+  });
+
+  test.each([
+    ["it already left the queue", { queued: false }],
+    ["its head moved", { headSha: OLD_SHA }],
+    ["its threads were resolved", { threads: unresolved(0) }],
+  ])("no dequeue when, since the verdict, %s", (_, change) => {
+    expect(confirmDequeue(failing, { ...fresh, ...change })).toBe(false);
+  });
+
+  test("a verdict that is not a failure never confirms", () => {
+    expect(confirmDequeue(passing, fresh)).toBe(false);
   });
 });
 

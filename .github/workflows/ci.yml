@@ -1511,7 +1511,7 @@ jobs:
         run: |
           bun test scripts/check-migration-order.test.ts
           bun test scripts/merge-bar.test.ts
-          bun test scripts/review-gate.test.ts scripts/review-gate-workflows.test.ts
+          bun test scripts/review-gate.test.ts scripts/review-gate-github.test.ts scripts/review-gate-workflows.test.ts
 
       # The live ordering check, against the branch this run merges into. In a
       # merge group that is main as it stands at merge time, so a migration

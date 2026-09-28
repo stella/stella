@@ -25,6 +25,7 @@ import {
   GATE_APP_ID,
   ReviewGateError,
   affectedGroups,
+  confirmDequeue,
   decidePublish,
   decodeIdentity,
   encodeIdentity,
@@ -46,7 +47,9 @@ import {
   type OpenPullRequest,
   type PublishedRun,
   type PullRequestSnapshot,
+  type PullRequestVerdict,
   type QueueEntry,
+  type QueueRecheck,
   type ReviewGateConfig,
   type RunIdentity,
 } from "./review-gate";
@@ -214,12 +217,13 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String!) {
   }
 }`;
 
-// The two facts a success depends on most, re-read just before publishing.
+// The facts a success or a dequeue rests on, re-read just before acting.
 const REVALIDATE_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       headRefOid
+      mergeQueueEntry { position }
       reviewThreads(first: 100) { ${THREADS_FIELDS} }
     }
   }
@@ -259,7 +263,7 @@ mutation($id: ID!) {
 
 type Threads = PullRequestSnapshot["threads"];
 
-type PullRequestRead = PullRequestSnapshot & {
+export type PullRequestRead = PullRequestSnapshot & {
   id: string;
   baseRefName: string;
   queued: boolean;
@@ -279,9 +283,9 @@ const parseRuns = (commit: unknown): readonly PublishedRun[] =>
     })),
   );
 
-type Gateway = {
+export type Gateway = {
   readPullRequest: (number: number) => PullRequestRead;
-  revalidate: (number: number) => { headSha: string; threads: Threads };
+  revalidate: (number: number) => QueueRecheck;
   readQueue: () => readonly QueueEntry[];
   readRuns: (sha: string) => readonly PublishedRun[];
   writeRun: (sha: string, output: GateOutput, identity: RunIdentity) => void;
@@ -461,6 +465,7 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
       );
       return {
         headSha: text(pr, "headRefOid"),
+        queued: isRecord(field(pr, "mergeQueueEntry")),
         threads: collectThreads(number, field(pr, "reviewThreads")),
       };
     },
@@ -549,7 +554,7 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
 
 // --- Evaluate and publish -------------------------------------------------------
 
-type Run = {
+export type Run = {
   gateway: Gateway;
   config: ReviewGateConfig;
   baseBranch: string;
@@ -558,9 +563,26 @@ type Run = {
   // contain is read and revalidated once. Every target's first attempt may
   // reuse them; a retry after the state moved never does.
   snapshots: Map<number, PullRequestRead>;
-  revalidations: Map<number, { headSha: string; threads: Threads }>;
+  revalidations: Map<number, QueueRecheck>;
+  // Pull requests this run already removed from the queue.
+  dequeued: Set<number>;
   failures: string[];
 };
+
+export const createRun = (
+  gateway: Gateway,
+  config: ReviewGateConfig,
+  { baseBranch, dryRun }: { baseBranch: string; dryRun: boolean },
+): Run => ({
+  gateway,
+  config,
+  baseBranch,
+  dryRun,
+  snapshots: new Map(),
+  revalidations: new Map(),
+  dequeued: new Set(),
+  failures: [],
+});
 
 const now = (): string => new Date().toISOString();
 
@@ -627,7 +649,36 @@ const stillHolds = (run: Run, pullRequest: PullRequestRead): boolean => {
   );
 };
 
-const evaluatePullRequestTarget = (run: Run, number: number): void => {
+// Enforce mode's eviction. The fresh read is taken right before the mutation
+// and never served from the pass cache: only the confirmed offender leaves.
+const dequeueIfConfirmed = (
+  run: Run,
+  pullRequest: PullRequestRead,
+  verdict: PullRequestVerdict,
+): void => {
+  if (
+    run.dequeued.has(pullRequest.number) ||
+    !shouldDequeue(run.config.mode, verdict, pullRequest.queued)
+  ) {
+    return;
+  }
+  const fresh = run.gateway.revalidate(pullRequest.number);
+  if (!confirmDequeue(verdict, fresh)) {
+    console.log(
+      `#${pullRequest.number}: not dequeued; the fresh read no longer confirms it`,
+    );
+    return;
+  }
+  console.log(
+    `#${pullRequest.number}: ${verdict.title} while queued; dequeuing`,
+  );
+  if (!run.dryRun) {
+    run.gateway.dequeue(pullRequest.id);
+  }
+  run.dequeued.add(pullRequest.number);
+};
+
+export const evaluatePullRequestTarget = (run: Run, number: number): void => {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     forget(run, [number]);
     const pullRequest = readPullRequest(run, number);
@@ -646,12 +697,7 @@ const evaluatePullRequestTarget = (run: Run, number: number): void => {
       pullRequest: number,
       observedAt,
     });
-    if (shouldDequeue(run.config.mode, verdict, pullRequest.queued)) {
-      console.log(`#${number}: failing while queued; dequeuing`);
-      if (!run.dryRun) {
-        run.gateway.dequeue(pullRequest.id);
-      }
-    }
+    dequeueIfConfirmed(run, pullRequest, verdict);
     return;
   }
   publish(
@@ -672,7 +718,7 @@ const earliest = (first: string, rest: readonly string[]): string => {
   return result;
 };
 
-const evaluateGroupTarget = (run: Run, headSha: string): void => {
+export const evaluateGroupTarget = (run: Run, headSha: string): void => {
   for (let attempt = 0; attempt < MEMBERSHIP_ATTEMPTS; attempt += 1) {
     const queueReadAt = now();
     const members = groupMembers(run.gateway.readQueue(), headSha);
@@ -697,11 +743,10 @@ const evaluateGroupTarget = (run: Run, headSha: string): void => {
       queueReadAt,
       pullRequests.map(({ readAt }) => readAt),
     );
-    const output = groupOutput(
-      pullRequests.map((pullRequest) =>
-        evaluatePullRequest(pullRequest, run.config, observedAt),
-      ),
+    const verdicts = pullRequests.map((pullRequest) =>
+      evaluatePullRequest(pullRequest, run.config, observedAt),
     );
+    const output = groupOutput(verdicts);
     if (output.conclusion === "success") {
       const again = groupMembers(run.gateway.readQueue(), headSha);
       const unchanged =
@@ -713,6 +758,14 @@ const evaluateGroupTarget = (run: Run, headSha: string): void => {
       }
     }
     publish(run, headSha, output, { kind: "group", members, observedAt });
+    // The failing group names its offenders; only they leave, each confirmed
+    // by its own fresh read, so the rest of the group is rebuilt without them.
+    for (const [index, pullRequest] of pullRequests.entries()) {
+      const verdict = verdicts[index];
+      if (verdict !== undefined) {
+        dequeueIfConfirmed(run, pullRequest, verdict);
+      }
+    }
     return;
   }
   publish(
@@ -863,18 +916,14 @@ const main = (argv: readonly string[]): void => {
     Bun.YAML.parse(readFileSync(CONFIG_PATH, "utf-8")),
   );
   const baseBranch = process.env["REVIEW_GATE_BASE"] ?? "main";
-  const run: Run = {
-    gateway: createGateway(
+  const run = createRun(
+    createGateway(
       process.env["GITHUB_REPOSITORY"] ?? "stella/stella",
       baseBranch,
     ),
     config,
-    baseBranch,
-    dryRun: argv.includes("--dry-run"),
-    snapshots: new Map(),
-    revalidations: new Map(),
-    failures: [],
-  };
+    { baseBranch, dryRun: argv.includes("--dry-run") },
+  );
 
   switch (command) {
     case "pr": {

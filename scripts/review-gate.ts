@@ -774,6 +774,27 @@ export const affectedGroups = (
   );
 };
 
+export type QueueRecheck = {
+  queued: boolean;
+  headSha: string;
+  threads: PullRequestSnapshot["threads"];
+};
+
+/**
+ * Dequeuing is the primary eviction, so it removes only a confirmed
+ * offender: a fresh read taken right before the mutation must still show the
+ * pull request queued, on the head the verdict judged, and still failing the
+ * thread rule (the only rule that fails rather than waits).
+ */
+export const confirmDequeue = (
+  verdict: PullRequestVerdict,
+  fresh: QueueRecheck,
+): boolean =>
+  verdict.conclusion === "failure" &&
+  fresh.queued &&
+  fresh.headSha === verdict.headSha &&
+  (!fresh.threads.complete || fresh.threads.unresolved.length > 0);
+
 /** In enforce mode only, a queued pull request that now fails leaves. */
 export const shouldDequeue = (
   mode: Mode,
