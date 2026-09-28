@@ -35,6 +35,11 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { DefaultPendingComponent } from "@/components/route-components";
 import { FieldValue } from "@/components/workspaces/field-value";
 import {
+  SourceLocatorLabel,
+  sourceLocatorPage,
+  useOpenSourceDocument,
+} from "@/components/workspaces/list-source";
+import {
   isListItemType,
   isTaskPriority,
   isTaskStatus,
@@ -45,12 +50,10 @@ import type { ListItemType } from "@/components/workspaces/tasks/task-detail-con
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import type { LegalListSourceLocator } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { entityOptions } from "@/lib/workspaces/queries/entities";
 import {
   legalListActivityOptions,
   legalListItemsOptions,
@@ -230,7 +233,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
   const t = useTranslations();
   const formatter = useFormatter();
   const queryClient = useQueryClient();
-  const navigate = Route.useNavigate();
   const list = useQuery(legalListOptions(workspaceId, listId));
   const items = useInfiniteQuery(legalListItemsOptions(workspaceId, listId));
   const properties = useQuery(propertiesOptions(workspaceId));
@@ -789,35 +791,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           itemEntityId={sourceItemId}
           listId={listId}
           onClose={() => setSourceItemId("")}
-          onOpenDocument={(entityId, pdfPage) => {
-            detached(
-              (async () => {
-                const sourceEntity = await queryClient.query(
-                  entityOptions(workspaceId, entityId),
-                );
-                const sourceFile = sourceEntity.fields.find(
-                  (field) => field.content.type === "file",
-                );
-                if (!sourceFile) {
-                  stellaToast.add({
-                    title: t("errors.actionFailed"),
-                    type: "error",
-                  });
-                  return;
-                }
-                await navigate({
-                  to: "/workspaces/$workspaceId/$viewId/document",
-                  params: { workspaceId, viewId: "all" },
-                  search: {
-                    entity: entityId,
-                    field: sourceFile.id,
-                    ...(pdfPage === undefined ? {} : { pdfPage }),
-                  },
-                });
-              })(),
-              "lists.fetch-query",
-            );
-          }}
           workspaceId={workspaceId}
         />
       )}
@@ -830,7 +803,6 @@ type ItemSourcesPanelProps = {
   listId: string;
   itemEntityId: string;
   onClose: () => void;
-  onOpenDocument: (entityId: string, pdfPage?: number) => void;
 };
 
 const ItemSourcesPanel = ({
@@ -838,11 +810,11 @@ const ItemSourcesPanel = ({
   listId,
   itemEntityId,
   onClose,
-  onOpenDocument,
 }: ItemSourcesPanelProps) => {
   const t = useTranslations();
   const formatter = useFormatter();
   const queryClient = useQueryClient();
+  const openSourceDocument = useOpenSourceDocument(workspaceId);
   const { data, isPending } = useQuery(
     legalListSourcesOptions(workspaceId, listId, itemEntityId),
   );
@@ -897,11 +869,9 @@ const ItemSourcesPanel = ({
                   <Button
                     className="h-auto min-w-0 justify-start p-0"
                     onClick={() =>
-                      onOpenDocument(
+                      openSourceDocument(
                         source.sourceEntityId,
-                        source.locator.type === "pdf-page"
-                          ? source.locator.pageNumber
-                          : undefined,
+                        sourceLocatorPage(source.locator),
                       )
                     }
                     variant="link"
@@ -1008,21 +978,6 @@ const ActivityLabel = ({
 const ListItemTypeLabel = ({ value }: { value: ListItemType }) => {
   const t = useTranslations();
   return t(ITEM_TYPE_TRANSLATION_KEYS[value]);
-};
-
-const SourceLocatorLabel = ({
-  locator,
-}: {
-  locator: LegalListSourceLocator;
-}) => {
-  const t = useTranslations();
-  if (locator.type === "pdf-page") {
-    return `${t("common.document")} · ${locator.pageNumber}`;
-  }
-  if (locator.type === "docx-block") {
-    return locator.blockId;
-  }
-  return t("common.document");
 };
 
 const ListSkeleton = () => (

@@ -235,6 +235,10 @@ describe("derived-file regeneration boundary", () => {
         "bun --filter @stll/api gen:web-api-types --check",
         "bun --filter @stll/api gen:web-api-types\n",
       ],
+      [
+        "bun --filter @stll/web generate:route-tree --check",
+        "bun --filter @stll/web generate:route-tree\n",
+      ],
       ["bun run check:module-ownership", "bun scripts/ownership.ts --write"],
       [
         "bun run check:design-tokens",
@@ -263,8 +267,8 @@ describe("derived-file regeneration boundary", () => {
     for (const input of [
       "apps/api/",
       "packages/",
-      "apps/web/src/generated/",
-      String.raw`apps/web/package\.json$`,
+      "apps/web/src/(generated/|routes/|routeTree",
+      String.raw`apps/web/(package\.json|vite\.config\.ts|route-tree\.config\.ts|scripts/generate-route-tree\.ts)$`,
       String.raw`\.oxfmtrc\.json$`,
       String.raw`scripts/(ownership|design-tokens-doc)\.ts$`,
       String.raw`bun\.lock$`,

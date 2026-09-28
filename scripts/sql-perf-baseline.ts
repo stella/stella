@@ -1,0 +1,283 @@
+#!/usr/bin/env bun
+
+import { panic } from "better-result";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import { BASELINE_PATHS } from "./baseline-paths";
+import { analyzeSqlPerf } from "./sql-perf-detector";
+import { isSqlPerfSource, SQL_PERF_LINT_FILES } from "./sql-perf-scope.ts";
+
+export const SQL_PERF_BASELINE_PATH = BASELINE_PATHS.sqlPerf;
+const SOURCE_GLOBS = SQL_PERF_LINT_FILES;
+
+export type SqlPerfCounts = Record<string, number>;
+
+export type BaselineIssue = {
+  file: string;
+  expected: number | null;
+  actual: number | null;
+  kind: "increase" | "decrease" | "stale" | "absent";
+};
+
+export const countSqlPerfHits = (source: string, filename: string): number => {
+  const result = analyzeSqlPerf(source, filename);
+  if (result.commentErrors.length > 0) {
+    const errors = result.commentErrors
+      .map(({ line, message }) => `${filename}:${line}: ${message}`)
+      .join("\n");
+    return panic(errors);
+  }
+  return result.hits.length;
+};
+
+export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
+  const counts: SqlPerfCounts = {};
+  for (const glob of SOURCE_GLOBS) {
+    for (const file of new Bun.Glob(glob).scanSync(root)) {
+      if (!isSqlPerfSource(file)) {
+        continue;
+      }
+      const source = readFileSync(path.join(root, file), "utf-8");
+      const count = countSqlPerfHits(source, file);
+      if (count > 0) {
+        counts[file] = count;
+      }
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(counts).toSorted(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  );
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+export const parseSqlPerfCounts = (value: unknown): SqlPerfCounts => {
+  if (!isRecord(value)) {
+    return panic("SQL performance baseline must be an object");
+  }
+  const counts: SqlPerfCounts = {};
+  for (const [file, count] of Object.entries(value)) {
+    if (!isSqlPerfSource(file)) {
+      return panic(
+        `SQL performance baseline has an out-of-scope path: ${file}`,
+      );
+    }
+    if (
+      typeof count !== "number" ||
+      !Number.isSafeInteger(count) ||
+      count <= 0
+    ) {
+      return panic(
+        `SQL performance baseline count for ${file} must be a positive integer`,
+      );
+    }
+    counts[file] = count;
+  }
+  return Object.fromEntries(
+    Object.entries(counts).toSorted(([left], [right]) =>
+      left.localeCompare(right),
+    ),
+  );
+};
+
+export const compareSqlPerfCounts = (
+  current: SqlPerfCounts,
+  baseline: SqlPerfCounts,
+): BaselineIssue[] => {
+  const issues: BaselineIssue[] = [];
+  for (const [file, actual] of Object.entries(current)) {
+    const expected = baseline[file];
+    if (expected === undefined) {
+      issues.push({ file, expected: null, actual, kind: "absent" });
+    } else if (actual > expected) {
+      issues.push({ file, expected, actual, kind: "increase" });
+    } else if (actual < expected) {
+      issues.push({ file, expected, actual, kind: "decrease" });
+    }
+  }
+  for (const [file, expected] of Object.entries(baseline)) {
+    if (current[file] === undefined) {
+      issues.push({ file, expected, actual: null, kind: "stale" });
+    }
+  }
+  return issues.toSorted((left, right) => left.file.localeCompare(right.file));
+};
+
+export const lowerSqlPerfBaseline = (
+  current: SqlPerfCounts,
+  baseline: SqlPerfCounts,
+): SqlPerfCounts => {
+  const increases = compareSqlPerfCounts(current, baseline).filter(
+    ({ kind }) => kind === "increase" || kind === "absent",
+  );
+  if (increases.length > 0) {
+    return panic(
+      `Refusing to raise SQL performance baseline: ${formatIssues(increases)}`,
+    );
+  }
+  return current;
+};
+
+export const assertOriginMainSeedIsClean = (root: string): void => {
+  const committedDiff = Bun.spawnSync(
+    [
+      "git",
+      "diff",
+      "--quiet",
+      "origin/main",
+      "HEAD",
+      "--",
+      "apps/api",
+      "packages",
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (committedDiff.exitCode !== 0) {
+    return panic(
+      "Initial SQL performance baseline can only be seeded from origin/main source",
+    );
+  }
+  const status = Bun.spawnSync(
+    [
+      "git",
+      "status",
+      "--porcelain",
+      "--untracked-files=all",
+      "--",
+      "apps/api",
+      "packages",
+    ],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (status.exitCode !== 0) {
+    return panic("Could not verify source changes against origin/main");
+  }
+  if (status.stdout.toString().trim() !== "") {
+    return panic(
+      "Initial SQL performance baseline can only be seeded when apps/api and packages are unchanged from origin/main",
+    );
+  }
+};
+
+const parseBaselineText = (text: string): SqlPerfCounts =>
+  parseSqlPerfCounts(JSON.parse(text));
+
+const readBaseline = (root: string): SqlPerfCounts => {
+  const file = path.join(root, SQL_PERF_BASELINE_PATH);
+  if (!existsSync(file)) {
+    return panic(`Missing ${SQL_PERF_BASELINE_PATH}`);
+  }
+  return parseBaselineText(readFileSync(file, "utf-8"));
+};
+
+const formatIssues = (issues: readonly BaselineIssue[]): string =>
+  issues
+    .map(
+      ({ file, expected, actual, kind }) =>
+        `${file}: ${kind} (${expected ?? "missing"} -> ${actual ?? "none"})`,
+    )
+    .join("\n");
+
+const readBaseBaseline = (root: string, base: string): SqlPerfCounts | null => {
+  const commit = Bun.spawnSync(
+    ["git", "rev-parse", "--verify", `${base}^{commit}`],
+    {
+      cwd: root,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  if (commit.exitCode !== 0) {
+    return panic(`BASE_SHA does not identify a commit: ${base}`);
+  }
+  const result = Bun.spawnSync(
+    ["git", "show", `${base}:${SQL_PERF_BASELINE_PATH}`],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    return null;
+  }
+  return parseBaselineText(result.stdout.toString());
+};
+
+export const compareAgainstMergeBase = (
+  currentBaseline: SqlPerfCounts,
+  baseBaseline: SqlPerfCounts | null,
+): BaselineIssue[] => {
+  if (baseBaseline === null) {
+    return [];
+  }
+  return compareSqlPerfCounts(currentBaseline, baseBaseline).filter(
+    ({ kind }) => kind === "increase" || kind === "absent",
+  );
+};
+
+const writeBaseline = (root: string, counts: SqlPerfCounts): void => {
+  writeFileSync(
+    path.join(root, SQL_PERF_BASELINE_PATH),
+    `${JSON.stringify(counts, null, 2)}\n`,
+  );
+};
+
+const main = (): number => {
+  const root = path.resolve(import.meta.dir, "..");
+  const args = process.argv.slice(2);
+  const mode = args.includes("--write") ? "write" : "check";
+  const current = scanSqlPerfCounts(root);
+  const baselineExists = existsSync(path.join(root, SQL_PERF_BASELINE_PATH));
+  if (!baselineExists && mode !== "write") {
+    return panic(`Missing ${SQL_PERF_BASELINE_PATH}`);
+  }
+  const baseline = baselineExists ? readBaseline(root) : null;
+  if (mode === "write" && baseline === null) {
+    assertOriginMainSeedIsClean(root);
+    writeBaseline(root, current);
+    console.log(
+      `Seeded SQL performance baseline from unchanged origin/main source at ${SQL_PERF_BASELINE_PATH}`,
+    );
+    return 0;
+  }
+  if (baseline === null) {
+    return panic("SQL performance baseline was not initialized");
+  }
+  const issues = compareSqlPerfCounts(current, baseline);
+
+  if (mode === "write") {
+    const lowered = lowerSqlPerfBaseline(current, baseline);
+    writeBaseline(root, lowered);
+    console.log(
+      `Wrote lower SQL performance counts to ${SQL_PERF_BASELINE_PATH}`,
+    );
+    return 0;
+  }
+
+  if (issues.length > 0) {
+    console.error(
+      `SQL performance baseline mismatch:\n${formatIssues(issues)}`,
+    );
+    return 1;
+  }
+
+  const base = process.env["BASE_SHA"];
+  if (base) {
+    const baseBaseline = readBaseBaseline(root, base);
+    const mergeIssues = compareAgainstMergeBase(baseline, baseBaseline);
+    if (mergeIssues.length > 0) {
+      console.error(
+        `SQL performance baseline raises counts from ${base}:\n${formatIssues(mergeIssues)}`,
+      );
+      return 1;
+    }
+  }
+
+  console.log("SQL performance baseline: counts match.");
+  return 0;
+};
+
+if (import.meta.main) {
+  process.exit(main());
+}

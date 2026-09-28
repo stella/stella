@@ -27612,7 +27612,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "lists", "items-list"],
                 capabilityId: "lists.items.list",
                 description:
-                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set.",
+                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set, and its first source (document id, document name, locator), null when it has none.",
                 access: "read",
                 flags: [
                   {

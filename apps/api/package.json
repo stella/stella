@@ -4,11 +4,13 @@
   "license": "Apache-2.0",
   "module": "src/server.ts",
   "imports": {
-    "#quickjs-release-asyncify.wasm": "@jitl/quickjs-wasmfile-release-asyncify/wasm"
+    "#quickjs-release-asyncify.wasm": "@jitl/quickjs-wasmfile-release-asyncify/wasm",
+    "#text-shaper.wasm": "@stll/folio-core/text-shaping/wasm"
   },
   "scripts": {
     "build": "bun run build:mcp-apps",
     "build:mcp-apps": "bun scripts/build-mcp-apps.ts",
+    "gen:chat-saved-state": "bun scripts/gen-chat-saved-state.ts",
     "gen:chat-transcripts": "bun scripts/gen-chat-transcripts.ts",
     "gen:web-api-types": "bun scripts/generate-web-api-types.ts",
     "build:analyze": "bun build --target bun --outdir .cache/server-build --entry-naming=server.js --metafile-md=.cache/server-metafile.md src/server.ts",
@@ -141,6 +143,7 @@
     "@tanstack/ai-openai": "catalog:",
     "@tanstack/ai-openrouter": "catalog:",
     "@valibot/to-json-schema": "^1.8.0",
+    "asn1js": "3.0.10",
     "better-auth": "catalog:",
     "better-result": "catalog:",
     "bullmq": "^6.3.8",
@@ -159,6 +162,7 @@
     "jszip": "catalog:",
     "nodemailer": "^10.0.10",
     "onnxruntime-node": "1.30.0",
+    "pkijs": "3.4.0",
     "postal-mime": "^3.0.0",
     "posthog-node": "^5.52.5",
     "quickjs-emscripten": "^0.32.0",
@@ -181,7 +185,8 @@
     "bun-types": "catalog:",
     "drizzle-kit": "catalog:",
     "expect-type": "^1.4.0",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "pdfjs-dist": "^6.3.289"
   },
   "ciGateTestRunners": {
     "test:postgres": {

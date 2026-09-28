@@ -127,11 +127,30 @@ const bodySchema = v.variant("encoding", [
   }),
 ]);
 
+/**
+ * The request as the adapter sent it, minus what varies between runs: the
+ * protocol headers (`PINNED_REQUEST_HEADERS`, never a credential or an SDK
+ * version), and the JSON body in the order it was written, with the prompt
+ * text replaced by `[prompt]`. Tool schemas, strict flags, message roles and
+ * part kinds, model options and cache markers all live in it.
+ */
+const requestShapeSchema = v.strictObject({
+  headers: headersSchema,
+  body: v.unknown(),
+});
+
+export type ProviderWireRequestShape = v.InferOutput<typeof requestShapeSchema>;
+
 const exchangeSchema = v.strictObject({
   request: v.strictObject({
     method: v.literal("POST"),
     /** Path and query, without credentials. */
     path: v.string(),
+    /** What the scenario's synthetic request must look like on the wire:
+     *  written by the recorder from the live request, and for a synthetic
+     *  cassette by `record:provider-cassettes --update-request-shapes`. The
+     *  replay test fails an exchange without one. */
+    shape: v.optional(requestShapeSchema),
   }),
   response: v.strictObject({
     status: v.pipe(v.number(), v.integer(), v.minValue(100), v.maxValue(599)),
@@ -191,8 +210,8 @@ export const providerWireCassetteSchema = v.strictObject({
   /** Where a synthetic cassette's bytes come from. */
   basis: v.optional(v.string()),
   recordedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
-  /** The user prompt a recording sent: the recorder stores no request body,
-   *  so this is how a recording is tied to the prompt it answers. */
+  /** The user prompt a recording sent; its request shapes hold `[prompt]`
+   *  in its place. */
   prompt: v.optional(v.string()),
   /** The model the request named. */
   model: v.string(),

@@ -6,6 +6,7 @@ import {
 } from "@tanstack/ai";
 import type { StreamChunk, TokenUsage } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
@@ -35,6 +36,7 @@ import {
 import type {
   ProviderWireCassette,
   ProviderWireProvider,
+  ProviderWireRequestShape,
   ProviderWireScenario,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import { encodeAwsEventStreamMessage } from "@/api/tests/helpers/provider-wire-replay";
@@ -42,6 +44,7 @@ import type {
   Chunking,
   ProviderWireReplay,
   ProviderWireReplayFindings,
+  ReplayedRequest,
 } from "@/api/tests/helpers/provider-wire-replay";
 
 // One contract for every provider adapter. A run sends the fixed synthetic
@@ -712,6 +715,117 @@ export const findWireCancelViolations = ({
   ];
 };
 
+// --- The request shape ------------------------------------------------------
+
+/** Request headers that change what a provider does with a request. The rest
+ *  (credentials, SDK versions, retry counters, invocation ids) stay out of a
+ *  request's shape. */
+const PINNED_REQUEST_HEADERS = [
+  "accept",
+  "anthropic-beta",
+  "anthropic-version",
+  "content-type",
+] as const;
+
+const PROMPT_PLACEHOLDER = "[prompt]";
+
+const withPromptReplaced = (value: unknown, prompt: string): unknown => {
+  if (value === prompt) {
+    return PROMPT_PLACEHOLDER;
+  }
+  if (Array.isArray(value)) {
+    return value.map((child) => withPromptReplaced(child, prompt));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        withPromptReplaced(child, prompt),
+      ]),
+    );
+  }
+  return value;
+};
+
+/** The shape of one request that sent `prompt`. */
+export const wireRequestShape = ({
+  body,
+  headers,
+  prompt,
+}: {
+  body: string;
+  headers: Headers;
+  prompt: string;
+}): ProviderWireRequestShape => {
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  return {
+    headers: Object.fromEntries(
+      PINNED_REQUEST_HEADERS.flatMap((name) => {
+        const value = headers.get(name);
+        return value === null ? [] : [[name, value]];
+      }),
+    ),
+    body: Result.isOk(parsed)
+      ? withPromptReplaced(parsed.value, prompt)
+      : body.replaceAll(prompt, () => PROMPT_PLACEHOLDER),
+  };
+};
+
+/** The prompt a cassette's requests send. */
+export const cassettePrompt = (cassette: ProviderWireCassette): string =>
+  cassette.prompt ?? scenarioPrompt(cassette.provider, cassette.scenario);
+
+/** A shape as it is compared and shown: headers by name, the body in the
+ *  order it was written, since a strict provider generates a tool's input
+ *  in its schema's property order. */
+const requestShapeText = (shape: ProviderWireRequestShape): string =>
+  JSON.stringify(
+    {
+      headers: Object.fromEntries(
+        // Header names are ASCII and unique.
+        Object.entries(shape.headers).toSorted(([left], [right]) =>
+          left < right ? -1 : 1,
+        ),
+      ),
+      body: shape.body,
+    },
+    null,
+    2,
+  );
+
+export type RequestShapeDrift = {
+  exchange: number;
+  expected: string;
+  got: string;
+};
+
+/** Every answered request whose shape is not the one its exchange pins. A
+ *  refused or side request is the transport oracle's finding. */
+export const findRequestShapeDrift = ({
+  cassette,
+  sent,
+}: {
+  cassette: ProviderWireCassette;
+  sent: readonly ReplayedRequest[];
+}): RequestShapeDrift[] => {
+  const prompt = cassettePrompt(cassette);
+  return sent.flatMap((request) => {
+    if (typeof request.exchange !== "number") {
+      return [];
+    }
+    const exchange =
+      cassette.exchanges[request.exchange] ??
+      panic(`No exchange ${String(request.exchange)} answered the request`);
+    const pinned = exchange.request.shape;
+    const expected =
+      pinned === undefined ? "(no shape pinned)" : requestShapeText(pinned);
+    const got = requestShapeText(wireRequestShape({ ...request, prompt }));
+    return got === expected
+      ? []
+      : [{ exchange: request.exchange, expected, got }];
+  });
+};
+
 /** Serves `cassette` and runs its scenario against its provider's adapter. */
 export const replayWireScenario = async ({
   cancelAfterFirstDelta,
@@ -741,8 +855,8 @@ export const replayWireScenario = async ({
     cancelAfterFirstDelta === true
       ? await runCancelledWireScenario(request)
       : await runWireScenario(request);
-  const requests = replay.requests().length;
-  return { findings: replay.takeFindings(), requests, run };
+  const sent = [...replay.requests()];
+  return { findings: replay.takeFindings(), requests: sent.length, run, sent };
 };
 
 /** Where a text cassette goes quiet for the cancel run: at the end of its
