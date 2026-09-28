@@ -747,10 +747,14 @@ const processPreparedRequests = async ({
         error.status !== 400 &&
         error.status !== 413 &&
         error.status !== 422);
-    // The cycle summary groups every failed append under cleanup pending; the
-    // state row retains whether the engine rejected this exact request.
+    // A batch 500 may be caused by one document, so isolate its members
+    // without charging them. A singleton 500 then counts as an unknown
+    // document outcome and cannot loop without bound.
+    const documentFault = !engineFault || error.status === 500;
+    const stopForEngine =
+      engineFault && !(error.status === 500 && started.length === 1);
     let event = "corpus_projection.append_unknown";
-    if (engineFault) {
+    if (stopForEngine) {
       event = "corpus_projection.engine_unavailable";
     } else if (error.rejection === "definite") {
       event = "corpus_projection.append_rejected";
@@ -769,7 +773,7 @@ const processPreparedRequests = async ({
             leaseToken: preparedEntry.material.lease.leaseToken,
             errorMessage: error.message,
             rejection: error.rejection,
-            fault: engineFault ? "engine" : "document",
+            fault: documentFault ? "document" : "engine",
           }),
       );
       return {
@@ -809,14 +813,14 @@ const processPreparedRequests = async ({
         errorMessage: "projection append stopped after an unknown request",
       }),
     );
-    if (engineFault) {
+    if (stopForEngine) {
       result.status = "engine_unavailable";
     } else if (abandoned.blocked.length > 0) {
       result.status = "append_blocked";
     } else {
       result.status = "append_unknown";
     }
-    if (engineFault) {
+    if (stopForEngine) {
       result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
     }
     return result.status;

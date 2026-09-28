@@ -22,6 +22,7 @@ import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/
 import { CORPUS_PROJECTION_APPEND_COMMIT_MODE } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import { CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -253,52 +254,166 @@ test("every cycle reports one timing per phase, in both commit modes", async () 
   }
 });
 
-test("a rejected two-revision request isolates both; only a failed singleton is charged", async () => {
+test("repeated 413 cycles park only the rejected revision after its healthy batch mate succeeds", async () => {
   const entityIds = await seedLegislation([1, 2]);
+  const failingEntity =
+    entityIds.at(0) ?? panic("Expected failing legislation entity");
+  const healthyEntity =
+    entityIds.at(1) ?? panic("Expected healthy legislation entity");
   const requestSizes: number[] = [];
+  const warn = spyOn(logger, "warn");
   const ingest = async (_indexId: string, ndjson: string) => {
     const size = ndjson.split("\n").length;
     requestSizes.push(size);
-    return Result.err(
-      new CorpusIndexError({
-        message: "request rejected",
-        status: 413,
-        rejection: "definite",
+    if (ndjson.includes(failingEntity)) {
+      return Result.err(
+        new CorpusIndexError({
+          message: "request rejected",
+          status: 413,
+          rejection: "definite",
+        }),
+      );
+    }
+    return Result.ok(undefined);
+  };
+  try {
+    const first = await runLegislationCycle({
+      entityIds,
+      text: "Small act text.",
+      ingest,
+    });
+    expect(first.status).toBe("append_unknown");
+    expect(first.requestCount).toBe(1);
+    expect(requestSizes).toEqual([2]);
+    expect(await projectionStates(entityIds)).toEqual(
+      entityIds.map((entityId) => ({
+        entityId,
+        workStatus: "retry_scheduled",
+        failureAttempts: 0,
+        lastFailureKind: "append_rejected",
+        appendMode: "single",
+      })),
+    );
+
+    await makeRetryDue(entityIds);
+    const second = await runLegislationCycle({
+      entityIds,
+      text: "Small act text.",
+      ingest,
+    });
+    expect(second.status).toBe("append_unknown");
+    expect(second.requestCount).toBe(1);
+    expect(second.cancelled).toBe(1);
+    expect(requestSizes).toEqual([2, 1]);
+    expect(await projectionStates(entityIds)).toEqual([
+      {
+        entityId: failingEntity,
+        workStatus: "retry_scheduled",
+        failureAttempts: 1,
+        lastFailureKind: "append_rejected",
+        appendMode: "single",
+      },
+      {
+        entityId: healthyEntity,
+        workStatus: "retry_scheduled",
+        failureAttempts: 0,
+        lastFailureKind: "append_rejected",
+        appendMode: "single",
+      },
+    ]);
+
+    await makeRetryDue([healthyEntity]);
+    const third = await runLegislationCycle({
+      entityIds,
+      text: "Small act text.",
+      ingest,
+    });
+    expect(third.status).toBe("completed");
+    expect(third.applied).toBe(1);
+    expect(third.requestCount).toBe(1);
+    expect(requestSizes).toEqual([2, 1, 1]);
+    expect(await projectionStates([healthyEntity])).toEqual([
+      {
+        entityId: healthyEntity,
+        workStatus: "eligible",
+        failureAttempts: 0,
+        lastFailureKind: null,
+        appendMode: "batchable",
+      },
+    ]);
+
+    await makeRetryDue([failingEntity]);
+    const fourth = await runLegislationCycle({
+      entityIds,
+      text: "Small act text.",
+      ingest,
+    });
+    expect(fourth.status).toBe("append_blocked");
+    expect(fourth.blocked).toBe(1);
+    expect(fourth.requestCount).toBe(1);
+    expect(requestSizes).toEqual([2, 1, 1, 1]);
+    expect(await projectionStates(entityIds)).toEqual([
+      {
+        entityId: failingEntity,
+        workStatus: "blocked",
+        failureAttempts: 2,
+        lastFailureKind: "append_rejected",
+        appendMode: "single",
+      },
+      {
+        entityId: healthyEntity,
+        workStatus: "eligible",
+        failureAttempts: 0,
+        lastFailureKind: null,
+        appendMode: "batchable",
+      },
+    ]);
+    expect(warn).toHaveBeenCalledWith(
+      "corpus_projection.append_blocked",
+      expect.objectContaining({
+        entity: failingEntity,
+        kind: "append_rejected",
+        attempts: 2,
       }),
     );
-  };
-  const first = await runLegislationCycle({
-    entityIds,
-    text: "Small act text.",
-    ingest,
-  });
-  expect(first.status).toBe("append_unknown");
-  expect(first.requestCount).toBe(1);
-  expect(requestSizes).toEqual([2]);
-  expect(await projectionStates(entityIds)).toEqual(
-    entityIds.map((entityId) => ({
-      entityId,
-      workStatus: "retry_scheduled",
-      failureAttempts: 0,
-      lastFailureKind: "append_rejected",
-      appendMode: "single",
-    })),
-  );
+  } finally {
+    warn.mockRestore();
+  }
+});
 
-  await makeRetryDue(entityIds);
-  const second = await runLegislationCycle({
-    entityIds,
-    text: "Small act text.",
-    ingest,
-  });
-  expect(second.requestCount).toBe(1);
-  expect(requestSizes).toEqual([2, 1]);
-  const states = await projectionStates(entityIds);
-  expect(states.map(({ failureAttempts }) => failureAttempts)).toEqual([1, 0]);
-  expect(states.map(({ appendMode }) => appendMode)).toEqual([
-    "single",
-    "single",
-  ]);
+test("a persistent 500 on one revision is charged until it parks", async () => {
+  const entityIds = await seedLegislation([11]);
+  const ingest = async () =>
+    Result.err(new CorpusIndexError({ message: "ingest failed", status: 500 }));
+
+  for (
+    let attempt = 1;
+    attempt <= CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT;
+    attempt += 1
+  ) {
+    if (attempt > 1) {
+      await makeRetryDue(entityIds);
+    }
+    const result = await runLegislationCycle({
+      entityIds,
+      text: "Small act text.",
+      ingest,
+    });
+    const parked = attempt === CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT;
+    expect(result.status).toBe(parked ? "append_blocked" : "append_unknown");
+    expect(result.requestCount).toBe(1);
+    expect(result.blocked).toBe(parked ? 1 : 0);
+    expect(await projectionStates(entityIds)).toEqual([
+      {
+        entityId:
+          entityIds.at(0) ?? panic("Expected seeded legislation entity"),
+        workStatus: parked ? "blocked" : "retry_scheduled",
+        failureAttempts: attempt,
+        lastFailureKind: "append_unknown",
+        appendMode: "batchable",
+      },
+    ]);
+  }
 });
 
 test("an unknown two-revision outcome does not charge either batch mate", async () => {

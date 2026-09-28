@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -59,6 +59,7 @@ import {
   startCorpusProjectionAppendTx,
   unparkCorpusProjectionAppendTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -1679,18 +1680,33 @@ test("operator unpark resets one blocked revision after cleanup", async () => {
       lastFailureMessage: "rejected",
     })
     .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
-  const unpark = async () =>
+  const info = spyOn(logger, "info");
+  const unpark = async (reason: string) =>
     await db.transaction(
       async (tx) =>
         await unparkCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
           family: "case_law",
           generation: "case_law_v5",
           entityId: DECISION_ID,
-          reason: "reviewed and corrected source",
+          reason,
         }),
     );
-  expect(await unpark()).toBe("unparked");
-  expect(await unpark()).toBe("not_blocked");
+  try {
+    expect(unpark("  ")).rejects.toThrow(
+      "unpark reason must contain 1-256 characters",
+    );
+    expect(await unpark("reviewed and corrected source")).toBe("unparked");
+    expect(await unpark("reviewed and corrected source")).toBe("not_blocked");
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith("corpus_projection.append_unparked", {
+      family: "case_law",
+      generation: "case_law_v5",
+      entity: DECISION_ID,
+      reason: "reviewed and corrected source",
+    });
+  } finally {
+    info.mockRestore();
+  }
   const [state] = await db
     .select({
       workStatus: corpusIndexProjectionStates.workStatus,

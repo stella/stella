@@ -1001,24 +1001,28 @@ export const abandonCorpusProjectionAppendTx = async (
     : { status: "cleanup_pending" };
 };
 
-type UnparkCorpusProjectionAppendOptions = {
+export type UnparkCorpusProjectionAppendOptions = {
   family: CorpusFamily;
   generation: string;
   entityId: string;
   reason: string;
 };
 
-/**
- * Operator repair for one parked entity. Call in a database transaction after
- * inspecting its failure and settling cleanup. The prior singleton choice is
- * retained; a retry cannot silently return a suspect revision to a batch.
- */
+export type CorpusProjectionAppendUnparkResult =
+  | "unparked"
+  | "not_blocked"
+  | "cleanup_pending";
+
+/** Unpark one blocked entity after cleanup settles; retain singleton retry. */
 export const unparkCorpusProjectionAppendTx = async (
   tx: Transaction,
   { family, generation, entityId, reason }: UnparkCorpusProjectionAppendOptions,
-): Promise<"unparked" | "not_blocked" | "cleanup_pending"> => {
-  if (reason.trim().length === 0) {
-    return panic("Corpus projection unpark requires a reason");
+): Promise<CorpusProjectionAppendUnparkResult> => {
+  const normalizedReason = reason.trim();
+  if (normalizedReason.length === 0 || normalizedReason.length > 256) {
+    return panic(
+      "Corpus projection unpark reason must contain 1-256 characters",
+    );
   }
   await lockCorpusIndexProjectionMutationsTx(tx, [{ family, generation }]);
   await lockRegisteredCorpusProjectionManifestForMutation(
@@ -1075,6 +1079,13 @@ export const unparkCorpusProjectionAppendTx = async (
         eq(corpusIndexProjectionStates.entityId, entityId),
       ),
     );
+  const { logger } = await import("@/api/lib/observability/logger");
+  logger.info("corpus_projection.append_unparked", {
+    family,
+    generation,
+    entity: entityId,
+    reason: normalizedReason,
+  });
   return "unparked";
 };
 

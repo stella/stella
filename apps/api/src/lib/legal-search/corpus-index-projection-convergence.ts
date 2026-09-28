@@ -169,9 +169,6 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   if (await readOutstandingCorpusProjectionIntentTx(tx, target)) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding;
   }
-  // A parked entity is a terminal, visible exception to convergence. Report
-  // it after cleanup settles so callers can advance the generation while
-  // retaining the explicit repair obligation.
   if (observation["hasBlockedState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.knownBlocked;
   }
