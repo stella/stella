@@ -2,6 +2,7 @@
 name: playbook-builder
 description: Build a contract review playbook with the user, position by position, from their past executed contracts, an interview, and market-standard defaults. Use when the user wants to create, draft, or extend a playbook.
 metadata:
+  stella-required-tools: save_playbook
   stella-chat-excluded-tools: spawn_subagents
   stella-chat-documented-reads: list_documents search_across_matters read_content_across_matters
 ---
@@ -31,9 +32,7 @@ draft that a person approves in the editor; you never approve it.
   no imports and returns plain JSON. If a call is rejected, re-read the
   signature and correct the call yourself.
 - `save_playbook` and `ask-user` are direct tool calls, never functions in a
-  script: a script has no `save_playbook`, and `save_playbook is not
-defined` inside one means the call was written in the wrong place, not
-  that the tool is missing. Read in a script, then save with a tool call.
+  script. Read in a script, then save with a tool call.
 - `spawn_subagents` is never used with this skill, whatever the chat's
   delegation rule says: every call is yours.
 
@@ -101,11 +100,8 @@ before it is read, and a subagent cannot ask them.
      they did not pick, however relevant it looks: a search also returns
      drafts and the counterparty's paper, and a playbook is visible to the
      whole organization, so which documents feed it is the user's choice.
-     Document ids listed before the user answered no longer resolve after
-     it (`Unknown entity ref`), so read in one script that first lists the
-     chosen matters' documents again with `list_documents` and then reads
-     the picked ones by the ids that listing returns.
-     Positions already saved are then revised from what the contracts say.
+     Read the picked documents by the ids the listing returned. Positions
+     already saved are then revised from what the contracts say.
 - **None, or later:** do not search and do not list matters. Build from
   defaults and the interview: after the opening answers, go straight to
   section 3 in the same reply and save the first position. Once the
