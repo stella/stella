@@ -103,7 +103,16 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
-  USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
+  /**
+   * Local development and tests only. `"true"` answers AI requests with the
+   * dev mock unless the organization configured its own key, which then
+   * answers for real; `"force"` mocks every request, keys included, for runs
+   * that must stay deterministic whatever the database holds.
+   */
+  USE_MOCK_AI: v.optional(
+    v.union([v.literal("force"), v.pipe(v.string(), v.parseBoolean())]),
+    "false",
+  ),
   E2E_DISABLE_AUTH_RATE_LIMIT: v.optional(
     v.pipe(v.string(), v.parseBoolean()),
     "false",
@@ -585,7 +594,7 @@ type EnvApiInvariantInput = {
   SMTP_HOST?: string | undefined;
   SMTP_PORT?: number | undefined;
   TRANSACTIONAL_EMAIL_FROM?: string | undefined;
-  USE_MOCK_AI: boolean;
+  USE_MOCK_AI: boolean | "force";
   nodeEnv: NodeEnvLabel;
   runtimeMode: RuntimeMode;
 };
@@ -649,7 +658,7 @@ export const envApiInvariantViolation = ({
   if (DEV_PUBLIC_LAW_CONNECT_COMMAND !== undefined && !localDevOpen) {
     return "DEV_PUBLIC_LAW_CONNECT_COMMAND is only supported in local development and tests.";
   }
-  if (USE_MOCK_AI && !localDevOpen) {
+  if (USE_MOCK_AI !== false && !localDevOpen) {
     return "USE_MOCK_AI is only supported in local development and tests.";
   }
   if (FEATURE_ORG_ACCESS_STATE && ORG_EVALUATION_PERIOD_DAYS === undefined) {

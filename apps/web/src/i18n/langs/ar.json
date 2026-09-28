@@ -1068,6 +1068,10 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "mockModel": {
+      "description": "ردود ثابتة من نموذج المحاكاة المحلي",
+      "label": "ذكاء اصطناعي مُحاكى"
+    },
     "modelSelector": {
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",

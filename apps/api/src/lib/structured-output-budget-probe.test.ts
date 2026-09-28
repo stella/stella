@@ -42,6 +42,7 @@ describe("buildBudgetEdgeSchema", () => {
       // seam production requests pass through: the schema it hands back must
       // actually clear `checkStructuredOutputBudget`.
       const wireSchema = structuredOutputWireJsonSchema({
+        mock: false,
         outputSchema: result.outputSchema,
         provider: target.provider,
       });

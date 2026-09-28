@@ -27,7 +27,7 @@ fi
 # First publication needs an npm token; trusted publishing can only be configured
 # after each package exists. Keep this list limited to unpublished placeholder
 # packages so an already-released package cannot block their bootstrap.
-packages=(start-runtime ssr-kit ssr-testkit invoicing)
+packages=(start-runtime ssr-kit ssr-testkit)
 manifests=()
 integrities=()
 publish_modes=()
