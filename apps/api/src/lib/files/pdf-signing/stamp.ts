@@ -30,7 +30,22 @@ import * as pkijs from "pkijs";
 import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp, PdfSigningStampRotation } from "@/api/db/schema";
-import { stampTextCheck } from "@/api/lib/files/pdf-signing/stamp-text";
+import type { StampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
+import {
+  drawStampRows,
+  pdfNumber,
+} from "@/api/lib/files/pdf-signing/stamp-glyphs";
+import {
+  FIRST_STRONG_ISOLATE,
+  LEFT_TO_RIGHT_ISOLATE,
+  layoutStampRow,
+  POP_DIRECTIONAL_ISOLATE,
+  STAMP_UNITS_PER_EM,
+} from "@/api/lib/files/pdf-signing/stamp-layout";
+import {
+  stampTextCheck,
+  stampValue,
+} from "@/api/lib/files/pdf-signing/stamp-text";
 
 /** The stamp cannot be put on the document it was placed for. */
 export class PdfSigningStampError extends TaggedError("PdfSigningStampError")<{
@@ -316,6 +331,16 @@ export const formatStampTime = (signingTime: Date, timeZone: string) => {
   return `${pad(zoned.year, 4)}-${pad(zoned.month)}-${pad(zoned.day)} ${pad(zoned.hour)}:${pad(zoned.minute)}:${pad(zoned.second)} ${zoned.offset}`;
 };
 
+/** An inserted value, set apart so its direction cannot leak into the label's. */
+const isolated = (value: string) =>
+  `${FIRST_STRONG_ISOLATE}${stampValue(value)}${POP_DIRECTIONAL_ISOLATE}`;
+
+/**
+ * The stamp's lines, in logical order. Each inserted value is a bidi
+ * isolate: an Arabic name after an English label stays one unit instead of
+ * pulling the text after it into its own direction, and the numeric time
+ * always reads left to right, whatever the labels' language.
+ */
 export const stampLines = ({
   location,
   reason,
@@ -329,48 +354,15 @@ export const stampLines = ({
   signingTime: Date;
   stamp: SignatureStamp;
 }): string[] => [
-  `${stamp.labels.signedBy} ${signerName}`.trim(),
-  `${stamp.labels.date}: ${formatStampTime(signingTime, stamp.timeZone)}`,
-  ...(reason === null ? [] : [`${stamp.labels.reason}: ${reason}`]),
-  ...(location === null ? [] : [`${stamp.labels.location}: ${location}`]),
+  signerName === ""
+    ? stamp.labels.signedBy
+    : `${stamp.labels.signedBy} ${isolated(signerName)}`,
+  `${stamp.labels.date}: ${LEFT_TO_RIGHT_ISOLATE}${formatStampTime(signingTime, stamp.timeZone)}${POP_DIRECTIONAL_ISOLATE}`,
+  ...(reason === null ? [] : [`${stamp.labels.reason}: ${isolated(reason)}`]),
+  ...(location === null
+    ? []
+    : [`${stamp.labels.location}: ${isolated(location)}`]),
 ];
-
-/** Fixed precision keeps the content stream byte-identical across phases. */
-const num = (value: number) => {
-  const fixed = value.toFixed(3);
-  return fixed === "-0.000" ? "0.000" : fixed;
-};
-
-/**
- * Six capital letters derived from what the subset holds. LibPDF picks a
- * random subset tag; a derived one keeps both phases' bytes identical.
- */
-const subsetTag = (lines: readonly string[]) => {
-  const hash = new Bun.CryptoHasher("sha256").update(lines.join("\n")).digest();
-  return Array.from(hash.subarray(0, 6), (byte) =>
-    String.fromCodePoint(65 + (byte % 26)),
-  ).join("");
-};
-
-const retagSubsetFont = (pdf: PDF, fontRef: PdfRef, tag: string) => {
-  const resolve = (ref: PdfRef): PdfObject | null => pdf.getObject(ref);
-  const retag = (dict: PdfDict | undefined, key: string) => {
-    const name = dict?.getName(key, resolve)?.value;
-    if (name?.includes("+") === true) {
-      dict?.set(key, PdfName.of(`${tag}${name.slice(name.indexOf("+"))}`));
-    }
-  };
-  const type0 = pdf.getObject(fontRef);
-  if (!(type0 instanceof PdfDict)) {
-    return;
-  }
-  retag(type0, "BaseFont");
-  const descendant = type0.getArray("DescendantFonts", resolve)?.at(0, resolve);
-  if (descendant instanceof PdfDict) {
-    retag(descendant, "BaseFont");
-    retag(descendant.getDict("FontDescriptor", resolve), "FontName");
-  }
-};
 
 const nextFieldName = (pdf: PDF) => {
   const taken = new Set(pdf.getForm()?.getFieldNames());
@@ -379,6 +371,29 @@ const nextFieldName = (pdf: PDF) => {
     index += 1;
   }
   return `${STAMP_FIELD_PREFIX}${index}`;
+};
+
+const ISOLATE_INITIATOR = /[\u2066-\u2068]/u;
+
+/**
+ * Close, at the end of a row, an isolate that wrapping left open, and
+ * reopen it at the start of the next: each row is laid out on its own, and
+ * an isolate split across rows would otherwise lose its direction in the
+ * second.
+ */
+const balanceIsolates = (rows: readonly string[]) => {
+  const open: string[] = [];
+  return rows.map((row) => {
+    const reopened = open.join("");
+    for (const character of row) {
+      if (ISOLATE_INITIATOR.test(character)) {
+        open.push(character);
+      } else if (character === POP_DIRECTIONAL_ISOLATE) {
+        open.pop();
+      }
+    }
+    return `${reopened}${row}${POP_DIRECTIONAL_ISOLATE.repeat(open.length)}`;
+  });
 };
 
 /** Split a word too wide for a row into pieces that fit, by grapheme. */
@@ -420,7 +435,7 @@ const wrapLine = (
     rows.push(...pieces.slice(0, -1));
     row = pieces.at(-1) ?? "";
   }
-  return row === "" ? rows : [...rows, row];
+  return balanceIsolates(row === "" ? rows : [...rows, row]);
 };
 
 /**
@@ -477,13 +492,13 @@ const APPEARANCE_MATRIX = {
  * phases, with the same inputs.
  */
 export const addSignatureStamp = ({
-  fontBytes,
+  fonts,
   lines,
   pdf,
   stamp,
 }: {
   /** See `stamp-font.ts`. */
-  fontBytes: Uint8Array;
+  fonts: StampFonts;
   lines: readonly string[];
   pdf: PDF;
   stamp: SignatureStamp;
@@ -502,8 +517,8 @@ export const addSignatureStamp = ({
   const width = turned ? y2 - y1 : x2 - x1;
   const height = turned ? x2 - x1 : y2 - y1;
 
-  // Never draw a blank glyph or a misordered script: see `stamp-text.ts`.
-  const check = stampTextCheck(fontBytes);
+  // Never draw a blank glyph or an unshaped script: see `stamp-text.ts`.
+  const check = stampTextCheck(fonts);
   if (!lines.every((line) => check.canDraw(line))) {
     return Result.err(
       new PdfSigningStampError({
@@ -513,19 +528,20 @@ export const addSignatureStamp = ({
       }),
     );
   }
-  const font = pdf.embedFont(fontBytes);
-  const unitWidth = (text: string) =>
-    // Glyph widths are per code point: the font maps code points to glyphs.
-    Array.from(text).reduce(
-      (total, character) =>
-        total + font.getWidth(character.codePointAt(0) ?? 0) / 1000,
-      0,
-    );
+  const laidOut = new Map<string, ReturnType<typeof layoutStampRow>>();
+  const layoutRow = (text: string) => {
+    let row = laidOut.get(text);
+    if (row === undefined) {
+      row = layoutStampRow({ direction: stamp.direction, fonts, text });
+      laidOut.set(text, row);
+    }
+    return row;
+  };
   const layout = layoutStampText({
     height,
     lines,
     unit: 1 / pageUserUnit(page.dict),
-    unitWidth,
+    unitWidth: (text) => layoutRow(text).width / STAMP_UNITS_PER_EM,
     width,
   });
   if (layout === null) {
@@ -538,33 +554,32 @@ export const addSignatureStamp = ({
     );
   }
   const { fontSize, padding, rows } = layout;
+  const text = drawStampRows({
+    fontSize,
+    pdf,
+    rows: rows.map((line, index) => {
+      const row = layoutRow(line);
+      const rowWidth = (row.width * fontSize) / STAMP_UNITS_PER_EM;
+      return {
+        row,
+        x: stamp.direction === "rtl" ? width - padding - rowWidth : padding,
+        y: height - padding - fontSize - index * fontSize * LINE_HEIGHT,
+      };
+    }),
+  });
 
   const operators = [
     "q",
     "0.35 0.35 0.35 RG",
     "0.6 w",
-    `0.300 0.300 ${num(width - 0.6)} ${num(height - 0.6)} re`,
+    `0.300 0.300 ${pdfNumber(width - 0.6)} ${pdfNumber(height - 0.6)} re`,
     "S",
     "Q",
     "BT",
     "0.1 0.1 0.1 rg",
-    `/F1 ${num(fontSize)} Tf`,
+    ...text.operators,
+    "ET",
   ];
-  for (const [index, line] of rows.entries()) {
-    const lineWidth = unitWidth(line) * fontSize;
-    const x = stamp.direction === "rtl" ? width - padding - lineWidth : padding;
-    const y = height - padding - fontSize - index * fontSize * LINE_HEIGHT;
-    const glyphs = font
-      .encodeTextToGids(line)
-      .map((gid) => gid.toString(16).padStart(4, "0"))
-      .join("");
-    operators.push(`1 0 0 1 ${num(x)} ${num(y)} Tm`, `<${glyphs}> Tj`);
-  }
-  operators.push("ET");
-
-  // Subset now, with a derived tag, rather than at save with a random one.
-  pdf.fonts.finalize(true);
-  retagSubsetFont(pdf, font.ref, subsetTag(lines));
 
   const appearance = pdf.context.registry.register(
     new PdfStream(
@@ -577,7 +592,7 @@ export const addSignatureStamp = ({
             PdfNumber.of(v),
           ),
         ),
-        Resources: PdfDict.of({ Font: PdfDict.of({ F1: font.ref }) }),
+        Resources: PdfDict.of({ Font: text.fonts }),
       }),
       new TextEncoder().encode(operators.join("\n")),
     ),

@@ -53,7 +53,7 @@ import {
   stampLines,
 } from "@/api/lib/files/pdf-signing/stamp";
 import type { SignatureStamp } from "@/api/lib/files/pdf-signing/stamp";
-import { loadStampFont } from "@/api/lib/files/pdf-signing/stamp-font";
+import { loadStampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
 import {
   createFallbackTimestampAuthority,
   PdfSigningTimestampUnavailableError,
@@ -232,7 +232,7 @@ const prepareSignatureField = async (
   invocation.stamp === null
     ? Result.ok(undefined)
     : addSignatureStamp({
-        fontBytes: await loadStampFont(),
+        fonts: await loadStampFonts(),
         lines: stampLines({
           location: invocation.location,
           reason: invocation.reason,

@@ -171,6 +171,7 @@
         "drizzle-kit": "catalog:",
         "expect-type": "^1.4.0",
         "fast-check": "catalog:",
+        "pdfjs-dist": "^6.3.289",
       },
     },
     "apps/collab": {

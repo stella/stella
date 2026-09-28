@@ -24,7 +24,7 @@ import type {
   StampPlacementRejection,
   ViewerBox,
 } from "@/api/lib/files/pdf-signing/stamp";
-import { loadStampFont } from "@/api/lib/files/pdf-signing/stamp-font";
+import { loadStampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
 import {
   drawableLabels,
   stampTextCheck,
@@ -136,7 +136,7 @@ export const drawableStamp = async ({
   reason: string | null;
   stamp: PdfSigningStamp;
 }): Promise<Result<PdfSigningStamp, HandlerError>> => {
-  const check = stampTextCheck(await loadStampFont());
+  const check = stampTextCheck(await loadStampFonts());
   const values = [reason, location].filter((value) => value !== null);
   if (!values.every((value) => check.canDraw(value))) {
     return stampRejected(

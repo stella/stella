@@ -4,7 +4,8 @@
   "license": "Apache-2.0",
   "module": "src/server.ts",
   "imports": {
-    "#quickjs-release-asyncify.wasm": "@jitl/quickjs-wasmfile-release-asyncify/wasm"
+    "#quickjs-release-asyncify.wasm": "@jitl/quickjs-wasmfile-release-asyncify/wasm",
+    "#text-shaper.wasm": "@stll/folio-core/text-shaping/wasm"
   },
   "scripts": {
     "build": "bun run build:mcp-apps",
@@ -184,7 +185,8 @@
     "bun-types": "catalog:",
     "drizzle-kit": "catalog:",
     "expect-type": "^1.4.0",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "pdfjs-dist": "^6.3.289"
   },
   "ciGateTestRunners": {
     "test:postgres": {
