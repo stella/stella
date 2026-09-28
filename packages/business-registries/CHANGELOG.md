@@ -1,5 +1,15 @@
 # @stll/business-registries
 
+## 0.10.0
+
+### Minor Changes
+
+- [#3923](https://github.com/stella/stella/pull/3923) [`84be555`](https://github.com/stella/stella/commit/84be555cc854258d47451b00c8bbf3bd26bd7ed0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add entity checks: screen a company by IČO or a person by name and birth date against the Czech insolvency register (ISIR). Each check answers clear, found (with typed findings), unavailable, or not-covered; a source error, timeout, outage page, or unparseable answer is never reported as clear. The CLI gains `contact check-counterparty`.
+
+- [#3924](https://github.com/stella/stella/pull/3924) [`bc046e0`](https://github.com/stella/stella/commit/bc046e03f32cf54173e07afaed5c46447c739aac) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `cz-vat-reliability` entity check: the Czech VAT register's unreliable-payer status and published bank accounts for a DIČ. An IČO is sent as `CZ` + IČO and the result marks the DIČ as derived. A DIČ the register does not hold is reported as `not-registered`, never as clear.
+
+- [#3921](https://github.com/stella/stella/pull/3921) [`df1ebaf`](https://github.com/stella/stella/commit/df1ebaf973d8b0278bdde978a24d62412aad2c80) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `orsr.lookupFullRecordByIco` (history, filed documents, related persons) and the opt-in `detail: "full"` registry lookup.
+
 ## 0.9.0
 
 ### Minor Changes
