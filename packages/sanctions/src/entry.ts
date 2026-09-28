@@ -2,7 +2,13 @@ import { TaggedError } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
-export type SanctionsSource = "eu" | "un" | "cz" | "us-sdn" | "us-non-sdn";
+export type SanctionsSource =
+  | "eu"
+  | "un"
+  | "cz"
+  | "us-sdn"
+  | "us-non-sdn"
+  | "uk";
 
 export type SanctionsIssuer = "EU" | "UN" | "CZ" | "US" | "GB" | "CH" | "UA";
 

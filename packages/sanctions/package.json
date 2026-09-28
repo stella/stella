@@ -2,7 +2,7 @@
   "name": "@stll/sanctions",
   "version": "0.0.0",
   "private": true,
-  "description": "Sanctions-list parsing and name screening for the EU, UN and Czech national lists",
+  "description": "Sanctions-list parsing and name screening",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,

@@ -42,3 +42,4 @@ export type {
   ScreeningResult,
 } from "./screening";
 export { parseUnList, readUnListVersion } from "./un";
+export { parseUkList, readUkListVersion } from "./uk";
