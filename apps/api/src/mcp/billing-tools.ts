@@ -9,10 +9,6 @@ import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
-import {
-  NARRATIVE_LANGUAGE_MAX_LENGTH,
-  NARRATIVE_LANGUAGE_PATTERN,
-} from "@/api/handlers/time-entries/narrative-language";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
@@ -32,6 +28,10 @@ import {
   SAVE_TIME_ENTRY_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import {
+  NARRATIVE_LANGUAGE_MAX_LENGTH,
+  NARRATIVE_LANGUAGE_PATTERN,
+} from "@/api/lib/narrative-language";
 import {
   createCursorPage,
   decodePaginationCursor,

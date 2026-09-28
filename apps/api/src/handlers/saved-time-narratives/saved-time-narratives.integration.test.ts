@@ -136,7 +136,7 @@ test("saved narrative CRUD stays personal and scoped to the active organization"
       params: { id },
     }),
   );
-  expect(deleted).toEqual({ id: created.id });
+  expect(deleted).toEqual({ id });
   expect(await list(ids.orgA, ids.userA1)).toMatchObject({ items: [] });
   expect(JSON.stringify(auditEvents)).not.toContain("Reviewed motion");
   expect(JSON.stringify(auditEvents)).not.toContain("Edited motion");
