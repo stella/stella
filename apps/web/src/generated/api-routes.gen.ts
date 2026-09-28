@@ -3584,7 +3584,7 @@ export type WebRoutes = {
                   name: string;
                   samples: Array<string>;
                   sourceIndex: number;
-                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code" | "custom_field" | "ignore");
+                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "date_of_birth" | "nationality_codes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code" | "custom_field" | "ignore");
                 }>;
                 readonly defaultType: Te287bedd42;
                 readonly delimiter: ("comma" | "semicolon" | "tab" | "labeled");
@@ -3692,6 +3692,20 @@ export type WebRoutes = {
                   type: Ta083079a24;
                   isPrimary: T1bdf39f14a;
                 }>;
+                dateOfBirth?: {
+                  precision: "year";
+                  year: number;
+                } | {
+                  precision: "month";
+                  year: number;
+                  month: number;
+                } | {
+                  precision: "day";
+                  year: number;
+                  month: number;
+                  day: number;
+                };
+                nationalityCodes?: Array<string>;
                 registrationNumber?: string;
                 taxId?: string;
                 notes?: string;
@@ -3783,6 +3797,20 @@ export type WebRoutes = {
             type: Ta083079a24;
             isPrimary: T1bdf39f14a;
           }>;
+          dateOfBirth?: {
+            precision: "year";
+            year: number;
+          } | {
+            precision: "month";
+            year: number;
+            month: number;
+          } | {
+            precision: "day";
+            year: number;
+            month: number;
+            day: number;
+          };
+          nationalityCodes?: Array<string>;
           registrationNumber?: string;
           taxId?: string;
           currency?: string;
@@ -3843,6 +3871,7 @@ export type WebRoutes = {
             organizationName: T432e07d100;
             emails: T30ee072c99;
             phones: T59ad5fb938;
+            nationalityCodes: Array<string>;
             registrationNumber: T432e07d100;
             taxId: T432e07d100;
             currency: T432e07d100;
@@ -3852,6 +3881,9 @@ export type WebRoutes = {
             prefix: T432e07d100;
             middleName: T432e07d100;
             suffix: T432e07d100;
+            dateOfBirthYear: T688f6f1190;
+            dateOfBirthMonth: T688f6f1190;
+            dateOfBirthDay: T688f6f1190;
             addresses: Tc173b4ec8f;
             bankAccounts: T1ab3934a92;
             billingAddress: T4705e5b348;
@@ -3911,6 +3943,20 @@ export type WebRoutes = {
                 type: Ta083079a24;
                 isPrimary: T1bdf39f14a;
               }>;
+              dateOfBirth?: {
+                precision: "year";
+                year: number;
+              } | {
+                precision: "month";
+                year: number;
+                month: number;
+              } | {
+                precision: "day";
+                year: number;
+                month: number;
+                day: number;
+              };
+              nationalityCodes?: Array<string>;
               registrationNumber?: string;
               taxId?: string;
               notes?: string;
@@ -4074,6 +4120,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
+              dateOfBirth: (null | T1da10ca5fd | T3934db9d9e | T4566e4a2e2);
               clientMatterCount: number;
               clientMatters: Array<{
                 name: string;
@@ -4102,6 +4149,7 @@ export type WebRoutes = {
               organizationName: T432e07d100;
               emails: T30ee072c99;
               phones: T59ad5fb938;
+              nationalityCodes: Array<string>;
               registrationNumber: T432e07d100;
               taxId: T432e07d100;
               currency: T432e07d100;
@@ -4187,6 +4235,20 @@ export type WebRoutes = {
               type: Ta083079a24;
               isPrimary: T1bdf39f14a;
             }>;
+            dateOfBirth?: null | {
+              precision: "year";
+              year: number;
+            } | {
+              precision: "month";
+              year: number;
+              month: number;
+            } | {
+              precision: "day";
+              year: number;
+              month: number;
+              day: number;
+            };
+            nationalityCodes?: null | Array<string>;
             registrationNumber?: null | string;
             taxId?: null | string;
             currency?: null | string;
@@ -32817,7 +32879,7 @@ type T1173055df0 = string & valibot_Brand<"SafeId"> & {
 type T1214881f9f = {
   query: string;
   jurisdiction?: undefined | "global" | "at" | "de" | "eu" | "sk" | "cz";
-  freshness?: undefined | "year" | "any" | "month" | "week" | "day";
+  freshness?: undefined | "year" | "month" | "day" | "any" | "week";
   maxResults?: undefined | number;
 };
 
@@ -33023,7 +33085,7 @@ type T196b4403fb = {
 
 type T19d71e5be4 = {
   code: stll_api_contract_ContactImportIssueCode;
-  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
+  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "date_of_birth" | "nationality_codes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
   rowNumber: number;
 };
 
@@ -33135,6 +33197,11 @@ type T1d7c2dd626 = {
 } | {
   type: "person";
   version: 1;
+};
+
+type T1da10ca5fd = {
+  precision: "year";
+  year: number;
 };
 
 type T1db05d7243 = {
@@ -33696,6 +33763,12 @@ type T38aa50e8be = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clauseVariant";
 };
 
+type T3934db9d9e = {
+  precision: "month";
+  year: number;
+  month: number;
+};
+
 type T3a3428dc33 = {
   jurisdiction: T9960bad961;
   query: string;
@@ -33988,6 +34061,13 @@ type T454acf9abc = {
   codigo?: string;
   nombre?: string;
   item?: T4d6a470586 | Array<T4d6a470586>;
+};
+
+type T4566e4a2e2 = {
+  precision: "day";
+  year: number;
+  month: number;
+  day: number;
 };
 
 type T459c229135 = {
@@ -35753,7 +35833,7 @@ type T7c8bca7f18 = {
 type T7c9021b9f6 = {
   query: string;
   jurisdiction: T31e574e5a2;
-  freshness: ("year" | "any" | "month" | "week" | "day");
+  freshness: ("year" | "month" | "day" | "any" | "week");
   maxResults: number;
 };
 
@@ -36024,6 +36104,8 @@ type T86963b5528 = {
   tags?: undefined | Array<string>;
   registrationNumber?: undefined | string;
   taxId?: undefined | string;
+  dateOfBirth?: undefined | T1da10ca5fd | T3934db9d9e | T4566e4a2e2;
+  nationalityCodes?: undefined | Array<string>;
   metadata?: undefined | T5d1f74b178;
 };
 
@@ -36094,7 +36176,7 @@ type T876924cdc0 = {
   type: "overview";
 };
 
-type T881614816e = "year" | "month" | "week" | "day";
+type T881614816e = "year" | "month" | "day" | "week";
 
 type T8854c1a08e = "email" | "displayName" | "firstName" | "lastName" | "organizationName" | "address" | "phone" | "addressStreet" | "addressCity" | "addressPostalCode" | "addressCountry" | "registrationNumber" | "taxId" | "iban" | "bic" | "dataBox";
 
@@ -38972,7 +39054,7 @@ type Tf26788d5a2 = {
 type Tf272474a81 = {
   startDatePropertyId: string;
   endDatePropertyId: string;
-  zoom: ("month" | "week" | "day" | "quarter");
+  zoom: ("month" | "day" | "week" | "quarter");
   groupByPropertyId?: undefined | string;
   showTable: T1bdf39f14a;
   filters: Array<stll_conditions_ConditionNode>;

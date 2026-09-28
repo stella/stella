@@ -5,13 +5,13 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28607,
-        "inputSchema": 80275,
-        "outputSchema": 53543,
+        "description": 28534,
+        "inputSchema": 76800,
+        "outputSchema": 53890,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 178132,
+      "payloadUtf8Bytes": 174931,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -30,13 +30,13 @@
       "chars": {
         "name": 247,
         "title": 255,
-        "description": 5511,
-        "inputSchema": 14640,
+        "description": 5636,
+        "inputSchema": 14432,
         "outputSchema": 8229,
         "annotations": 1502,
         "instructions": 888
       },
-      "payloadUtf8Bytes": 31730,
+      "payloadUtf8Bytes": 31647,
       "largestDescription": {
         "tool": "compare_documents",
         "chars": 770
@@ -55,20 +55,20 @@
       "chars": {
         "name": 472,
         "title": 496,
-        "description": 12893,
-        "inputSchema": 26219,
-        "outputSchema": 30621,
+        "description": 13136,
+        "inputSchema": 22201,
+        "outputSchema": 30968,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 75956,
+      "payloadUtf8Bytes": 72528,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
       },
       "largestInputSchema": {
         "tool": "search_case_law",
-        "chars": 3237
+        "chars": 2447
       },
       "largestOutputSchema": {
         "tool": "read_document",
@@ -80,20 +80,20 @@
       "chars": {
         "name": 161,
         "title": 176,
-        "description": 6055,
-        "inputSchema": 12263,
+        "description": 6018,
+        "inputSchema": 10039,
         "outputSchema": 8622,
         "annotations": 956,
         "instructions": 1188
       },
-      "payloadUtf8Bytes": 29094,
+      "payloadUtf8Bytes": 26833,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802
       },
       "largestInputSchema": {
         "tool": "search_case_law",
-        "chars": 3237
+        "chars": 2447
       },
       "largestOutputSchema": {
         "tool": "search_case_law",
