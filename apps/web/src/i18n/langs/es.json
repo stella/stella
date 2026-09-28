@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Verificado con {count, plural, one {# hecho} other {# hechos}} tal y como constaban el {checkedAt}. Las ediciones posteriores de la lista no modifican esta verificación.",
       "failedTitle": "Error en la verificación",
+      "history": {
+        "label": "Historial de verificaciones",
+        "loadFailed": "No se pudieron cargar las verificaciones anteriores de este documento."
+      },
       "inProgress": "Contrastando las afirmaciones del documento con los hechos de la lista…",
       "loadFailed": "No se pudo cargar esta verificación.",
       "noClaims": "No se encontraron afirmaciones en este documento.",

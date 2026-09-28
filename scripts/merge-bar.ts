@@ -150,6 +150,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckMissing: "REQUIRED_CHECK_MISSING",
   requiredCheckIncomplete: "REQUIRED_CHECK_INCOMPLETE",
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
+  ciPlanSkipped: "CI_PLAN_SKIPPED",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationOrder: "MIGRATION_ORDER_VIOLATION",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
@@ -256,6 +257,8 @@ const evaluateMergeable = (pullRequest: PullRequestSnapshot): GateVerdict => {
   return { gate: "mergeable", status: "pass", detail: "MERGEABLE" };
 };
 
+const CI_PLAN_CHECK_RUN = "ci-plan";
+
 // A direct merge needs every required check to have SUCCEEDED on the head:
 // the write is final. "Merge when ready" needs only that none has FAILED: a
 // check still running, or not yet created for a fresh push, is what GitHub
@@ -303,6 +306,18 @@ const evaluateRequiredCheck = ({
   );
   const quote = (names: readonly string[]): string =>
     names.map((name) => `\`${name}\``).join(", ");
+
+  // CI Checks skips its plan, and every job after it, for a draft. A run
+  // queued while the pull request was still a draft can supersede the run for
+  // the ready one, so a skipped plan on a ready head checked nothing.
+  if (latestByName.get(CI_PLAN_CHECK_RUN)?.conclusion === "skipped") {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.ciPlanSkipped,
+      detail: `\`${CI_PLAN_CHECK_RUN}\` was skipped on ${headSha}; re-run CI Checks`,
+    };
+  }
 
   if (unsuccessful.length > 0) {
     return {

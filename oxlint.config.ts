@@ -155,6 +155,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
   ]),
+  fixtureRuleOverride("request-lifetime.fixture.ts", [
+    "request-lifetime/confine-request-reads",
+  ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
   ]),
@@ -495,6 +498,40 @@ const apiPortableSafeIdBrandingImport = {
   message:
     "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
 };
+
+// The model factory builds every provider text adapter and holds its stream
+// to the provider stream contract (one terminal event, last; a cut-off stream
+// is a run error). An adapter built anywhere else skips that contract, so the
+// runtime entry points of the adapter packages, and of the adapter subclass
+// the factory builds, belong to the factory; type-only imports stay allowed.
+export const API_PROVIDER_ADAPTER_MODULES = [
+  "@/api/lib/stella-openrouter-text-adapter",
+  "@tanstack/ai-anthropic",
+  "@tanstack/ai-anthropic/byok",
+  "@tanstack/ai-anthropic/vertex",
+  "@tanstack/ai-bedrock",
+  "@tanstack/ai-bedrock/byok",
+  "@tanstack/ai-gemini",
+  "@tanstack/ai-gemini/byok",
+  "@tanstack/ai-gemini/experimental",
+  "@tanstack/ai-mistral",
+  "@tanstack/ai-mistral/adapters/text",
+  "@tanstack/ai-mistral/byok",
+  "@tanstack/ai-mistral/vertex",
+  "@tanstack/ai-openai",
+  "@tanstack/ai-openai/byok",
+  "@tanstack/ai-openai/compatible",
+  "@tanstack/ai-openrouter",
+  "@tanstack/ai-openrouter/byok",
+  "@tanstack/openai-base",
+] as const;
+
+const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Build provider adapters through createTanStackTextAdapterFactory in '@/api/lib/tanstack-ai-models', which holds their streams to the provider stream contract.",
+}));
 
 // pragmatic-drag-and-drop's element adapter keeps exactly one live drop
 // target, and one draggable, per element behind a private WeakMap registry:
@@ -1238,6 +1275,7 @@ export default defineConfig({
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
@@ -2205,6 +2243,22 @@ export default defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // A chat turn's run outlives the request that started it (see
+      // `chat-turn-run.ts`), so nothing on the send-to-settlement path may
+      // read the request except the send's own disconnect probe.
+      files: [
+        "apps/api/src/handlers/chat/send-message*.ts",
+        "apps/api/src/handlers/chat/stream-chat.ts",
+        "apps/api/src/handlers/chat/chat-turn-*.ts",
+        "apps/api/src/handlers/chat/chat-message-persistence.ts",
+        "apps/api/src/handlers/chat/tools/**/*.ts",
+      ],
+      excludeFiles: ["apps/api/src/handlers/chat/**/*.test.ts"],
+      rules: {
+        "request-lifetime/confine-request-reads": "error",
       },
     },
     {
@@ -3280,6 +3334,9 @@ export default defineConfig({
               // rather than through env.ts so it stays side-effect-free at
               // import time, matching the two call sites it replaces.
               "apps/api/src/lib/version.ts",
+              // Reads the stack URLs and credentials agent:drive hands it;
+              // e2e infra has no app env module to route through.
+              "apps/web/e2e/agent/drive.ts",
               "apps/web/e2e/helpers/api.ts",
               // Reads E2E_API_URL (same contract as helpers/api.ts) and the
               // E2E_NETWORK_BASELINE write/rewrite mode switch; e2e infra has
@@ -3613,6 +3670,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3669,6 +3727,7 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3684,6 +3743,28 @@ export default defineConfig({
           {
             paths: [
               noZodImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The model factory and the adapter subclass it builds are the provider
+      // adapters' owners. Only that restriction is lifted.
+      files: [
+        "apps/api/src/lib/tanstack-ai-models.ts",
+        "apps/api/src/lib/stella-openrouter-text-adapter.ts",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
             ],
@@ -3967,6 +4048,7 @@ export default defineConfig({
                   "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/db",
                 importNames: ["createScopedDb"],
@@ -4076,6 +4158,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],

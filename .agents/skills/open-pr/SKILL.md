@@ -154,6 +154,13 @@ Write a concise title and body describing only the visible implementation.
 Follow repository rules for attribution and public context. Do not add a test
 plan unless requested.
 
+When the change alters what a user sees, add screenshots (before and after
+for a changed screen) through the repository's documented attach command,
+which checks that every image shows only fixture data. A repository without
+one gets no screenshots: never attach an image with `gh --attach` directly,
+since attachments on a public repository are public. Skip this when nothing
+visible changed.
+
 For an existing PR, update only `PR_NUMBER` in `BASE_REPO`; never rely on the
 checkout's implicit repository or branch selection. For a new PR, pass the resolved
 base repository, base branch, and head repository and branch explicitly. After any

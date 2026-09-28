@@ -90,9 +90,17 @@ const deriveChatThreadNames = async ({
         WHEN ${refContextPath}->>'version' = '2' THEN NULL
         ELSE ${chatMessages.content}::text
       END`,
+      // A call part keeps its id in `id`; legacy `tool-<name>` and
+      // `dynamic-tool` parts may keep it in either `toolCallId` or `id`.
       toolCallIds: sql<unknown>`jsonb_path_query_array(
         ${chatMessages.content},
         '$.data[*] ? (@.type == "tool-call").id'
+      ) || jsonb_path_query_array(
+        ${chatMessages.content},
+        '$.data[*] ? (@.type == "dynamic-tool" || (@.type starts with "tool-" && @.type != "tool-call" && @.type != "tool-result")).toolCallId'
+      ) || jsonb_path_query_array(
+        ${chatMessages.content},
+        '$.data[*] ? (@.type == "dynamic-tool" || (@.type starts with "tool-" && @.type != "tool-call" && @.type != "tool-result")).id'
       )`,
     })
     .from(chatMessages)

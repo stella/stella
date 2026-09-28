@@ -721,6 +721,17 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_arrivals_idx")
       .on(t.sourceId, t.createdAt)
       .where(storedObservationHasDetail(t.metadata)),
+    // The sitemap shard refresh: the public countries' published decisions,
+    // counted per month and bucket with their newest `updated_at`.
+    // Partial on the publication gate so the gate costs nothing per row, and
+    // carrying the source (for the redistribution join), `updated_at` and `id`
+    // (for the bucket) so the count is read off the index rather than the
+    // heap. Trailing keys rather than INCLUDE for the reason given at
+    // `case_law_decisions_citation_candidate_idx`.
+    p
+      .index("case_law_decisions_sitemap_shard_idx")
+      .on(t.country, t.decisionDate, t.sourceId, t.updatedAt, t.id)
+      .where(storedObservationHasDetail(t.metadata)),
     p
       .index("case_law_decisions_updated_id_idx")
       .on(t.updatedAt.desc(), t.id.desc()),
@@ -2056,6 +2067,42 @@ export const caseLawStatuteCitationCountState = p.pgTable(
       sql`${t.status} IN (${sql.join(STATUTE_CITATION_COUNT_STATUS_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * The public case-law sitemap index, one row per shard it lists. Replaced
+ * whole by a background refresh, so a public read lists the shards without
+ * counting the corpus. `year`/`month` are the shard's path segments
+ * (`undated`/`00` for decisions without a date) and `bucket` is `all` for an
+ * unsplit month or the two-digit bucket of a split one.
+ *
+ * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
+ * so the owner-run refresh needs a policy; table privileges decide access.
+ */
+export const caseLawSitemapShards = p.pgTable(
+  "case_law_sitemap_shards",
+  {
+    country: p.varchar({ length: 3 }).notNull(),
+    year: p.varchar({ length: 7 }).notNull(),
+    month: p.varchar({ length: 2 }).notNull(),
+    bucket: p.varchar({ length: 3 }).notNull(),
+    total: p.integer().notNull(),
+    lastModifiedAt: timestamptz("last_modified_at").notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_sitemap_shards_pkey",
+      columns: [t.country, t.year, t.month, t.bucket],
+    }),
+    p.check("case_law_sitemap_shards_total_positive", sql`${t.total} > 0`),
+    p.pgPolicy("case_law_sitemap_shard_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
     ...publicLawReaderPolicies(),
   ],
 );

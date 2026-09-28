@@ -118,12 +118,14 @@ const readListItems = createSafeHandler(
               reviewStatus: legalListItems.reviewStatus,
               createdAt: legalListItems.createdAt,
               updatedAt: legalListItems.updatedAt,
+              // Drizzle reads a left-joined object as absent when its first
+              // column is null, so a non-null column must lead.
               factDetails: {
+                confidence: legalListFactDetails.confidence,
                 occurredOn: legalListFactDetails.occurredOn,
                 occurredOnPrecision: legalListFactDetails.occurredOnPrecision,
                 evidenceKind: legalListFactDetails.evidenceKind,
                 medium: legalListFactDetails.medium,
-                confidence: legalListFactDetails.confidence,
                 interpretationNote: legalListFactDetails.interpretationNote,
                 scoring: legalListFactDetails.scoring,
               },

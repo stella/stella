@@ -236,6 +236,10 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law/search-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
+  "apps/api/src/lib/case-law/sitemap-shard-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Sitemap shard naming fragments; no query.",
+  },
   "apps/api/src/lib/decision-date-bounds-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Date-bound fragments; no query.",
@@ -546,12 +550,18 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("language: caseLawDecisions.language");
     expect(source).toContain("languageAlternates:");
     expect(source).toContain("updatedAt: caseLawDecisions.updatedAt");
-    expect(source).toContain("SITEMAP_SHARD_BUCKET_COUNT");
+    expect(source).toContain("decisionBucketSql");
     expect(source).toContain("SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE");
     expect(source).toContain("normalizeLanguageSegment");
     expect(source).toContain("LIMITS.caseLawSitemapShardUrlLimit");
-    expect(source).toContain("bucketRowsByNaturalShard");
-    expect(source).toContain("Case-law sitemap bucket exceeds shard capacity");
+    // The index lists the refreshed snapshot's own columns, never a count.
+    expect(source).toContain(".from(caseLawSitemapShards)");
+    expect(source).toContain(
+      "lastModifiedAt: caseLawSitemapShards.lastModifiedAt",
+    );
+    expect(source).toContain(
+      "Case-law sitemap shard count exceeds sitemap index capacity",
+    );
     expect(source).toContain("LIMITS.caseLawSitemapIndexEntryLimit");
   });
 

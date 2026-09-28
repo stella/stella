@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Ověřeno vůči {count, plural, one {# faktu} few {# faktům} many {# faktům} other {# faktům}} ve stavu ke dni {checkedAt}. Pozdější úpravy seznamu toto ověření nemění.",
       "failedTitle": "Ověření se nezdařilo",
+      "history": {
+        "label": "Historie ověření",
+        "loadFailed": "Předchozí ověření tohoto dokumentu se nepodařilo načíst."
+      },
       "inProgress": "Porovnávání tvrzení dokumentu s fakty seznamu…",
       "loadFailed": "Toto ověření se nepodařilo načíst.",
       "noClaims": "V tomto dokumentu nebyla nalezena žádná tvrzení.",
