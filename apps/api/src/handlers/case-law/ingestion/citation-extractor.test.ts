@@ -2390,6 +2390,36 @@ describe("stored decision identifier projection", () => {
     ]);
   });
 
+  test("keeps one row for two spellings of a reporter citation its jurisdiction reads as one", () => {
+    const spellings = [
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "347 U.S. 483",
+      },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "347 U.S. Rep. 483",
+      },
+    ] as const;
+    const identifiers = decisionIdentifiersFromMetadata({
+      caseNumber: "No. 1",
+      identifiers: spellings,
+      jurisdiction: "USA",
+    });
+
+    expect(identifiers).toEqual([
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "No. 1" },
+      spellings[0],
+    ]);
+    const stored = decisionIdentifiersFromStoredMetadata({
+      caseNumber: "No. 1",
+      country: "USA",
+      ecli: null,
+      metadata: storeDecisionIdentifiersInMetadata({}, spellings),
+    });
+    expect(stored).toEqual(identifiers);
+  });
+
   test("reserves identifier capacity for a legacy reporter citation", () => {
     const identifiers = decisionIdentifiersFromStoredMetadata({
       caseNumber: "1 As 2/2024",

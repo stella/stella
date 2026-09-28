@@ -416,6 +416,7 @@ export const planDecisionWrite = async ({
     caseNumber: result.caseNumber,
     ecli: result.ecli ?? null,
     identifiers: result.identifiers,
+    jurisdiction: result.country,
   });
   const identifierRows = decisionIdentifiers.map((identifier) => ({
     type: identifier.type,

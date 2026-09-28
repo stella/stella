@@ -1305,10 +1305,17 @@ type DecisionMetadata = {
   caseNumber: string;
   ecli?: string | null;
   identifiers?: DecisionIdentifiers | undefined;
+  /**
+   * The decision's jurisdiction. Identifiers are deduplicated under the key
+   * the row is stored with, which for some kinds depends on it: two spellings
+   * of one reporter citation are one row, not a primary-key collision.
+   */
+  jurisdiction?: string | undefined;
 };
 
 type StoredDecisionMetadata = {
   caseNumber: string;
+  country?: string | undefined;
   ecli: string | null;
   metadata: Record<string, unknown>;
 };
@@ -1319,6 +1326,7 @@ export const decisionIdentifiersFromMetadata = ({
   caseNumber,
   ecli,
   identifiers,
+  jurisdiction,
 }: DecisionMetadata): DecisionIdentifiers => {
   const caseNumberIdentifier = {
     type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -1346,7 +1354,7 @@ export const decisionIdentifiersFromMetadata = ({
     `${caseNumberIdentifier.type}:${normalizedCaseNumber}`,
   ]);
   const additional = candidates.slice(1).filter((identifier) => {
-    const normalized = normalizeDecisionIdentifier(identifier);
+    const normalized = normalizeDecisionIdentifierIn(jurisdiction, identifier);
     if (!normalized) {
       return false;
     }
@@ -1402,6 +1410,7 @@ const expandCompositeReporterIdentifier = (
 
 export const decisionIdentifiersFromStoredMetadata = ({
   caseNumber,
+  country,
   ecli,
   metadata,
 }: StoredDecisionMetadata): DecisionIdentifiers => {
@@ -1415,6 +1424,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
     return decisionIdentifiersFromMetadata({
       caseNumber,
       ecli,
+      jurisdiction: country,
       identifiers:
         firstIdentifier === undefined
           ? undefined
@@ -1475,6 +1485,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
   return decisionIdentifiersFromMetadata({
     caseNumber,
     ecli,
+    jurisdiction: country,
     identifiers:
       firstIdentifier === undefined
         ? undefined
