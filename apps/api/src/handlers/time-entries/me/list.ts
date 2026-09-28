@@ -88,19 +88,20 @@ const listMyTimeEntries = createSafeRootHandler(
             source: timeEntries.source,
             timerStartedAt: timeEntries.timerStartedAt,
           })
-          .from(workspaces)
+          .from(timeEntries)
           .innerJoin(
-            timeEntries,
+            workspaces,
             and(
               eq(timeEntries.workspaceId, workspaces.id),
               eq(timeEntries.organizationId, workspaces.organizationId),
-              eq(timeEntries.userId, user.id),
-              eq(timeEntries.dateWorked, query.date),
-              cursor ? gt(timeEntries.id, cursor) : undefined,
             ),
           )
           .where(
             and(
+              eq(timeEntries.organizationId, session.activeOrganizationId),
+              eq(timeEntries.userId, user.id),
+              eq(timeEntries.dateWorked, query.date),
+              cursor ? gt(timeEntries.id, cursor) : undefined,
               eq(workspaces.organizationId, session.activeOrganizationId),
               ne(workspaces.status, DELETING_WORKSPACE_STATUS),
             ),

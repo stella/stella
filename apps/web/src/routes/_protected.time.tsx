@@ -14,6 +14,7 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
+import { localISODate } from "@/lib/local-iso-date";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -22,18 +23,12 @@ import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
 
-const today = () =>
-  Temporal.Now.instant()
-    .toZonedDateTimeISO(Temporal.Now.timeZoneId())
-    .toPlainDate()
-    .toString();
-
 export const Route = createFileRoute("/_protected/time")({
   validateSearch: (search) => ({
     date:
       typeof search.date === "string" && parsePlainDate(search.date) !== null
         ? search.date
-        : today(),
+        : localISODate(),
   }),
   loaderDeps: ({ search }) => ({ date: search.date }),
   beforeLoad: async ({ context }) => {
@@ -89,8 +84,12 @@ function MyDayPage() {
   );
   const entries = entriesQuery.data.pages.flatMap((page) => page.items);
   const totalMinutes = entries.reduce(
-    (sum, entry) => sum + entry.durationMinutes,
+    (sum, entry) =>
+      sum + (entry.timerStartedAt === null ? entry.durationMinutes : 0),
     0,
+  );
+  const hasRunningEntry = entries.some(
+    (entry) => entry.timerStartedAt !== null,
   );
   const moveDay = (days: number) => {
     const nextDate = Temporal.PlainDate.from(date).add({ days }).toString();
@@ -105,7 +104,7 @@ function MyDayPage() {
           <Button
             onClick={() =>
               detached(
-                navigate({ search: { date: today() } }),
+                navigate({ search: { date: localISODate() } }),
                 "my-day.navigate",
               )
             }
@@ -156,8 +155,15 @@ function MyDayPage() {
                   <span className="text-muted-foreground">
                     {tBilling("total")}
                   </span>
-                  <span className="font-medium tabular-nums">
-                    {formatMinutes(totalMinutes)}
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium tabular-nums">
+                      {formatMinutes(totalMinutes)}
+                    </span>
+                    {hasRunningEntry && (
+                      <span className="text-muted-foreground">
+                        {tCommon("running")}
+                      </span>
+                    )}
                   </span>
                 </div>
               )}
@@ -197,7 +203,9 @@ function MyDayPage() {
                     </div>
                     <div className="space-y-1 text-end text-sm">
                       <p className="font-medium tabular-nums">
-                        {formatMinutes(entry.durationMinutes)}
+                        {entry.timerStartedAt === null
+                          ? formatMinutes(entry.durationMinutes)
+                          : tCommon("running")}
                       </p>
                       <p className="text-muted-foreground text-xs">
                         {tBilling(`statuses.${entry.status}`)}

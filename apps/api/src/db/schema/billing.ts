@@ -101,6 +101,9 @@ export const timeEntries = p.pgTable(
       .index("time_entries_ws_user_date_idx")
       .on(table.workspaceId, table.userId, table.dateWorked),
     p
+      .index("time_entries_org_user_date_id_idx")
+      .on(table.organizationId, table.userId, table.dateWorked, table.id),
+    p
       .index("time_entries_ws_work_item_status_idx")
       .on(table.workspaceId, table.workItemId, table.status),
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
