@@ -31,7 +31,10 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import {
   findLiveViewViolations,
@@ -86,6 +89,13 @@ export const APPROVAL_TOOL_NAME = "mcp__external__delete";
  */
 export const PLAIN_TOOL_NAME = "list_templates";
 export const PLAIN_TOOL_ARGUMENTS = "{}";
+/**
+ * A server tool, behind an approval like every external tool, whose output
+ * shows the model document refs minted by the request's own registry, as a
+ * direct tool does (`create_matter_document`, `save_document`). Registered
+ * only when a harness asks for it.
+ */
+export const DIRECT_REF_TOOL_NAME = "mcp__external__list_documents";
 
 /** Arguments the scripted provider passes to the approval-gated tool. */
 export const approvalToolArguments = (name: string): string =>
@@ -204,8 +214,11 @@ export const createApprovalHarness = ({
   safeDb,
   scopedDb,
   testDb,
+  withDirectRefTool = false,
 }: {
   ids: TestIds;
+  /** Registers `DIRECT_REF_TOOL_NAME` too. */
+  withDirectRefTool?: boolean | undefined;
   /** Defaults to the scripted provider. */
   model?: HarnessModel | undefined;
   /** The organization's model selection; defaults to the harness's own. */
@@ -233,6 +246,26 @@ export const createApprovalHarness = ({
     return await Promise.resolve({ deleted: name });
   });
   const refLedger = createRefStabilityLedger();
+  /** The registry the newest request built: the one a running tool uses. */
+  let requestRegistry: ChatRefRegistry | undefined;
+  const directRefTool = toolDefinition({
+    name: DIRECT_REF_TOOL_NAME,
+    description: "Lists the documents the user can access, by ref",
+    inputSchema: toTanStackToolSchema(v.object({})),
+    needsApproval: true,
+  }).server(async () => {
+    const registry =
+      requestRegistry ?? panic("A tool runs inside a request that built one");
+    return await Promise.resolve({
+      documents: [
+        { entityId: ids.entityA2, name: "entityA2", workspaceId: ids.wsA2 },
+        { entityId: ids.entityA1, name: "entityA1", workspaceId: ids.wsA1 },
+      ].map(({ entityId, name, workspaceId }) => ({
+        id: registry.toEntityRef({ entityId, workspaceId }),
+        name,
+      })),
+    });
+  });
   const sendMessageDependencies = {
     indexThread: async () => await Promise.resolve(undefined),
     loadExternalMcpTools: async () => {
@@ -244,7 +277,12 @@ export const createApprovalHarness = ({
           closeClients: close,
           sourceTools: {},
         }),
-        tools: { [APPROVAL_TOOL_NAME]: approvalTool },
+        tools: {
+          [APPROVAL_TOOL_NAME]: approvalTool,
+          ...(withDirectRefTool
+            ? { [DIRECT_REF_TOOL_NAME]: directRefTool }
+            : {}),
+        },
       });
     },
     loadWebSearchProviders: async () =>
@@ -265,8 +303,10 @@ export const createApprovalHarness = ({
     }
     const created = createSendMessage({
       ...sendMessageDependencies,
-      createRefRegistry: (bindings, retired) =>
-        refLedger.track(threadId, createChatRefRegistry(bindings, retired)),
+      createRefRegistry: (bindings, retired) => {
+        requestRegistry = createChatRefRegistry(bindings, retired);
+        return refLedger.track(threadId, requestRegistry);
+      },
     });
     handlers.set(threadId, created);
     return created;
