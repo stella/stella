@@ -39,6 +39,12 @@ type ResolveDocumentLanguageInput = {
   interfaceLocale: UiLocale;
 };
 
+type ResolvedPageLanguage = {
+  lang: string;
+  /** Whether `lang` names the rendered document or the interface. */
+  source: "document" | "interface";
+};
+
 /**
  * The `lang` of the whole page: the document's language where the page
  * renders one, otherwise the interface locale.
@@ -46,9 +52,13 @@ type ResolveDocumentLanguageInput = {
 export const resolveDocumentLanguage = ({
   documentLanguage,
   interfaceLocale,
-}: ResolveDocumentLanguageInput): string =>
-  (documentLanguage === null ? null : toLanguageCode(documentLanguage)) ??
-  interfaceLocale;
+}: ResolveDocumentLanguageInput): ResolvedPageLanguage => {
+  const lang =
+    documentLanguage === null ? null : toLanguageCode(documentLanguage);
+  return lang === null
+    ? { lang: interfaceLocale, source: "interface" }
+    : { lang, source: "document" };
+};
 
 type DocumentLanguageAttributes = {
   dir: TextDirection;

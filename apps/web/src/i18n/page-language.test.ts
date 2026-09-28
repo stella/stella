@@ -9,7 +9,7 @@ describe("page language", () => {
         documentLanguage: "cs",
         interfaceLocale: "en",
       }),
-    ).toBe("cs");
+    ).toEqual({ lang: "cs", source: "document" });
   });
 
   test("a regional or differently cased document tag reduces to its language", () => {
@@ -18,7 +18,7 @@ describe("page language", () => {
         documentLanguage: "SK_sk",
         interfaceLocale: "en",
       }),
-    ).toBe("sk");
+    ).toEqual({ lang: "sk", source: "document" });
   });
 
   test("a document language outside the interface locales is kept", () => {
@@ -27,7 +27,7 @@ describe("page language", () => {
         documentLanguage: "sl",
         interfaceLocale: "cs",
       }),
-    ).toBe("sl");
+    ).toEqual({ lang: "sl", source: "document" });
   });
 
   test("a page without a document follows the interface locale", () => {
@@ -36,7 +36,7 @@ describe("page language", () => {
         documentLanguage: null,
         interfaceLocale: "pt-BR",
       }),
-    ).toBe("pt-BR");
+    ).toEqual({ lang: "pt-BR", source: "interface" });
   });
 
   test("an unrecognised document tag falls back to the interface locale", () => {
@@ -45,6 +45,6 @@ describe("page language", () => {
         documentLanguage: "zz-unknown",
         interfaceLocale: "de",
       }),
-    ).toBe("de");
+    ).toEqual({ lang: "de", source: "interface" });
   });
 });

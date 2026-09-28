@@ -104,7 +104,10 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   const documentLanguage = useRouterState({
     select: (state) => pageDocumentLanguage(state.matches),
   });
-  const lang = resolveDocumentLanguage({ documentLanguage, interfaceLocale });
+  const { lang, source: langSource } = resolveDocumentLanguage({
+    documentLanguage,
+    interfaceLocale,
+  });
   const dir = getLangDir(interfaceLocale);
 
   // Hydration keeps the attributes the server (or prepaint-init.js) put on
@@ -124,8 +127,14 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     // attribute set never matches the server markup; suppress the
     // per-element warning rather than letting every SSR page log a
     // recovered hydration error. The server renders the document's own
-    // language on pages that show one, and the interface locale otherwise.
-    <html lang={lang} dir={dir} suppressHydrationWarning>
+    // language on pages that show one, and the interface locale otherwise;
+    // data-lang-source tells prepaint-init.js to keep a document language.
+    <html
+      lang={lang}
+      dir={dir}
+      data-lang-source={langSource}
+      suppressHydrationWarning
+    >
       <head>
         <HeadContent />
 
