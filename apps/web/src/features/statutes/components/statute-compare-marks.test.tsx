@@ -5,12 +5,12 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import type { Block } from "@stll/legal-ast/document-ast";
+import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
 
 import {
   HEADING_CLASS,
   InlineContent,
 } from "@/components/legal-reader/document-ast-text";
-import { SEARCH_MARK_CLASS_NAME } from "@/components/legal-reader/query-marks";
 import { StatuteBlock } from "@/features/statutes/components/statute-text";
 import { compareStatuteBlocks } from "@/features/statutes/statute-compare";
 import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
@@ -250,7 +250,7 @@ describe("reader marks", () => {
       `<span class="sr-only select-none" data-reader-chrome="">${messages.statutes.diffInserted} </span>new</ins>`,
     );
     expect(html).toContain(
-      `<mark class="${SEARCH_MARK_CLASS_NAME} ring-warning ring-1" data-reader-match-index="0">found</mark>`,
+      `<mark class="${textMarkClass({ ...SEARCH_HIT_MARK, state: "active" })}" data-slot="text-mark" data-reader-match-index="0">found</mark>`,
     );
   });
 });

@@ -1,5 +1,7 @@
 import type { Element, ElementContent, Root, RootContent, Text } from "hast";
 
+import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
+
 import { findSearchTextMatches } from "@/lib/document-search";
 import type { SearchTextQuery } from "@/lib/search-text";
 
@@ -71,7 +73,10 @@ export function rehypeSearchMatches(
         result.push({
           type: "element",
           tagName: "mark",
-          properties: { "data-search-match": "true" },
+          properties: {
+            className: textMarkClass(SEARCH_HIT_MARK).split(" "),
+            "data-search-match": "true",
+          },
           children: [
             { type: "text", value: text.value.slice(match.start, match.end) },
           ],

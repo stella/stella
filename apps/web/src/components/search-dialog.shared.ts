@@ -3,6 +3,8 @@ import {
   type GlobalSearchResultType,
 } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
+import { cn } from "@stll/ui/utils";
 
 import type {
   SearchFilters,
@@ -12,8 +14,10 @@ import type { TranslationKey } from "@/i18n/types";
 import type { EntityKind, GlobalSearchHit } from "@/lib/api-contract";
 import type { TimePreset } from "@/lib/search";
 
-export const SEARCH_PREVIEW_CONTENT_CLASS_NAME =
-  "text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium";
+export const SEARCH_PREVIEW_CONTENT_CLASS_NAME = cn(
+  "text-foreground/90 text-sm leading-6 whitespace-pre-wrap",
+  SEARCH_HIT_DESCENDANT_MARK_CLASS,
+);
 export const SEARCH_PREVIEW_COLUMN_CLASS_NAME =
   "hidden min-h-0 w-[var(--search-preview-w,min(44%,32rem))] min-w-72 shrink-0 flex-col overflow-hidden border-s md:flex";
 

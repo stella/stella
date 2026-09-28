@@ -1,23 +1,45 @@
-import type { CSSProperties, ReactElement, ReactNode } from "react";
-
-import { panic } from "better-result";
+import type { ReactElement, ReactNode } from "react";
 
 import type { Block } from "@stll/legal-ast/document-ast";
-import { cn } from "@stll/ui/utils";
+import { TextMark } from "@stll/ui/text-mark";
+import type {
+  TextMarkOptions,
+  TextMarkTone,
+  TextMarkVariant,
+} from "@stll/ui/text-mark";
 
+import type {
+  AnnotationColor,
+  AnnotationStyle,
+} from "@/components/legal-reader/annotations/annotation-types";
 import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
 
 /** A reader's highlight or comment, as a span to draw over the text. */
 export type AnnotationAnchorSource = {
   blockAnchorId: string;
-  color: string | null;
+  color: AnnotationColor | null;
   endOffset: number;
   id: string;
   kind: "highlight" | "comment";
   startOffset: number;
   /** How a highlight is drawn; null for a comment. */
-  style: "highlight" | "underline" | "squiggly" | "strikethrough" | null;
+  style: AnnotationStyle | null;
 };
+
+const STYLE_VARIANT = {
+  highlight: "fill",
+  underline: "underline",
+  squiggly: "wavy",
+  strikethrough: "strike",
+} as const satisfies Record<AnnotationStyle, TextMarkVariant>;
+
+const COLOR_TONE = {
+  yellow: "option-yellow",
+  green: "option-green",
+  sky: "option-sky",
+  violet: "option-violet",
+  red: "option-red",
+} as const satisfies Record<AnnotationColor, TextMarkTone>;
 
 /**
  * A mark on the text, drawn the way PDF readers draw mark-up: a colour and a
@@ -25,61 +47,29 @@ export type AnnotationAnchorSource = {
  * stay readable under every style, including a strike, since the reader's
  * own mark must never hide the law's text.
  */
-const annotationClassName = ({
-  kind,
-  style,
-}: AnnotationAnchorSource): string => {
-  if (kind === "comment") {
-    return "cursor-pointer bg-transparent text-inherit underline decoration-dotted decoration-2 underline-offset-4";
-  }
-  switch (style) {
-    case "underline": {
-      return "cursor-pointer bg-transparent text-inherit underline decoration-2 underline-offset-3";
-    }
-    case "squiggly": {
-      return "cursor-pointer bg-transparent text-inherit underline decoration-wavy decoration-2 underline-offset-3";
-    }
-    case "strikethrough": {
-      return "cursor-pointer bg-transparent text-inherit line-through decoration-2";
-    }
-    case "highlight":
-    case null: {
-      // No padding or rounding: a mark over several inline runs is several
-      // elements, and only a flat background reads as one continuous mark.
-      return "cursor-pointer text-inherit";
-    }
-    default: {
-      style satisfies never;
-      return panic(`Unhandled style: ${String(style)}`);
-    }
-  }
-};
-
-const annotationStyle = ({
+const annotationMark = ({
   color,
   kind,
   style,
-}: AnnotationAnchorSource): CSSProperties => {
-  if (kind === "comment") {
-    return { textDecorationColor: "var(--option-sky)" };
-  }
-  const swatch = `var(--option-${color ?? "yellow"})`;
-  return style === "highlight" || style === null
-    ? { backgroundColor: `color-mix(in srgb, ${swatch} 32%, transparent)` }
-    : { textDecorationColor: swatch };
-};
+}: AnnotationAnchorSource): TextMarkOptions =>
+  kind === "comment"
+    ? { variant: "dotted", tone: "option-sky" }
+    : {
+        variant: STYLE_VARIANT[style ?? "highlight"],
+        tone: COLOR_TONE[color ?? "yellow"],
+      };
 
 const renderAnnotation = (
   annotation: AnnotationAnchorSource,
   children: ReactNode,
 ): ReactElement => (
-  <mark
-    className={cn(annotationClassName(annotation))}
+  <TextMark
+    {...annotationMark(annotation)}
+    className="cursor-pointer"
     data-annotation-id={annotation.id}
-    style={annotationStyle(annotation)}
   >
     {children}
-  </mark>
+  </TextMark>
 );
 
 /** One run of text and the single mark that draws it. */
