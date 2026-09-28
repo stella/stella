@@ -328,7 +328,7 @@ const matchIndexesInOrder = (markup: string): number[] =>
 
 const activeMatchIndexOf = (markup: string): number | null => {
   const active =
-    /<mark class="[^"]*ring-warning[^"]*" data-reader-match-index="(?<index>\d+)"/u.exec(
+    /<mark class="[^"]*ring-1[^"]*"[^>]* data-reader-match-index="(?<index>\d+)"/u.exec(
       markup,
     )?.groups?.["index"];
   return active === undefined ? null : Number(active);

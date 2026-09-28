@@ -1624,6 +1624,7 @@
     "profile": "Profil",
     "properties": "Vlastnosti",
     "queued": "V poradí",
+    "reason": "Dôvod",
     "reconnecting": "Obnovenie spojenia…",
     "reference": "Referencia",
     "refresh": "Obnoviť",
@@ -1949,6 +1950,19 @@
     "deliveredBy": "Doručil <address>{sender}</address>",
     "deliveredByAuthenticated": "Doručil <address>{sender}</address> · overené",
     "deliveryAuthentication": "Overenie doručenia",
+    "drops": {
+      "authenticationHint": "Požiadajte správcu e-mailu odosielateľa o nastavenie <protocol>SPF</protocol>, <protocol>DKIM</protocol> a <protocol>DMARC</protocol> pre odosielajúcu doménu.",
+      "reasons": {
+        "attachmentRejected": "Príloha bola odmietnutá",
+        "authenticationFailed": "Overenie doručenia zlyhalo",
+        "malformedMessage": "Správu sa nepodarilo prečítať",
+        "messageTooLarge": "Správa je príliš veľká",
+        "revokedAddress": "E-mailová adresa bola zrušená",
+        "unauthorizedSender": "Odosielateľ nemá oprávnenie",
+        "unknownRecipient": "Neznámy príjemca"
+      },
+      "title": "Odmietnuté doručenia"
+    },
     "empty": "Zatiaľ žiadna korešpondencia.",
     "filers": "Odosielatelia",
     "forwardedBy": "Preposlal <address>{sender}</address>",
@@ -5182,7 +5196,6 @@
         "signedDescriptionNoVersion": "Podpis bol uložený ako nová verzia.",
         "signedTitle": "PDF podpísané",
         "stampLocation": "Miesto",
-        "stampReason": "Dôvod",
         "stampRejectedDescription": "Pečiatku na toto miesto nemožno umiestniť. Umiestnite ju znova a skúste to znova.",
         "stampSignedBy": "Digitálne podpísal",
         "stampTextUnrenderableDescription": "Dôvod alebo miesto nemožno zobraziť vo viditeľnej pečiatke. Upravte text alebo použite neviditeľný podpis.",

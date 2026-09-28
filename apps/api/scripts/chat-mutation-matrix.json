@@ -661,6 +661,62 @@
       "oracle": "chat.wire.snapshot-served"
     },
     {
+      "id": "gemini-malformed-call-fails",
+      "fix": "#4002",
+      "behaviour": "A Gemini response that ends on a tool call the model could not form fails the run instead of finishing as an empty answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "  MALFORMED_FUNCTION_CALL: \"failed\",",
+      "replace": "  MALFORMED_FUNCTION_CALL: \"ended\",",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract google unusable-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "anthropic-pause-turn-unfinished",
+      "fix": "#4002",
+      "behaviour": "An Anthropic turn the provider paused mid-way reads as unfinished, not as a finished answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "  pause_turn: \"unfinished\",",
+      "replace": "  pause_turn: \"ended\",",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract anthropic unusable-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "no-stop-reason-unfinished",
+      "fix": "#4002",
+      "behaviour": "A stream that ends without the provider stating why it stopped reads as unfinished, not as a finished answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "    return \"unfinished\";",
+      "replace": "    return \"ended\";",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "that never arrived leaves the answer unfinished"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "split-multibyte-character-decoded",
+      "fix": "#4002",
+      "behaviour": "A multi-byte character cut across two reads of a stream decodes as the character, not as replacement characters.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/ai-mistral/dist/esm/adapters/text.js",
+      "search": "buffer += decoder.decode(value, { stream: true });",
+      "replace": "buffer += decoder.decode(value);",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "reads a stream cut anywhere as it reads it whole mistral text"
+      },
+      "oracle": "chat.provider-wire.split"
+    },
+    {
       "id": "approval-answer-in-its-step",
       "fix": "#4020",
       "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
@@ -715,6 +771,20 @@
         "test": "leaves nothing waiting when a dropped connection cuts an answer off (after-tool-end)"
       },
       "oracle": "chat.ledger.pending"
+    },
+    {
+      "id": "denied-step-ends-at-its-recorded-step",
+      "fix": "#4038",
+      "behaviour": "A step whose every call was denied ends where the next step's first call records a step of its own, so its answers go right after it even when no text separates the two steps.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "  while (callOfSameStep(call, parts[end])) {",
+      "replace": "  while (parts[end]?.type === \"tool-call\") {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "answers each call right after its own step in every request"
+      },
+      "oracle": "chat.provider.prefix-stable"
     },
     {
       "id": "reader-decodes-v2-envelope",
@@ -785,6 +855,20 @@
         "test": "of a call's arguments reach the model alike however the model spaced them"
       },
       "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "snapshot-reasoning-keeps-its-step",
+      "fix": "#4017",
+      "behaviour": "The page takes each reasoning message of an interrupt snapshot as a thinking part with its own step, so the run that continues the answer adds its reasoning beside the earlier step's instead of overwriting it.",
+      "status": "active",
+      "file": "../web/src/features/chat/chat-snapshot-history.ts",
+      "search": "keepPostedMessages(posted, keepReasoningSteps(chunk.messages))",
+      "replace": "keepPostedMessages(posted, chunk.messages)",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps the first step's reasoning when the answer continues after an approval"
+      },
+      "oracle": "chat.live.equals-reload"
     }
   ]
 }

@@ -4,12 +4,17 @@
 2. A Converse stream that ends without messageStop throws (code
    incomplete-stream), so chatStream reports a RUN_ERROR instead of finishing
    the cut-off answer as stop. Upstream PR to be opened; remove when released.
+3. The terminal event carries messageStop's stopReason (null when it has
+   none) as
+   metadata.providerStopReason, so the service decides every stop reason from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
+   of reading an unhandled one as "stop". Remove when upstream exposes the
+   raw reason.
 
 diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-text.js
-index 4541a0a03889fdcd3c29dd1e33a022a64833529d..7daf27cda1e52db12f68aec86e247f529e50d604 100644
 --- a/dist/esm/adapters/converse-text.js
 +++ b/dist/esm/adapters/converse-text.js
-@@ -6,7 +6,7 @@ import { processConverseStream, throwIfConverseStreamError } from "../converse/s
+@@ -6,7 +6,7 @@
  import { buildStructuredToolConfig } from "../converse/structured-output.js";
  import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
  import { BaseTextAdapter } from "@tanstack/ai/adapters";
@@ -18,7 +23,7 @@ index 4541a0a03889fdcd3c29dd1e33a022a64833529d..7daf27cda1e52db12f68aec86e247f52
  //#region src/adapters/converse-text.ts
  /**
  * Bedrock Converse text adapter. Wires the Converse translation modules (message
-@@ -126,6 +126,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+@@ -126,6 +126,7 @@
  			});
  		} catch (error) {
  			const errorPayload = toRunErrorPayload(error, `${this.name}.chatStream failed`);
@@ -26,7 +31,7 @@ index 4541a0a03889fdcd3c29dd1e33a022a64833529d..7daf27cda1e52db12f68aec86e247f52
  			options.logger.errors(`${this.name}.chatStream fatal`, {
  				error: errorPayload,
  				source: `${this.name}.chatStream`
-@@ -136,6 +137,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+@@ -136,6 +137,7 @@
  				timestamp: Date.now(),
  				message: errorPayload.message,
  				...errorPayload.code !== void 0 && { code: errorPayload.code },
@@ -35,10 +40,25 @@ index 4541a0a03889fdcd3c29dd1e33a022a64833529d..7daf27cda1e52db12f68aec86e247f52
  					message: errorPayload.message,
  					...errorPayload.code !== void 0 && { code: errorPayload.code }
 diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-processor.js
-index baef7cac6284264c0bcb4483ebb406399d5d729d..392f87b4d435ecd96c8a9b62480ae68b5a3818c1 100644
 --- a/dist/esm/converse/stream-processor.js
 +++ b/dist/esm/converse/stream-processor.js
-@@ -207,12 +207,14 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
+@@ -59,6 +59,7 @@
+ 	const toolCallsByIndex = /* @__PURE__ */ new Map();
+ 	let usage;
+ 	let finishReason;
++	let providerStopReason = null;
+ 	function* ensureRunStarted() {
+ 		if (hasEmittedRunStarted) return;
+ 		hasEmittedRunStarted = true;
+@@ -180,6 +181,7 @@
+ 		}
+ 		if ("messageStop" in ev) {
+ 			const stopReason = ev.messageStop?.stopReason;
++			providerStopReason = stopReason ?? null;
+ 			finishReason = stopReason === "tool_use" ? "tool_calls" : stopReason === "max_tokens" ? "length" : stopReason === "content_filtered" ? "content_filter" : "stop";
+ 			continue;
+ 		}
+@@ -207,13 +209,16 @@
  		timestamp: Date.now()
  	};
  	yield* closeReasoning();
@@ -50,7 +70,10 @@ index baef7cac6284264c0bcb4483ebb406399d5d729d..392f87b4d435ecd96c8a9b62480ae68b
  		threadId,
  		timestamp: Date.now(),
 -		finishReason: finishReason ?? "stop",
+-		...usage && { usage }
 +		finishReason,
- 		...usage && { usage }
++		...usage && { usage },
++		metadata: { providerStopReason }
  	};
  }
+ //#endregion

@@ -11,9 +11,13 @@ export type {
   ListVersion,
   ParsedList,
   SanctionsEntry,
+  SanctionsIssuer,
   SanctionsName,
   SanctionsSource,
 } from "./entry";
+export { parseOfacList, readOfacListVersion } from "./ofac";
+export { SANCTIONS_SOURCES, readSourceEditionMarker } from "./sources";
+export type { SourceEditionMarker } from "./sources";
 export { parseEuList, readEuListVersion } from "./eu";
 export {
   ListReplacementError,

@@ -27,10 +27,18 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       may-version: ${{ steps.release.outputs.may-version }}
     steps:
+      - name: Check out the release recognition rule
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/release-pull-requests.sh
+          sparse-checkout-cone-mode: false
+
       - name: Look for an open release pull request
         # The title alone is contributor-controlled text, which would make this
         # an unauthenticated switch for suppressing versioning. A release is
@@ -43,14 +51,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          open=$(gh pr list --repo "$REPOSITORY" --state open --base main \
-            --limit 100 --json title,isDraft,isCrossRepository \
-            --jq '[
-              .[]
-              | select(.title | startswith("chore: release v"))
-              | select(.isDraft | not)
-              | select(.isCrossRepository | not)
-            ] | length')
+          open=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" \
+            | sed -n 's/^open_other=//p')
           if [[ "$MANUAL" == "true" || "$open" == "0" ]]; then
             echo "may-version=true" >> "$GITHUB_OUTPUT"
           else

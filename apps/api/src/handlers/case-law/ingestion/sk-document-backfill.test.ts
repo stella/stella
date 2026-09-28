@@ -11,13 +11,19 @@ import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
+  DOCUMENT_FETCH_FAILURE,
   fetchPdfBytes,
+  MAX_DOCUMENT_FETCH_ATTEMPTS,
   MAX_PRIORITY_FETCH_ATTEMPTS,
+  parkedDocumentPredicate,
+  type PdfFetchResult,
   remainingDocumentOrder,
   remainingDocumentPredicate,
   requestedDocumentOrder,
   requestedDocumentPredicate,
+  type SkDocumentFetch,
 } from "@/api/lib/legal-search/sk-document-backfill";
 
 const dialect = new PgDialect();
@@ -38,9 +44,185 @@ describe("deferred document queue shape", () => {
       signal: new AbortController().signal,
     });
 
-    expect(result).toBeUndefined();
+    expect(result).toEqual({ type: "absent" });
   });
 
+  test("the remaining tier stops handing out a decision at the parking threshold", () => {
+    const { sql, params } = compileCondition(remainingDocumentPredicate);
+
+    expect(sql).toContain(`"document_fetch_attempts" <`);
+    expect(params).toContain(MAX_DOCUMENT_FETCH_ATTEMPTS);
+    // The requested tier retires earlier, so a parked decision is in
+    // neither tier and the parked set is exactly what both leave.
+    expect(MAX_PRIORITY_FETCH_ATTEMPTS).toBeLessThan(
+      MAX_DOCUMENT_FETCH_ATTEMPTS,
+    );
+    const parked = compileCondition(parkedDocumentPredicate);
+    expect(parked.sql).toContain(`"document_fetch_attempts" >=`);
+    expect(parked.params).toContain(MAX_DOCUMENT_FETCH_ATTEMPTS);
+  });
+});
+
+const PUBLISHER_URL =
+  "https://obcan.justice.sk/content/public/item/6fe03973-7694-432b-9ebd-dfa4104ef742";
+
+const download = async (
+  fetchDocument: SkDocumentFetch,
+): Promise<PdfFetchResult> =>
+  await fetchPdfBytes({
+    documentUrl: PUBLISHER_URL,
+    fetchDocument,
+    signal: new AbortController().signal,
+  });
+
+/**
+ * What the promise rejected with; a resolution comes back wrapped so it can
+ * never pass for the expected error. bun-types declares `.rejects.toX` as
+ * void, so awaiting it trips type-aware lint; capture the rejection instead.
+ */
+const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
+    (value: unknown) => ({ resolved: value }),
+    (error: unknown) => error,
+  );
+
+/** A network failure as Bun reports it: a `TypeError` carrying a code. */
+const bunNetworkError = (code: string): TypeError =>
+  Object.assign(new TypeError(`${code} fetching the document`), { code });
+
+/** A body that errors after its first bytes, as a dropped download does. */
+const brokenBody = (error: unknown): ReadableStream<Uint8Array> =>
+  new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      controller.enqueue(new Uint8Array([0x25, 0x50]));
+      controller.error(error);
+    },
+  });
+
+/**
+ * Statuses that answer for the publisher or this client, not for the one
+ * document requested: every 5xx, credentials, a refused client, and a
+ * request for less traffic.
+ */
+const isPublisherWideStatus = (status: number): boolean =>
+  status >= 500 || [401, 403, 407, 408, 429].includes(status);
+
+describe("one document's download", () => {
+  test("no status is the document's own failure unless it is a client error about the request", async () => {
+    // A throw backs the whole walk off; a `failed` result costs only this
+    // document's attempt. Swept over every status a response can carry, so
+    // an outage (5xx) or a refused client can never spend the attempts of
+    // every document it touches.
+    for (let status = 300; status < 600; status += 1) {
+      const outcome = await rejectionOf(
+        download(
+          async () => await Promise.resolve(new Response(null, { status })),
+        ),
+      );
+
+      if (status === 404 || status === 410) {
+        expect({ status, outcome }).toEqual({
+          status,
+          outcome: { resolved: { type: "absent" } },
+        });
+        continue;
+      }
+      if (status >= 400 && !isPublisherWideStatus(status)) {
+        expect({ status, outcome }).toEqual({
+          status,
+          outcome: {
+            resolved: {
+              type: "failed",
+              failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+              detail: `http-${status}`,
+            },
+          },
+        });
+        continue;
+      }
+      expect({ status, thrown: outcome instanceof AdapterFetchError }).toEqual({
+        status,
+        thrown: true,
+      });
+    }
+  });
+
+  test("not found and gone mean there is nothing to fetch", async () => {
+    for (const status of [404, 410]) {
+      const result = await download(
+        async () => await Promise.resolve(new Response(null, { status })),
+      );
+
+      expect(result).toEqual({ type: "absent" });
+    }
+  });
+
+  test("a download that never got an answer throws, so the walk backs off", async () => {
+    // Refused, reset, redirected or timed out before a response: the
+    // publisher's state, not the document's, as far as this download can
+    // tell. The gate's own failure throws the same way.
+    for (const failure of [
+      bunNetworkError("ECONNRESET"),
+      bunNetworkError("ConnectionRefused"),
+      bunNetworkError("UnexpectedRedirect"),
+      new DOMException("The operation timed out.", "TimeoutError"),
+      new Error("gate unavailable"),
+    ]) {
+      const result = download(async () => {
+        throw failure;
+      });
+
+      expect(await rejectionOf(result)).toBe(failure);
+    }
+  });
+
+  test("a body cut off mid-download is that document's own failure", async () => {
+    const result = await download(
+      async () =>
+        await Promise.resolve(
+          new Response(brokenBody(bunNetworkError("ECONNRESET"))),
+        ),
+    );
+
+    expect(result).toEqual({
+      type: "failed",
+      failure: DOCUMENT_FETCH_FAILURE.NETWORK,
+      detail: "TypeError:ECONNRESET",
+    });
+  });
+
+  test("a body that runs out of time is that document's own failure", async () => {
+    const result = await download(
+      async () =>
+        await Promise.resolve(
+          new Response(
+            brokenBody(
+              new DOMException("The operation timed out.", "TimeoutError"),
+            ),
+          ),
+        ),
+    );
+
+    expect(result).toEqual({
+      type: "failed",
+      failure: DOCUMENT_FETCH_FAILURE.NETWORK,
+      detail: "TimeoutError",
+    });
+  });
+
+  test("a body failure that is not the download's own still throws", async () => {
+    // An abort on drain, or a programming error, is not something
+    // retrying this one document can fix.
+    const failure = new Error("stream consumer failed");
+    const result = download(
+      async () => await Promise.resolve(new Response(brokenBody(failure))),
+    );
+
+    expect(await rejectionOf(result)).toBe(failure);
+  });
+});
+
+describe("deferred document queue tiers", () => {
   test("both tiers only take decisions that are still waiting", () => {
     for (const predicate of [
       requestedDocumentPredicate,

@@ -27,7 +27,7 @@ import {
   requiredTrimmedStringSchema,
   toFormErrors,
 } from "@/lib/schema";
-import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
+import { billingCodesManagementOptions } from "@/lib/workspaces/queries/billing-codes";
 
 type BillingCodesDialogProps = {
   open: boolean;
@@ -46,7 +46,7 @@ export const BillingCodesDialog = ({
   const [showForm, setShowForm] = useState(false);
 
   const { data: codes } = useSuspenseQuery(
-    billingCodesOptions(workspaceId, activeTab),
+    billingCodesManagementOptions(workspaceId, activeTab),
   );
   const analytics = useAnalytics();
 

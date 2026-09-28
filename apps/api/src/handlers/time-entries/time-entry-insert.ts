@@ -5,18 +5,22 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import type { TimeEntrySource } from "@/api/db/schema";
+import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveRate } from "@/api/lib/billing-rates";
 import {
-  getTimeEntryDateValidationError,
+  getTimePolicyViolation,
+  readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import type { TimePolicy } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 type TimeEntryInsertInput = {
@@ -32,6 +36,8 @@ type TimeEntryInsertInput = {
 
 type PrepareTimeEntryInsertProps = {
   safeDb: SafeDb;
+  policy: TimePolicy;
+  canApprove: boolean;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   body: TimeEntryInsertInput;
@@ -56,6 +62,8 @@ type PreparedTimeEntry = {
 // Runs outside the insert transaction so the transaction stays short.
 export const prepareTimeEntryInsert = async function* ({
   safeDb,
+  policy,
+  canApprove,
   workspaceId,
   userId,
   body,
@@ -63,17 +71,15 @@ export const prepareTimeEntryInsert = async function* ({
   const todayStr = yield* formatTodayInTimeZone({
     timezoneId: body.timezoneId,
   });
-  const dateValidationError = getTimeEntryDateValidationError({
+  const policyViolation = getTimePolicyViolation({
+    policy,
     dateWorked: body.dateWorked,
     today: todayStr,
+    canApprove,
+    narrative: body.narrative,
   });
-  if (dateValidationError) {
-    return yield* Result.err(
-      new HandlerError({
-        status: 400,
-        message: dateValidationError,
-      }),
-    );
+  if (policyViolation) {
+    return yield* Result.err(policyViolation);
   }
 
   const workItemId = body.workItemId ?? null;
@@ -122,7 +128,10 @@ export const prepareTimeEntryInsert = async function* ({
     dateWorked: body.dateWorked,
     timezoneId: body.timezoneId,
     durationMinutes: body.durationMinutes,
-    billedMinutes: roundToBillingIncrement(body.durationMinutes),
+    billedMinutes: roundToBillingIncrement(
+      body.durationMinutes,
+      policy.timeMinimumUnitMinutes,
+    ),
     rateAtEntry: resolvedRate?.hourlyRate ?? 0,
     currency: resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY,
     narrative: body.narrative,
@@ -238,6 +247,7 @@ type CreateTimeEntryHandlerProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  memberRole: AuthorizedMemberRole;
   recordAuditEvent: AuditRecorder;
   body: TimeEntryInsertInput;
 };
@@ -250,11 +260,17 @@ export const createTimeEntryHandler = async function* ({
   organizationId,
   workspaceId,
   userId,
+  memberRole,
   recordAuditEvent,
   body,
 }: CreateTimeEntryHandlerProps) {
+  const policy = yield* Result.await(
+    readTimePolicy({ safeDb, organizationId }),
+  );
   const prepared = yield* prepareTimeEntryInsert({
     safeDb,
+    policy,
+    canApprove: canApproveTimeEntries(memberRole),
     workspaceId,
     userId,
     body,

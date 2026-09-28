@@ -92,7 +92,7 @@ export const CHAT_ORACLE = {
    *  throws. */
   providerWireOneTerminal: "chat.provider-wire.one-terminal",
   /** The run ends the way the wire did: the declared finish reason, or a
-   *  run error. */
+   *  run error; a stop reason no answer stands on never reads as one. */
   providerWireFinish: "chat.provider-wire.finish",
   /** The answer's text reaches the text deltas. */
   providerWireText: "chat.provider-wire.text",
@@ -107,6 +107,9 @@ export const CHAT_ORACLE = {
   providerWireError: "chat.provider-wire.error",
   /** A cancelled run ends promptly, unfinished, with no further request. */
   providerWireCancel: "chat.provider-wire.cancel",
+  /** A body cut into reads anywhere (inside a multi-byte character, a
+   *  `data:` line, a CRLF) yields the events the whole body does. */
+  providerWireSplit: "chat.provider-wire.split",
   /** Every request the adapter sends is the one its cassette pins: the
    *  protocol headers, and the body with its key order, minus the prompt
    *  text. */

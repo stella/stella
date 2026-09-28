@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -37,20 +38,6 @@ type DecisionCourt = {
 };
 
 type DecisionJudgeRow = typeof caseLawDecisionJudges.$inferInsert;
-
-/** Drivers disagree: bun-sql returns the rows, pglite wraps them in `{ rows }`. */
-const rowCount = (result: unknown): number => {
-  if (Array.isArray(result)) {
-    return result.length;
-  }
-  if (typeof result === "object" && result !== null) {
-    const rows: unknown = Reflect.get(result, "rows");
-    if (Array.isArray(rows)) {
-      return rows.length;
-    }
-  }
-  return panic("Judge relink returned no row set");
-};
 
 /**
  * The decision's rows, keyed and positioned.
@@ -204,5 +191,5 @@ export const relinkUnmatchedDecisionJudges = async (
     RETURNING 1
   `);
 
-  return { linked: rowCount(linked) };
+  return { linked: executedRows(linked).length };
 };

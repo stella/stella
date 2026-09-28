@@ -1,0 +1,16 @@
+From: Member <member@example.test>
+To: Matter <matter@example.test>
+Subject: Přeposlaná zpráva
+Date: Sat, 26 Sep 2026 12:00:00 +0000
+Message-ID: <inline-wrapper@example.test>
+Content-Type: text/plain; charset=UTF-8
+
+Prosím založit.
+
+-----Původní zpráva-----
+Od: Author <author@outside.test>
+Odesláno: Fri, 25 Sep 2026 11:00:00 +0000
+Předmět: Original subject
+Komu: Member <member@example.test>
+
+Original body.

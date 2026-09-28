@@ -15,6 +15,7 @@ import type {
   SanctionsName,
   SanctionsSource,
 } from "./entry";
+import { SANCTIONS_SOURCES } from "./sources";
 import {
   invalidValue,
   isoDate,
@@ -331,6 +332,7 @@ const entry = (
   const numberTitle = attribute(regulation, "numberTitle");
   const parsed: SanctionsEntry = {
     source: SOURCE,
+    issuer: SANCTIONS_SOURCES[SOURCE].issuer,
     sourceId,
     referenceNumber: attribute(node, "euReferenceNumber"),
     entityType,

@@ -1,4 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
+import { Result } from "better-result";
 
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -32,12 +33,11 @@ const withSortedKeys = (value: unknown): unknown => {
 const sortedJsonOf = (
   text: string,
 ): { json: string; value: unknown } | undefined => {
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  if (Result.isError(parsed)) {
     return undefined;
   }
+  const value = parsed.value;
   return { json: JSON.stringify(withSortedKeys(value)), value };
 };
 
