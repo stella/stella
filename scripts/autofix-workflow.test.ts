@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { GENERATORS, orderGenerators } from "./generated-files";
+
 const WORKFLOW_URL = new URL(
   "../.github/workflows/autofix.yml",
   import.meta.url,
@@ -210,71 +212,38 @@ describe("derived-file regeneration boundary", () => {
     expect(job.indexOf("autofix-ci/action@")).toBeGreaterThan(pushStep);
   });
 
-  test("runs the fix each CI drift guard names, catalog before CLI codegen", async () => {
+  test("runs the manifest plan and keeps the generated diff restricted", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
-    const ci = await Bun.file(
-      new URL("../.github/workflows/ci.yml", import.meta.url),
-    ).text();
     const restrictionStep = job.indexOf("- name: Restrict regenerated changes");
-
-    // Each pair is the guard ci.yml runs and the fix this job runs for it.
-    const guards = [
-      [
-        "bun apps/api/scripts/export-capability-catalog.ts --check",
-        "bun apps/api/scripts/export-capability-catalog.ts\n",
-      ],
-      [
-        "(cd packages/cli && bun run codegen)",
-        "(cd packages/cli && bun run codegen)",
-      ],
-      [
-        "(cd apps/api && bun run build:mcp-apps)",
-        "(cd apps/api && bun run build:mcp-apps)",
-      ],
-      [
-        "bun --filter @stll/api gen:web-api-types --check",
-        "bun --filter @stll/api gen:web-api-types\n",
-      ],
-      [
-        "bun --filter @stll/web generate:route-tree --check",
-        "bun --filter @stll/web generate:route-tree\n",
-      ],
-      ["bun run check:module-ownership", "bun scripts/ownership.ts --write"],
-      [
-        "bun run check:design-tokens",
-        "bun scripts/design-tokens-doc.ts --write",
-      ],
-      ["mcp-surface-baseline", "bun run mcp:surface-baseline --write"],
-    ] as const;
-    for (const [guard, fix] of guards) {
-      expect(ci).toContain(guard);
-      expect(job).toContain(fix);
-      expect(job.indexOf(fix)).toBeLessThan(restrictionStep);
-    }
-
-    expect(job.indexOf("export-capability-catalog.ts")).toBeLessThan(
-      job.indexOf("bun run codegen"),
+    expect(job).toContain("scripts/autofix-plan.ts plan");
+    expect(job).toContain('scripts/autofix-plan.ts run "$GENERATOR_IDS"');
+    expect(job).toContain('scripts/autofix-plan.ts allowed "$GENERATOR_IDS"');
+    expect(job).toContain(
+      'if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then',
     );
-    // The baseline records exact numbers, so it is rewritten only past its
-    // tolerance.
-    expect(job).toContain("if ! bun run mcp:surface-baseline --check; then");
+    expect(job).toContain(`git diff --name-only -- . "\${excludes[@]}"`);
+    expect(job).toContain(
+      `git ls-files --others --exclude-standard -- . "\${excludes[@]}"`,
+    );
+    expect(job).not.toContain("inputs='^");
+    expect(job).not.toContain("generated=(");
+    expect(job.indexOf("scripts/autofix-plan.ts run")).toBeLessThan(
+      restrictionStep,
+    );
+    const ordered = orderGenerators(
+      GENERATORS.filter((generator) => generator.autofix),
+    );
+    expect(
+      ordered.findIndex(({ id }) => id === "capability-catalog"),
+    ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
   });
 
   test("skips pull requests that touch no generator input", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     expect(job).toContain("needs: regenerate-scope");
     expect(job).toContain("if: needs.regenerate-scope.outputs.run == 'true'");
-    for (const input of [
-      "apps/api/",
-      "packages/",
-      "apps/web/src/(generated/|routes/|routeTree",
-      String.raw`apps/web/(package\.json|vite\.config\.ts|route-tree\.config\.ts|scripts/generate-route-tree\.ts)$`,
-      String.raw`\.oxfmtrc\.json$`,
-      String.raw`scripts/(ownership|design-tokens-doc)\.ts$`,
-      String.raw`bun\.lock$`,
-    ]) {
-      expect(job).toContain(input);
-    }
+    expect(job).toContain("scripts/autofix-plan.ts plan");
+    expect(job).toContain("scripts/autofix-plan.ts plan --all");
     // A capped file list regenerates rather than skipping.
     expect(job).toContain("-ge 3000");
   });

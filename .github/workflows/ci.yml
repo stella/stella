@@ -993,6 +993,14 @@ jobs:
         # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
         run: bun run check:design-tokens
 
+      - name: Generated files manifest guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/stella
+        run: |
+          bun scripts/generated-files-guard.ts --guard-a
+          bun scripts/generated-files-guard.ts --guard-b
+
       - name: Suppression waiver ledger
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The ratchet budgets cap how many suppressions each lint rule carries.
