@@ -67,7 +67,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max matters to return (list mode)",
+                  description:
+                    "Max matters to return (list mode). Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -388,7 +393,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 20,
-                  description: "Max results to return",
+                  description:
+                    "Max results to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -427,7 +437,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "court",
                 kind: "string",
                 repeatable: false,
-                description: "Filter by court name",
+                description:
+                  'Filter by court name. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
                 required: false,
               },
               {
@@ -444,7 +455,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "language",
                 kind: "string",
                 repeatable: false,
-                description: "Filter by language code",
+                description:
+                  'Filter by language code. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
                 required: false,
               },
               {
@@ -452,7 +464,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "decision_type",
                 kind: "string",
                 repeatable: false,
-                description: "Filter by decision type",
+                description:
+                  'Filter by decision type. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
                 required: false,
               },
               {
@@ -468,7 +481,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "date_from",
                 kind: "string",
                 repeatable: false,
-                description: "Filter decisions from this ISO date (YYYY-MM-DD)",
+                description:
+                  "Filter decisions from this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
                 required: false,
               },
               {
@@ -477,7 +491,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Filter decisions up to this ISO date (YYYY-MM-DD)",
+                  "Filter decisions up to this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
                 required: false,
               },
               {
@@ -529,7 +543,11 @@ export const generatedRouteMap: RouteNode = {
                   minimum: 1,
                   maximum: 20,
                   description:
-                    "Merged-page size, split evenly across the queries (at least one hit each)",
+                    "Merged-page size, split evenly across the queries (at least one hit each). Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -542,7 +560,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   maxLength: 512,
-                  description: "Filter by court name",
+                  description:
+                    'Filter by court name. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                  "x-stella-agent-input": {
+                    kind: "filter",
+                  },
                 },
                 country: {
                   type: "string",
@@ -562,13 +584,21 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   maxLength: 8,
-                  description: "Filter by language code",
+                  description:
+                    'Filter by language code. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                  "x-stella-agent-input": {
+                    kind: "filter",
+                  },
                 },
                 decision_type: {
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Filter by decision type",
+                  description:
+                    'Filter by decision type. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                  "x-stella-agent-input": {
+                    kind: "filter",
+                  },
                 },
                 source_id: {
                   type: "string",
@@ -580,14 +610,22 @@ export const generatedRouteMap: RouteNode = {
                   format: "date",
                   maxLength: 10,
                   description:
-                    "Filter decisions from this ISO date (YYYY-MM-DD)",
+                    "Filter decisions from this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "start",
+                  },
                 },
                 date_to: {
                   type: "string",
                   format: "date",
                   maxLength: 10,
                   description:
-                    "Filter decisions up to this ISO date (YYYY-MM-DD)",
+                    "Filter decisions up to this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "end",
+                  },
                 },
                 sort: {
                   enum: ["relevance", "newest"],
@@ -780,7 +818,11 @@ export const generatedRouteMap: RouteNode = {
                   minimum: 1,
                   maximum: 50,
                   description:
-                    "Citations per page; defaults to 20, at most 50.",
+                    "Citations per page; defaults to 20, at most 50. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -911,7 +953,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max entities to return",
+                  description:
+                    "Max entities to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -1747,7 +1794,12 @@ export const generatedRouteMap: RouteNode = {
                       type: "integer",
                       minimum: 1,
                       maximum: 100,
-                      description: "Max properties to return",
+                      description:
+                        "Max properties to return. Use a JSON number; a value outside the range is clamped to it.",
+                      "x-stella-agent-input": {
+                        kind: "number",
+                        range: "clamp",
+                      },
                     },
                     cursor: {
                       type: "string",
@@ -2046,7 +2098,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Maximum contacts to return",
+                  description:
+                    "Maximum contacts to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
               },
             },
@@ -3095,7 +3152,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "document_type",
                 kind: "string",
                 repeatable: false,
-                description: "Filter by document type",
+                description:
+                  'Filter by document type. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
                 required: false,
               },
               {
@@ -3103,7 +3161,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "status",
                 kind: "string",
                 repeatable: false,
-                description: "Filter by publication status",
+                description:
+                  'Filter by publication status. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
                 required: false,
               },
               {
@@ -3111,7 +3170,8 @@ export const generatedRouteMap: RouteNode = {
                 prop: "language",
                 kind: "string",
                 repeatable: false,
-                description: "Filter by language code",
+                description:
+                  'Filter by language code. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
                 required: false,
               },
               {
@@ -3120,7 +3180,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Filter statutes effective from this ISO date (YYYY-MM-DD)",
+                  "Filter statutes effective from this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
                 required: false,
               },
               {
@@ -3129,7 +3189,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
+                  "Filter statutes effective up to this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
                 required: false,
               },
             ],
@@ -3169,39 +3229,64 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   maxLength: 128,
-                  description: "Filter by document type",
+                  description:
+                    'Filter by document type. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                  "x-stella-agent-input": {
+                    kind: "filter",
+                  },
                 },
                 status: {
                   type: "string",
                   minLength: 1,
                   maxLength: 32,
-                  description: "Filter by publication status",
+                  description:
+                    'Filter by publication status. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                  "x-stella-agent-input": {
+                    kind: "filter",
+                  },
                 },
                 language: {
                   type: "string",
                   minLength: 1,
                   maxLength: 8,
-                  description: "Filter by language code",
+                  description:
+                    'Filter by language code. Omit it to search without this filter; a placeholder such as "all" or "-" reads as no filter.',
+                  "x-stella-agent-input": {
+                    kind: "filter",
+                  },
                 },
                 date_from: {
                   type: "string",
                   format: "date",
                   maxLength: 10,
                   description:
-                    "Filter statutes effective from this ISO date (YYYY-MM-DD)",
+                    "Filter statutes effective from this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "start",
+                  },
                 },
                 date_to: {
                   type: "string",
                   format: "date",
                   maxLength: 10,
                   description:
-                    "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
+                    "Filter statutes effective up to this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "end",
+                  },
                 },
                 limit: {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max results to return; defaults to 10.",
+                  description:
+                    "Max results to return; defaults to 10. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -3228,7 +3313,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                  "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
                 required: true,
               },
               {
@@ -3267,7 +3352,10 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 512,
                   description:
-                    "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                    "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
+                  "x-stella-agent-input": {
+                    kind: "eli",
+                  },
                 },
                 language: {
                   type: "string",
@@ -3324,7 +3412,11 @@ export const generatedRouteMap: RouteNode = {
                         minLength: 1,
                         maxLength: 512,
                         description:
-                          "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                          "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
+                        "x-stella-agent-input": {
+                          kind: "eli",
+                          invalidValueDisposition: "handler-owned",
+                        },
                       },
                       anchor: {
                         type: "string",
@@ -3374,7 +3466,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                  "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
                 required: true,
               },
               {
@@ -3413,7 +3505,10 @@ export const generatedRouteMap: RouteNode = {
                   minLength: 1,
                   maxLength: 512,
                   description:
-                    "European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it.",
+                    "European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one.",
+                  "x-stella-agent-input": {
+                    kind: "eli",
+                  },
                 },
                 anchor: {
                   type: "string",
@@ -3433,7 +3528,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 20,
-                  description: "Versions per page; defaults to 5, at most 20.",
+                  description:
+                    "Versions per page; defaults to 5, at most 20. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -3616,7 +3716,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max search results to return",
+                  description:
+                    "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -4653,7 +4758,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: {},
                   description:
-                    "Map of field path to value, the same map fill_template takes. Partial is fine: the model decides on what it is given.",
+                    "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given.",
                 },
               },
             },
@@ -4703,7 +4808,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+                  "List only tasks due on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
                 required: false,
               },
               {
@@ -4712,7 +4817,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+                  "List only tasks due on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
                 required: false,
               },
               {
@@ -4758,14 +4863,22 @@ export const generatedRouteMap: RouteNode = {
                   format: "date",
                   maxLength: 10,
                   description:
-                    "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+                    "List only tasks due on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "start",
+                  },
                 },
                 date_to: {
                   type: "string",
                   format: "date",
                   maxLength: 10,
                   description:
-                    "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+                    "List only tasks due on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "end",
+                  },
                 },
                 status: {
                   type: "string",
@@ -4777,7 +4890,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max tasks to return (default 50)",
+                  description:
+                    "Max tasks to return (default 50). Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -5188,7 +5306,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 200,
-                  description: "Max clauses to return",
+                  description:
+                    "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -5527,7 +5650,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max playbooks to return",
+                  description:
+                    "Max playbooks to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -6019,7 +6147,11 @@ export const generatedRouteMap: RouteNode = {
                   minimum: 1,
                   maximum: 100,
                   description:
-                    "Max rows to read (a mark over several paragraphs is several rows).",
+                    "Max rows to read (a mark over several paragraphs is several rows). Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -6395,7 +6527,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+                  "List only entries worked on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
                 required: false,
               },
               {
@@ -6404,7 +6536,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+                  "List only entries worked on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
                 required: false,
               },
               {
@@ -6456,14 +6588,22 @@ export const generatedRouteMap: RouteNode = {
                   format: "date",
                   maxLength: 10,
                   description:
-                    "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+                    "List only entries worked on or after this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its first day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "start",
+                  },
                 },
                 date_to: {
                   type: "string",
                   format: "date",
                   maxLength: 10,
                   description:
-                    "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+                    "List only entries worked on or before this ISO date (YYYY-MM-DD). Use ISO YYYY-MM-DD; a bare year or year-month reads as its last day.",
+                  "x-stella-agent-input": {
+                    kind: "date",
+                    bound: "end",
+                  },
                 },
                 status: {
                   enum: ["draft", "approved", "billed", "written_off"],
@@ -6474,7 +6614,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max entries to return",
+                  description:
+                    "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -6879,7 +7024,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Max invoices to return",
+                  description:
+                    "Max invoices to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -7046,7 +7196,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 200,
-                  description: "Max entries to return",
+                  description:
+                    "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
                 cursor: {
                   type: "string",
@@ -7628,8 +7783,13 @@ export const generatedRouteMap: RouteNode = {
                   type: "integer",
                   minimum: 1,
                   maximum: 100,
-                  description: "Maximum capabilities to return.",
+                  description:
+                    "Maximum capabilities to return. Use a JSON number; a value outside the range is clamped to it.",
                   default: 25,
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
                 },
               },
             },
@@ -7679,8 +7839,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["capability", "invoke"],
             toolName: "invoke_capability",
-            description:
-              "Invoke one capability by id (from list_capabilities/describe_capability).",
+            description: "Invoke one capability by id.",
             flags: [
               {
                 flag: "--capability",
@@ -7688,7 +7847,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "string",
                 repeatable: false,
                 description:
-                  "Capability id to invoke, as returned by list_capabilities.",
+                  "Capability id to invoke. Use an id list_capabilities returned.",
                 required: true,
               },
               {
@@ -7717,7 +7876,7 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   minLength: 1,
                   description:
-                    "Capability id to invoke, as returned by list_capabilities.",
+                    "Capability id to invoke. Use an id list_capabilities returned.",
                 },
                 input: {
                   type: "object",
@@ -27453,7 +27612,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "lists", "items-list"],
                 capabilityId: "lists.items.list",
                 description:
-                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set.",
+                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns. A fact item also carries its evidential detail (date and precision, evidence kind, medium, confidence, interpretation note, scoring), null until it is set, and its first source (document id, document name, locator), null when it has none.",
                 access: "read",
                 flags: [
                   {
@@ -29824,6 +29983,225 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "correspondence-get": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "correspondence-get"],
+                capabilityId: "matters.correspondence.get",
+                description:
+                  "Read one matter correspondence record with its filers and attachments.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--correspondence-id",
+                    prop: "correspondenceId",
+                    required: true,
+                    part: "params",
+                    partPath: "correspondenceId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "correspondenceId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        correspondenceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "correspondence-list"],
+                capabilityId: "matters.correspondence.list",
+                description:
+                  "List correspondence filed in a matter, newest received first.",
+                access: "read",
+                flags: [
+                  {
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    kind: "string",
+                    required: true,
+                    repeatable: false,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      properties: {
+                        matterId: {
+                          type: "string",
+                        },
+                      },
+                      required: ["matterId"],
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "matters", "correspondence-update"],
+                capabilityId: "matters.correspondence.update",
+                description:
+                  "Update supplied handling fields of a matter correspondence record. Omitted fields stay unchanged; null assignee clears assignment.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--correspondence-id",
+                    prop: "correspondenceId",
+                    required: true,
+                    part: "params",
+                    partPath: "correspondenceId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--assignee-id",
+                    prop: "assigneeId",
+                    required: false,
+                    part: "body",
+                    partPath: "assigneeId",
+                  },
+                ],
+                inputOnly: ["body.handlingState"],
+                paginated: false,
+                destructive: false,
+                scope: "matters_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        handlingState: {
+                          anyOf: [
+                            {
+                              const: "new",
+                              type: "string",
+                            },
+                            {
+                              const: "handled",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        assigneeId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "correspondenceId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        correspondenceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             create: {
               kind: "capability-leaf",
               spec: {
@@ -30826,6 +31204,322 @@ export const generatedRouteMap: RouteNode = {
                               },
                             },
                           },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-create",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.create",
+                description:
+                  "Approve a shared mailbox address for filing correspondence.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--address",
+                    prop: "address",
+                    required: true,
+                    part: "body",
+                    partPath: "address",
+                  },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--matter-ids",
+                    prop: "matterIds",
+                    required: false,
+                    part: "body",
+                    partPath: "matterIds",
+                  },
+                ],
+                inputOnly: ["body.scope"],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["address", "scope"],
+                      properties: {
+                        address: {
+                          format: "email",
+                          minLength: 3,
+                          maxLength: 320,
+                          type: "string",
+                        },
+                        scope: {
+                          anyOf: [
+                            {
+                              const: "organization",
+                              type: "string",
+                            },
+                            {
+                              const: "matters",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        matterIds: {
+                          maxItems: 200,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-delete",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.delete",
+                description:
+                  "Revoke an approved shared mailbox sender while retaining its approval history.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--sender-id",
+                    prop: "senderId",
+                    required: true,
+                    part: "params",
+                    partPath: "senderId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["senderId"],
+                      properties: {
+                        senderId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-list",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.list",
+                description:
+                  "List approved and revoked shared mailbox senders for the active organization.",
+                access: "write",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-scope-add": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-scope-add",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.scope.add",
+                description:
+                  "Allow an approved shared mailbox to file correspondence for one matter.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--sender-id",
+                    prop: "senderId",
+                    required: true,
+                    part: "params",
+                    partPath: "senderId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "body",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["senderId"],
+                      properties: {
+                        senderId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "correspondence-allowed-senders-scope-remove": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: [
+                  "capability",
+                  "organization-settings",
+                  "correspondence-allowed-senders-scope-remove",
+                ],
+                capabilityId:
+                  "organization-settings.correspondence.allowed-senders.scope.remove",
+                description:
+                  "Remove one matter from a shared mailbox sender's filing scope.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--sender-id",
+                    prop: "senderId",
+                    required: true,
+                    part: "params",
+                    partPath: "senderId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "body",
+                    partPath: "matterId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "admin_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["matterId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["senderId"],
+                      properties: {
+                        senderId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
                         },
                       },
                     },

@@ -131,6 +131,7 @@ const getFileTabEditorState = ({
   entityData,
   filePropertyId,
   isNativeDocxDisplay,
+  isPdfDisplay,
   tab,
 }: {
   canUpdateEntity: boolean;
@@ -141,6 +142,7 @@ const getFileTabEditorState = ({
     | undefined;
   filePropertyId: string | undefined;
   isNativeDocxDisplay: boolean;
+  isPdfDisplay: boolean;
   tab: FileTabPanelProps["tab"];
 }) => {
   const isEditingNativeDocx =
@@ -151,7 +153,9 @@ const getFileTabEditorState = ({
     isEditingNativeDocx &&
     env.VITE_FEATURE_FOLIO_COLLAB &&
     env.VITE_COLLAB_URL !== undefined;
-  const isCurrentDesktopEditField =
+  // Both desktop hand-offs write a new version of the property's current
+  // file, so neither is offered while the panel shows an older version.
+  const isCurrentFileField =
     filePropertyId !== undefined &&
     entityData?.fields.some(
       (field) => field.id === tab.id && field.propertyId === filePropertyId,
@@ -161,12 +165,19 @@ const getFileTabEditorState = ({
       canUpdateEntity &&
       desktopEditFileType !== null &&
       filePropertyId !== undefined &&
-      isCurrentDesktopEditField
+      isCurrentFileField
         ? { fileType: desktopEditFileType, propertyId: filePropertyId }
         : null,
     isCollaboratingNativeDocx,
     isEditingNativeDocx,
     isMetadataLaneExpanded: (tab.metadataLane ?? "closed") === "expanded",
+    pdfSignTarget:
+      canUpdateEntity &&
+      isPdfDisplay &&
+      filePropertyId !== undefined &&
+      isCurrentFileField
+        ? { propertyId: filePropertyId }
+        : null,
   };
 };
 
@@ -245,6 +256,7 @@ export const FileTabPanel = ({
     isMarkdownDisplay,
     isNativeDocxDisplay,
     isOfficeDisplay,
+    isPdfDisplay,
     renderId,
     requiresPdfMeasurement,
     scaleOffset,
@@ -274,6 +286,7 @@ export const FileTabPanel = ({
     desktopEditFileType,
     isActive,
     isEmailViewerActive: display.isEmailViewerActive,
+    isPdfDisplay,
     minimized,
     needsPropertyResolution: display.needsPropertyResolution,
     tab,
@@ -328,6 +341,7 @@ export const FileTabPanel = ({
     isCollaboratingNativeDocx,
     isEditingNativeDocx,
     isMetadataLaneExpanded,
+    pdfSignTarget,
   } = getFileTabEditorState({
     canUpdateEntity,
     desktopEditFileType,
@@ -335,6 +349,7 @@ export const FileTabPanel = ({
     entityData: entity.query.data,
     filePropertyId,
     isNativeDocxDisplay,
+    isPdfDisplay,
     tab,
   });
 
@@ -430,6 +445,7 @@ export const FileTabPanel = ({
               <FileTabHeaderActions
                 desktopEditTarget={desktopEditTarget}
                 downloadRenditions={entity.downloadRenditions}
+                pdfSignTarget={pdfSignTarget}
                 tab={tab}
               >
                 <BackToPeekButton
@@ -485,6 +501,7 @@ export const FileTabPanel = ({
             <FileTabHeaderActions
               desktopEditTarget={desktopEditTarget}
               downloadRenditions={entity.downloadRenditions}
+              pdfSignTarget={pdfSignTarget}
               tab={tab}
             >
               {isPreviewFacet && editExit}

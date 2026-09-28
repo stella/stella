@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<export xmlns="http://eu.europa.ec/fpi/fsd/export" generationDate="2026-09-22T20:01:34.799+02:00" globalFileId="185564">
+    <sanctionEntity designationDetails="" unitedNationId="" euReferenceNumber="EU.27.28" logicalId="13">
+        <remark>UNSC RESOLUTION 1483</remark>
+        <regulation regulationType="regulation" organisationType="commission" publicationDate="2003-07-08" entryIntoForceDate="2003-07-07" numberTitle="1210/2003 (OJ L169)" programme="IRQ" logicalId="348">
+            <publicationUrl>http://eur-lex.europa.eu/LexUriServ/LexUriServ.do?uri=OJ:L:2003:169:0006:0023:EN:PDF</publicationUrl>
+        </regulation>
+        <subjectType code="person" classificationCode="P"/>
+        <nameAlias firstName="Saddam" middleName="" lastName="Hussein Al-Tikriti" wholeName="Saddam Hussein Al-Tikriti" function="" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="17">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Abu Ali" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="19">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Abou Ali" function="" title="" nameLanguage="FR" strong="true" regulationLanguage="en" logicalId="380">
+        </nameAlias>
+        <citizenship region="" countryIso2Code="IQ" countryDescription="IRAQ" regulationLanguage="en" logicalId="1">
+        </citizenship>
+        <birthdate circa="false" calendarType="GREGORIAN" city="al-Awja, near Tikrit" zipCode="" birthdate="1937-04-28" dayOfMonth="28" monthOfYear="4" year="1937" region="" place="" countryIso2Code="IQ" countryDescription="IRAQ" regulationLanguage="en" logicalId="14">
+        </birthdate>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2022-02-25" designationDetails="" unitedNationId="" euReferenceNumber="EU.7510.16" logicalId="135909">
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2022-02-25" entryIntoForceDate="2022-02-25" numberTitle="2022/332 (OJ L53)" programme="UKR" logicalId="149145">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=uriserv%3AOJ.L_.2022.053.01.0001.01.ENG&amp;toc=OJ%3AL%3A2022%3A053%3ATOC</publicationUrl>
+        </regulation>
+        <subjectType code="person" classificationCode="P"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Vladimir Vladimirovitj PUTIN" function="" gender="M" title="" nameLanguage="SV" strong="true" regulationLanguage="en" logicalId="136017">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Vladimir Vladimirovich POUTINE" function="" gender="M" title="" nameLanguage="FR" strong="true" regulationLanguage="en" logicalId="136016">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Влади́мир Влади́мирович ПУ́ТИН" function="" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="135911">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Vladimir Vladimirovich PUTIN" function="President of the Russian Federation" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="135912">
+        </nameAlias>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Leningrad (now Saint-Petersburg)" zipCode="" birthdate="1952-10-07" dayOfMonth="7" monthOfYear="10" year="1952" region="" place="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="135910">
+            <remark>Leningrad (now Saint-Petersburg), ex USSR (now Russian Federation)</remark>
+        </birthdate>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2020-11-06" designationDetails="" unitedNationId="" euReferenceNumber="EU.5971.83" logicalId="126365">
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2021-02-26" entryIntoForceDate="2021-02-27" numberTitle="2021/339 (OJ L68)" programme="BLR" logicalId="135789">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=uriserv%3AOJ.L_.2021.068.01.0029.01.ENG&amp;toc=OJ%3AL%3A2021%3A068%3ATOC</publicationUrl>
+        </regulation>
+        <subjectType code="person" classificationCode="P"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Alexandr Grigorievich LUKASHENKO" function="" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="126369">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Аляксандр Рыгоравіч ЛУКАШЭНКА" function="" gender="M" title="" nameLanguage="BE" strong="true" regulationLanguage="en" logicalId="126368">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Александр Григорьевич ЛУКАШЕНКО" function="" gender="M" title="" nameLanguage="RU" strong="true" regulationLanguage="en" logicalId="126367">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Aljaksandr Ryhoravitj LUKASJENKA" function="" gender="M" title="" nameLanguage="SV" strong="true" regulationLanguage="en" logicalId="127938">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Aleksandr Grigorjevitj LUKASJENKO" function="" gender="M" title="" nameLanguage="SV" strong="true" regulationLanguage="en" logicalId="127937">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Aliaksandr Ryhoravich LUKASHENKA" function="President of the Republic of Belarus" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="126370">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Alexander Grigorievich LUKASHENKO" function="" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="127939">
+        </nameAlias>
+        <birthdate circa="false" calendarType="GREGORIAN" city="" zipCode="" birthdate="1954-08-30" dayOfMonth="30" monthOfYear="8" year="1954" region="" place="Kopys settlement, Vitebsk/Viciebsk Region/Oblast" countryIso2Code="BY" countryDescription="BELARUS" regulationLanguage="en" logicalId="126366">
+            <remark>former USSR (now Belarus)</remark>
+        </birthdate>
+    </sanctionEntity>
+    <sanctionEntity designationDetails="" unitedNationId="" euReferenceNumber="EU.2557.69" logicalId="6125">
+        <regulation regulationType="amendment" organisationType="commission" publicationDate="2015-01-16" entryIntoForceDate="2015-01-17" numberTitle="2015/64 (OJ L11)" programme="TAQA" logicalId="1158">
+            <publicationUrl>http://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=OJ:L:2015:011:FULL&amp;from=EN</publicationUrl>
+        </regulation>
+        <subjectType code="person" classificationCode="P"/>
+        <nameAlias firstName="Doku" middleName="Hamatovič" lastName="Umarov" wholeName="Doku Hamatovič Umarov" function="" title="" nameLanguage="SL" strong="true" regulationLanguage="en" logicalId="9173">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Lom-ali Butayev (Butaev)" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="18468">
+        </nameAlias>
+        <nameAlias firstName="Doku" middleName="Chamatowicz" lastName="Umarow" wholeName="Doku Chamatowicz Umarow" function="" title="" nameLanguage="PL" strong="true" regulationLanguage="en" logicalId="9172">
+        </nameAlias>
+        <nameAlias firstName="Доку" middleName="Хаматович" lastName="Умаров" wholeName="Доку Хаматович Умаров" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="9171">
+        </nameAlias>
+        <nameAlias firstName="Doku" middleName="Khamatovich" lastName="Umarov" wholeName="Doku Khamatovich Umarov" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="9170">
+        </nameAlias>
+        <citizenship region="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="674">
+        </citizenship>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Kharsenoy Village, Shatoyskiy (Sovetskiy) District, Chechenskaya Respublika" zipCode="" birthdate="1964-04-13" dayOfMonth="13" monthOfYear="4" year="1964" region="" place="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="2287">
+        </birthdate>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Kharsenoy Village, Shatoyskiy (Sovetskiy) District, Chechenskaya Respublika" zipCode="" birthdate="1965-04-13" dayOfMonth="13" monthOfYear="4" year="1965" region="" place="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="2286">
+        </birthdate>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Kharsenoy Village, Shatoyskiy (Sovetskiy) District, Chechenskaya Respublika" zipCode="" year="1955" region="" place="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="2285">
+        </birthdate>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Kharsenoy Village, Shatoyskiy (Sovetskiy) District, Chechenskaya Respublika" zipCode="" birthdate="1964-05-12" dayOfMonth="12" monthOfYear="5" year="1964" region="" place="" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="1480">
+        </birthdate>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="9900000001" region="" identificationTypeCode="passport" identificationTypeDescription="National passport" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="903">
+            <remark>russian passport number issued on 1.6.2003</remark>
+        </identification>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2018-03-30" designationDetails="" unitedNationId="" euReferenceNumber="EU.4453.13" logicalId="116198">
+        <remark>UNLI-30.03.2018</remark>
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2022-09-12" entryIntoForceDate="2022-09-13" numberTitle="2022/1503 (OJ L235)" programme="PRK" logicalId="161780">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/en/TXT/PDF/?uri=CELEX:32022R1503</publicationUrl>
+        </regulation>
+        <subjectType code="enterprise" classificationCode="E"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="KOREA SAMMA SHIPPING CO." function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="116371">
+            <remark>A DPRK-flagged tanker, SAM MA 2 owned by Korea Samma Shipping Company, conducted a ship-to-ship transfer of oil and fabricated documents in mid-October 2017.</remark>
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Korea Samma SHPG CO" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="143642">
+        </nameAlias>
+        <address city="Pyongyang" street="Rakrang 3-dong, Rakrang-guyok," poBox="" zipCode="" region="" place="" asAtListingTime="false" countryIso2Code="KP" countryDescription="KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF" regulationLanguage="en" logicalId="116370">
+        </address>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="5145892" region="" identificationTypeCode="imo" identificationTypeDescription="IMO (vessel identification)" countryIso2Code="00" countryDescription="UNKNOWN" regulationLanguage="en" logicalId="143210">
+        </identification>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2024-05-27" designationDetails="" unitedNationId="" euReferenceNumber="EU.11634.76" logicalId="165994">
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2024-05-27" entryIntoForceDate="2024-05-27" numberTitle="2024/1493 (OJ L27052024)" programme="UKR" logicalId="196466">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=OJ:L_202401493</publicationUrl>
+        </regulation>
+        <subjectType code="enterprise" classificationCode="E"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Hlas Evropy" function="" title="" nameLanguage="CS" strong="true" regulationLanguage="en" logicalId="165998">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="VOICE OF EUROPE S.R.O." function="online media outlet" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="165997">
+            <remark>Principal place of business: Czech Republic</remark>
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Гласът на Европа" function="" title="" nameLanguage="BG" strong="true" regulationLanguage="en" logicalId="166000">
+        </nameAlias>
+        <address city="Prague" street="Krakovská 583/9" poBox="" zipCode="110 00" region="" place="" asAtListingTime="false" countryIso2Code="CZ" countryDescription="CZECH REPUBLIC" regulationLanguage="en" logicalId="165995">
+        </address>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issueDate="2023-03-14" issuedBy="" latinNumber="" nameOnDocument="" number="CZ05185327" region="" identificationTypeCode="regnumber" identificationTypeDescription="Registration Number" countryIso2Code="CZ" countryDescription="CZECH REPUBLIC" regulationLanguage="en" logicalId="165996">
+        </identification>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2022-03-15" designationDetails="" unitedNationId="" euReferenceNumber="EU.7807.67" logicalId="137714">
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2023-03-14" entryIntoForceDate="2023-03-15" numberTitle="2023/571 (OJ L75 I)" programme="UKR" logicalId="172660">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:32023R0571</publicationUrl>
+        </regulation>
+        <subjectType code="enterprise" classificationCode="E"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Роснефть-Аэро" function="" title="" nameLanguage="RU" strong="true" regulationLanguage="en" logicalId="137871">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="РН-Аэро" function="" title="" nameLanguage="RU" strong="true" regulationLanguage="en" logicalId="137877">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="RN AERO" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="137716">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="ROSNEFT AERO" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="137717">
+        </nameAlias>
+        <address city="Moscow" street="15, Malaya Kaluzhskaya Str." poBox="" zipCode="119071" region="" place="" asAtListingTime="false" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="137715">
+            <contactInfo key="WEB" value="https://www.rosneft-aero.ru/en/"/>
+            <contactInfo key="PHONE" value="+7 (499) 517-76-56"/>
+            <contactInfo key="EMAIL" value="info@rn-aero.rosneft.ru"/>
+            <contactInfo key="FAX" value="+7 (499) 517-76-55"/>
+        </address>
+        <address city="Moscow" street="Schipok street 18" poBox="" zipCode="115093" region="" place="" asAtListingTime="false" countryIso2Code="RU" countryDescription="RUSSIAN FEDERATION" regulationLanguage="en" logicalId="151699">
+        </address>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="7705843041" region="" identificationTypeCode="fiscalcode" identificationTypeDescription="National Fiscal Code" countryIso2Code="00" countryDescription="UNKNOWN" regulationLanguage="en" logicalId="151700">
+            <remark>Tax number:</remark>
+        </identification>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="1087746656711" region="" identificationTypeCode="regnumber" identificationTypeDescription="Registration Number" countryIso2Code="00" countryDescription="UNKNOWN" regulationLanguage="en" logicalId="151701">
+            <remark>State registration number</remark>
+        </identification>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2023-10-17" designationDetails="UN designation 24/03/2007 (no longer valid)" unitedNationId="" euReferenceNumber="EU.3964.36" logicalId="3826">
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2024-07-29" entryIntoForceDate="2024-07-30" numberTitle="2024/2074 (OJ L29072024)" programme="IRN" logicalId="200116">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=OJ:L_202402074</publicationUrl>
+        </regulation>
+        <subjectType code="enterprise" classificationCode="E"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Ipari Csoport" function="" title="" nameLanguage="HU" strong="true" regulationLanguage="en" logicalId="169730">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Industrial Production Group" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159438">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Industrial Group" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="5206">
+            <remark>controlled by Iran’s Aerospace Industries Organization (AIO).
+Associated individual: 
+Reza Sadougi, CEO.
+Economic code: 41113967376</remark>
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Industries Group" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159430">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Group" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159431">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Department 140" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159437">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Industries Co." function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159433">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Industrial Company" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159434">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="SPM" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159435">
+            <remark>Sanam Projects Management</remark>
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Projects Management" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159436">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Sanam Industrial and Trading Company" function="" title="" nameLanguage="EN" strong="true" regulationLanguage="en" logicalId="159432">
+        </nameAlias>
+        <address city="Tehran" street="" poBox="19575/596" zipCode="" region="" place="" asAtListingTime="false" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="159444">
+        </address>
+        <address city="Tehran" street="3rd Fl., Sanam Bldg., Nobonyad Sq., Pasdaran Ave." poBox="" zipCode="19579" region="" place="" asAtListingTime="false" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="159445">
+        </address>
+        <address city="Tehran" street="Km. 25th of Khavaran Rd." poBox="" zipCode="" region="" place="" asAtListingTime="false" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="159443">
+            <remark>factory address</remark>
+        </address>
+        <address city="Tehran" street="Pasdaran Road 15" poBox="" zipCode="" region="" place="" asAtListingTime="false" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="159441">
+            <contactInfo key="PHONE" value="+98 21 2546008; +98 21 2556772; +98 21 88969501"/>
+            <contactInfo key="FAX" value="+98 21 2556830; +98 21 88969501"/>
+        </address>
+        <address city="Tehran" street="Farzam Alley, No 3, Fatemi Square, Palestine St" poBox="" zipCode="" region="" place="" asAtListingTime="false" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="159442">
+        </address>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="176855" region="" identificationTypeCode="regnumber" identificationTypeDescription="Registration Number" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="159440">
+            <remark>Place of registration: Tehran.
+Date of registration: 1987 and 2001</remark>
+        </identification>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="10102191894" region="" identificationTypeCode="other" identificationTypeDescription="Other identification number" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="159439">
+            <remark>National ID</remark>
+        </identification>
+        <identification diplomatic="false" knownExpired="false" knownFalse="false" reportedLost="false" revokedByIssuer="false" issuedBy="" latinNumber="" nameOnDocument="" number="411139673763" region="" identificationTypeCode="other" identificationTypeDescription="Other identification number" countryIso2Code="00" countryDescription="UNKNOWN" regulationLanguage="en" logicalId="169729">
+            <remark>Economic code</remark>
+        </identification>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2021-04-12" designationDetails="" unitedNationId="" euReferenceNumber="EU.6131.26" logicalId="127388">
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2021-04-12" entryIntoForceDate="2021-04-12" numberTitle="2021/584 (OJ L124I)" programme="IRN" logicalId="135716">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=uriserv%3AOJ.LI.2021.124.01.0001.01.ENG&amp;toc=OJ%3AL%3A2021%3A124I%3ATOC</publicationUrl>
+        </regulation>
+        <subjectType code="person" classificationCode="P"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Gholamreza SOLEIMANI" function="Head of the Basij Organisation of the Islamic Revolutionary Guard Corps (IRGC)" gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="127393">
+        </nameAlias>
+        <citizenship region="" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="127392">
+        </citizenship>
+        <birthdate circa="false" calendarType="ISLAMIC" city="Farsan" zipCode="" year="1343" region="" place="" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="127389">
+            <remark>Iranian Hijri calendar</remark>
+        </birthdate>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Farsan" zipCode="" year="1965" region="" place="" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="127390">
+        </birthdate>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Farsan" zipCode="" year="1964" region="" place="" countryIso2Code="IR" countryDescription="IRAN (ISLAMIC REPUBLIC OF)" regulationLanguage="en" logicalId="127391">
+        </birthdate>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2001-01-25" designationDetails="" unitedNationId="" euReferenceNumber="EU.502.12" logicalId="521">
+        <remark>Believed to be in Afghanistan/ Pakistan border area. Review pursuant to Security Council Resolution 1822 (2008) was concluded on 21 Jul. 2010. INTERPOL-UN Security Council Special Notice web link: https://www.interpol.int/en/notice/search/un/ 4678353</remark>
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2017-03-09" entryIntoForceDate="2017-03-10" numberTitle="2017/404 (OJ L63)" programme="AFG" logicalId="101046">
+            <publicationUrl>http://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:32017R0404&amp;from=EN</publicationUrl>
+        </regulation>
+        <subjectType code="person" classificationCode="P"/>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Haji Ahmad Jan" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="16052">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Ahmed Jan Akhund" function="" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="16053">
+        </nameAlias>
+        <nameAlias firstName="" middleName="" lastName="" wholeName="Ahmed Jan Akhundzada Wazir" function="Minister of Water and Electricity under the Taliban regime" title="Maulavi" nameLanguage="" strong="true" regulationLanguage="en" logicalId="111128">
+        </nameAlias>
+        <citizenship region="" countryIso2Code="AF" countryDescription="AFGHANISTAN" regulationLanguage="en" logicalId="101684">
+        </citizenship>
+        <birthdate circa="true" calendarType="GREGORIAN" city="Kandahar province" zipCode="" yearRangeFrom="1953" yearRangeTo="1958" region="" place="" countryIso2Code="AF" countryDescription="AFGHANISTAN" regulationLanguage="en" logicalId="101683">
+        </birthdate>
+        <birthdate circa="true" calendarType="GREGORIAN" city="Tirin Kot District, Uruzgan Province" zipCode="" yearRangeFrom="1953" yearRangeTo="1958" region="" place="" countryIso2Code="AF" countryDescription="AFGHANISTAN" regulationLanguage="en" logicalId="1865">
+            <remark>between 1953 and 1958</remark>
+        </birthdate>
+    </sanctionEntity>
+    <sanctionEntity designationDate="2012-03-23" designationDetails="" unitedNationId="" euReferenceNumber="EU.2909.48" logicalId="6971">
+        <regulation regulationType="amendment" organisationType="council" publicationDate="2022-04-12" entryIntoForceDate="2022-04-12" numberTitle="2022/592 (OJ L114)" programme="IRN" logicalId="151405">
+            <publicationUrl>https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=CELEX:32022R0592</publicationUrl>
+        </regulation>
+        <subjectType code="person" classificationCode="P"/>
+        <nameAlias firstName="Sadeq" middleName="" lastName="LARIJANI" wholeName="Sadeq LARIJANI" function="Head of the Expediency Council since 29 December 2018. Former member of the Guardian Council (until September 2021). Former Head of the Judiciary (2009-2019)." gender="M" title="" nameLanguage="" strong="true" regulationLanguage="en" logicalId="15843">
+        </nameAlias>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Najaf" zipCode="" monthOfYear="8" year="1961" region="" place="" countryIso2Code="IQ" countryDescription="IRAQ" regulationLanguage="en" logicalId="1792">
+        </birthdate>
+        <birthdate circa="false" calendarType="GREGORIAN" city="Najaf" zipCode="" year="1960" region="" place="" countryIso2Code="IQ" countryDescription="IRAQ" regulationLanguage="en" logicalId="1791">
+        </birthdate>
+    </sanctionEntity>
+</export>

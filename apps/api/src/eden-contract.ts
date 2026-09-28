@@ -43,6 +43,8 @@ type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
 // does not carry them; the browser's local Dev menu still calls them.
 type LocalDevPublicRoutes = (typeof devPublicRoute)["~Routes"];
 type LocalDevV1Routes = (typeof devRoute)["~Routes"];
+type ApiWorkspaceRoutes = ApiV1Routes["workspaces"];
+type ApiWorkspaceByIdRoutes = ApiWorkspaceRoutes[":workspaceId"];
 
 /**
  * Main browser Eden route tree. Routes whose addition would breach the
@@ -50,7 +52,10 @@ type LocalDevV1Routes = (typeof devRoute)["~Routes"];
  */
 type WebRoutes = Omit<ApiRoutes, "v1"> &
   LocalDevPublicRoutes & {
-    v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> &
+    v1: Omit<
+      ApiV1Routes,
+      "entities" | "memories" | "time-entries" | "workspaces"
+    > &
       LocalDevV1Routes & {
         entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
           ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
@@ -59,8 +64,19 @@ type WebRoutes = Omit<ApiRoutes, "v1"> &
             };
           };
         };
+        workspaces: Omit<ApiWorkspaceRoutes, ":workspaceId"> & {
+          ":workspaceId": Omit<ApiWorkspaceByIdRoutes, "correspondence">;
+        };
       };
   };
+
+type CorrespondenceRoutes = {
+  v1: {
+    workspaces: {
+      ":workspaceId": Pick<ApiWorkspaceByIdRoutes, "correspondence">;
+    };
+  };
+};
 
 /**
  * Every API type apps/web consumes. apps/web never compiles the API: each
@@ -70,6 +86,7 @@ type WebRoutes = Omit<ApiRoutes, "v1"> &
  */
 export type WebApiContract = {
   WebRoutes: WebRoutes;
+  CorrespondenceRoutes: CorrespondenceRoutes;
   MemoriesRoutes: (typeof memoriesRoute)["~Routes"];
   ChatAnonRestoration: ChatAnonRestoration;
   ChatMessage: ChatMessage;

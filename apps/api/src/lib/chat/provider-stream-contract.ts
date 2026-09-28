@@ -6,9 +6,12 @@ import {
 } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
 
+import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { withDecidedStopReasons } from "@/api/lib/chat/provider-stop-reasons";
+import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
@@ -243,6 +246,32 @@ const parsedArguments = (text: string | undefined): unknown => {
     : undefined;
 };
 
+/**
+ * Every tool call of one response stamped with the response's step: the id of
+ * its first call, which the thread holds once. The engine keeps a call's
+ * metadata on the call it records, and so do the page and persistence, so
+ * the step reads the same live, stored and reloaded. Adapters read only the
+ * metadata keys they own, so the key never reaches a provider's wire.
+ *
+ * @yields Each chunk of `chunks`, every call start naming its step.
+ */
+async function* withToolCallSteps(
+  chunks: AsyncIterable<StreamChunk>,
+): AsyncIterable<StreamChunk> {
+  let step: string | undefined;
+  for await (const chunk of chunks) {
+    if (chunk.type !== EventType.TOOL_CALL_START) {
+      yield chunk;
+      continue;
+    }
+    step ??= chunk.toolCallId;
+    yield {
+      ...chunk,
+      metadata: { ...chunk.metadata, [TOOL_CALL_STEP_METADATA_KEY]: step },
+    };
+  }
+}
+
 async function* withOneTerminalEvent(
   chunks: AsyncIterable<StreamChunk>,
   options: ChatStreamOptions,
@@ -303,16 +332,30 @@ async function* withOneTerminalEvent(
 /**
  * `adapter` with its chat stream held to the contract above. Every other
  * member is the adapter's own, its methods bound to it, so class state
- * (private fields included) keeps working.
+ * (private fields included) keeps working. `provider` names the table the
+ * adapter's stop reasons are decided by (`provider-stop-reasons.ts`); an
+ * adapter that reports none (a mock) passes its terminal event through.
  */
 export const withProviderStreamContract = (
   adapter: AnyTextAdapter,
+  provider?: TanStackAIProvider,
 ): AnyTextAdapter => {
+  const decided = (chunks: AsyncIterable<StreamChunk>) =>
+    provider === undefined
+      ? chunks
+      : withDecidedStopReasons(chunks, {
+          provider,
+          unfinishedCode: INCOMPLETE_STREAM_CODE,
+        });
   const chatStream: AnyTextAdapter["chatStream"] = (options) =>
     withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
-          withUniqueToolCallIds(adapter.chatStream(options), options.messages),
+          decided(
+            withToolCallSteps(
+              withUniqueToolCallIds(adapter.chatStream(options), options),
+            ),
+          ),
         ),
         options,
       ),

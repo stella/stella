@@ -116,6 +116,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -684,12 +685,7 @@ const handleListDocumentsTool: TypedMcpToolHandler<
   if (parsed.output.cursor !== undefined) {
     boundary = decodeEntityPageCursor(parsed.output.cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor: parsed.output.cursor });
     }
   }
 
@@ -834,12 +830,7 @@ const loadVersionHistory = async ({
   if (cursor !== undefined) {
     boundary = decodeVersionsPageCursor(cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor });
     }
   }
 
@@ -2175,12 +2166,7 @@ const handleListPropertiesTool: TypedMcpToolHandler<
   if (parsed.output.cursor !== undefined) {
     boundary = propertyPageCursorCodec.decode(parsed.output.cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor: parsed.output.cursor });
     }
   }
   const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;

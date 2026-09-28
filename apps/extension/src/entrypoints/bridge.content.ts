@@ -3,6 +3,7 @@ import { defineContentScript } from "wxt/utils/define-content-script";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
+  type BrowserExtensionResponse,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
 } from "@stll/api-contract/browser-control";
@@ -42,12 +43,13 @@ export default defineContentScript({
     window.postMessage(
       {
         allSitesGranted: false,
+        controlledTabId: null,
         controllerId: null,
         protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
         requestId: "extension-ready",
         source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
         type: "pong",
-      },
+      } satisfies BrowserExtensionResponse,
       window.location.origin,
     );
   },

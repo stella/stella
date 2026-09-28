@@ -127,6 +127,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "HOSTED_USAGE_PROVIDER",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
+  "INBOUND_MAIL_DOMAIN",
   "LEGAL_CORPUS_S3_BUCKET",
   "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
@@ -134,6 +135,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "PORT",
   "POSTHOG_HOST",
   "POSTHOG_KEY",
+  "PDF_SIGNING_TSA_URL",
+  "PDF_SIGNING_TSA_URLS",
+  "PDF_SIGNING_TSA_TRUST_PEM",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
@@ -184,6 +188,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   DB_SSLMODE: "require",
   DB_USER: "postgres",
   EMAIL_PROVIDER: "smtp",
+  INBOUND_MAIL_DOMAIN: "inbound.example.com",
   EDGAR_USER_AGENT: "stella admin@example.com",
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
@@ -294,6 +299,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
+  INBOUND_MAIL_DOMAIN:
+    "Dedicated catch-all domain for matter inbound addresses. Unset disables address creation.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
@@ -342,6 +349,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
     "Allow PostHog capture from localhost when using a real project key.",
+  PDF_SIGNING_TSA_URL:
+    "Single RFC 3161 timestamp authority for PDF signing, appended to PDF_SIGNING_TSA_URLS.",
+  PDF_SIGNING_TSA_TRUST_PEM:
+    "Trust anchors for PDF signing timestamps: PEM text or a path to a PEM file (CA certificates, or an authority's own certificate to pin it). Unset embeds timestamps without counting them as trusted time.",
+  PDF_SIGNING_TSA_URLS:
+    "RFC 3161 timestamp authorities for PDF signing in preference order, comma separated; the next one is tried when one fails. Unset signs at PAdES B-B.",
   PUBLIC_URL:
     "Public API origin for OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:
@@ -530,7 +543,7 @@ const sectionFor = (name: string) => {
   ) {
     return "Authentication";
   }
-  if (/^(EMAIL|SES_|SMTP_|TRANSACTIONAL|FEEDBACK)/u.test(name)) {
+  if (/^(EMAIL|INBOUND_MAIL|SES_|SMTP_|TRANSACTIONAL|FEEDBACK)/u.test(name)) {
     return "Email and feedback";
   }
   if (
@@ -677,6 +690,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
+  "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
   "STELLA_SERVER_URL",
   "STELLA_WEB_PORT",
@@ -764,11 +778,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
+  "BASE_SHA",
   "CANARY_PORT",
   "CANARY_PROBE_TOKEN",
   "CANARY_SERVER_URL",
   "CANARY_SIGNING_SECRET",
   "CANARY_STATE_PATH",
+  "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
@@ -831,6 +847,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
   "STELLA_DESKTOP_RELEASE_API_PATH",
@@ -846,6 +863,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
   "STELLA_TEST_OMIT_ASSET",
+  "STELLA_TEST_RELEASE_NUMBERS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_SCM_BASE",
   "WXT_STELLA_ORIGINS",

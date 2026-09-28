@@ -8,6 +8,7 @@ import type { DocumentProperty } from "@stll/api-contract";
 
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createSignedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -513,6 +514,24 @@ describe("scrubDocumentProperties", () => {
 
     const result = await scrubDocumentProperties({
       bytes: source,
+      mimeType: PDF_MIME_TYPE,
+    });
+
+    expect(result.status).toBe("signed");
+  });
+
+  it("refuses a signed PDF whose current form no longer shows the signature", async () => {
+    const signed = await createSignedPdf({
+      hidingRevision: "inherit-signature-value",
+    });
+    const form = (await PDF.load(signed)).getForm();
+    expect(form?.properties.hasSignatures).toBe(false);
+    expect(form?.getSignatureFields().some((field) => field.isSigned())).toBe(
+      false,
+    );
+
+    const result = await scrubDocumentProperties({
+      bytes: toArrayBuffer(signed),
       mimeType: PDF_MIME_TYPE,
     });
 

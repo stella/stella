@@ -144,6 +144,23 @@ export const createScopedDb =
       fn,
     });
 
+/**
+ * A transaction on the application role with no tenant settings, for a call
+ * that carries only a token. Every row policy is closed in it, so it reaches
+ * nothing but what a SECURITY DEFINER lookup hands back for that token.
+ */
+export const createTenantlessDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+  ) =>
+  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await database.transaction(async (tx: TTransaction) => {
+      await tx.execute(
+        sql`SELECT set_config('role', '${sql.raw(stella.name)}', true)`,
+      );
+      return await fn(tx);
+    });
+
 type MembershipScopedDbOptions = {
   organizationId: SafeId<"organization">;
   /**

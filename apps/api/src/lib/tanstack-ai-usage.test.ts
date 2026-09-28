@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   addTokenUsage,
-  tokenUsageFromRunFinishedChunk,
+  tokenUsageFromTerminalChunk,
 } from "@/api/lib/tanstack-ai-usage";
 
 type RunFinishedChunkOptions = Pick<
@@ -30,14 +30,14 @@ describe("TanStack run usage normalization", () => {
       completionTokensDetails: { reasoningTokens: 2 },
     } satisfies TokenUsage;
 
-    expect(tokenUsageFromRunFinishedChunk(runFinishedChunk({ usage }))).toBe(
+    expect(tokenUsageFromTerminalChunk(runFinishedChunk({ usage }))).toBe(
       usage,
     );
   });
 
   test("rebuilds rich usage from the AG-UI counters and TanStack metadata", () => {
     expect(
-      tokenUsageFromRunFinishedChunk(
+      tokenUsageFromTerminalChunk(
         runFinishedChunk({
           usage: [
             {
@@ -69,7 +69,7 @@ describe("TanStack run usage normalization", () => {
 
   test("rebuilds rich usage when only TanStack metadata is present", () => {
     expect(
-      tokenUsageFromRunFinishedChunk(
+      tokenUsageFromTerminalChunk(
         runFinishedChunk({
           metadata: {
             tanstack: {

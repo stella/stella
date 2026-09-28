@@ -4,7 +4,9 @@
  *
  * Held facts are left out: `held` means a reviewer has not yet confirmed the
  * fact can be relied on. A rejected source is left off its fact, since it no
- * longer says where the fact comes from.
+ * longer says where the fact comes from. Each source carries its document's
+ * name as it stood, so the run still says where a fact comes from after the
+ * document is renamed or removed.
  */
 
 import { panic } from "better-result";
@@ -96,11 +98,19 @@ export const readVerificationEvidence = async ({
       sourceEntityVersionId: legalListItemSources.sourceEntityVersionId,
       locator: legalListItemSources.locator,
       quote: legalListItemSources.quote,
+      sourceName: entities.name,
       rank: sql<number>`row_number() over (partition by ${legalListItemSources.itemEntityId} order by ${legalListItemSources.createdAt}, ${legalListItemSources.id})`.as(
         "rank",
       ),
     })
     .from(legalListItemSources)
+    .innerJoin(
+      entities,
+      and(
+        eq(entities.id, legalListItemSources.sourceEntityId),
+        eq(entities.workspaceId, legalListItemSources.workspaceId),
+      ),
+    )
     .where(
       and(
         eq(legalListItemSources.workspaceId, workspaceId),
@@ -122,6 +132,7 @@ export const readVerificationEvidence = async ({
             sourceEntityVersionId: ranked.sourceEntityVersionId,
             locator: ranked.locator,
             quote: ranked.quote,
+            sourceName: ranked.sourceName,
           })
           .from(ranked)
           .where(lte(ranked.rank, VERIFICATION_LIMITS.SOURCES_PER_FACT_MAX))
@@ -134,10 +145,12 @@ export const readVerificationEvidence = async ({
   const sourcesByFact = new Map<SafeId<"entity">, VerificationEvidenceSource[]>(
     facts.map((fact) => [fact.factEntityId, []]),
   );
-  for (const { itemEntityId, quote, ...source } of sources) {
-    sourcesByFact
-      .get(itemEntityId)
-      ?.push({ ...source, quote: quote === null ? null : clip(quote) });
+  for (const { itemEntityId, quote, sourceName, ...source } of sources) {
+    sourcesByFact.get(itemEntityId)?.push({
+      ...source,
+      sourceName: clip(sourceName),
+      quote: quote === null ? null : clip(quote),
+    });
   }
 
   return {

@@ -74,6 +74,7 @@ import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
+import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
 import {
   isTransactionalEmailConfigured,
   sendNewDeviceLoginEmail,
@@ -1230,6 +1231,11 @@ const createAuth = () => {
                 userId,
               });
               await revokeOrganizationMemberAuthArtifacts(tx, {
+                organizationId,
+                userId,
+              });
+              await clearOrganizationCorrespondenceAssignments({
+                tx,
                 organizationId,
                 userId,
               });

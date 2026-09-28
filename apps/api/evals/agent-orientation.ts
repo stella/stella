@@ -354,6 +354,7 @@ const schemaCheck = (
   // date are read here exactly as `tools.ts` reads them.
   const boundary = isRecord(args)
     ? normalizeObjectInputAtBoundary({
+        access: definition.access,
         exactProperties: ["confirm", "validate_only"],
         schema: definition.inputSchema,
         value: args,

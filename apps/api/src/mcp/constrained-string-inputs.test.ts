@@ -57,10 +57,6 @@ import api from "@/api/server";
 const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
   // A BCP-47 language tag bounded at 8 characters instead of bound to the
   // locale kind, so `cs_CZ` and `Czech` are rejected before it runs.
-  "search_case_law.language":
-    "language tag length-bounded, not the locale kind",
-  "search_legislation.language":
-    "language tag length-bounded, not the locale kind",
   "read_statute.language": "language tag length-bounded, not the locale kind",
   "read_statute_provisions.items[].language":
     "language tag length-bounded, not the locale kind",

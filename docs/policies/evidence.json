@@ -67,7 +67,7 @@
           "path": ".github/dependabot.yml",
           "contains": [
             "package-ecosystem: \"bun\"",
-            "interval: \"daily\"",
+            "cronjob: \"0 3 * * *\"",
             "default-days: 5"
           ]
         }

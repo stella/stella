@@ -313,14 +313,6 @@ type Actions = {
 
 let loadRequestId = 0;
 
-const setDocumentLanguage = (lang: SupportedLanguage): void => {
-  if (typeof document === "undefined") {
-    return;
-  }
-  document.documentElement.lang = lang;
-  document.documentElement.dir = getLangDir(lang);
-};
-
 const refreshFormatter = (
   formattingLocale: string,
   timeZone = resolveAppTimeZone(),
@@ -373,7 +365,6 @@ const applyMessages = ({
       weekStart,
     }),
   );
-  setDocumentLanguage(lang);
 };
 
 /** Rebuild the non-React formatter from the current store state. */
@@ -413,7 +404,6 @@ export const useI18nStore = create<State & Actions>()(
         const state = get();
         if (state.loadedLang === lang && state.isLoaded) {
           set({ lang, hasLoadedOnce: true });
-          setDocumentLanguage(lang);
           // The bundle is already loaded (e.g. English on boot), but rehydrated
           // formatting prefs still need to reach the shared formatter, which
           // was initialized as plain English/UTC.

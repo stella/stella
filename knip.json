@@ -40,6 +40,7 @@
         "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
         "src/lib/ocr-local/ocr-local-worker.ts!",
+        "src/lib/ocr-searchable-pdf-worker.ts!",
         "scripts/*.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
@@ -135,6 +136,9 @@
     },
     "packages/runtime-mode": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/sanctions": {
+      "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]
     },
     "packages/scripts": {
       "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]

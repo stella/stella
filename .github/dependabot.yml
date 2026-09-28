@@ -4,16 +4,19 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
       default-days: 5
     groups:
-      actions:
+      minor-and-patch:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "📦 dependencies"
     commit-message:
@@ -25,8 +28,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/api"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -36,12 +39,19 @@ updates:
       prefix: "chore"
     reviewers:
       - "jan-kubica"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/apps/web"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -51,12 +61,19 @@ updates:
       prefix: "chore"
     reviewers:
       - "jan-kubica"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/apps/legal-atlas-runner"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -66,12 +83,19 @@ updates:
       prefix: "chore"
     reviewers:
       - "jan-kubica"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/packages/agent-engine/docker"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -81,12 +105,19 @@ updates:
       prefix: "chore"
     reviewers:
       - "jan-kubica"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -96,35 +127,56 @@ updates:
       prefix: "chore"
     reviewers:
       - "jan-kubica"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "cargo"
     directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
       default-days: 5
     open-pull-requests-limit: 10
     groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
       tauri:
         patterns:
           - "tauri"
           - "tauri-*"
+        update-types:
+          - "major"
       async-runtime:
         patterns:
           - "tokio"
           - "futures-*"
+        update-types:
+          - "major"
       serialization:
         patterns:
           - "serde"
           - "serde_*"
+        update-types:
+          - "major"
       http:
         patterns:
           - "axum"
           - "reqwest"
           - "tower-*"
+        update-types:
+          - "major"
     labels:
       - "📦 dependencies"
     commit-message:
@@ -139,8 +191,8 @@ updates:
     labels:
       - "📦 dependencies"
     schedule:
-      interval: "daily"
-      time: "07:00"
+      interval: "cron"
+      cronjob: "0 3 * * *"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -150,85 +202,131 @@ updates:
     # standalone PRs.
     groups:
       # Executable installs derive this exact root version at build time.
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
       turbo:
         patterns:
           - "turbo"
+        update-types:
+          - "major"
       tanstack:
         patterns:
           - "@tanstack/*"
+        update-types:
+          - "major"
       astro:
         patterns:
           - "astro"
           - "@astrojs/*"
+        update-types:
+          - "major"
       expo:
         patterns:
           - "expo"
           - "expo-*"
           - "@expo/*"
+        update-types:
+          - "major"
       tailwind:
         patterns:
           - "tailwindcss"
           - "@tailwindcss/*"
+        update-types:
+          - "major"
       vite:
         patterns:
           - "vite"
           - "@vitejs/*"
+        update-types:
+          - "major"
       react:
         patterns:
           - "react"
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
+        update-types:
+          - "major"
       oxc:
         patterns:
           - "oxlint"
           - "oxlint-tsgolint"
           - "oxfmt"
+        update-types:
+          - "major"
       ai:
         patterns:
           - "ai"
           - "@ai-sdk/*"
+        update-types:
+          - "major"
       convex:
         patterns:
           - "convex"
           - "@convex-dev/*"
+        update-types:
+          - "major"
       posthog:
         patterns:
           - "posthog*"
           - "@posthog*"
+        update-types:
+          - "major"
       tiptap:
         patterns:
           - "@tiptap/*"
+        update-types:
+          - "major"
       hocuspocus:
         patterns:
           - "@hocuspocus/*"
+        update-types:
+          - "major"
       atlaskit:
         patterns:
           - "@atlaskit/*"
+        update-types:
+          - "major"
       drizzle:
         patterns:
           - "drizzle-orm"
           - "drizzle-kit"
+        update-types:
+          - "major"
       elysia:
         patterns:
           - "elysia"
           - "@elysia/*"
           - "@elysiajs/*"
+        update-types:
+          - "major"
       react-email:
         patterns:
           - "react-email"
           - "@react-email/*"
+        update-types:
+          - "major"
       rivetkit:
         patterns:
           - "rivetkit"
           - "@rivetkit/*"
+        update-types:
+          - "major"
       streamdown:
         patterns:
           - "streamdown*"
           - "@streamdown/*"
+        update-types:
+          - "major"
       aws-sdk:
         patterns:
           - "@aws-sdk/*"
+        update-types:
+          - "major"
     versioning-strategy: increase
     # v5 requires Elysia 2. Remove this guard when Elysia 2 reaches stable and
     # the API migrates rate-limit scoping from `scoped` to `plugin`.
@@ -250,6 +348,11 @@ updates:
       # Expo SDK 57 requires react-native-screens ~4.26.0. Remove this guard
       # when Expo's supported range advances to 4.27 or newer.
       - dependency-name: "react-native-screens"
+        update-types:
+          - "version-update:semver-minor"
+      # Expo SDK 57 requires react-native 0.86.x (`expo doctor` fails on
+      # 0.87). Remove this guard when the SDK upgrade moves react-native.
+      - dependency-name: "react-native"
         update-types:
           - "version-update:semver-minor"
     commit-message:

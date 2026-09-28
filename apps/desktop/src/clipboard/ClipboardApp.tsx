@@ -92,6 +92,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { RegistrySearch } from "../registry/RegistrySearch";
@@ -538,12 +539,9 @@ const ClipboardCard = ({
           ) : null}
           {highlightedText.map((segment) =>
             segment.match ? (
-              <mark
-                className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
-                key={segment.start}
-              >
+              <TextMark {...SEARCH_HIT_MARK} key={segment.start}>
                 {segment.text}
-              </mark>
+              </TextMark>
             ) : (
               <span key={segment.start}>{segment.text}</span>
             ),

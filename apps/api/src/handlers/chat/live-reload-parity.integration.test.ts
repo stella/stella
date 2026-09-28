@@ -158,8 +158,8 @@ type Ledger = {
   /** Provider failures planned so far; each one is an error the page shows. */
   failures: number;
   approvesAll: boolean;
-  /** How the latest turn ended; `cancelled` when the user stopped it or a
-   *  fork settled what it awaited. */
+  /** How the latest turn ended; `cancelled` when the user stopped it, a
+   *  dropped connection cut it off, or a fork settled what it awaited. */
   latest: "awaiting" | "cancelled" | "failed" | "none" | "text";
   /** How each turn stood when the conversation last settled. */
   outcomes: Map<number, Ledger["latest"]>;
@@ -488,6 +488,7 @@ const STALE_PAGE_ORACLES = new Set<string>([
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
   CHAT_ORACLE.persistedTurnSettles,
+  CHAT_ORACLE.providerResultsStable,
   CHAT_ORACLE.providerScriptsConsumed,
   CHAT_ORACLE.wireResultsStored,
   CHAT_ORACLE.wireSnapshotIdentity,
@@ -1328,6 +1329,9 @@ const replaceWaiting = async (calls: CallKind[]) => {
       real,
     );
     await new ReloadPage().run(model, real);
+    // The next request reads the replaced calls as stored; the replacing
+    // turn must have read them the same way.
+    await new SendUserMessage([TEXT_ANSWER], "Anything else?").run(model, real);
   });
 };
 
@@ -1410,6 +1414,39 @@ const STEP: StepShape = {
 };
 
 describe("a conversation's live view", () => {
+  test.each([
+    ["an approval", "approval", ["approve"]],
+    ["a client call", "client", []],
+  ] satisfies [string, CallKind, Decision[]][])(
+    "keeps the first step's reasoning when the answer continues after %s",
+    async (_label, call, decisions) => {
+      const conversation = await openConversation();
+      const { model, real } = conversation;
+      try {
+        await new SendUserMessage(
+          [[{ ...STEP, calls: [call], reasoning: true }]],
+          "Draft the NDA",
+        ).run(model, real);
+        // The fixture must reach the fault: the answer the run continues
+        // already holds a thinking part when the next step reasons again.
+        expect(
+          real.client
+            .messages()
+            .flatMap(({ parts }) =>
+              parts.filter((part) => part.type === "thinking"),
+            ),
+        ).toHaveLength(1);
+        expect(real.ledger.pending).toHaveLength(1);
+        await new ResolveCards(decisions, [[{ ...STEP, reasoning: true }]]).run(
+          model,
+          real,
+        );
+      } finally {
+        closeConversation(conversation);
+      }
+    },
+    propertyTestTimeout(30_000),
+  );
   test(
     "keeps every card after an approval on a message that already holds a tool result",
     async () => {
@@ -1553,6 +1590,51 @@ describe("a conversation's live view", () => {
       } finally {
         closeConversation(conversation);
       }
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  // A dropped connection cuts the run off before it hands out an interrupt:
+  // a server call whose input completed never ran, and nothing waits on it.
+  test.each(["after-tool-end", "before-tool-end"] as const)(
+    "leaves nothing waiting when a dropped connection cuts an answer off (%s)",
+    async (quietAt) => {
+      await inConversation(async (model, real) => {
+        const { harness, ledger, threadId } = real;
+        ledger.turn += 1;
+        const toolCallId = real.nextId();
+        ledger.calls.push({ id: toolCallId, kind: "plain", turn: ledger.turn });
+        ledger.latest = "cancelled";
+        harness.streamLive(threadId);
+        harness.script(threadId, [
+          {
+            quietUntilAborted: quietAt,
+            text: "Checking the register",
+            toolCalls: [
+              {
+                arguments: PLAIN_TOOL_ARGUMENTS,
+                toolCallId,
+                toolName: PLAIN_TOOL_NAME,
+              },
+            ],
+            type: "step",
+          },
+        ]);
+        await real.client.startUserMessage(
+          Bun.randomUUIDv7(),
+          "Check the register",
+          (messages) =>
+            messages.some(({ parts }) =>
+              parts.some(
+                (part) => part.type === "tool-call" && part.id === toolCallId,
+              ),
+            ),
+        );
+        harness.dropConnection(threadId);
+        await real.client.settle();
+        harness.streamWhole(threadId);
+        await new ReloadPage().run(model, real);
+      });
     },
     propertyTestTimeout(30_000),
   );

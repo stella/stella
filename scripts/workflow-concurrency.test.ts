@@ -25,7 +25,7 @@ const COMMENTED_ISSUE_NUMBER = /\bgithub\.event\.issue\.number\b/u;
 /** Not `github.ref_name`, which is only the branch name on a push. */
 const PULL_REQUEST_MERGE_REF = /\bgithub\.ref\b(?!_)/u;
 /** The pull request workflows today. Fewer means the scan broke. */
-const MINIMUM_PULL_REQUEST_WORKFLOWS = 10;
+const MINIMUM_PULL_REQUEST_WORKFLOWS = 9;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

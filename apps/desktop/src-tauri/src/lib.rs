@@ -22,6 +22,7 @@ mod i18n;
 mod keychain;
 mod logging;
 mod marker_file;
+mod pdf_signing;
 mod registry;
 mod relaunch;
 mod session_manager;

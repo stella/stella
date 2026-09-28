@@ -51,6 +51,7 @@ export const DOC_SOURCES = {
       "@tanstack/react-table",
       "@tanstack/react-table-devtools",
       "@tanstack/react-virtual",
+      "@tanstack/router-generator",
       "@tanstack/table-core",
     ],
     markdownPages: {
@@ -369,6 +370,7 @@ export const DOC_SOURCE_EXCLUSIONS = [
   "re2-wasm",
   "react-native-web",
   "rollup-plugin-visualizer",
+  "saxes",
   "scslre",
   "sherif",
   "slimdom",
@@ -425,6 +427,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
       dependency: "cldr-misc-full",
       explanation:
         "A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
+      expiresAt: "2026-10-26T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-09-26T00:00:00.000Z",
+      dependency: "asn1js",
+      explanation:
+        "https://asn1js.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/PeculiarVentures/asn1.js and the typed API in its package directly.",
+      expiresAt: "2026-10-26T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-09-26T00:00:00.000Z",
+      dependency: "pkijs",
+      explanation:
+        "https://pkijs.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the documentation at https://pkijs.org/docs/ and the typed API in its package directly.",
       expiresAt: "2026-10-26T00:00:00.000Z",
       reason: "no-llms-txt",
     },

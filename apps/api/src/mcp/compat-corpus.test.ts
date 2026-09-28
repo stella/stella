@@ -1,16 +1,24 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import fc from "fast-check";
 
+import { normalizeCountry } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { propertyConfig } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
-import { corpusCountryQuotas } from "@/api/mcp/compat-corpus";
+import {
+  corpusCountryQuotas,
+  rankCorpusCountries,
+  resolveCompatCorpusCountries,
+} from "@/api/mcp/compat-corpus";
 import { LAW_COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-law-tools";
+import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -276,6 +284,93 @@ beforeEach(() => {
 const withCorpus = async (body: () => Promise<void>) =>
   await withPublicLaw({ featurePublicLaw: true, localDevOpen: false }, body);
 
+/** The alpha-2 code the practice-jurisdiction column stores for a country. */
+const alpha2Of = (alpha3: string): string | undefined => {
+  const normalized = normalizeCountry(alpha3, { spelling: "alpha-3" });
+  return normalized.ok ? normalized.value.alpha2 : undefined;
+};
+
+describe("practice jurisdictions rank the corpus countries", () => {
+  const COUNTRY_POOL = ["AUT", "CZE", "DEU", "JPN", "POL", "SVK", "USA"];
+  const admittedArbitrary = fc.uniqueArray(fc.constantFrom(...COUNTRY_POOL), {
+    maxLength: COUNTRY_POOL.length,
+  });
+  const practisedArbitrary = fc.array(
+    fc.record({
+      alpha3: fc.constantFrom(...COUNTRY_POOL, "GBR"),
+      isPrimary: fc.boolean(),
+    }),
+    { maxLength: 6 },
+  );
+  const rankOf = (
+    country: string,
+    practised: readonly { alpha3: string; isPrimary: boolean }[],
+  ): number => {
+    const entries = practised.filter(({ alpha3 }) => alpha3 === country);
+    if (entries.some(({ isPrimary }) => isPrimary)) {
+      return 0;
+    }
+    return entries.length > 0 ? 1 : 2;
+  };
+
+  test("the ranked list is exactly the admitted countries, each once", () => {
+    fc.assert(
+      fc.property(
+        admittedArbitrary,
+        practisedArbitrary,
+        (admitted, practised) => {
+          const ranked = rankCorpusCountries(admitted, practised);
+          expect(ranked.length).toBe(admitted.length);
+          expect(ranked.toSorted()).toEqual(admitted.toSorted());
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("primary leads, then practised, then the rest, each in admitted order", () => {
+    fc.assert(
+      fc.property(
+        admittedArbitrary,
+        practisedArbitrary,
+        (admitted, practised) => {
+          const ranked = rankCorpusCountries(admitted, practised);
+          for (let index = 1; index < ranked.length; index += 1) {
+            const previous = ranked[index - 1] ?? "";
+            const current = ranked[index] ?? "";
+            const order =
+              rankOf(previous, practised) - rankOf(current, practised);
+            expect(order).toBeLessThanOrEqual(0);
+            if (order === 0) {
+              expect(admitted.indexOf(previous)).toBeLessThan(
+                admitted.indexOf(current),
+              );
+            }
+          }
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("with no practice jurisdictions the admitted order is kept", () => {
+    expect(rankCorpusCountries(["CZE", "POL", "SVK"], [])).toEqual([
+      "CZE",
+      "POL",
+      "SVK",
+    ]);
+    expect(
+      rankCorpusCountries(
+        ["CZE", "POL", "SVK"],
+        [
+          { alpha3: "POL", isPrimary: false },
+          { alpha3: "SVK", isPrimary: true },
+        ],
+      ),
+    ).toEqual(["SVK", "POL", "CZE"]);
+  });
+});
+
 describe("the corpus page cap split across countries", () => {
   // Exhaustive rather than sampled: the domain is 1..cap for two caps that are
   // constants, so every case a deployment can reach is checked here.
@@ -308,7 +403,7 @@ describe("the corpus page cap split across countries", () => {
           Math.min(...limits),
           `cap ${cap} across ${count}`,
         ).toBeGreaterThan(0);
-        // The remainder goes to the first countries in admitted order, so the
+        // The remainder goes to the first countries in the order they are asked, so the
         // largest and smallest share can differ by one hit and no more.
         expect(Math.max(...limits) - Math.min(...limits)).toBeLessThanOrEqual(
           1,
@@ -424,35 +519,140 @@ describe("compat search reaching the public corpus", () => {
     );
   });
 
-  test("the organization's practice jurisdictions select the corpus countries", async () => {
-    await withCorpus(async () => {
-      await run({
-        args: { query: "promlčení" },
-        context: createContext({
-          practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
-        }),
-        handler: COMPAT_TOOL_HANDLERS.search,
-      });
-
-      // The column stores alpha-2 and the corpus keys on alpha-3.
-      expect(searchDecisionsHandlerMock.mock.calls.at(0)?.[0]).toMatchObject({
-        country: "CZE",
-      });
-    });
+  test("the organization's practice jurisdictions rank the corpus countries", async () => {
+    // The column stores alpha-2 and the corpus keys on alpha-3: the ranking
+    // reads the converted code, so the practised country leads.
+    const last = PUBLIC_CASE_LAW_COUNTRIES.at(-1);
+    const lastAlpha2 = last === undefined ? undefined : alpha2Of(last);
+    if (last === undefined || lastAlpha2 === undefined) {
+      throw new Error("the corpus admits no case-law country");
+    }
+    const countries = await resolveCompatCorpusCountries(
+      createContext({
+        practiceJurisdictions: [{ countryCode: lastAlpha2, isPrimary: true }],
+      }),
+    );
+    expect(countries.caseLaw.at(0)).toBe(last);
   });
 
-  test("an organization practising only outside the corpus gets no corpus hits", async () => {
+  for (const surface of [
+    {
+      mode: "default",
+      handler: COMPAT_TOOL_HANDLERS.search,
+      // The default surface also searches matters: the empty stub.
+      searchProvider: undefined,
+    },
+    {
+      mode: "law",
+      handler: LAW_COMPAT_TOOL_HANDLERS.search,
+      searchProvider: forbiddenSearchProvider,
+    },
+  ] as const) {
+    test(`an organization practising only outside the corpus still searches all of it (${surface.mode})`, async () => {
+      await withCorpus(async () => {
+        const payload = await run({
+          args: { query: "promlčení" },
+          context: createContext({
+            practiceJurisdictions: [{ countryCode: "JP", isPrimary: true }],
+            ...(surface.searchProvider === undefined
+              ? {}
+              : { searchProvider: surface.searchProvider }),
+          }),
+          handler: surface.handler,
+          mode: surface.mode,
+        });
+
+        expect(payload.results?.map(({ id }) => id)).toEqual([
+          `decision:${DECISION_ID}`,
+          `statute:${STATUTE_ELI}`,
+        ]);
+        expect(
+          searchDecisionsHandlerMock.mock.calls.map(
+            ([input]) => asTestRaw<{ country: string }>(input).country,
+          ),
+        ).toEqual([...PUBLIC_CASE_LAW_COUNTRIES]);
+        expect(
+          searchLegislationHandlerMock.mock.calls.map(
+            ([input]) =>
+              asTestRaw<{ jurisdiction: string }>(input).jurisdiction,
+          ),
+        ).toEqual([...PUBLIC_LEGISLATION_COUNTRIES]);
+      });
+    });
+  }
+
+  test("the searched countries are the admitted ones whatever the practice jurisdictions", async () => {
+    const alpha2 = fc.constantFrom(
+      "CZ",
+      "SK",
+      "PL",
+      "DE",
+      "AT",
+      "JP",
+      "US",
+      "cz",
+      "XX",
+      "",
+    );
+    await fc.assert(
+      fc.asyncProperty(
+        fc.option(
+          fc.array(
+            fc.record({ countryCode: alpha2, isPrimary: fc.boolean() }),
+            { maxLength: 6 },
+          ),
+          { nil: null },
+        ),
+        async (practiceJurisdictions) => {
+          const countries = await resolveCompatCorpusCountries(
+            createContext({ practiceJurisdictions }),
+          );
+          expect(countries.caseLaw.toSorted()).toEqual(
+            [...PUBLIC_CASE_LAW_COUNTRIES].toSorted(),
+          );
+          expect(countries.legislation.toSorted()).toEqual(
+            [...PUBLIC_LEGISLATION_COUNTRIES].toSorted(),
+          );
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("a cursor minted while a country was not asked starts that country at its first page", async () => {
     await withCorpus(async () => {
+      // What the default surface issued for an organization whose practice
+      // jurisdictions excluded every corpus country: the matter position and
+      // no corpus keys at all.
+      const cursor = encodeCompatSearchCursor({
+        matter: "matter-2",
+        corpus: { decisions: {}, statutes: {} },
+      });
+
       const payload = await run({
-        args: { query: "promlčení" },
+        args: { query: "promlčení", cursor },
         context: createContext({
           practiceJurisdictions: [{ countryCode: "JP", isPrimary: true }],
         }),
         handler: COMPAT_TOOL_HANDLERS.search,
       });
 
-      expect(payload.results).toEqual([]);
-      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+      expect(payload.error).toBeUndefined();
+      expect(searchProviderSearchMock.mock.calls.at(-1)?.[0]).toMatchObject({
+        cursor: "matter-2",
+      });
+      // First page: no sub-cursor is passed for a country the cursor never
+      // named, so nothing is skipped.
+      for (const [input] of searchDecisionsHandlerMock.mock.calls) {
+        expect(asTestRaw<{ cursor?: string }>(input).cursor).toBeUndefined();
+      }
+      expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(
+        PUBLIC_CASE_LAW_COUNTRIES.length,
+      );
+      expect(payload.results?.map(({ id }) => id)).toEqual([
+        `decision:${DECISION_ID}`,
+        `statute:${STATUTE_ELI}`,
+      ]);
     });
   });
 

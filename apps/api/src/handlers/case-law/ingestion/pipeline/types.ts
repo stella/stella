@@ -48,6 +48,13 @@ export type DecisionRowWriteStatus =
 export const MAX_SOURCE_IDENTITY_CANDIDATES = 8;
 
 /**
+ * Legacy null-id rows one docket may hold. A docket publishes a handful of
+ * documents at most; the bound keeps a pathological docket from loading an
+ * unbounded row set inside the identity transaction.
+ */
+export const MAX_LEGACY_DOCKET_CANDIDATES = 32;
+
+/**
  * Log event emitted when a source states a decision date the ingestion
  * boundary cannot accept — a non-calendar day or a year outside the range a
  * decision can carry. Reported at WARN: the document is still stored, with
@@ -59,6 +66,17 @@ export const DECISION_DATE_OUT_OF_BOUNDS =
 
 /** Enough of the rejected value to identify its shape, not a payload. */
 export const MAX_LOGGED_DECISION_DATE_LENGTH = 64;
+
+/**
+ * An observed docket its jurisdiction's grammar does not accept as written:
+ * `outcome` says whether ingestion cut a tail from it (`trimmed`), left one
+ * because the row is keyed by its docket (`unkeyed`), or found no docket in
+ * it at all (`unparsed`).
+ */
+export const DECISION_DOCKET_NOT_CANONICAL =
+  "case_law.ingestion.docket_not_canonical";
+
+export const MAX_LOGGED_DOCKET_LENGTH = 128;
 
 export const DECISION_REFRESH = {
   /**

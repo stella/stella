@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  AUTO_INFRA_OFFSET_GRID,
   buildPersistentSteps,
   buildPreparationSteps,
   checkPortAvailabilityOnHosts,
@@ -28,14 +29,18 @@ import {
   projectsForDeletedWorktrees,
   parseDockerComposePsJson,
   parseForeignPortOwners,
+  parseStellaDockerProject,
   portsForOffset,
   requiredPortsForMode,
+  resolveAutoInfraOffset,
   resolveMainRootFromCommonDir,
   resolveOffset,
   shouldAutoOpenBrowser,
   stopChildren,
 } from "./dev-runner";
 import {
+  DEFAULT_INFRA_PORTS,
+  DEFAULT_PORTS,
   MAX_INFRA_OFFSET,
   MAX_PORT_OFFSET,
   parseDevRunnerConfig,
@@ -111,14 +116,27 @@ describe("stopChildren", () => {
 });
 
 describe("parseDevRunnerConfig", () => {
-  test("uses dev mode and zero infrastructure offset by default", () => {
+  test("uses dev mode and an automatic infrastructure offset by default", () => {
     expect(parseDevRunnerConfig({ args: [], environment: {} })).toMatchObject({
       status: "ok",
       value: {
-        infraOffset: 0,
+        infraOffset: { type: "auto" },
         mode: "dev",
+        seed: false,
       },
     });
+  });
+
+  test("accepts auto from the flag and the environment", () => {
+    for (const input of [
+      { args: ["--infra-offset", "auto"], environment: {} },
+      { args: [], environment: { STELLA_INFRA_OFFSET: "auto" } },
+    ]) {
+      expect(parseDevRunnerConfig(input)).toMatchObject({
+        status: "ok",
+        value: { infraOffset: { type: "auto" } },
+      });
+    }
   });
 
   test("gives CLI offsets and instance precedence over environment values", () => {
@@ -142,7 +160,7 @@ describe("parseDevRunnerConfig", () => {
       status: "ok",
       value: {
         devInstance: "cli-instance",
-        infraOffset: 10,
+        infraOffset: { offset: 10, type: "fixed" },
         portOffset: 8,
       },
     });
@@ -157,6 +175,7 @@ describe("parseDevRunnerConfig", () => {
           "--skip-db-push",
           "--dry-run",
           "--no-browser",
+          "--seed",
         ],
         environment: {},
       }),
@@ -166,6 +185,7 @@ describe("parseDevRunnerConfig", () => {
         dryRun: true,
         mode: "dev:desktop",
         noBrowser: true,
+        seed: true,
         skipDbPush: true,
         skipInstall: true,
       },
@@ -326,6 +346,121 @@ describe("resolveOffset", () => {
     expect(offsetFor("/Users/dev/stella/.worktrees/alpha")).not.toBe(
       offsetFor("/Users/dev/stella/.worktrees/beta"),
     );
+  });
+});
+
+describe("automatic infrastructure offsets", () => {
+  const worktreePath = "/Users/dev/stella/.worktrees/alpha";
+  const allFree = async () => true;
+  const infraPortSet = (offset: number) =>
+    Object.values(infraPortsForOffset(offset));
+  const gridStep = (offset: number, steps: number) => {
+    const { base, slots, stride } = AUTO_INFRA_OFFSET_GRID;
+    return base + (((offset - base) / stride + steps) % slots) * stride;
+  };
+
+  test("no two grid offsets publish the same host port", () => {
+    const defaults = Object.values(DEFAULT_INFRA_PORTS);
+    for (const left of defaults) {
+      for (const right of defaults) {
+        if (left !== right) {
+          expect(
+            Math.abs(left - right) % AUTO_INFRA_OFFSET_GRID.stride,
+          ).not.toBe(0);
+        }
+      }
+    }
+  });
+
+  test("the grid stays clear of application ports and the ephemeral range", () => {
+    const { base, slots, stride } = AUTO_INFRA_OFFSET_GRID;
+    const lowest = Math.min(...infraPortSet(base));
+    const highest = Math.max(...infraPortSet(base + (slots - 1) * stride));
+    const applicationPorts = Object.values(DEFAULT_PORTS).flatMap((port) => [
+      port,
+      port + MAX_HASH_OFFSET,
+    ]);
+    const EPHEMERAL_PORT_START = 49_152;
+
+    expect(highest).toBeLessThan(EPHEMERAL_PORT_START);
+    for (const port of applicationPorts) {
+      expect(port < lowest || port > highest).toBe(true);
+    }
+  });
+
+  test("reuses the offset of this worktree's existing project", async () => {
+    const own = dockerProjectName({
+      infraOffset: 12_340,
+      isWorktree: true,
+      worktreePath,
+    });
+
+    expect(
+      await resolveAutoInfraOffset({
+        isPortFree: async () => false,
+        knownProjects: ["stella-dev", own, "unrelated"],
+        reservedPorts: [],
+        worktreePath,
+      }),
+    ).toEqual({ offset: 12_340, source: "this worktree's Docker project" });
+  });
+
+  test("is stable for a worktree and lands on the grid", async () => {
+    const resolve = async () =>
+      await resolveAutoInfraOffset({
+        isPortFree: allFree,
+        knownProjects: [],
+        reservedPorts: [],
+        worktreePath,
+      });
+    const first = await resolve();
+
+    expect(await resolve()).toEqual(first);
+    expect(
+      (first.offset - AUTO_INFRA_OFFSET_GRID.base) %
+        AUTO_INFRA_OFFSET_GRID.stride,
+    ).toBe(0);
+  });
+
+  test("skips offsets whose ports another project or a busy host port holds", async () => {
+    const hashed = await resolveAutoInfraOffset({
+      isPortFree: allFree,
+      knownProjects: [],
+      reservedPorts: [],
+      worktreePath,
+    });
+    const taken = dockerProjectName({
+      infraOffset: hashed.offset,
+      isWorktree: true,
+      worktreePath: "/Users/dev/stella/.worktrees/beta",
+    });
+    const busyPort = infraPortsForOffset(gridStep(hashed.offset, 1)).postgres;
+
+    const resolved = await resolveAutoInfraOffset({
+      isPortFree: async (port) => port !== busyPort,
+      knownProjects: [taken],
+      reservedPorts: [],
+      worktreePath,
+    });
+
+    expect(resolved.offset).toBe(gridStep(hashed.offset, 2));
+    expect(resolved.source).toContain("adjusted");
+  });
+
+  test("parses the offset and worktree hash out of project names", () => {
+    expect(parseStellaDockerProject("stella-dev")).toEqual({
+      offset: 0,
+      worktreeHash: undefined,
+    });
+    expect(parseStellaDockerProject("stella-dev-120")).toEqual({
+      offset: 120,
+      worktreeHash: undefined,
+    });
+    expect(parseStellaDockerProject("stella-dev-44000-0123456789ab")).toEqual({
+      offset: 44_000,
+      worktreeHash: "0123456789ab",
+    });
+    expect(parseStellaDockerProject("kodecar")).toBeUndefined();
   });
 });
 

@@ -46,9 +46,12 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   buildLegislationDocumentAppUrl,
   countryInputSchema,
   countryNormalization,
+  ELI_NORMALIZATION,
+  FILTER_NORMALIZATION,
   cursorInput,
   DEFAULT_SEARCH_LIMIT,
   errorResult,
@@ -59,7 +62,6 @@ import {
   mapValibotIssues,
   notFoundResult,
   nullAsAbsent,
-  structuredErrorResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
@@ -118,9 +120,9 @@ const eliInputSchema = v.pipe(
   v.minLength(1),
   v.maxLength(512),
   v.description(
-    "European Legislation Identifier of the work, exactly as " +
-      "search_legislation returns it (for example /eli/cz/sb/2012/89). It " +
-      "addresses the act, not one consolidation of it.",
+    "European Legislation Identifier of the work, as search_legislation " +
+      "returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). " +
+      "It addresses the act, not one consolidation of it.",
   ),
 );
 
@@ -336,6 +338,9 @@ const LEGISLATION_TOOL_DEFINITIONS = [
         admitted: PUBLIC_LEGISLATION_COUNTRIES,
         tool: SEARCH_LEGISLATION_TOOL,
       }),
+      document_type: FILTER_NORMALIZATION,
+      status: FILTER_NORMALIZATION,
+      language: FILTER_NORMALIZATION,
     },
     access: "read",
     anonymized: { exposure: "passthrough" },
@@ -363,6 +368,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "AI use of its wording still answers with metadata, versions and " +
       "outline, and `textWithheldReason` in place of the text.",
     inputSchema: readStatuteArgsSchema,
+    inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -388,6 +394,14 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "`text_withheld` (the source bars AI use of its wording) each carry a " +
       "message. Prefer one batched call over one call per provision.",
     inputSchema: readStatuteProvisionsArgsSchema,
+    // Each entry is answered on its own, so an ELI no spelling rescues is that
+    // entry's `not_found`, not a refusal of the whole batch.
+    inputNormalization: {
+      "items[].eli": {
+        ...ELI_NORMALIZATION,
+        invalidValueDisposition: "handler-owned",
+      },
+    },
     access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -409,6 +423,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "not carry the anchor is left out of `items`. Pass the returned " +
       "nextCursor back as cursor for older windows.",
     inputSchema: readProvisionHistoryArgsSchema,
+    inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -455,13 +470,8 @@ const statuteResolutionError = (
   }
 };
 
-const invalidCursorError = (toolName: LegislationToolName) =>
-  structuredErrorResult({
-    code: "validation_error",
-    message: "Invalid cursor",
-    issues: [{ path: "cursor", message: "Invalid cursor" }],
-    hint: `Pass the 'cursor' verbatim as returned by a previous ${toolName} call, or omit it for the first page.`,
-  });
+const invalidCursorError = (toolName: LegislationToolName, cursor: string) =>
+  invalidCursorResult({ cursor, tool: toolName });
 
 /** Text cut to the provision budget, and whether the budget cut it. */
 const boundProvisionText = (text: string) => {
@@ -518,7 +528,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
     return failure?.message === "Invalid cursor"
-      ? invalidCursorError("search_legislation")
+      ? invalidCursorError("search_legislation", cursor ?? "")
       : errorResult(failure?.message ?? "Legislation search failed");
   }
 
@@ -981,7 +991,7 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   if (!isProvisionHistoryPage(page)) {
     const failure = handlerStatusOf(page);
     if (failure?.message === "Invalid cursor") {
-      return invalidCursorError("read_provision_history");
+      return invalidCursorError("read_provision_history", cursor ?? "");
     }
     return failure?.message === "Provision not found"
       ? notFoundResult("Provision not found", PICK_AN_ANCHOR_HINT)

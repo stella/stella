@@ -173,6 +173,7 @@ describe("a subagent run under an anonymizing boundary", () => {
       excludedCanonicals: Promise.resolve([]),
       gazetteerEntries: Promise.resolve([]),
       literalPlaceholderAliases: new Map<string, string>(),
+      historicalRedactionMap: new Map<string, string>(),
       organizationId: ids.orgA,
       pipelineContext: createPipelineContext(),
       placeholderOffsets: new Map<string, number>(),
@@ -243,6 +244,24 @@ describe("a subagent run that ends without a complete answer", () => {
       outcome: "failed",
       reason: "run-error",
       usage: LOOKUP_STEP_USAGE,
+    });
+  });
+
+  test("adds the usage a failed step reported to the steps before it", async () => {
+    const { result } = await runScriptedSubagent([
+      lookupStep,
+      {
+        code: "incomplete-stream",
+        message: "The provider stream ended with an error.",
+        type: "error",
+        usage: ANSWER_STEP_USAGE,
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      outcome: "failed",
+      reason: "run-error",
+      usage: { completionTokens: 45, promptTokens: 230, totalTokens: 275 },
     });
   });
 

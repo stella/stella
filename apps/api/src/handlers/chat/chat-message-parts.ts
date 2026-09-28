@@ -228,10 +228,12 @@ const normalizeLegacyMessagePartsToTanStack = (
       continue;
     }
     if (isLegacyAnonRestorationsPart(part)) {
+      // Legacy parts predate thread-wide placeholder numbering, so a repeated
+      // placeholder here is expected history, not a fault: not reported.
       metadata.anonRestorations = mergeAnonRestorations(
         metadata.anonRestorations,
         part.data,
-      );
+      ).restorations;
       continue;
     }
     if (isLegacyMentionsPart(part)) {
@@ -620,7 +622,7 @@ const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
 const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
   name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
 
-type AwaitingUserInteraction = Extract<
+export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
   { type: "awaiting-user" }
 >["interaction"];
@@ -1605,12 +1607,39 @@ const isTanStackToolResultContentPart = (part: unknown): boolean => {
   );
 };
 
+/**
+ * One message's restorations, each placeholder once. A placeholder names one
+ * original across a thread (`createChatThirdPartyBoundary` numbers every
+ * request after the thread's earlier ones), so a pair naming another original
+ * for a placeholder already held is a numbering fault: the first meaning
+ * stays, and the count of such pairs is returned for the caller to report.
+ */
 export const mergeAnonRestorations = (
   current: ChatMessageMetadata["anonRestorations"],
   next: NonNullable<ChatMessageMetadata["anonRestorations"]>,
-): NonNullable<ChatMessageMetadata["anonRestorations"]> => ({
-  pairs: [...(current === undefined ? [] : current.pairs), ...next.pairs],
-});
+): {
+  conflicts: number;
+  restorations: NonNullable<ChatMessageMetadata["anonRestorations"]>;
+} => {
+  const pairs = current === undefined ? [] : [...current.pairs];
+  const named = new Map<string, string>();
+  for (const { original, placeholder } of pairs) {
+    if (!named.has(placeholder)) {
+      named.set(placeholder, original);
+    }
+  }
+  let conflicts = 0;
+  for (const pair of next.pairs) {
+    const held = named.get(pair.placeholder);
+    if (held === undefined) {
+      named.set(pair.placeholder, pair.original);
+      pairs.push(pair);
+    } else if (held !== pair.original) {
+      conflicts += 1;
+    }
+  }
+  return { conflicts, restorations: { pairs } };
+};
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&

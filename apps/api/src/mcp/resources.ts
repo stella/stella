@@ -25,6 +25,7 @@ import {
   LEGISLATION_WORKFLOW_REFERENCE_URI,
 } from "@/api/mcp/legislation-workflow-reference";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import { unlistedToolNamesIn } from "@/api/mcp/surface-tool-mentions";
 import {
   buildFieldReference,
   TEMPLATE_FIELD_REFERENCE_URI,
@@ -81,6 +82,23 @@ type StaticResource = {
 const isAvailable = (resource: StaticResource): boolean =>
   isMcpToolFeatureEnabled(resource.feature);
 
+/**
+ * A reference served exactly where the surface lists every tool its
+ * description and text name, read off the text itself rather than a second
+ * list of audience names. A procedure whose steps call tools the surface does
+ * not list sends the model to calls that answer `unknown_tool`.
+ */
+const servedWhereItsToolsAreListed = (
+  resource: Omit<StaticResource, "isServedInMode" | "read"> & {
+    read: (mode: McpMode) => string;
+  },
+): StaticResource => ({
+  ...resource,
+  isServedInMode: (mode) =>
+    unlistedToolNamesIn(`${resource.description}\n${resource.read(mode)}`, mode)
+      .length === 0,
+});
+
 const PRODUCT_IDENTITY_URI = "stella://about";
 
 export const STELLA_PRODUCT_IDENTITY = {
@@ -110,7 +128,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     listed: true,
     read: buildProductIdentity,
   },
-  {
+  servedWhereItsToolsAreListed({
     uri: TEMPLATE_MARKER_REFERENCE_URI,
     name: "template-markers",
     title: "Template marker grammar",
@@ -121,8 +139,8 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: "text/markdown",
     listed: true,
     read: buildMarkerReference,
-  },
-  {
+  }),
+  servedWhereItsToolsAreListed({
     uri: TEMPLATE_FIELD_REFERENCE_URI,
     name: "template-fields",
     title: "Template field configuration",
@@ -134,8 +152,8 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: "text/markdown",
     listed: true,
     read: buildFieldReference,
-  },
-  {
+  }),
+  servedWhereItsToolsAreListed({
     uri: TEMPLATE_WORKFLOW_REFERENCE_URI,
     name: "template-workflow",
     title: "Template workflow",
@@ -147,7 +165,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: "text/markdown",
     listed: true,
     read: buildWorkflowReference,
-  },
+  }),
   {
     uri: LEGISLATION_WORKFLOW_REFERENCE_URI,
     name: "legislation-workflow",

@@ -60,6 +60,11 @@ const PROVISION_READ_STATUS_MIGRATION_PATH = nodePath.join(
   "20260927090000_case_law_provision_read_status",
   "migration.sql",
 );
+const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260731190000_case_law_observation_legacy_fence",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -264,6 +269,38 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260928101000_pdf_signing_sessions",
+  "migration.sql",
+);
+
+const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
+  'ALTER TABLE "pdf_signing_sessions"\n  FORCE ROW LEVEL SECURITY',
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
+] as const;
+
+/**
+ * Install what schema push cannot say about PDF signing sessions: forced row
+ * security and the token-scope lookups the desktop's calls go through.
+ */
+export const installPglitePdfSigningTokenScopes = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    PDF_SIGNING_SESSIONS_MIGRATION_PATH,
+  ).filter((statement) =>
+    PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
   'INSERT INTO "case_law_statute_citation_count_state"',
   "CREATE FUNCTION",
@@ -369,6 +406,21 @@ export const installPgliteLegislationPayloadRevision = async (
       executableSql(statement).startsWith(prefix),
     ),
   );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
+ * Install the fence that rejects a write of a decision's publisher hash that
+ * does not advance its observation order.
+ */
+export const installPgliteCaseLawObservationFence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH,
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

@@ -1,3 +1,4 @@
+import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { expect, test } from "../helpers/test";
 
 // Marker recognized by the mock AI adapter (apps/api/src/dev/register-mock-ai.ts,
@@ -24,7 +25,7 @@ test("composer draft survives typing while a response is streaming", async ({
   // title routeError.title). Checked after every step below; declared
   // once so the assertions read the same way each time.
   const errorBoundary = page.getByRole("heading", {
-    name: "This page couldn’t be opened",
+    name: ROUTE_ERROR_HEADING,
   });
   await expect(errorBoundary).toHaveCount(0);
 

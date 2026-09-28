@@ -69,11 +69,13 @@ export const lockAccountRow = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ): Promise<void> => {
+  // Drain membership-locked writers before erasure without blocking their
+  // foreign-key KEY SHARE locks. The account's key is retained on deletion.
   await tx
     .select({ id: user.id })
     .from(user)
     .where(eq(user.id, userId))
-    .for("update");
+    .for("no key update");
 };
 
 /**

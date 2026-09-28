@@ -1,3 +1,9 @@
+import { createTranslator } from "use-intl/core";
+
+import { resolveUiLocale, toLanguageCode } from "@stll/locales";
+
+import { loadLocaleMessages } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import {
@@ -47,9 +53,13 @@ const LEGAL_COLLECTION_TYPES = {
 
 type LegalCollectionKind = keyof typeof LEGAL_COLLECTION_TYPES;
 
+const LEGAL_COLLECTION_LABELS = {
+  caseLaw: "common.caseLaw",
+  statutes: "statutes.title",
+} as const satisfies Record<LegalCollectionKind, TranslationKey>;
+
 type LegalCollectionJsonLdInput = {
-  /** What the collection is a collection of, e.g. "Statutes". */
-  aboutName: string;
+  t: (key: (typeof LEGAL_COLLECTION_LABELS)[LegalCollectionKind]) => string;
   canonicalUrl: string;
   description?: string | null;
   items?: readonly {
@@ -88,7 +98,7 @@ export const createPublicLawHead = ({
   ...rest
 }: PublicLawHeadInput) => createPublicHead({ crawlAllowed, ...rest });
 
-export const createCaseLawDecisionJsonLd = ({
+export const createCaseLawDecisionJsonLd = async ({
   canonicalUrl,
   caseNumber,
   country,
@@ -100,7 +110,14 @@ export const createCaseLawDecisionJsonLd = ({
   sourceName,
   sourceUrl,
   updatedAt,
-}: CaseLawDecisionJsonLdInput): JsonLdObject => {
+}: CaseLawDecisionJsonLdInput): Promise<JsonLdObject> => {
+  // Resolve the content language independently of the interface store: public
+  // requests can render different document languages concurrently.
+  const locale = resolveUiLocale(toLanguageCode(language) ?? language) ?? "en";
+  const t = createTranslator({
+    locale,
+    messages: await loadLocaleMessages(locale),
+  });
   const publishedDate = dateToIsoDate(decisionDate);
   const modifiedDate = dateToIsoDate(updatedAt ?? null);
   const officialSourceUrl = absoluteUrlOrNull(sourceUrl);
@@ -116,7 +133,7 @@ export const createCaseLawDecisionJsonLd = ({
     inLanguage: language,
     isPartOf: {
       "@type": "Collection",
-      name: "Stella case law",
+      name: t("caseLaw.seo.collectionName"),
     },
     mainEntityOfPage: {
       "@id": canonicalUrl,
@@ -179,7 +196,7 @@ export const createStatuteJsonLd = ({
 };
 
 export const createLegalCollectionJsonLd = ({
-  aboutName,
+  t,
   canonicalUrl,
   description,
   items = [],
@@ -209,7 +226,7 @@ export const createLegalCollectionJsonLd = ({
     "@type": "CollectionPage",
     about: {
       "@type": itemType,
-      name: aboutName,
+      name: t(LEGAL_COLLECTION_LABELS[kind]),
     },
     mainEntity: itemList,
     name,

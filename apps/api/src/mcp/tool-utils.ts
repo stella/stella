@@ -8,6 +8,8 @@ import type {
 } from "@stll/agent-input";
 import {
   AGENT_INPUT_NORMALIZATION_KIND,
+  askForFix,
+  askSentence,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
 import {
@@ -149,6 +151,21 @@ export const countryNormalization = ({
     ...(tool === undefined ? {} : { tool }),
   },
 });
+
+/**
+ * An optional search filter whose values live in the corpus rather than in the
+ * schema (a court, a decision type, a language). The shared reader drops the
+ * placeholder a caller writes for "not filtering" (`" "`, `"all"`, `"-"`);
+ * matching the value against the data is the handler's.
+ */
+export const FILTER_NORMALIZATION: AgentInputNormalizationAnnotation = {
+  kind: AGENT_INPUT_NORMALIZATION_KIND.filter,
+};
+
+/** A statute's ELI, read back from the short and reordered spellings. */
+export const ELI_NORMALIZATION: AgentInputNormalizationAnnotation = {
+  kind: AGENT_INPUT_NORMALIZATION_KIND.eli,
+};
 
 /**
  * An MCP tool's declared input: `v.strictObject(...)`, or a pipe over one.
@@ -493,13 +510,26 @@ export const errorResult = (message: string): InternalToolErrorResult => ({
 });
 
 /**
- * Hint pointing an agent at the feedback flow after an unexpected server-side
- * failure. Kept as a shared constant so the internal-error envelope reads the
- * same wherever it is produced. It names both steps: a hint that stops at the
- * draft leaves the report sitting in the model's context, unsent.
+ * Hint for an unexpected server-side failure. Kept as a shared constant so the
+ * internal-error envelope reads the same wherever it is produced. The report
+ * step names both calls: a hint that stops at the draft leaves the report
+ * sitting in the model's context, unsent.
+ *
+ * One step per sentence: the dispatch boundary drops each sentence naming a
+ * tool the serving surface does not list (`scopeToolResultToSurface`), so a
+ * surface without the feedback tools keeps the first two: what failed, and
+ * the step every caller can still take.
  */
 export const MCP_INTERNAL_ERROR_HINT =
-  "If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.";
+  "This is a server-side failure; changing the arguments will not fix it. Tell the human this step failed on the server, then continue without it. If this looks like a stella bug, draft a report with prepare_feedback, then send it with submit_feedback once the human approves.";
+
+/**
+ * Hint for a backing service that is temporarily unreachable. Same
+ * sentence-per-step shape as {@link MCP_INTERNAL_ERROR_HINT}: the retry step
+ * survives on every surface, the report step only where it can be filed.
+ */
+export const MCP_UPSTREAM_UNAVAILABLE_HINT =
+  "Retry the same request. If the service remains unavailable, draft a report with prepare_feedback (put the request ID in context.request_id) and send it with submit_feedback once the human approves.";
 
 /**
  * Preserve the caller's current grants while adding every scope required by an
@@ -680,7 +710,7 @@ export const internalFailureResult = (
       return structuredErrorResult({
         code: "upstream_unavailable",
         message: error.message,
-        hint: "Retry the same request. If the service remains unavailable, draft a report with prepare_feedback (put the request ID in context.request_id) and send it with submit_feedback once the human approves.",
+        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
         retryable: true,
       });
     }
@@ -769,24 +799,6 @@ const levenshtein = (a: string, b: string): number => {
   return cell(previous, b.length);
 };
 
-/**
- * `validation_error` envelope for a bad argument, hinting at the fix. `path` is
- * the offending property name, surfaced as the single structured issue so this
- * hand-rolled parser produces the same `error.issues` shape as the Valibot
- * `safeParse` paths.
- */
-const argValidationError = (
-  message: string,
-  hint: string,
-  path: string,
-): InternalToolErrorResult =>
-  structuredErrorResult({
-    code: "validation_error",
-    hint,
-    issues: [{ path, message }],
-    message,
-  });
-
 export const isToolErrorResult = (
   value: unknown,
 ): value is InternalToolErrorResult =>
@@ -841,6 +853,42 @@ export const cursorInput = ({
     ),
   );
 
+/**
+ * The one refusal for a cursor inside the issued class that does not decode:
+ * one the caller invented on a later call, or a real one that arrived cut
+ * short.
+ *
+ * It asks rather than restarting at page one. Both readings mean the
+ * position is lost, and a silent restart would hand a paging caller its
+ * first page again as if it were the next one: results repeat, and a caller
+ * that stops at a page it has seen concludes it has read everything. Asking
+ * costs one round trip and keeps every page a caller is given the one it
+ * asked for, so the hint names the restart explicitly instead.
+ */
+export const invalidCursorResult = ({
+  cursor,
+  tool,
+}: {
+  cursor: string;
+  /** The tool that issues this cursor, named in the hint; omit when shared. */
+  tool?: string | undefined;
+}): InternalToolErrorResult => {
+  const ask = askForFix({
+    input: cursor,
+    expected: `a cursor ${tool ?? "this tool"} issued`,
+    hint:
+      `This cursor does not decode, so the position it held is lost. Call ` +
+      `${tool ?? "the tool"} again without cursor to start from the first ` +
+      "page, or pass nextCursor exactly as the previous response returned it.",
+  });
+  return structuredErrorResult({
+    code: "validation_error",
+    message: "Invalid cursor",
+    issues: [{ path: "cursor", message: askSentence(ask) }],
+    hint: ask.hint,
+  });
+};
+
 export type TextWindowResult = {
   text: string;
   charCount: number;
@@ -884,11 +932,7 @@ const decodeTextWindowOffset = (
     !Number.isInteger(candidate) ||
     candidate < 0
   ) {
-    return argValidationError(
-      "Invalid cursor",
-      "Pass the 'cursor' verbatim as returned by a previous call, or omit it to read from the start.",
-      "cursor",
-    );
+    return invalidCursorResult({ cursor });
   }
   return candidate;
 };

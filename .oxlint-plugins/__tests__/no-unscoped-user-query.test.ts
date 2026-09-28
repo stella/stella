@@ -45,3 +45,47 @@ describe.serial("no-unscoped-user-query allowedFiles", () => {
     ).toEqual([2]);
   });
 });
+
+const HISTORICAL_QUERY = `
+import { user as account } from "@/api/db/auth-schema";
+import { alias as tableAlias } from "drizzle-orm/pg-core";
+import * as orm from "drizzle-orm";
+import { correspondenceFilers as filers, correspondenceAllowedSenders as senders } from "@/api/db/schema";
+const filer = tableAlias(account, "filer");
+const approver = tableAlias(account, "approver");
+export const read = tx.select({ name: filer.name, approver: approver.name })
+  .from(filers)
+  .leftJoin(senders, orm.eq(filers.filedByAllowedSenderId, senders.id))
+  .leftJoin(filer, orm.eq(filers.filedByUserId, filer.id))
+  .leftJoin(approver, orm.eq(senders.approvedBy, approver.id))
+  .where(orm.and(
+    orm.eq(filers.organizationId, session.activeOrganizationId),
+    orm.eq(filers.workspaceId, workspaceId),
+    orm.eq(filers.correspondenceId, correspondenceId)
+  )).limit(100);
+`;
+const lintHistorical = async (source: string) =>
+  await lintSingleRule("no-unscoped-user-query", source, {
+    plugin: "security-guards",
+    sourcePath: "apps/api/src/handlers/workspaces/correspondence/get.ts",
+  });
+
+describe.serial("no-unscoped-user-query historical correspondence", () => {
+  test("rejects stored filer and approver joins without current membership scope", async () => {
+    expect(await lintHistorical(HISTORICAL_QUERY)).not.toEqual([]);
+  });
+
+  test("rejects historical user joins inside Promise.all with an unrelated query", async () => {
+    expect(
+      await lintHistorical(
+        HISTORICAL_QUERY.replace(
+          "export const read = tx.select",
+          "export const read = Promise.all([tx.select",
+        ).replace(
+          ")).limit(100);",
+          ")).limit(100), tx.select().from(otherTable)]);",
+        ),
+      ),
+    ).not.toEqual([]);
+  });
+});
