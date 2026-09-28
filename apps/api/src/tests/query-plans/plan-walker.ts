@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { isRecord } from "@/api/lib/type-guards";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
@@ -44,7 +44,7 @@ const childPlans = (node: PlanNode): PlanNode[] => {
   if (plans === undefined) {
     return [];
   }
-  if (!Array.isArray(plans) || !plans.every(isRecord)) {
+  if (!isUnknownArray(plans) || !plans.every(isRecord)) {
     return panic("EXPLAIN plan has malformed children");
   }
   return plans;
@@ -54,6 +54,18 @@ const descendants = (node: PlanNode): PlanNode[] => {
   const found: PlanNode[] = [];
   for (const child of childPlans(node)) {
     found.push(child, ...descendants(child));
+  }
+  return found;
+};
+
+const attachedDescendants = (node: PlanNode): PlanNode[] => {
+  const found: PlanNode[] = [];
+  for (const child of childPlans(node)) {
+    const relationship = field(child, "Parent Relationship");
+    if (relationship === "SubPlan" || relationship === "InitPlan") {
+      continue;
+    }
+    found.push(child, ...attachedDescendants(child));
   }
   return found;
 };
@@ -85,7 +97,7 @@ const subplansOf = (node: PlanNode, position: string) => {
 const indexDetails = (node: PlanNode) => {
   const candidates =
     field(node, "Node Type") === "Bitmap Heap Scan"
-      ? descendants(node).filter(
+      ? attachedDescendants(node).filter(
           (candidate) => field(candidate, "Node Type") === "Bitmap Index Scan",
         )
       : [node];
@@ -118,12 +130,12 @@ const indexDetails = (node: PlanNode) => {
 /** Decode Drizzle/PGlite's single JSON EXPLAIN row; malformed plans fail closed. */
 export const explainRoot = (explained: unknown): PlanNode => {
   const rows = isRecord(explained) ? explained["rows"] : explained;
-  if (!Array.isArray(rows) || rows.length !== 1) {
+  if (!isUnknownArray(rows) || rows.length !== 1) {
     return panic("EXPLAIN did not return one JSON plan row");
   }
   const row = rows[0];
   const documents = isRecord(row) ? row["QUERY PLAN"] : undefined;
-  if (!Array.isArray(documents) || documents.length !== 1) {
+  if (!isUnknownArray(documents) || documents.length !== 1) {
     return panic("EXPLAIN row has no single JSON plan");
   }
   const document = documents[0];
@@ -139,7 +151,7 @@ export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
   const visit = (node: PlanNode, position: string) => {
     const relation = field(node, "Relation Name");
     const nodeType = field(node, "Node Type");
-    if (relation !== null && nodeType !== null && nodeType.includes("Scan")) {
+    if (relation !== null && nodeType?.includes("Scan")) {
       const { index, indexCond } = indexDetails(node);
       const rows = node["Plan Rows"];
       scans.push({
@@ -162,14 +174,21 @@ export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
   return scans;
 };
 
-const withoutAuthorizationSubplans = (scan: ScanOccurrence): string => {
+/** The workspace access view appears as `aw` over its base tables in EXPLAIN. */
+export const withoutAuthorizationSubplans = (scan: ScanOccurrence): string => {
   let filter = scan.filter ?? "";
   for (const subplan of scan.subplans) {
     if (
       subplan.name !== null &&
-      subplan.relations.includes("stella_authorized_workspaces")
+      subplan.relations.includes("aw") &&
+      subplan.relations.includes("workspace_members") &&
+      subplan.relations.includes("workspaces")
     ) {
-      filter = filter.replaceAll(subplan.name, "");
+      const escapedName = subplan.name.replaceAll(
+        /[.*+?^${}()|[\]\\]/gu,
+        "\\$&",
+      );
+      filter = filter.replaceAll(new RegExp(`${escapedName}(?!\\d)`, "gu"), "");
     }
   }
   return filter;
@@ -274,7 +293,7 @@ export const accessPathViolations = (
       target.index !== scan.index
     ) {
       violations.push(
-        `${scan.position}: access path changed for ${scan.relation}`,
+        `${scan.position}: expected ${target.nodeType}/${target.index ?? "none"}, got ${scan.nodeType}/${scan.index ?? "none"} on ${scan.relation}`,
       );
     }
     if (
@@ -298,8 +317,12 @@ export const accessPathViolations = (
   for (const path of expected) {
     const matching = actualGuarded.filter((scan) => matches(scan, path));
     if (matching.length !== 1) {
+      const locator =
+        path.position ??
+        path.alias ??
+        `${path.relation}[${path.occurrence === undefined ? "missing" : String(path.occurrence)}]`;
       violations.push(
-        `${path.position ?? path.alias ?? `${path.relation}[${path.occurrence}]`}: expected one ${path.relation} scan, found ${matching.length}`,
+        `${locator}: expected one ${path.relation} scan, found ${matching.length}`,
       );
     }
   }

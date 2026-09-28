@@ -15,6 +15,7 @@ import { sitemapBucketCountsQuery } from "@/api/lib/case-law/sitemap-shard-refre
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
+import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
 import type { AccessPath } from "@/api/tests/query-plans/plan-walker";
 import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";
 
@@ -64,28 +65,7 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     status: { type: "active" },
-    contract: {
-      scans: [
-        {
-          occurrence: 0,
-          relation: "case_law_decisions",
-          nodeType: "Bitmap Heap Scan",
-          index: "case_law_decisions_ecli_idx",
-        },
-        {
-          alias: "case_law_decision_identifiers",
-          relation: "case_law_decision_identifiers",
-          nodeType: "Index Only Scan",
-          index: "case_law_decision_identifiers_lookup_idx",
-        },
-        {
-          occurrence: 1,
-          relation: "case_law_decisions",
-          nodeType: "Index Only Scan",
-          index: "case_law_decisions_pkey",
-        },
-      ],
-    },
+    contract: planContracts["case-law.ecli-identity"],
   },
   {
     id: "case-law.sitemap-refresh",
@@ -95,16 +75,7 @@ export const QUERY_PLAN_REGISTRY = [
     seed: "case-law",
     planMode: "covering-index",
     status: { type: "active" },
-    contract: {
-      scans: [
-        {
-          alias: "case_law_decisions",
-          relation: "case_law_decisions",
-          nodeType: "Index Only Scan",
-          index: "case_law_decisions_sitemap_shard_idx",
-        },
-      ],
-    },
+    contract: planContracts["case-law.sitemap-refresh"],
   },
   {
     id: "case-law.sitemap-shard-read",
@@ -113,16 +84,7 @@ export const QUERY_PLAN_REGISTRY = [
     build: (tx) => sitemapShardDecisionsQuery(tx, shardConditions),
     seed: "case-law",
     status: { type: "active" },
-    contract: {
-      scans: [
-        {
-          alias: "case_law_decisions",
-          relation: "case_law_decisions",
-          nodeType: "Index Scan",
-          index: "case_law_decisions_sitemap_shard_idx",
-        },
-      ],
-    },
+    contract: planContracts["case-law.sitemap-shard-read"],
   },
   {
     id: "case-law.decisions-list",
@@ -138,26 +100,10 @@ export const QUERY_PLAN_REGISTRY = [
     seed: "case-law",
     status: {
       type: "known-violation",
-      reason:
-        "The multilingual sibling predicate still combines a null arm with a subquery.",
+      reason: "Pending query update.",
       expectedViolation: "OR with a subplan",
     },
-    contract: {
-      scans: [
-        {
-          alias: "case_law_decisions",
-          relation: "case_law_decisions",
-          nodeType: "Index Scan",
-          index: "case_law_decisions_country_date_idx",
-        },
-        {
-          alias: "sibling",
-          relation: "case_law_decisions",
-          nodeType: "Index Scan",
-          index: "case_law_decisions_lang_group_idx",
-        },
-      ],
-    },
+    contract: planContracts["case-law.decisions-list"],
   },
   {
     id: PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence,
@@ -167,16 +113,8 @@ export const QUERY_PLAN_REGISTRY = [
       decisionTextPresenceQuery(tx, QUERY_PLAN_SAMPLE.caseLaw.decisionId),
     seed: "case-law",
     status: { type: "active" },
-    contract: {
-      scans: [
-        {
-          alias: "case_law_decisions",
-          relation: "case_law_decisions",
-          nodeType: "Index Scan",
-          index: "case_law_decisions_pkey",
-        },
-      ],
-    },
+    contract:
+      planContracts[PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 

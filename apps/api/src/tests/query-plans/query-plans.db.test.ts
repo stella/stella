@@ -11,11 +11,17 @@ import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
 import { ecliOrFixtureQuery } from "@/api/tests/query-plans/ecli-fixtures";
 import {
   accessPathViolations,
   explainRoot,
   scanOccurrences,
+  withoutAuthorizationSubplans,
+} from "@/api/tests/query-plans/plan-walker";
+import type {
+  AccessPath,
+  ScanOccurrence,
 } from "@/api/tests/query-plans/plan-walker";
 import {
   PUBLIC_LAW_PLAN_DISPOSITION,
@@ -23,7 +29,34 @@ import {
 } from "@/api/tests/query-plans/registry";
 import { seedQueryPlanData } from "@/api/tests/query-plans/seed";
 
+import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
+
 const DB_TEST_TIMEOUT_MS = 120_000;
+const UPDATE_PLAN_CONTRACTS =
+  process.env["STELLA_UPDATE_PLAN_CONTRACTS"] === "1";
+const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
+const observedContracts: Record<string, { scans: AccessPath[] }> = {};
+
+const observedPaths = (scans: readonly ScanOccurrence[]): AccessPath[] =>
+  scans
+    .filter(({ relation }) => guardedTables.has(relation))
+    .map(({ position, relation, nodeType, index }) => ({
+      position,
+      relation,
+      nodeType,
+      index,
+    }));
+
+const assertPlan = (
+  violations: readonly string[],
+  scans: readonly ScanOccurrence[],
+) => {
+  if (violations.length > 0) {
+    panic(
+      `${violations.join("\n")}\nObserved scans (estimated rows):\n${JSON.stringify(scans, null, 2)}`,
+    );
+  }
+};
 
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
@@ -38,6 +71,15 @@ beforeAll(
 );
 
 afterAll(async () => {
+  if (UPDATE_PLAN_CONTRACTS) {
+    if (Object.keys(observedContracts).length !== QUERY_PLAN_REGISTRY.length) {
+      panic("Plan contract update did not observe every registry entry");
+    }
+    await Bun.write(
+      new URL("contracts.json", import.meta.url),
+      `${JSON.stringify(observedContracts, null, 2)}\n`,
+    );
+  }
   await client.close();
 });
 
@@ -87,21 +129,30 @@ for (const entry of QUERY_PLAN_REGISTRY) {
         entry.build,
         "planMode" in entry ? entry.planMode : undefined,
       );
+      if (UPDATE_PLAN_CONTRACTS) {
+        observedContracts[entry.id] = { scans: observedPaths(scans) };
+      }
       const violations = accessPathViolations(
         scans,
-        entry.contract.scans,
+        UPDATE_PLAN_CONTRACTS ? observedPaths(scans) : entry.contract.scans,
         entry.class,
         "allowSeqScan" in entry.contract &&
           entry.contract.allowSeqScan === true,
       );
       switch (entry.status.type) {
         case "active":
-          expect(violations).toEqual([]);
+          assertPlan(violations, scans);
           break;
         case "known-violation": {
           const expectedViolation = entry.status.expectedViolation;
-          expect(violations).toHaveLength(1);
-          expect(violations[0]?.endsWith(expectedViolation)).toBe(true);
+          if (
+            violations.length !== 1 ||
+            !violations[0]?.endsWith(expectedViolation)
+          ) {
+            panic(
+              `Expected ${expectedViolation}; got ${violations.join("; ")}\nObserved scans (estimated rows):\n${JSON.stringify(scans, null, 2)}`,
+            );
+          }
           break;
         }
       }
@@ -132,19 +183,25 @@ test(
     const indexes = unionScans.map(({ index }) => index);
     expect(indexes).toContain("case_law_decisions_ecli_idx");
     expect(indexes).toContain("case_law_decision_identifiers_lookup_idx");
-    expect(
+    assertPlan(
       accessPathViolations(
         unionScans,
-        union.contract.scans,
+        UPDATE_PLAN_CONTRACTS
+          ? observedPaths(unionScans)
+          : union.contract.scans,
         union.class,
         false,
       ),
-    ).toEqual([]);
+      unionScans,
+    );
   },
   DB_TEST_TIMEOUT_MS,
 );
 
 test("every shared public-law query has a registered or reasoned disposition", () => {
+  expect(Object.keys(planContracts).toSorted()).toEqual(
+    QUERY_PLAN_REGISTRY.map(({ id }) => id).toSorted(),
+  );
   const ids = Object.values(PUBLIC_LAW_SHARED_QUERY).toSorted();
   expect(Object.keys(PUBLIC_LAW_PLAN_DISPOSITION).toSorted()).toEqual(ids);
   for (const disposition of Object.values(PUBLIC_LAW_PLAN_DISPOSITION)) {
@@ -158,5 +215,33 @@ test("every shared public-law query has a registered or reasoned disposition", (
         expect(disposition.reason.length).toBeGreaterThan(0);
         break;
     }
+  }
+});
+
+test("recognizes the workspace RLS subplan in its real role", async () => {
+  const plan = await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE stella`);
+    await tx.execute(sql`SELECT set_config('app.workspace_ids', '{}', true)`);
+    await tx.execute(
+      sql`SELECT set_config('app.workspace_access_mode', 'membership', true)`,
+    );
+    const result = await tx.execute(
+      sql`EXPLAIN (FORMAT JSON) SELECT id FROM entities WHERE workspace_id = '00000000-0000-7000-8000-000000000001'::uuid`,
+    );
+    return explainRoot(result);
+  });
+  const scan =
+    scanOccurrences(plan).at(0) ?? panic("Workspace RLS plan has no scan");
+  expect(scan.relation).toBe("entities");
+  expect(scan.filter).toContain("SubPlan");
+  expect(scan.subplans.some(({ relations }) => relations.includes("aw"))).toBe(
+    true,
+  );
+  expect(withoutAuthorizationSubplans(scan)).not.toContain("SubPlan");
+  if (UPDATE_PLAN_CONTRACTS) {
+    await Bun.write(
+      new URL("workspace-rls-plan.fixture.json", import.meta.url),
+      `${JSON.stringify(plan, null, 2)}\n`,
+    );
   }
 });
