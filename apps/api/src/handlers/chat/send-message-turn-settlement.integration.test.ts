@@ -19,6 +19,7 @@ import {
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -198,6 +199,7 @@ const createContext = ({
     getWorkspaceAccess: async () => null,
     memberRole: { role: "owner" },
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
