@@ -9,6 +9,8 @@ import { panic } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { formattedLikeRepository } from "./generated-artifacts";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const THEME_PATH = "packages/ui/src/styles/theme.css";
 const DOC_PATH = "DESIGN.md";
@@ -176,12 +178,15 @@ const renderDesignDoc = (doc: string, css: string): string =>
     renderFontStack(css),
   );
 
-const main = (argv: readonly string[]): number => {
+const main = async (argv: readonly string[]): Promise<number> => {
   const docFile = path.join(REPO_ROOT, DOC_PATH);
   const committed = readFileSync(docFile, "utf-8");
-  const rendered = renderDesignDoc(
-    committed,
-    readFileSync(path.join(REPO_ROOT, THEME_PATH), "utf-8"),
+  const rendered = await formattedLikeRepository(
+    renderDesignDoc(
+      committed,
+      readFileSync(path.join(REPO_ROOT, THEME_PATH), "utf-8"),
+    ),
+    "md",
   );
 
   if (argv.includes("--write")) {
@@ -204,5 +209,5 @@ const main = (argv: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }

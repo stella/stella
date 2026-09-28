@@ -248,6 +248,7 @@ Compose model, migrate, then start the three declared services. Run the web SSR
 server separately as described above.
 
 <!-- BEGIN GENERATED SELF-HOST RUN COMMANDS -->
+
 ```bash
 bun run selfhost:doctor
 docker compose --env-file deploy/selfhost/.env \
@@ -258,6 +259,7 @@ docker compose --env-file deploy/selfhost/.env \
 docker compose --env-file deploy/selfhost/.env \
   -f docker-compose.selfhost.yml up -d
 ```
+
 <!-- END GENERATED SELF-HOST RUN COMMANDS -->
 
 `STELLA_API_IMAGE` has no default. Copy the digest-qualified API reference from

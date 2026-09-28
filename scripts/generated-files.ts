@@ -132,7 +132,13 @@ export const GENERATORS = [
   {
     id: "module-ownership",
     outputs: ["docs/module-ownership.md"],
-    inputs: ["scripts/ownership.ts", "apps/**", "packages/**"],
+    inputs: [
+      "scripts/ownership.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
+      "apps/**",
+      "packages/**",
+    ],
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
     checkedBy: "Module ownership",
@@ -157,6 +163,8 @@ export const GENERATORS = [
     inputs: [
       "packages/ui/src/styles/theme.css",
       "scripts/design-tokens-doc.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
     ],
     write: ["bun", "scripts/design-tokens-doc.ts", "--write"],
     check: null,
@@ -182,6 +190,8 @@ export const GENERATORS = [
     inputs: [
       "scripts/changeset-policy.json",
       "scripts/check-published-package-lists.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
     ],
     write: ["bun", "scripts/check-published-package-lists.ts", "--write"],
     check: null,
@@ -388,6 +398,8 @@ export const GENERATORS = [
     inputs: [
       "scripts/selfhost-contract.ts",
       "scripts/selfhost-tool.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
       "apps/api/src/env*.ts",

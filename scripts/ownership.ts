@@ -18,6 +18,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { formattedLikeRepository } from "./generated-artifacts";
+
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
 export type AllowedFile = {
@@ -1297,8 +1299,11 @@ export const validateOwnership = (
   return problems;
 };
 
-const main = (argv: readonly string[]): number => {
-  const rendered = renderOwnershipDocument(OWNERSHIP);
+const main = async (argv: readonly string[]): Promise<number> => {
+  const rendered = await formattedLikeRepository(
+    renderOwnershipDocument(OWNERSHIP),
+    "md",
+  );
   const docFile = path.join(REPO_ROOT, DOC_PATH);
 
   if (argv.includes("--write")) {
@@ -1333,5 +1338,5 @@ const main = (argv: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }

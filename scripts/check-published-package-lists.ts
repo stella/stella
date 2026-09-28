@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { loadChangesetPolicy } from "./changeset-guard";
+import { formattedLikeRepository } from "./generated-artifacts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const START_MARKER = "<!-- published-packages:start -->";
@@ -106,25 +107,26 @@ type RenderedFile = {
   readonly rendered: string;
 };
 
-const renderFiles = (root: string): readonly RenderedFile[] => {
+const renderFiles = async (root: string): Promise<readonly RenderedFile[]> => {
   const block = renderPublishedPackageBlock(
     loadChangesetPolicy(root).releasePaths,
   );
-  return RENDERED_FILES.map((file) => {
-    const committed = readFileSync(path.join(root, file), "utf-8");
-    return {
-      committed,
-      file,
-      rendered: replacePublishedPackageBlock({
-        block,
-        contents: committed,
+  return await Promise.all(
+    RENDERED_FILES.map(async (file) => {
+      const committed = readFileSync(path.join(root, file), "utf-8");
+      return {
+        committed,
         file,
-      }),
-    };
-  });
+        rendered: await formattedLikeRepository(
+          replacePublishedPackageBlock({ block, contents: committed, file }),
+          "md",
+        ),
+      };
+    }),
+  );
 };
 
-const main = (argv: readonly string[]): number => {
+const main = async (argv: readonly string[]): Promise<number> => {
   const write = argv.includes("--write");
   if (!write && !argv.includes("--check")) {
     console.error(
@@ -133,7 +135,7 @@ const main = (argv: readonly string[]): number => {
     return 1;
   }
 
-  const files = renderFiles(REPO_ROOT);
+  const files = await renderFiles(REPO_ROOT);
   if (write) {
     for (const { file, rendered } of files) {
       writeFileSync(path.join(REPO_ROOT, file), rendered);
@@ -163,5 +165,5 @@ const main = (argv: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }
