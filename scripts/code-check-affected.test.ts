@@ -374,7 +374,10 @@ describe("affected code-check planning", () => {
       input.slice("$TURBO_ROOT$/".length).replace(/\/\*\*$/u, "/fixture.ts"),
     ),
   )("shared root-script input %s schedules full root lint", (changedPath) => {
-    const planned = plan([changedPath], []);
+    const workspace = [...WORKSPACES].find((workspacePath) =>
+      changedPath.startsWith(`${workspacePath}/`),
+    );
+    const planned = plan([changedPath], workspace ? [workspace] : []);
     expect(planned.type).toBe("scoped");
     if (planned.type !== "scoped") {
       throw new Error("Expected a scoped code-check plan");

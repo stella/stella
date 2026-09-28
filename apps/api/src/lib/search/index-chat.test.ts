@@ -281,9 +281,12 @@ describe("chat search indexing", () => {
 
     const compiled = new PgDialect().sqlToQuery(query);
     expect(compiled.sql).toContain("LEFT JOIN chat_thread_search_documents");
+    expect(compiled.sql).toContain("LEFT JOIN LATERAL");
     expect(compiled.sql).toContain("LEFT JOIN chat_message_search_documents");
     expect(compiled.sql).toContain("md.message_id IS NULL");
     expect(compiled.sql).toContain("d.preview_generation IS DISTINCT FROM");
+    expect(compiled.sql.match(/FROM chat_threads t/gu)).toHaveLength(1);
+    expect(compiled.sql).not.toContain("UNION");
     expect(compiled.sql).not.toContain("chat_thread_search_preview_passages");
   });
 });

@@ -423,6 +423,7 @@ export const completeCorpusIndexGenerationRebuildTx = async (
 ): Promise<void> => {
   await lockCorpusIndexGenerationActivationTx(tx, target.family);
   await requireRebuildTarget(tx, target, "retiring");
+  // sql-perf-allow: bounded by one family and generation pair in each indexed probe
   const remaining = await tx.execute(sql`
     SELECT EXISTS (
       SELECT 1

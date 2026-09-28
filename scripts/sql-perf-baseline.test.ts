@@ -57,6 +57,12 @@ describe("SQL performance baseline source scope", () => {
 sql\`SELECT id FROM case_law_decisions WHERE title ILIKE \${pattern}\`;
 `;
     expect(countSqlPerfHits(source, "apps/api/src/search.ts")).toBe(1);
+    expect(
+      countSqlPerfHits(
+        'import { or, notExists } from "drizzle-orm"; or(eq(a, b), notExists(db.select().from(other)));',
+        "apps/api/src/search.ts",
+      ),
+    ).toBe(0);
     expect(() =>
       countSqlPerfHits(
         "// sql-perf-allow: because\nconst value = 1;",
