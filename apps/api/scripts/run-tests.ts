@@ -23,7 +23,7 @@ import {
   type TestBatchKind,
 } from "./test-batch-plan";
 import {
-  acquireCachedSnapshot,
+  acquireCurrentSnapshot,
   snapshotCacheDir,
   snapshotDigest,
   snapshotKey,
@@ -404,22 +404,20 @@ const validateSnapshot = async (snapshotPath: string): Promise<boolean> => {
 
 const buildTestDbSnapshot = async (): Promise<string> => {
   if (
-    process.env.CI !== undefined &&
-    !process.env.STELLA_PGLITE_SNAPSHOT_CACHE_DIR
+    process.env["CI"] !== undefined &&
+    !process.env["STELLA_PGLITE_SNAPSHOT_CACHE_DIR"]
   ) {
     return await buildPrivateSnapshot();
   }
   try {
     const repositoryRoot = path.resolve(apiRoot, "../..");
-    const key = snapshotKey(
-      repositoryRoot,
-      path.join(apiRoot, "scripts/build-pglite-snapshot.ts"),
-    );
-    const result = await acquireCachedSnapshot({
+    const entryPoint = path.join(apiRoot, "scripts/build-pglite-snapshot.ts");
+    const result = await acquireCurrentSnapshot({
       cacheDir: snapshotCacheDir(process.env),
-      key,
+      key: () => snapshotKey(repositoryRoot, entryPoint),
       build: runSnapshotBuilder,
       validate: validateSnapshot,
+      signal: runnerShutdown.signal,
     });
     if (result.status === "hit") {
       process.on("exit", result.snapshot.release);

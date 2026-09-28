@@ -16,6 +16,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 const SNAPSHOT_FORMAT = "1";
 const LOCK_TIMEOUT_MS = 5 * 60_000;
@@ -25,11 +26,16 @@ const POLL_MS = 250;
 const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60_000;
 const MAX_TEMP_AGE_MS = 60 * 60_000;
 const MAX_CACHE_ENTRIES = 4;
+const MAX_INPUT_RETRIES = 3;
 
 export class SnapshotBuildError extends TaggedError("SnapshotBuildError")<{
   message: string;
   exitCode: number;
 }> {}
+
+class SnapshotInputsChangedError extends TaggedError(
+  "SnapshotInputsChangedError",
+)<{ message: string }> {}
 
 const errorCode = (error: unknown) =>
   error instanceof Error && "code" in error ? error.code : undefined;
@@ -152,9 +158,9 @@ export const snapshotKey = (repositoryRoot: string, entryPoint: string) => {
 };
 
 export const snapshotCacheDir = (env: NodeJS.ProcessEnv) =>
-  env.STELLA_PGLITE_SNAPSHOT_CACHE_DIR ??
+  env["STELLA_PGLITE_SNAPSHOT_CACHE_DIR"] ??
   path.join(
-    env.XDG_CACHE_HOME ?? path.join(homedir(), ".cache"),
+    env["XDG_CACHE_HOME"] ?? path.join(homedir(), ".cache"),
     "stella/pglite",
   );
 
@@ -176,7 +182,27 @@ type AcquireOptions = {
   key: string;
   build: (filePath: string) => Promise<void>;
   validate: (filePath: string) => Promise<boolean>;
+  signal?: AbortSignal;
   timeoutMs?: number;
+};
+
+const assertNotAborted = (signal: AbortSignal | undefined) => {
+  if (signal?.aborted) {
+    throw new SnapshotBuildError({
+      message: "PGlite snapshot cache wait interrupted.",
+      exitCode: 1,
+    });
+  }
+};
+
+const waitForLock = async (signal: AbortSignal | undefined) => {
+  assertNotAborted(signal);
+  try {
+    await sleep(POLL_MS, undefined, { signal });
+  } catch (error) {
+    assertNotAborted(signal);
+    throw error;
+  }
 };
 
 const alive = (pid: number) => {
@@ -331,8 +357,10 @@ export const acquireCachedSnapshot = async ({
   key,
   build,
   validate,
+  signal,
   timeoutMs = LOCK_TIMEOUT_MS,
 }: AcquireOptions): Promise<CacheResult> => {
+  assertNotAborted(signal);
   try {
     mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
     accessSync(cacheDir, constants.W_OK);
@@ -346,6 +374,7 @@ export const acquireCachedSnapshot = async ({
   const lockDir = path.join(cacheDir, `${key}.lock`);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    assertNotAborted(signal);
     const token = Bun.randomUUIDv7();
     try {
       mkdirSync(lockDir, { mode: 0o700 });
@@ -372,7 +401,7 @@ export const acquireCachedSnapshot = async ({
             } catch {
               // Another waiter may already have removed it.
             }
-            await Bun.sleep(POLL_MS);
+            await waitForLock(signal);
             continue;
           }
           try {
@@ -388,10 +417,13 @@ export const acquireCachedSnapshot = async ({
           }
           continue;
         }
-      } catch {
+      } catch (staleError) {
+        if (staleError instanceof SnapshotBuildError) {
+          throw staleError;
+        }
         // Another process may have released or replaced the lock.
       }
-      await Bun.sleep(POLL_MS);
+      await waitForLock(signal);
       continue;
     }
     try {
@@ -445,7 +477,10 @@ export const acquireCachedSnapshot = async ({
       prune(cacheDir, key);
       return { status: "hit", snapshot };
     } catch (error) {
-      if (error instanceof SnapshotBuildError) {
+      if (
+        error instanceof SnapshotBuildError ||
+        error instanceof SnapshotInputsChangedError
+      ) {
         throw error;
       }
       return {
@@ -457,4 +492,50 @@ export const acquireCachedSnapshot = async ({
     }
   }
   return { status: "fallback", reason: "cache lock timed out" };
+};
+
+type CurrentSnapshotOptions = Omit<AcquireOptions, "key" | "build"> & {
+  key: () => string;
+  build: (filePath: string) => Promise<void>;
+};
+
+export const acquireCurrentSnapshot = async ({
+  key,
+  build,
+  ...options
+}: CurrentSnapshotOptions): Promise<CacheResult> => {
+  for (let attempt = 0; attempt < MAX_INPUT_RETRIES; attempt += 1) {
+    const expectedKey = key();
+    let result: CacheResult;
+    try {
+      result = await acquireCachedSnapshot({
+        ...options,
+        key: expectedKey,
+        build: async (filePath) => {
+          await build(filePath);
+          if (key() !== expectedKey) {
+            throw new SnapshotInputsChangedError({
+              message: "Snapshot inputs changed during the build.",
+            });
+          }
+        },
+      });
+    } catch (error) {
+      if (error instanceof SnapshotInputsChangedError) {
+        continue;
+      }
+      throw error;
+    }
+    if (result.status === "fallback") {
+      return result;
+    }
+    if (key() === expectedKey) {
+      return result;
+    }
+    result.snapshot.release();
+  }
+  return {
+    status: "fallback",
+    reason: "snapshot inputs kept changing during cache acquisition",
+  };
 };

@@ -15,6 +15,7 @@ import path from "node:path";
 
 import {
   acquireCachedSnapshot,
+  acquireCurrentSnapshot,
   snapshotInputPaths,
   snapshotKey,
   SnapshotBuildError,
@@ -70,7 +71,9 @@ test("real snapshot closure contains schema modules and migration SQL", () => {
   expect(inputs).toContain(
     path.join(root, "apps/api/src/tests/pglite-schema.ts"),
   );
-  expect(inputs.some((file) => file.endsWith("/migration.sql"))).toBe(true);
+  expect(inputs.some((file) => path.basename(file) === "migration.sql")).toBe(
+    true,
+  );
   for (const dependency of ["drizzle-kit", "drizzle-orm", "pglite"]) {
     expect(
       inputs.some(
@@ -157,6 +160,108 @@ test("concurrent acquirers build once and both receive the final snapshot", asyn
     expect(first.snapshot.path).toBe(second.snapshot.path);
     first.snapshot.release();
     second.snapshot.release();
+  }
+});
+
+test("a changed key during build discards the old output and retries", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  const oldKey = "a".repeat(64);
+  const newKey = "b".repeat(64);
+  let currentKey = oldKey;
+  let builds = 0;
+  const result = await acquireCurrentSnapshot({
+    cacheDir,
+    key: () => currentKey,
+    build: async (filePath) => {
+      builds += 1;
+      writeFileSync(filePath, "valid");
+      if (builds === 1) {
+        currentKey = newKey;
+      }
+    },
+    validate: async () => true,
+  });
+  expect(result.status).toBe("hit");
+  if (result.status === "hit") {
+    expect(result.snapshot.path).toBe(path.join(cacheDir, `${newKey}.tar`));
+    result.snapshot.release();
+  }
+  expect(builds).toBe(2);
+  expect(existsSync(path.join(cacheDir, `${oldKey}.tar`))).toBe(false);
+});
+
+test("a changed key while waiting does not accept the old snapshot", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  const oldKey = "c".repeat(64);
+  const newKey = "d".repeat(64);
+  const lockDir = path.join(cacheDir, `${oldKey}.lock`);
+  mkdirSync(lockDir, { recursive: true });
+  writeFileSync(
+    path.join(lockDir, "owner"),
+    JSON.stringify({ pid: process.pid, started: Date.now(), token: "owner" }),
+  );
+  writeFileSync(path.join(cacheDir, `${oldKey}.tar`), "old");
+  let currentKey = oldKey;
+  const change = setTimeout(() => {
+    currentKey = newKey;
+    rmSync(lockDir, { recursive: true, force: true });
+  }, 20);
+  let builds = 0;
+  try {
+    const result = await acquireCurrentSnapshot({
+      cacheDir,
+      key: () => currentKey,
+      build: async (filePath) => {
+        builds += 1;
+        writeFileSync(filePath, "new");
+      },
+      validate: async () => true,
+    });
+    expect(result.status).toBe("hit");
+    if (result.status === "hit") {
+      expect(result.snapshot.path).toBe(path.join(cacheDir, `${newKey}.tar`));
+      result.snapshot.release();
+    }
+    expect(builds).toBe(1);
+  } finally {
+    clearTimeout(change);
+  }
+});
+
+test("abort stops a cache-lock wait promptly", async () => {
+  const root = fixture();
+  const cacheDir = path.join(root, "cache");
+  const key = "e".repeat(64);
+  const lockDir = path.join(cacheDir, `${key}.lock`);
+  mkdirSync(lockDir, { recursive: true });
+  writeFileSync(
+    path.join(lockDir, "owner"),
+    JSON.stringify({ pid: process.pid, started: Date.now(), token: "owner" }),
+  );
+  const controller = new AbortController();
+  const abort = setTimeout(() => controller.abort(), 20);
+  const started = Date.now();
+  let builds = 0;
+  try {
+    await expect(
+      acquireCachedSnapshot({
+        cacheDir,
+        key,
+        build: async (filePath) => {
+          builds += 1;
+          writeFileSync(filePath, "unexpected");
+        },
+        validate: async () => true,
+        signal: controller.signal,
+        timeoutMs: 5000,
+      }),
+    ).rejects.toThrow(SnapshotBuildError);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(builds).toBe(0);
+  } finally {
+    clearTimeout(abort);
   }
 });
 
