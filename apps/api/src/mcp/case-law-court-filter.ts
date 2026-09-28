@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import type { VocabularyEntry } from "@stll/agent-input";
 import { normalizeVocabularyValue } from "@stll/agent-input";
 import { Temporal } from "@stll/time";
@@ -211,13 +213,17 @@ export const loadCaseLawCourtNames = async (
   if (read !== undefined) {
     return await read(country);
   }
-  try {
-    return await withTimeout(async () => await readCachedCourtNames(country), {
-      label: "case-law-court-filter-vocabulary",
-      timeoutMs: COURT_NAMES_READ_TIMEOUT_MS,
-    });
-  } catch (error) {
-    observeFailure(error, { sink: COURT_FILTER_VOCABULARY_SINK });
+  const courts = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(async () => await readCachedCourtNames(country), {
+        label: "case-law-court-filter-vocabulary",
+        timeoutMs: COURT_NAMES_READ_TIMEOUT_MS,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(courts)) {
+    observeFailure(courts.error, { sink: COURT_FILTER_VOCABULARY_SINK });
     return null;
   }
+  return courts.value;
 };

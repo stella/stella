@@ -66,6 +66,35 @@ describe("values drawn from data", () => {
     );
   });
 
+  // Two stored spellings of one court, both given the same abbreviation or
+  // folding to the same words: the first listed is not the one meant.
+  test.each([
+    [
+      "NS",
+      [
+        { value: "Nejvyšší soud", aliases: ["NS"] },
+        { value: "Nejvyšší soud ČR", aliases: ["NS"] },
+      ],
+    ],
+    ["nejvyssi soud", [{ value: "Nejvyšší soud" }, { value: "NEJVYŠŠÍ SOUD" }]],
+  ])("%s matching two stored values asks and names both", (input, entries) => {
+    const result = normalizeVocabularyValue(input, entries);
+    expect(outcome(result)).toBe(
+      `ask: Did you mean one of ${entries.map(({ value }) => `"${value}"`).join(", ")}?`,
+    );
+  });
+
+  test("one value listed twice under the same alias still reads", () => {
+    expect(
+      outcome(
+        normalizeVocabularyValue("NS", [
+          { value: "Nejvyšší soud", aliases: ["NS"] },
+          { value: "Nejvyšší soud", aliases: ["NS", "Supreme Court"] },
+        ]),
+      ),
+    ).toBe("Nejvyšší soud");
+  });
+
   test("a spelling matching nothing lists the values, bounded", () => {
     expect(read("Okresní soud")).toBe(
       'ask: The courts include "Ústavní soud", "Nejvyšší soud", "Nejvyšší správní soud", "Krajský soud v Brně", "Krajský soud v Praze", "Městský soud v Praze".',

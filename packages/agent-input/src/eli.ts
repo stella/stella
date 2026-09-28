@@ -35,7 +35,6 @@ const ELI_HINT = "Pass the eli a search result returned.";
  *  host needs a dot so `cz/sb/...` is never taken for one. */
 const ORIGIN_RE =
   /^(?:(?<scheme>https?):\/\/(?<host>[^/\s]+)|(?<bareHost>[a-z0-9-]+(?:\.[a-z0-9-]+)+))(?=\/|$)/iu;
-const TRAILING_SLASHES_RE = /\/+$/u;
 const JURISDICTION_RE = /^[a-z]{2,3}$/u;
 const COLLECTION_RE = /^[a-z0-9-]+$/u;
 const DIGITS_RE = /^\d+$/u;
@@ -111,6 +110,21 @@ const parseEli = (trimmed: string): ParsedEli | null => {
     : null;
 };
 
+/** A host with its trailing slashes cut, scanned from the end so a long run
+ *  of slashes costs one pass. */
+const withoutTrailingSlashes = (
+  host: string | undefined,
+): string | undefined => {
+  if (host === undefined) {
+    return undefined;
+  }
+  let end = host.length;
+  while (end > 0 && host[end - 1] === "/") {
+    end -= 1;
+  }
+  return host.slice(0, end);
+};
+
 const eliOf = (
   origin: string,
   { jurisdiction, collection }: ParsedEli,
@@ -151,8 +165,7 @@ export const normalizeEli = (
   }
 
   const origin =
-    options.hosts[parsed.jurisdiction]?.replace(TRAILING_SLASHES_RE, "") ??
-    parsed.origin;
+    withoutTrailingSlashes(options.hosts[parsed.jurisdiction]) ?? parsed.origin;
   if (origin === null) {
     return askForFix({
       input,

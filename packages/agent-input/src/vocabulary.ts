@@ -119,16 +119,30 @@ export const normalizeVocabularyValue = (
     return readValueAs(input, exact.value);
   }
 
+  // A folded value or alias two stored values share (two spellings of one
+  // court, each given the same abbreviation) is two readings, never the first
+  // one listed: filtering by either would drop the other's decisions.
   const folded = fold(input);
-  const byValue = entries.find((entry) => fold(entry.value) === folded);
+  const readOneOf = (matches: readonly VocabularyEntry[]) => {
+    const [only, ...others] = distinctValues(matches);
+    if (only === undefined) {
+      return undefined;
+    }
+    return others.length === 0 ? readValueAs(input, only) : askAmong(matches);
+  };
+  const byValue = readOneOf(
+    entries.filter((entry) => fold(entry.value) === folded),
+  );
   if (byValue !== undefined) {
-    return readValueAs(input, byValue.value);
+    return byValue;
   }
-  const byAlias = entries.find((entry) =>
-    (entry.aliases ?? []).some((alias) => fold(alias) === folded),
+  const byAlias = readOneOf(
+    entries.filter((entry) =>
+      (entry.aliases ?? []).some((alias) => fold(alias) === folded),
+    ),
   );
   if (byAlias !== undefined) {
-    return readValueAs(input, byAlias.value);
+    return byAlias;
   }
 
   const inputTokens = tokensOf(folded);

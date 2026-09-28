@@ -420,17 +420,21 @@ const readPartialDate = (trimmed: string, bound: DateBound): string | null => {
   return isoDate(year, month, Temporal.PlainDate.from(first).daysInMonth);
 };
 
-/** How a model writes both ends of a range in one string. The unspaced dash
- *  and the slash split only where both halves are dates on their own, so a
- *  single `2020-05` or `5/2020` never reads as two. */
+/** How a model writes both ends of a range in one string, matched on the
+ *  string with its whitespace runs collapsed to one space (halves are trimmed
+ *  after the split), so no separator backtracks over a run of whitespace. The
+ *  unspaced dash and the slash split only where both halves are dates on
+ *  their own, so a single `2020-05` or `5/2020` never reads as two. */
 const RANGE_SEPARATORS = [
   /\.\./u,
-  /\s*[–—]\s*/u,
-  /\s+to\s+/iu,
-  /\s+-\s+/u,
+  /[–—]/u,
+  / to /iu,
+  / - /u,
   /\//u,
   /-/u,
 ] as const;
+
+const WHITESPACE_RUN_RE = /\s+/gu;
 
 /** One bound read on its own: a whole date, else a partial one. */
 const readBoundHalf = (
@@ -447,8 +451,9 @@ const readRange = (
   trimmed: string,
   options: DateValueOptions | undefined,
 ): { start: string; end: string } | null => {
+  const spaced = trimmed.replace(WHITESPACE_RUN_RE, " ");
   for (const separator of RANGE_SEPARATORS) {
-    const halves = trimmed.split(separator).map((half) => half.trim());
+    const halves = spaced.split(separator).map((half) => half.trim());
     const [left, right] = halves;
     if (halves.length !== 2 || left === undefined || right === undefined) {
       continue;

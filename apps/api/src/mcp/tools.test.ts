@@ -950,12 +950,22 @@ const createContext = ({
  * from the same metadata function, so these tests pin the binding and not
  * the wording.
  */
-const withKind = <TProperty extends { description: string }>(
+// Keeps the annotation's literal type: the widened annotation union carries
+// the country branch's readonly list, which the JSON schema type refuses.
+const withKind = <
+  TProperty extends { description: string },
+  TAnnotation extends Exclude<
+    Parameters<typeof agentInputNormalizationMetadata>[0],
+    { kind: typeof AGENT_INPUT_NORMALIZATION_KIND.country }
+  >,
+>(
   property: TProperty,
-  annotation: Parameters<typeof agentInputNormalizationMetadata>[0],
+  annotation: TAnnotation,
 ) => ({
   ...property,
-  ...agentInputNormalizationMetadata(annotation, property.description),
+  [AGENT_INPUT_NORMALIZATION_KEY]: annotation,
+  description: agentInputNormalizationMetadata(annotation, property.description)
+    .description,
 });
 
 const FILTER_KIND = { kind: AGENT_INPUT_NORMALIZATION_KIND.filter } as const;

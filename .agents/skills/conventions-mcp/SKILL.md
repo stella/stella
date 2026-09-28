@@ -97,9 +97,12 @@ issues[] }` with codes from a closed set. `hint` names the corrective action,
     locale, enum. A repaired value returns a note ("Read X as Y") that reaches
     the caller beside the result. A placeholder in an optional property is
     absence on a read and an ask on a write, where an optional id can switch
-    update into create. An optional filter never empties a search: a value that
-    names no stored value, or several, is dropped with a warning naming the
-    stored ones. An opaque token the server issues extends "absent" one step: a
+    update into create. An optional filter read against a data-owned vocabulary
+    (court) never empties a search: a value that names no stored value, or
+    several, is dropped with a warning naming the stored ones. A filter with no
+    such vocabulary yet reads only its placeholders, and an empty page under it
+    carries `no_hits_filtered` naming the values that would have matched; do
+    not advertise resolution a filter does not do. An opaque token the server issues extends "absent" one step: a
     client filling every declared property invents a first-call cursor (`" "`,
     `"0"`, `"start"`), so `cursorInput` reads a value outside the class its
     encoders emit as no cursor, while a value inside that class still reaches

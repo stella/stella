@@ -86,6 +86,16 @@ describe("legislation identifiers", () => {
     ).toBe("ask: Pass eli from search_legislation.");
   });
 
+  test("a configured host's trailing slashes are cut", () => {
+    expect(
+      outcome(
+        normalizeEli("/eli/cz/sb/2012/89", {
+          hosts: { cz: "https://www.e-sbirka.cz///" },
+        }),
+      ),
+    ).toBe(WORK);
+  });
+
   test("a work whose segments carry no year keeps the publisher's order", () => {
     // Nothing says the order is wrong, so only the spelling is canonical;
     // whether the work exists is the corpus's answer, not this reader's.
