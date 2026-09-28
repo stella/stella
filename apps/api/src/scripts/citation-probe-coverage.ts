@@ -1,4 +1,3 @@
-/** Whether an extracted citation already accounts for a probe candidate. */
 import { stripCitationPrefix } from "@stll/legal-ast/citation-prefix";
 
 import {
@@ -6,6 +5,7 @@ import {
   extractCitations,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 
+/** Whether an extracted citation already accounts for a probe candidate. */
 export const citationCoverage = (
   extractedCitationTexts: readonly string[],
 ): ((candidate: string) => boolean) => {
