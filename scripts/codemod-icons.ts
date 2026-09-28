@@ -119,12 +119,14 @@ type Specifier = {
 const parseSpecifiers = (list: string): Specifier[] =>
   list
     .split(",")
-    .map((part) => part.trim())
+    // Whitespace collapsed to single spaces first, so `as` splits on a plain
+    // string rather than a backtracking pattern.
+    .map((part) => part.replaceAll(/\s+/gu, " ").trim())
     .filter((part) => part.length > 0)
     .map((part) => {
       const typeOnly = part.startsWith("type ");
-      const body = typeOnly ? part.slice("type ".length).trim() : part;
-      const [imported = "", alias] = body.split(/\s+as\s+/u);
+      const body = typeOnly ? part.slice("type ".length) : part;
+      const [imported = "", alias] = body.split(" as ");
       return { typeOnly, imported, local: alias ?? imported };
     });
 
