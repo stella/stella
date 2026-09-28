@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 

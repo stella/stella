@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, ReactElement, ReactNode, Ref } from "react";
 
-import { ChevronDownIcon } from "lucide-react";
-
 import { DirectionalIcon } from "../components/directional-icon";
+import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { createBandPeekController } from "./band-peek";
 import type { BandPeekController } from "./band-peek";

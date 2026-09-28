@@ -1,3 +1,6 @@
+import { useTranslations } from "use-intl";
+
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   BookmarkIcon,
   CalendarIcon,
@@ -5,10 +8,7 @@ import {
   ChevronRightIcon,
   KanbanIcon,
   TableIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import { PreviewPane } from "@stll/ui/preview-pane";
 import { cn } from "@stll/ui/utils";
 

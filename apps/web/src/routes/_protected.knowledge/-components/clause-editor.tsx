@@ -17,6 +17,16 @@ import Text from "@tiptap/extension-text";
 import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
+import type { Command as PMCommand } from "prosemirror-state";
+import { useTranslations } from "use-intl";
+
+import {
+  acceptAIEditRevision,
+  acceptAllChanges,
+  rejectAIEditRevision,
+  rejectAllChanges,
+} from "@stll/folio-core/prosemirror/commands/comments";
+import { Button } from "@stll/ui/button";
 import {
   BoldIcon,
   CheckIcon,
@@ -30,19 +40,9 @@ import {
   Redo2Icon,
   RotateCcwIcon,
   Undo2Icon,
-  WandSparklesIcon,
+  AiActionIcon,
   XIcon,
-} from "lucide-react";
-import type { Command as PMCommand } from "prosemirror-state";
-import { useTranslations } from "use-intl";
-
-import {
-  acceptAIEditRevision,
-  acceptAllChanges,
-  rejectAIEditRevision,
-  rejectAllChanges,
-} from "@stll/folio-core/prosemirror/commands/comments";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -855,7 +855,7 @@ const AiEditBar = ({
   return (
     <div className="bg-popover absolute inset-x-0 bottom-2 z-10 mx-auto flex w-[min(92%,32rem)] flex-col gap-2 rounded-lg border p-2 shadow-lg">
       <div className="flex items-start gap-2">
-        <WandSparklesIcon className="text-muted-foreground mt-2 size-3.5 shrink-0" />
+        <AiActionIcon className="text-muted-foreground mt-2 size-3.5 shrink-0" />
         <Textarea
           autoFocus
           className="min-h-9 flex-1 resize-none text-sm"
@@ -916,5 +916,5 @@ const AiEditSubmitIcon = ({
   if (reviewing) {
     return <RotateCcwIcon className="size-3.5" />;
   }
-  return <WandSparklesIcon className="size-3.5" />;
+  return <AiActionIcon className="size-3.5" />;
 };

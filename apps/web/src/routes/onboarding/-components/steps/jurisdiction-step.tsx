@@ -1,8 +1,8 @@
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
+import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { Globe, type GlobeMarker } from "@/components/globe";

@@ -2,6 +2,11 @@ import type { ReactNode } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { CommandItem } from "@stll/ui/command";
 import {
   FileTextIcon,
   HistoryIcon,
@@ -10,13 +15,8 @@ import {
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
-  WandSparklesIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { CommandItem } from "@stll/ui/command";
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { MenuSection } from "@stll/ui/menu-section";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
@@ -149,7 +149,7 @@ export const SearchSummaryItem = ({
           {isPending ? (
             <LoaderIcon className="size-3.5 animate-spin" />
           ) : (
-            <WandSparklesIcon className="size-3.5" />
+            <AiActionIcon className="size-3.5" />
           )}
         </span>
         <span className="min-w-0 flex-1">
@@ -166,7 +166,7 @@ export const SearchSummaryItem = ({
     <div className="border-border bg-background mb-2 w-full rounded-md border px-2.5 py-2.5 text-start shadow-xs">
       <div className="flex w-full items-start gap-3 text-start">
         <span className="bg-background text-foreground mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md border">
-          <WandSparklesIcon className="size-3.5" />
+          <AiActionIcon className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">

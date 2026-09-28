@@ -16,16 +16,16 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   CogIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
   PinIcon,
   PinOffIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import {
   InspectorDock,
   resolveInspectorDockWidth,

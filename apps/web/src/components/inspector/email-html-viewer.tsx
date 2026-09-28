@@ -1,7 +1,6 @@
 import { Fragment, useRef, useState, type ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangleIcon, PaperclipIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -10,6 +9,7 @@ import {
 } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { AlertTriangleIcon, PaperclipIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { textMarkClass } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";

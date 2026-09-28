@@ -1,15 +1,4 @@
 import {
-  AlertCircleIcon,
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CheckCircle2Icon,
-  CircleDotIcon,
-  CircleIcon,
-  MinusIcon,
-  XCircleIcon,
-} from "lucide-react";
-
-import {
   ENTITY_PRIORITIES as TASK_PRIORITIES,
   isEntityPriority as isTaskPriority,
   isTaskStatus,
@@ -24,6 +13,16 @@ import {
   LIST_ITEM_TYPES,
 } from "@stll/api-contract/entity-options";
 import type { ListItemType } from "@stll/api-contract/entity-options";
+import {
+  AlertCircleIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CheckCircle2Icon,
+  CircleDotIcon,
+  CircleIcon,
+  MinusIcon,
+  XCircleIcon,
+} from "@stll/ui/icons";
 import type { OptionColor } from "@stll/ui/option-color";
 
 import type { TranslationKey } from "@/i18n/types";

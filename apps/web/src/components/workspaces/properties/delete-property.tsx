@@ -1,4 +1,3 @@
-import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -12,6 +11,7 @@ import {
   AlertDialogTrigger,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { Trash2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import type { WorkspaceProperty } from "@/lib/types";

@@ -1,5 +1,8 @@
 import { useCallback, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   BanknoteIcon,
   CogIcon,
@@ -13,10 +16,7 @@ import {
   UserIcon,
   XIcon,
   type LucideIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";

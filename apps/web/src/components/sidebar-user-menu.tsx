@@ -1,5 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   BuildingIcon,
   ChevronsUpDownIcon,
@@ -9,10 +12,7 @@ import {
   MonitorIcon,
   MoonIcon,
   SunIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { BidiText } from "@stll/ui/bidi-text";
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuGroup,

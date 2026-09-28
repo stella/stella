@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import { SearchIcon } from "lucide-react";
-
 import { Button } from "@stll/ui/button";
 import {
   COMPOSER_BOX_CLASS,
@@ -15,6 +13,7 @@ import {
   COMPOSER_TEXT_CLASS,
   ComposerStatusRow,
 } from "@stll/ui/composer";
+import { SearchIcon } from "@stll/ui/icons";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 

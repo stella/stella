@@ -2,13 +2,6 @@ import { useId, useRef, useState, type ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import {
-  AlertTriangleIcon,
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  PaperclipIcon,
-  SaveIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -26,6 +19,13 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  ChevronDownIcon,
+  PaperclipIcon,
+  SaveIcon,
+} from "@stll/ui/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,

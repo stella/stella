@@ -1,4 +1,4 @@
-/* oxlint-disable import/no-duplicates, no-duplicate-imports, unicorn/prefer-module, import/namespace, typescript/dot-notation -- fixture: each import form stands on its own line */
+/* oxlint-disable import/no-duplicates, no-duplicate-imports, unicorn/prefer-module, import/namespace, typescript/dot-notation, no-direct-lucide-import/no-direct-lucide-import -- fixture: each import form stands on its own line, straight from lucide */
 
 // Passive regression fixture for
 // `no-direct-matter-glyph/no-direct-matter-glyph`.
@@ -15,6 +15,9 @@ import { Layers2Icon, LayersIcon as MatterGlyph } from "lucide-react";
 import { LucideLayers } from "lucide-react";
 // expect-clean: no-direct-matter-glyph/no-direct-matter-glyph
 import { FileIcon } from "lucide-react";
+
+// oxlint-disable-next-line no-direct-matter-glyph/no-direct-matter-glyph -- the shared icon module re-exports the glyph
+import { LayersIcon as IconModuleLayers } from "@stll/ui/icons";
 
 // oxlint-disable-next-line no-direct-matter-glyph/no-direct-matter-glyph -- namespace member
 const NamespaceGlyph = Lucide.Layers;
@@ -40,6 +43,7 @@ export const DirectMatterGlyphFixture = () => (
     <Layers2Icon />
     <LucideLayers />
     <FileIcon />
+    <IconModuleLayers />
     <NamespaceGlyph />
     <ComputedGlyph />
     <DestructuredGlyph />

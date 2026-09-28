@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
-import { GripVerticalIcon, Rows3Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { GripVerticalIcon, Rows3Icon } from "@stll/ui/icons";
 import {
   KANBAN_VIRTUAL_CELL_PAGINATION,
   KanbanCellAction,

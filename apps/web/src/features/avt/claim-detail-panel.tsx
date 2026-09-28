@@ -7,6 +7,10 @@
 import * as React from "react";
 
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   CheckCircle2Icon,
@@ -18,11 +22,7 @@ import {
   SearchIcon,
   SplitIcon,
   XCircleIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import type { ReviewDecisionState } from "@stll/ui/review-decision-actions";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";

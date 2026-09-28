@@ -1,11 +1,11 @@
 import { useState } from "react";
 
 import { Result } from "better-result";
-import { DownloadIcon, SendIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
+import { DownloadIcon, SendIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
   Menu,

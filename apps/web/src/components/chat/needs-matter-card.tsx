@@ -1,6 +1,11 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -9,12 +14,7 @@ import {
   FilePlusIcon,
   LoaderIcon,
   SearchIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 

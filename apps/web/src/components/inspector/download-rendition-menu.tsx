@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { ChevronDownIcon, DownloadIcon, FileOutputIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, DownloadIcon, FileOutputIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuCheckboxItem,

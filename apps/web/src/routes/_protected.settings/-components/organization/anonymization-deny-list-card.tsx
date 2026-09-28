@@ -3,7 +3,6 @@ import { useFormStatus } from "react-dom";
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { Trash2, UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_CHAT_ANON_ENTITY_LABELS } from "@stll/anonymize-chat";
@@ -18,6 +17,7 @@ import {
 } from "@stll/ui/combobox";
 import { openFilePicker } from "@stll/ui/file-picker";
 import { Frame, FramePanel } from "@stll/ui/frame";
+import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 

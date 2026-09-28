@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RotateCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -14,6 +13,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { RotateCcwIcon } from "@stll/ui/icons";
 import {
   Sheet,
   SheetHeader,

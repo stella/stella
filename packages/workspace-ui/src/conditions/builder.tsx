@@ -2,11 +2,11 @@ import { createContext, use } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
-import { PlusIcon, XIcon } from "lucide-react";
 
 import type { ConditionNode, GroupNode } from "@stll/conditions";
 import { Button } from "@stll/ui/button";
 import { DatePickerPopover } from "@stll/ui/date-picker-popover";
+import { PlusIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,

@@ -1,7 +1,7 @@
-import { MessageSquareIcon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { MessageSquareIcon, PlusIcon } from "@stll/ui/icons";
 
 import { ProposalMenu } from "./proposal-panel";
 import { RevisionMenu } from "./revision-menu";

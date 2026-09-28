@@ -1,7 +1,6 @@
 import { Fragment, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { RouteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { ConditionNode } from "@stll/conditions";
@@ -15,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { RouteIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
 

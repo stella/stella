@@ -8,15 +8,6 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
-import {
-  ArrowLeftIcon,
-  CheckIcon,
-  EditIcon,
-  SendIcon,
-  Trash2Icon,
-  UndoIcon,
-  XCircleIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -37,6 +28,15 @@ import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldError } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  EditIcon,
+  SendIcon,
+  Trash2Icon,
+  UndoIcon,
+  XCircleIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Skeleton } from "@stll/ui/skeleton";

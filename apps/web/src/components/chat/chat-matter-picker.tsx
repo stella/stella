@@ -3,11 +3,11 @@ import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
 import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
+import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuCheckboxItem,

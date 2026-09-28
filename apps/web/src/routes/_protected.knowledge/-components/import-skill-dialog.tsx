@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { LoaderIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -16,6 +15,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { LoaderIcon, SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
