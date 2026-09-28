@@ -88,6 +88,7 @@ export const SCENARIO_PROMPTS = {
   "malformed-chunk": TEXT_PROMPT,
   "early-eof": TEXT_PROMPT,
   "unusable-stop": TEXT_PROMPT,
+  "unlisted-stop": TEXT_PROMPT,
 } as const satisfies Record<ProviderWireScenario, string>;
 
 /** A provider's own wording for a scenario, where the shared prompt records
@@ -856,7 +857,13 @@ export const replayWireScenario = async ({
       ? await runCancelledWireScenario(request)
       : await runWireScenario(request);
   const sent = [...replay.requests()];
-  return { findings: replay.takeFindings(), requests: sent.length, run, sent };
+  return {
+    findings: replay.takeFindings(),
+    requests: sent.length,
+    run,
+    sent,
+    transcripts: replay.takeRequests(),
+  };
 };
 
 /** Where a text cassette goes quiet for the cancel run: at the end of its

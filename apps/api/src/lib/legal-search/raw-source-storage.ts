@@ -15,6 +15,7 @@ import type {
   SourceRawObjectRef,
   SourceRawObjects,
 } from "@/api/lib/legal-search/ingestion-types";
+import { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 import {
   createS3ObjectIfAbsent,
   deleteS3ObjectWithSignal,
@@ -25,6 +26,8 @@ import {
 } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
+
+export { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
 
 /**
  * Where a publisher's response is kept, for both corpus families.
@@ -37,11 +40,6 @@ import type { S3PresignError } from "@/api/lib/s3-presign";
  * decision's payloads and files live under a prefix of its own, so erasing
  * one decision is deleting one prefix and nothing another decision holds.
  */
-
-export const RAW_SOURCE_FAMILY = {
-  CASE_LAW: "case-law",
-  LEGISLATION: "legislation",
-} as const;
 
 type RawSourceFamily =
   (typeof RAW_SOURCE_FAMILY)[keyof typeof RAW_SOURCE_FAMILY];

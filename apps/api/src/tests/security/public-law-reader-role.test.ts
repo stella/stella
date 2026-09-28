@@ -39,6 +39,7 @@ import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/
 import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
+import { listStatuteSitemapShardsHandler } from "@/api/handlers/legislation/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -775,6 +776,10 @@ describe("public-law reader role", () => {
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- role-scoped production query census
         return await fn(tx as unknown as LegislationReadTransaction);
       });
+
+    expect(await listStatuteSitemapShardsHandler(legislationDb)).toMatchObject({
+      items: [],
+    });
 
     const result = await rehydrateLegislationCandidates({
       body: { query: "reader role census" },
