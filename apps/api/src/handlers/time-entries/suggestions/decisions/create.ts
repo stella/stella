@@ -10,6 +10,7 @@ import {
   timeEntrySuggestions,
 } from "@/api/db/schema";
 import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
+import { narrativeLanguageSchema } from "@/api/handlers/time-entries/narrative-language";
 import { loadTimeSuggestions } from "@/api/handlers/time-entries/suggestions/load";
 import {
   timeSuggestionDateSchema,
@@ -45,6 +46,7 @@ const acceptDecisionSchema = t.Object({
     maxLength: 10_000,
     description: "Description of the work",
   }),
+  narrativeLanguage: t.Optional(narrativeLanguageSchema),
   billable: t.Optional(
     t.Boolean({ description: "Whether the entry is billable to the client" }),
   ),
@@ -132,6 +134,7 @@ const acceptSuggestion = async function* ({
       timezoneId: body.timezoneId,
       durationMinutes: body.decision.durationMinutes,
       narrative: body.decision.narrative,
+      narrativeLanguage: body.decision.narrativeLanguage,
       billable: body.decision.billable,
       taskCode: body.decision.taskCode,
       activityCode: body.decision.activityCode,

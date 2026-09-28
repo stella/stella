@@ -9,6 +9,10 @@ import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
+import {
+  NARRATIVE_LANGUAGE_MAX_LENGTH,
+  NARRATIVE_LANGUAGE_PATTERN,
+} from "@/api/handlers/time-entries/narrative-language";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
@@ -466,6 +470,7 @@ const timeEntryColumns = {
   rateAtEntry: timeEntries.rateAtEntry,
   currency: timeEntries.currency,
   narrative: timeEntries.narrative,
+  narrativeLanguage: timeEntries.narrativeLanguage,
   invoiceNarrative: timeEntries.invoiceNarrative,
   billable: timeEntries.billable,
   noCharge: timeEntries.noCharge,
@@ -751,6 +756,21 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
           v.description("Description of the work; required when creating"),
         ),
       ),
+      narrative_language: v.optional(
+        v.pipe(
+          v.nullable(
+            v.pipe(
+              v.string(),
+              v.minLength(2),
+              v.maxLength(NARRATIVE_LANGUAGE_MAX_LENGTH),
+              v.regex(new RegExp(NARRATIVE_LANGUAGE_PATTERN, "u")),
+            ),
+          ),
+          v.description(
+            "BCP-47 language tag for the narrative; pass null to clear",
+          ),
+        ),
+      ),
       invoice_narrative: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(10_000))),
@@ -904,6 +924,9 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
           timezoneId: input.timezone_id ?? "",
           durationMinutes: input.duration_minutes ?? 0,
           narrative: input.narrative ?? "",
+          ...(input.narrative_language === undefined
+            ? {}
+            : { narrativeLanguage: input.narrative_language }),
           ...(input.billable === undefined ? {} : { billable: input.billable }),
           ...(input.task_code === undefined
             ? {}
@@ -964,6 +987,9 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
         ...(input.narrative === undefined
           ? {}
           : { narrative: input.narrative }),
+        ...(input.narrative_language === undefined
+          ? {}
+          : { narrativeLanguage: input.narrative_language }),
         ...(input.invoice_narrative === undefined
           ? {}
           : { invoiceNarrative: input.invoice_narrative }),

@@ -1,0 +1,93 @@
+import { Result } from "better-result";
+import { and, asc, eq, gt, or } from "drizzle-orm";
+import { t } from "elysia";
+
+import { savedTimeNarratives } from "@/api/db/schema";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+  isUuidPaginationCursorPart,
+} from "@/api/lib/pagination";
+import { brandPersistedSavedTimeNarrativeId } from "@/api/lib/safe-id-boundaries";
+
+import { toSavedTimeNarrativeItem } from "./schema";
+
+const config = {
+  description:
+    "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
+  permissions: { timeEntry: ["read"] },
+  mcp: { type: "capability", reason: "billing_admin" },
+  access: "read",
+  query: t.Object({
+    limit: t.Optional(tPaginationLimit(100)),
+    cursor: t.Optional(tPaginationCursor()),
+  }),
+} satisfies HandlerConfig;
+
+const listSavedTimeNarratives = createSafeRootHandler(
+  config,
+  async function* ({ query, safeDb, session, user }) {
+    const limit = query.limit ?? 50;
+    const conditions = [
+      eq(savedTimeNarratives.organizationId, session.activeOrganizationId),
+      eq(savedTimeNarratives.userId, user.id),
+    ];
+    if (query.cursor) {
+      const parts = decodePaginationCursor(query.cursor);
+      const name = parts?.at(0);
+      const id = parts?.at(1);
+      if (
+        parts?.length !== 2 ||
+        typeof name !== "string" ||
+        !isUuidPaginationCursorPart(id)
+      ) {
+        return Result.err(
+          new HandlerError({ status: 400, message: "Invalid cursor" }),
+        );
+      }
+      const after = or(
+        gt(savedTimeNarratives.name, name),
+        and(
+          eq(savedTimeNarratives.name, name),
+          gt(savedTimeNarratives.id, brandPersistedSavedTimeNarrativeId(id)),
+        ),
+      );
+      if (after) {
+        conditions.push(after);
+      }
+    }
+    const rows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: savedTimeNarratives.id,
+            name: savedTimeNarratives.name,
+            narrative: savedTimeNarratives.narrative,
+            narrativeLanguage: savedTimeNarratives.narrativeLanguage,
+            createdAt: savedTimeNarratives.createdAt,
+            updatedAt: savedTimeNarratives.updatedAt,
+          })
+          .from(savedTimeNarratives)
+          .where(and(...conditions))
+          .orderBy(asc(savedTimeNarratives.name), asc(savedTimeNarratives.id))
+          .limit(limit + 1),
+      ),
+    );
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (item) => encodePaginationCursor([item.name, item.id]),
+    });
+    return Result.ok({
+      ...page,
+      items: page.items.map(toSavedTimeNarrativeItem),
+    });
+  },
+);
+
+export default listSavedTimeNarratives;

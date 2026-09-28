@@ -29,6 +29,7 @@ type TimeEntryInsertInput = {
   timezoneId: string;
   durationMinutes: number;
   narrative: string;
+  narrativeLanguage?: string | null | undefined;
   billable?: boolean | undefined;
   taskCode?: string | null | undefined;
   activityCode?: string | null | undefined;
@@ -52,6 +53,7 @@ type PreparedTimeEntry = {
   rateAtEntry: number;
   currency: string;
   narrative: string;
+  narrativeLanguage: string | null;
   billable: boolean;
   taskCode: string | null;
   activityCode: string | null;
@@ -135,6 +137,7 @@ export const prepareTimeEntryInsert = async function* ({
     rateAtEntry: resolvedRate?.hourlyRate ?? 0,
     currency: resolvedRate?.currency ?? UNPRICED_TIME_ENTRY_CURRENCY,
     narrative: body.narrative,
+    narrativeLanguage: body.narrativeLanguage ?? null,
     billable,
     taskCode: body.taskCode ?? null,
     activityCode: body.activityCode ?? null,
@@ -207,6 +210,7 @@ export const insertPreparedTimeEntry = async ({
       rateAtEntry: cents(prepared.rateAtEntry),
       currency: prepared.currency,
       narrative: prepared.narrative,
+      narrativeLanguage: prepared.narrativeLanguage,
       billable: prepared.billable,
       taskCode: prepared.taskCode,
       activityCode: prepared.activityCode,

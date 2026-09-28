@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "piem. Standarta 2025"
     },
     "revertToDraft": "Atgriezt kā melnrakstu",
+    "savedNarratives": {
+      "empty": "Saglabājiet aprakstu, lai to izmantotu vēlreiz.",
+      "save": "Saglabāt aprakstu",
+      "title": "Saglabātie apraksti"
+    },
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "selectedCount": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",

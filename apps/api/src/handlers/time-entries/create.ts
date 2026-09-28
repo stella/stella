@@ -3,6 +3,7 @@ import { t } from "elysia";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 
+import { narrativeLanguageSchema } from "./narrative-language";
 import { createTimeEntryHandler } from "./time-entry-insert";
 
 const createTimeEntryBodySchema = t.Object({
@@ -33,6 +34,7 @@ const createTimeEntryBodySchema = t.Object({
     maxLength: 10_000,
     description: "Description of the work",
   }),
+  narrativeLanguage: t.Optional(narrativeLanguageSchema),
   billable: t.Optional(
     t.Boolean({ description: "Whether the entry is billable to the client" }),
   ),
