@@ -13,6 +13,7 @@ export type TimeEntry = {
   id: string;
   invoiceNarrative: string | null;
   narrative: string;
+  narrativeLanguage: string | null;
   noCharge: boolean;
   rateAtEntry: number;
   source: TimeEntrySource;

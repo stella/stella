@@ -197,6 +197,7 @@ type ServeOptions = {
 
 /** A request the replay answered or refused. */
 export type ReplayedRequest = {
+  /** The body the SDK sent, as text. */
   body: string;
   exchange: number | "side" | null;
   headers: Headers;

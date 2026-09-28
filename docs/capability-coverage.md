@@ -383,6 +383,15 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `reports.templates.list` | read   | stella:read          | —       | generic invoke → `stella capability reports templates-list` |
 | `reports.views.export`   | write  | stella:matters_write | —       | generic invoke → `stella capability reports views-export`   |
 
+## saved-time-narratives
+
+| Capability                     | Access             | Scope                | Feature              | Reachable via                                                     |
+| ------------------------------ | ------------------ | -------------------- | -------------------- | ----------------------------------------------------------------- |
+| `saved-time-narratives.create` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives create` |
+| `saved-time-narratives.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives delete` |
+| `saved-time-narratives.list`   | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives list`   |
+| `saved-time-narratives.update` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives update` |
+
 ## seller-profiles
 
 | Capability                       | Access | Scope                | Feature | Reachable via                                                       |

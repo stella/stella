@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "např. Standard 2025"
     },
     "revertToDraft": "Vrátit do konceptu",
+    "savedNarratives": {
+      "empty": "Uložte popis pro další použití.",
+      "save": "Uložit popis",
+      "title": "Uložené popisy"
+    },
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis pro spuštění měření",
     "selectedCount": "{count, plural, one {# vybrán} few {# vybrány} other {# vybráno}}",
