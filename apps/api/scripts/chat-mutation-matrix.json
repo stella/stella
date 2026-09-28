@@ -816,7 +816,7 @@
     },
     {
       "id": "rejected-input-call-kept",
-      "fix": "rejected-tool-input",
+      "fix": "#4068",
       "behaviour": "A call the engine answered with an error is stored as a failed call whatever its input, so a turn whose model recovers from input the tool's schema rejected stores the whole turn instead of failing to persist it.",
       "status": "active",
       "file": "src/handlers/chat/chat-schema.ts",
