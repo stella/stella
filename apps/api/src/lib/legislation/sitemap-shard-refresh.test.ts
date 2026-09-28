@@ -41,10 +41,12 @@ beforeAll(async () => {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded test database stands in for the root pool
   refreshDb = db as unknown as typeof refreshDb;
   legislationDb = async (read) =>
-    await withPublicLawReaderRole(db, async (tx) => 
-      // SAFETY: the role transaction exposes the production read surface.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for the public reader
-      await read(tx as unknown as LegislationReadTransaction)
+    await withPublicLawReaderRole(
+      db,
+      async (tx) =>
+        // SAFETY: the role transaction exposes the production read surface.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- embedded role transaction stands in for the public reader
+        await read(tx as unknown as LegislationReadTransaction),
     );
 
   await db.insert(legislationSources).values({
@@ -79,8 +81,13 @@ test(
       statuteWorksQuery(tx, []).toSQL(),
     );
     const plan = await client.transaction(async (tx) => {
+      // The seeded table is small; force its ordered, covering path to prove
+      // that the refresh can group Works without reading document rows.
       await tx.query("SET LOCAL enable_seqscan = off");
       await tx.query("SET LOCAL enable_bitmapscan = off");
+      await tx.query("SET LOCAL enable_sort = off");
+      await tx.query("SET LOCAL enable_incremental_sort = off");
+      await tx.query("SET LOCAL join_collapse_limit = 1");
       await tx.query("SET LOCAL seq_page_cost = 1000");
       await tx.query("SET LOCAL random_page_cost = 1000");
       const explained = await tx.query(`EXPLAIN (COSTS OFF) ${query.sql}`, [
@@ -108,7 +115,7 @@ test(
     });
     const listed = await listStatuteSitemapShardsHandler(legislationDb);
     if (!("items" in listed)) {
-      return panic("Expected statute sitemap bucket shards.");
+      panic("Expected statute sitemap bucket shards.");
     }
     expect(listed.items).toHaveLength(64);
     expect(listed.items.every((shard) => shard.bucket !== "all")).toBe(true);
@@ -121,7 +128,7 @@ test(
         legislationDb,
       );
       if (!("items" in page)) {
-        return panic("Expected a listed statute bucket to be readable.");
+        panic("Expected a listed statute bucket to be readable.");
       }
       for (const item of page.items) {
         expect(served.has(item.slug)).toBe(false);

@@ -224,8 +224,10 @@ export const legislationDocuments = p.pgTable(
         t.sourceId,
         t.eli,
         t.language,
+        sql`coalesce(${t.versionValidFrom}, DATE '0001-01-01') DESC`,
+        sql`${t.id} DESC`,
+        // Keep the base column too: index-only scans need it to evaluate the sort expression.
         t.versionValidFrom,
-        t.id,
         t.slug,
         t.updatedAt,
       )

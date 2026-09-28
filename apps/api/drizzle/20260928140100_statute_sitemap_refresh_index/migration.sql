@@ -15,7 +15,7 @@ DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_sitemap_refresh_idx";
 --> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "legislation_documents_sitemap_refresh_idx"
-  ON "legislation_documents" ("country", "source_id", "eli", "language", "version_valid_from", "id", "slug", "updated_at")
+  ON "legislation_documents" ("country", "source_id", "eli", "language", (coalesce("version_valid_from", DATE '0001-01-01')) DESC, "id" DESC, "version_valid_from", "slug", "updated_at")
   WHERE "slug" IS NOT NULL;
 --> statement-breakpoint
 
