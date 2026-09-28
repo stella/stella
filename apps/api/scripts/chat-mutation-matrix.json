@@ -942,7 +942,7 @@
     },
     {
       "id": "skill-menu-follows-edit-mode",
-      "fix": "#4070",
+      "fix": "#4086",
       "behaviour": "The composer's skill availability decides over the chat's own edit mode, as a send does, instead of assuming an open document always queues edits for review.",
       "status": "active",
       "file": "src/handlers/chat/skill-availability/offered-tools.ts",
