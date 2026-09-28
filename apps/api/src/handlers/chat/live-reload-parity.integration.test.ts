@@ -488,6 +488,7 @@ const STALE_PAGE_ORACLES = new Set<string>([
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
   CHAT_ORACLE.persistedTurnSettles,
+  CHAT_ORACLE.providerResultsStable,
   CHAT_ORACLE.providerScriptsConsumed,
   CHAT_ORACLE.wireResultsStored,
   CHAT_ORACLE.wireSnapshotIdentity,
@@ -1328,6 +1329,9 @@ const replaceWaiting = async (calls: CallKind[]) => {
       real,
     );
     await new ReloadPage().run(model, real);
+    // The next request reads the replaced calls as stored; the replacing
+    // turn must have read them the same way.
+    await new SendUserMessage([TEXT_ANSWER], "Anything else?").run(model, real);
   });
 };
 
