@@ -261,7 +261,7 @@ const findServedLosses = (
 ): OracleViolation[] =>
   violationsOf(
     PAST_RELEASE,
-    (stored.chat_messages ?? []).flatMap((row) => {
+    (stored.chat_messages ?? []).flatMap((row): unknown[] => {
       const message = served.find(({ id }) => id === row["id"]);
       if (message === undefined) {
         return [{ unservedMessage: row["id"] }];
@@ -432,7 +432,8 @@ const continueSavedThread = async (
     const beyondInherited = (findings: OracleViolation[]) =>
       findings.filter((finding) => !inheritedKeys.has(JSON.stringify(finding)));
 
-    const steps: [string, () => Promise<void>][] = [
+    type Step = readonly [string, () => Promise<void>];
+    const steps: Step[] = [
       [
         decision,
         async () => {
@@ -474,7 +475,7 @@ const continueSavedThread = async (
                 await page.resend();
               },
             ],
-          ] as const)
+          ] satisfies Step[])
         : []),
     ];
     for (const [label, step] of steps) {
@@ -498,7 +499,7 @@ const continueSavedThread = async (
       ...(await attempt("reload after", async () =>
         findServedLosses(
           {
-            chat_messages: before.chat_messages?.filter(
+            chat_messages: (before.chat_messages ?? []).filter(
               ({ id }) => id !== continued,
             ),
           },
@@ -615,10 +616,10 @@ const writeFixture = ({
     /^\d{14}_/u.test(name),
   );
   const fixture: SavedStateFixture = {
-    release: process.env["CHAT_SAVED_STATE_RELEASE"] ?? null,
+    release: null,
     sourceCommit: git("rev-parse", "HEAD"),
     newestMigration: migrations.toSorted().at(-1) ?? "",
-    shape: process.env["CHAT_SAVED_STATE_SHAPE"] ?? "",
+    shape: "TODO: what this stored shape adds or drops",
     actors: { organizationId: ids.orgA, userId: ids.userA1 },
     threadId,
     pendingToolCallId,
