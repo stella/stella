@@ -447,8 +447,8 @@
                   },
                   "refEncoding": "persisted-resource-refs-v2",
                   "turnOutcome": {
-                    "type": "failed",
-                    "error": "unknown"
+                    "type": "interrupted",
+                    "reason": "client-disconnected"
                   }
                 },
                 "role": "assistant",
@@ -460,9 +460,8 @@
                   {
                     "arguments": "{}",
                     "id": "call-1",
-                    "input": {},
                     "name": "list_templates",
-                    "state": "input-complete",
+                    "state": "error",
                     "type": "tool-call"
                   }
                 ]

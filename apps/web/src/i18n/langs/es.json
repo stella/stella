@@ -801,6 +801,12 @@
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
     },
+    "seo": {
+      "collectionName": "Jurisprudencia de stella",
+      "description": "Base de datos pública de jurisprudencia con resoluciones judiciales y fuentes jurídicas indexables.",
+      "homeDescription": "Base de datos jurídica pública con resoluciones judiciales y normas consolidadas; búsqueda por identificador o palabras.",
+      "scopedDescription": "Base de datos pública de jurisprudencia de {scope}, con resoluciones judiciales y fuentes jurídicas indexables."
+    },
     "showWholeHeadnote": "Mostrar el sumario completo",
     "sort": {
       "newest": "Más recientes",
@@ -1928,6 +1934,41 @@
       "organization": "Organización",
       "person": "Persona"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Dirección de correo del asunto",
+    "assertedOriginal": "Cabeceras originales (según quien reenvía)",
+    "authResults": {
+      "fail": "Fallida",
+      "pass": "Correcta",
+      "unknown": "Sin determinar"
+    },
+    "backToList": "Volver a correspondencia",
+    "createAddress": "Crear dirección",
+    "deliveredBy": "Entregado por <address>{sender}</address>",
+    "deliveredByAuthenticated": "Entregado por <address>{sender}</address> · autenticado",
+    "deliveryAuthentication": "Autenticación de la entrega",
+    "empty": "Todavía no hay correspondencia.",
+    "filers": "Remitentes",
+    "forwardedBy": "Reenviado por <address>{sender}</address>",
+    "forwardedByAuthenticated": "Reenviado por <address>{sender}</address> · autenticado",
+    "inboundNotConfigured": "El correo entrante no está configurado. Pida al administrador que configure el dominio de correo entrante.",
+    "markHandled": "Marcar como tramitado",
+    "markNew": "Marcar como nuevo",
+    "noAddress": "No hay ninguna dirección de correo activa.",
+    "originalSender": "Remitente original",
+    "originalSenderUnverified": "Remitente original (según lo indicado, sin verificar)",
+    "originalSignatureVerified": "Firma original verificada (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Recibido",
+    "revokeAddress": "Revocar dirección",
+    "rotateAddress": "Cambiar dirección",
+    "sentAt": "Enviado el",
+    "sharedMailboxFiler": "Buzón compartido {address}, aprobado por {approver}",
+    "states": {
+      "handled": "Tramitado"
+    },
+    "title": "Correspondencia",
+    "unknownApprover": "Aprobador desconocido"
   },
   "docxReview": {
     "acceptAll": "Aceptar todo",
@@ -4302,6 +4343,7 @@
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",
+    "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
     "diffInserted": "Añadido:",
     "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versión no tiene texto disponible.",
@@ -5359,6 +5401,7 @@
         },
         "targets": {
           "automation": "automatización",
+          "correspondence": "correspondencia",
           "court": "registro judicial",
           "document": "documento",
           "documentReview": "revisión de documento",

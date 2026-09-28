@@ -1,9 +1,11 @@
 import { EventType } from "@tanstack/ai";
+import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
@@ -32,6 +34,7 @@ import {
   UNMET_SIZE,
   violatedOracles,
 } from "@/api/tests/helpers/provider-wire-unmet";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Every provider adapter against the provider wire corpus
 // (`src/tests/fixtures/provider-wire`): the real adapter, its real SDK and
@@ -181,6 +184,47 @@ describe("every adapter satisfies the wire contract", () => {
       RETRY_TIMEOUT_MS,
     );
   }
+});
+
+// Every adapter we ship ends a cut-off stream in its own run error, but only
+// through our patches: the releases they patch end it with no terminal event
+// (each patch's header). The stream contract is what holds every adapter to
+// one terminal event, so it is checked on the stream such a release produces.
+describe("the stream contract holds where an adapter does not", () => {
+  test("a cut-off stream an adapter leaves unended", async () => {
+    const cassette = cassetteFor(cassettes, "openai", "early-eof");
+    const { findings, run } = await replayWireScenario({ cassette, replay });
+    // The adapter's own events, without the run error it ends the stream in.
+    const unended = run.chunks.filter(
+      ({ type }) =>
+        type !== EventType.RUN_ERROR && type !== EventType.RUN_FINISHED,
+    );
+    const released = asTestRaw<AnyTextAdapter>({
+      kind: "text",
+      model: cassette.model,
+      name: "released",
+      async *chatStream() {
+        await Promise.resolve();
+        yield* unended;
+      },
+    });
+    const chunks: StreamChunk[] = [];
+    for await (const chunk of withProviderStreamContract(released).chatStream({
+      logger: resolveDebugOption(false),
+      messages: [],
+      model: cassette.model,
+    })) {
+      chunks.push(chunk);
+    }
+    expectContract(
+      `${cassetteKey(cassette)}/unended`,
+      findWireContractViolations({
+        cassette,
+        replay: findings,
+        run: { ...run, chunks },
+      }),
+    );
+  });
 });
 
 describe("a cancelled run rejects cleanly", () => {

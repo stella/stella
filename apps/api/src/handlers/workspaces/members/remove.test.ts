@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 import {
   auditLogs,
+  correspondence,
   desktopEditSessions,
   timeEntries,
   workspaceMembers,
@@ -185,6 +186,10 @@ describe("removeWorkspaceMember", () => {
     expect(result).toEqual({ id: deletedWorkspaceMemberId });
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
     expect(updates).toEqual([
+      {
+        table: correspondence,
+        value: { assigneeId: null, updatedAt: expect.any(Date) },
+      },
       { table: workspaces, value: { leadUserId: null } },
       {
         table: desktopEditSessions,

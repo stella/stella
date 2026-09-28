@@ -359,6 +359,30 @@ test("a completed backfill re-derives identifiers a key rule change moved", asyn
   ]);
 });
 
+test("a declared alias is neither removed nor counted as drift", async () => {
+  await db.insert(caseLawDecisionIdentifiers).values({
+    decisionId,
+    type: DECISION_IDENTIFIER_TYPES.ECLI,
+    value: "ECLI:CZ:US:2020:DECLARED.ALIAS",
+    normalizedValue: "czus2020declaredalias",
+    declaredAt: new Date(),
+  });
+
+  const repaired = await runDecisionIdentifierBackfill(rootDb(), {
+    batchSize: 10,
+  });
+
+  expect(repaired.verification.gaps.decisionIdentifierMismatches).toBe(0);
+  expect(
+    await db
+      .select({ value: caseLawDecisionIdentifiers.value })
+      .from(caseLawDecisionIdentifiers)
+      .where(
+        eq(caseLawDecisionIdentifiers.normalizedValue, "czus2020declaredalias"),
+      ),
+  ).toEqual([{ value: "ECLI:CZ:US:2020:DECLARED.ALIAS" }]);
+});
+
 test("rejects a batch that could exceed PostgreSQL's bind-parameter limit", async () => {
   expect(MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE).toBe(500);
   const outcome: unknown = await runDecisionIdentifierBackfill(rootDb(), {

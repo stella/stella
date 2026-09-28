@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.35.0
+
+### Minor Changes
+
+- [#3931](https://github.com/stella/stella/pull/3931) [`9d57661`](https://github.com/stella/stella/commit/9d576613d04dd842c18c3074baf7c9f30927deeb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `--ease-spring` and `--ease-smooth` easing tokens (`ease-spring`, `ease-smooth` utilities). The toast entry uses `--ease-smooth`, the button loading spinner fades and scales in, and both respect `prefers-reduced-motion`.
+
 ## 0.34.6
 
 ### Patch Changes
