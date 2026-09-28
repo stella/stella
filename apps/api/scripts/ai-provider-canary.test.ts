@@ -16,10 +16,10 @@ import type { CachingDecision } from "@/api/lib/ai-config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 
 import {
   CANARY_TEXT_FINISH_POLICY,
-  canaryToolProbeModelOptions,
   CanaryCredentialRejectedError,
   CanaryError,
   CanaryProviderUnavailableError,
@@ -28,6 +28,7 @@ import {
   canaryCapabilityProbeTimeout,
   catalogModelIds,
   classifyCanaryFailure,
+  createCanaryConfig,
   createPdfCanaryMessages,
   CREDENTIAL_REJECTION_SIGNATURES,
   CREDENTIAL_REJECTION_STATUSES,
@@ -39,6 +40,7 @@ import {
   runCanaryProbe,
   runCanaryProbeSequence,
   runCatalogCanaryProbes,
+  runToolCallRoundTripProbe,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
@@ -371,20 +373,52 @@ describe("AI provider canary tool contract", () => {
     });
   });
 
-  test("leaves Anthropic tool choice to the model", () => {
-    // SAFETY: this fixture exercises only the provider/model-options branch;
-    // the adapter is never invoked.
-    const model = {
-      adapter: createProbeFinishAdapter("stop"),
-      keySource: "instance",
-      modelId: "claude-opus-5-5",
-      modelOptions: { temperature: 0 },
-      provider: "anthropic",
-    } as ResolvedTanStackTextModel;
+  test("leaves Anthropic tool choice to the model in the round-trip probe", async () => {
+    // Every model call the probe makes, with the options it sent.
+    const sentModelOptions: unknown[] = [];
+    const scripted = createScriptedTextAdapter([
+      {
+        arguments: JSON.stringify({ count: 7, value: "stella-canary" }),
+        toolName: "canary_round_trip",
+        type: "tool-call",
+      },
+      { finishReason: "stop", text: "stella-tool-round-trip-ok", type: "text" },
+    ]);
+    const adapter: AnyTextAdapter = {
+      ...scripted,
+      chatStream: (options) => {
+        sentModelOptions.push(options.modelOptions);
+        return scripted.chatStream(options);
+      },
+    };
 
-    expect(canaryToolProbeModelOptions({ model })).not.toHaveProperty(
-      "tool_choice",
-    );
+    await runToolCallRoundTripProbe({
+      context: {
+        config: createCanaryConfig({
+          apiKey: "test-key",
+          provider: "anthropic",
+        }),
+        provider: "anthropic",
+      },
+      // SAFETY: the probe reads only the adapter and the provider options of
+      // the resolved model; nothing here reaches a provider.
+      resolveTextModel: () =>
+        ({
+          adapter,
+          keySource: "instance",
+          modelId: "claude-opus-5-5",
+          modelOptions: {},
+          provider: "anthropic",
+        }) as ResolvedTanStackTextModel,
+      signal: AbortSignal.timeout(5000),
+    });
+
+    // The tool call and the answer after its result: two model calls, and
+    // neither pins the tool.
+    expect(sentModelOptions).toHaveLength(2);
+    for (const modelOptions of sentModelOptions) {
+      expect(modelOptions).not.toHaveProperty("tool_choice");
+    }
   });
 });
 
