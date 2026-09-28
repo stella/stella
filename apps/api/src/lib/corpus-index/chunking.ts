@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
