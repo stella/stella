@@ -17,7 +17,7 @@ export type WebRoutes = {
     auth: {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -30,7 +30,7 @@ export type WebRoutes = {
       organization: {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -43,7 +43,7 @@ export type WebRoutes = {
     consent: {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -56,7 +56,7 @@ export type WebRoutes = {
     "oauth-authorization-server": {
       options: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -68,7 +68,7 @@ export type WebRoutes = {
     "oauth-authorization-server": {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -82,7 +82,7 @@ export type WebRoutes = {
         auth: {
           options: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
@@ -98,7 +98,7 @@ export type WebRoutes = {
         auth: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
@@ -112,7 +112,7 @@ export type WebRoutes = {
     "openid-configuration": {
       options: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -124,7 +124,7 @@ export type WebRoutes = {
     "openid-configuration": {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -136,7 +136,7 @@ export type WebRoutes = {
     "openai-apps-challenge": {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -149,7 +149,7 @@ export type WebRoutes = {
     "oauth-protected-resource": {
       options: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -161,7 +161,7 @@ export type WebRoutes = {
     "oauth-protected-resource": {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -174,7 +174,7 @@ export type WebRoutes = {
       "mcp-anonymized": {
         options: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -188,7 +188,7 @@ export type WebRoutes = {
       "mcp-anonymized": {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -202,7 +202,7 @@ export type WebRoutes = {
       mcp: {
         options: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -216,7 +216,7 @@ export type WebRoutes = {
       mcp: {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -230,7 +230,7 @@ export type WebRoutes = {
       "mcp-documents": {
         options: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -244,7 +244,7 @@ export type WebRoutes = {
       "mcp-documents": {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -258,7 +258,7 @@ export type WebRoutes = {
       "mcp-law": {
         options: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -272,7 +272,7 @@ export type WebRoutes = {
       "mcp-law": {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -285,7 +285,7 @@ export type WebRoutes = {
   "auth.md": {
     options: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -295,7 +295,7 @@ export type WebRoutes = {
   } & {
     get: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -306,7 +306,7 @@ export type WebRoutes = {
   ready: {
     get: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -328,7 +328,7 @@ export type WebRoutes = {
   mcp: {
     [key: string]: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -340,7 +340,7 @@ export type WebRoutes = {
     feedback: {
       post: {
         body: string;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -359,13 +359,13 @@ export type WebRoutes = {
     };
   };
   usage: {
-    hosted: T76055d566d;
+    hosted: T5e3ac29766;
   } & {
     hosted: {
       webhook: {
         post: {
           body: string;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -397,7 +397,7 @@ export type WebRoutes = {
           assertion_type: "urn:ietf:params:oauth:token-type:id-jag";
           assertion: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -463,7 +463,7 @@ export type WebRoutes = {
             email: string;
             claim_token: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -512,7 +512,7 @@ export type WebRoutes = {
           assertion: string;
           grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer";
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -551,7 +551,7 @@ export type WebRoutes = {
       notify: {
         post: {
           body: string;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -590,7 +590,7 @@ export type WebRoutes = {
           body: {
             user_code: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -627,7 +627,7 @@ export type WebRoutes = {
     registrations: {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: string;
@@ -674,7 +674,7 @@ export type WebRoutes = {
   live: {
     get: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -685,7 +685,7 @@ export type WebRoutes = {
   started: {
     get: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -706,7 +706,7 @@ export type WebRoutes = {
   health: {
     get: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -717,7 +717,7 @@ export type WebRoutes = {
   "mcp-documents": {
     [key: string]: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -728,7 +728,7 @@ export type WebRoutes = {
   "mcp-anonymized": {
     [key: string]: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -739,7 +739,7 @@ export type WebRoutes = {
   "mcp-law": {
     [key: string]: {
       body: unknown;
-      params: T76055d566d;
+      params: T5e3ac29766;
       query: unknown;
       headers: unknown;
       response: {
@@ -751,7 +751,7 @@ export type WebRoutes = {
     "last-otp": {
       get: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           email: string;
         };
@@ -777,7 +777,7 @@ export type WebRoutes = {
     session: {
       post: {
         body: unknown;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: unknown;
         headers: unknown;
         response: {
@@ -796,7 +796,7 @@ export type WebRoutes = {
       capabilities: {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -824,11 +824,11 @@ export type WebRoutes = {
           query: string;
           types: Array<T9527c354f7>;
           kinds: Array<T884a45faa8>;
-          workspaceIds: Array<T00e0a643b6>;
+          workspaceIds: Array<Te20afbb7bb>;
           editedByUserIds: Array<string>;
           mimeTypes: Array<string>;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -852,9 +852,9 @@ export type WebRoutes = {
             reason?: string;
             required?: number;
             available?: number;
-            confirmation?: T1d7e53ae9c;
+            confirmation?: T3d34d1a07d;
             error?: string;
-            claim?: T92d0af8865;
+            claim?: T1987577a01;
             registration_id?: string;
             registration_type?: string;
             claim_url?: string;
@@ -902,12 +902,12 @@ export type WebRoutes = {
             query: string;
             types: Array<T9527c354f7>;
             search: string;
-            workspaceIds: Array<T00e0a643b6>;
+            workspaceIds: Array<Te20afbb7bb>;
             editedByUserIds: Array<string>;
             mimeTypes: Array<string>;
             facet: ("mimeType" | "workspace" | "editor");
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -922,9 +922,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -968,7 +968,7 @@ export type WebRoutes = {
             type: T9527c354f7;
             resultId: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1017,7 +1017,7 @@ export type WebRoutes = {
             locale?: string;
             query: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1051,9 +1051,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -1081,11 +1081,11 @@ export type WebRoutes = {
             originalQuery?: string;
             query: string;
             types: Array<T9527c354f7>;
-            workspaceIds: Array<T00e0a643b6>;
+            workspaceIds: Array<Te20afbb7bb>;
             editedByUserIds: Array<string>;
             mimeTypes: Array<string>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1109,9 +1109,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -1135,9 +1135,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -1172,9 +1172,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -1207,11 +1207,11 @@ export type WebRoutes = {
                 number: number;
               }>;
               summary: string;
-              workspaceIds: Array<T00e0a643b6>;
+              workspaceIds: Array<Te20afbb7bb>;
               editedByUserIds: Array<string>;
               mimeTypes: Array<string>;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -1226,9 +1226,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -1264,9 +1264,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -1288,7 +1288,7 @@ export type WebRoutes = {
       "lookup-formats": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             cursor?: string;
             limit?: number;
@@ -1297,7 +1297,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              items: Array<Taf711e608a>;
+              items: Array<T282a48bd54>;
               defaultFormat: T88ad5a8d38;
               userDefaultFormat: T88ad5a8d38;
               nextCursor: Tbe0400fa4c;
@@ -1335,11 +1335,11 @@ export type WebRoutes = {
             format: string;
             registry: T347d72c6fa;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
-            200: Taf711e608a;
+            200: T282a48bd54;
             400: T0fb1fed158;
             401: T0fb1fed158;
             402: T0fb1fed158;
@@ -1370,7 +1370,7 @@ export type WebRoutes = {
           delete: {
             body: Record<never, never>;
             params: {
-              formatId: T2c205b6e9a;
+              formatId: T6a02bf8080;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -1409,7 +1409,7 @@ export type WebRoutes = {
               registry: T347d72c6fa;
               formatId: Tbda09b9036;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -1449,7 +1449,7 @@ export type WebRoutes = {
               registry: T347d72c6fa;
               formatId: Tbda09b9036;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -1487,7 +1487,7 @@ export type WebRoutes = {
           body: {
             file: File;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1527,7 +1527,7 @@ export type WebRoutes = {
             values: string;
             file: File;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             format?: "docx" | "pdf";
           };
@@ -1566,7 +1566,7 @@ export type WebRoutes = {
             format: Tbe0400fa4c;
             registry: T347d72c6fa;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1603,7 +1603,7 @@ export type WebRoutes = {
           body: {
             file: File;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1643,7 +1643,7 @@ export type WebRoutes = {
             instructions?: string;
             text: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1687,7 +1687,7 @@ export type WebRoutes = {
       "binding-catalog": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1749,7 +1749,7 @@ export type WebRoutes = {
     } & {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -1760,7 +1760,7 @@ export type WebRoutes = {
           200: {
             templatesCountLimit: 50;
             items: Array<{
-              readonly id: Td15ae0fedc;
+              readonly id: T6db7aeaa15;
               readonly name: string;
               readonly fileName: string;
               readonly fieldCount: number;
@@ -1810,7 +1810,7 @@ export type WebRoutes = {
           name: string;
           file: File;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -1845,7 +1845,7 @@ export type WebRoutes = {
             categoryId?: Tb532bdabe3;
             name: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1881,7 +1881,7 @@ export type WebRoutes = {
             name: string;
             styleSource: File;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1918,7 +1918,7 @@ export type WebRoutes = {
             name: string;
             styleSetId: T6868c5f803;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -1953,7 +1953,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -1995,7 +1995,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -2081,10 +2081,10 @@ export type WebRoutes = {
         "decide-conditions": {
           post: {
             body: {
-              values: (Record<never, never> & Tf555caa6f9);
+              values: (Record<never, never> & T7a3ee17d2d);
             };
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -2140,10 +2140,10 @@ export type WebRoutes = {
         "fill-preview": {
           post: {
             body: {
-              values: (Record<never, never> & Tf555caa6f9);
+              values: (Record<never, never> & T7a3ee17d2d);
             };
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -2155,20 +2155,20 @@ export type WebRoutes = {
                 unusedValues: Array<string>;
                 structureErrors: Array<T85e6600670>;
                 aiFieldErrors: Array<T6e9118d33d>;
-                conditionDecisions: Array<((T3203bdde0c & {
+                conditionDecisions: Array<((T3a5b898b8d & {
                   state: "decided";
                   value: Tfddd645dc8;
                   decidedBy: "decision_model";
                   probability: number;
-                }) | (T3203bdde0c & {
+                }) | (T3a5b898b8d & {
                   state: "decided";
                   value: Tfddd645dc8;
                   decidedBy: "generative_model";
-                }) | (T3203bdde0c & {
+                }) | (T3a5b898b8d & {
                   state: "decided";
                   value: Tfddd645dc8;
                   decidedBy: "user";
-                }) | (T3203bdde0c & {
+                }) | (T3a5b898b8d & {
                   state: "undecided";
                   reason: T3e64088e2c;
                 }))>;
@@ -2204,10 +2204,10 @@ export type WebRoutes = {
           post: {
             body: {
               clauseOverrides?: Record<never, never>;
-              values: (Record<never, never> & Tf555caa6f9);
+              values: (Record<never, never> & T7a3ee17d2d);
             };
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: {
               format?: "docx" | "pdf";
@@ -2249,11 +2249,11 @@ export type WebRoutes = {
                 name?: string;
                 parentId?: T23e9e9a218;
                 clauseOverrides?: Record<never, never>;
-                values: (Record<never, never> & Tf555caa6f9);
+                values: (Record<never, never> & T7a3ee17d2d);
               };
               params: {
-                workspaceId: T00e0a643b6;
-                templateId: Td15ae0fedc;
+                workspaceId: Te20afbb7bb;
+                templateId: T6db7aeaa15;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -2303,7 +2303,7 @@ export type WebRoutes = {
               timezone?: string;
             };
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -2345,7 +2345,7 @@ export type WebRoutes = {
         get: {
           body: Record<never, never>;
           params: {
-            templateId: Td15ae0fedc;
+            templateId: T6db7aeaa15;
           };
           query: Record<never, never>;
           headers: Record<never, never>;
@@ -2365,7 +2365,7 @@ export type WebRoutes = {
                 authors: Array<T8f22b22b9e>;
               };
               tags: T36f8891ad4;
-              id: Td15ae0fedc;
+              id: T6db7aeaa15;
               createdAt: string;
               updatedAt: string;
               createdBy: string;
@@ -2382,13 +2382,13 @@ export type WebRoutes = {
                   hint?: undefined | string;
                   inputType?: undefined | "number" | "boolean" | "date" | "text" | "select";
                   options?: undefined | Array<string>;
-                  validation?: undefined | Ta97f719cc5;
+                  validation?: undefined | T8da97ce6b5;
                   required?: undefined | false | true;
                   aiPrompt?: undefined | string;
                   aiAdapt?: undefined | false | true;
                   aiSeesDocument?: undefined | false | true;
                   optionsFrom?: undefined | string;
-                  lookup?: undefined | T9a31037c51;
+                  lookup?: undefined | T1f8c83bb85;
                   source?: undefined | T1463cf47a4 | Te16df143a9 | T2bc8abc5f9 | T22e0107aa8 | T6f17a2dbb3;
                   formula?: undefined | string;
                   condition?: undefined | string;
@@ -2433,7 +2433,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -2482,13 +2482,13 @@ export type WebRoutes = {
             languages?: Array<string>;
           };
           params: {
-            templateId: Td15ae0fedc;
+            templateId: T6db7aeaa15;
           };
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
             200: {
-              id: Td15ae0fedc;
+              id: T6db7aeaa15;
               name: string;
               fieldCount: number;
               updatedAt: string;
@@ -2525,14 +2525,14 @@ export type WebRoutes = {
               file: File;
             };
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
               200: {
                 name: string;
-                id: Td15ae0fedc;
+                id: T6db7aeaa15;
                 updatedAt: string;
                 fieldCount: number;
               };
@@ -2566,7 +2566,7 @@ export type WebRoutes = {
         delete: {
           body: Record<never, never>;
           params: {
-            templateId: Td15ae0fedc;
+            templateId: T6db7aeaa15;
           };
           query: Record<never, never>;
           headers: Record<never, never>;
@@ -2602,7 +2602,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: {
               cursor?: string;
@@ -2632,9 +2632,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -2656,9 +2656,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -2696,7 +2696,7 @@ export type WebRoutes = {
             get: {
               body: Record<never, never>;
               params: {
-                templateId: Td15ae0fedc;
+                templateId: T6db7aeaa15;
                 versionId: T9a0fa30e77;
               };
               query: Record<never, never>;
@@ -2721,9 +2721,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -2765,7 +2765,7 @@ export type WebRoutes = {
               get: {
                 body: Record<never, never>;
                 params: {
-                  templateId: Td15ae0fedc;
+                  templateId: T6db7aeaa15;
                   versionId: T9a0fa30e77;
                 };
                 query: Record<never, never>;
@@ -2809,7 +2809,7 @@ export type WebRoutes = {
               post: {
                 body: Record<never, never>;
                 params: {
-                  templateId: Td15ae0fedc;
+                  templateId: T6db7aeaa15;
                   versionId: T9a0fa30e77;
                 };
                 query: Record<never, never>;
@@ -2851,7 +2851,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -2895,9 +2895,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -2938,7 +2938,7 @@ export type WebRoutes = {
               clauseId: T0da73a8dae;
             };
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -2960,9 +2960,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -2984,9 +2984,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -3030,7 +3030,7 @@ export type WebRoutes = {
                 slotName: Tbe0400fa4c;
               };
               params: {
-                templateId: Td15ae0fedc;
+                templateId: T6db7aeaa15;
                 linkId: Te1131bea29;
               };
               query: Record<never, never>;
@@ -3048,9 +3048,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -3072,9 +3072,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -3095,9 +3095,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -3135,7 +3135,7 @@ export type WebRoutes = {
             delete: {
               body: Record<never, never>;
               params: {
-                templateId: Td15ae0fedc;
+                templateId: T6db7aeaa15;
                 linkId: Te1131bea29;
               };
               query: Record<never, never>;
@@ -3175,7 +3175,7 @@ export type WebRoutes = {
             post: {
               body: Record<never, never>;
               params: {
-                templateId: Td15ae0fedc;
+                templateId: T6db7aeaa15;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -3195,9 +3195,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -3237,7 +3237,7 @@ export type WebRoutes = {
               post: {
                 body: Record<never, never>;
                 params: {
-                  templateId: Td15ae0fedc;
+                  templateId: T6db7aeaa15;
                   linkId: Te1131bea29;
                 };
                 query: Record<never, never>;
@@ -3255,9 +3255,9 @@ export type WebRoutes = {
                     reason?: string;
                     required?: number;
                     available?: number;
-                    confirmation?: T1d7e53ae9c;
+                    confirmation?: T3d34d1a07d;
                     error?: string;
-                    claim?: T92d0af8865;
+                    claim?: T1987577a01;
                     registration_id?: string;
                     registration_type?: string;
                     claim_url?: string;
@@ -3279,9 +3279,9 @@ export type WebRoutes = {
                     reason?: string;
                     required?: number;
                     available?: number;
-                    confirmation?: T1d7e53ae9c;
+                    confirmation?: T3d34d1a07d;
                     error?: string;
-                    claim?: T92d0af8865;
+                    claim?: T1987577a01;
                     registration_id?: string;
                     registration_type?: string;
                     claim_url?: string;
@@ -3324,7 +3324,7 @@ export type WebRoutes = {
     contacts: {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           type?: "organization" | "person";
           cursor?: string;
@@ -3378,7 +3378,7 @@ export type WebRoutes = {
       search: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             type?: "organization" | "person";
             q: string;
@@ -3425,7 +3425,7 @@ export type WebRoutes = {
       "business-registries": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             detail?: "standard" | "full";
             registry: T347d72c6fa;
@@ -3436,11 +3436,11 @@ export type WebRoutes = {
             200: {
               type: "lookup";
               registry: T347d72c6fa;
-              hit: (null | T44a68408fe);
+              hit: (null | T1aa75e4cd5);
             } | {
               type: "search";
               registry: T347d72c6fa;
-              hits: Array<T44a68408fe>;
+              hits: Array<T1aa75e4cd5>;
             };
             400: T0fb1fed158;
             401: T0fb1fed158;
@@ -3479,7 +3479,7 @@ export type WebRoutes = {
               check: Ta70e9835f3;
               subjectType: T7aebf701ec;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -3537,7 +3537,7 @@ export type WebRoutes = {
       export: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             format?: "json" | "csv";
           };
@@ -3575,7 +3575,7 @@ export type WebRoutes = {
             body: {
               file: File;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -3625,7 +3625,7 @@ export type WebRoutes = {
               file: File;
               mapping: string;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -3714,7 +3714,7 @@ export type WebRoutes = {
               }>;
               taxIdScheme: Te403754937;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -3825,7 +3825,7 @@ export type WebRoutes = {
           id: Tbf83a7d346;
           displayName: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -3937,7 +3937,7 @@ export type WebRoutes = {
               readonly __safeIdType?: "contactImportRequest";
             });
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -3981,7 +3981,7 @@ export type WebRoutes = {
             size: number;
             sha256Hex: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -4021,7 +4021,7 @@ export type WebRoutes = {
           body: {
             uploadId: T5eefd06bf2;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -4077,14 +4077,14 @@ export type WebRoutes = {
               clientMatterCount: number;
               clientMatters: Array<{
                 name: string;
-                id: T00e0a643b6;
+                id: Te20afbb7bb;
                 createdAt: string;
                 color: Tbe0400fa4c;
               }>;
               partyMatters: Array<{
                 color: Tbe0400fa4c;
                 createdAt: string;
-                id: T00e0a643b6;
+                id: Te20afbb7bb;
                 name: string;
                 roles: Array<Tdedb951219>;
               }>;
@@ -4291,7 +4291,7 @@ export type WebRoutes = {
         };
       };
     };
-    fields: (Tcb0f968164 & {
+    fields: (Taadba38b02 & {
       ":workspaceId": {
         post: {
           body: {
@@ -4562,7 +4562,7 @@ export type WebRoutes = {
         };
       };
     });
-    uploads: (Tcb0f968164 & {
+    uploads: (Taadba38b02 & {
       ":workspaceId": {
         presign: {
           post: {
@@ -4843,7 +4843,7 @@ export type WebRoutes = {
         };
       };
     });
-    documents: (Tcb0f968164 & {
+    documents: (Taadba38b02 & {
       ":workspaceId": {
         document: {
           ":documentId": {
@@ -4965,7 +4965,7 @@ export type WebRoutes = {
         };
       };
     });
-    properties: (Tcb0f968164 & {
+    properties: (Taadba38b02 & {
       ":workspaceId": {
         put: {
           body: {
@@ -5192,7 +5192,7 @@ export type WebRoutes = {
                 }>;
               };
               id: T173eec1550;
-              workspaceId: T00e0a643b6;
+              workspaceId: Te20afbb7bb;
               name: string;
               status: Tcc5629f46f;
               content: T26d760a340;
@@ -5207,7 +5207,7 @@ export type WebRoutes = {
                 askPropertyId?: never;
               };
               id: T173eec1550;
-              workspaceId: T00e0a643b6;
+              workspaceId: Te20afbb7bb;
               name: string;
               status: Tcc5629f46f;
               content: T26d760a340;
@@ -5222,7 +5222,7 @@ export type WebRoutes = {
                 dependencies: Array<T69ec7580d1>;
               };
               id: T173eec1550;
-              workspaceId: T00e0a643b6;
+              workspaceId: Te20afbb7bb;
               name: string;
               status: Tcc5629f46f;
               content: T26d760a340;
@@ -5382,7 +5382,7 @@ export type WebRoutes = {
       "oauth-connections": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -5422,7 +5422,7 @@ export type WebRoutes = {
             status: ("skipped" | "completed" | "not-started");
             tourId: ("documents" | "chat" | "playbooks" | "chat-power" | "workflows" | "tabular-review");
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -5497,7 +5497,7 @@ export type WebRoutes = {
         "pending-tasks": {
           get: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -5542,13 +5542,13 @@ export type WebRoutes = {
         };
       };
     } & {
-      delete: T76055d566d;
+      delete: T5e3ac29766;
     } & {
       delete: {
         "send-otp": {
           post: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -5591,7 +5591,7 @@ export type WebRoutes = {
               }>;
               code: string;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -5624,13 +5624,13 @@ export type WebRoutes = {
         };
       };
     } & {
-      "two-factor": T76055d566d;
+      "two-factor": T5e3ac29766;
     } & {
       "two-factor": {
         "send-otp": {
           post: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -5663,7 +5663,7 @@ export type WebRoutes = {
         };
       };
     };
-    tasks: (Tcb0f968164 & {
+    tasks: (Taadba38b02 & {
       ":workspaceId": {
         put: {
           body: {
@@ -5676,7 +5676,7 @@ export type WebRoutes = {
             startAt?: null | string;
             endAt?: null | string;
             agendaKind?: string;
-            listId?: T6215623c33;
+            listId?: T386276519a;
             occurredAt?: null | string;
             remindAt?: null | string;
             allDay?: false | true;
@@ -5907,7 +5907,7 @@ export type WebRoutes = {
                   sourceType?: string;
                 });
                 id: T23e9e9a218;
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
                 createdAt: string;
                 priority: Tbe0400fa4c;
                 listItemType: Tcdfc93c4d1;
@@ -5974,7 +5974,7 @@ export type WebRoutes = {
                   readOnly: Tfddd645dc8;
                   assignees: Array<{
                     id: Ta3c7c5499a;
-                    workspaceId: T00e0a643b6;
+                    workspaceId: Te20afbb7bb;
                     createdAt: string;
                     entityId: T23e9e9a218;
                     role: T4e819907f9;
@@ -5989,7 +5989,7 @@ export type WebRoutes = {
                 }>;
                 assignees: Array<{
                   id: Ta3c7c5499a;
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   createdAt: string;
                   entityId: T23e9e9a218;
                   role: T4e819907f9;
@@ -6004,7 +6004,7 @@ export type WebRoutes = {
                 currentVersion: (null | {
                   description: Tbe0400fa4c;
                   id: Tb86085a330;
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   source: (null | {
                     kind: "upload";
                   } | {
@@ -6049,7 +6049,7 @@ export type WebRoutes = {
                 workObligation: (null | {
                   status: T2fb0b2d20e;
                   type: T6fe53f6bc0;
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   createdAt: string;
                   updatedAt: string;
                   entityId: T23e9e9a218;
@@ -6074,7 +6074,7 @@ export type WebRoutes = {
                     id: (string & valibot_Brand<"SafeId"> & {
                       readonly __safeIdType?: "workObligationEvent";
                     });
-                    workspaceId: T00e0a643b6;
+                    workspaceId: Te20afbb7bb;
                     details: {
                       type: "created";
                       cause?: "legacy_backfill";
@@ -6124,7 +6124,7 @@ export type WebRoutes = {
                 });
                 linksAsSource: Array<{
                   id: T6ecf471e35;
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   createdAt: string;
                   linkType: string;
                   sourceEntityId: T23e9e9a218;
@@ -6137,7 +6137,7 @@ export type WebRoutes = {
                 }>;
                 linksAsTarget: Array<{
                   id: T6ecf471e35;
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   createdAt: string;
                   linkType: string;
                   sourceEntityId: T23e9e9a218;
@@ -6413,7 +6413,7 @@ export type WebRoutes = {
                     id: T23e9e9a218;
                   });
                   id: T6ecf471e35;
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   createdAt: string;
                   linkType: string;
                   sourceEntityId: T23e9e9a218;
@@ -6449,7 +6449,7 @@ export type WebRoutes = {
     clauses: {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -6520,7 +6520,7 @@ export type WebRoutes = {
           }>;
           title: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -6558,7 +6558,7 @@ export type WebRoutes = {
       export: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             format?: "json" | "csv";
             ids?: string;
@@ -6594,7 +6594,7 @@ export type WebRoutes = {
       import: {
         put: {
           body: T68b623e94c;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -6627,7 +6627,7 @@ export type WebRoutes = {
       import: {
         post: {
           body: T68b623e94c;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -6665,7 +6665,7 @@ export type WebRoutes = {
             body: Array<Tf7a762d6ad>;
             instruction: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -6702,7 +6702,7 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
@@ -6817,7 +6817,7 @@ export type WebRoutes = {
               listLevel?: number;
               text: string;
             }>;
-            metadata?: null | Tf555caa6f9;
+            metadata?: null | T7a3ee17d2d;
             description?: null | string;
             title?: string;
             language?: null | string;
@@ -7308,7 +7308,7 @@ export type WebRoutes = {
           parentRunId: string;
           resume: Array<Tacbaeed0d6>;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -7354,7 +7354,7 @@ export type WebRoutes = {
                   activeTurnId: Teb6f68ab0f;
                   messages: Array<T6b718d91dc>;
                   olderCursor: Tbe0400fa4c;
-                  contextMatterIds: Array<T00e0a643b6>;
+                  contextMatterIds: Array<Te20afbb7bb>;
                   lastActivityAt: Tbe0400fa4c;
                   usedAnonymization: Tfddd645dc8;
                   webSearchAvailable: Tfddd645dc8;
@@ -7407,7 +7407,7 @@ export type WebRoutes = {
                   activeTurnId: Teb6f68ab0f;
                   messages: Array<T6b718d91dc>;
                   olderCursor: Tbe0400fa4c;
-                  contextMatterIds: Array<T00e0a643b6>;
+                  contextMatterIds: Array<Te20afbb7bb>;
                   lastActivityAt: Tbe0400fa4c;
                   usedAnonymization: Tfddd645dc8;
                   webSearchAvailable: Tfddd645dc8;
@@ -7448,9 +7448,9 @@ export type WebRoutes = {
       "template-thread": {
         post: {
           body: {
-            templateId: Td15ae0fedc;
+            templateId: T6db7aeaa15;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -7486,9 +7486,9 @@ export type WebRoutes = {
         rotate: {
           post: {
             body: {
-              templateId: Td15ae0fedc;
+              templateId: T6db7aeaa15;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -7524,7 +7524,7 @@ export type WebRoutes = {
       threads: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             search?: string;
             cursor?: string;
@@ -7583,7 +7583,7 @@ export type WebRoutes = {
       "model-options": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -7632,7 +7632,7 @@ export type WebRoutes = {
             sendMode: T00bc2c60de;
             strategy: ("structure" | "verify" | "decompose" | "specify-output");
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -7672,7 +7672,7 @@ export type WebRoutes = {
               threadId: Taf779979ed;
             };
             query: {
-              workspaceId?: T00e0a643b6;
+              workspaceId?: Te20afbb7bb;
             };
             headers: Record<never, never>;
             response: {
@@ -7713,7 +7713,7 @@ export type WebRoutes = {
               threadId: Taf779979ed;
             };
             query: {
-              workspaceId?: T00e0a643b6;
+              workspaceId?: Te20afbb7bb;
             };
             headers: Record<never, never>;
             response: {
@@ -7758,7 +7758,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
               };
               headers: Record<never, never>;
               response: {
@@ -7804,7 +7804,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
               };
               headers: Record<never, never>;
               response: {
@@ -7847,7 +7847,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
               };
               headers: Record<never, never>;
               response: {
@@ -7891,7 +7891,7 @@ export type WebRoutes = {
                   threadId: Taf779979ed;
                 };
                 query: {
-                  workspaceId?: T00e0a643b6;
+                  workspaceId?: Te20afbb7bb;
                 };
                 headers: Record<never, never>;
                 response: {
@@ -7935,7 +7935,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
                 allowMissingThread?: false | true;
               };
               headers: Record<never, never>;
@@ -7954,7 +7954,7 @@ export type WebRoutes = {
                   };
                   messages: Array<T6b718d91dc>;
                   olderCursor: Tbe0400fa4c;
-                  contextMatterIds: Array<T00e0a643b6>;
+                  contextMatterIds: Array<Te20afbb7bb>;
                   lastActivityAt: Tbe0400fa4c;
                   threadRevision: Tbe0400fa4c;
                   threadExists: Tfddd645dc8;
@@ -8002,7 +8002,7 @@ export type WebRoutes = {
                   threadId: Taf779979ed;
                 };
                 query: {
-                  workspaceId?: T00e0a643b6;
+                  workspaceId?: Te20afbb7bb;
                   before: string;
                 };
                 headers: Record<never, never>;
@@ -8048,7 +8048,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
               };
               headers: Record<never, never>;
               response: {
@@ -8091,7 +8091,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
               };
               headers: Record<never, never>;
               response: {
@@ -8134,21 +8134,21 @@ export type WebRoutes = {
                   body: Record<never, never>;
                   params: {
                     threadId: Taf779979ed;
-                    turnId: Te9c0b20753;
+                    turnId: T7a153ddc24;
                   };
                   query: Record<never, never>;
                   headers: Record<never, never>;
                   response: {
                     200: {
                       turn: {
-                        id: Te9c0b20753;
+                        id: T7a153ddc24;
                         status: ("failed" | "accepted" | "running" | "completed" | "awaiting-user");
                       } | {
-                        id: Te9c0b20753;
+                        id: T7a153ddc24;
                         reason: T5e702ac6d9;
                         status: "cancelled";
                       } | {
-                        id: Te9c0b20753;
+                        id: T7a153ddc24;
                         reason: T5b6a988e20;
                         status: "interrupted";
                       };
@@ -8194,7 +8194,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
               };
               headers: Record<never, never>;
               response: {
@@ -8242,7 +8242,7 @@ export type WebRoutes = {
                 threadId: Taf779979ed;
               };
               query: {
-                workspaceId?: T00e0a643b6;
+                workspaceId?: Te20afbb7bb;
               };
               headers: Record<never, never>;
               response: {
@@ -8278,7 +8278,7 @@ export type WebRoutes = {
         };
       };
     };
-    invoices: (Tcb0f968164 & {
+    invoices: (Taadba38b02 & {
       ":workspaceId": {
         get: {
           body: Record<never, never>;
@@ -8348,7 +8348,7 @@ export type WebRoutes = {
                 status: Tc0f5c8e964;
                 reference: Tbe0400fa4c;
                 id: Tb7bcf69f62;
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
                 dueDate: Tbe0400fa4c;
                 currency: string;
                 notes: Tbe0400fa4c;
@@ -8681,7 +8681,7 @@ export type WebRoutes = {
         };
       };
     });
-    expenses: (Tcb0f968164 & {
+    expenses: (Taadba38b02 & {
       ":workspaceId": {
         get: {
           body: Record<never, never>;
@@ -8879,7 +8879,7 @@ export type WebRoutes = {
       statutes: {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             number?: string;
             query?: string;
@@ -8894,9 +8894,9 @@ export type WebRoutes = {
           };
           headers: unknown;
           response: {
-            200: (Ta6ac4e7e6e | {
+            200: (T279717e2be | {
               items: Array<{
-                id: T6b147c2baf;
+                id: T35a727ba02;
                 eli: string;
                 slug: Tbe0400fa4c;
                 title: string;
@@ -8926,9 +8926,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -8967,13 +8967,13 @@ export type WebRoutes = {
         shelf: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               country: string;
             };
             headers: unknown;
             response: {
-              200: (Ta6ac4e7e6e | {
+              200: (T279717e2be | {
                 country: string;
                 recentlyInForce: Array<T8ab40cad8c>;
                 enteringIntoForce: Array<T8ab40cad8c>;
@@ -8986,9 +8986,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -9028,13 +9028,13 @@ export type WebRoutes = {
         facets: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               country: string;
             };
             headers: unknown;
             response: {
-              200: (Ta6ac4e7e6e | {
+              200: (T279717e2be | {
                 documentType: Array<{
                   value: string;
                   count: number;
@@ -9048,9 +9048,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -9090,7 +9090,7 @@ export type WebRoutes = {
         "by-eli": {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               language?: string;
               asOf?: string;
@@ -9111,9 +9111,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -9157,17 +9157,17 @@ export type WebRoutes = {
                 asOf: string;
               }>;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
-              200: (Ta6ac4e7e6e | {
+              200: (T279717e2be | {
                 items: Array<{
                   country: string;
                   eli: string;
                   asOf: string;
                   statute: (null | {
-                    id: T6b147c2baf;
+                    id: T35a727ba02;
                     eli: string;
                     slug: Tbe0400fa4c;
                     title: string;
@@ -9227,9 +9227,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -9251,9 +9251,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -9293,7 +9293,7 @@ export type WebRoutes = {
           get: {
             body: unknown;
             params: {
-              documentId: T6b147c2baf;
+              documentId: T35a727ba02;
             };
             query: unknown;
             headers: unknown;
@@ -9331,7 +9331,7 @@ export type WebRoutes = {
             get: {
               body: unknown;
               params: {
-                documentId: T6b147c2baf;
+                documentId: T35a727ba02;
               };
               query: {
                 cursor?: string;
@@ -9339,9 +9339,9 @@ export type WebRoutes = {
               };
               headers: unknown;
               response: {
-                200: (Ta6ac4e7e6e | {
+                200: (T279717e2be | {
                   items: Array<{
-                    id: T6b147c2baf;
+                    id: T35a727ba02;
                     eli: string;
                     slug: Tbe0400fa4c;
                     title: string;
@@ -9368,9 +9368,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -9392,9 +9392,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -9436,14 +9436,14 @@ export type WebRoutes = {
                   body: unknown;
                   params: {
                     anchor: string;
-                    documentId: T6b147c2baf;
+                    documentId: T35a727ba02;
                   };
                   query: {
                     citedAnchor?: string;
                   };
                   headers: unknown;
                   response: {
-                    200: (Ta6ac4e7e6e | T2156291db9);
+                    200: (T279717e2be | T4801abd3d1);
                     400: T0fb1fed158;
                     401: T0fb1fed158;
                     402: T0fb1fed158;
@@ -9456,9 +9456,9 @@ export type WebRoutes = {
                       reason?: string;
                       required?: number;
                       available?: number;
-                      confirmation?: T1d7e53ae9c;
+                      confirmation?: T3d34d1a07d;
                       error?: string;
-                      claim?: T92d0af8865;
+                      claim?: T1987577a01;
                       registration_id?: string;
                       registration_type?: string;
                       claim_url?: string;
@@ -9504,7 +9504,7 @@ export type WebRoutes = {
                   body: unknown;
                   params: {
                     anchor: string;
-                    documentId: T6b147c2baf;
+                    documentId: T35a727ba02;
                   };
                   query: {
                     cursor?: string;
@@ -9512,11 +9512,11 @@ export type WebRoutes = {
                   };
                   headers: unknown;
                   response: {
-                    200: (Ta6ac4e7e6e | {
+                    200: (T279717e2be | {
                       items: Array<{
                         text: string;
                         allowsDerivedAi: Tfddd645dc8;
-                        documentId: T6b147c2baf;
+                        documentId: T35a727ba02;
                         versionValidFrom: Tbe0400fa4c;
                         versionValidTo: Tbe0400fa4c;
                       }>;
@@ -9531,9 +9531,9 @@ export type WebRoutes = {
                       reason?: string;
                       required?: number;
                       available?: number;
-                      confirmation?: T1d7e53ae9c;
+                      confirmation?: T3d34d1a07d;
                       error?: string;
-                      claim?: T92d0af8865;
+                      claim?: T1987577a01;
                       registration_id?: string;
                       registration_type?: string;
                       claim_url?: string;
@@ -9555,9 +9555,9 @@ export type WebRoutes = {
                       reason?: string;
                       required?: number;
                       available?: number;
-                      confirmation?: T1d7e53ae9c;
+                      confirmation?: T3d34d1a07d;
                       error?: string;
-                      claim?: T92d0af8865;
+                      claim?: T1987577a01;
                       registration_id?: string;
                       registration_type?: string;
                       claim_url?: string;
@@ -9598,11 +9598,11 @@ export type WebRoutes = {
         shards: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
-              200: (Ta6ac4e7e6e | {
+              200: (T279717e2be | {
                 items: Array<{
                   bucket: string;
                   country: string;
@@ -9629,9 +9629,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -9660,14 +9660,14 @@ export type WebRoutes = {
           shard: {
             get: {
               body: unknown;
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: {
                 bucket?: string;
                 country: string;
               };
               headers: unknown;
               response: {
-                200: (Ta6ac4e7e6e | {
+                200: (T279717e2be | {
                   items: Array<{
                     country: string;
                     slug: string;
@@ -9702,9 +9702,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -9727,7 +9727,7 @@ export type WebRoutes = {
       search: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             title?: string;
             cursor?: string;
@@ -9762,7 +9762,7 @@ export type WebRoutes = {
                 url_eli?: string;
                 url_html_consolidada?: string;
               }>;
-              status?: T28dfa04504;
+              status?: Teb83a7a10a;
             };
             400: T0fb1fed158;
             401: T0fb1fed158;
@@ -9985,14 +9985,14 @@ export type WebRoutes = {
                 summary: {
                   data?: {
                     sumario?: {
-                      diario?: Tcec18a7212 | Array<Tcec18a7212>;
+                      diario?: T85af885d91 | Array<T85af885d91>;
                       metadatos?: {
                         fecha_publicacion?: string;
                         publicacion?: string;
                       };
                     };
                   };
-                  status?: T28dfa04504;
+                  status?: Teb83a7a10a;
                 };
               };
               400: T0fb1fed158;
@@ -10021,7 +10021,7 @@ export type WebRoutes = {
         };
       };
     } & {
-      corpus: T76055d566d;
+      corpus: T5e3ac29766;
     } & {
       corpus: {
         search: {
@@ -10040,7 +10040,7 @@ export type WebRoutes = {
               dateTo?: string;
               query: string;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -10085,12 +10085,12 @@ export type WebRoutes = {
           get: {
             body: Record<never, never>;
             params: {
-              documentId: T6b147c2baf;
+              documentId: T35a727ba02;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: T6d60ad273f;
+              200: T500bae5525;
               400: T0fb1fed158;
               401: T0fb1fed158;
               402: T0fb1fed158;
@@ -10122,7 +10122,7 @@ export type WebRoutes = {
         "client-metadata.json": {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
@@ -10144,7 +10144,7 @@ export type WebRoutes = {
         callback: {
           get: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               code?: string;
               state?: string;
@@ -10181,7 +10181,7 @@ export type WebRoutes = {
       connectors: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10248,7 +10248,7 @@ export type WebRoutes = {
             displayName?: string;
             url: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10291,7 +10291,7 @@ export type WebRoutes = {
             body: {
               url: string;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -10412,7 +10412,7 @@ export type WebRoutes = {
       connections: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10461,7 +10461,7 @@ export type WebRoutes = {
             token: string;
             connectorSlug: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10622,7 +10622,7 @@ export type WebRoutes = {
       entitlement: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10678,7 +10678,7 @@ export type WebRoutes = {
       lane: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10724,7 +10724,7 @@ export type WebRoutes = {
       policies: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10780,7 +10780,7 @@ export type WebRoutes = {
       assignments: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10824,7 +10824,7 @@ export type WebRoutes = {
           body: {
             userId: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10861,7 +10861,7 @@ export type WebRoutes = {
           body: {
             userId: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -10900,7 +10900,7 @@ export type WebRoutes = {
               seats?: number;
               usagePolicyId: T4c80e82e5d;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -10938,7 +10938,7 @@ export type WebRoutes = {
         management: {
           post: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -10971,7 +10971,7 @@ export type WebRoutes = {
         };
       };
     };
-    workspaces: (Tcb0f968164 & {
+    workspaces: (Taadba38b02 & {
       ":workspaceId": {
         events: {
           get: {
@@ -11002,13 +11002,13 @@ export type WebRoutes = {
     } & {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
           200: {
             workspaces: Array<{
-              id: T00e0a643b6;
+              id: Te20afbb7bb;
               name: string;
               reference: string;
               clientId: Tb411b93636;
@@ -11025,7 +11025,7 @@ export type WebRoutes = {
               openTaskCount: number;
               nextDeadline: Tbe0400fa4c;
               members: Array<{
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
                 userId: string;
                 userEmail: string;
                 userName: string;
@@ -11061,7 +11061,7 @@ export type WebRoutes = {
       navigation: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             cursor?: string;
             limit?: number;
@@ -11105,15 +11105,15 @@ export type WebRoutes = {
           clientId?: Tbf83a7d346;
           memberUserIds?: Array<string>;
           name: string;
-          id: T00e0a643b6;
+          id: Te20afbb7bb;
           filePropertyName: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
           200: {
-            id: T00e0a643b6;
+            id: Te20afbb7bb;
           };
           400: T0fb1fed158;
           401: T0fb1fed158;
@@ -11142,7 +11142,7 @@ export type WebRoutes = {
       active: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -11185,7 +11185,7 @@ export type WebRoutes = {
               name: string;
               status: T453834ba82;
               reference: string;
-              id: T00e0a643b6;
+              id: Te20afbb7bb;
               lastActivityAt: string;
               createdAt: string;
               billingReference: Tbe0400fa4c;
@@ -11426,7 +11426,7 @@ export type WebRoutes = {
                   id: T6ef7cb3785;
                   fieldId: T6993bee61f;
                   content: Taedcc9e56f;
-                  boundingBoxes: (null | Tef69109a6b);
+                  boundingBoxes: (null | Ta00829b8c4);
                   fileFieldIds: Array<T6993bee61f>;
                 }>;
                 400: T0fb1fed158;
@@ -11864,7 +11864,7 @@ export type WebRoutes = {
                     };
                     category: ("court" | "matter" | "documents" | "tasks" | "team" | "automation");
                     id: T3ae9eb741e;
-                    performer: (Taf33d8c472 | {
+                    performer: (T8135f755f6 | {
                       name: Tbe0400fa4c;
                       type: ("agent" | "service");
                     });
@@ -12078,7 +12078,7 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
               };
               400: T0fb1fed158;
               401: T0fb1fed158;
@@ -12225,7 +12225,7 @@ export type WebRoutes = {
             response: {
               200: Array<{
                 id: T490337f73a;
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
                 createdAt: string;
                 contactId: Tbf83a7d346;
                 role: Tdedb951219;
@@ -12280,7 +12280,7 @@ export type WebRoutes = {
             response: {
               200: {
                 id: T490337f73a;
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
                 createdAt: string;
                 contactId: Tbf83a7d346;
                 role: Tdedb951219;
@@ -12786,7 +12786,7 @@ export type WebRoutes = {
       };
     } & {
       ":workspaceId": {
-        playbooks: T76055d566d;
+        playbooks: T5e3ac29766;
       };
     } & {
       ":workspaceId": {
@@ -12881,7 +12881,7 @@ export type WebRoutes = {
       };
     } & {
       ":workspaceId": {
-        "document-reviews": T76055d566d;
+        "document-reviews": T5e3ac29766;
       };
     } & {
       ":workspaceId": {
@@ -13179,7 +13179,7 @@ export type WebRoutes = {
                   subject: string;
                 }>;
                 references: Array<{
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   entityId: T23e9e9a218;
                   fileFieldId: T6993bee61f;
                 }>;
@@ -13431,7 +13431,7 @@ export type WebRoutes = {
       };
     } & {
       ":workspaceId": {
-        "document-translations": T76055d566d;
+        "document-translations": T5e3ac29766;
       };
     } & {
       ":workspaceId": {
@@ -13598,7 +13598,7 @@ export type WebRoutes = {
       };
     } & {
       ":workspaceId": {
-        "bilingual-translations": T76055d566d;
+        "bilingual-translations": T5e3ac29766;
       };
     } & {
       ":workspaceId": {
@@ -13795,7 +13795,7 @@ export type WebRoutes = {
       };
     } & {
       ":workspaceId": {
-        reports: T76055d566d;
+        reports: T5e3ac29766;
       };
     } & {
       ":workspaceId": {
@@ -13869,7 +13869,7 @@ export type WebRoutes = {
                     cloneable: Tfddd645dc8;
                   }>;
                   stored: Array<{
-                    id: Td15ae0fedc;
+                    id: T6db7aeaa15;
                     name: string;
                   }>;
                 };
@@ -13915,7 +13915,7 @@ export type WebRoutes = {
                 headers: Record<never, never>;
                 response: {
                   200: {
-                    templateId: Td15ae0fedc;
+                    templateId: T6db7aeaa15;
                   };
                   400: T0fb1fed158;
                   401: T0fb1fed158;
@@ -13958,7 +13958,7 @@ export type WebRoutes = {
                   key: string;
                 } | {
                   type: "stored";
-                  templateId: Td15ae0fedc;
+                  templateId: T6db7aeaa15;
                 };
                 viewId: T7e10a0d884;
               };
@@ -14046,7 +14046,7 @@ export type WebRoutes = {
     } & {
       ":workspaceId": {
         flows: {
-          runs: T76055d566d;
+          runs: T5e3ac29766;
         };
       };
     } & {
@@ -14325,12 +14325,12 @@ export type WebRoutes = {
     signals: {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           origin?: "source" | "model" | "manual";
           cursor?: string;
           limit?: number;
-          matterId?: T00e0a643b6;
+          matterId?: Te20afbb7bb;
           severity?: "warning" | "info" | "notice" | "critical";
           view?: "open" | "snoozed" | "resolved";
           assignedToMe?: false | true;
@@ -14369,7 +14369,7 @@ export type WebRoutes = {
       count: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             asOf?: string;
           };
@@ -14406,13 +14406,13 @@ export type WebRoutes = {
       requests: {
         post: {
           body: {
-            matterId?: null | T00e0a643b6;
+            matterId?: null | Te20afbb7bb;
             severity?: "warning" | "info" | "notice" | "critical";
             assigneeUserId?: null | T30c869f383;
             description: string;
             title: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -14592,7 +14592,7 @@ export type WebRoutes = {
             body: {
               result?: {
                 type: "workspace";
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
               };
               suggestionKind: ("create-deadline" | "create-task" | "promote-to-workspace" | "assign" | "open-chat");
             };
@@ -14632,7 +14632,7 @@ export type WebRoutes = {
         callback: {
           get: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               error?: string;
               code?: string;
@@ -14672,7 +14672,7 @@ export type WebRoutes = {
           body: {
             enabled: Tfddd645dc8;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -14707,7 +14707,7 @@ export type WebRoutes = {
       connect: {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -14734,7 +14734,7 @@ export type WebRoutes = {
       connection: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -14779,7 +14779,7 @@ export type WebRoutes = {
       connection: {
         delete: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -14807,7 +14807,7 @@ export type WebRoutes = {
         root: {
           get: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               cursor?: string;
               limit?: number;
@@ -14854,7 +14854,7 @@ export type WebRoutes = {
         };
       };
     };
-    views: (Tcb0f968164 & {
+    views: (Taadba38b02 & {
       ":workspaceId": {
         get: {
           body: Record<never, never>;
@@ -15271,7 +15271,7 @@ export type WebRoutes = {
             registry: T347d72c6fa;
             formatId: Tbda09b9036;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -15292,7 +15292,7 @@ export type WebRoutes = {
                 userId: string;
                 organizationId: string;
               };
-            } | T0e4469d7ca | (T0e4469d7ca & {
+            } | T84ec37c6b4 | (T84ec37c6b4 & {
               results: Array<{
                 id: string;
                 name: string;
@@ -15337,7 +15337,7 @@ export type WebRoutes = {
       grant: {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15406,7 +15406,7 @@ export type WebRoutes = {
       seed: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15420,7 +15420,7 @@ export type WebRoutes = {
       seed: {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15434,7 +15434,7 @@ export type WebRoutes = {
       "seed-firm-knowledge": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             jobId: string;
           };
@@ -15464,7 +15464,7 @@ export type WebRoutes = {
             incompleteMatterMode?: "skip" | "replace";
             selectionSeed?: string;
           });
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15487,7 +15487,7 @@ export type WebRoutes = {
       clean: {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15503,7 +15503,7 @@ export type WebRoutes = {
       "rebuild-search": {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15519,7 +15519,7 @@ export type WebRoutes = {
       "clear-cache": {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15535,7 +15535,7 @@ export type WebRoutes = {
       "public-law-connection": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15549,7 +15549,7 @@ export type WebRoutes = {
       "public-law-connection": {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15569,7 +15569,7 @@ export type WebRoutes = {
             headings?: Array<string>;
             prefix: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15617,7 +15617,7 @@ export type WebRoutes = {
           area: ("templates" | "matters" | "contacts" | "other" | "documents" | "tasks" | "chat" | "case_law" | "legislation" | "billing" | "mcp_cli" | "web_app" | "desktop");
           whatHappened: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -15661,7 +15661,7 @@ export type WebRoutes = {
       events: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15674,7 +15674,7 @@ export type WebRoutes = {
     } & {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -15725,7 +15725,7 @@ export type WebRoutes = {
       "read-all": {
         post: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15764,7 +15764,7 @@ export type WebRoutes = {
             title: string;
             announcementKey: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -15838,7 +15838,7 @@ export type WebRoutes = {
     playbooks: {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -15974,7 +15974,7 @@ export type WebRoutes = {
             version: 3;
           };
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -16006,7 +16006,7 @@ export type WebRoutes = {
       starters: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -16047,7 +16047,7 @@ export type WebRoutes = {
       recent: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             limit?: number;
           };
@@ -16096,7 +16096,7 @@ export type WebRoutes = {
           body: {
             starterId: T15dbebb935;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -16130,10 +16130,10 @@ export type WebRoutes = {
         post: {
           body: {
             name?: string;
-            workspaceId: T00e0a643b6;
+            workspaceId: Te20afbb7bb;
             runId: Te37ec2cbbd;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -16509,7 +16509,7 @@ export type WebRoutes = {
               readonly __safeIdType?: "documentReviewReferencePassage";
             })>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -16547,7 +16547,7 @@ export type WebRoutes = {
     flows: {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -16594,7 +16594,7 @@ export type WebRoutes = {
     } & {
       post: {
         body: Tbbddf8a170;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -16753,7 +16753,7 @@ export type WebRoutes = {
     "document-types": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -16793,7 +16793,7 @@ export type WebRoutes = {
         body: {
           label: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -16832,7 +16832,7 @@ export type WebRoutes = {
           body: {
             orderedIds: Array<T1cbe63218a>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -16935,7 +16935,7 @@ export type WebRoutes = {
         };
       };
     };
-    files: (Tcb0f968164 & {
+    files: (Taadba38b02 & {
       ":workspaceId": {
         url: {
           ":fieldId": {
@@ -17037,9 +17037,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -17204,9 +17204,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -17283,7 +17283,7 @@ export type WebRoutes = {
             token?: unknown;
             roomName?: unknown;
           });
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -17324,7 +17324,7 @@ export type WebRoutes = {
       "refresh-token": {
         post: {
           body: Tfc73a40629;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -17362,7 +17362,7 @@ export type WebRoutes = {
       heartbeat: {
         post: {
           body: Tfc73a40629;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -17400,7 +17400,7 @@ export type WebRoutes = {
             body: (null | {
               roomId?: unknown;
             });
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
@@ -17448,7 +17448,7 @@ export type WebRoutes = {
               expectedSnapshotRevision?: unknown;
               snapshotBase64?: unknown;
             });
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
@@ -17489,7 +17489,7 @@ export type WebRoutes = {
           body: {
             handoffToken: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
@@ -17504,7 +17504,7 @@ export type WebRoutes = {
               });
               propertyId: T173eec1550;
               remoteSession: T07b521aaca;
-              workspaceId: T00e0a643b6;
+              workspaceId: Te20afbb7bb;
             };
             400: T4d5e4f5d1c;
             403: {
@@ -17844,7 +17844,7 @@ export type WebRoutes = {
         };
       };
     };
-    "docx-suggestions": (Tcb0f968164 & {
+    "docx-suggestions": (Taadba38b02 & {
       ":workspaceId": {
         entity: {
           ":entityId": {
@@ -18110,7 +18110,7 @@ export type WebRoutes = {
     "style-sets": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -18159,7 +18159,7 @@ export type WebRoutes = {
           name: string;
           styleSource: File;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -18196,7 +18196,7 @@ export type WebRoutes = {
         stella: {
           get: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -18242,7 +18242,7 @@ export type WebRoutes = {
               styleSetId: T6868c5f803;
               settings: Tdadf537056;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -18309,7 +18309,7 @@ export type WebRoutes = {
               };
             };
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -18623,7 +18623,7 @@ export type WebRoutes = {
     "template-categories": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -18668,7 +18668,7 @@ export type WebRoutes = {
           parentId?: Tb532bdabe3;
           name: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -18688,9 +18688,9 @@ export type WebRoutes = {
             reason?: string;
             required?: number;
             available?: number;
-            confirmation?: T1d7e53ae9c;
+            confirmation?: T3d34d1a07d;
             error?: string;
-            claim?: T92d0af8865;
+            claim?: T1987577a01;
             registration_id?: string;
             registration_type?: string;
             claim_url?: string;
@@ -18712,9 +18712,9 @@ export type WebRoutes = {
             reason?: string;
             required?: number;
             available?: number;
-            confirmation?: T1d7e53ae9c;
+            confirmation?: T3d34d1a07d;
             error?: string;
-            claim?: T92d0af8865;
+            claim?: T1987577a01;
             registration_id?: string;
             registration_type?: string;
             claim_url?: string;
@@ -18774,9 +18774,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -18800,9 +18800,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -18873,7 +18873,7 @@ export type WebRoutes = {
     "template-packs": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -18881,7 +18881,7 @@ export type WebRoutes = {
         };
         headers: Record<never, never>;
         response: {
-          200: (Tf4d936028e | {
+          200: (T7fc66a79c4 | {
             items: Array<{
               name: string;
               description: string;
@@ -18897,7 +18897,7 @@ export type WebRoutes = {
               lastReviewedAt: Tbe0400fa4c;
               disclaimer: Tbe0400fa4c;
             } & {
-              templates: Array<T75c6fa928a>;
+              templates: Array<Td810130c25>;
               templateCount: number;
               matchesJurisdiction: Tfddd645dc8;
               matchesLanguage: Tfddd645dc8;
@@ -18939,11 +18939,11 @@ export type WebRoutes = {
           body: {
             hidden: Tfddd645dc8;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
-            200: (Tf4d936028e | {
+            200: (T7fc66a79c4 | {
               hidden: Tfddd645dc8;
             });
             400: T0fb1fed158;
@@ -18980,7 +18980,7 @@ export type WebRoutes = {
           };
           headers: Record<never, never>;
           response: {
-            200: (Tf4d936028e | {
+            200: (T7fc66a79c4 | {
               name: string;
               description: string;
               id: string;
@@ -18998,9 +18998,9 @@ export type WebRoutes = {
               matchesJurisdiction: Tfddd645dc8;
               matchesLanguage: Tfddd645dc8;
             } & {
-              templates: Array<(T75c6fa928a & {
+              templates: Array<(Td810130c25 & {
                 readme: string;
-                installedTemplateId: (null | Td15ae0fedc);
+                installedTemplateId: (null | T6db7aeaa15);
               })>;
               canInstall: Tfddd645dc8;
               hidden: Tfddd645dc8;
@@ -19041,11 +19041,11 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: (Tf4d936028e | {
+              200: (T7fc66a79c4 | {
                 items: Array<{
                   slug: string;
                   status: ("installed" | "already-installed");
-                  templateId: Td15ae0fedc;
+                  templateId: T6db7aeaa15;
                 }>;
               });
               400: T0fb1fed158;
@@ -19078,7 +19078,7 @@ export type WebRoutes = {
       "native-tool-deploy-availability": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -19104,7 +19104,7 @@ export type WebRoutes = {
     } & {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -19259,7 +19259,7 @@ export type WebRoutes = {
             scope?: "private" | "team";
             slug: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -19294,7 +19294,7 @@ export type WebRoutes = {
     "template-recipes": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -19336,7 +19336,7 @@ export type WebRoutes = {
           name: string;
           definition: unknown;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -19355,9 +19355,9 @@ export type WebRoutes = {
             reason?: string;
             required?: number;
             available?: number;
-            confirmation?: T1d7e53ae9c;
+            confirmation?: T3d34d1a07d;
             error?: string;
-            claim?: T92d0af8865;
+            claim?: T1987577a01;
             registration_id?: string;
             registration_type?: string;
             claim_url?: string;
@@ -19428,7 +19428,7 @@ export type WebRoutes = {
         };
       };
     };
-    "billing-codes": (Tcb0f968164 & {
+    "billing-codes": (Taadba38b02 & {
       ":workspaceId": {
         get: {
           body: Record<never, never>;
@@ -19597,7 +19597,7 @@ export type WebRoutes = {
         };
       };
     });
-    rates: (Tcb0f968164 & {
+    rates: (Taadba38b02 & {
       ":workspaceId": {
         get: {
           body: Record<never, never>;
@@ -20005,7 +20005,7 @@ export type WebRoutes = {
     "external-preview": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: T1856d5abc1;
         headers: Record<never, never>;
         response: {
@@ -20043,7 +20043,7 @@ export type WebRoutes = {
       file: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: T1856d5abc1;
           headers: Record<never, never>;
           response: {
@@ -20076,7 +20076,7 @@ export type WebRoutes = {
     "organization-settings": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -20115,7 +20115,7 @@ export type WebRoutes = {
       "business-registry-credentials": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20173,7 +20173,7 @@ export type WebRoutes = {
             registry: T740180a0c1;
             credential: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20208,7 +20208,7 @@ export type WebRoutes = {
       "business-registry-credentials": {
         delete: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             registry: T740180a0c1;
           };
@@ -20250,7 +20250,7 @@ export type WebRoutes = {
           documentProcessingMode?: "off" | "searchable-text";
           memoryExtractionEnabled?: false | true;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -20293,7 +20293,7 @@ export type WebRoutes = {
               countryCode: string;
             }>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20331,7 +20331,7 @@ export type WebRoutes = {
             matterNumberPattern: string;
             matterNumberPadding: number;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20367,7 +20367,7 @@ export type WebRoutes = {
       "ai-availability": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20405,7 +20405,7 @@ export type WebRoutes = {
       "document-ocr-availability": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20440,13 +20440,13 @@ export type WebRoutes = {
       "ai-config": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
-            200: ((Tbc14da7d48 & {
+            200: ((T73394a6a76 & {
               configured: false;
-            }) | (Tbc14da7d48 & {
+            }) | (T73394a6a76 & {
               configured: true;
               providers: Array<{
                 provider: Tcc23752159;
@@ -20507,7 +20507,7 @@ export type WebRoutes = {
               provider: T4b83723412;
             }>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20554,7 +20554,7 @@ export type WebRoutes = {
       "ai-config": {
         delete: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20589,7 +20589,7 @@ export type WebRoutes = {
       deepl: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20624,7 +20624,7 @@ export type WebRoutes = {
       "deepl-config": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20665,7 +20665,7 @@ export type WebRoutes = {
           body: {
             apiKey: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20701,7 +20701,7 @@ export type WebRoutes = {
       deepl: {
         delete: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20736,7 +20736,7 @@ export type WebRoutes = {
       "web-search-config": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20775,7 +20775,7 @@ export type WebRoutes = {
             kind: T1065d99f0d;
             apiKey: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20813,7 +20813,7 @@ export type WebRoutes = {
           body: {
             kind: T1065d99f0d;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20849,7 +20849,7 @@ export type WebRoutes = {
       "anonymization-blacklist": {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20897,7 +20897,7 @@ export type WebRoutes = {
               label: string;
             }>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20942,7 +20942,7 @@ export type WebRoutes = {
             provider: T4b83723412;
             apiKey: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -20980,7 +20980,7 @@ export type WebRoutes = {
     "api-keys": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -21039,7 +21039,7 @@ export type WebRoutes = {
           };
           scopes: Array<T696e471b85>;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -21082,7 +21082,7 @@ export type WebRoutes = {
             expiresInDays?: number;
             keyId: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -21125,7 +21125,7 @@ export type WebRoutes = {
           body: {
             keyId: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -21161,7 +21161,7 @@ export type WebRoutes = {
     "clause-categories": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -21206,7 +21206,7 @@ export type WebRoutes = {
           parentId?: T1d1d28b371;
           name: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -21328,7 +21328,7 @@ export type WebRoutes = {
       annotations: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             cursor?: string;
             limit?: number;
@@ -21405,7 +21405,7 @@ export type WebRoutes = {
             targetId: string;
             spans: Array<T41e0ad416a>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -21528,7 +21528,7 @@ export type WebRoutes = {
     "saved-searches": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -21581,12 +21581,12 @@ export type WebRoutes = {
             sort: "relevance";
             version: 1;
             kinds: Array<T884a45faa8>;
-            workspaceIds: Array<T00e0a643b6>;
+            workspaceIds: Array<Te20afbb7bb>;
             editedByUserIds: Array<string>;
             mimeTypes: Array<string>;
           };
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -21633,7 +21633,7 @@ export type WebRoutes = {
               sort: "relevance";
               version: 1;
               kinds: Array<T884a45faa8>;
-              workspaceIds: Array<T00e0a643b6>;
+              workspaceIds: Array<Te20afbb7bb>;
               editedByUserIds: Array<string>;
               mimeTypes: Array<string>;
             };
@@ -21704,7 +21704,7 @@ export type WebRoutes = {
     "audit-logs": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: T0c07d42a21;
         headers: Record<never, never>;
         response: {
@@ -21749,7 +21749,7 @@ export type WebRoutes = {
       export: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: T0c07d42a21;
           headers: Record<never, never>;
           response: {
@@ -21783,11 +21783,11 @@ export type WebRoutes = {
       coverage: {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: unknown;
           headers: unknown;
           response: {
-            200: (Tba19248280 | {
+            200: (T12163e1f6a | {
               generatedAt: string;
               totals: {
                 searchable: number;
@@ -21796,13 +21796,13 @@ export type WebRoutes = {
                   asOf: Tbe0400fa4c;
                 };
               };
-              countries: ReadonlyArray<((T83a69c5d1c & {
+              countries: ReadonlyArray<((T3373327116 & {
                 availability: "searchable";
                 searchable: number;
                 decisionYearFrom: T588d0ee653;
                 decisionYearTo: T588d0ee653;
                 courts: (null | ReadonlyArray<T27f4c16dc2>);
-              }) | (T83a69c5d1c & {
+              }) | (T3373327116 & {
                 availability: "in-preparation";
               }))>;
             } | {
@@ -21828,7 +21828,7 @@ export type WebRoutes = {
       decisions: {
         get: {
           body: unknown;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: {
             cursor?: string;
             limit?: number;
@@ -21842,7 +21842,7 @@ export type WebRoutes = {
           };
           headers: unknown;
           response: {
-            200: (Tba19248280 | {
+            200: (T12163e1f6a | {
               items: Array<{
                 id: T406326c84f;
                 caseNumber: string;
@@ -21872,9 +21872,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -21896,9 +21896,9 @@ export type WebRoutes = {
               reason?: string;
               required?: number;
               available?: number;
-              confirmation?: T1d7e53ae9c;
+              confirmation?: T3d34d1a07d;
               error?: string;
-              claim?: T92d0af8865;
+              claim?: T1987577a01;
               registration_id?: string;
               registration_type?: string;
               claim_url?: string;
@@ -21933,13 +21933,13 @@ export type WebRoutes = {
         facets: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               country: string;
             };
             headers: unknown;
             response: {
-              200: (Tba19248280 | {
+              200: (T12163e1f6a | {
                 country: Array<T096c8fbbba>;
                 court: Array<T096c8fbbba>;
                 year: Array<T096c8fbbba>;
@@ -21952,9 +21952,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -21976,9 +21976,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22014,13 +22014,13 @@ export type WebRoutes = {
         status: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               country: string;
             };
             headers: unknown;
             response: {
-              200: (Tba19248280 | {
+              200: (T12163e1f6a | {
                 decisions: number;
                 updatedAt: Tbe0400fa4c;
                 courts: ReadonlyArray<T27f4c16dc2>;
@@ -22033,9 +22033,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22057,9 +22057,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22095,13 +22095,13 @@ export type WebRoutes = {
         latest: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               country: string;
             };
             headers: unknown;
             response: {
-              200: (Tba19248280 | {
+              200: (T12163e1f6a | {
                 country: string;
                 courts: Array<{
                   court: string;
@@ -22130,9 +22130,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22154,9 +22154,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22284,13 +22284,13 @@ export type WebRoutes = {
               };
               headers: unknown;
               response: {
-                200: (Tba19248280 | {
+                200: (T12163e1f6a | {
                   items: Array<{
                     id: T6685765ee4;
                     citationText: string;
                     sectionIndex: T588d0ee653;
                     treatment: Tf8140c6ae1;
-                    decision: (null | Te4d156ddc2);
+                    decision: (null | T824c9c84e1);
                   }>;
                   nextCursor: Tbe0400fa4c;
                   limit: number;
@@ -22303,9 +22303,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -22356,7 +22356,7 @@ export type WebRoutes = {
                 query: unknown;
                 headers: unknown;
                 response: {
-                  200: (Tba19248280 | {
+                  200: (T12163e1f6a | {
                     incoming: T2b15184b07;
                     outgoing: T2b15184b07;
                     incomingByYear: Array<(T2b15184b07 & {
@@ -22405,13 +22405,13 @@ export type WebRoutes = {
                 };
                 headers: unknown;
                 response: {
-                  200: (Tba19248280 | {
+                  200: (T12163e1f6a | {
                     items: Array<{
                       id: T6685765ee4;
                       citationText: string;
                       sectionIndex: T588d0ee653;
                       treatment: Tf8140c6ae1;
-                      decision: Te4d156ddc2;
+                      decision: T824c9c84e1;
                     }>;
                   });
                   400: Tb2f04eed16;
@@ -22456,7 +22456,7 @@ export type WebRoutes = {
               };
               headers: unknown;
               response: {
-                200: (Tba19248280 | {
+                200: (T12163e1f6a | {
                   items: Array<{
                     anchor: string;
                     versionValidFrom: Tbe0400fa4c;
@@ -22490,14 +22490,14 @@ export type WebRoutes = {
                     nameEnd: T588d0ee653;
                     nameText: Tbe0400fa4c;
                     printedWorkIdentifier: Tbe0400fa4c;
-                    targetDocumentId: (null | T6b147c2baf);
+                    targetDocumentId: (null | T35a727ba02);
                     targetStatus: (null | "available" | "anchor_missing" | "no_version_for_date" | "work_not_held" | "unverified_target" | "incomplete_versions");
                   } & {
                     previewKey: Tbe0400fa4c;
                   }>;
                   nextCursor: Tbe0400fa4c;
                   limit: number;
-                  previews: Array<(T2156291db9 & {
+                  previews: Array<(T4801abd3d1 & {
                     key: string;
                   })>;
                   status: {
@@ -22530,9 +22530,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -22557,9 +22557,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -22598,12 +22598,12 @@ export type WebRoutes = {
             get: {
               body: unknown;
               params: {
-                judgeId: Ta0197da346;
+                judgeId: Te5f70e8d49;
               };
               query: unknown;
               headers: unknown;
               response: {
-                200: (Response | Tba19248280);
+                200: (Response | T12163e1f6a);
                 400: T0fb1fed158;
                 401: T0fb1fed158;
                 402: T0fb1fed158;
@@ -22635,7 +22635,7 @@ export type WebRoutes = {
         "citing-decisions": {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               cursor?: string;
               limit?: number;
@@ -22648,7 +22648,7 @@ export type WebRoutes = {
             };
             headers: unknown;
             response: {
-              200: (Tba19248280 | {
+              200: (T12163e1f6a | {
                 nextCursor: Tbe0400fa4c;
                 items: Array<{
                   decisionId: T406326c84f;
@@ -22674,9 +22674,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22698,9 +22698,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22736,14 +22736,14 @@ export type WebRoutes = {
         "citation-counts": {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: {
               eli: string;
               jurisdiction: string;
             };
             headers: unknown;
             response: {
-              200: (Tba19248280 | {
+              200: (T12163e1f6a | {
                 status: "building";
                 provisions?: never;
               } | {
@@ -22764,9 +22764,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22824,7 +22824,7 @@ export type WebRoutes = {
               query: string;
               country: string;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
@@ -22898,11 +22898,11 @@ export type WebRoutes = {
         shards: {
           get: {
             body: unknown;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: unknown;
             headers: unknown;
             response: {
-              200: (Tba19248280 | {
+              200: (T12163e1f6a | {
                 items: Array<{
                   bucket: string;
                   country: string;
@@ -22931,9 +22931,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -22941,12 +22941,6 @@ export type WebRoutes = {
                 claim_token_expires?: string;
                 post_claim_scopes?: Array<string>;
                 requiredFields?: Array<Tbbced72298>;
-              } | {
-                readonly message: "Case-law sitemap bucket shards exceed sitemap index capacity.";
-              } | {
-                readonly message: "Case-law sitemap bucket rows missing for natural shard.";
-              } | {
-                readonly message: "Case-law sitemap bucket exceeds shard capacity.";
               } | {
                 readonly message: "Case-law sitemap shard count exceeds sitemap index capacity.";
               };
@@ -22962,7 +22956,7 @@ export type WebRoutes = {
           shard: {
             get: {
               body: unknown;
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: {
                 bucket?: string;
                 country: string;
@@ -22971,7 +22965,7 @@ export type WebRoutes = {
               };
               headers: unknown;
               response: {
-                200: (Tba19248280 | {
+                200: (T12163e1f6a | {
                   items: Array<{
                     id: T406326c84f;
                     caseNumber: string;
@@ -23001,9 +22995,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -23025,9 +23019,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -23059,9 +23053,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -23093,9 +23087,9 @@ export type WebRoutes = {
               response: {
                 200: {
                   status: ("error" | "done" | "generating");
-                  analysis?: (T39c651e6ab & {
+                  analysis?: (T68a79b2c83 & {
                     version: 2;
-                  }) | (T39c651e6ab & {
+                  }) | (T68a79b2c83 & {
                     version: 3;
                     holding: {
                       text: string;
@@ -23162,7 +23156,7 @@ export type WebRoutes = {
                 query: string;
                 country: string;
               };
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
@@ -23204,7 +23198,7 @@ export type WebRoutes = {
                 query: string;
                 country: string;
               };
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
@@ -23242,13 +23236,13 @@ export type WebRoutes = {
         };
       };
     } & {
-      research: T76055d566d;
+      research: T5e3ac29766;
     } & {
       research: {
         columns: {
           get: {
             body: Record<never, never>;
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -23292,7 +23286,7 @@ export type WebRoutes = {
               question: string;
               answerType: Tdc6c8f5a77;
             };
-            params: T76055d566d;
+            params: T5e3ac29766;
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
@@ -23330,7 +23324,7 @@ export type WebRoutes = {
               body: {
                 columnIds: Array<Teb50de97c7>;
               };
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
@@ -23387,7 +23381,7 @@ export type WebRoutes = {
                 answerKind: Tdc6c8f5a77;
                 decisionIds: Array<T406326c84f>;
               };
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
@@ -23509,7 +23503,7 @@ export type WebRoutes = {
               body: {
                 decisionIds: Array<T406326c84f>;
               };
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
@@ -23568,7 +23562,7 @@ export type WebRoutes = {
                 columnIds?: Array<Teb50de97c7>;
                 decisionIds: Array<T406326c84f>;
               };
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
@@ -23602,7 +23596,7 @@ export type WebRoutes = {
         };
       };
     } & {
-      "matter-links": Tcb0f968164;
+      "matter-links": Taadba38b02;
     } & {
       "matter-links": {
         ":workspaceId": {
@@ -23681,9 +23675,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -23705,9 +23699,9 @@ export type WebRoutes = {
                 reason?: string;
                 required?: number;
                 available?: number;
-                confirmation?: T1d7e53ae9c;
+                confirmation?: T3d34d1a07d;
                 error?: string;
-                claim?: T92d0af8865;
+                claim?: T1987577a01;
                 registration_id?: string;
                 registration_type?: string;
                 claim_url?: string;
@@ -23817,9 +23811,9 @@ export type WebRoutes = {
                   reason?: string;
                   required?: number;
                   available?: number;
-                  confirmation?: T1d7e53ae9c;
+                  confirmation?: T3d34d1a07d;
                   error?: string;
-                  claim?: T92d0af8865;
+                  claim?: T1987577a01;
                   registration_id?: string;
                   registration_type?: string;
                   claim_url?: string;
@@ -23852,14 +23846,14 @@ export type WebRoutes = {
         };
       };
     } & {
-      admin: T76055d566d;
+      admin: T5e3ac29766;
     } & {
       admin: {
         ingestion: {
           status: {
             get: {
               body: Record<never, never>;
-              params: T76055d566d;
+              params: T5e3ac29766;
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
@@ -23933,7 +23927,7 @@ export type WebRoutes = {
     skills: {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -23990,7 +23984,7 @@ export type WebRoutes = {
       commands: {
         get: {
           body: Record<never, never>;
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -24094,7 +24088,7 @@ export type WebRoutes = {
           scope: T7906e8b72f;
           description: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -24131,7 +24125,7 @@ export type WebRoutes = {
             scope: T7906e8b72f;
             blueprintId: ("blank" | "answer-from-sources" | "check-against-rules" | "intake-to-draft");
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -24169,7 +24163,7 @@ export type WebRoutes = {
             scope: T7906e8b72f;
             file: File;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -24208,7 +24202,7 @@ export type WebRoutes = {
             url: string;
             scope: T7906e8b72f;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -24246,7 +24240,7 @@ export type WebRoutes = {
           body: {
             url: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -24315,7 +24309,7 @@ export type WebRoutes = {
               };
             }>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -24367,7 +24361,7 @@ export type WebRoutes = {
             }>;
             intent: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -24833,7 +24827,7 @@ export type WebRoutes = {
             response: {
               200: {
                 items: Array<{
-                  id: Ta10554ed7b;
+                  id: Tf8edbf73b1;
                   baseRevisionId: T6e37e01eb4;
                   baseIsCurrent: Tfddd645dc8;
                   summary: string;
@@ -24879,14 +24873,14 @@ export type WebRoutes = {
               body: Record<never, never>;
               params: {
                 skillId: T8ff9f6d126;
-                proposalId: Ta10554ed7b;
+                proposalId: Tf8edbf73b1;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
                 200: {
                   baseIsCurrent: Tfddd645dc8;
-                  id: Ta10554ed7b;
+                  id: Tf8edbf73b1;
                   skillId: T8ff9f6d126;
                   baseRevisionId: T6e37e01eb4;
                   body: string;
@@ -24941,7 +24935,7 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                id: Ta10554ed7b;
+                id: Tf8edbf73b1;
               };
               400: T0fb1fed158;
               401: T0fb1fed158;
@@ -24984,7 +24978,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
-                  id: Ta10554ed7b;
+                  id: Tf8edbf73b1;
                   summary: string;
                 };
                 400: T0fb1fed158;
@@ -25025,13 +25019,13 @@ export type WebRoutes = {
               };
               params: {
                 skillId: T8ff9f6d126;
-                proposalId: Ta10554ed7b;
+                proposalId: Tf8edbf73b1;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
               response: {
                 200: {
-                  id: Ta10554ed7b;
+                  id: Tf8edbf73b1;
                 };
                 400: T0fb1fed158;
                 401: T0fb1fed158;
@@ -25071,13 +25065,13 @@ export type WebRoutes = {
                 };
                 params: {
                   skillId: T8ff9f6d126;
-                  proposalId: Ta10554ed7b;
+                  proposalId: Tf8edbf73b1;
                 };
                 query: Record<never, never>;
                 headers: Record<never, never>;
                 response: {
                   200: {
-                    id: Ta10554ed7b;
+                    id: Tf8edbf73b1;
                     status: Tdce31e5530;
                     resultRevisionId: T4866a24af7;
                   };
@@ -25116,7 +25110,7 @@ export type WebRoutes = {
               body: Record<never, never>;
               params: {
                 skillId: T8ff9f6d126;
-                proposalId: Ta10554ed7b;
+                proposalId: Tf8edbf73b1;
               };
               query: Record<never, never>;
               headers: Record<never, never>;
@@ -25165,7 +25159,7 @@ export type WebRoutes = {
                 items: Array<{
                   readonly id: Tf42adc792b;
                   readonly revisionId: T6e37e01eb4;
-                  readonly proposalId: (null | Ta10554ed7b);
+                  readonly proposalId: (null | Tf8edbf73b1);
                   readonly rangeStart: number;
                   readonly rangeEnd: number;
                   readonly anchorText: string;
@@ -25207,7 +25201,7 @@ export type WebRoutes = {
           post: {
             body: {
               revisionId?: T6e37e01eb4;
-              proposalId?: Ta10554ed7b;
+              proposalId?: Tf8edbf73b1;
               body: string;
               rangeStart: number;
               rangeEnd: number;
@@ -25445,7 +25439,7 @@ export type WebRoutes = {
         };
       };
     };
-    "view-templates": (Tcb0f968164 & {
+    "view-templates": (Taadba38b02 & {
       ":workspaceId": {
         get: {
           body: Record<never, never>;
@@ -25567,7 +25561,7 @@ export type WebRoutes = {
     "entity-views": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -25603,7 +25597,7 @@ export type WebRoutes = {
           name: string;
           layout: Ta2bfcf8544;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -25706,7 +25700,7 @@ export type WebRoutes = {
           body: {
             viewIds: Array<T7e10a0d884>;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -25770,10 +25764,10 @@ export type WebRoutes = {
               type: "organization";
             } | {
               type: "matter";
-              matterId: T00e0a643b6;
+              matterId: Te20afbb7bb;
             };
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -25824,7 +25818,7 @@ export type WebRoutes = {
         };
       };
     };
-    lists: (Tcb0f968164 & {
+    lists: (Taadba38b02 & {
       ":workspaceId": {
         get: {
           body: Record<never, never>;
@@ -25838,7 +25832,7 @@ export type WebRoutes = {
           response: {
             200: {
               items: Array<{
-                id: T6215623c33;
+                id: T386276519a;
                 name: string;
                 description: Tbe0400fa4c;
                 status: Teced05ac51;
@@ -25884,7 +25878,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              id: T6215623c33;
+              id: T386276519a;
             };
             400: T0fb1fed158;
             401: T0fb1fed158;
@@ -25917,14 +25911,14 @@ export type WebRoutes = {
             name?: string;
             status?: string;
             description?: null | string;
-            id: T6215623c33;
+            id: T386276519a;
           };
           params: T62128c5ec5;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
             200: {
-              id: T6215623c33;
+              id: T386276519a;
             };
             400: T0fb1fed158;
             401: T0fb1fed158;
@@ -25957,7 +25951,7 @@ export type WebRoutes = {
             body: {
               position?: string;
               name: string;
-              listId: T6215623c33;
+              listId: T386276519a;
             };
             params: {
               workspaceId: string;
@@ -26001,7 +25995,7 @@ export type WebRoutes = {
               required?: false | true;
               position?: number;
               propertyId: T173eec1550;
-              listId: T6215623c33;
+              listId: T386276519a;
             };
             params: {
               workspaceId: string;
@@ -26043,7 +26037,7 @@ export type WebRoutes = {
           post: {
             body: {
               instruction: string;
-              listId: T6215623c33;
+              listId: T386276519a;
               sources: Array<{
                 entityId: T23e9e9a218;
                 entityVersionId: Tb86085a330;
@@ -26113,7 +26107,7 @@ export type WebRoutes = {
                 }>;
               }>;
               runId: T9bf0b27838;
-              listId: T6215623c33;
+              listId: T386276519a;
             };
             params: {
               workspaceId: string;
@@ -26158,7 +26152,7 @@ export type WebRoutes = {
               body: {
                 sectionId?: T0a54ae7a2b;
                 runId: T9bf0b27838;
-                listId: T6215623c33;
+                listId: T386276519a;
                 candidateId: T116acb8596;
               };
               params: {
@@ -26203,7 +26197,7 @@ export type WebRoutes = {
             post: {
               body: {
                 runId: T9bf0b27838;
-                listId: T6215623c33;
+                listId: T386276519a;
                 candidateId: T116acb8596;
               };
               params: {
@@ -26247,7 +26241,7 @@ export type WebRoutes = {
           post: {
             body: {
               quote?: null | string;
-              listId: T6215623c33;
+              listId: T386276519a;
               sourceEntityId: T23e9e9a218;
               sourceEntityVersionId: Tb86085a330;
               itemEntityId: T23e9e9a218;
@@ -26299,7 +26293,7 @@ export type WebRoutes = {
           post: {
             body: {
               body: string;
-              listId: T6215623c33;
+              listId: T386276519a;
               itemEntityId: T23e9e9a218;
             };
             params: {
@@ -26345,7 +26339,7 @@ export type WebRoutes = {
             body: {
               note?: null | string;
               decision: string;
-              listId: T6215623c33;
+              listId: T386276519a;
               itemEntityId: T23e9e9a218;
             };
             params: {
@@ -26391,7 +26385,7 @@ export type WebRoutes = {
             body: {
               status: string;
               id: Tfaa06c2259;
-              listId: T6215623c33;
+              listId: T386276519a;
               itemEntityId: T23e9e9a218;
             };
             params: Tdfa6d7299b;
@@ -26434,7 +26428,7 @@ export type WebRoutes = {
               description?: null | string;
               position?: string;
               sectionId?: null | T0a54ae7a2b;
-              listId: T6215623c33;
+              listId: T386276519a;
               itemEntityId: T23e9e9a218;
             };
             params: {
@@ -26477,7 +26471,7 @@ export type WebRoutes = {
           put: {
             body: {
               medium: Tbe0400fa4c;
-              listId: T6215623c33;
+              listId: T386276519a;
               confidence: T2233e69cfb;
               itemEntityId: T23e9e9a218;
               occurredOn: (null | {
@@ -26647,7 +26641,7 @@ export type WebRoutes = {
               confirmedUnits?: number;
               entityId: T23e9e9a218;
               fileFieldId: T6993bee61f;
-              listId: T6215623c33;
+              listId: T386276519a;
             };
             params: {
               workspaceId: string;
@@ -26795,7 +26789,7 @@ export type WebRoutes = {
                   fileFieldId: T6993bee61f;
                   entityVersionId: Tb86085a330;
                   evidence: {
-                    listId: T6215623c33;
+                    listId: T386276519a;
                     facts: ReadonlyArray<{
                       factEntityId: T23e9e9a218;
                       text: string;
@@ -26900,7 +26894,7 @@ export type WebRoutes = {
                   params: {
                     workspaceId: T2b6cefd27b;
                     runId: T9bf0b27838;
-                    listId: T6215623c33;
+                    listId: T386276519a;
                   };
                   query: {
                     cursor?: string;
@@ -26973,7 +26967,7 @@ export type WebRoutes = {
               body: Record<never, never>;
               params: {
                 workspaceId: T2b6cefd27b;
-                listId: T6215623c33;
+                listId: T386276519a;
               };
               query: {
                 cursor?: string;
@@ -27026,13 +27020,13 @@ export type WebRoutes = {
             body: Record<never, never>;
             params: {
               workspaceId: T2b6cefd27b;
-              listId: T6215623c33;
+              listId: T386276519a;
             };
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
               200: {
-                id: T6215623c33;
+                id: T386276519a;
                 name: string;
                 description: Tbe0400fa4c;
                 status: Teced05ac51;
@@ -27042,10 +27036,10 @@ export type WebRoutes = {
                 sections: Array<{
                   name: string;
                   id: T0a54ae7a2b;
-                  workspaceId: T00e0a643b6;
+                  workspaceId: Te20afbb7bb;
                   createdAt: string;
                   updatedAt: string;
-                  listId: T6215623c33;
+                  listId: T386276519a;
                   position: string;
                 }>;
                 columns: Array<{
@@ -27089,7 +27083,7 @@ export type WebRoutes = {
               body: Record<never, never>;
               params: {
                 workspaceId: T2b6cefd27b;
-                listId: T6215623c33;
+                listId: T386276519a;
               };
               query: {
                 cursor?: string;
@@ -27112,11 +27106,11 @@ export type WebRoutes = {
                     createdAt: string;
                     updatedAt: string;
                     factDetails: (null | {
+                      confidence: T2233e69cfb;
                       occurredOn: Tbe0400fa4c;
                       occurredOnPrecision: T4a9a2dd4a4;
                       evidenceKind: Tbe0400fa4c;
                       medium: Tbe0400fa4c;
-                      confidence: T2233e69cfb;
                       interpretationNote: Tbe0400fa4c;
                       scoring: Tad12f531bb;
                     });
@@ -27166,7 +27160,7 @@ export type WebRoutes = {
                   body: Record<never, never>;
                   params: {
                     workspaceId: T2b6cefd27b;
-                    listId: T6215623c33;
+                    listId: T386276519a;
                     itemEntityId: T23e9e9a218;
                   };
                   query: {
@@ -27225,7 +27219,7 @@ export type WebRoutes = {
                   body: Record<never, never>;
                   params: {
                     workspaceId: T2b6cefd27b;
-                    listId: T6215623c33;
+                    listId: T386276519a;
                     itemEntityId: T23e9e9a218;
                   };
                   query: {
@@ -27278,7 +27272,7 @@ export type WebRoutes = {
         };
       };
     });
-    "work-obligations": (Tcb0f968164 & {
+    "work-obligations": (Taadba38b02 & {
       ":workspaceId": {
         ":entityId": {
           patch: {
@@ -27418,7 +27412,7 @@ export type WebRoutes = {
     "my-work": {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           cursor?: string;
           limit?: number;
@@ -27430,7 +27424,7 @@ export type WebRoutes = {
           200: {
             items: Array<{
               entityId: T23e9e9a218;
-              workspaceId: T00e0a643b6;
+              workspaceId: Te20afbb7bb;
               workspaceName: string;
               type: T6fe53f6bc0;
               workflowStatus: T2fb0b2d20e;
@@ -28211,7 +28205,7 @@ export type WebRoutes = {
           post: {
             body: {
               draftChatThreadId?: Taf779979ed;
-              threadWorkspaceId?: T00e0a643b6;
+              threadWorkspaceId?: Te20afbb7bb;
               name: string;
               propertyId: T173eec1550;
               file: File;
@@ -28268,7 +28262,7 @@ export type WebRoutes = {
                 fileName: string;
                 entityId: T23e9e9a218;
                 fieldId: T6993bee61f;
-                workspaceId: T00e0a643b6;
+                workspaceId: Te20afbb7bb;
                 href: (`#stella-decision=${string}` | `#stella-entity=${string}` | `#stella-workspace=${string}`);
                 mention: string;
               };
@@ -28732,7 +28726,7 @@ export type WebRoutes = {
             body: {
               sourceFieldId?: T6993bee61f;
               entityId: T23e9e9a218;
-              targetWorkspaceId: T00e0a643b6;
+              targetWorkspaceId: Te20afbb7bb;
               targetParentId: Tf058fe611e;
               deleteSource: Tfddd645dc8;
             };
@@ -29477,19 +29471,19 @@ export type WebRoutes = {
 
 export type MemoriesRoutes = {
   v1: {
-    memories: T76055d566d;
+    memories: T5e3ac29766;
   };
 } & {
   v1: {
     memories: {
       get: {
         body: Record<never, never>;
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: {
           status?: "active" | "archived" | "stale" | "suggested";
           scope?: "organization" | "workspace" | "user";
           cursor?: string;
-          workspaceId?: T00e0a643b6;
+          workspaceId?: Te20afbb7bb;
           limit?: number;
         };
         headers: Record<never, never>;
@@ -29552,10 +29546,10 @@ export type MemoriesRoutes = {
           pinned?: false | true;
           kind: Td204418ab7;
           scope: "workspace";
-          workspaceId: T00e0a643b6;
+          workspaceId: Te20afbb7bb;
           content: string;
         };
-        params: T76055d566d;
+        params: T5e3ac29766;
         query: Record<never, never>;
         headers: Record<never, never>;
         response: {
@@ -29596,7 +29590,7 @@ export type MemoriesRoutes = {
             kind: ("instruction" | "preference");
             content: string;
           };
-          params: T76055d566d;
+          params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
@@ -30492,16 +30486,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T28fa267a26;
+      readonly types?: undefined | T0e173cdfb9;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T9334491cb1 | Tf7089052a5 | Promise<(T9334491cb1 | Tf7089052a5)>);
+        (value: unknown, options?: T71f88011ed): (T9334491cb1 | T905f17eff7 | Promise<(T9334491cb1 | T905f17eff7)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T28fa267a26;
+      readonly types?: undefined | T0e173cdfb9;
     };
   };
   needsApproval?: true;
@@ -30509,7 +30503,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T7046a3cd58, context?: Tc88149628d): (Tc6418cf1d2 | T2c38cb5eb5 | Promise<Tc3cf8464c3>);
+    (args: T7046a3cd58, context?: Tc88149628d): (Td148ae0348 | Td1fcedc3dd | Promise<T791f46aa1e>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -30985,7 +30979,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   name: "search-past-chats";
   description: string;
   inputSchema?: T8954e9fb6b;
-  outputSchema?: T66ee481b93;
+  outputSchema?: Tcee5dc1789;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
@@ -30997,7 +30991,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   name: "search-all-past-chats";
   description: string;
   inputSchema?: T8954e9fb6b;
-  outputSchema?: T66ee481b93;
+  outputSchema?: Tcee5dc1789;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
@@ -31227,10 +31221,10 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   execute?: Tbc32b289d5;
   readonly [__symbol0]?: T350a170d52;
 }>, unknown, undefined> & {
-  metadata?: T1ea61eec1a;
+  metadata?: T3a69eab32c;
 });
 
-export type ChatPart = (tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | Tca4616e593 | T69e4442ba6 | T286fe5c70c | Ta7d5e5a7dd | T0c8ae177fe | T8c3c1c32f4 | T37bc7049d3 | Tf6dd51ff2d | T38997a08f8 | Tc1a9238263 | Tcc93778d9d | Ta6e5948fa7 | Td79c27feb9 | T07baa563f5 | T194b1272b4 | T0a55c6eeb2 | T4370dddc43 | T8dafec6f73 | Ted2919e284 | Tc399155d09 | T942beb40a7 | T1207098b6b | T042c15c75c | T8761e3d1ea | T9a2f3d426d | T70b3acf43f | T90b63b6aaa | T55b0e1503d | T12d496804b | T7eb5d5c461 | T30f5b86cc2 | Td524f13c20 | T70e030032c | T04f044027c | T1b464e64a6 | T0c852b7d2d | T1a7e91a409 | Td198fe3f0d | Taa75430af9 | T9dadf9aafd | Tc6d6876c9a | T1ccacff7b7 | T9bc11d91fa | T25ac107f5d | Tad44fdcb7a | Tff1778545c | T5969934f1a | Te3715764bf | T58b763246a | Teb2ac01f34 | T19cd75bcc2 | Tfa205b00e7 | Teea8d3c0f8 | T7828552116 | T02e17dea94 | T8d6dbfb2be | Tccd7724753 | T2f0f7289d9 | T15be425e4b | T95c4235861 | Tc67673be53 | Tb3e472cfb3 | T6d79370f9f | T2310920144 | T3a3d8e6621 | Te9216ef372 | T0c25e198bf | Td949ea28ce | T6d624d1d5c | Td05bc7fda9 | T3a81487f60 | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_client_SubagentPart);
+export type ChatPart = (tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | Tca4616e593 | T69e4442ba6 | T286fe5c70c | Ta7d5e5a7dd | T0c8ae177fe | T8c3c1c32f4 | T37bc7049d3 | Tf6dd51ff2d | T38997a08f8 | Tc1a9238263 | Tcc93778d9d | Ta6e5948fa7 | Td79c27feb9 | T07baa563f5 | T194b1272b4 | T0a55c6eeb2 | T4370dddc43 | T8dafec6f73 | Ted2919e284 | Tc399155d09 | T942beb40a7 | T1207098b6b | T042c15c75c | T8761e3d1ea | T9a2f3d426d | T70b3acf43f | T90b63b6aaa | T55b0e1503d | T12d496804b | T7eb5d5c461 | T30f5b86cc2 | Td524f13c20 | T70e030032c | T04f044027c | T1b464e64a6 | T0c852b7d2d | T1a7e91a409 | Td198fe3f0d | Taa75430af9 | T9dadf9aafd | Tc6d6876c9a | T1ccacff7b7 | Tb49e06d399 | T25ac107f5d | Tad44fdcb7a | Tff1778545c | T5969934f1a | Te3715764bf | T58b763246a | Teb2ac01f34 | T19cd75bcc2 | Tfa205b00e7 | Teea8d3c0f8 | T7828552116 | T02e17dea94 | T8d6dbfb2be | Tccd7724753 | T2f0f7289d9 | T15be425e4b | T95c4235861 | Tc67673be53 | Tb3e472cfb3 | T6d79370f9f | T2310920144 | T3a3d8e6621 | Te9216ef372 | T0c25e198bf | Td949ea28ce | T6d624d1d5c | Td05bc7fda9 | T3a81487f60 | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_client_SubagentPart);
 
 export type ChatSourceDocument = Tcde02c03e1;
 
@@ -31397,7 +31391,7 @@ export type ChatUITools = {
   };
   "use-browser": {
     input: T7046a3cd58;
-    output: T0c6fb5c67e;
+    output: Teab563bdda;
   };
   infosoud_lookup_case: {
     input: T466db84340;
@@ -31646,7 +31640,7 @@ export type IdealLanguage = (T99663c92cb | Tf089417a99);
 
 export type LegalListSourceLocator = Tb14bbccf94;
 
-export type Negotiation = Ta1919aa7eb;
+export type Negotiation = Tea672cd0a4;
 
 export type PlaybookScope = T0779b152b5;
 
@@ -31672,10 +31666,6 @@ export type ViewSort = T4c703c7179;
 
 export type ViewTemplateProperty = T2eac278e7d;
 
-type T002b7a31df = {
-  protocolVersion: number;
-};
-
 type T0060643e39 = {
   readonly input: Tcd9d9c9940;
   readonly output: Ta817cf67be;
@@ -31688,11 +31678,9 @@ type T00896ec22e = {
   currency: Tbe0400fa4c;
 };
 
-type T00b5a3f4ca = "disconnected" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-closed" | "timed-out" | "unsupported-page";
+type T00b5a3f4ca = "cancelled" | "disconnected" | "budget-exceeded" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-changed" | "tab-closed" | "timed-out" | "unsupported-page";
 
 type T00bc2c60de = "anonymized" | "rawOverride";
-
-type T00e0a643b6 = string & valibot_Brand<"SafeId"> & Tc66ff042da;
 
 type T0199bafd46 = null | "document-type-classifier";
 
@@ -31709,7 +31697,7 @@ type T02e17dea94 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T02fd605e1e = {
   answers: Array<{
@@ -31741,7 +31729,7 @@ type T042c15c75c = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T04f044027c = {
   type: "tool-call";
@@ -31751,7 +31739,7 @@ type T04f044027c = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T059c285743 = {
   skillName: string;
@@ -31817,34 +31805,15 @@ type T07baa563f5 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
-
-type T08254e0a67 = {
-  type: "footnote";
-  label: string;
-  noteId?: undefined | string;
-};
+} & T85a22e9285;
 
 type T08e85a8b67 = {
   readonly value: Td527bc6af5;
   readonly issues?: undefined;
 };
 
-type T094a680c09 = {
-  stored: number;
-  storedAsOf: string;
-  reported: number;
-  reportedAsOf: string;
-  reportedBy: ("operator" | "publisher" | "listing");
-};
-
 type T094c3ba654 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "timeEntry";
-};
-
-type T09692f7717 = {
-  status: "unavailable";
-  reason: string;
 };
 
 type T096c8fbbba = {
@@ -31942,15 +31911,7 @@ type T0a55c6eeb2 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
-
-type T0ad25a55b8 = {
-  fileFieldId?: T6993bee61f;
-  docxEditSnapshot?: T94af9a40b9;
-  supportsDocxEdits?: false | true;
-  entityId: T23e9e9a218;
-  fileName: string;
-};
+} & T85a22e9285;
 
 type T0b7cb34284 = {
   apiContractVersion: 4;
@@ -31961,7 +31922,7 @@ type T0b7cb34284 = {
 
 type T0c07d42a21 = {
   cursor?: string;
-  workspaceId?: T00e0a643b6;
+  workspaceId?: Te20afbb7bb;
   limit?: number;
   userId?: string;
   action?: string;
@@ -31980,34 +31941,7 @@ type T0c25e198bf = {
   input?: unknown;
   state: Tfafd241922;
   output?: T80db06bf34;
-} & T6e81b203f5;
-
-type T0c6fb5c67e = {
-  protocolVersion: 3;
-  snapshot: {
-    contentTrust: "untrusted-web-content";
-    elements: Array<{
-      context?: undefined | string;
-      href?: undefined | string;
-      name: string;
-      ref: string;
-      role: string;
-      value?: undefined | string;
-    }>;
-    revision: string;
-    text: string;
-    textOffset: number;
-    textTotalChars: number;
-    title: string;
-    url: string;
-  };
-  status: "success";
-} | {
-  code: T00b5a3f4ca;
-  message: string;
-  protocolVersion: 3;
-  status: "error";
-};
+} & T85a22e9285;
 
 type T0c852b7d2d = {
   type: "tool-call";
@@ -32017,7 +31951,7 @@ type T0c852b7d2d = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T0c8ae177fe = {
   type: "tool-call";
@@ -32027,7 +31961,7 @@ type T0c8ae177fe = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T0ca223e5b8 = {
   handle: Tfa4a809121;
@@ -32058,21 +31992,21 @@ type T0da73a8dae = string & valibot_Brand<"SafeId"> & {
 };
 
 type T0db8da917f = {
-  workspaceId?: T00e0a643b6;
-  contextMatterIds?: Array<T00e0a643b6>;
+  workspaceId?: Te20afbb7bb;
+  contextMatterIds?: Array<Te20afbb7bb>;
   truncateAfterMessageId?: T66e92cdab1;
   turnIntent?: "regenerate";
   toolScope?: "suggest-template-fields";
   runMode?: "agent";
-  userContext?: Tca2a3e7599;
-  activeDraft?: T560c64ac5c;
-  activeFile?: T0ad25a55b8;
-  activeTemplate?: T26f42d66de;
-  activeDecision?: T0de933e4cd;
-  activeExternal?: T62738c1324;
-  activeSkill?: Tc09d390530;
-  activeStatute?: T53b95bbc9f;
-  browserClient?: T002b7a31df;
+  userContext?: T129008ae9b;
+  activeDraft?: Tf78513ca89;
+  activeFile?: Tea998d0bab;
+  activeTemplate?: T1aa7c51f6e;
+  activeDecision?: Tbe6ab36107;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: Tc380b4b353;
+  activeStatute?: T7a4ca69142;
+  browserClient?: Tf9e246ce28;
   editApplyMode?: "auto" | "manual";
   docxEditRepresentation?: "direct" | "tracked-changes";
   devModelId?: string;
@@ -32089,19 +32023,15 @@ type T0db8da917f = {
   resume: Array<Tacbaeed0d6>;
 };
 
-type T0de933e4cd = {
-  decisionId: T406326c84f;
-};
-
 type T0dffc664dd = {
   status: "not-registered";
   checkedAt: string;
   sourceDataAsOf: Tbe0400fa4c;
 };
 
-type T0e4469d7ca = {
-  defaultFormatId: Tbe0400fa4c;
-  defaultFormatSource: (null | "organization" | "user");
+type T0e173cdfb9 = {
+  readonly input: T791f46aa1e;
+  readonly output: Teab563bdda;
 };
 
 type T0e7822079a = "date" | "text" | "person" | "file" | "single-select" | "multi-select" | "int" | "money";
@@ -32114,9 +32044,9 @@ type T0fb1fed158 = {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -32124,6 +32054,11 @@ type T0fb1fed158 = {
   claim_token_expires?: string;
   post_claim_scopes?: Array<string>;
   requiredFields?: Array<Tbbced72298>;
+};
+
+type T1060343604 = {
+  readonly input: any;
+  readonly output: any;
 };
 
 type T1065d99f0d = "search" | "fetch";
@@ -32161,14 +32096,18 @@ type T1207098b6b = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
-type T125cb63dca = {
-  street: Tbe0400fa4c;
-  postalCode: Tbe0400fa4c;
-  city: Tbe0400fa4c;
-  country: Tbe0400fa4c;
-  textAddress: Tbe0400fa4c;
+type T12163e1f6a = {
+  readonly error: "Not Found";
+};
+
+type T129008ae9b = {
+  wordEditShortcut?: string;
+  wordEditAuthorName?: string;
+  locale: string;
+  userName: string;
+  timezone: string;
 };
 
 type T12d496804b = {
@@ -32216,7 +32155,7 @@ type T15be425e4b = {
   input?: unknown;
   state: Tfafd241922;
   output?: T878ef6d1f6;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T15dbebb935 = "nda" | "dpa" | "msa" | "saas";
 
@@ -32262,9 +32201,17 @@ type T194b1272b4 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T19752008a0 = null | "reviewed" | "disputed";
+
+type T1987577a01 = {
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+  expires_in: number;
+  interval: number;
+};
 
 type T19cd75bcc2 = {
   type: "tool-call";
@@ -32274,7 +32221,7 @@ type T19cd75bcc2 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T19d0292ba7 = {
   analysis: string;
@@ -32299,1149 +32246,9 @@ type T1a7e91a409 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
-type T1b464e64a6 = {
-  type: "tool-call";
-  id: string;
-  name: "business_registry_lookup";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T1befb01f3e = {
-  dataBoxes?: Array<{
-    label?: string;
-    id: string;
-    isPrimary: Tfddd645dc8;
-  }>;
-  customFields?: Array<{
-    value: string;
-    id: string;
-    label: string;
-  }>;
-};
-
-type T1c0bc9000a = {
-  lawId: string;
-  metadata?: undefined | false | true;
-  analysis?: undefined | false | true;
-  fullText?: undefined | false | true;
-  eli?: undefined | false | true;
-};
-
-type T1c0d9c2cf5 = {
-  id: T3185916700;
-  entityId: T23e9e9a218;
-  fileFieldId: T6993bee61f;
-  status: T2832369547;
-  errorCode: T77d06e55fd;
-  entityVersionId: Tb86085a330;
-  listId: T6215623c33;
-  createdAt: string;
-  finishedAt: Tbe0400fa4c;
-  claimCounts: {
-    supported: number;
-    tension: number;
-    contradicted: number;
-    nocover: number;
-    notverifiable: number;
-    recordconflict: number;
-  };
-};
-
-type T1cbe63218a = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "documentType";
-};
-
-type T1ccacff7b7 = {
-  type: "tool-call";
-  id: string;
-  name: "borme_get_summary";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T1d1d28b371 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "clauseCategory";
-};
-
-type T1d719fd945 = "other" | "mobile" | "office" | "home" | "fax";
-
-type T1d7e53ae9c = {
-  estimatedUnits: number;
-  availableUnits: number;
-};
-
-type T1dacb02040 = "organization" | "person";
-
-type T1dec1d0a87 = {
-  content: string;
-  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
-  scope?: undefined | "workspace" | "user";
-};
-
-type T1ea61eec1a = {
-  activeDraftContext?: undefined | {
-    type: "generated-document";
-    originChatMessageId: T66e92cdab1;
-    originChatThreadId: Taf779979ed;
-    toolCallId: string;
-    version: 1;
-  };
-  anonRestorations?: undefined | {
-    pairs: Array<Tc7eaf8104c>;
-  };
-  docxEditPreferences?: undefined | {
-    docxEditRepresentation?: undefined | "direct" | "tracked-changes";
-    editApplyMode?: undefined | "auto" | "manual";
-  };
-  mentions?: undefined | {
-    mentions: Array<((Tf7f46f643d & {
-      category: "entity";
-      resource: T2a53b33d09;
-      workspaceId: Tbe0400fa4c;
-    }) | (Tf7f46f643d & {
-      category: "workspace";
-      resource: T4c3eeb6df3;
-    }))>;
-  };
-  refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
-  refContext?: undefined | (T26619dc783 & {
-    version: 1;
-  }) | (T26619dc783 & {
-    version: 2;
-    refs: Array<{
-      kind: "contact";
-      ref: string;
-      contact: T346ea860b1;
-    } | {
-      kind: "entity";
-      ref: string;
-      entity: T2a53b33d09;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "matter";
-      ref: string;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "property";
-      ref: string;
-      property: {
-        readonly type: "property";
-        readonly id: stll_api_contract_SafeId<"property">;
-      };
-    } | {
-      kind: "source";
-      ref: string;
-      href: `#stella-source=${string}`;
-    }>;
-  });
-  serverProvenance?: undefined | {
-    type: "search-summary";
-    version: 1;
-  };
-  sourceDocuments?: undefined | Array<Tcde02c03e1>;
-  turnOutcome?: undefined | {
-    type: "awaiting-user";
-    interaction: {
-      type: "approval";
-      toolCallId: string;
-    } | {
-      type: "ask-user";
-      toolCallId: string;
-    } | {
-      type: "client-tool";
-      toolCallId: string;
-    };
-  } | {
-    type: "completed";
-  } | {
-    type: "cancelled";
-    reason: T5e702ac6d9;
-  } | {
-    type: "failed";
-    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "provider_stream_incomplete" | "loop_detected" | "empty_completion");
-  } | {
-    type: "interrupted";
-    reason: T5b6a988e20;
-  };
-  usage?: undefined | {
-    totalTokens: number;
-    completionTokens: number;
-    promptTokens: number;
-  } & {
-    completionTokensDetails?: undefined | {
-      reasoningTokens?: number;
-    };
-  };
-};
-
-type T1eaad4c663 = "verified" | "needs-review" | "important" | "follow-up" | "contradiction";
-
-type T1f9ad2ddf4 = {
-  blockId: string;
-  text: string;
-};
-
-type T1fb4a2d60d = {
-  id: string;
-  workspaceId: string;
-  entityId: string;
-  entityVersionId: string;
-  fileFieldId: string;
-  blockId: string;
-};
-
-type T2139066e86 = {
-  readonly input: T89ed64b036;
-  readonly output: T2e9e8fc862;
-};
-
-type T2156291db9 = {
-  documentId: T6b147c2baf;
-  language: string;
-  anchorId: string;
-  citedAnchorId: Tbe0400fa4c;
-  headings: Array<{
-    anchorId: string;
-    level: T83854980c8;
-    text: string;
-  }>;
-  heading: (null | {
-    id: string;
-    anchorId: string;
-    level: T83854980c8;
-    text: string;
-  });
-  blocks: Array<{
-    id: string;
-    anchorId: string;
-    text: string;
-  }>;
-};
-
-type T21931d6d07 = "highlight" | "underline" | "squiggly" | "strikethrough";
-
-type T2196542353 = {
-  readonly value: Tf8c3169b2f;
-  readonly issues?: undefined;
-};
-
-type T21b00a9f66 = {
-  path: string;
-  kind: ("string" | "boolean" | "object" | "array");
-  count: number;
-  label?: undefined | string;
-  hint?: undefined | string;
-  inputType?: undefined | "number" | "boolean" | "date" | "text" | "select";
-  options?: undefined | Array<string>;
-  validation?: undefined | Ta97f719cc5;
-  required?: undefined | false | true;
-  aiAdapt?: undefined | false | true;
-  aiPrompt?: undefined | string;
-  aiSeesDocument?: undefined | false | true;
-  optionsFrom?: undefined | string;
-  lookup?: undefined | T9a31037c51;
-  source?: undefined | T1463cf47a4 | Te16df143a9 | T2bc8abc5f9 | T22e0107aa8 | T6f17a2dbb3;
-  formula?: undefined | string;
-  condition?: undefined | string;
-  conditionAst?: undefined | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
-  dateFormat?: undefined | stll_template_conditions_FieldDateFormat;
-  itemFields?: undefined | Array<T21b00a9f66>;
-  visibleWhen?: undefined | string;
-};
-
-type T21d4acdd13 = {
-  success: true;
-  fileName: string;
-  entityId: string;
-  fieldId: string;
-  workspaceId: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
-};
-
-type T21e7b1b9fc = {
-  countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
-  isPrimary: Tfddd645dc8;
-};
-
-type T22259c97a4 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "expense";
-};
-
-type T2233e69cfb = "medium" | "high" | "low";
-
-type T22e0107aa8 = {
-  kind: "attorney";
-  ref: T6202858453;
-  field: ("name" | "email");
-};
-
-type T2310920144 = {
-  type: "tool-call";
-  id: string;
-  name: "search-all-past-chats";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T5d269baf56;
-} & T6e81b203f5;
-
-type T23680c2d7b = "global" | "ch" | "eu";
-
-type T238b2f5b62 = {
-  status: "failed";
-  message: string;
-};
-
-type T23e9e9a218 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "entity";
-};
-
-type T244a503d33 = {
-  resource: string;
-  resource_name: string;
-  resource_logo_uri: string;
-  authorization_servers: Array<string>;
-  scopes_supported: Array<("stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback" | "stella:search_anonymized" | "stella:read_anonymized" | "stella:templates_anonymized")>;
-  bearer_methods_supported: Array<string>;
-  stella_contract: {
-    protocol: 2;
-    revision: 3;
-    capabilities: {
-      "document-version-upload": 1;
-      "mcp-v2-transport": 1;
-    };
-  };
-  stella_compatibility: {
-    api_contract_version: 2;
-    cli_version: {
-      minimum: string;
-      maximum: string;
-    };
-  };
-};
-
-type T25ac107f5d = {
-  type: "tool-call";
-  id: string;
-  name: "infosoud_lookup_case";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T25af101672 = null | "supported" | "tension" | "contradicted" | "nocover" | "notverifiable";
-
-type T25d6161727 = {
-  readonly input: Te0b1fd5531;
-  readonly output: Taf56293cce;
-};
-
-type T25e979f956 = {
-  chat: T8919d5949d;
-  pdf: T8919d5949d;
-  fast: T8919d5949d;
-  reasoning: T8919d5949d;
-};
-
-type T262e717ec6 = {
-  target: {
-    entityId: T23e9e9a218;
-    fileFieldId: T6993bee61f;
-  };
-  perspective: {
-    type: "neutral";
-  } | {
-    name: Tbe0400fa4c;
-    type: "party";
-    role: string;
-  };
-  references: Array<{
-    workspaceId: T00e0a643b6;
-    entityId: T23e9e9a218;
-    fileFieldId: T6993bee61f;
-  }>;
-  seededPositions: Array<{
-    guidance?: string;
-    issue: string;
-    mode: "extract";
-    ask: {
-      content: T514ecb9b39;
-      question: string;
-    };
-    enabled: Tfddd645dc8;
-    sourceId: string;
-  } | {
-    check?: {
-      kind: "presence";
-      expectation: T71643efc98;
-    } | {
-      kind: "constraint";
-      condition: stll_conditions_ConditionNode;
-    };
-    guidance?: string;
-    negotiation?: {
-      escalation?: string;
-      rationale?: string;
-      talkingPoints?: Array<string>;
-    };
-    purpose?: string;
-    issue: string;
-    mode: "graded";
-    standard: {
-      source: "tiers";
-      tiers: {
-        acceptable: {
-          ideal?: {
-            clauseVersion?: number;
-            source: "clause";
-            clauseId: string;
-          } | {
-            text: string;
-            source: "inline";
-          };
-          rules: Array<Tc0c3c02800>;
-        };
-        fallback: {
-          entries: Array<{
-            label?: string;
-            text: string;
-            id: string;
-          }>;
-        };
-        notAcceptable: {
-          rules: Array<Tc0c3c02800>;
-        };
-      };
-    } | {
-      source: "reference";
-      passages: Array<{
-        id: string;
-        workspaceId: string;
-        entityId: string;
-        entityVersionId: string;
-        fileFieldId: string;
-        blockId: string;
-      }>;
-      termKind: T3802454091;
-    };
-    ask: {
-      derived?: {
-        content: T514ecb9b39;
-        question: string;
-        rulesHash: string;
-      };
-      mode: "auto";
-    } | {
-      mode: "manual";
-      content: T514ecb9b39;
-      question: string;
-    };
-    enabled: Tfddd645dc8;
-    severity: T7538035c96;
-    sourceId: string;
-  }>;
-};
-
-type T26619dc783 = {
-  entities: Array<{
-    entity: T2a53b33d09;
-    toolCallId: string;
-    workspace: T4c3eeb6df3;
-  }>;
-  unresolvedInputs: Array<{
-    kind: ("contact" | "entity" | "matter" | "property");
-    param: string;
-    ref: string;
-    toolCallId: string;
-  }>;
-  workspaceScope: Array<T4c3eeb6df3>;
-};
-
-type T26d760a340 = {
-  type: "file";
-  version: 1;
-} | Tcb216ab4cd | Tcdeb3f7c12 | Tcdd35a1427 | T2b5a9a8bf4 | {
-  type: "money";
-  version: 1;
-  currency: Tbe0400fa4c;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type T26f42d66de = {
-  docxEditSnapshot?: T94af9a40b9;
-  templateId: Td15ae0fedc;
-  fileName: string;
-};
-
-type T270991263d = Response | {
-  status: "idle";
-  jobId: string;
-} | {
-  status: "running";
-  startedAt: string;
-  jobId: string;
-} | {
-  status: "succeeded";
-  startedAt: string;
-  finishedAt: string;
-  jobId: string;
-} | {
-  status: "failed";
-  startedAt: string;
-  finishedAt: string;
-  message: string;
-  jobId: string;
-};
-
-type T27875dbd24 = {
-  courtCode: string;
-  spisZn: string;
-};
-
-type T27f4c16dc2 = {
-  type: "court";
-  court: string;
-  courtAbbreviation: Tbe0400fa4c;
-  tier: Tc79049686d;
-  decisions: number;
-  addedLastDay: number;
-  addedLastWeek: number;
-  updatedAt: Tbe0400fa4c;
-} | {
-  type: "tier";
-  tier: Tc79049686d;
-  courts: number;
-  decisions: number;
-  addedLastDay: number;
-  addedLastWeek: number;
-  updatedAt: Tbe0400fa4c;
-} | {
-  type: "unlisted";
-  tier: "other";
-  listed: number;
-  decisions: number;
-};
-
-type T280b23614f = null | "private" | "normal" | "confidential";
-
-type T2832369547 = "failed" | "running" | "completed" | "queued";
-
-type T286fe5c70c = {
-  type: "tool-call";
-  id: string;
-  name: "list_templates";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T28ae3065fc = "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "Backspace" | "Enter" | "Escape" | "Space" | "Tab";
-
-type T28dfa04504 = {
-  code?: string;
-  text?: string;
-};
-
-type T28f86e2c9b = {
-  readonly input: T95d0de5680;
-  readonly output: T64c3504dad;
-};
-
-type T28fa267a26 = {
-  readonly input: Tc3cf8464c3;
-  readonly output: T0c6fb5c67e;
-};
-
-type T290c6ff7c9 = {
-  value: string;
-  validFrom: Tbe0400fa4c;
-  validTo: Tbe0400fa4c;
-};
-
-type T29fdf0f93e = {
-  readonly input: Tcf27a234be;
-  readonly output: Td256ffc109;
-};
-
-type T2a109871bb = {
-  estimatedTokens: number;
-  triggerTokens: number;
-  cacheStableTokens: number;
-  summarizedMessageCount: number;
-  breakdown: {
-    promptTokens: number;
-    toolTokens: number;
-    summaryTokens: number;
-    attachmentTokens: number;
-    conversationTokens: number;
-  };
-};
-
-type T2a2ca5507a = null | {
-  text: string;
-  value: T588d0ee653;
-  unit: Tbe0400fa4c;
-  citation: T1f9ad2ddf4;
-};
-
-type T2a53b33d09 = {
-  readonly type: "entity";
-  readonly id: stll_api_contract_SafeId<"entity">;
-};
-
-type T2b15184b07 = {
-  neutral: number;
-  negative: number;
-  positive: number;
-  supportive: number;
-  mixed: number;
-  unclassified: number;
-};
-
-type T2b5a9a8bf4 = {
-  type: "int";
-  version: 1;
-};
-
-type T2b6600fed5 = null | "email" | "manual" | "calendar" | "infosoud" | "import" | "api";
-
-type T2b6cefd27b = string & valibot_Brand<"SafeId"> & Tc66ff042da;
-
-type T2bc8abc5f9 = {
-  kind: "matter";
-  field: ("name" | "status" | "reference" | "billingReference");
-};
-
-type T2bf53fea26 = {
-  id: Tcdc6b0a442;
-  name: string;
-  criteria: stll_api_contract_SavedSearchCriteria;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type T2c205b6e9a = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "templateLookupFormat";
-};
-
-type T2c38cb5eb5 = {
-  code: T00b5a3f4ca;
-  message: string;
-  protocolVersion: 3;
-  status: "error";
-};
-
-type T2c979d39c8 = T21d4acdd13 | T5e0fe5d459 | T6b4b00e15b | T8ec56b71d8;
-
-type T2cf59f96cb = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: Tfddd645dc8;
-  provider: "jina";
-};
-
-type T2d0a4c53c0 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "docxSuggestion";
-};
-
-type T2d12db4ee0 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
-
-type T2d674d595a = {
-  kind: "ai";
-  name: string;
-  prompt: string;
-  includeDocuments: Tfddd645dc8;
-} | {
-  kind: "review-gate";
-  name: string;
-  instructions: string;
-} | {
-  kind: "create-document";
-  name: string;
-  documentTitle: string;
-};
-
-type T2e1b9ec514 = "Desktop edit session source file is no longer available." | "Desktop edit session not found." | "Desktop editing moved to another device. This local copy is preserved." | `File validation failed: ${string}` | "Workspace is not active" | "Desktop edit session is already closed." | "Desktop edit session file type changed while finalizing." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Base entity version not found.";
-
-type T2e29c5e55f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "flowRun";
-};
-
-type T2e9e8fc862 = {
-  lawId: string;
-  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
-};
-
-type T2eac278e7d = {
-  role?: null | "document-type-classifier";
-  dependencies?: Array<{
-    condition: T60e51917c9;
-    dependsOnSourceId: string;
-  }>;
-  name: string;
-  tool: {
-    type: "ai-model";
-    prompt: string;
-    version: 1;
-  } | {
-    type: "manual-input";
-    version: 1;
-  };
-  version: 1;
-  content: {
-    type: "file";
-    version: 1;
-  } | {
-    type: "text";
-    version: 1;
-  } | {
-    type: Tf795dc12d5;
-    options: Array<{
-      value: string;
-      color: string;
-    }>;
-    version: 1;
-    fallback: Tbe0400fa4c;
-  } | {
-    type: "date";
-    version: 1;
-  } | {
-    type: "int";
-    version: 1;
-  } | {
-    type: "money";
-    version: 1;
-    currency: Tbe0400fa4c;
-  } | {
-    type: "person";
-    version: 1;
-  };
-  sourceId: string;
-  createIfMissing: Tfddd645dc8;
-};
-
-type T2eda26bd51 = {
-  id: T501a665986;
-  decisionId: T406326c84f;
-  workspaceId: T00e0a643b6;
-  note: Tbe0400fa4c;
-  linkedBy: string;
-  createdAt: string;
-};
-
-type T2f0f7289d9 = {
-  type: "tool-call";
-  id: string;
-  name: "create_matter_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T6c9afce89f;
-} & T6e81b203f5;
-
-type T2f120574a2 = {
-  status: "ready";
-};
-
-type T2fb0b2d20e = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
-
-type T302c0995c4 = {
-  status: "unavailable";
-  checkedAt: string;
-  reason: ("timeout" | "network" | "http-error" | "outage-page" | "soap-fault" | "malformed-response" | "source-error");
-  detail: Tbe0400fa4c;
-};
-
-type T30c869f383 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "user";
-};
-
-type T30f5b86cc2 = {
-  type: "tool-call";
-  id: string;
-  name: "update-current-skill-resource";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T310abc7c1b = null | {
-  pattern: Tbe0400fa4c;
-  range: Tbe0400fa4c;
-  raw?: unknown;
-};
-
-type T3119a3043a = {
-  workspaceId: T2b6cefd27b;
-};
-
-type T313f510b34 = null | T2a109871bb;
-
-type T3185916700 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListVerificationRun";
-};
-
-type T3203bdde0c = {
-  path: string;
-  label: string;
-};
-
-type T32a2c3700a = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillResource";
-};
-
-type T32fdeee18e = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: Tbe0400fa4c;
-  id: string;
-  language: string;
-  slug: Tbe0400fa4c;
-};
-
-type T33acf664a2 = {
-  readonly input: T48c9e573fc;
-  readonly output: T646bf117c1;
-};
-
-type T34252d475f = {
-  viewId: T7e10a0d884;
-};
-
-type T34425e956a = {
-  readonly value: Taa8cddb06d;
-  readonly issues?: undefined;
-};
-
-type T346ea860b1 = {
-  readonly type: "contact";
-  readonly id: stll_api_contract_SafeId<"contact">;
-};
-
-type T347d72c6fa = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
-
-type T34da0c446b = {
-  workspaceId: string;
-};
-
-type T350a170d52 = {
-  needsApproval: true;
-  approvalSchema: undefined;
-};
-
-type T35afed2065 = {
-  type: ("unreliable-person" | "unreliable-vat-payer");
-  publishedOn: Tbe0400fa4c;
-};
-
-type T3682189719 = "approved" | "rejected";
-
-type T36f8891ad4 = null | Array<string>;
-
-type T37ad4e6588 = {
-  fileNumber: string;
-  court: Tbe0400fa4c;
-  phase: ("unverified" | "ongoing" | "ended");
-  stateCode: Tbe0400fa4c;
-  matchedBy: ("company-id" | "name-and-birth-date");
-  debtor: {
-    name: Tbe0400fa4c;
-    firstName: Tbe0400fa4c;
-    companyId: Tbe0400fa4c;
-    birthDate: Tbe0400fa4c;
-    address: Tbe0400fa4c;
-  };
-  insolvencyDeclaredOn: Tbe0400fa4c;
-  insolvencyEndedOn: Tbe0400fa4c;
-  url: Tbe0400fa4c;
-};
-
-type T37bc7049d3 = {
-  type: "tool-call";
-  id: string;
-  name: "read_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T37fefd1259 = {
-  entityId: string;
-  fieldId: string;
-  fileId: string;
-  fileName: string;
-  renamed: Tfddd645dc8;
-};
-
-type T3802454091 = "language" | "presence" | "parameter" | "enumeration";
-
-type T38997a08f8 = {
-  type: "tool-call";
-  id: string;
-  name: "delete_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T38d4bc0e42 = {
-  playbookId: T4e595a8315;
-};
-
-type T38eb7c9eb4 = null | Array<T884a45faa8>;
-
-type T3913e4550c = {
-  lawId: string;
-  blockId: string;
-};
-
-type T392bdfc9ed = {
-  readonly target: ((T76055d566d & string) | "draft-2020-12" | "draft-07" | "openapi-3.0");
-  readonly libraryOptions?: undefined | T631856df6b;
-};
-
-type T39c651e6ab = {
-  generatedAt: string;
-  model: string;
-  inputFingerprint: string;
-  tree: Array<T4a06edd937>;
-};
-
-type T3a1c2c3f9f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "bilingualTranslationRun";
-};
-
-type T3a2aa457e2 = "available" | "unavailable" | "installed";
-
-type T3a3d8e6621 = {
-  type: "tool-call";
-  id: string;
-  name: "describe_template";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T3a7788c76f = {
-  readonly value: T2cf59f96cb;
-  readonly issues?: undefined;
-};
-
-type T3a81487f60 = {
-  type: "tool-call";
-  id: string;
-  name: "discover_tools";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T3a8e541c8b = {
-  success: true;
-  entityRef: string;
-  propertyRef: string;
-  newValue: string;
-};
-
-type T3ae65c10f1 = null | string;
-
-type T3ae717d55b = {
-  (args: Tce5e19ec0e, context?: Tc88149628d): (T5d269baf56 | Promise<T5d269baf56>);
-};
-
-type T3ae9eb741e = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "auditLog";
-};
-
-type T3b2c7123e2 = {
-  text?: undefined | string;
-  title?: undefined | string;
-  departmentCode?: undefined | string;
-  legalRangeCode?: undefined | string;
-  matterCode?: undefined | string;
-  dateFrom?: undefined | string;
-  dateTo?: undefined | string;
-  offset?: undefined | number;
-  limit?: undefined | number;
-};
-
-type T3b4d67e019 = null | {
-  country?: string;
-  state?: string;
-  line1?: string;
-  line2?: string;
-  postalCode?: string;
-  city?: string;
-};
-
-type T3b98ffcc55 = {
-  id: string;
-  resourceName: (string & valibot_Brand<"ResourceName">);
-  type: T9527c354f7;
-  title: string;
-  headline: Tbe0400fa4c;
-  updatedAt: string;
-};
-
-type T3ba9545800 = {
-  workspaceId: string;
-};
-
-type T3c0c1b0a27 = {
-  title: string;
-  introduction: string;
-  investmentHeading: string;
-  investmentBody: string;
-  equityFinancingHeading: string;
-  equityFinancingBody: string;
-  conversionPriceHeading: string;
-  conversionPriceBody: string;
-  shareClassHeading: string;
-  shareClassBody: string;
-  liquidityEventHeading: string;
-  liquidityEventBody: string;
-  companyRepresentationsHeading: string;
-  companyRepresentationsBody: string;
-  generalHeading: string;
-  generalBody: string;
-};
-
-type T3c3fa57c15 = {
-  country?: string;
-  label?: string;
-  state?: string;
-  line2?: string;
-  postalCode?: string;
-  city?: string;
-  type: T10a0947927;
-  isPrimary: Tfddd645dc8;
-  line1: string;
-};
-
-type T3c7d464d59 = {
-  readonly input: T3b2c7123e2;
-  readonly output: T8c80beb4cd;
-};
-
-type T3c86765bb1 = "Forbidden" | T0fb1fed158;
-
-type T3dc3e2ca32 = {
-  label?: string;
-  text: string;
-  id: string;
-};
-
-type T3e64088e2c = "failed" | "no-backend" | "below-floor";
-
-type T3ed0ca26b3 = {
-  readonly value: T8436dc75f2;
-  readonly issues?: undefined;
-};
-
-type T3f3b30a014 = "Unauthorized" | T0fb1fed158;
-
-type T3fbc5ba165 = readonly [T73b2a1010d, ...T73b2a1010d[]];
-
-type T4042d27c41 = {
-  workspaceId: string;
-};
-
-type T406326c84f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawDecision";
-};
-
-type T41e0ad416a = {
-  quote: string;
-  blockAnchorId: string;
-  startOffset: number;
-  endOffset: number;
-};
-
-type T41ee5fbcc8 = {
-  snippet?: string;
-  citation?: string;
-  jurisdiction?: string;
-  sourceType?: string;
-  type: "clip";
-  url: string;
-  version: 1;
-};
-
-type T426e4657a4 = null | string | number | Array<string>;
-
-type T42b0ce8576 = {
-  ok: false;
-  error: string;
-};
-
-type T4370dddc43 = {
-  type: "tool-call";
-  id: string;
-  name: "link_matter_contact";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T6e81b203f5;
-
-type T43767f9c31 = {
-  templateId: string;
-  values: T98898fcada;
-};
-
-type T44145b9198 = {
-  code?: string;
-  message: string;
-};
-
-type T444ef89911 = {
-  readonly value: T9c71399a75;
-  readonly issues?: undefined;
-};
-
-type T4498be3bc0 = "Not Found" | {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tf976198c2f>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T1d7e53ae9c;
-  error?: string;
-  claim?: T92d0af8865;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<Tbbced72298>;
-};
-
-type T44a68408fe = {
+type T1aa75e4cd5 = {
   registry: T347d72c6fa;
   id: string;
   name: string;
@@ -33749,18 +32556,18 @@ type T44a68408fe = {
     detail: "full";
   } & {
     company: T9676908f8c;
-    history: (T09692f7717 | {
+    history: (T5bd2b68d05 | {
       status: "loaded";
-      value: Array<((T9a40f14600 & {
+      value: Array<((Tbbe838b61c & {
         kind: ("name" | "address" | "legal-form" | "share-capital" | "acting-clause" | "legal-status");
         value: string;
-      }) | (T9a40f14600 & {
+      }) | (Tbbe838b61c & {
         kind: ("statutory-body-member" | "stakeholder");
         name: string;
         role: Tbe0400fa4c;
       }))>;
     });
-    documents: (T09692f7717 | {
+    documents: (T5bd2b68d05 | {
       status: "loaded";
       value: Array<{
         serialNumber: number;
@@ -33771,7 +32578,7 @@ type T44a68408fe = {
         medium: ("electronic" | "paper");
       }>;
     });
-    related: (T09692f7717 | {
+    related: (T5bd2b68d05 | {
       status: "loaded";
       value: Array<{
         name: string;
@@ -33856,9 +32663,9 @@ type T44a68408fe = {
       name: string;
       formerNames: Array<T290c6ff7c9>;
       legalForm: Tcc3a2ff045;
-      address: (null | T125cb63dca);
+      address: (null | T8cd91eaf57);
       formerAddresses: Array<{
-        value: T125cb63dca;
+        value: T8cd91eaf57;
         validFrom: Tbe0400fa4c;
         validTo: Tbe0400fa4c;
       }>;
@@ -33913,6 +32720,1156 @@ type T44a68408fe = {
   };
 };
 
+type T1aa7c51f6e = {
+  docxEditSnapshot?: T94af9a40b9;
+  templateId: T6db7aeaa15;
+  fileName: string;
+};
+
+type T1b464e64a6 = {
+  type: "tool-call";
+  id: string;
+  name: "business_registry_lookup";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T1c0bc9000a = {
+  lawId: string;
+  metadata?: undefined | false | true;
+  analysis?: undefined | false | true;
+  fullText?: undefined | false | true;
+  eli?: undefined | false | true;
+};
+
+type T1c0d9c2cf5 = {
+  id: T3185916700;
+  entityId: T23e9e9a218;
+  fileFieldId: T6993bee61f;
+  status: T2832369547;
+  errorCode: T77d06e55fd;
+  entityVersionId: Tb86085a330;
+  listId: T386276519a;
+  createdAt: string;
+  finishedAt: Tbe0400fa4c;
+  claimCounts: {
+    supported: number;
+    tension: number;
+    contradicted: number;
+    nocover: number;
+    notverifiable: number;
+    recordconflict: number;
+  };
+};
+
+type T1c99d77bbc = {
+  readonly __safeIdType?: "contact";
+};
+
+type T1cbe63218a = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "documentType";
+};
+
+type T1ccacff7b7 = {
+  type: "tool-call";
+  id: string;
+  name: "borme_get_summary";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T1d1d28b371 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "clauseCategory";
+};
+
+type T1d6100d20a = {
+  type: "footnote";
+  label: string;
+  noteId?: undefined | string;
+};
+
+type T1d719fd945 = "other" | "mobile" | "office" | "home" | "fax";
+
+type T1dacb02040 = "organization" | "person";
+
+type T1dec1d0a87 = {
+  content: string;
+  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
+  scope?: undefined | "workspace" | "user";
+};
+
+type T1eaad4c663 = "verified" | "needs-review" | "important" | "follow-up" | "contradiction";
+
+type T1f8c83bb85 = {
+  registry: T347d72c6fa;
+  formats: Array<{
+    key: string;
+    template: string;
+  }>;
+};
+
+type T1f9ad2ddf4 = {
+  blockId: string;
+  text: string;
+};
+
+type T1fb4a2d60d = {
+  id: string;
+  workspaceId: string;
+  entityId: string;
+  entityVersionId: string;
+  fileFieldId: string;
+  blockId: string;
+};
+
+type T2139066e86 = {
+  readonly input: T89ed64b036;
+  readonly output: T2e9e8fc862;
+};
+
+type T21931d6d07 = "highlight" | "underline" | "squiggly" | "strikethrough";
+
+type T2194886cef = {
+  identificador?: string;
+  titulo?: string;
+  url_pdf?: {
+    pagina_final?: string;
+    pagina_inicial?: string;
+    szBytes?: string;
+    szKBytes?: string;
+    texto?: string;
+  };
+  url_html?: string;
+  url_xml?: string;
+};
+
+type T2196542353 = {
+  readonly value: Tf8c3169b2f;
+  readonly issues?: undefined;
+};
+
+type T21b00a9f66 = {
+  path: string;
+  kind: ("string" | "boolean" | "object" | "array");
+  count: number;
+  label?: undefined | string;
+  hint?: undefined | string;
+  inputType?: undefined | "number" | "boolean" | "date" | "text" | "select";
+  options?: undefined | Array<string>;
+  validation?: undefined | T8da97ce6b5;
+  required?: undefined | false | true;
+  aiAdapt?: undefined | false | true;
+  aiPrompt?: undefined | string;
+  aiSeesDocument?: undefined | false | true;
+  optionsFrom?: undefined | string;
+  lookup?: undefined | T1f8c83bb85;
+  source?: undefined | T1463cf47a4 | Te16df143a9 | T2bc8abc5f9 | T22e0107aa8 | T6f17a2dbb3;
+  formula?: undefined | string;
+  condition?: undefined | string;
+  conditionAst?: undefined | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
+  dateFormat?: undefined | stll_template_conditions_FieldDateFormat;
+  itemFields?: undefined | Array<T21b00a9f66>;
+  visibleWhen?: undefined | string;
+};
+
+type T21d4acdd13 = {
+  success: true;
+  fileName: string;
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
+};
+
+type T21e7b1b9fc = {
+  countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
+  isPrimary: Tfddd645dc8;
+};
+
+type T22259c97a4 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "expense";
+};
+
+type T2233e69cfb = "medium" | "high" | "low";
+
+type T22e0107aa8 = {
+  kind: "attorney";
+  ref: T6202858453;
+  field: ("name" | "email");
+};
+
+type T2310920144 = {
+  type: "tool-call";
+  id: string;
+  name: "search-all-past-chats";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T5d269baf56;
+} & T85a22e9285;
+
+type T23680c2d7b = "global" | "ch" | "eu";
+
+type T238b2f5b62 = {
+  status: "failed";
+  message: string;
+};
+
+type T23e9e9a218 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "entity";
+};
+
+type T244a503d33 = {
+  resource: string;
+  resource_name: string;
+  resource_logo_uri: string;
+  authorization_servers: Array<string>;
+  scopes_supported: Array<("stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback" | "stella:search_anonymized" | "stella:read_anonymized" | "stella:templates_anonymized")>;
+  bearer_methods_supported: Array<string>;
+  stella_contract: {
+    protocol: 2;
+    revision: 3;
+    capabilities: {
+      "document-version-upload": 1;
+      "mcp-v2-transport": 1;
+    };
+  };
+  stella_compatibility: {
+    api_contract_version: 2;
+    cli_version: {
+      minimum: string;
+      maximum: string;
+    };
+  };
+};
+
+type T25ac107f5d = {
+  type: "tool-call";
+  id: string;
+  name: "infosoud_lookup_case";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T25af101672 = null | "supported" | "tension" | "contradicted" | "nocover" | "notverifiable";
+
+type T25d6161727 = {
+  readonly input: Te0b1fd5531;
+  readonly output: Taf56293cce;
+};
+
+type T25e979f956 = {
+  chat: T8919d5949d;
+  pdf: T8919d5949d;
+  fast: T8919d5949d;
+  reasoning: T8919d5949d;
+};
+
+type T262e717ec6 = {
+  target: {
+    entityId: T23e9e9a218;
+    fileFieldId: T6993bee61f;
+  };
+  perspective: {
+    type: "neutral";
+  } | {
+    name: Tbe0400fa4c;
+    type: "party";
+    role: string;
+  };
+  references: Array<{
+    workspaceId: Te20afbb7bb;
+    entityId: T23e9e9a218;
+    fileFieldId: T6993bee61f;
+  }>;
+  seededPositions: Array<{
+    guidance?: string;
+    issue: string;
+    mode: "extract";
+    ask: {
+      content: T514ecb9b39;
+      question: string;
+    };
+    enabled: Tfddd645dc8;
+    sourceId: string;
+  } | {
+    check?: {
+      kind: "presence";
+      expectation: T71643efc98;
+    } | {
+      kind: "constraint";
+      condition: stll_conditions_ConditionNode;
+    };
+    guidance?: string;
+    negotiation?: {
+      escalation?: string;
+      rationale?: string;
+      talkingPoints?: Array<string>;
+    };
+    purpose?: string;
+    issue: string;
+    mode: "graded";
+    standard: {
+      source: "tiers";
+      tiers: {
+        acceptable: {
+          ideal?: {
+            clauseVersion?: number;
+            source: "clause";
+            clauseId: string;
+          } | {
+            text: string;
+            source: "inline";
+          };
+          rules: Array<Tc0c3c02800>;
+        };
+        fallback: {
+          entries: Array<{
+            label?: string;
+            text: string;
+            id: string;
+          }>;
+        };
+        notAcceptable: {
+          rules: Array<Tc0c3c02800>;
+        };
+      };
+    } | {
+      source: "reference";
+      passages: Array<{
+        id: string;
+        workspaceId: string;
+        entityId: string;
+        entityVersionId: string;
+        fileFieldId: string;
+        blockId: string;
+      }>;
+      termKind: T3802454091;
+    };
+    ask: {
+      derived?: {
+        content: T514ecb9b39;
+        question: string;
+        rulesHash: string;
+      };
+      mode: "auto";
+    } | {
+      mode: "manual";
+      content: T514ecb9b39;
+      question: string;
+    };
+    enabled: Tfddd645dc8;
+    severity: T7538035c96;
+    sourceId: string;
+  }>;
+};
+
+type T26d760a340 = {
+  type: "file";
+  version: 1;
+} | Tcb216ab4cd | Tcdeb3f7c12 | Tcdd35a1427 | T2b5a9a8bf4 | {
+  type: "money";
+  version: 1;
+  currency: Tbe0400fa4c;
+} | {
+  type: "person";
+  version: 1;
+};
+
+type T270991263d = Response | {
+  status: "idle";
+  jobId: string;
+} | {
+  status: "running";
+  startedAt: string;
+  jobId: string;
+} | {
+  status: "succeeded";
+  startedAt: string;
+  finishedAt: string;
+  jobId: string;
+} | {
+  status: "failed";
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+  jobId: string;
+};
+
+type T27875dbd24 = {
+  courtCode: string;
+  spisZn: string;
+};
+
+type T279717e2be = {
+  readonly error: "Not Found";
+};
+
+type T27f4c16dc2 = {
+  type: "court";
+  court: string;
+  courtAbbreviation: Tbe0400fa4c;
+  tier: Tc79049686d;
+  decisions: number;
+  addedLastDay: number;
+  addedLastWeek: number;
+  updatedAt: Tbe0400fa4c;
+} | {
+  type: "tier";
+  tier: Tc79049686d;
+  courts: number;
+  decisions: number;
+  addedLastDay: number;
+  addedLastWeek: number;
+  updatedAt: Tbe0400fa4c;
+} | {
+  type: "unlisted";
+  tier: "other";
+  listed: number;
+  decisions: number;
+};
+
+type T280b23614f = null | "private" | "normal" | "confidential";
+
+type T282a48bd54 = {
+  id: T6a02bf8080;
+  registry: T347d72c6fa;
+  name: string;
+  format: string;
+  createdAt: string;
+};
+
+type T2832369547 = "failed" | "running" | "completed" | "queued";
+
+type T286fe5c70c = {
+  type: "tool-call";
+  id: string;
+  name: "list_templates";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T28ae3065fc = "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "Backspace" | "Enter" | "Escape" | "Space" | "Tab";
+
+type T28f86e2c9b = {
+  readonly input: T95d0de5680;
+  readonly output: T64c3504dad;
+};
+
+type T290c6ff7c9 = {
+  value: string;
+  validFrom: Tbe0400fa4c;
+  validTo: Tbe0400fa4c;
+};
+
+type T29fdf0f93e = {
+  readonly input: Tcf27a234be;
+  readonly output: Td256ffc109;
+};
+
+type T2a109871bb = {
+  estimatedTokens: number;
+  triggerTokens: number;
+  cacheStableTokens: number;
+  summarizedMessageCount: number;
+  breakdown: {
+    promptTokens: number;
+    toolTokens: number;
+    summaryTokens: number;
+    attachmentTokens: number;
+    conversationTokens: number;
+  };
+};
+
+type T2a2ca5507a = null | {
+  text: string;
+  value: T588d0ee653;
+  unit: Tbe0400fa4c;
+  citation: T1f9ad2ddf4;
+};
+
+type T2a53b33d09 = {
+  readonly type: "entity";
+  readonly id: stll_api_contract_SafeId<"entity">;
+};
+
+type T2b15184b07 = {
+  neutral: number;
+  negative: number;
+  positive: number;
+  supportive: number;
+  mixed: number;
+  unclassified: number;
+};
+
+type T2b5a9a8bf4 = {
+  type: "int";
+  version: 1;
+};
+
+type T2b6600fed5 = null | "email" | "manual" | "calendar" | "infosoud" | "import" | "api";
+
+type T2b6cefd27b = string & valibot_Brand<"SafeId"> & T86cb36b507;
+
+type T2bc8abc5f9 = {
+  kind: "matter";
+  field: ("name" | "status" | "reference" | "billingReference");
+};
+
+type T2bf53fea26 = {
+  id: Tcdc6b0a442;
+  name: string;
+  criteria: stll_api_contract_SavedSearchCriteria;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type T2c979d39c8 = T21d4acdd13 | T5e0fe5d459 | T6b4b00e15b | T8ec56b71d8;
+
+type T2cf59f96cb = {
+  url: string;
+  title?: undefined | string;
+  publishedAt?: undefined | string;
+  content: string;
+  truncated: Tfddd645dc8;
+  provider: "jina";
+};
+
+type T2d0a4c53c0 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "docxSuggestion";
+};
+
+type T2d12db4ee0 = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
+
+type T2d674d595a = {
+  kind: "ai";
+  name: string;
+  prompt: string;
+  includeDocuments: Tfddd645dc8;
+} | {
+  kind: "review-gate";
+  name: string;
+  instructions: string;
+} | {
+  kind: "create-document";
+  name: string;
+  documentTitle: string;
+};
+
+type T2e1b9ec514 = "Desktop edit session source file is no longer available." | "Desktop edit session not found." | "Desktop editing moved to another device. This local copy is preserved." | `File validation failed: ${string}` | "Workspace is not active" | "Desktop edit session is already closed." | "Desktop edit session file type changed while finalizing." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Base entity version not found.";
+
+type T2e29c5e55f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "flowRun";
+};
+
+type T2e9e8fc862 = {
+  lawId: string;
+  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
+};
+
+type T2eac278e7d = {
+  role?: null | "document-type-classifier";
+  dependencies?: Array<{
+    condition: T60e51917c9;
+    dependsOnSourceId: string;
+  }>;
+  name: string;
+  tool: {
+    type: "ai-model";
+    prompt: string;
+    version: 1;
+  } | {
+    type: "manual-input";
+    version: 1;
+  };
+  version: 1;
+  content: {
+    type: "file";
+    version: 1;
+  } | {
+    type: "text";
+    version: 1;
+  } | {
+    type: Tf795dc12d5;
+    options: Array<{
+      value: string;
+      color: string;
+    }>;
+    version: 1;
+    fallback: Tbe0400fa4c;
+  } | {
+    type: "date";
+    version: 1;
+  } | {
+    type: "int";
+    version: 1;
+  } | {
+    type: "money";
+    version: 1;
+    currency: Tbe0400fa4c;
+  } | {
+    type: "person";
+    version: 1;
+  };
+  sourceId: string;
+  createIfMissing: Tfddd645dc8;
+};
+
+type T2eda26bd51 = {
+  id: T501a665986;
+  decisionId: T406326c84f;
+  workspaceId: Te20afbb7bb;
+  note: Tbe0400fa4c;
+  linkedBy: string;
+  createdAt: string;
+};
+
+type T2f0f7289d9 = {
+  type: "tool-call";
+  id: string;
+  name: "create_matter_document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T6c9afce89f;
+} & T85a22e9285;
+
+type T2f120574a2 = {
+  status: "ready";
+};
+
+type T2fb0b2d20e = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
+
+type T302c0995c4 = {
+  status: "unavailable";
+  checkedAt: string;
+  reason: ("timeout" | "network" | "http-error" | "outage-page" | "soap-fault" | "malformed-response" | "source-error");
+  detail: Tbe0400fa4c;
+};
+
+type T30c869f383 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "user";
+};
+
+type T30f5b86cc2 = {
+  type: "tool-call";
+  id: string;
+  name: "update-current-skill-resource";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T310abc7c1b = null | {
+  pattern: Tbe0400fa4c;
+  range: Tbe0400fa4c;
+  raw?: unknown;
+};
+
+type T3119a3043a = {
+  workspaceId: T2b6cefd27b;
+};
+
+type T313f510b34 = null | T2a109871bb;
+
+type T3185916700 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListVerificationRun";
+};
+
+type T32a2c3700a = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkillResource";
+};
+
+type T32fdeee18e = {
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: Tbe0400fa4c;
+  id: string;
+  language: string;
+  slug: Tbe0400fa4c;
+};
+
+type T32ff7bfdbf = {
+  codigo?: string;
+  nombre?: string;
+  item?: T2194886cef | Array<T2194886cef>;
+};
+
+type T3373327116 = {
+  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
+  health: Te354fca58a;
+  stored: {
+    decisions: number;
+    asOf: Tbe0400fa4c;
+  };
+  addedLastWeek: T588d0ee653;
+  completeness: {
+    measuredSources: number;
+    stored: number;
+    reported: number;
+    storedAsOf: Tbe0400fa4c;
+    staleSources: number;
+    notMeasuredSources: number;
+    notCountedSources: number;
+  };
+  sources: ReadonlyArray<{
+    adapterKey: string;
+    name: string;
+    publicHomeUrl: string;
+    health: Te354fca58a;
+    lastSyncAt: Tbe0400fa4c;
+    completeness: {
+      state: "measured";
+    } & T95e2b6a406 | {
+      state: "stale";
+    } & T95e2b6a406 | {
+      state: "not-measured-yet";
+    } | {
+      state: "not-counted-yet";
+    };
+    addedLastWeek: T588d0ee653;
+  }>;
+};
+
+type T33acf664a2 = {
+  readonly input: T48c9e573fc;
+  readonly output: T646bf117c1;
+};
+
+type T34252d475f = {
+  viewId: T7e10a0d884;
+};
+
+type T34425e956a = {
+  readonly value: Taa8cddb06d;
+  readonly issues?: undefined;
+};
+
+type T346ea860b1 = {
+  readonly type: "contact";
+  readonly id: stll_api_contract_SafeId<"contact">;
+};
+
+type T347d72c6fa = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
+
+type T34da0c446b = {
+  workspaceId: string;
+};
+
+type T350a170d52 = {
+  needsApproval: true;
+  approvalSchema: undefined;
+};
+
+type T35a727ba02 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legislationDocument";
+};
+
+type T35afed2065 = {
+  type: ("unreliable-person" | "unreliable-vat-payer");
+  publishedOn: Tbe0400fa4c;
+};
+
+type T3682189719 = "approved" | "rejected";
+
+type T36f8891ad4 = null | Array<string>;
+
+type T37ad4e6588 = {
+  fileNumber: string;
+  court: Tbe0400fa4c;
+  phase: ("unverified" | "ongoing" | "ended");
+  stateCode: Tbe0400fa4c;
+  matchedBy: ("company-id" | "name-and-birth-date");
+  debtor: {
+    name: Tbe0400fa4c;
+    firstName: Tbe0400fa4c;
+    companyId: Tbe0400fa4c;
+    birthDate: Tbe0400fa4c;
+    address: Tbe0400fa4c;
+  };
+  insolvencyDeclaredOn: Tbe0400fa4c;
+  insolvencyEndedOn: Tbe0400fa4c;
+  url: Tbe0400fa4c;
+};
+
+type T37bc7049d3 = {
+  type: "tool-call";
+  id: string;
+  name: "read_document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T37fefd1259 = {
+  entityId: string;
+  fieldId: string;
+  fileId: string;
+  fileName: string;
+  renamed: Tfddd645dc8;
+};
+
+type T3802454091 = "language" | "presence" | "parameter" | "enumeration";
+
+type T386276519a = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalList";
+};
+
+type T38935fed2e = {
+  email: Tbe0400fa4c;
+  name: Tbe0400fa4c;
+};
+
+type T38997a08f8 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T38d4bc0e42 = {
+  playbookId: T4e595a8315;
+};
+
+type T38eb7c9eb4 = null | Array<T884a45faa8>;
+
+type T3913e4550c = {
+  lawId: string;
+  blockId: string;
+};
+
+type T392bdfc9ed = {
+  readonly target: ((T5e3ac29766 & string) | "draft-2020-12" | "draft-07" | "openapi-3.0");
+  readonly libraryOptions?: undefined | T631856df6b;
+};
+
+type T3a1c2c3f9f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "bilingualTranslationRun";
+};
+
+type T3a2aa457e2 = "available" | "unavailable" | "installed";
+
+type T3a3d8e6621 = {
+  type: "tool-call";
+  id: string;
+  name: "describe_template";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T3a5b898b8d = {
+  path: string;
+  label: string;
+};
+
+type T3a69eab32c = {
+  activeDraftContext?: undefined | {
+    type: "generated-document";
+    originChatMessageId: T66e92cdab1;
+    originChatThreadId: Taf779979ed;
+    toolCallId: string;
+    version: 1;
+  };
+  anonRestorations?: undefined | {
+    pairs: Array<Tc7eaf8104c>;
+  };
+  docxEditPreferences?: undefined | {
+    docxEditRepresentation?: undefined | "direct" | "tracked-changes";
+    editApplyMode?: undefined | "auto" | "manual";
+  };
+  mentions?: undefined | {
+    mentions: Array<((Ta3fb0e1ff6 & {
+      category: "entity";
+      resource: T2a53b33d09;
+      workspaceId: Tbe0400fa4c;
+    }) | (Ta3fb0e1ff6 & {
+      category: "workspace";
+      resource: T4c3eeb6df3;
+    }))>;
+  };
+  refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
+  refContext?: undefined | (Tcf21c48e21 & {
+    version: 1;
+  }) | (Tcf21c48e21 & {
+    version: 2;
+    refs: Array<{
+      kind: "contact";
+      ref: string;
+      contact: T346ea860b1;
+    } | {
+      kind: "entity";
+      ref: string;
+      entity: T2a53b33d09;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "matter";
+      ref: string;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "property";
+      ref: string;
+      property: {
+        readonly type: "property";
+        readonly id: stll_api_contract_SafeId<"property">;
+      };
+    } | {
+      kind: "source";
+      ref: string;
+      href: `#stella-source=${string}`;
+    }>;
+  });
+  serverProvenance?: undefined | {
+    type: "search-summary";
+    version: 1;
+  };
+  sourceDocuments?: undefined | Array<Tcde02c03e1>;
+  turnOutcome?: undefined | {
+    type: "awaiting-user";
+    interaction: {
+      type: "approval";
+      toolCallId: string;
+    } | {
+      type: "ask-user";
+      toolCallId: string;
+    } | {
+      type: "client-tool";
+      toolCallId: string;
+    };
+  } | {
+    type: "completed";
+  } | {
+    type: "cancelled";
+    reason: T5e702ac6d9;
+  } | {
+    type: "failed";
+    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "provider_stream_incomplete" | "loop_detected" | "empty_completion");
+  } | {
+    type: "interrupted";
+    reason: T5b6a988e20;
+  };
+  usage?: undefined | {
+    totalTokens: number;
+    completionTokens: number;
+    promptTokens: number;
+  } & {
+    completionTokensDetails?: undefined | {
+      reasoningTokens?: number;
+    };
+  };
+};
+
+type T3a7788c76f = {
+  readonly value: T2cf59f96cb;
+  readonly issues?: undefined;
+};
+
+type T3a81487f60 = {
+  type: "tool-call";
+  id: string;
+  name: "discover_tools";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T3a8e541c8b = {
+  success: true;
+  entityRef: string;
+  propertyRef: string;
+  newValue: string;
+};
+
+type T3ae65c10f1 = null | string;
+
+type T3ae717d55b = {
+  (args: Tce5e19ec0e, context?: Tc88149628d): (T5d269baf56 | Promise<T5d269baf56>);
+};
+
+type T3ae9eb741e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "auditLog";
+};
+
+type T3b2c7123e2 = {
+  text?: undefined | string;
+  title?: undefined | string;
+  departmentCode?: undefined | string;
+  legalRangeCode?: undefined | string;
+  matterCode?: undefined | string;
+  dateFrom?: undefined | string;
+  dateTo?: undefined | string;
+  offset?: undefined | number;
+  limit?: undefined | number;
+};
+
+type T3b4d67e019 = null | {
+  country?: string;
+  state?: string;
+  line1?: string;
+  line2?: string;
+  postalCode?: string;
+  city?: string;
+};
+
+type T3ba9545800 = {
+  workspaceId: string;
+};
+
+type T3c0c1b0a27 = {
+  title: string;
+  introduction: string;
+  investmentHeading: string;
+  investmentBody: string;
+  equityFinancingHeading: string;
+  equityFinancingBody: string;
+  conversionPriceHeading: string;
+  conversionPriceBody: string;
+  shareClassHeading: string;
+  shareClassBody: string;
+  liquidityEventHeading: string;
+  liquidityEventBody: string;
+  companyRepresentationsHeading: string;
+  companyRepresentationsBody: string;
+  generalHeading: string;
+  generalBody: string;
+};
+
+type T3c3fa57c15 = {
+  country?: string;
+  label?: string;
+  state?: string;
+  line2?: string;
+  postalCode?: string;
+  city?: string;
+  type: T10a0947927;
+  isPrimary: Tfddd645dc8;
+  line1: string;
+};
+
+type T3c7d464d59 = {
+  readonly input: T3b2c7123e2;
+  readonly output: T8c80beb4cd;
+};
+
+type T3c86765bb1 = "Forbidden" | T0fb1fed158;
+
+type T3d34d1a07d = {
+  estimatedUnits: number;
+  availableUnits: number;
+};
+
+type T3dc3e2ca32 = {
+  label?: string;
+  text: string;
+  id: string;
+};
+
+type T3e64088e2c = "failed" | "no-backend" | "below-floor";
+
+type T3ed0ca26b3 = {
+  readonly value: T8436dc75f2;
+  readonly issues?: undefined;
+};
+
+type T3f3b30a014 = "Unauthorized" | T0fb1fed158;
+
+type T3f8f92c9e4 = {
+  [key: string]: never;
+};
+
+type T3fbc5ba165 = readonly [T73b2a1010d, ...T73b2a1010d[]];
+
+type T4042d27c41 = {
+  workspaceId: string;
+};
+
+type T406326c84f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawDecision";
+};
+
+type T41e0ad416a = {
+  quote: string;
+  blockAnchorId: string;
+  startOffset: number;
+  endOffset: number;
+};
+
+type T41ee5fbcc8 = {
+  snippet?: string;
+  citation?: string;
+  jurisdiction?: string;
+  sourceType?: string;
+  type: "clip";
+  url: string;
+  version: 1;
+};
+
+type T426e4657a4 = null | string | number | Array<string>;
+
+type T42b0ce8576 = {
+  ok: false;
+  error: string;
+};
+
+type T4370dddc43 = {
+  type: "tool-call";
+  id: string;
+  name: "link_matter_contact";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T85a22e9285;
+
+type T43767f9c31 = {
+  templateId: string;
+  values: T98898fcada;
+};
+
+type T444ef89911 = {
+  readonly value: T9c71399a75;
+  readonly issues?: undefined;
+};
+
+type T4498be3bc0 = "Not Found" | {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tf976198c2f>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T3d34d1a07d;
+  error?: string;
+  claim?: T1987577a01;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<Tbbced72298>;
+};
+
 type T44e2cd4568 = null | false | true;
 
 type T450f33afce = string & valibot_Brand<"SafeId"> & {
@@ -33953,6 +33910,29 @@ type T47eb19fe67 = {
 
 type T47f7828fc7 = null | T6993bee61f;
 
+type T4801abd3d1 = {
+  documentId: T35a727ba02;
+  language: string;
+  anchorId: string;
+  citedAnchorId: Tbe0400fa4c;
+  headings: Array<{
+    anchorId: string;
+    level: T83854980c8;
+    text: string;
+  }>;
+  heading: (null | {
+    id: string;
+    anchorId: string;
+    level: T83854980c8;
+    text: string;
+  });
+  blocks: Array<{
+    id: string;
+    anchorId: string;
+    text: string;
+  }>;
+};
+
 type T4866a24af7 = null | T6e37e01eb4;
 
 type T48c9e573fc = {
@@ -33992,7 +33972,7 @@ type T4a9a2dd4a4 = null | "year" | "month" | "day";
 type T4ac8f6dd24 = {
   check?: Tc73300f3b4 | T53caa211eb;
   guidance?: string;
-  negotiation?: Ta1919aa7eb;
+  negotiation?: Tea672cd0a4;
   purpose?: string;
   issue: string;
   mode: "graded";
@@ -34043,7 +34023,7 @@ type T4c80e82e5d = string & valibot_Brand<"SafeId"> & {
 };
 
 type T4d118d2832 = {
-  contactId: (string & valibot_Brand<"SafeId"> & T76a3e02717);
+  contactId: (string & valibot_Brand<"SafeId"> & T1c99d77bbc);
 };
 
 type T4d5e4f5d1c = {
@@ -34090,13 +34070,81 @@ type T4f14f5a335 = "year" | "month" | "week" | "day";
 
 type T4f14fbee20 = "AR" | "BG" | "DE" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "LT" | "LV" | "NL" | "PL" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "ZH" | "CS" | "DA" | "EN-GB" | "EL" | "JA" | "KO" | "NB" | "PT-PT" | "UK" | "ZH-HANS" | "ZH-HANT" | "EN-US" | "PT-BR" | "ES-419";
 
-type T4fd3d0b2db = null | Taf33d8c472;
+type T4fd3d0b2db = null | T8135f755f6;
+
+type T500bae5525 = {
+  documentAst: (null | {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: undefined | "decision-title" | "section-heading";
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      note?: undefined | T1d6100d20a;
+      listDepth?: undefined | 1 | 2 | 3 | 4;
+      number?: undefined | number;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: undefined | "related-proceedings" | "metadata-table";
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: undefined | number;
+        rowSpan?: undefined | number;
+        header?: undefined | true;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: undefined | string;
+      width?: undefined | number;
+      height?: undefined | number;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4);
+  fulltext: Tbe0400fa4c;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  id: T35a727ba02;
+};
 
 type T501a665986 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawMatterLink";
 };
 
-type T504bb6d30f = Tfc50a8646b | Te17508d65e;
+type T504bb6d30f = Ta307d8fb8c | T6d7cc2a321;
 
 type T50638894d5 = {
   readonly value: Td84f9e1ca6;
@@ -34198,10 +34246,6 @@ type T5334594290 = {
   workspaceId: string;
 };
 
-type T53b95bbc9f = {
-  documentId: T6b147c2baf;
-};
-
 type T53be3fbe82 = {
   code: stll_api_contract_ContactImportIssueCode;
   field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "primary_email" | "primary_phone" | "address_line_1" | "address_line_2" | "postal_code");
@@ -34269,14 +34313,6 @@ type T55b0e1503d = {
   output?: T21d4acdd13 | T5e0fe5d459 | T6b4b00e15b | T8ec56b71d8;
 };
 
-type T560c64ac5c = {
-  fileName: string;
-  toolCallId: string;
-  originChatMessageId: T66e92cdab1;
-  originChatThreadId: Taf779979ed;
-  docxEditSnapshot: T94af9a40b9;
-};
-
 type T560ef50822 = {
   code?: string;
   message: string;
@@ -34285,9 +34321,9 @@ type T560ef50822 = {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -34295,6 +34331,11 @@ type T560ef50822 = {
   claim_token_expires?: string;
   post_claim_scopes?: Array<string>;
   requiredFields?: Array<Tbbced72298>;
+};
+
+type T561c958713 = {
+  code?: string;
+  message: string;
 };
 
 type T563dffc614 = {
@@ -34395,7 +34436,7 @@ type T58b763246a = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T591f462342 = {
   readonly input: T6225d0be51;
@@ -34410,7 +34451,7 @@ type T5969934f1a = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T5971389af6 = {
   status: ("accepted" | "new" | "snoozed" | "dismissed");
@@ -34555,6 +34596,11 @@ type T5ba12a51f9 = {
   workspaceId: T2b6cefd27b;
 };
 
+type T5bd2b68d05 = {
+  status: "unavailable";
+  reason: string;
+};
+
 type T5c4694a609 = {
   readonly value: T8c80beb4cd;
   readonly issues?: undefined;
@@ -34600,6 +34646,8 @@ type T5e0fe5d459 = {
   destination: "draft";
   fileName: string;
 };
+
+type T5e3ac29766 = {};
 
 type T5e6378eb9f = null | {
   street: Tbe0400fa4c;
@@ -34656,10 +34704,6 @@ type T62128c5ec5 = {
   workspaceId: string;
 };
 
-type T6215623c33 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalList";
-};
-
 type T622176dd6d = {
   matterRef: string;
   entityRef: string;
@@ -34681,16 +34725,6 @@ type T6269a5e99e = {
   platformFallback: Tfddd645dc8;
 };
 
-type T62738c1324 = {
-  text?: string;
-  snippet?: string;
-  provider?: string;
-  connectorSlug?: string;
-  sourceToolName?: string;
-  url: string;
-  title: string;
-};
-
 type T62d7ac0050 = {
   readonly value: Tce2d2f121d;
   readonly issues?: undefined;
@@ -34704,7 +34738,7 @@ type T631856df6b = {
 
 type T635a859ab7 = "left" | "right" | "preserve" | "center" | "both";
 
-type T63854f81c6 = null | T00e0a643b6;
+type T63854f81c6 = null | Te20afbb7bb;
 
 type T63924fc269 = {
   text: string;
@@ -34748,30 +34782,12 @@ type T66e92cdab1 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatMessage";
 };
 
-type T66ee481b93 = {
-  readonly "~standard": {
-    readonly jsonSchema: Tc49e8b2305;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Tb87e94c168;
-  };
-} & {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T71f88011ed): (T9334491cb1 | Te3fd0c0fbf | Promise<(T9334491cb1 | Te3fd0c0fbf)>);
-    };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Tb87e94c168;
-  };
-};
-
 type T67fcbc4a91 = {
   readonly input: Tb085302148;
   readonly output: T842e04d728;
 };
 
-type T682630bfc7 = null | T84cab9716c;
+type T682630bfc7 = null | T38935fed2e;
 
 type T6868c5f803 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "styleSet";
@@ -34779,6 +34795,13 @@ type T6868c5f803 = string & valibot_Brand<"SafeId"> & {
 
 type T68a1ff7fc9 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "workspaceViewTemplate";
+};
+
+type T68a79b2c83 = {
+  generatedAt: string;
+  model: string;
+  inputFingerprint: string;
+  tree: Array<T4a06edd937>;
 };
 
 type T68b623e94c = {
@@ -34806,18 +34829,18 @@ type T69e4442ba6 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T69ec7580d1 = {
   condition: T60e51917c9;
   dependsOnPropertyId: T173eec1550;
 };
 
-type T6afed77565 = "draft" | "approved" | "ephemeral";
-
-type T6b147c2baf = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legislationDocument";
+type T6a02bf8080 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "templateLookupFormat";
 };
+
+type T6afed77565 = "draft" | "approved" | "ephemeral";
 
 type T6b29dee50d = {
   kind: "fallback";
@@ -34834,7 +34857,7 @@ type T6b4b00e15b = {
 type T6b718d91dc = {
   createdAt: string;
   id: T66e92cdab1;
-  metadata?: T1ea61eec1a;
+  metadata?: T3a69eab32c;
   role: Tbc3d04c5ab;
   parts: Array<(tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | {
     type: "tool-result";
@@ -34846,7 +34869,7 @@ type T6b718d91dc = {
     error?: string;
     metadata?: T631856df6b;
     createdAt?: string;
-  } | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | Tca4616e593 | T69e4442ba6 | T286fe5c70c | Ta7d5e5a7dd | T0c8ae177fe | T8c3c1c32f4 | T37bc7049d3 | Tf6dd51ff2d | T38997a08f8 | Tc1a9238263 | Tcc93778d9d | Ta6e5948fa7 | Td79c27feb9 | T07baa563f5 | T194b1272b4 | T0a55c6eeb2 | T4370dddc43 | T8dafec6f73 | Ted2919e284 | Tc399155d09 | T942beb40a7 | T1207098b6b | T042c15c75c | T8761e3d1ea | T9a2f3d426d | T70b3acf43f | T90b63b6aaa | T55b0e1503d | T12d496804b | T7eb5d5c461 | T30f5b86cc2 | Td524f13c20 | T70e030032c | T04f044027c | T1b464e64a6 | T0c852b7d2d | T1a7e91a409 | Td198fe3f0d | Taa75430af9 | T9dadf9aafd | Tc6d6876c9a | T1ccacff7b7 | T9bc11d91fa | T25ac107f5d | Tad44fdcb7a | Tff1778545c | T5969934f1a | Te3715764bf | T58b763246a | Teb2ac01f34 | T19cd75bcc2 | Tfa205b00e7 | Teea8d3c0f8 | T7828552116 | T02e17dea94 | T8d6dbfb2be | Tccd7724753 | T2f0f7289d9 | T15be425e4b | T95c4235861 | Tc67673be53 | Tb3e472cfb3 | T6d79370f9f | T2310920144 | T3a3d8e6621 | Te9216ef372 | T0c25e198bf | Td949ea28ce | T6d624d1d5c | Td05bc7fda9 | T3a81487f60 | tanstack_ai_StructuredOutputPart<unknown> | {
+  } | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | Tca4616e593 | T69e4442ba6 | T286fe5c70c | Ta7d5e5a7dd | T0c8ae177fe | T8c3c1c32f4 | T37bc7049d3 | Tf6dd51ff2d | T38997a08f8 | Tc1a9238263 | Tcc93778d9d | Ta6e5948fa7 | Td79c27feb9 | T07baa563f5 | T194b1272b4 | T0a55c6eeb2 | T4370dddc43 | T8dafec6f73 | Ted2919e284 | Tc399155d09 | T942beb40a7 | T1207098b6b | T042c15c75c | T8761e3d1ea | T9a2f3d426d | T70b3acf43f | T90b63b6aaa | T55b0e1503d | T12d496804b | T7eb5d5c461 | T30f5b86cc2 | Td524f13c20 | T70e030032c | T04f044027c | T1b464e64a6 | T0c852b7d2d | T1a7e91a409 | Td198fe3f0d | Taa75430af9 | T9dadf9aafd | Tc6d6876c9a | T1ccacff7b7 | Tb49e06d399 | T25ac107f5d | Tad44fdcb7a | Tff1778545c | T5969934f1a | Te3715764bf | T58b763246a | Teb2ac01f34 | T19cd75bcc2 | Tfa205b00e7 | Teea8d3c0f8 | T7828552116 | T02e17dea94 | T8d6dbfb2be | Tccd7724753 | T2f0f7289d9 | T15be425e4b | T95c4235861 | Tc67673be53 | Tb3e472cfb3 | T6d79370f9f | T2310920144 | T3a3d8e6621 | Te9216ef372 | T0c25e198bf | Td949ea28ce | T6d624d1d5c | Td05bc7fda9 | T3a81487f60 | tanstack_ai_StructuredOutputPart<unknown> | {
     type: "subagent";
     subagent: {
       stop?: {
@@ -34857,10 +34880,10 @@ type T6b718d91dc = {
       parentRunId?: string;
       interruptIds?: undefined | Array<string>;
       messages: Array<Tcf1688e82d>;
-      error?: T44145b9198;
+      error?: T561c958713;
       name: string;
       description?: string;
-      metadata?: T9d83f57557;
+      metadata?: T74ebaa3415;
       parentSubagentRunId?: string;
       parentToolCallId?: string;
     };
@@ -34896,74 +34919,6 @@ type T6d031af10d = {
   sourceId: string;
 } | T4ac8f6dd24;
 
-type T6d60ad273f = {
-  documentAst: (null | {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: undefined | "decision-title" | "section-heading";
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
-      note?: undefined | T08254e0a67;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
-      number?: undefined | number;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: undefined | "related-proceedings" | "metadata-table";
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
-        header?: undefined | true;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: undefined | string;
-      width?: undefined | number;
-      height?: undefined | number;
-      plainText: string;
-    }>;
-  } | T9e71bd4de1);
-  fulltext: Tbe0400fa4c;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  id: T6b147c2baf;
-};
-
 type T6d624d1d5c = {
   type: "tool-call";
   id: string;
@@ -34972,7 +34927,7 @@ type T6d624d1d5c = {
   input?: unknown;
   state: Tfafd241922;
   output?: Tee12b2a0c6;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T6d79370f9f = {
   type: "tool-call";
@@ -34982,18 +34937,19 @@ type T6d79370f9f = {
   input?: unknown;
   state: Tfafd241922;
   output?: T5d269baf56;
-} & T6e81b203f5;
+} & T85a22e9285;
+
+type T6d7cc2a321 = {
+  readonly type: "absent";
+  readonly reason: ("not_published" | "parse_failed" | "publisher_placeholder" | "redistribution_withheld");
+};
+
+type T6db7aeaa15 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "template";
+};
 
 type T6e37e01eb4 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillRevision";
-};
-
-type T6e81b203f5 = {
-  approval?: {
-    id: string;
-    needsApproval: Tfddd645dc8;
-    approved?: false | true;
-  };
 };
 
 type T6e9118d33d = {
@@ -35068,7 +35024,7 @@ type T70b3acf43f = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T70e030032c = {
   type: "tool-call";
@@ -35078,7 +35034,7 @@ type T70e030032c = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T71643efc98 = "required" | "restricted";
 
@@ -35104,7 +35060,7 @@ type T71f8c17907 = {
   tags?: undefined | Array<string>;
   registrationNumber?: undefined | string;
   taxId?: undefined | string;
-  metadata?: undefined | T1befb01f3e;
+  metadata?: undefined | T8ea6f311ec;
 };
 
 type T7204429ae2 = {
@@ -35120,9 +35076,9 @@ type T7213122d77 = {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -35148,7 +35104,7 @@ type T72f7776665 = {
     displayName: string;
   });
   defaultViewId: (null | T7e10a0d884);
-  id: T00e0a643b6;
+  id: Te20afbb7bb;
   name: string;
   reference: string;
   clientId: Tb411b93636;
@@ -35158,6 +35114,11 @@ type T72f7776665 = {
 };
 
 type T731ffd6028 = T560ef50822 | T86f61f0431;
+
+type T73394a6a76 = {
+  instanceProvisioned: Tfddd645dc8;
+  decisionInstanceProvisioned: Tfddd645dc8;
+};
 
 type T73467fd01f = {
   lawId: string;
@@ -35189,24 +35150,15 @@ type T74a7b5630d = {
   readonly issues?: undefined;
 };
 
+type T74ebaa3415 = {
+  [key: string]: any;
+};
+
 type T7538035c96 = "medium" | "high" | "low" | "blocker";
 
 type T75c585bdb4 = {
   workspaceId: T2b6cefd27b;
 };
-
-type T75c6fa928a = {
-  title: string;
-  jurisdictions: ReadonlyArray<T61d3076ac0>;
-  fields: ReadonlyArray<string>;
-  slug: string;
-  license: string;
-  languages: ReadonlyArray<string>;
-  sha256: string;
-  legalArea: Tbe0400fa4c;
-};
-
-type T76055d566d = {};
 
 type T76156445ff = {
   label?: string;
@@ -35232,10 +35184,6 @@ type T764575d81d = {
   sha256Hex: string;
 };
 
-type T76a3e02717 = {
-  readonly __safeIdType?: "contact";
-};
-
 type T775353dad5 = null | T631856df6b;
 
 type T776ff126f4 = {
@@ -35246,9 +35194,9 @@ type T776ff126f4 = {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -35282,13 +35230,15 @@ type T7828552116 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T78cf7de591 = {
   workspaceId: string;
 };
 
 type T7906e8b72f = "private" | "team";
+
+type T791f46aa1e = Td148ae0348 | Td1fcedc3dd;
 
 type T7992dab398 = {
   readonly input: Taeaa3ad44e;
@@ -35308,9 +35258,21 @@ type T79f23715fc = {
 
 type T7a0a473ce3 = "workspaces.parties.client" | "templates.binding.sourceParty" | "common.matter" | "templates.binding.sourceAttorney" | "templates.binding.sourceFirm" | "common.displayName" | "contacts.fields.firstName" | "contacts.fields.lastName" | "common.organizationName" | "common.email" | "contacts.columns.phone" | "common.anonymizationLabels.address" | "contacts.fields.billingAddressLine1" | "contacts.fields.billingAddressCity" | "contacts.fields.billingAddressPostalCode" | "common.country" | "contacts.fields.registrationNumber" | "contacts.fields.taxId" | "contacts.fields.bankAccountIban" | "contacts.fields.bankAccountBic" | "contacts.communication.dataBoxPlaceholder" | "common.name" | "common.reference" | "templates.binding.fieldBillingReference" | "common.status" | "workspaces.parties.partyRoles.opposing_party" | "workspaces.parties.partyRoles.opposing_counsel" | "workspaces.parties.partyRoles.co_counsel" | "workspaces.parties.partyRoles.witness" | "workspaces.parties.partyRoles.expert_witness" | "workspaces.parties.partyRoles.third_party" | "workspaces.parties.partyRoles.judge" | "workspaces.parties.partyRoles.mediator" | "workspaces.parties.partyRoles.other" | "contacts.attorneys.responsible" | "contacts.attorneys.originating" | "templates.binding.attorneyLead";
 
+type T7a153ddc24 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "chatTurn";
+};
+
 type T7a1942a03f = {
   reason?: "processing" | "enqueue";
   status: "failed";
+};
+
+type T7a3ee17d2d = {
+  [key: string]: unknown;
+};
+
+type T7a4ca69142 = {
+  documentId: T35a727ba02;
 };
 
 type T7aebf701ec = "person" | "company-id" | "tax-id";
@@ -35339,7 +35301,7 @@ type T7cc13e2600 = {
     playbookMissing: Tfddd645dc8;
     basis: {
       references: Array<{
-        workspaceId: T00e0a643b6;
+        workspaceId: Te20afbb7bb;
         entityId: T23e9e9a218;
         entityVersionId: Tb86085a330;
         fileFieldId: T6993bee61f;
@@ -35533,7 +35495,7 @@ type T7eb5d5c461 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T7f217a9731 = {
   index: number;
@@ -35543,6 +35505,10 @@ type T7f217a9731 = {
   index: number;
   status: "skipped";
   reason: ("invalid_tax_id" | "contacts_limit_reached" | "duplicate_contact_id" | "duplicate_tax_id" | "invalid_row");
+};
+
+type T7fc66a79c4 = {
+  readonly error: "Not Found";
 };
 
 type T8065b8ad03 = string & valibot_Brand<"SafeId"> & {
@@ -35593,6 +35559,14 @@ type T80db06bf34 = {
   }>;
 };
 
+type T8135f755f6 = {
+  deletedAt: Tbe0400fa4c;
+  id: string;
+  image: Tbe0400fa4c;
+  name: Tbe0400fa4c;
+  type: "user";
+};
+
 type T818296fd17 = "none" | "bearer" | "oauth2";
 
 type T81e7f6a3eb = {
@@ -35607,21 +35581,22 @@ type T823941dec3 = {
   role: string;
 };
 
-type T82825555c9 = "translated" | "bilingual";
-
-type T8302235c19 = {
-  identificador?: string;
-  titulo?: string;
-  url_pdf?: {
-    pagina_final?: string;
-    pagina_inicial?: string;
-    szBytes?: string;
-    szKBytes?: string;
-    texto?: string;
-  };
-  url_html?: string;
-  url_xml?: string;
+type T824c9c84e1 = {
+  id: T406326c84f;
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: Tbe0400fa4c;
+  decisionType: Tbe0400fa4c;
+  ecli: Tbe0400fa4c;
+  language: string;
+  languageAlternates: ReadonlyArray<T32fdeee18e>;
+  slug: Tbe0400fa4c;
+} & {
+  citationAuthority: number;
 };
+
+type T82825555c9 = "translated" | "bilingual";
 
 type T832c2a19d3 = {
   results: Array<{
@@ -35636,42 +35611,6 @@ type T832c2a19d3 = {
 };
 
 type T83854980c8 = 1 | 2 | 3 | 4 | 5 | 6;
-
-type T83a69c5d1c = {
-  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
-  health: Te354fca58a;
-  stored: {
-    decisions: number;
-    asOf: Tbe0400fa4c;
-  };
-  addedLastWeek: T588d0ee653;
-  completeness: {
-    measuredSources: number;
-    stored: number;
-    reported: number;
-    storedAsOf: Tbe0400fa4c;
-    staleSources: number;
-    notMeasuredSources: number;
-    notCountedSources: number;
-  };
-  sources: ReadonlyArray<{
-    adapterKey: string;
-    name: string;
-    publicHomeUrl: string;
-    health: Te354fca58a;
-    lastSyncAt: Tbe0400fa4c;
-    completeness: {
-      state: "measured";
-    } & T094a680c09 | {
-      state: "stale";
-    } & T094a680c09 | {
-      state: "not-measured-yet";
-    } | {
-      state: "not-counted-yet";
-    };
-    addedLastWeek: T588d0ee653;
-  }>;
-};
 
 type T8422c22f27 = {
   kind: "cz-insolvency";
@@ -35718,7 +35657,7 @@ type T8462f8cf08 = {
 };
 
 type T84b2a2edb5 = {
-  id: Td15ae0fedc;
+  id: T6db7aeaa15;
   name: string;
   fileName: string;
   fieldCount: number;
@@ -35726,9 +35665,30 @@ type T84b2a2edb5 = {
   createdAt: string;
 };
 
-type T84cab9716c = {
-  email: Tbe0400fa4c;
-  name: Tbe0400fa4c;
+type T84ec37c6b4 = {
+  defaultFormatId: Tbe0400fa4c;
+  defaultFormatSource: (null | "organization" | "user");
+};
+
+type T85a22e9285 = {
+  approval?: {
+    id: string;
+    needsApproval: Tfddd645dc8;
+    approved?: false | true;
+  };
+};
+
+type T85af885d91 = {
+  numero?: string;
+  seccion?: Tfe6af8ed7e | Array<Tfe6af8ed7e>;
+  sumario_diario?: {
+    identificador?: string;
+    url_pdf?: {
+      szBytes?: string;
+      szKBytes?: string;
+      texto?: string;
+    };
+  };
 };
 
 type T85c0da56d3 = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
@@ -35755,6 +35715,10 @@ type T8643dbf11b = null | {
 
 type T86a1d73bed = "docx" | "xlsx" | "pptx";
 
+type T86cb36b507 = {
+  readonly __safeIdType?: "workspace";
+};
+
 type T86d8d3c659 = {
   query: string;
   limit: number;
@@ -35777,7 +35741,7 @@ type T8761e3d1ea = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T878ef6d1f6 = {
   query: string;
@@ -35816,9 +35780,9 @@ type T880f60a469 = "Bad Request" | {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -35835,7 +35799,7 @@ type T881fe81d91 = {
 
 type T884a45faa8 = "message" | "document" | "folder" | "task" | "link";
 
-type T88ad5a8d38 = null | Taf711e608a;
+type T88ad5a8d38 = null | T282a48bd54;
 
 type T8919d5949d = {
   provider: Tcc23752159;
@@ -35869,6 +35833,15 @@ type T89f3fe155f = {
   items: Array<T09dc0536e6>;
   nextCursor: Tbe0400fa4c;
   limit: number;
+};
+
+type T8a2c472711 = {
+  id: string;
+  resourceName: (string & valibot_Brand<"ResourceName">);
+  type: T9527c354f7;
+  title: string;
+  headline: Tbe0400fa4c;
+  updatedAt: string;
 };
 
 type T8ab40ae369 = {
@@ -35908,7 +35881,7 @@ type T8c3c1c32f4 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T8c80beb4cd = {
   text?: undefined | string;
@@ -35933,6 +35906,14 @@ type T8ccd7b8a1f = {
   type: "kanban";
 };
 
+type T8cd91eaf57 = {
+  street: Tbe0400fa4c;
+  postalCode: Tbe0400fa4c;
+  city: Tbe0400fa4c;
+  country: Tbe0400fa4c;
+  textAddress: Tbe0400fa4c;
+};
+
 type T8cf50df639 = {
   value: string;
   type: "text";
@@ -35947,7 +35928,18 @@ type T8d6dbfb2be = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
+
+type T8da97ce6b5 = {
+  required?: undefined | false | true;
+  minLength?: undefined | number;
+  maxLength?: undefined | number;
+  min?: undefined | number;
+  max?: undefined | number;
+  pattern?: undefined | string;
+  minItems?: undefined | number;
+  maxItems?: undefined | number;
+};
 
 type T8dafec6f73 = {
   type: "tool-call";
@@ -35957,7 +35949,7 @@ type T8dafec6f73 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T8de31056e4 = {
   templateId: string;
@@ -35966,6 +35958,19 @@ type T8de31056e4 = {
 type T8e48cbb643 = {
   readonly value: Tf72c012b56;
   readonly issues?: undefined;
+};
+
+type T8ea6f311ec = {
+  dataBoxes?: Array<{
+    label?: string;
+    id: string;
+    isPrimary: Tfddd645dc8;
+  }>;
+  customFields?: Array<{
+    value: string;
+    id: string;
+    label: string;
+  }>;
 };
 
 type T8eadc2be64 = {
@@ -36002,6 +36007,11 @@ type T8ff9f6d126 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
 };
 
+type T905f17eff7 = {
+  readonly value: Teab563bdda;
+  readonly issues?: undefined;
+};
+
 type T90864899a0 = "all" | "columns";
 
 type T90b63b6aaa = {
@@ -36012,7 +36022,7 @@ type T90b63b6aaa = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T91908c75f9 = {
   datePropertyId: string;
@@ -36038,14 +36048,6 @@ type T9281829eb5 = {
   role: ("tool" | "user" | "system" | "activity" | "assistant" | "reasoning" | "developer");
 };
 
-type T92d0af8865 = {
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete: string;
-  expires_in: number;
-  interval: number;
-};
-
 type T9334491cb1 = {
   readonly issues: ReadonlyArray<{
     readonly message: string;
@@ -36056,7 +36058,7 @@ type T9334491cb1 = {
 };
 
 type T93af4ea63a = {
-  listId: (null | T6215623c33);
+  listId: (null | T386276519a);
   filters: Array<stll_conditions_ConditionNode>;
   sorts: Array<T4c703c7179>;
   hiddenProperties: Array<string>;
@@ -36073,7 +36075,7 @@ type T942beb40a7 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T94af9a40b9 = {
   canApplyEdits?: false | true;
@@ -36106,10 +36108,18 @@ type T95c4235861 = {
   input?: unknown;
   state: Tfafd241922;
   output?: T1406cc2244;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T95d0de5680 = {
   skillName: string;
+};
+
+type T95e2b6a406 = {
+  stored: number;
+  storedAsOf: string;
+  reported: number;
+  reportedAsOf: string;
+  reportedBy: ("operator" | "publisher" | "listing");
 };
 
 type T95e2c0da1e = {
@@ -36226,20 +36236,7 @@ type T9a2f3d426d = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
-
-type T9a31037c51 = {
-  registry: T347d72c6fa;
-  formats: Array<{
-    key: string;
-    template: string;
-  }>;
-};
-
-type T9a40f14600 = {
-  validFrom: Tbe0400fa4c;
-  validTo: Tbe0400fa4c;
-};
+} & T85a22e9285;
 
 type T9a7fed5187 = "email" | "document" | "court" | "manual" | "flow" | "calendar" | "import" | "api";
 
@@ -36256,16 +36253,6 @@ type T9a9f6e322d = {
 type T9b129e6597 = {
   status: "saved";
 };
-
-type T9bc11d91fa = {
-  type: "tool-call";
-  id: string;
-  name: "use-browser";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: Tc6418cf1d2 | T2c38cb5eb5;
-} & T6e81b203f5;
 
 type T9bcd2c6ed7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "notification";
@@ -36295,10 +36282,6 @@ type T9c71399a75 = {
 
 type T9ce19af5be = null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "playbook_check_failed" | "reference_check_failed" | "enqueue_failed";
 
-type T9d83f57557 = {
-  [key: string]: any;
-};
-
 type T9d8da34b19 = {
   system: string;
   documentId: string;
@@ -36314,15 +36297,11 @@ type T9dadf9aafd = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type T9dd1760324 = {
   readonly input: T5d218cfca5;
   readonly output: T4b85e6a17a;
-};
-
-type T9e71bd4de1 = {
-  [key: string]: never;
 };
 
 type T9f60b23b0d = {
@@ -36336,8 +36315,9 @@ type T9fbd583e13 = {
   outcome: ("created" | "existing");
 };
 
-type Ta0197da346 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawJudge";
+type Ta00829b8c4 = {
+  version: 1;
+  boxes: Array<T880b804d02>;
 };
 
 type Ta03fcc4def = {
@@ -36364,21 +36344,21 @@ type Ta0a053f749 = {
 };
 
 type Ta0bbeaffaa = {
-  workspaceId?: T00e0a643b6;
-  contextMatterIds?: Array<T00e0a643b6>;
+  workspaceId?: Te20afbb7bb;
+  contextMatterIds?: Array<Te20afbb7bb>;
   truncateAfterMessageId?: T66e92cdab1;
   turnIntent?: "regenerate";
   toolScope?: "suggest-template-fields";
   runMode?: "agent";
-  userContext?: Tca2a3e7599;
-  activeDraft?: T560c64ac5c;
-  activeFile?: T0ad25a55b8;
-  activeTemplate?: T26f42d66de;
-  activeDecision?: T0de933e4cd;
-  activeExternal?: T62738c1324;
-  activeSkill?: Tc09d390530;
-  activeStatute?: T53b95bbc9f;
-  browserClient?: T002b7a31df;
+  userContext?: T129008ae9b;
+  activeDraft?: Tf78513ca89;
+  activeFile?: Tea998d0bab;
+  activeTemplate?: T1aa7c51f6e;
+  activeDecision?: Tbe6ab36107;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: Tc380b4b353;
+  activeStatute?: T7a4ca69142;
+  browserClient?: Tf9e246ce28;
   editApplyMode?: "auto" | "manual";
   docxEditRepresentation?: "direct" | "tracked-changes";
   devModelId?: string;
@@ -36395,7 +36375,7 @@ type Ta0bbeaffaa = {
 
 type Ta0c1d202e7 = null | stll_money_CentsAmount;
 
-type Ta0e1c4f807 = Tba19248280 | {
+type Ta0e1c4f807 = T12163e1f6a | {
   documentPending: Tfddd645dc8;
   documentReadFailed: Tfddd645dc8;
   documentUnavailable: Tfddd645dc8;
@@ -36419,7 +36399,7 @@ type Ta0e1c4f807 = Tba19248280 | {
   languageGroupKey: Tbe0400fa4c;
   decisionDate: Tbe0400fa4c;
   decisionType: Tbe0400fa4c;
-  documentAst: (null | T9e71bd4de1 | {
+  documentAst: (null | T3f8f92c9e4 | {
     metadata: Tb41431d9b3;
     source: T9d8da34b19;
     version: 1;
@@ -36439,7 +36419,7 @@ type Ta0e1c4f807 = Tba19248280 | {
       id: string;
       role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "signature" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
       anchorId: string;
-      note?: undefined | T08254e0a67;
+      note?: undefined | T1d6100d20a;
       inlines: Array<Ta4c2166933>;
       listDepth?: undefined | 1 | 2 | 3 | 4;
     } & {
@@ -36496,7 +36476,7 @@ type Ta0e1c4f807 = Tba19248280 | {
   judges: Array<{
     role: ("rapporteur" | "presiding" | "panel-member" | "dissenting" | "advocate-general");
     name: string;
-    judgeId: (null | Ta0197da346);
+    judgeId: (null | Te5f70e8d49);
     portrait: (null | {
       url: string;
       attribution: string;
@@ -36521,16 +36501,6 @@ type Ta0e1c4f807 = Tba19248280 | {
 
 type Ta10437f406 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "mcpConnector";
-};
-
-type Ta10554ed7b = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillProposal";
-};
-
-type Ta1919aa7eb = {
-  escalation?: string;
-  rationale?: string;
-  talkingPoints?: Array<string>;
 };
 
 type Ta2334aabfb = {
@@ -36562,6 +36532,11 @@ type Ta2d78c1129 = {
   }>;
 };
 
+type Ta307d8fb8c = {
+  readonly type: "present";
+  readonly text: string;
+};
+
 type Ta35ad6cf8a = {
   open: number;
   accepted: number;
@@ -36570,6 +36545,11 @@ type Ta35ad6cf8a = {
 
 type Ta3c7c5499a = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "taskAssignee";
+};
+
+type Ta3fb0e1ff6 = {
+  id: string;
+  label: string;
 };
 
 type Ta4c1d493fd = {
@@ -36621,10 +36601,6 @@ type Ta5a7a15b67 = {
   readonly output: T95e2c0da1e;
 };
 
-type Ta6ac4e7e6e = {
-  readonly error: "Not Found";
-};
-
 type Ta6e5948fa7 = {
   type: "tool-call";
   id: string;
@@ -36633,7 +36609,7 @@ type Ta6e5948fa7 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Ta70e9835f3 = "cz-insolvency" | "cz-vat-reliability";
 
@@ -36647,14 +36623,14 @@ type Ta7d5e5a7dd = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Ta81312e0a4 = {
   readonly "~standard": {
     readonly jsonSchema: Tc49e8b2305;
     readonly version: 1;
     readonly vendor: string;
-    readonly types?: undefined | Tcf382656b4;
+    readonly types?: undefined | T1060343604;
   };
 };
 
@@ -36679,17 +36655,6 @@ type Ta8d1af4749 = "none" | "account" | "api-key";
 
 type Ta92a4cb146 = null | Array<Te7a0943297>;
 
-type Ta97f719cc5 = {
-  required?: undefined | false | true;
-  minLength?: undefined | number;
-  maxLength?: undefined | number;
-  min?: undefined | number;
-  max?: undefined | number;
-  pattern?: undefined | string;
-  minItems?: undefined | number;
-  maxItems?: undefined | number;
-};
-
 type Ta9ad173755 = {
   savedSearchId: Tcdc6b0a442;
 };
@@ -36702,7 +36667,7 @@ type Taa75430af9 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Taa8cddb06d = {
   lawId: string;
@@ -36710,6 +36675,10 @@ type Taa8cddb06d = {
 
 type Taa9f64260f = {
   prompt: string;
+};
+
+type Taadba38b02 = {
+  ":workspaceId": T5e3ac29766;
 };
 
 type Tab1d8336c8 = {
@@ -36742,9 +36711,9 @@ type Tad44fdcb7a = {
   input?: unknown;
   state: Tfafd241922;
   output?: T3a8e541c8b;
-} & T6e81b203f5;
+} & T85a22e9285;
 
-type Tada6067f00 = T6d60ad273f | Ta6ac4e7e6e;
+type Tada6067f00 = T500bae5525 | T279717e2be;
 
 type Tae1a9610be = "failed" | "cancelled" | "running" | "completed" | "queued";
 
@@ -36796,26 +36765,10 @@ type Taef59073eb = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "mcpUserConnection";
 };
 
-type Taf33d8c472 = {
-  deletedAt: Tbe0400fa4c;
-  id: string;
-  image: Tbe0400fa4c;
-  name: Tbe0400fa4c;
-  type: "user";
-};
-
 type Taf56293cce = {
   messageId: string;
   before: number;
   after: number;
-};
-
-type Taf711e608a = {
-  id: T2c205b6e9a;
-  registry: T347d72c6fa;
-  name: string;
-  format: string;
-  createdAt: string;
 };
 
 type Taf779979ed = string & valibot_Brand<"SafeId"> & {
@@ -36840,7 +36793,7 @@ type Tb14bbccf94 = {
 } | {
   type: "pdf-page";
   pageNumber: number;
-  boundingBoxes?: undefined | Tef69109a6b;
+  boundingBoxes?: undefined | Ta00829b8c4;
 };
 
 type Tb165f0f166 = {
@@ -36874,9 +36827,9 @@ type Tb2f04eed16 = {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -36927,7 +36880,7 @@ type Tb3e472cfb3 = {
   input?: unknown;
   state: Tfafd241922;
   output?: Tcf27a234be;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tb411b93636 = null | Tbf83a7d346;
 
@@ -36946,6 +36899,16 @@ type Tb431e0fb82 = {
   readonly output: Ta2adf01c0a;
 };
 
+type Tb49e06d399 = {
+  type: "tool-call";
+  id: string;
+  name: "use-browser";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: Td148ae0348 | Td1fcedc3dd;
+} & T85a22e9285;
+
 type Tb4fc35ac16 = "user" | "proposed" | "detected";
 
 type Tb532bdabe3 = string & valibot_Brand<"SafeId"> & {
@@ -36961,12 +36924,6 @@ type Tb7bcf69f62 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "invoice";
 };
 
-type Tb822d6ac14 = {
-  codigo?: string;
-  nombre?: string;
-  item?: T8302235c19 | Array<T8302235c19>;
-};
-
 type Tb83bcd41f8 = {
   code?: string;
   message: string;
@@ -36975,9 +36932,9 @@ type Tb83bcd41f8 = {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -37008,9 +36965,9 @@ type Tb934c8da8e = {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -37033,10 +36990,6 @@ type Tb9db08c163 = null | Array<{
   title: Tbe0400fa4c;
   text: string;
 }>;
-
-type Tba19248280 = {
-  readonly error: "Not Found";
-};
 
 type Tba428f02e1 = {
   readonly [key: string]: never;
@@ -37070,7 +37023,7 @@ type Tbbddf8a170 = {
     type: "manual";
   } | {
     type: "schedule";
-    workspaceId: T00e0a643b6;
+    workspaceId: Te20afbb7bb;
     schedule: {
       dayOfWeek?: number;
       dayOfMonth?: number;
@@ -37079,7 +37032,7 @@ type Tbbddf8a170 = {
     };
   } | {
     type: "file-upload";
-    workspaceIds: (null | Array<T00e0a643b6>);
+    workspaceIds: (null | Array<Te20afbb7bb>);
     fileExtensions: (null | Array<string>);
   };
   steps: Array<{
@@ -37098,6 +37051,11 @@ type Tbbddf8a170 = {
   }>;
 };
 
+type Tbbe838b61c = {
+  validFrom: Tbe0400fa4c;
+  validTo: Tbe0400fa4c;
+};
+
 type Tbbfbf3c65c = {
   bold: Tfddd645dc8;
   alignment: T635a859ab7;
@@ -37111,11 +37069,6 @@ type Tbbfbf3c65c = {
 };
 
 type Tbc037571a0 = "free" | "pro";
-
-type Tbc14da7d48 = {
-  instanceProvisioned: Tfddd645dc8;
-  decisionInstanceProvisioned: Tfddd645dc8;
-};
 
 type Tbc32b289d5 = {
   (args: unknown, context?: Tc88149628d): unknown;
@@ -37143,13 +37096,17 @@ type Tbd6f65e1eb = {
   version: 1;
 };
 
-type Tbda09b9036 = null | T2c205b6e9a;
+type Tbda09b9036 = null | T6a02bf8080;
 
 type Tbdcaa23547 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clauseVersion";
 };
 
 type Tbe0400fa4c = null | string;
+
+type Tbe6ab36107 = {
+  decisionId: T406326c84f;
+};
 
 type Tbed0668ae0 = null | {
   amount: number;
@@ -37161,15 +37118,10 @@ type Tbf4e52e092 = {
   readonly output: T86d8d3c659;
 };
 
-type Tbf83a7d346 = string & valibot_Brand<"SafeId"> & T76a3e02717;
+type Tbf83a7d346 = string & valibot_Brand<"SafeId"> & T1c99d77bbc;
 
 type Tbf9acfc494 = {
   workspaceId: T2b6cefd27b;
-};
-
-type Tc09d390530 = {
-  skillId: T8ff9f6d126;
-  skillName: string;
 };
 
 type Tc0c3c02800 = {
@@ -37189,7 +37141,7 @@ type Tc1a9238263 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tc23cfaebea = null | {
   street: Tbe0400fa4c;
@@ -37230,6 +37182,11 @@ type Tc2e7697733 = {
   errors?: undefined | Array<Ta0a053f749>;
 };
 
+type Tc380b4b353 = {
+  skillId: T8ff9f6d126;
+  skillName: string;
+};
+
 type Tc399155d09 = {
   type: "tool-call";
   id: string;
@@ -37238,9 +37195,17 @@ type Tc399155d09 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
-type Tc3cf8464c3 = Tc6418cf1d2 | T2c38cb5eb5;
+type Tc42c89297d = {
+  text?: string;
+  snippet?: string;
+  provider?: string;
+  connectorSlug?: string;
+  sourceToolName?: string;
+  url: string;
+  title: string;
+};
 
 type Tc49e8b2305 = {
   readonly input: {
@@ -37286,32 +37251,6 @@ type Tc5ea972ce8 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "reportExport";
 };
 
-type Tc6418cf1d2 = {
-  protocolVersion: 3;
-  snapshot: {
-    contentTrust: "untrusted-web-content";
-    elements: Array<{
-      context?: undefined | string;
-      href?: undefined | string;
-      name: string;
-      ref: string;
-      role: string;
-      value?: undefined | string;
-    }>;
-    revision: string;
-    text: string;
-    textOffset: number;
-    textTotalChars: number;
-    title: string;
-    url: string;
-  };
-  status: "success";
-};
-
-type Tc66ff042da = {
-  readonly __safeIdType?: "workspace";
-};
-
 type Tc67673be53 = {
   type: "tool-call";
   id: string;
@@ -37320,7 +37259,7 @@ type Tc67673be53 = {
   input?: unknown;
   state: Tfafd241922;
   output?: Ta2d78c1129;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tc6d6876c9a = {
   type: "tool-call";
@@ -37330,7 +37269,7 @@ type Tc6d6876c9a = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tc6e1fc1a97 = "Bad Gateway" | {
   code?: string;
@@ -37340,9 +37279,9 @@ type Tc6e1fc1a97 = "Bad Gateway" | {
   reason?: string;
   required?: number;
   available?: number;
-  confirmation?: T1d7e53ae9c;
+  confirmation?: T3d34d1a07d;
   error?: string;
-  claim?: T92d0af8865;
+  claim?: T1987577a01;
   registration_id?: string;
   registration_type?: string;
   claim_url?: string;
@@ -37387,14 +37326,6 @@ type Tc8b5f0ee0a = {
   readonly output: T964e4dc2dd;
 };
 
-type Tca2a3e7599 = {
-  wordEditShortcut?: string;
-  wordEditAuthorName?: string;
-  locale: string;
-  userName: string;
-  timezone: string;
-};
-
 type Tca4109745b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentTranslationRun";
 };
@@ -37407,11 +37338,7 @@ type Tca4616e593 = {
   input?: unknown;
   state: Tfafd241922;
   output?: any;
-} & T6e81b203f5;
-
-type Tcb0f968164 = {
-  ":workspaceId": T76055d566d;
-};
+} & T85a22e9285;
 
 type Tcb19db2b80 = "other" | "expert_witness" | "filing_fee" | "travel" | "printing" | "courier";
 
@@ -37490,7 +37417,7 @@ type Tcc93778d9d = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tccd7724753 = {
   type: "tool-call";
@@ -37500,7 +37427,7 @@ type Tccd7724753 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tccd7994462 = {
   success: true;
@@ -37624,16 +37551,21 @@ type Tce5e19ec0e = {
 
 type Tceacd4fcc7 = "pending" | "applied";
 
-type Tcec18a7212 = {
-  numero?: string;
-  seccion?: Te574b24e3f | Array<Te574b24e3f>;
-  sumario_diario?: {
-    identificador?: string;
-    url_pdf?: {
-      szBytes?: string;
-      szKBytes?: string;
-      texto?: string;
+type Tcee5dc1789 = {
+  readonly "~standard": {
+    readonly jsonSchema: Tc49e8b2305;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | Tb87e94c168;
+  };
+} & {
+  readonly "~standard": {
+    readonly validate: {
+      (value: unknown, options?: T71f88011ed): (T9334491cb1 | Te3fd0c0fbf | Promise<(T9334491cb1 | Te3fd0c0fbf)>);
     };
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: undefined | Tb87e94c168;
   };
 };
 
@@ -37658,10 +37590,10 @@ type Tcf1688e82d = {
       parentRunId?: string;
       interruptIds?: undefined | Array<string>;
       messages: Array<Tcf1688e82d>;
-      error?: T44145b9198;
+      error?: T561c958713;
       name: string;
       description?: string;
-      metadata?: T9d83f57557;
+      metadata?: T74ebaa3415;
       parentSubagentRunId?: string;
       parentToolCallId?: string;
     };
@@ -37671,6 +37603,21 @@ type Tcf1688e82d = {
   metadata?: {
     [key: string]: any;
   };
+};
+
+type Tcf21c48e21 = {
+  entities: Array<{
+    entity: T2a53b33d09;
+    toolCallId: string;
+    workspace: T4c3eeb6df3;
+  }>;
+  unresolvedInputs: Array<{
+    kind: ("contact" | "entity" | "matter" | "property");
+    param: string;
+    ref: string;
+    toolCallId: string;
+  }>;
+  workspaceScope: Array<T4c3eeb6df3>;
 };
 
 type Tcf27a234be = {
@@ -37683,11 +37630,6 @@ type Tcf27a234be = {
   }>;
 };
 
-type Tcf382656b4 = {
-  readonly input: any;
-  readonly output: any;
-};
-
 type Tcf7096fd53 = null | string | number | false | true | T529735e682 | Array<Tcf7096fd53>;
 
 type Td05bc7fda9 = {
@@ -37698,15 +37640,34 @@ type Td05bc7fda9 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Td0e847ea74 = {
   readonly input: T7046a3cd58;
   readonly output: T5831ba7917;
 };
 
-type Td15ae0fedc = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "template";
+type Td148ae0348 = {
+  protocolVersion: 4;
+  snapshot: {
+    contentTrust: "untrusted-web-content";
+    elements: Array<{
+      context?: undefined | string;
+      href?: undefined | string;
+      name: string;
+      ref: string;
+      role: string;
+      value?: undefined | string;
+    }>;
+    revision: string;
+    text: string;
+    textOffset: number;
+    textTotalChars: number;
+    tabId: number;
+    title: string;
+    url: string;
+  };
+  status: "success";
 };
 
 type Td16108295a = "email" | "displayName" | "firstName" | "lastName" | "organizationName" | "address" | "phone" | "addressStreet" | "addressCity" | "addressPostalCode" | "addressCountry" | "registrationNumber" | "taxId" | "iban" | "bic" | "dataBox";
@@ -37719,7 +37680,7 @@ type Td198fe3f0d = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Td1d698d0b5 = {
   readonly input: T1406cc2244;
@@ -37729,6 +37690,13 @@ type Td1d698d0b5 = {
 type Td1fb7ffe46 = {
   readonly value: T6f9e2e6853;
   readonly issues?: undefined;
+};
+
+type Td1fcedc3dd = {
+  code: T00b5a3f4ca;
+  message: string;
+  protocolVersion: 4;
+  status: "error";
 };
 
 type Td204418ab7 = "decision" | "instruction" | "fact" | "preference" | "relationship";
@@ -37756,7 +37724,7 @@ type Td524f13c20 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Td527bc6af5 = {
   lawId: string;
@@ -37798,11 +37766,22 @@ type Td79c27feb9 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Td7c16cda70 = {
   readonly input: T1dec1d0a87;
   readonly output: Te384930758;
+};
+
+type Td810130c25 = {
+  title: string;
+  jurisdictions: ReadonlyArray<T61d3076ac0>;
+  fields: ReadonlyArray<string>;
+  slug: string;
+  license: string;
+  languages: ReadonlyArray<string>;
+  sha256: string;
+  legalArea: Tbe0400fa4c;
 };
 
 type Td84f9e1ca6 = {
@@ -37828,7 +37807,7 @@ type Td949ea28ce = {
   input?: unknown;
   state: Tfafd241922;
   output?: T832c2a19d3;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Td9d59542cb = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalReaderAnnotation";
@@ -37883,7 +37862,7 @@ type Tdbe417239b = {
   readonly issues?: undefined;
 };
 
-type Tdbef009541 = null | Array<(T84cab9716c & {
+type Tdbef009541 = null | Array<(T38935fed2e & {
   optional?: false | true;
   responseStatus?: null | string;
   type?: null | "optional" | "required" | "resource";
@@ -37927,7 +37906,7 @@ type Tdfa6d7299b = {
   workspaceId: string;
 };
 
-type Te06446a5fa = null | (T1befb01f3e & {
+type Te06446a5fa = null | (T8ea6f311ec & {
   version: 1;
   custom?: T529735e682;
 });
@@ -37948,17 +37927,14 @@ type Te16df143a9 = {
   field: Td16108295a;
 };
 
-type Te17508d65e = {
-  readonly type: "absent";
-  readonly reason: ("not_published" | "parse_failed" | "publisher_placeholder" | "redistribution_withheld");
-};
-
 type Te1f90e1fdd = {
   code: string;
   message: string;
   severity: Tf31e28edee;
   line?: undefined | number;
 };
+
+type Te20afbb7bb = string & valibot_Brand<"SafeId"> & T86cb36b507;
 
 type Te354fca58a = "unknown" | "disabled" | "current" | "delayed" | "stalled";
 
@@ -37970,7 +37946,7 @@ type Te3715764bf = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Te37ec2cbbd = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentReviewRun";
@@ -38039,26 +38015,8 @@ type Te481cc0140 = {
   readonly issues?: undefined;
 };
 
-type Te4d156ddc2 = {
-  id: T406326c84f;
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: Tbe0400fa4c;
-  decisionType: Tbe0400fa4c;
-  ecli: Tbe0400fa4c;
-  language: string;
-  languageAlternates: ReadonlyArray<T32fdeee18e>;
-  slug: Tbe0400fa4c;
-} & {
-  citationAuthority: number;
-};
-
-type Te574b24e3f = {
-  apartado?: Tb822d6ac14 | Array<Tb822d6ac14>;
-  codigo?: string;
-  item?: T8302235c19 | Array<T8302235c19>;
-  nombre?: string;
+type Te5f70e8d49 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawJudge";
 };
 
 type Te6e750ecc6 = {
@@ -38114,15 +38072,11 @@ type Te9216ef372 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Te922fcec0b = {
   readonly value: T964e4dc2dd;
   readonly issues?: undefined;
-};
-
-type Te9c0b20753 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "chatTurn";
 };
 
 type Te9efa1bb8e = {
@@ -38160,7 +38114,49 @@ type Tea5efc28d0 = {
   readonly issues?: undefined;
 };
 
+type Tea672cd0a4 = {
+  escalation?: string;
+  rationale?: string;
+  talkingPoints?: Array<string>;
+};
+
+type Tea998d0bab = {
+  fileFieldId?: T6993bee61f;
+  docxEditSnapshot?: T94af9a40b9;
+  supportsDocxEdits?: false | true;
+  entityId: T23e9e9a218;
+  fileName: string;
+};
+
 type Tea9af4cf16 = "table" | "paragraph" | "heading" | "listItem";
+
+type Teab563bdda = {
+  protocolVersion: 4;
+  snapshot: {
+    contentTrust: "untrusted-web-content";
+    elements: Array<{
+      context?: undefined | string;
+      href?: undefined | string;
+      name: string;
+      ref: string;
+      role: string;
+      value?: undefined | string;
+    }>;
+    revision: string;
+    text: string;
+    textOffset: number;
+    textTotalChars: number;
+    tabId: number;
+    title: string;
+    url: string;
+  };
+  status: "success";
+} | {
+  code: T00b5a3f4ca;
+  message: string;
+  protocolVersion: 4;
+  status: "error";
+};
 
 type Teaea18eeca = {
   workspaceId: string;
@@ -38176,13 +38172,18 @@ type Teb2ac01f34 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Teb50de97c7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawResearchColumn";
 };
 
-type Teb6f68ab0f = null | Te9c0b20753;
+type Teb6f68ab0f = null | T7a153ddc24;
+
+type Teb83a7a10a = {
+  code?: string;
+  text?: string;
+};
 
 type Tec209dc69c = {
   readonly value: Td256ffc109;
@@ -38209,7 +38210,7 @@ type Ted2919e284 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tedc8712fe4 = {
   readonly input: T43767f9c31;
@@ -38233,12 +38234,7 @@ type Teea8d3c0f8 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
-
-type Tef69109a6b = {
-  version: 1;
-  boxes: Array<T880b804d02>;
-};
+} & T85a22e9285;
 
 type Tefb102e423 = {
   "content-type": string;
@@ -38278,14 +38274,6 @@ type Tf42adc792b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillComment";
 };
 
-type Tf4d936028e = {
-  readonly error: "Not Found";
-};
-
-type Tf555caa6f9 = {
-  [key: string]: unknown;
-};
-
 type Tf68c73525f = "docx" | "xlsx" | "csv";
 
 type Tf6be02e277 = {
@@ -38312,18 +38300,21 @@ type Tf6dd51ff2d = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
-
-type Tf7089052a5 = {
-  readonly value: T0c6fb5c67e;
-  readonly issues?: undefined;
-};
+} & T85a22e9285;
 
 type Tf72c012b56 = {
   answers: Array<{
     question: string;
     answer: string;
   }>;
+};
+
+type Tf78513ca89 = {
+  fileName: string;
+  toolCallId: string;
+  originChatMessageId: T66e92cdab1;
+  originChatThreadId: Taf779979ed;
+  docxEditSnapshot: T94af9a40b9;
 };
 
 type Tf795dc12d5 = "single-select" | "multi-select";
@@ -38344,11 +38335,6 @@ type Tf7a762d6ad = {
   text: string;
 };
 
-type Tf7f46f643d = {
-  id: string;
-  label: string;
-};
-
 type Tf8140c6ae1 = "neutral" | "negative" | "positive" | "supportive" | "mixed" | "unclassified";
 
 type Tf8218060a3 = "draft" | "accepted" | "rejected" | "proposed";
@@ -38360,11 +38346,19 @@ type Tf8c3169b2f = {
   documentVersion?: string;
 };
 
+type Tf8edbf73b1 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkillProposal";
+};
+
 type Tf95e7c72a3 = null | T1d1d28b371;
 
 type Tf976198c2f = {
   path: string;
   message: string;
+};
+
+type Tf9e246ce28 = {
+  protocolVersion: number;
 };
 
 type Tf9f177c7df = {
@@ -38374,7 +38368,7 @@ type Tf9f177c7df = {
     };
     readonly version: 1;
     readonly vendor: string;
-    readonly types?: undefined | Tcf382656b4;
+    readonly types?: undefined | T1060343604;
   };
 };
 
@@ -38390,7 +38384,7 @@ type Tfa205b00e7 = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
 type Tfa4a809121 = {
   type: "main";
@@ -38420,7 +38414,7 @@ type Tfaa06c2259 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListItemSource";
 };
 
-type Tfab89e6ca5 = (T3b98ffcc55 & {
+type Tfab89e6ca5 = (T8a2c472711 & {
   type: T884a45faa8;
   resource: T2a53b33d09;
   entityId: string;
@@ -38432,18 +38426,18 @@ type Tfab89e6ca5 = (T3b98ffcc55 & {
   fileFieldId: Tbe0400fa4c;
   filePropertyId: Tbe0400fa4c;
   mimeType: Tbe0400fa4c;
-}) | (T3b98ffcc55 & {
+}) | (T8a2c472711 & {
   type: "matter";
   resource: T4c3eeb6df3;
   workspaceId: string;
   workspaceName: string;
   color: Tbe0400fa4c;
-}) | (T3b98ffcc55 & {
+}) | (T8a2c472711 & {
   type: "contact";
   resource: T346ea860b1;
   contactId: string;
   contactType: T1dacb02040;
-}) | (T3b98ffcc55 & {
+}) | (T8a2c472711 & {
   type: "case-law";
   resource: {
     readonly type: "case_law_decision";
@@ -38460,7 +38454,7 @@ type Tfab89e6ca5 = (T3b98ffcc55 & {
   languageAlternates: ReadonlyArray<{
     language: string;
   }>;
-}) | (T3b98ffcc55 & {
+}) | (T8a2c472711 & {
   type: "chat";
   resource: {
     readonly type: "chat_thread";
@@ -38477,11 +38471,6 @@ type Tfb7cce8440 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListColumn";
 };
 
-type Tfc50a8646b = {
-  readonly type: "present";
-  readonly text: string;
-};
-
 type Tfc73a40629 = null | {
   token?: unknown;
   roomId?: unknown;
@@ -38492,6 +38481,13 @@ type Tfddd645dc8 = false | true;
 type Tfe2faf9844 = {
   ok: true;
   result: stll_folio_agents_FolioAgentApplyOperationsSummary;
+};
+
+type Tfe6af8ed7e = {
+  apartado?: T32ff7bfdbf | Array<T32ff7bfdbf>;
+  codigo?: string;
+  item?: T2194886cef | Array<T2194886cef>;
+  nombre?: string;
 };
 
 type Tfe9ed7e6b7 = {
@@ -38507,9 +38503,9 @@ type Tff1778545c = {
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
-} & T6e81b203f5;
+} & T85a22e9285;
 
-type Tff4e0165d4 = Te17508d65e | (Tfc50a8646b & {
+type Tff4e0165d4 = T6d7cc2a321 | (Ta307d8fb8c & {
   readonly truncated: Tfddd645dc8;
 }) | {
   readonly type: "keywords";
