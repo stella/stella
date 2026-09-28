@@ -8,7 +8,7 @@ import path from "node:path";
  * the kinds are chained in one script, runs every other kind in full.
  */
 
-export type TestRun = {
+type TestRun = {
   readonly label: string;
   readonly args: readonly string[];
 };
