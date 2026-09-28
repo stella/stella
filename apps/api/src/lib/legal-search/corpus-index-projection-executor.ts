@@ -901,13 +901,11 @@ const processPreparedRequests = async ({
     );
     if (failure.stopForEngine) {
       result.status = "engine_unavailable";
+      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
     } else if (abandoned.blocked.length > 0) {
       result.status = "append_blocked";
     } else {
       result.status = "append_unknown";
-    }
-    if (failure.stopForEngine) {
-      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
     }
     return result.status;
   }
