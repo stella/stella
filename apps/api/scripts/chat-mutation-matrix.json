@@ -564,7 +564,7 @@
     },
     {
       "id": "approval-answer-in-its-step",
-      "fix": "#PR",
+      "fix": "#4020",
       "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
@@ -578,7 +578,7 @@
     },
     {
       "id": "approval-answer-in-its-step-dispatched",
-      "fix": "#PR",
+      "fix": "#4020",
       "behaviour": "Every chat attempt hands the provider the history with each call answered in its own step.",
       "status": "pending",
       "reason": "The harness checks chat.provider.prefix-stable on every conversation only once its prompt ledger lands; this scenario then kills the entry.",
