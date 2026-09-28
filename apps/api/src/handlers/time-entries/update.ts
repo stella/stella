@@ -147,14 +147,14 @@ export const updateTimeEntryHandler = async function* ({
   const policy = yield* Result.await(
     readTimePolicy({ safeDb, organizationId: existing.organizationId }),
   );
-  const today = yield* formatTodayInTimeZone({
-    timezoneId: body.timezoneId ?? existing.timezoneId,
+  const existingToday = yield* formatTodayInTimeZone({
+    timezoneId: existing.timezoneId,
   });
   const canApprove = canApproveTimeEntries(actor.memberRole);
   const existingViolation = getTimePolicyViolation({
     policy,
     dateWorked: existing.dateWorked,
-    today,
+    today: existingToday,
     canApprove,
     narrative: body.narrative ?? existing.narrative,
   });
@@ -176,10 +176,13 @@ export const updateTimeEntryHandler = async function* ({
         }),
       );
     }
+    const changedToday = yield* formatTodayInTimeZone({
+      timezoneId: body.timezoneId,
+    });
     const dateValidationError = getTimePolicyViolation({
       policy,
       dateWorked: changedDateWorked,
-      today,
+      today: changedToday,
       canApprove,
     });
     if (dateValidationError) {

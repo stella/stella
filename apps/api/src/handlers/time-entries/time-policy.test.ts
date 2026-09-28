@@ -127,6 +127,38 @@ describe("time entry policy at API write paths", () => {
     );
   });
 
+  test("an edited time zone cannot shift the existing entry into the edit window", async () => {
+    setSystemTime(new Date("2026-08-31T23:30:00.000Z"));
+    const { safeDb } = createScopedDbMock({
+      query: {
+        organizationSettings: {
+          findFirst: async () => ({ ...defaultPolicy, timeEditWindowDays: 0 }),
+        },
+        timeEntries: {
+          findFirst: async () => ({
+            ...entry,
+            timezoneId: "Asia/Tokyo",
+          }),
+        },
+      },
+      update: () => {
+        throw new Error("expired entry must not be updated");
+      },
+    });
+    const result = await Result.gen(() =>
+      updateTimeEntryHandler({
+        safeDb,
+        workspaceId,
+        actor: { userId, memberRole: { role: "member" } },
+        recordAuditEvent: async () => {},
+        body: { id: entryId, timezoneId: "America/Los_Angeles" },
+      }),
+    );
+    expect(Result.isError(result) && result.error.code).toBe(
+      "outside_edit_window",
+    );
+  });
+
   test("non-approver cannot delete an entry outside the edit window", async () => {
     setSystemTime(new Date("2026-09-01T12:00:00.000Z"));
     const { safeDb } = createScopedDbMock({
