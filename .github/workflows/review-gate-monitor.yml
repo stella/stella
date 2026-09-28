@@ -1,0 +1,87 @@
+name: Review Gate Monitor
+
+# Watches the Review Gate from outside it: shares no code with the evaluator,
+# so a broken evaluator cannot also silence this. It fails when a pull request
+# that is armed or queued has no `review-gate` verdict, or one stuck pending
+# past twice the longest reviewer wait, or when Review Gate's own recent runs
+# keep failing.
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: review-gate-monitor
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      checks: read
+      pull-requests: read
+    steps:
+      - name: Check for stale gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch }}
+          # Twice the longest reviewer timeout in .github/review-gate.yml.
+          STALE_MINUTES: 40
+        run: |
+          set -euo pipefail
+          owner="${REPO%%/*}"
+          name="${REPO#*/}"
+          # One page: the monitor only looks at pull requests about to land.
+          gh api graphql \
+            -f owner="$owner" -f name="$name" -f base="$BASE" \
+            -f query='
+              query($owner: String!, $name: String!, $base: String!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequests(states: OPEN, baseRefName: $base, first: 100) {
+                    nodes {
+                      number isDraft
+                      autoMergeRequest { enabledAt }
+                      mergeQueueEntry { position }
+                      commits(last: 1) { nodes { commit { statusCheckRollup {
+                        contexts(first: 100) { nodes {
+                          ... on CheckRun { name status startedAt }
+                        } }
+                      } } } }
+                    }
+                  }
+                }
+              }' > prs.json
+          stale=$(jq -r --argjson minutes "$STALE_MINUTES" '
+            (now - $minutes * 60) as $cutoff
+            | .data.repository.pullRequests.nodes[]
+            | select((.isDraft | not) and (.autoMergeRequest != null or .mergeQueueEntry != null))
+            | . as $pr
+            | [(.commits.nodes[0].commit.statusCheckRollup.contexts.nodes // [])[]
+                | select(.name == "review-gate")]
+            | (sort_by(.startedAt) | last) as $gate
+            | if $gate == null then "#\($pr.number): no review-gate verdict"
+              elif $gate.status != "COMPLETED"
+                and ($gate.startedAt | fromdateiso8601) < $cutoff
+              then "#\($pr.number): review-gate pending since \($gate.startedAt)"
+              else empty end' prs.json)
+
+          failed=$(gh api \
+            "repos/$REPO/actions/workflows/review-gate.yml/runs?status=completed&per_page=6" \
+            --jq '[.workflow_runs[] | select(.conclusion == "failure")] | length')
+
+          status=0
+          if [ -n "$stale" ]; then
+            echo "::error::Stale review gates:"
+            echo "$stale"
+            status=1
+          fi
+          if [ "$failed" -ge 3 ]; then
+            echo "::error::$failed of the last 6 Review Gate runs failed"
+            status=1
+          fi
+          exit "$status"

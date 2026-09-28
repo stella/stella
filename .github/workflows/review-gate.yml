@@ -1,0 +1,123 @@
+name: Review Gate
+
+# Publishes the `review-gate` check (scripts/review-gate-github.ts): the
+# configured reviewers have reported, or timed out, and no review thread is
+# unresolved.
+#
+# The only publisher. Every trigger below runs the default branch's version
+# of this file, and the job checks out the script and its config at that same
+# commit (`github.sha`), never from a pull request; it re-reads all state from
+# GitHub rather than trusting the event. Events that run a pull request's own
+# workflow version (reviews, review comments, merge groups) reach it through
+# the permissionless Review Gate Signal workflow instead.
+#
+# Emergency: if this workflow breaks while `review-gate` is a required check,
+# nothing can merge a fix through the queue. A repository admin removes the
+# check from the main-branch ruleset in Settings -> Rules, lands the fix,
+# and restores it (.github/branch-protection/ruleset-main.json is the record).
+on:
+  # `_target` runs the default branch's workflow with a token that can write
+  # checks, also for forks; nothing from the pull request is checked out.
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - converted_to_draft
+  # A re-request for a review restarts that reviewer's wait.
+  issue_comment:
+    types: [created]
+  # Reviewers that report as a commit status or a check run.
+  status:
+  check_run:
+    types: [completed]
+  workflow_run:
+    workflows: [Review Gate Signal]
+    types: [requested]
+  # Timeouts elapse without an event, reactions and thread resolution have no
+  # workflow trigger, and events can be missed; the sweep settles all three.
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to re-evaluate
+        required: true
+        type: number
+
+# Coalesces bursts for one target; correctness does not rest on it, since a
+# verdict read before the latest published one is never written.
+concurrency:
+  group: >-
+    review-gate-${{
+      github.event.pull_request.number
+      || github.event.issue.number
+      || inputs.pr
+      || github.event.workflow_run.head_sha
+      || github.event.sha
+      || github.event.check_run.head_sha
+      || 'sweep'
+    }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  publish:
+    # Only the default branch's definition publishes; a dispatch from another
+    # branch would otherwise run that branch's copy with a write token.
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      && (github.event_name != 'pull_request_target'
+        || github.event.pull_request.base.ref == github.event.repository.default_branch)
+      && (github.event_name != 'issue_comment'
+        || (github.event.issue.pull_request
+          && github.event.comment.user.type != 'Bot'
+          && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)))
+      && (github.event_name != 'status' || github.event.state != 'pending')
+      && (github.event_name != 'check_run' || github.event.check_run.app.slug != 'github-actions')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            scripts/review-gate.ts
+            scripts/review-gate-github.ts
+            .github/review-gate.yml
+          sparse-checkout-cone-mode: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_GATE_BASE: ${{ github.event.repository.default_branch }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
+          STATUS_SHA: ${{ github.event.sha }}
+          STATUS_CONTEXT: ${{ github.event.context }}
+          CHECK_SHA: ${{ github.event.check_run.head_sha }}
+          CHECK_NAME: ${{ github.event.check_run.name }}
+          RELAY_EVENT: ${{ github.event.workflow_run.event }}
+          RELAY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RELAY_PULL_REQUESTS: ${{ join(github.event.workflow_run.pull_requests.*.number, ',') }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            status) bun scripts/review-gate-github.ts sha "$STATUS_SHA" --signal "$STATUS_CONTEXT" ;;
+            check_run) bun scripts/review-gate-github.ts sha "$CHECK_SHA" --signal "$CHECK_NAME" ;;
+            workflow_run) bun scripts/review-gate-github.ts relay ;;
+            schedule) bun scripts/review-gate-github.ts sweep ;;
+            *) bun scripts/review-gate-github.ts pr "$PR_NUMBER" ;;
+          esac
