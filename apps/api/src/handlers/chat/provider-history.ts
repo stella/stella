@@ -28,7 +28,6 @@ export const withoutRepeatedCalls = (
   messages: readonly ChatMessage[],
 ): readonly ChatMessage[] => {
   const seen = new Set<string>();
-  let changed = false;
   const kept = messages.map((message) => {
     if (message.role !== "assistant") {
       return message;
@@ -46,7 +45,6 @@ export const withoutRepeatedCalls = (
     if (repeated.size === 0) {
       return message;
     }
-    changed = true;
     return {
       ...message,
       parts: message.parts.filter((part) =>
@@ -56,7 +54,9 @@ export const withoutRepeatedCalls = (
       ),
     };
   });
-  return changed ? kept : messages;
+  return kept.some((message, index) => message !== messages[index])
+    ? kept
+    : messages;
 };
 
 /**
