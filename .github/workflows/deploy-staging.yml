@@ -1,21 +1,22 @@
 name: Deploy main to staging
 
-# Deploys the tip of main into staging once a day, and on demand. The
-# tagged release workflow remains the production path.
+# Deploys the tip of main into staging on demand. The tagged release
+# workflow remains the production path and does not depend on this one.
 #
-# The scheduled run deploys only when staging serves a different commit than
-# main, so a day without merges deploys nothing. Staging can be unreachable
-# for reasons that say nothing about the commit, so an unreachable
-# environment defers the deploy instead of failing it, and the next
-# scheduled run resumes it once staging answers again. What still fails is a
-# commit that cannot reach staging for MAX_DEFERRAL_HOURS: that is a stalled
-# delivery rather than a passing interruption.
+# Staging is off unless someone starts it, so this runs only when
+# dispatched. A dispatch while staging is not answering deploys nothing and
+# stays green with a notice: start staging first, then dispatch again. To
+# deploy a fix to a staging that is up but unhealthy, dispatch with
+# deploy_when_unreachable.
 
 on:
-  schedule:
-    # Daily, after the staging environment's own morning start.
-    - cron: "0 6 * * *"
   workflow_dispatch:
+    inputs:
+      deploy_when_unreachable:
+        description: "Deploy even when staging does not answer its health probe"
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -32,7 +33,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      deployments: read
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
 
@@ -110,117 +110,34 @@ jobs:
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           echo "served_commit=${served_commit}" >> "$GITHUB_OUTPUT"
 
-      # Absent staging defers; a commit that stays undeliverable fails.
-      - name: Decide deploy, defer, or escalate
+      # Staging that does not answer is normally off. Deploying into it would
+      # leave the smoke below measuring an environment that is not running.
+      - name: Decide deploy or skip
         id: decide
         env:
-          DEPLOY_ENVIRONMENT: staging
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SERVED_COMMIT: ${{ steps.probe.outputs.served_commit }}
+          DEPLOY_WHEN_UNREACHABLE: ${{ inputs.deploy_when_unreachable }}
           STATUS: ${{ steps.probe.outputs.status }}
         run: |
           set -euo pipefail
 
-          # A passing interruption resolves well inside this budget; anything
-          # longer is a stalled delivery worth waking someone. The gate is
-          # sampled once a day, so the budget spans more than one sample: an
-          # outage that outlives the first daily run is observed by the next.
-          readonly MAX_DEFERRAL_HOURS=36
-
           if [[ "$STATUS" == "ready" ]]; then
-            # A dispatch always deploys what it carries. The schedule only
-            # deploys when it can prove staging serves something else, so an
-            # unreadable commit stamp leaves staging alone instead of
-            # redeploying it on every tick.
-            if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-              if [[ ! "$SERVED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
-                echo "deploy=false" >> "$GITHUB_OUTPUT"
-                echo "Staging reported no resolvable commit, so there is nothing to resume." >> "$GITHUB_STEP_SUMMARY"
-                exit 0
-              fi
-              if [[ "$SERVED_COMMIT" == "$GITHUB_SHA" ]]; then
-                echo "deploy=false" >> "$GITHUB_OUTPUT"
-                echo "Staging already serves \`${GITHUB_SHA}\`; nothing to resume." >> "$GITHUB_STEP_SUMMARY"
-                exit 0
-              fi
-            fi
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ "$DEPLOY_WHEN_UNREACHABLE" == "true" ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Staging is not answering; workflow_dispatch bypasses the gate and deploys anyway."
+            echo "::notice::Staging is not answering; deploying anyway as requested."
             exit 0
           fi
 
           echo "deploy=false" >> "$GITHUB_OUTPUT"
-
-          # Only the schedule escalates: a dispatch has just started waiting,
-          # and the schedule revisits it against a measured wait, so the
-          # decision is made in one place.
-          if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
-            # The last commit recorded as deployed. Empty before this workflow
-            # has recorded one, which reads as "still pending" and so can only
-            # escalate, never suppress.
-            deployed_sha="$(
-              gh api \
-                "repos/${GITHUB_REPOSITORY}/deployments?environment=${DEPLOY_ENVIRONMENT}&per_page=1" \
-                --jq '.[0].sha // ""'
-            )"
-
-            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
-              {
-                echo "### Staging is not answering"
-                echo "Nothing is waiting: staging already has \`${GITHUB_SHA}\`, so this run stays green."
-              } >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-
-            # How long delivery has been blocked, which is the age of the
-            # oldest commit staging has not taken yet. Measuring the tip
-            # instead would restart the clock on every push made during one
-            # continuous outage, so the alarm would never fire. jq resolves
-            # the timestamp so the arithmetic does not depend on GNU date's -d.
-            pending_since_epoch=""
-            if [[ -n "$deployed_sha" ]]; then
-              pending_since_epoch="$(
-                gh api \
-                  "repos/${GITHUB_REPOSITORY}/compare/${deployed_sha}...${GITHUB_SHA}" \
-                  --jq '[.commits[].commit.committer.date | fromdateiso8601] | first // empty' \
-                  2>/dev/null || true
-              )"
-            fi
-
-            # Before the first recorded deployment, and if the recorded commit
-            # has since left the history, the tip is all there is to measure.
-            if [[ -z "$pending_since_epoch" ]]; then
-              pending_since_epoch="$(
-                gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" \
-                  --jq '.commit.committer.date | fromdateiso8601'
-              )"
-            fi
-
-            waited_seconds=$(( $(date -u +%s) - pending_since_epoch ))
-
-            if (( waited_seconds > MAX_DEFERRAL_HOURS * 3600 )); then
-              waited_hours=$(( waited_seconds / 3600 ))
-              {
-                echo "### Staging deploy stalled"
-                echo "Staging has not answered its health probe, and has taken no commit for ${waited_hours}h. The tip waiting on it is \`${GITHUB_SHA}\`."
-                echo "That is past the ${MAX_DEFERRAL_HOURS}h budget, so staging needs a look."
-              } >> "$GITHUB_STEP_SUMMARY"
-              echo "::error::Staging has taken no commit for ${waited_hours}h (budget ${MAX_DEFERRAL_HOURS}h); the environment needs attention."
-              exit 1
-            fi
-          fi
-
           {
-            echo "### Staging deploy deferred"
+            echo "### Staging is off"
             echo "Staging is not answering its health probe, so \`${GITHUB_SHA}\` was not deployed."
-            echo "The scheduled run resumes it automatically once staging is reachable; this run stays green because the commit itself is fine."
+            echo "Start staging, then dispatch this workflow again."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice::Staging is not answering; deploy of ${GITHUB_SHA} deferred until it does."
+          echo "::notice::Staging is not answering; nothing was deployed. Start staging, then dispatch again."
 
   build-api:
     name: Build staging API image
@@ -417,9 +334,7 @@ jobs:
           web-image-digest: ${{ needs.build-web.outputs.digest }}
           git-sha: ${{ github.sha }}
 
-      # The commit staging is running, recorded where it outlives this run:
-      # the health gate reads it to tell a deploy that is waiting from one
-      # that is stuck.
+      # The commit staging is running, recorded where it outlives this run.
       - name: Record staging deployment
         if: steps.current.outputs.promoted == 'true'
         env:
