@@ -13,37 +13,16 @@ import {
 type FailureCode = NonNullable<
   typeof sanctionsSources.$inferSelect.lastFailureCode
 >;
-
-const isHeldUpdate = (code: FailureCode): boolean => {
-  switch (code) {
-    case "replacement-below-minimum":
-    case "replacement-contracted":
-    case "replacement-stale":
-    case "replacement-source-mismatch":
-      return true;
-    case "access-denied":
-    case "fetch-failed":
-    case "metadata-invalid":
-    case "parse-failed":
-      return false;
-    default: {
-      code satisfies never;
-      return panic("Unknown sanctions refresh failure");
-    }
-  }
-};
+type GuardCode = NonNullable<
+  typeof sanctionsSources.$inferSelect.heldGuardCode
+>;
 
 export type SanctionsSourceFreshness = {
   source: SanctionsSource;
   issuer: string;
   licence: string | null;
   status: "fresh" | "unavailable";
-  reason:
-    | "not-loaded"
-    | "access-denied"
-    | "stale"
-    | "list-update-held-for-review"
-    | null;
+  reason: "not-loaded" | "access-denied" | "stale" | null;
   edition: {
     id: typeof sanctionsEditions.$inferSelect.id;
     publishedAt: string;
@@ -53,37 +32,41 @@ export type SanctionsSourceFreshness = {
   lastCheckedAt: Date | null;
   lastSuccessfulVerifiedAt: Date | null;
   heldUpdate: {
-    code: FailureCode;
+    editionId: typeof sanctionsEditions.$inferSelect.id;
+    code: GuardCode;
     at: Date;
     previousCount: number | null;
     nextCount: number | null;
   } | null;
+  annotation:
+    | { type: "held-for-review"; code: GuardCode }
+    | { type: "transport-failure"; code: FailureCode; at: Date }
+    | null;
 };
-
-type FreshnessReason = SanctionsSourceFreshness["reason"];
 
 const freshnessReason = ({
   hasEdition,
   lastVerified,
   failureCode,
-  heldUpdate,
   now,
   freshnessMs,
 }: {
   hasEdition: boolean;
   lastVerified: Date | null;
   failureCode: FailureCode | null;
-  heldUpdate: SanctionsSourceFreshness["heldUpdate"];
   now: Date;
   freshnessMs: number;
-}): FreshnessReason => {
-  if (!hasEdition || lastVerified === null) {return "not-loaded";}
-  if (failureCode === "access-denied") {return "access-denied";}
-  if (now.getTime() - lastVerified.getTime() <= freshnessMs) {return null;}
-  return heldUpdate === null ? "stale" : "list-update-held-for-review";
+}): SanctionsSourceFreshness["reason"] => {
+  if (!hasEdition || lastVerified === null) {
+    return failureCode === "access-denied" ? "access-denied" : "not-loaded";
+  }
+  if (now.getTime() - lastVerified.getTime() > freshnessMs) {
+    return "stale";
+  }
+  return null;
 };
 
-const loadSanctionsRows = async (db: ScopedDb, ids: SanctionsSource[]) => 
+const loadSanctionsRows = async (db: ScopedDb, ids: SanctionsSource[]) =>
   await db(
     async (tx) =>
       await tx
@@ -92,12 +75,15 @@ const loadSanctionsRows = async (db: ScopedDb, ids: SanctionsSource[]) =>
           issuer: sanctionsSources.issuer,
           licence: sanctionsSources.licence,
           activeEditionId: sanctionsSources.activeEditionId,
+          heldEditionId: sanctionsSources.heldEditionId,
+          heldGuardCode: sanctionsSources.heldGuardCode,
+          heldAt: sanctionsSources.heldAt,
+          heldPreviousCount: sanctionsSources.heldPreviousCount,
+          heldNextCount: sanctionsSources.heldNextCount,
           lastCheckedAt: sanctionsSources.lastCheckedAt,
           lastSuccessfulVerifiedAt: sanctionsSources.lastSuccessfulVerifiedAt,
           lastFailureAt: sanctionsSources.lastFailureAt,
           lastFailureCode: sanctionsSources.lastFailureCode,
-          lastFailurePreviousCount: sanctionsSources.lastFailurePreviousCount,
-          lastFailureNextCount: sanctionsSources.lastFailureNextCount,
           editionId: sanctionsEditions.id,
           editionState: sanctionsEditions.state,
           publishedAt: sanctionsEditions.publishedAt,
@@ -111,10 +97,51 @@ const loadSanctionsRows = async (db: ScopedDb, ids: SanctionsSource[]) =>
         )
         .where(inArray(sanctionsSources.id, ids))
         .limit(ids.length),
-  )
-;
+  );
 
 type SanctionsSourceRow = Awaited<ReturnType<typeof loadSanctionsRows>>[number];
+
+const activeEditionFromRow = (
+  row: SanctionsSourceRow | undefined,
+): SanctionsSourceFreshness["edition"] => {
+  if (row?.activeEditionId === null || row?.activeEditionId === undefined) {
+    return null;
+  }
+  if (
+    row.editionId === null ||
+    row.editionId !== row.activeEditionId ||
+    row.editionState !== "ready"
+  ) {
+    return panic("Sanctions active edition is missing or not ready");
+  }
+  if (row.publishedAt === null || row.entryCount === null) {
+    return panic("Sanctions active edition fields are missing");
+  }
+  return {
+    id: row.editionId,
+    publishedAt: row.publishedAt,
+    fileId: row.fileId,
+    entryCount: row.entryCount,
+  };
+};
+
+const heldUpdateFromRow = (
+  row: SanctionsSourceRow | undefined,
+): SanctionsSourceFreshness["heldUpdate"] => {
+  if (row?.heldGuardCode === null || row?.heldGuardCode === undefined) {
+    return null;
+  }
+  if (row.heldEditionId === null || row.heldAt === null) {
+    return panic("Sanctions held update fields are missing");
+  }
+  return {
+    editionId: row.heldEditionId,
+    code: row.heldGuardCode,
+    at: row.heldAt,
+    previousCount: row.heldPreviousCount,
+    nextCount: row.heldNextCount,
+  };
+};
 
 type ToFreshnessOptions = {
   source: SanctionsSource;
@@ -128,48 +155,32 @@ const toSourceFreshness = ({
   now,
 }: ToFreshnessOptions): SanctionsSourceFreshness => {
   const config = SANCTIONS_SOURCE_CONFIG[source];
-  if (
-    row?.activeEditionId !== null &&
-    row?.activeEditionId !== undefined &&
-    (row.editionId !== row.activeEditionId || row.editionState !== "ready")
-  ) {
-    return panic("Sanctions active edition is missing or not ready");
-  }
-  let edition: SanctionsSourceFreshness["edition"] = null;
-  if (row?.activeEditionId !== null && row?.activeEditionId !== undefined) {
-    if (
-      row.editionId === null ||
-      row.publishedAt === null ||
-      row.entryCount === null
-    ) {
-      return panic("Sanctions active edition fields are missing");
-    }
-    edition = {
-      id: row.editionId,
-      publishedAt: row.publishedAt,
-      fileId: row.fileId,
-      entryCount: row.entryCount,
-    };
-  }
+  const edition = activeEditionFromRow(row);
+  const heldUpdate = heldUpdateFromRow(row);
+
   const failureCode = row?.lastFailureCode ?? null;
-  const heldUpdate =
-    failureCode !== null && row?.lastFailureAt && isHeldUpdate(failureCode)
-      ? {
-          code: failureCode,
-          at: row.lastFailureAt,
-          previousCount: row.lastFailurePreviousCount,
-          nextCount: row.lastFailureNextCount,
-        }
-      : null;
+  const failureAt = row?.lastFailureAt ?? null;
+  if ((failureCode === null) !== (failureAt === null)) {
+    return panic("Sanctions transport failure fields are inconsistent");
+  }
   const lastVerified = row?.lastSuccessfulVerifiedAt ?? null;
   const reason = freshnessReason({
     hasEdition: edition !== null,
     lastVerified,
     failureCode,
-    heldUpdate,
     now,
     freshnessMs: config.freshnessMs,
   });
+  let annotation: SanctionsSourceFreshness["annotation"] = null;
+  if (heldUpdate !== null) {
+    annotation = { type: "held-for-review", code: heldUpdate.code };
+  } else if (failureCode !== null && failureAt !== null) {
+    annotation = {
+      type: "transport-failure",
+      code: failureCode,
+      at: failureAt,
+    };
+  }
   return {
     source,
     issuer: row?.issuer ?? config.issuer,
@@ -180,6 +191,7 @@ const toSourceFreshness = ({
     lastCheckedAt: row?.lastCheckedAt ?? null,
     lastSuccessfulVerifiedAt: lastVerified,
     heldUpdate,
+    annotation,
   };
 };
 

@@ -12,6 +12,7 @@ import {
 } from "@stll/sanctions";
 import type { ListVersion, ParsedList, SanctionsSource } from "@stll/sanctions";
 
+import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   safeOutboundFetchBytes,
@@ -22,6 +23,7 @@ import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/sanctions/source-config";
 const METADATA_MAX_BYTES = 1_000_000;
 const LIST_MAX_BYTES = 64_000_000;
 const REQUEST_TIMEOUT_MS = 30_000;
+const STREAM_TOTAL_TIMEOUT_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 3;
 const EU_XML_TITLE = "Consolidated Financial Sanctions File 1.1";
 const EU_XML_PATH = "/fsd/fsf/public/files/xmlFullSanctionsList_1_1/content";
@@ -135,8 +137,12 @@ export const discoverCzCsvUrl = (
     }
   });
   candidates.sort((left, right) => {
-    if (left.publishedAt < right.publishedAt) {return 1;}
-    if (left.publishedAt > right.publishedAt) {return -1;}
+    if (left.publishedAt < right.publishedAt) {
+      return 1;
+    }
+    if (left.publishedAt > right.publishedAt) {
+      return -1;
+    }
     return 0;
   });
   const latest = candidates.at(0);
@@ -145,7 +151,7 @@ export const discoverCzCsvUrl = (
     : Result.ok(latest.url);
 };
 
-type FetchedMarker = {
+export type FetchedMarker = {
   source: SanctionsSource;
   version: ListVersion;
   downloadUrl: string;
@@ -153,7 +159,9 @@ type FetchedMarker = {
 
 type FetchOptions = {
   euXmlUrlOverride?: string | undefined;
+  fetchStreamRequest?: typeof safeOutboundFetchStream | undefined;
   signal: AbortSignal;
+  streamTotalTimeoutMs?: number | undefined;
   userAgent?: string | undefined;
 };
 
@@ -165,7 +173,7 @@ const headersFor = ({
   userAgent?: string | undefined;
 }): Record<string, string> => ({
   ...(accept === undefined ? {} : { Accept: accept }),
-  ...(userAgent === undefined ? {} : { "User-Agent": userAgent }),
+  "User-Agent": userAgent ?? INGESTION_USER_AGENT,
 });
 
 const fetchBytes = async ({
@@ -199,22 +207,29 @@ const fetchBytes = async ({
 };
 
 const fetchStream = async ({
+  fetchStreamRequest = safeOutboundFetchStream,
   signal,
   source,
+  streamTotalTimeoutMs = STREAM_TOTAL_TIMEOUT_MS,
   url,
   userAgent,
 }: {
+  fetchStreamRequest?: typeof safeOutboundFetchStream | undefined;
   signal: AbortSignal;
   source: SanctionsSource;
+  streamTotalTimeoutMs?: number | undefined;
   url: string;
   userAgent?: string | undefined;
 }): Promise<Result<ReadableStream<Uint8Array>, SanctionsRefreshError>> => {
-  const response = await safeOutboundFetchStream({
+  const response = await fetchStreamRequest({
     url,
     maxBytes: LIST_MAX_BYTES,
     timeoutMs: REQUEST_TIMEOUT_MS,
     headers: headersFor({ userAgent }),
-    signal,
+    signal: AbortSignal.any([
+      signal,
+      AbortSignal.timeout(streamTotalTimeoutMs),
+    ]),
   });
   if (response.isErr()) {
     return Result.err(refreshError(source, "fetch-failed"));
@@ -238,6 +253,21 @@ const fetchStream = async ({
     );
   }
   return Result.ok(response.value.body);
+};
+
+const trackStreamFailure = (body: ReadableStream<Uint8Array>) => {
+  let failed = false;
+  const chunks = async function* () {
+    try {
+      for await (const chunk of body) {
+        yield chunk;
+      }
+    } catch (error) {
+      failed = true;
+      throw error;
+    }
+  };
+  return { chunks: chunks(), failed: () => failed };
 };
 
 const decodeUtf8 = (
@@ -291,34 +321,50 @@ const loadMarkerOnce = async (
         return Result.err(refreshError(source, "metadata-invalid"));
       }
       const response = await fetchStream({
+        fetchStreamRequest: options.fetchStreamRequest,
         source,
         url: downloadUrl,
         signal: options.signal,
+        streamTotalTimeoutMs: options.streamTotalTimeoutMs,
         userAgent: options.userAgent,
       });
       if (response.isErr()) {
         return response;
       }
-      const version = await readEuListVersion(response.value);
+      const body = trackStreamFailure(response.value);
+      const version = await readEuListVersion(body.chunks);
       return version.isOk()
         ? Result.ok({ source, version: version.value, downloadUrl })
-        : Result.err(refreshError(source, "parse-failed"));
+        : Result.err(
+            refreshError(
+              source,
+              body.failed() ? "fetch-failed" : "parse-failed",
+            ),
+          );
     }
     case "un": {
       const downloadUrl = SANCTIONS_SOURCE_CONFIG.un.markerUrl;
       const response = await fetchStream({
+        fetchStreamRequest: options.fetchStreamRequest,
         source,
         url: downloadUrl,
         signal: options.signal,
+        streamTotalTimeoutMs: options.streamTotalTimeoutMs,
         userAgent: options.userAgent,
       });
       if (response.isErr()) {
         return response;
       }
-      const version = await readUnListVersion(response.value);
+      const body = trackStreamFailure(response.value);
+      const version = await readUnListVersion(body.chunks);
       return version.isOk()
         ? Result.ok({ source, version: version.value, downloadUrl })
-        : Result.err(refreshError(source, "parse-failed"));
+        : Result.err(
+            refreshError(
+              source,
+              body.failed() ? "fetch-failed" : "parse-failed",
+            ),
+          );
     }
     case "cz": {
       const page = await fetchBytes({
@@ -385,7 +431,7 @@ export const fetchSanctionsMarker = async (
     signal: options.signal,
   });
 
-type FetchedEdition = { parsed: ParsedList; contentHash: string };
+export type FetchedEdition = { parsed: ParsedList; contentHash: string };
 
 const loadEditionOnce = async (
   marker: FetchedMarker,
@@ -420,17 +466,20 @@ const loadEditionOnce = async (
   }
 
   const downloaded = await fetchStream({
+    fetchStreamRequest: options.fetchStreamRequest,
     source: marker.source,
     url: marker.downloadUrl,
     signal: options.signal,
+    streamTotalTimeoutMs: options.streamTotalTimeoutMs,
     userAgent: options.userAgent,
   });
   if (downloaded.isErr()) {
     return downloaded;
   }
+  const body = trackStreamFailure(downloaded.value);
   const hash = createHash("sha256");
   const hashed = async function* () {
-    for await (const chunk of downloaded.value) {
+    for await (const chunk of body.chunks) {
       hash.update(chunk);
       yield chunk;
     }
@@ -441,7 +490,12 @@ const loadEditionOnce = async (
       : await parseUnList(hashed());
   return parsed.isOk()
     ? Result.ok({ parsed: parsed.value, contentHash: hash.digest("hex") })
-    : Result.err(refreshError(marker.source, "parse-failed"));
+    : Result.err(
+        refreshError(
+          marker.source,
+          body.failed() ? "fetch-failed" : "parse-failed",
+        ),
+      );
 };
 
 export const fetchSanctionsEdition = async (

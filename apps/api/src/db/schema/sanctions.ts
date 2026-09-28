@@ -23,15 +23,18 @@ export const SANCTIONS_REPLACEMENT_GUARD_CODES = [
   "source-mismatch",
 ] as const;
 
+export const SANCTIONS_EDITION_REJECTION_CODES = [
+  ...SANCTIONS_REPLACEMENT_GUARD_CODES,
+  "invalid-stage",
+  "superseded",
+] as const;
+
 export const SANCTIONS_REFRESH_FAILURE_CODES = [
   "access-denied",
   "fetch-failed",
   "metadata-invalid",
   "parse-failed",
-  "replacement-below-minimum",
-  "replacement-contracted",
-  "replacement-stale",
-  "replacement-source-mismatch",
+  "unexpected-error",
 ] as const;
 
 export const sanctionsSources = p.pgTable(
@@ -42,14 +45,19 @@ export const sanctionsSources = p.pgTable(
     licence: p.text(),
     markerUrl: p.text("marker_url").notNull(),
     activeEditionId: safeUuid<"sanctionsEdition">("active_edition_id"),
+    heldEditionId: safeUuid<"sanctionsEdition">("held_edition_id"),
+    heldGuardCode: p.text("held_guard_code", {
+      enum: SANCTIONS_REPLACEMENT_GUARD_CODES,
+    }),
+    heldAt: timestamptz("held_at"),
+    heldPreviousCount: p.integer("held_previous_count"),
+    heldNextCount: p.integer("held_next_count"),
     lastCheckedAt: timestamptz("last_checked_at"),
     lastSuccessfulVerifiedAt: timestamptz("last_successful_verified_at"),
     lastFailureAt: timestamptz("last_failure_at"),
     lastFailureCode: p.text("last_failure_code", {
       enum: SANCTIONS_REFRESH_FAILURE_CODES,
     }),
-    lastFailurePreviousCount: p.integer("last_failure_previous_count"),
-    lastFailureNextCount: p.integer("last_failure_next_count"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
@@ -61,16 +69,34 @@ export const sanctionsSources = p.pgTable(
         foreignColumns: [sanctionsEditions.sourceId, sanctionsEditions.id],
       })
       .onDelete("restrict"),
+    p
+      .foreignKey({
+        name: "sanctions_sources_held_edition_fk",
+        columns: [table.id, table.heldEditionId],
+        foreignColumns: [sanctionsEditions.sourceId, sanctionsEditions.id],
+      })
+      .onDelete("restrict"),
+    p.check(
+      "sanctions_sources_held_code_allowed",
+      sql`${table.heldGuardCode} IS NULL OR ${table.heldGuardCode} IN (${sql.join(
+        SANCTIONS_REPLACEMENT_GUARD_CODES.map((code) => sql`${code}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "sanctions_sources_held_counts_nonnegative",
+      sql`(${table.heldPreviousCount} IS NULL OR ${table.heldPreviousCount} >= 0) AND (${table.heldNextCount} IS NULL OR ${table.heldNextCount} >= 0)`,
+    ),
+    p.check(
+      "sanctions_sources_held_shape",
+      sql`(${table.heldAt} IS NULL) = (${table.heldGuardCode} IS NULL) AND (${table.heldEditionId} IS NULL) = (${table.heldGuardCode} IS NULL)`,
+    ),
     p.check(
       "sanctions_sources_failure_code_allowed",
       sql`${table.lastFailureCode} IS NULL OR ${table.lastFailureCode} IN (${sql.join(
         SANCTIONS_REFRESH_FAILURE_CODES.map((code) => sql`${code}`),
         sql`, `,
       )})`,
-    ),
-    p.check(
-      "sanctions_sources_failure_counts_nonnegative",
-      sql`(${table.lastFailurePreviousCount} IS NULL OR ${table.lastFailurePreviousCount} >= 0) AND (${table.lastFailureNextCount} IS NULL OR ${table.lastFailureNextCount} >= 0)`,
     ),
     p.check(
       "sanctions_sources_failure_pair",
@@ -95,7 +121,7 @@ export const sanctionsEditions = p.pgTable(
     entryCount: p.integer("entry_count").notNull(),
     state: p.text({ enum: SANCTIONS_EDITION_STATES }).notNull(),
     guardCode: p.text("guard_code", {
-      enum: SANCTIONS_REPLACEMENT_GUARD_CODES,
+      enum: SANCTIONS_EDITION_REJECTION_CODES,
     }),
     previousEntryCount: p.integer("previous_entry_count"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
@@ -127,6 +153,13 @@ export const sanctionsEditions = p.pgTable(
       sql`(${table.state} = 'rejected') = (${table.guardCode} IS NOT NULL)`,
     ),
     p.check(
+      "sanctions_editions_guard_code_allowed",
+      sql`${table.guardCode} IS NULL OR ${table.guardCode} IN (${sql.join(
+        SANCTIONS_EDITION_REJECTION_CODES.map((code) => sql`${code}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
       "sanctions_editions_hash_shape",
       sql`${table.markerKey} ~ '^[0-9a-f]{64}$' AND ${table.contentHash} ~ '^[0-9a-f]{64}$'`,
     ),
@@ -134,26 +167,42 @@ export const sanctionsEditions = p.pgTable(
   ],
 );
 
-export const sanctionsEntries = p.pgTable(
-  "sanctions_entries",
+export const sanctionsEntryPayloads = p.pgTable(
+  "sanctions_entry_payloads",
+  {
+    contentHash: p.text("content_hash").primaryKey(),
+    payload: jsonb().$type<SanctionsEntry>().notNull(),
+  },
+  (table) => [
+    p.check(
+      "sanctions_entry_payloads_hash_shape",
+      sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "sanctions_entry_payloads_payload_object",
+      sql`jsonb_typeof(${table.payload}) = 'object'`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+export const sanctionsEditionEntries = p.pgTable(
+  "sanctions_edition_entries",
   {
     editionId: safeUuid<"sanctionsEdition">("edition_id")
       .notNull()
       .references(() => sanctionsEditions.id, { onDelete: "restrict" }),
     sourceEntryId: p.text("source_entry_id").notNull(),
-    contentHash: p.text("content_hash").notNull(),
-    payload: jsonb().$type<SanctionsEntry>().notNull(),
+    contentHash: p
+      .text("content_hash")
+      .notNull()
+      .references(() => sanctionsEntryPayloads.contentHash, {
+        onDelete: "restrict",
+      }),
   },
   (table) => [
     p.primaryKey({ columns: [table.editionId, table.sourceEntryId] }),
-    p.check(
-      "sanctions_entries_hash_shape",
-      sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-    p.check(
-      "sanctions_entries_payload_object",
-      sql`jsonb_typeof(${table.payload}) = 'object'`,
-    ),
+    p.index("sanctions_edition_entries_content_hash_idx").on(table.contentHash),
     ...globalCaseLawPolicies(),
   ],
 );

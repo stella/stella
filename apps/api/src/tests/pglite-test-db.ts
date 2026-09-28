@@ -436,7 +436,8 @@ export const ROLE_GRANT_STATEMENTS = [
   // Global sanctions lists are readable by requests and writable by ingestion.
   `
     REVOKE INSERT, UPDATE, DELETE ON TABLE
-      "sanctions_sources", "sanctions_editions", "sanctions_entries"
+      "sanctions_sources", "sanctions_editions",
+      "sanctions_entry_payloads", "sanctions_edition_entries"
     FROM stella
   `,
   `
@@ -445,7 +446,9 @@ export const ROLE_GRANT_STATEMENTS = [
     TO stella_ingestion
   `,
   `
-    GRANT SELECT, INSERT ON TABLE "sanctions_entries" TO stella_ingestion
+    GRANT SELECT, INSERT ON TABLE
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    TO stella_ingestion
   `,
   // Legislation corpus — same global model as case law.
   `

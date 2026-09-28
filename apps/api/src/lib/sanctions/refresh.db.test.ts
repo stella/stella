@@ -1,19 +1,25 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { createHash } from "node:crypto";
 
 import type { ParsedList } from "@stll/sanctions";
+import { stableStringify } from "@stll/stable-stringify";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   sanctionsEditions,
-  sanctionsEntries,
+  sanctionsEditionEntries,
+  sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
 import { readSanctionsFreshness } from "@/api/lib/sanctions/freshness";
-import { refreshSanctionsSource } from "@/api/lib/sanctions/refresh";
+import {
+  refreshSanctionsSource,
+  SANCTIONS_PARSER_VERSION,
+} from "@/api/lib/sanctions/refresh";
 import { SanctionsRefreshError } from "@/api/lib/sanctions/source-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -67,6 +73,14 @@ const markerFor = (parsed: ParsedList) => async () =>
     downloadUrl: SOURCE_URL,
   });
 
+const markerKey = (
+  parsed: ParsedList,
+  parserVersion = SANCTIONS_PARSER_VERSION,
+) =>
+  createHash("sha256")
+    .update(stableStringify({ parserVersion, version: parsed.version }))
+    .digest("hex");
+
 test(
   "activates a complete edition and verifies the same marker without re-downloading",
   async () => {
@@ -100,8 +114,10 @@ test(
       .from(sanctionsSources)
       .where(eq(sanctionsSources.id, "cz"));
     expect(source?.activeEditionId).not.toBeNull();
-    const entries = await db.select().from(sanctionsEntries);
-    expect(entries).toHaveLength(1);
+    const memberships = await db.select().from(sanctionsEditionEntries);
+    const payloads = await db.select().from(sanctionsEntryPayloads);
+    expect(memberships).toHaveLength(1);
+    expect(payloads).toHaveLength(1);
     const freshness = await readSanctionsFreshness({ db: scopedDb });
     expect(freshness.find((item) => item.source === "cz")?.status).toBe(
       "fresh",
@@ -176,7 +192,17 @@ test(
     const freshness = await readSanctionsFreshness({ db: scopedDb });
     const cz = freshness.find((item) => item.source === "cz");
     expect(cz?.edition?.entryCount).toBe(1);
-    expect(cz?.reason).toBe("access-denied");
+    expect(cz?.status).toBe("fresh");
+    expect(cz?.heldUpdate?.code).toBe("contracted");
+    expect(cz?.annotation).toEqual({
+      type: "held-for-review",
+      code: "contracted",
+    });
+    const stale = await readSanctionsFreshness({
+      db: scopedDb,
+      now: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+    });
+    expect(stale.find((item) => item.source === "cz")?.reason).toBe("stale");
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -205,6 +231,155 @@ test(
     ).rejects.toMatchObject({
       cause: { code: "42501" },
     });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "re-reads a changed marker once and reuses identical entry payloads",
+  async () => {
+    const oldMarker = list("2026-07-25");
+    const currentList = list("2026-07-26");
+    let markerReads = 0;
+    let downloads = 0;
+    const outcome = await refreshSanctionsSource({
+      db: scopedDb,
+      source: "cz",
+      signal: new AbortController().signal,
+      fetchMarker: async () => {
+        markerReads += 1;
+        const version =
+          markerReads === 1 ? oldMarker.version : currentList.version;
+        return Result.ok({
+          source: "cz" as const,
+          version,
+          downloadUrl: SOURCE_URL,
+        });
+      },
+      fetchEdition: async () => {
+        downloads += 1;
+        return Result.ok({ parsed: currentList, contentHash: "c".repeat(64) });
+      },
+    });
+    expect(outcome).toEqual({
+      status: "activated",
+      source: "cz",
+      entryCount: 1,
+    });
+    expect(markerReads).toBe(2);
+    expect(downloads).toBe(2);
+    expect(await db.select().from(sanctionsEditionEntries)).toHaveLength(2);
+    expect(await db.select().from(sanctionsEntryPayloads)).toHaveLength(1);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a parser-version change supersedes an unfinished stage without mixing its entries",
+  async () => {
+    const parsed = list("2026-07-27");
+    const contentHash = "d".repeat(64);
+    const [oldStage] = await db
+      .insert(sanctionsEditions)
+      .values({
+        sourceId: "cz",
+        markerKey: markerKey(parsed, `${SANCTIONS_PARSER_VERSION}-old`),
+        publishedAt: parsed.version.publishedAt,
+        fileId: parsed.version.fileId,
+        contentHash,
+        entryCount: 1,
+        state: "staging",
+      })
+      .returning({ id: sanctionsEditions.id });
+    const outcome = await refreshSanctionsSource({
+      db: scopedDb,
+      source: "cz",
+      signal: new AbortController().signal,
+      fetchMarker: markerFor(parsed),
+      fetchEdition: async () => Result.ok({ parsed, contentHash }),
+    });
+    expect(outcome).toEqual({
+      status: "activated",
+      source: "cz",
+      entryCount: 1,
+    });
+    const editions = await db
+      .select()
+      .from(sanctionsEditions)
+      .where(eq(sanctionsEditions.contentHash, contentHash));
+    expect(editions).toHaveLength(2);
+    expect(
+      editions.find((edition) => edition.id === oldStage?.id)?.guardCode,
+    ).toBe("superseded");
+    expect(
+      editions.find((edition) => edition.markerKey === markerKey(parsed))
+        ?.state,
+    ).toBe("ready");
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "an inconsistent stage is rejected and leaves the last active edition intact",
+  async () => {
+    const parsed = list("2026-07-28");
+    const contentHash = "e".repeat(64);
+    const [activeBefore] = await db
+      .select({ id: sanctionsSources.activeEditionId })
+      .from(sanctionsSources)
+      .where(eq(sanctionsSources.id, "cz"));
+    const [payload] = await db
+      .select({ contentHash: sanctionsEntryPayloads.contentHash })
+      .from(sanctionsEntryPayloads)
+      .limit(1);
+    const [stage] = await db
+      .insert(sanctionsEditions)
+      .values({
+        sourceId: "cz",
+        markerKey: markerKey(parsed),
+        publishedAt: parsed.version.publishedAt,
+        fileId: parsed.version.fileId,
+        contentHash,
+        entryCount: 1,
+        state: "staging",
+      })
+      .returning({ id: sanctionsEditions.id });
+    if (!stage || !payload) {
+      return panic("Missing sanctions test fixture");
+    }
+    await db.insert(sanctionsEditionEntries).values({
+      editionId: stage.id,
+      sourceEntryId: "unexpected",
+      contentHash: payload.contentHash,
+    });
+    const options = {
+      db: scopedDb,
+      source: "cz" as const,
+      signal: new AbortController().signal,
+      fetchMarker: markerFor(parsed),
+      fetchEdition: async () => Result.ok({ parsed, contentHash }),
+    };
+    expect(await refreshSanctionsSource(options)).toEqual({
+      status: "failed",
+      source: "cz",
+      code: "parse-failed",
+    });
+    expect(await refreshSanctionsSource(options)).toEqual({
+      status: "failed",
+      source: "cz",
+      code: "parse-failed",
+    });
+    const [after] = await db
+      .select()
+      .from(sanctionsSources)
+      .where(eq(sanctionsSources.id, "cz"));
+    const [rejected] = await db
+      .select()
+      .from(sanctionsEditions)
+      .where(eq(sanctionsEditions.id, stage.id));
+    expect(after?.activeEditionId).toBe(activeBefore?.id);
+    expect(rejected?.state).toBe("rejected");
+    expect(rejected?.guardCode).toBe("invalid-stage");
   },
   DB_TEST_TIMEOUT_MS,
 );

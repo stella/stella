@@ -1,6 +1,19 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 
-import { discoverCzCsvUrl, discoverEuXmlUrl } from "./source-fetch";
+import { readUnListVersion } from "@stll/sanctions";
+
+import {
+  discoverCzCsvUrl,
+  discoverEuXmlUrl,
+  fetchSanctionsEdition,
+} from "./source-fetch";
+
+const UN_FIXTURE = path.join(
+  import.meta.dir,
+  "../../../../../packages/sanctions/src/fixtures/un.xml",
+);
 
 const euMetadata = (downloadUrl: string) => ({
   "@graph": [
@@ -49,5 +62,77 @@ describe("publisher download discovery", () => {
     expect(found.unwrap()).toBe(
       "https://mzv.gov.cz/file/2/Vnitrostatni_sankcni_seznam_2026_07_23.csv",
     );
+  });
+});
+
+describe("streaming list downloads", () => {
+  test("retries a connection lost while reading the body as a fetch failure", async () => {
+    const fixture = new Uint8Array(await Bun.file(UN_FIXTURE).arrayBuffer());
+    const version = (
+      await readUnListVersion(Bun.file(UN_FIXTURE).stream())
+    ).unwrap();
+    let attempts = 0;
+    const result = await fetchSanctionsEdition(
+      { source: "un", version, downloadUrl: "https://example.test/un.xml" },
+      {
+        signal: new AbortController().signal,
+        fetchStreamRequest: async ({ headers }) => {
+          attempts += 1;
+          expect(new Headers(headers).get("User-Agent")).toMatch(
+            /^stella-ingestion\//u,
+          );
+          return Result.ok({
+            body: new ReadableStream<Uint8Array>({
+              start(controller) {
+                controller.enqueue(fixture.subarray(0, 128));
+                controller.error(new Error("connection reset"));
+              },
+            }),
+            headers: new Headers(),
+            ok: true,
+            status: 200,
+          });
+        },
+      },
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(result.error.code).toBe("fetch-failed");
+    expect(attempts).toBe(3);
+  });
+
+  test("bounds a body that remains silent after response headers", async () => {
+    const version = (
+      await readUnListVersion(Bun.file(UN_FIXTURE).stream())
+    ).unwrap();
+    let attempts = 0;
+    const result = await fetchSanctionsEdition(
+      { source: "un", version, downloadUrl: "https://example.test/un.xml" },
+      {
+        signal: new AbortController().signal,
+        streamTotalTimeoutMs: 20,
+        fetchStreamRequest: async ({ signal }) => {
+          attempts += 1;
+          return Result.ok({
+            body: new ReadableStream<Uint8Array>({
+              start(controller) {
+                signal?.addEventListener(
+                  "abort",
+                  () => controller.error(signal.reason),
+                  { once: true },
+                );
+              },
+            }),
+            headers: new Headers(),
+            ok: true,
+            status: 200,
+          });
+        },
+      },
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(result.error.code).toBe("fetch-failed");
+    expect(attempts).toBe(3);
   });
 });
