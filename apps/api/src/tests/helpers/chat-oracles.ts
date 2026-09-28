@@ -61,6 +61,9 @@ export const CHAT_ORACLE = {
    *  each of its tool results the same way (up to key order): a request
    *  reads the earlier turns as stored, as the next one will. */
   providerResultsStable: "chat.provider.results-stable",
+  /** Every tool call a model request hands the model, a failed one
+   *  included, is followed by its result. */
+  providerTranscriptSettled: "chat.provider.transcript-settled",
   /** The cards on screen and the interactions stored are exactly the ones the
    *  conversation's ledger expects. */
   ledgerPending: "chat.ledger.pending",

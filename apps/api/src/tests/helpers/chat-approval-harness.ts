@@ -186,7 +186,12 @@ const statusResponse = (answer: unknown): Response => {
  */
 export type HarnessModel = Pick<
   ReturnType<typeof installScriptedProvider>,
-  "modelOptionsOf" | "restore" | "script" | "stalled" | "takeFindings"
+  | "modelOptionsOf"
+  | "promptsOf"
+  | "restore"
+  | "script"
+  | "stalled"
+  | "takeFindings"
 >;
 
 export const createApprovalHarness = ({
@@ -995,8 +1000,12 @@ export const createApprovalHarness = ({
       reloadView(threadId),
       findPersistedViolations(threadId),
     ]);
-    const { changedToolResults, unconsumedScripts, unscriptedCalls } =
-      provider.takeFindings(threadId);
+    const {
+      changedToolResults,
+      unconsumedScripts,
+      unscriptedCalls,
+      unsettledCalls,
+    } = provider.takeFindings(threadId);
     const requests = clientFindings.splice(0);
     const refusals = requests.filter(
       ({ oracle }) => oracle === CHAT_ORACLE.clientRequestsAccepted,
@@ -1020,6 +1029,7 @@ export const createApprovalHarness = ({
         ...unscriptedCalls.map((call) => ({ unscripted: call })),
       ]),
       ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
+      ...violationsOf(CHAT_ORACLE.providerTranscriptSettled, unsettledCalls),
       ...violationsOf(CHAT_ORACLE.clientNoErrors, [
         ...(expectsError ? [] : errors),
         ...(expectsError && errors.length === 0
@@ -1168,6 +1178,8 @@ export const createApprovalHarness = ({
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>
       provider.modelOptionsOf(threadId),
+    /** The prompt of each of `threadId`'s model calls so far. */
+    promptsOf: (threadId: SafeId<"chatThread">) => provider.promptsOf(threadId),
     /** Queues the model's runs for `threadId`'s next requests, one each. */
     script: (threadId: SafeId<"chatThread">, ...runs: ScriptedRun[]) => {
       provider.script(threadId, ...runs);

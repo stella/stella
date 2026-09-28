@@ -95,6 +95,7 @@ afterAll(async () => {
  *  conversation's script. */
 const replayedModel = (): HarnessModel => ({
   modelOptionsOf: () => [],
+  promptsOf: () => [],
   restore: () => undefined,
   script: (_threadId, ...runs) => {
     expect(runs).toEqual([]);
@@ -112,6 +113,7 @@ const replayedModel = (): HarnessModel => ({
       changedToolResults: [],
       unconsumedScripts: unconsumed,
       unscriptedCalls: unexpected,
+      unsettledCalls: [],
     };
   },
 });

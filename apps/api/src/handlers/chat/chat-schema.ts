@@ -1458,6 +1458,9 @@ const validateToolCallPart = ({
   tools: ChatToolMap;
 }): Result<ValidatedToolCallPart, HandlerError<400>> => {
   const tool = tools[part.name];
+  if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === "error") {
+    return validateErrorToolCallPart({ part, tool });
+  }
   if (tool === undefined) {
     return Result.err(
       new HandlerError({
@@ -1479,62 +1482,9 @@ const validateToolCallPart = ({
     });
   }
 
-  const argumentsResult = parseToolArguments(part.arguments);
-  if (Result.isError(argumentsResult)) {
-    return Result.err(argumentsResult.error);
-  }
-
-  const validatedArgumentsResult = validateToolPayload({
-    payload: argumentsResult.value,
-    payloadName: "arguments",
-    schema: tool.inputSchema,
-    toolName: part.name,
-  });
+  const validatedArgumentsResult = validateToolCallInput({ part, tool });
   if (Result.isError(validatedArgumentsResult)) {
     return Result.err(validatedArgumentsResult.error);
-  }
-
-  if (part.input !== undefined) {
-    const inputResult = validateToolPayload({
-      payload: part.input,
-      payloadName: "input",
-      schema: tool.inputSchema,
-      toolName: part.name,
-    });
-    if (Result.isError(inputResult)) {
-      return Result.err(inputResult.error);
-    }
-    if (!deepEquals(inputResult.value, validatedArgumentsResult.value)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Chat tool input does not match arguments for ${part.name}`,
-        }),
-      );
-    }
-  }
-
-  if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === "error") {
-    const errorOutputResult = validateToolCallErrorOutput(part);
-    if (Result.isError(errorOutputResult)) {
-      return Result.err(errorOutputResult.error);
-    }
-    return Result.ok({
-      type: "error",
-      name: part.name,
-      error: errorOutputResult.value,
-      part: withValidatedToolPayload({
-        part,
-        payload:
-          errorOutputResult.value === undefined
-            ? { type: "input-only", input: validatedArgumentsResult.value }
-            : {
-                type: "input-output",
-                input: validatedArgumentsResult.value,
-                output: { error: errorOutputResult.value },
-              },
-      }),
-    });
   }
 
   if (part.output === undefined) {
@@ -1571,6 +1521,91 @@ const validateToolCallPart = ({
       },
     }),
   });
+};
+
+/** A call's input in the form its tool's schema gives it, or why not. */
+const validateToolCallInput = ({
+  part,
+  tool,
+}: {
+  part: ChatToolCallPart;
+  tool: ChatToolMap[string];
+}): Result<unknown, HandlerError<400>> => {
+  const argumentsResult = parseToolArguments(part.arguments);
+  if (Result.isError(argumentsResult)) {
+    return Result.err(argumentsResult.error);
+  }
+
+  const validatedArgumentsResult = validateToolPayload({
+    payload: argumentsResult.value,
+    payloadName: "arguments",
+    schema: tool.inputSchema,
+    toolName: part.name,
+  });
+  if (Result.isError(validatedArgumentsResult)) {
+    return Result.err(validatedArgumentsResult.error);
+  }
+
+  if (part.input !== undefined) {
+    const inputResult = validateToolPayload({
+      payload: part.input,
+      payloadName: "input",
+      schema: tool.inputSchema,
+      toolName: part.name,
+    });
+    if (Result.isError(inputResult)) {
+      return Result.err(inputResult.error);
+    }
+    if (!deepEquals(inputResult.value, validatedArgumentsResult.value)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Chat tool input does not match arguments for ${part.name}`,
+        }),
+      );
+    }
+  }
+  return Result.ok(validatedArgumentsResult.value);
+};
+
+/**
+ * A call the engine answered with an error never ran, and the model was
+ * handed that error, so the call is turn data whatever its input: the model
+ * may have sent arguments the tool's schema rejects, or named a tool the run
+ * does not register, and then gone on to recover. Input the schema accepts is
+ * stored canonical, as for any call. Other input is stored as the model sent
+ * it: `arguments` verbatim, since every later request replays exactly those
+ * to the model, and `input` as their JSON, or left out when they are not
+ * JSON. The error output itself must still be well formed.
+ */
+const validateErrorToolCallPart = ({
+  part,
+  tool,
+}: {
+  part: ChatToolCallPart;
+  tool: ChatToolMap[string] | undefined;
+}): Result<ValidatedToolCallPart, HandlerError<400>> => {
+  const errorOutputResult = validateToolCallErrorOutput(part);
+  if (Result.isError(errorOutputResult)) {
+    return Result.err(errorOutputResult.error);
+  }
+  const error = errorOutputResult.value;
+  const canonicalInput =
+    tool === undefined ? undefined : validateToolCallInput({ part, tool });
+  const sentInput =
+    canonicalInput !== undefined && Result.isOk(canonicalInput)
+      ? canonicalInput
+      : parseToolArguments(part.arguments);
+  const { input: _input, output: _output, ...call } = part;
+  const candidate: unknown = {
+    ...call,
+    ...(Result.isOk(sentInput) ? { input: sentInput.value } : {}),
+    ...(error === undefined ? {} : { output: { error } }),
+  };
+  if (!isChatPart(candidate) || candidate.type !== "tool-call") {
+    return panic("A failed chat tool call violates the tool-call contract");
+  }
+  return Result.ok({ type: "error", name: part.name, error, part: candidate });
 };
 
 const validateToolCallErrorOutput = (

@@ -1998,6 +1998,61 @@ describe("validateMessage", () => {
     expectInvalidChatMessage(result);
   });
 
+  test.each([
+    [
+      "input the tool's schema rejects",
+      "search-documents",
+      '{"query":123}',
+      { input: { query: 123 } },
+    ],
+    ["arguments that are not JSON", "search-documents", '{"query":', {}],
+    [
+      "a tool the run does not register",
+      "made-up-tool",
+      '{"query":"contract"}',
+      { input: { query: "contract" } },
+    ],
+  ] as const)(
+    "keeps a call the engine answered with an error for %s, as the model sent it",
+    (_label, name, sentArguments, stored) => {
+      const error = "Input validation failed";
+      const result = validateToolCallParts({
+        message: {
+          id: chatMessageId("msg_rejected_tool_input"),
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: "tool-call-1",
+              name,
+              arguments: sentArguments,
+              output: { error },
+              state: "error",
+            },
+            {
+              type: "tool-result",
+              toolCallId: "tool-call-1",
+              content: JSON.stringify({ error }),
+              error,
+              state: "error",
+            },
+          ],
+        },
+        tools: searchTools,
+      });
+
+      expect(Result.isOk(result) ? result.value[0] : result.error).toEqual({
+        type: "tool-call",
+        id: "tool-call-1",
+        name,
+        arguments: sentArguments,
+        ...stored,
+        output: { error },
+        state: "error",
+      });
+    },
+  );
+
   test("accepts tool results that match the paired tool output", async () => {
     const result = await validateMessage({
       message: {
