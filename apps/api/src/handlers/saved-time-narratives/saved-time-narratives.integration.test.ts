@@ -7,6 +7,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedSavedTimeNarrativeId } from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -84,7 +85,7 @@ test("saved narrative CRUD stays personal and scoped to the active organization"
   if (!("id" in created)) {
     throw new Error("Create did not return an id");
   }
-  const id = created.id;
+  const id = brandPersistedSavedTimeNarrativeId(created.id);
   createdIds.push(id);
 
   const list = async (
@@ -135,7 +136,7 @@ test("saved narrative CRUD stays personal and scoped to the active organization"
       params: { id },
     }),
   );
-  expect(deleted).toEqual({ id });
+  expect(deleted).toEqual({ id: created.id });
   expect(await list(ids.orgA, ids.userA1)).toMatchObject({ items: [] });
   expect(JSON.stringify(auditEvents)).not.toContain("Reviewed motion");
   expect(JSON.stringify(auditEvents)).not.toContain("Edited motion");
@@ -156,6 +157,7 @@ test("blank names and narratives are rejected before persistence", async () => {
       and(
         eq(savedTimeNarratives.organizationId, ids.orgA),
         eq(savedTimeNarratives.userId, ids.userA1),
+        eq(savedTimeNarratives.name, "   "),
       ),
     );
   expect(rows).toEqual([]);

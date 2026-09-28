@@ -258,6 +258,10 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.REPORT_EXPORT,
   },
   savedSearch: { type: "resource", resourceType: RESOURCE_TYPE.SAVED_SEARCH },
+  savedTimeNarrative: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.SAVED_TIME_NARRATIVE,
+  },
   sellerProfile: {
     type: "resource",
     resourceType: RESOURCE_TYPE.SELLER_PROFILE,

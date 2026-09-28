@@ -27,6 +27,7 @@ import {
   legalLists,
   legalReaderAnnotations,
   notifications,
+  savedTimeNarratives,
   savedSearches,
   sellerProfiles,
   signals,
@@ -57,6 +58,7 @@ import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
 import getSellerProfile from "@/api/handlers/seller-profiles/get";
 import listSellerProfiles from "@/api/handlers/seller-profiles/list";
+import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
 import listSignals from "@/api/handlers/signals/list";
 import readTaskById from "@/api/handlers/tasks/get";
 import getTemplate from "@/api/handlers/templates/get";
@@ -136,6 +138,9 @@ const savedSearchB = toSafeId<"savedSearch">(
 );
 const sellerProfileB = toSafeId<"sellerProfile">(
   "22222222-2222-4222-8222-222222222257",
+);
+const savedTimeNarrativeB = toSafeId<"savedTimeNarrative">(
+  "22222222-2222-4222-8222-222222222258",
 );
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
@@ -641,6 +646,20 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, savedSearchB),
   },
   {
+    name: "saved time narrative list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSavedTimeNarratives, workspaceA, {
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listSavedTimeNarratives, sameUserWorkspaceB, {
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, savedTimeNarrativeB),
+    expectPositive: (result) =>
+      expectPageContainsId(result, savedTimeNarrativeB),
+  },
+  {
     name: "personal cross-matter view list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listEntityViews, workspaceA, {}),
@@ -881,6 +900,14 @@ beforeAll(async () => {
       criteria: savedSearchCriteria(ids.wsB1),
     },
   ]);
+  await testDb.insert(savedTimeNarratives).values({
+    id: savedTimeNarrativeB,
+    organizationId: ids.orgB,
+    userId: ids.userA1,
+    name: "Workspace B narrative",
+    narrative: "Research and drafting",
+    narrativeLanguage: "en",
+  });
   await testDb.insert(entityViews).values({
     id: entityViewB,
     organizationId: ids.orgB,

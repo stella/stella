@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 const migration = async () =>
   await Bun.file(
     new URL(
-      "../../drizzle/20260928130000_saved_time_narratives/migration.sql",
+      "../../drizzle/20260928142000_saved_time_narratives/migration.sql",
       import.meta.url,
     ),
   ).text();
