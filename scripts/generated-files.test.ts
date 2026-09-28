@@ -133,14 +133,22 @@ test("the route generator guard rejects missing script and direct pin", async ()
         },
       }),
     );
-    await expect(checkRouteGeneratorVersion(root)).rejects.toThrow(
+    const missingScript = await checkRouteGeneratorVersion(root).catch(
+      (error: unknown) => error,
+    );
+    expect(missingScript).toHaveProperty(
+      "message",
       "The route-tree generator script is missing",
     );
     await writeFile(
       nodePath.join(web, "scripts/generate-route-tree.ts"),
       "export {};\n",
     );
-    await expect(checkRouteGeneratorVersion(root)).rejects.toThrow(
+    const missingPin = await checkRouteGeneratorVersion(root).catch(
+      (error: unknown) => error,
+    );
+    expect(missingPin).toHaveProperty(
+      "message",
       "The direct router-generator pin is missing",
     );
   } finally {
