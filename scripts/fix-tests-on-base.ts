@@ -40,13 +40,14 @@ import { panic } from "better-result";
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { parseArgs } from "node:util";
 
 const CHECK = "fix-tests-on-base";
 
 /** Conventional Commit `fix` type, scoped or not, breaking or not. */
 const FIX_TITLE = /^fix(?:\([^)]*\))?!?:\s/u;
 /** The escape hatch, one line of the pull request body. */
-const SKIP_MARKER = /^[ \t]*test-on-base:[ \t]*skip\b[ \t]*(.*)$/imu;
+const SKIP_MARKER = /^[ \t]*test-on-base:[ \t]*skip\b(.*)$/imu;
 
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 /** Directories that hold only test support: fixtures, snapshots, helpers. */
@@ -141,7 +142,7 @@ const apiRunner: TestRunner = {
       },
     );
     return {
-      exitCode: result.exitCode ?? 1,
+      exitCode: result.success ? 0 : Math.max(result.exitCode, 1),
       junitXml: readIfPresent(junitPath),
       output: `${result.stdout.toString()}${result.stderr.toString()}`,
     };
@@ -273,7 +274,7 @@ const decodeXml = (text: string): string =>
 
 const readAttributes = (tag: string): ReadonlyMap<string, string> =>
   new Map(
-    [...tag.matchAll(/([\w-]+)="([^"]*)"/gu)].map(
+    [...tag.matchAll(/\s([\w-]+)="([^"]*)"/gu)].map(
       ([, name = "", value = ""]) => [name, decodeXml(value)],
     ),
   );
@@ -605,36 +606,26 @@ export type CheckOptions = {
 const USAGE =
   "usage: fix-tests-on-base.ts --base <ref> [--head <ref>] [--title <text>] [--body-file <path>] [--root <path>]";
 
-export const parseArgs = (args: readonly string[]): CheckOptions => {
-  let root = path.resolve(import.meta.dirname, "..");
-  let base: string | null = null;
-  let head = "HEAD";
-  let title: string | null = null;
-  let body: string | null = null;
-  for (let index = 0; index < args.length; index += 2) {
-    const flag = args[index] ?? panic(USAGE);
-    const value = args.at(index + 1) ?? panic(USAGE);
-    switch (flag) {
-      case "--root":
-        root = path.resolve(value);
-        break;
-      case "--base":
-        base = value;
-        break;
-      case "--head":
-        head = value;
-        break;
-      case "--title":
-        title = value;
-        break;
-      case "--body-file":
-        body = readFileSync(value, "utf-8");
-        break;
-      default:
-        return panic(USAGE);
-    }
-  }
-  return { root, base: base ?? panic(USAGE), head, title, body };
+const parseCheckArgs = (args: readonly string[]): CheckOptions => {
+  const { values } = parseArgs({
+    args: [...args],
+    options: {
+      base: { type: "string" },
+      "body-file": { type: "string" },
+      head: { type: "string", default: "HEAD" },
+      root: { type: "string" },
+      title: { type: "string" },
+    },
+    strict: true,
+  });
+  const bodyFile = values["body-file"];
+  return {
+    root: path.resolve(values.root ?? path.join(import.meta.dirname, "..")),
+    base: values.base ?? panic(USAGE),
+    head: values.head,
+    title: values.title ?? null,
+    body: bodyFile === undefined ? null : readFileSync(bodyFile, "utf-8"),
+  };
 };
 
 const writeSummary = (lines: readonly string[]): void => {
@@ -653,7 +644,7 @@ const print = (lines: readonly string[]): void => {
 };
 
 const main = (args: readonly string[]): number => {
-  const options = parseArgs(args);
+  const options = parseCheckArgs(args);
   const { root } = options;
   const head = gitOutput(root, [
     "rev-parse",
