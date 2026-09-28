@@ -45,6 +45,7 @@ import {
   prepareCorpusProjectionReplacementsTx,
   reserveCorpusProjectionIntentsTx,
   startCorpusProjectionAppendBatchTx,
+  type CorpusProjectionAppendAbandonResult,
   startCorpusProjectionMultipartAppendTx,
   continueCorpusProjectionAppendPartTx,
   type CorpusProjectionReservationFailure,
@@ -682,25 +683,66 @@ const addCancellation = (
   result.leaseLost += cancellation.leaseLost;
 };
 
+const recordAbandonedAppendResults = (
+  result: CorpusProjectionAppendCycleResult,
+  abandoned: {
+    cleanupPending: number;
+    leaseLost: number;
+    blocked: readonly CorpusProjectionAppendAbandonResult[];
+  },
+): void => {
+  result.unknownCleanupPending += abandoned.cleanupPending;
+  result.blocked += abandoned.blocked.length;
+  result.leaseLost += abandoned.leaseLost;
+  for (const outcome of abandoned.blocked) {
+    if (outcome.status === "blocked") {
+      logger.warn("corpus_projection.append_blocked", {
+        entity: outcome.entityId,
+        kind: outcome.kind,
+        attempts: outcome.attempts,
+      });
+    }
+  }
+};
+
+type CorpusProjectionAppendFault = "document" | "engine";
+
 const logAppendFailure = ({
   indexId,
   documents,
+  revisionCount,
   error,
 }: {
   indexId: string;
   documents: number;
+  revisionCount: number;
   error: CorpusIndexError;
-}): void => {
-  logger.warn(
-    error.rejection === "definite"
-      ? "corpus_projection.append_rejected"
-      : "corpus_projection.append_unknown",
-    {
-      indexId,
-      documents,
-      ...errorFingerprint(error),
-    },
-  );
+}): { fault: CorpusProjectionAppendFault; stopForEngine: boolean } => {
+  const engineFault =
+    error.rejection === "transient" ||
+    error.cause !== undefined ||
+    (error.status !== undefined &&
+      error.status !== 400 &&
+      error.status !== 413 &&
+      error.status !== 422);
+  // A batch 500 may come from one document. Isolate its members without
+  // charging them, then charge a singleton 500 as an unknown outcome.
+  const fault: CorpusProjectionAppendFault =
+    !engineFault || error.status === 500 ? "document" : "engine";
+  const stopForEngine =
+    engineFault && !(error.status === 500 && revisionCount === 1);
+  let event = "corpus_projection.append_unknown";
+  if (stopForEngine) {
+    event = "corpus_projection.engine_unavailable";
+  } else if (error.rejection === "definite") {
+    event = "corpus_projection.append_rejected";
+  }
+  logger.warn(event, {
+    indexId,
+    documents,
+    ...errorFingerprint(error),
+  });
+  return { fault, stopForEngine };
 };
 
 type ProcessPreparedRequestsOptions = {
@@ -742,7 +784,7 @@ const processPreparedRequests = async ({
       unattemptedLeases: [...laterLeases, ...unattemptedLeases],
       result,
     });
-    if (status === "append_unknown") {
+    if (status !== "completed") {
       return status;
     }
     return await processPreparedRequests({
@@ -813,29 +855,11 @@ const processPreparedRequests = async ({
   );
   if (appended.isErr()) {
     const error: CorpusIndexError = appended.error;
-    const engineFault =
-      error.rejection === "transient" ||
-      error.cause !== undefined ||
-      (error.status !== undefined &&
-        error.status !== 400 &&
-        error.status !== 413 &&
-        error.status !== 422);
-    // A batch 500 may be caused by one document, so isolate its members
-    // without charging them. A singleton 500 then counts as an unknown
-    // document outcome and cannot loop without bound.
-    const documentFault = !engineFault || error.status === 500;
-    const stopForEngine =
-      engineFault && !(error.status === 500 && started.length === 1);
-    let event = "corpus_projection.append_unknown";
-    if (stopForEngine) {
-      event = "corpus_projection.engine_unavailable";
-    } else if (error.rejection === "definite") {
-      event = "corpus_projection.append_rejected";
-    }
-    logger.warn(event, {
+    const failure = logAppendFailure({
       indexId: request.indexId,
       documents: started.length,
-      ...errorFingerprint(error),
+      revisionCount: started.length,
+      error,
     });
     const abandoned = await runInTransaction(async (tx) => {
       const outcomes = await mapSequentially(
@@ -846,7 +870,7 @@ const processPreparedRequests = async ({
             leaseToken: preparedEntry.material.lease.leaseToken,
             errorMessage: error.message,
             rejection: error.rejection,
-            fault: documentFault ? "document" : "engine",
+            fault: failure.fault,
           }),
       );
       return {
@@ -858,18 +882,7 @@ const processPreparedRequests = async ({
           .length,
       };
     });
-    result.unknownCleanupPending += abandoned.cleanupPending;
-    result.blocked += abandoned.blocked.length;
-    result.leaseLost += abandoned.leaseLost;
-    for (const outcome of abandoned.blocked) {
-      if (outcome.status === "blocked") {
-        logger.warn("corpus_projection.append_blocked", {
-          entity: outcome.entityId,
-          kind: outcome.kind,
-          attempts: outcome.attempts,
-        });
-      }
-    }
+    recordAbandonedAppendResults(result, abandoned);
     const laterLeases = requests
       .slice(requestIndex + 1)
       .flatMap(({ entries: laterEntries }) =>
@@ -886,14 +899,14 @@ const processPreparedRequests = async ({
         errorMessage: "projection append stopped after an unknown request",
       }),
     );
-    if (stopForEngine) {
+    if (failure.stopForEngine) {
       result.status = "engine_unavailable";
     } else if (abandoned.blocked.length > 0) {
       result.status = "append_blocked";
     } else {
       result.status = "append_unknown";
     }
-    if (stopForEngine) {
+    if (failure.stopForEngine) {
       result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
     }
     return result.status;
@@ -964,12 +977,21 @@ const processMultipartEntry = async ({
   entry,
   unattemptedLeases,
   result,
-}: ProcessMultipartEntryOptions): Promise<"completed" | "append_unknown"> => {
+}: ProcessMultipartEntryOptions): Promise<
+  "completed" | "append_unknown" | "append_blocked" | "engine_unavailable"
+> => {
   const lease = entry.material.lease;
-  const stop = async (
-    errorMessage: string,
-    rejection: CorpusIndexError["rejection"] = "unknown",
-  ): Promise<"append_unknown"> => {
+  const stop = async ({
+    errorMessage,
+    rejection = "unknown",
+    fault = "document",
+    stopForEngine = false,
+  }: {
+    errorMessage: string;
+    rejection?: CorpusIndexError["rejection"];
+    fault?: CorpusProjectionAppendFault;
+    stopForEngine?: boolean;
+  }): Promise<"append_unknown" | "append_blocked" | "engine_unavailable"> => {
     const outcome = await runInTransaction(
       async (tx) =>
         await abandonCorpusProjectionAppendTx(tx, {
@@ -977,12 +999,27 @@ const processMultipartEntry = async ({
           leaseToken: lease.leaseToken,
           errorMessage,
           rejection,
+          fault,
         }),
     );
-    if (outcome === "cleanup_pending") {
-      result.unknownCleanupPending += 1;
-    } else {
-      result.leaseLost += 1;
+    switch (outcome.status) {
+      case "cleanup_pending":
+        result.unknownCleanupPending += 1;
+        break;
+      case "blocked":
+        result.blocked += 1;
+        logger.warn("corpus_projection.append_blocked", {
+          entity: outcome.entityId,
+          kind: outcome.kind,
+          attempts: outcome.attempts,
+        });
+        break;
+      case "lease_lost":
+        result.leaseLost += 1;
+        break;
+      default:
+        outcome satisfies never;
+        panic(`Unhandled multipart abandon: ${String(outcome)}`);
     }
     addCancellation(
       result,
@@ -992,12 +1029,25 @@ const processMultipartEntry = async ({
         errorMessage: "projection append stopped after a multipart request",
       }),
     );
-    result.status = "append_unknown";
-    return "append_unknown";
+    if (stopForEngine) {
+      result.status = "engine_unavailable";
+      result.cycleRetryDelayMs = CORPUS_PROJECTION_APPEND_RETRY_BASE_MS;
+    } else if (outcome.status === "blocked") {
+      result.status = "append_blocked";
+    } else {
+      result.status = "append_unknown";
+    }
+    return result.status;
   };
   const appendPart = async (
     partIndex: number,
-  ): Promise<"completed" | "skipped" | "append_unknown"> => {
+  ): Promise<
+    | "completed"
+    | "skipped"
+    | "append_unknown"
+    | "append_blocked"
+    | "engine_unavailable"
+  > => {
     const ndjson = entry.parts.at(partIndex);
     if (ndjson === undefined) {
       return "completed";
@@ -1015,7 +1065,9 @@ const processMultipartEntry = async ({
     );
     if (started !== "started") {
       if (partIndex > 0) {
-        return await stop("projection multipart append lost its lease");
+        return await stop({
+          errorMessage: "projection multipart append lost its lease",
+        });
       }
       if (started === "stale_cancelled") {
         result.cancelled += 1;
@@ -1037,21 +1089,27 @@ const processMultipartEntry = async ({
       },
     );
     if (appended.isErr()) {
-      logAppendFailure({
+      const failure = logAppendFailure({
         indexId: entry.indexId,
         documents: entry.documentCount,
+        revisionCount: 1,
         error: appended.error,
       });
-      return await stop(appended.error.message, appended.error.rejection);
+      return await stop({
+        errorMessage: appended.error.message,
+        rejection: appended.error.rejection,
+        fault: failure.fault,
+        stopForEngine: failure.stopForEngine,
+      });
     }
     return await appendPart(partIndex + 1);
   };
   const appendStatus = await appendPart(0);
-  if (appendStatus === "append_unknown") {
-    return "append_unknown";
-  }
   if (appendStatus === "skipped") {
     return "completed";
+  }
+  if (appendStatus !== "completed") {
+    return appendStatus;
   }
   const committed = await measured(
     async () =>

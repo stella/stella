@@ -512,10 +512,10 @@ test("an engine fault leaves later requests unattempted", async () => {
   ).toEqual([0, 0]);
 });
 
-test("a large act eventually parks with a counted outcome and an event", async () => {
+test("an act above the absolute ceiling parks with a counted outcome and an event", async () => {
   const entityIds = await seedLegislation([6]);
   const warn = spyOn(logger, "warn");
-  const text = "A".repeat(11 * 1024 * 1024);
+  const text = "A".repeat(129 * 1024 * 1024);
   try {
     const result = await runLegislationCycle({
       entityIds,
