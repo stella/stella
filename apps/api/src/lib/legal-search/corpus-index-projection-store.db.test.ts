@@ -12,6 +12,8 @@ import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
+  legislationDocuments,
+  legislationSources,
 } from "@/api/db/schema";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -3059,7 +3061,8 @@ const rejectionMessages = (error: unknown): string[] => {
   return messages;
 };
 
-test("an erasure outlives the deletion of its canonical row", async () => {
+/** The decision is retired (its state desires erasure) and then deleted. */
+const orphanErasedDecision = async (): Promise<void> => {
   await db.transaction(async (tx) => {
     await tx
       .update(caseLawDecisions)
@@ -3076,6 +3079,10 @@ test("an erasure outlives the deletion of its canonical row", async () => {
       .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID));
   });
   await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, DECISION_ID));
+};
+
+test("an erasure outlives the deletion of its canonical row", async () => {
+  await orphanErasedDecision();
 
   const erasureNow = new Date("2032-03-04T05:06:07.000Z");
   await setDatabaseClock(erasureNow);
@@ -3136,4 +3143,247 @@ test("an erasure outlives the deletion of its canonical row", async () => {
   expect(rejectionMessages(inserted)).toContain(
     "corpus index desired epoch must match the canonical row",
   );
+});
+
+const LEGISLATION_SOURCE_ID = toSafeId<"legislationSource">(
+  "0198e331-e578-7000-8000-000000000217",
+);
+const LEGISLATION_DOCUMENT_ID = toSafeId<"legislationDocument">(
+  "0198e331-e578-7000-8000-000000000218",
+);
+
+test("a legislation erasure outlives the deletion of its canonical row", async () => {
+  await db.insert(legislationSources).values({
+    id: LEGISLATION_SOURCE_ID,
+    adapterKey: "projection-store-test",
+    name: "Projection store test",
+  });
+  await db.insert(legislationDocuments).values({
+    id: LEGISLATION_DOCUMENT_ID,
+    sourceId: LEGISLATION_SOURCE_ID,
+    eli: "eli/cz/sb/2026/1",
+    title: "Test act",
+    country: "CZE",
+    language: "cs",
+    contentHash: "e".repeat(64),
+    projectionEpoch: 2n,
+  });
+  await db.insert(corpusIndexGenerations).values({
+    family: "legislation",
+    generation: "legislation_v2",
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.legislation_v2,
+    ),
+    status: "building",
+  });
+  await db.insert(corpusIndexProjectionStates).values({
+    family: "legislation",
+    generation: "legislation_v2",
+    entityId: LEGISLATION_DOCUMENT_ID,
+    desiredAction: "erase",
+    desiredEpoch: 2n,
+    updatedAt: INITIAL_RUNNABLE_AT,
+  });
+  await db
+    .delete(legislationDocuments)
+    .where(eq(legislationDocuments.id, LEGISLATION_DOCUMENT_ID));
+
+  const erasureNow = new Date("2032-03-04T05:06:07.000Z");
+  await setDatabaseClock(erasureNow);
+  const applied = await withDatabaseClock(
+    async (tx) =>
+      await advanceCorpusProjectionErasuresTx(tx, {
+        family: "legislation",
+        generation: "legislation_v2",
+        limit: 10,
+      }),
+  );
+  expect(applied).toMatchObject({
+    claimedCount: 1,
+    appliedEntityIds: [LEGISLATION_DOCUMENT_ID],
+  });
+  expect(
+    await db
+      .select({
+        action: corpusIndexProjectionStates.appliedAction,
+        epoch: corpusIndexProjectionStates.appliedEpoch,
+        updatedAt: corpusIndexProjectionStates.updatedAt,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, LEGISLATION_DOCUMENT_ID)),
+  ).toEqual([{ action: "erase", epoch: 2n, updatedAt: erasureNow }]);
+
+  const revived: unknown = await db
+    .update(corpusIndexProjectionStates)
+    .set({ desiredAction: "upsert", desiredEpoch: 3n })
+    .where(eq(corpusIndexProjectionStates.entityId, LEGISLATION_DOCUMENT_ID))
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejectionMessages(revived)).toContain(
+    "corpus index desired epoch must match the canonical row",
+  );
+});
+
+test("an orphaned erasure cannot move its desired epoch alone", async () => {
+  await orphanErasedDecision();
+
+  const bumped: unknown = await db
+    .update(corpusIndexProjectionStates)
+    .set({ desiredEpoch: 3n })
+    .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID))
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  expect(rejectionMessages(bumped)).toContain(
+    "corpus index desired epoch must match the canonical row",
+  );
+  expect(
+    await db
+      .select({ epoch: corpusIndexProjectionStates.desiredEpoch })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID)),
+  ).toEqual([{ epoch: 2n }]);
+});
+
+test("an orphaned erasure applies only after its applied upsert settles", async () => {
+  const [lease] = await db.transaction(
+    async (tx) =>
+      await reserveCorpusProjectionIntentsTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 10,
+        leaseMs: 60_000,
+        newIntentId: () => FIRST_INTENT_ID,
+        newLeaseToken: () => FIRST_LEASE_TOKEN,
+      }),
+  );
+  if (lease === undefined) {
+    return panic("Expected a projection lease");
+  }
+  // Accepted far enough in the past that the append is published, so the
+  // cleanup the erasure schedules is claimable at once.
+  const acceptedAt = new Date(
+    Date.now() -
+      corpusIndexAppendPublishDelayMs(CORPUS_INDEX_MANIFESTS.case_law_v5) -
+      1000,
+  );
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await startCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          testNow: acceptedAt,
+        }),
+    ),
+  ).toBe("started");
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await commitCorpusProjectionAppendTx(asTestRaw<Transaction>(tx), {
+          intentId: lease.intentId,
+          leaseToken: lease.leaseToken,
+          documentCount: 1,
+          testNow: acceptedAt,
+        }),
+    ),
+  ).toMatchObject({ status: "applied", entityId: DECISION_ID });
+  await orphanErasedDecision();
+
+  const markErased = async (): Promise<unknown> =>
+    await db
+      .update(corpusIndexProjectionStates)
+      .set({
+        appliedAction: "erase",
+        appliedEpoch: 2n,
+        appliedRevision: null,
+        appliedFingerprint: null,
+        appliedIndexId: null,
+      })
+      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID))
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+  expect(rejectionMessages(await markErased())).toContain(
+    "erased corpus index state requires every prior revision settled",
+  );
+
+  const scheduled = await db.transaction(
+    async (tx) =>
+      await advanceCorpusProjectionErasuresTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 10,
+      }),
+  );
+  expect(scheduled).toMatchObject({
+    claimedCount: 1,
+    scheduledRevisions: [FIRST_INTENT_ID],
+    appliedEntityIds: [],
+  });
+  expect(rejectionMessages(await markErased())).toContain(
+    "erased corpus index state requires every prior revision settled",
+  );
+
+  const cleanup = await db.transaction(
+    async (tx) =>
+      await claimCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        indexId: INDEX_ID,
+        limit: 10,
+        leaseMs: 60_000,
+        newLeaseToken: () => CLEANUP_LEASE_TOKEN,
+      }),
+  );
+  expect(cleanup.map(({ intentId }) => intentId)).toEqual([FIRST_INTENT_ID]);
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await recordCorpusProjectionDeleteTx(asTestRaw<Transaction>(tx), {
+          intentIds: [FIRST_INTENT_ID],
+          indexId: INDEX_ID,
+          leaseToken: CLEANUP_LEASE_TOKEN,
+          deleteOpstamp: 44,
+          deleteTaskCreatedAt: DELETE_TASK_CREATED_AT,
+        }),
+    ),
+  ).toBe(1);
+  const proof = await verifySettlement({
+    intentIds: [FIRST_INTENT_ID],
+    deleteOpstamp: 44,
+  });
+  expect(
+    await db.transaction(
+      async (tx) =>
+        await settleCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          proof,
+        }),
+    ),
+  ).toBe(1);
+
+  const applied = await db.transaction(
+    async (tx) =>
+      await advanceCorpusProjectionErasuresTx(asTestRaw<Transaction>(tx), {
+        family: "case_law",
+        generation: "case_law_v5",
+        limit: 10,
+      }),
+  );
+  expect(applied.appliedEntityIds).toEqual([DECISION_ID]);
+  expect(
+    await db
+      .select({
+        action: corpusIndexProjectionStates.appliedAction,
+        epoch: corpusIndexProjectionStates.appliedEpoch,
+        revision: corpusIndexProjectionStates.appliedRevision,
+      })
+      .from(corpusIndexProjectionStates)
+      .where(eq(corpusIndexProjectionStates.entityId, DECISION_ID)),
+  ).toEqual([{ action: "erase", epoch: 2n, revision: null }]);
 });
