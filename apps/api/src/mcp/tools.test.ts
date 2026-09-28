@@ -2176,6 +2176,23 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
+  test("lookup_case_law names the kind of a primary reference that is not a docket", async () => {
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+        caseNumberType: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+      },
+    ]);
+
+    const payload = asTestRaw<{ items: { caseNumberType?: string }[] }>(
+      await lookup([CZ_DOCKET]),
+    );
+
+    expect(payload.items.at(0)?.caseNumberType).toBe(
+      DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+    );
+  });
+
   test("lookup_case_law names the language of a multilingual decision in its appUrl", async () => {
     lookupDecisionsByIdentityMock.mockResolvedValue([
       {

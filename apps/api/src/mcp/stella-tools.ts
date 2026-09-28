@@ -2538,6 +2538,10 @@ const decisionIdentityOf = (row: DecisionIdentityRow) => ({
     slug: row.slug,
   }),
   caseNumber: row.caseNumber,
+  // As in search: the kind is named only where the reference is not a docket.
+  ...(row.caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+    ? {}
+    : { caseNumberType: row.caseNumberType }),
   court: row.court,
   decisionDate: row.decisionDate,
   decisionId: row.id,
