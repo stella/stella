@@ -17,7 +17,10 @@ import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
+import {
+  memberAssignmentRequiredError,
+  orgAIConfigStatusError,
+} from "@/api/lib/ai-config-response";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -897,7 +900,7 @@ type PreflightCtx = {
 };
 
 type UsagePreflightOutcome =
-  | { kind: "blocked"; response: SafeStatusResponse<402 | 500> }
+  | { kind: "blocked"; response: SafeStatusResponse<402 | 403 | 500> }
   | { kind: "allowed"; lane: UsageLaneDecision };
 
 const runUsagePreflight = async ({
@@ -923,6 +926,9 @@ const runUsagePreflight = async ({
         organizationId: meteringContext.organizationId,
         userId: meteringContext.userId,
       });
+      if (verdict === "unassigned") {
+        return { ok: false as const, unassigned: true as const };
+      }
       if (verdict === "allowance") {
         return {
           ok: true as const,
@@ -952,7 +958,7 @@ const runUsagePreflight = async ({
           ok: true as const,
           lane: { lane: "pool" } satisfies UsageLaneDecision,
         }
-      : { ok: false as const, error: check.error };
+      : { ok: false as const, unassigned: false as const, error: check.error };
   });
   if (Result.isError(checkResult)) {
     // DB error during pre-flight — surface generic 500 so the
@@ -976,6 +982,13 @@ const runUsagePreflight = async ({
   const check = checkResult.value;
   if (check.ok) {
     return { kind: "allowed", lane: check.lane };
+  }
+  if (check.unassigned) {
+    const refusal = memberAssignmentRequiredError();
+    return {
+      kind: "blocked",
+      response: toSafeStatusResponse(refusal.status, safeErrorBody(refusal)),
+    };
   }
   return {
     kind: "blocked",

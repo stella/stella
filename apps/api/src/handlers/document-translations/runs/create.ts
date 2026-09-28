@@ -4,6 +4,7 @@ import { isDocumentTranslationDeepLSupportedMimeType } from "@stll/api-contract/
 
 import { documentTranslationRuns } from "@/api/db/schema";
 import { createDocumentTranslationRunBodySchema } from "@/api/handlers/document-translations/schemas";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   assertUsageAvailableForHandler,
@@ -50,6 +51,7 @@ const createDocumentTranslationRun = createSafeHandler<
   async function* ({
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     recordAuditEvent,
     safeDb,
     session,
@@ -160,6 +162,10 @@ const createDocumentTranslationRun = createSafeHandler<
     }
 
     if (body.engine === DOCUMENT_TRANSLATION_ENGINE.AI) {
+      const accessError = memberAIAccessError(orgAIConfigStatus);
+      if (accessError) {
+        return Result.err(accessError);
+      }
       const usageError = await assertUsageAvailableForHandler({
         metering: { actionType: "doc_review", modelRole: "chat" },
         organizationId,

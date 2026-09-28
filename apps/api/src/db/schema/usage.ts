@@ -123,6 +123,10 @@ export const usagePolicies = p.pgTable(
     // and deployments that have not opted in).
     dailyAllowanceMicroUnits: p.integer("daily_allowance_micro_units"),
     fallbackWeeklyMicroUnits: p.integer("fallback_weekly_micro_units"),
+    // Operator-seeded member bound, read through the
+    // `organization_member_capacity` database function together with the
+    // seat count of a per-seat policy. Null = the policy sets no bound.
+    maxMembers: p.integer("max_members"),
     // Hidden by default: a seeded policy only appears in the catalog
     // endpoint once the operator explicitly marks it public.
     visibility: p
@@ -173,6 +177,10 @@ export const usagePolicies = p.pgTable(
     p.check(
       "usage_policies_fallback_weekly_nonneg",
       sql`fallback_weekly_micro_units IS NULL OR fallback_weekly_micro_units >= 0`,
+    ),
+    p.check(
+      "usage_policies_max_members_positive",
+      sql`max_members IS NULL OR max_members > 0`,
     ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
