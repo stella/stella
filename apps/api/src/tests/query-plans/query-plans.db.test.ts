@@ -44,6 +44,10 @@ import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 const DB_TEST_TIMEOUT_MS = 120_000;
 const UPDATE_PLAN_CONTRACTS =
   process.env["STELLA_UPDATE_PLAN_CONTRACTS"] === "1";
+const SCALE_PROFILE =
+  process.env["STELLA_QUERY_PLAN_SCALE_PROFILE"] === "physical"
+    ? null
+    : SYNTHETIC_SCALE_PROFILE;
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
 const observedContracts: Record<string, { scans: AccessPath[] }> = {};
 const scanReport: string[] = [];
@@ -83,7 +87,7 @@ beforeAll(
 
 afterAll(async () => {
   process.stdout.write(
-    "\nQuery-plan scan estimates (synthetic stats; heap-fetch upper bound per loop):\n" +
+    `\nQuery-plan scan estimates (${SCALE_PROFILE === null ? "physical" : "synthetic"} stats; heap-fetch upper bound per loop):\n` +
       `query | position | relation | scan | index | rows | heap-fetch upper bound per loop | query matches contract\n${scanReport.join(
         "\n",
       )}\n`,
@@ -275,12 +279,14 @@ test("recognizes the workspace RLS subplan in its real role", async () => {
   }
 });
 
-const reportRegistryScans = async (profile: ScaleProfile) => {
+const reportRegistryScans = async (profile: ScaleProfile | null) => {
   const reportClient = await createTestPglite();
   try {
     const reportDb = drizzle({ client: reportClient });
     await seedQueryPlanData(reportDb);
-    await injectScaleProfile(reportDb, profile);
+    if (profile !== null) {
+      await injectScaleProfile(reportDb, profile);
+    }
     for (const entry of QUERY_PLAN_REGISTRY) {
       const scans = await explainOn(reportDb)(
         entry.role,
@@ -307,7 +313,9 @@ const reportRegistryScans = async (profile: ScaleProfile) => {
             scan.nodeType,
             scan.index ?? "none",
             scan.rows ?? "unknown",
-            estimateHeapFetches(scan, profile) ?? "n/a",
+            profile === null
+              ? "n/a"
+              : (estimateHeapFetches(scan, profile) ?? "n/a"),
             matchesContract ? "yes" : "no",
           ].join(" | "),
         );
@@ -321,7 +329,7 @@ const reportRegistryScans = async (profile: ScaleProfile) => {
 test(
   "reports registry scan estimates",
   async () => {
-    await reportRegistryScans(SYNTHETIC_SCALE_PROFILE);
+    await reportRegistryScans(SCALE_PROFILE);
     expect(scanReport.length).toBeGreaterThanOrEqual(
       QUERY_PLAN_REGISTRY.length,
     );

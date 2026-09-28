@@ -227,11 +227,17 @@ test(
       ).toBe(false);
 
       await db.execute(sql`ANALYZE case_law_decisions`);
-      await expect(
-        assertScaleProfileApplied(db, SYNTHETIC_SCALE_PROFILE),
-      ).rejects.toThrow(
-        "Scale profile was overwritten or not applied: case_law_decisions",
+      const overwritten = await assertScaleProfileApplied(
+        db,
+        SYNTHETIC_SCALE_PROFILE,
+      ).then(
+        () => null,
+        (error: unknown) => error,
       );
+      expect(overwritten).toMatchObject({
+        message:
+          "Scale profile was overwritten or not applied: case_law_decisions",
+      });
     } finally {
       await client.close();
     }
