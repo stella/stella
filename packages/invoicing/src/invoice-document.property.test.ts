@@ -54,18 +54,18 @@ test("line sums, rate breakdowns, and credit note reversals agree", () => {
             description: line.description,
             vatRateBps: line.vatRateBps,
             vatTreatment: line.vatTreatment,
-            netAmountMinor: cents(-line.netAmountMinor || 0),
-            vatAmountMinor: cents(-line.vatAmountMinor || 0),
-            grossAmountMinor: cents(-line.grossAmountMinor || 0),
+            netAmountMinor: cents(-1 * line.netAmountMinor || 0),
+            vatAmountMinor: cents(-1 * line.vatAmountMinor || 0),
+            grossAmountMinor: cents(-1 * line.grossAmountMinor || 0),
           })),
         );
         expect(credit.totals.vatBreakdown).toEqual(
           invoice.totals.vatBreakdown.map((rate) => ({
             vatRateBps: rate.vatRateBps,
             vatTreatment: rate.vatTreatment,
-            netAmountMinor: cents(-rate.netAmountMinor || 0),
-            vatAmountMinor: cents(-rate.vatAmountMinor || 0),
-            grossAmountMinor: cents(-rate.grossAmountMinor || 0),
+            netAmountMinor: cents(-1 * rate.netAmountMinor || 0),
+            vatAmountMinor: cents(-1 * rate.vatAmountMinor || 0),
+            grossAmountMinor: cents(-1 * rate.grossAmountMinor || 0),
           })),
         );
       },
