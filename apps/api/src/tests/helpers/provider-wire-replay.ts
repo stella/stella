@@ -198,15 +198,15 @@ const requestModelOf = (url: URL, bodyText: string): string | null => {
 
 /**
  * The request `fetch(input, init)` sends: `init` overrides what `input`
- * carries, headers included. `input` is left unread, so it can still be
- * forwarded.
+ * carries, headers included. It takes over `input`'s body, so forward the
+ * returned request rather than `input`.
  */
 export const effectiveRequest = (
   input: string | URL | Request,
   init: RequestInit | undefined,
 ): Request =>
   input instanceof Request
-    ? new Request(input.clone(), init)
+    ? new Request(input, init)
     : new Request(input.toString(), init);
 
 const readRequest = async (

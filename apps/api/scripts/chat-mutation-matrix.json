@@ -428,8 +428,8 @@
       "behaviour": "A request's shape is read from what fetch sends, with the init's headers over the request's.",
       "status": "active",
       "file": "src/tests/helpers/provider-wire-replay.ts",
-      "search": "? new Request(input.clone(), init)",
-      "replace": "? input.clone()",
+      "search": "? new Request(input, init)",
+      "replace": "? input",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
         "test": "a header fetch's init overrides is the header the request is pinned by"

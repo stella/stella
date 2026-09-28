@@ -401,7 +401,7 @@ const installRecorder = ({
       prompt,
     });
     refuseSecret(JSON.stringify(shape), secret);
-    const response = await upstream(input, { ...init, redirect: "error" });
+    const response = await upstream(request, { redirect: "error" });
     const bytes = await readBounded(response);
     // Every stored byte and header, whatever its framing.
     refuseSecret(new TextDecoder().decode(bytes), secret);
