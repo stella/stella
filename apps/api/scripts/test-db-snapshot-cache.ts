@@ -286,7 +286,7 @@ const prune = (cacheDir: string, currentKey: string) => {
       if (
         Date.now() - statSync(filePath).mtimeMs >= MAX_TEMP_AGE_MS &&
         (match[1] === currentKey ||
-          !statSync(path.join(cacheDir, `${match[1]}.lock`), {
+          !statSync(path.join(cacheDir, `${String(match[1])}.lock`), {
             throwIfNoEntry: false,
           }))
       ) {

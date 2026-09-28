@@ -141,7 +141,7 @@ test("concurrent acquirers build once and both receive the final snapshot", asyn
   const root = fixture();
   const cacheDir = path.join(root, "cache");
   let builds = 0;
-  const acquire = () =>
+  const acquire = async () =>
     acquireCachedSnapshot({
       cacheDir,
       key: "a".repeat(64),
@@ -245,19 +245,23 @@ test("abort stops a cache-lock wait promptly", async () => {
   const started = Date.now();
   let builds = 0;
   try {
-    await expect(
-      acquireCachedSnapshot({
-        cacheDir,
-        key,
-        build: async (filePath) => {
-          builds += 1;
-          writeFileSync(filePath, "unexpected");
-        },
-        validate: async () => true,
-        signal: controller.signal,
-        timeoutMs: 5000,
-      }),
-    ).rejects.toThrow(SnapshotBuildError);
+    const error = await acquireCachedSnapshot({
+      cacheDir,
+      key,
+      build: async (filePath) => {
+        builds += 1;
+        writeFileSync(filePath, "unexpected");
+      },
+      validate: async () => true,
+      signal: controller.signal,
+      timeoutMs: 5000,
+    }).then(
+      () => {
+        throw new Error("Expected snapshot acquisition to reject");
+      },
+      (error: unknown) => error,
+    );
+    expect(error).toBeInstanceOf(SnapshotBuildError);
     expect(Date.now() - started).toBeLessThan(1000);
     expect(builds).toBe(0);
   } finally {
@@ -301,7 +305,7 @@ test("competing stale-lock takers still build once", async () => {
     JSON.stringify({ pid: 99_999_999, started: 0, token: "dead" }),
   );
   let builds = 0;
-  const acquire = () =>
+  const acquire = async () =>
     acquireCachedSnapshot({
       cacheDir,
       key,
@@ -379,20 +383,24 @@ test("builder failure cleans partial output and pruning removes old temp files",
   const root = fixture();
   const cacheDir = path.join(root, "cache");
   const failedKey = "7".repeat(64);
-  await expect(
-    acquireCachedSnapshot({
-      cacheDir,
-      key: failedKey,
-      build: async (filePath) => {
-        writeFileSync(filePath, "partial");
-        throw new SnapshotBuildError({
-          message: "builder failed",
-          exitCode: 1,
-        });
-      },
-      validate: async () => true,
-    }),
-  ).rejects.toThrow(SnapshotBuildError);
+  const error = await acquireCachedSnapshot({
+    cacheDir,
+    key: failedKey,
+    build: async (filePath) => {
+      writeFileSync(filePath, "partial");
+      throw new SnapshotBuildError({
+        message: "builder failed",
+        exitCode: 1,
+      });
+    },
+    validate: async () => true,
+  }).then(
+    () => {
+      throw new Error("Expected snapshot acquisition to reject");
+    },
+    (error: unknown) => error,
+  );
+  expect(error).toBeInstanceOf(SnapshotBuildError);
   expect(readdirSync(cacheDir).some((name) => name.includes(".tmp-"))).toBe(
     false,
   );
@@ -470,7 +478,7 @@ test("unwritable cache location falls back", async () => {
 test("pruning preserves a snapshot leased by another test run", async () => {
   const root = fixture();
   const cacheDir = path.join(root, "cache");
-  const acquire = (key: string) =>
+  const acquire = async (key: string) =>
     acquireCachedSnapshot({
       cacheDir,
       key,
