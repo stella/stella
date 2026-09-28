@@ -437,22 +437,6 @@ const buildTestDbSnapshot = async (): Promise<string> => {
   return await buildPrivateSnapshot();
 };
 
-const testProcessEnv: Record<string, string | undefined> = {
-  ...process.env,
-  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
-};
-if (dbTests.length > 0 || moduleMockTests.length > 0) {
-  try {
-    testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
-  } catch (error) {
-    if (error instanceof SnapshotBuildError) {
-      printError(error.message);
-      process.exit(error.exitCode);
-    }
-    throw error;
-  }
-}
-
 type PlannedTestBatch = {
   isolate: boolean;
   kind: TestBatchKind;
@@ -534,6 +518,29 @@ const plannedBatches = orderBatchesForLanes([
     ),
   }),
 ]);
+
+const testProcessEnv: Record<string, string | undefined> = {
+  ...process.env,
+  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
+};
+// Only a run that selected a DB-backed or module-mock batch boots PGlite, so
+// a run of logic test files skips the snapshot build.
+if (
+  plannedBatches.some(
+    ({ kind }) =>
+      kind === TEST_BATCH_KIND.db || kind === TEST_BATCH_KIND.moduleMock,
+  )
+) {
+  try {
+    testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+  } catch (error) {
+    if (error instanceof SnapshotBuildError) {
+      printError(error.message);
+      process.exit(error.exitCode);
+    }
+    throw error;
+  }
+}
 
 const testLanes = deriveTestLaneCount({
   availableParallelism: availableParallelism(),

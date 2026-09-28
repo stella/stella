@@ -487,9 +487,10 @@ describe("public case-law route boundary", () => {
     }
 
     expect(handlerSource).toContain("LIMITS.caseLawFacetLimit");
-    expect(pgFtsSource).toContain("caseLawDecisions.country");
-    expect(pgFtsSource).toContain("caseLawDecisions.court");
-    expect(pgFtsSource).toContain("caseLawDecisions.decisionDate");
+    expect(pgFtsSource).toContain("caseLawBrowseFacetCounts.country");
+    expect(pgFtsSource).toContain('eq(caseLawBrowseFacetCounts.kind, "court")');
+    expect(pgFtsSource).toContain('eq(caseLawBrowseFacetCounts.kind, "year")');
+    expect(pgFtsSource).toContain("redistributableCaseLawSource");
     expect(corpusIndexSource).toContain('field: "jurisdiction"');
     expect(corpusIndexSource).toContain('field: "court"');
     expect(corpusIndexSource).toContain(

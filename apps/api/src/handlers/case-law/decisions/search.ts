@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
@@ -1393,6 +1394,71 @@ type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
  * the citator resolves by, and the ECLI as published. Bounded by the page
  * size: past that the entry names a list, not a decision.
  */
+type DecisionIdsByIdentityQueryOptions = {
+  country: string | undefined;
+  identity: DecisionIdentity;
+  tx: CaseLawPublicReadTransaction;
+};
+
+/** The identity read itself, exported so a plan test can EXPLAIN it. */
+export const decisionIdsByIdentityQuery = ({
+  country,
+  identity,
+  tx,
+}: DecisionIdsByIdentityQueryOptions) => {
+  // An ECLI also matches the other spellings a decision declares as
+  // identifiers. The two sources are unioned into one id set, as the
+  // identity lookup does: OR-ing a column test with a subquery test leaves
+  // the planner no index for either side, and it scans the whole table.
+  const identityPredicate =
+    identity.kind === "ecli"
+      ? inArray(
+          caseLawDecisions.id,
+          unionAll(
+            tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(
+                inArray(caseLawDecisions.ecli, [
+                  identity.value,
+                  identity.value.toUpperCase(),
+                ]),
+              ),
+            tx
+              .select({ id: caseLawDecisionIdentifiers.decisionId })
+              .from(caseLawDecisionIdentifiers)
+              .where(
+                and(
+                  eq(
+                    caseLawDecisionIdentifiers.type,
+                    DECISION_IDENTIFIER_TYPES.ECLI,
+                  ),
+                  eq(
+                    caseLawDecisionIdentifiers.normalizedValue,
+                    normalizeDecisionIdentifierValue(
+                      DECISION_IDENTIFIER_TYPES.ECLI,
+                      identity.value,
+                    ),
+                  ),
+                ),
+              ),
+          ),
+        )
+      : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
+  return tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        identityPredicate,
+        country === undefined
+          ? undefined
+          : eq(caseLawDecisions.country, country),
+      ),
+    )
+    .limit(LIMITS.caseLawSearchPageSizeMax);
+};
+
 type FindDecisionIdsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string | undefined;
@@ -1408,53 +1474,9 @@ export const findDecisionIdsByIdentity = async ({
 }: FindDecisionIdsByIdentityOptions): Promise<SafeId<"caseLawDecision">[]> => {
   const rows = await timeDbRead(
     async () =>
-      await caseLawDb((tx) => {
-        // An ECLI also matches the other spellings a decision declares as
-        // identifiers, read as a set so the planner keeps the identifier
-        // index, as the identity lookup does.
-        const identityPredicate =
-          identity.kind === "ecli"
-            ? or(
-                inArray(caseLawDecisions.ecli, [
-                  identity.value,
-                  identity.value.toUpperCase(),
-                ]),
-                inArray(
-                  caseLawDecisions.id,
-                  tx
-                    .select({ id: caseLawDecisionIdentifiers.decisionId })
-                    .from(caseLawDecisionIdentifiers)
-                    .where(
-                      and(
-                        eq(
-                          caseLawDecisionIdentifiers.type,
-                          DECISION_IDENTIFIER_TYPES.ECLI,
-                        ),
-                        eq(
-                          caseLawDecisionIdentifiers.normalizedValue,
-                          normalizeDecisionIdentifierValue(
-                            DECISION_IDENTIFIER_TYPES.ECLI,
-                            identity.value,
-                          ),
-                        ),
-                      ),
-                    ),
-                ),
-              )
-            : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
-        return tx
-          .select({ id: caseLawDecisions.id })
-          .from(caseLawDecisions)
-          .where(
-            and(
-              identityPredicate,
-              country === undefined
-                ? undefined
-                : eq(caseLawDecisions.country, country),
-            ),
-          )
-          .limit(LIMITS.caseLawSearchPageSizeMax);
-      }),
+      await caseLawDb((tx) =>
+        decisionIdsByIdentityQuery({ country, identity, tx }),
+      ),
   );
   return rows.map((row) => row.id);
 };

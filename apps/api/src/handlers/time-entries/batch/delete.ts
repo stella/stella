@@ -6,8 +6,10 @@ import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const batchDeleteBodySchema = t.Object({
   ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
@@ -60,13 +62,54 @@ const batchDelete = createSafeHandler(
     access: "write",
     body: batchDeleteBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const { ids } = body;
-
+    const policy = yield* Result.await(
+      readTimePolicy({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
+    const now = new Date();
     // Draft entries: hard delete. Non-draft: write off.
     // Wrapped in a transaction for atomicity.
     const updated = yield* Result.await(
       safeDb(async (tx) => {
+        const candidates = await tx
+          .select({
+            dateWorked: timeEntries.dateWorked,
+            timezoneId: timeEntries.timezoneId,
+          })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.workspaceId, workspaceId),
+              inArray(timeEntries.id, ids),
+              ne(timeEntries.status, BILLING_STATUS.BILLED),
+              ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+            ),
+          )
+          .limit(ids.length)
+          .for("update");
+        for (const entry of candidates) {
+          const today = formatTodayInTimeZone({
+            timezoneId: entry.timezoneId,
+            now,
+          });
+          if (Result.isError(today)) {
+            return { type: "policy" as const, error: today.error };
+          }
+          const violation = getTimePolicyViolation({
+            policy,
+            dateWorked: entry.dateWorked,
+            today: today.value,
+            canApprove: true,
+          });
+          if (violation) {
+            return { type: "policy" as const, error: violation };
+          }
+        }
+
         const deleted = await tx
           .delete(timeEntries)
           .where(
@@ -99,11 +142,17 @@ const batchDelete = createSafeHandler(
           buildBatchDeleteEvents({ deleted, writtenOff }),
         );
 
-        return deleted.length + writtenOff.length;
+        return {
+          type: "updated" as const,
+          count: deleted.length + writtenOff.length,
+        };
       }),
     );
 
-    return Result.ok({ updated });
+    if (updated.type === "policy") {
+      return Result.err(updated.error);
+    }
+    return Result.ok({ updated: updated.count });
   },
 );
 

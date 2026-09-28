@@ -9,6 +9,8 @@
 // decision, so this test fails on all three.
 
 import { expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import nodePath from "node:path";
 import core from "ultracite/oxlint/core";
 
 import {
@@ -246,3 +248,43 @@ test(
   },
   TIMEOUT_MS,
 );
+
+test("the pre-commit autofix preserves includes checks", () => {
+  const directory = mkdtempSync(
+    nodePath.join(import.meta.dir, ".prefer-set-has-"),
+  );
+  const fixture = nodePath.join(directory, "fixture.ts");
+
+  try {
+    writeFileSync(
+      fixture,
+      [
+        'const phrase = "alphabet".slice(0, 5);',
+        'const names = ["alpha", "beta"];',
+        "export const containsSubstring = (needle: string) => phrase.includes(needle);",
+        "export const containsName = (name: string) => names.includes(name);",
+      ].join("\n"),
+    );
+
+    const result = Bun.spawnSync(
+      [
+        process.execPath,
+        "--bun",
+        "oxlint",
+        "-c",
+        "oxlint.config.ts",
+        "--fix",
+        fixture,
+      ],
+      { cwd: nodePath.resolve(import.meta.dir, "..") },
+    );
+
+    const fixed = readFileSync(fixture, "utf-8");
+    expect(fixed).toContain("phrase.includes(needle)");
+    expect(fixed).toContain("names.includes(name)");
+    expect(fixed).not.toContain("new Set(");
+    expect(result.exitCode).toBe(0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

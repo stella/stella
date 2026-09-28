@@ -29,6 +29,7 @@ import {
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
@@ -92,20 +93,6 @@ const toNullableString = (value: unknown): string | null =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
-
-/** Drivers disagree: bun-sql returns the rows, pglite wraps them in `{ rows }`. */
-const rowsOf = (result: unknown): Record<string, unknown>[] => {
-  let rows: unknown = result;
-  if (!Array.isArray(result) && isRecord(result)) {
-    rows = result["rows"];
-  }
-  if (!Array.isArray(rows)) {
-    throw new LatestDecisionsError({
-      message: "Newest decisions query returned no row set",
-    });
-  }
-  return rows.filter(isRecord);
-};
 
 const requiredString = (row: Record<string, unknown>, key: string): string => {
   const value = row[key];
@@ -203,7 +190,7 @@ export const readLatestDecisionsByCourt = async ({
         ORDER BY shelf.ordinality, ${decisionDateSortKeySql(sql.raw("d.decision_date"))} DESC, d.id DESC
       `),
   );
-  const rows = rowsOf(result);
+  const rows = executedRows(result).filter(isRecord);
 
   const languageGroupKeys = [
     ...new Set(

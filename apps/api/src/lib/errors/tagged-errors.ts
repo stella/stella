@@ -653,3 +653,15 @@ export class UnrecognizedDerivativeStateError extends TaggedError(
 )<{
   message: string;
 }> {}
+
+/**
+ * A provider ended a response with a stop reason no table in
+ * `provider-stop-reasons.ts` lists, most likely one its SDK added since.
+ * Reported so the table gets the reason; the run itself is decided without
+ * it.
+ */
+export class UnrecognizedProviderStopReasonError extends TaggedError(
+  "UnrecognizedProviderStopReasonError",
+)<{
+  message: string;
+}> {}

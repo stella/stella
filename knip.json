@@ -36,6 +36,8 @@
         "src/server.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
+        // Callable receiver boundary for authenticated mail transport hosts.
+        "src/lib/email/inbound/runtime.ts",
         "src/lib/files/pdf-worker.ts!",
         "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
@@ -65,6 +67,9 @@
         "src/server.ts!",
         "src/runtime.ts!",
         "vite.config.ts",
+        // The generated route tree is ignored; this route owns billing dialogs
+        // loaded by the router and must remain in Knip's usage graph.
+        "src/routes/_protected.workspaces/$workspaceId/timesheets.tsx",
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
         "e2e/**/*.spec.ts",

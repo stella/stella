@@ -146,6 +146,7 @@ import {
   completeRequest,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -665,6 +666,7 @@ const startServer = async (): Promise<void> => {
       stopSse,
       timeout: Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     });
+    closeActionAdmissionRedis();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
         logger.info("api.shutdown_complete", { signal });

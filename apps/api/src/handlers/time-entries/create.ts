@@ -29,7 +29,7 @@ const createTimeEntryBodySchema = t.Object({
     description: "Minutes worked (whole minutes)",
   }),
   narrative: t.String({
-    minLength: 1,
+    minLength: 0,
     maxLength: 10_000,
     description: "Description of the work",
   }),
@@ -69,6 +69,7 @@ const createTimeEntry = createSafeHandler(
     safeDb,
     session,
     workspaceId,
+    memberRole,
     user,
     body,
     recordAuditEvent,
@@ -78,6 +79,7 @@ const createTimeEntry = createSafeHandler(
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,
+      memberRole,
       recordAuditEvent,
       body,
     });

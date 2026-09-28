@@ -247,9 +247,7 @@ describe("manage_organization per-action validation", () => {
         document_processing_mode: "searchable-text",
       }),
     );
-    expect(message).toBe(
-      "matter_number_pattern, matter_number_padding, prompt_caching_enabled, and document_processing_mode apply only to update_org_settings",
-    );
+    expect(message).toBe("Settings fields apply only to update_org_settings");
   });
 
   test("rejects an empty update_org_settings action", async () => {

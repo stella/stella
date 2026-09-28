@@ -88,6 +88,7 @@ export const SCENARIO_PROMPTS = {
   "malformed-chunk": TEXT_PROMPT,
   "early-eof": TEXT_PROMPT,
   "unusable-stop": TEXT_PROMPT,
+  "unlisted-stop": TEXT_PROMPT,
 } as const satisfies Record<ProviderWireScenario, string>;
 
 /** A provider's own wording for a scenario, where the shared prompt records
