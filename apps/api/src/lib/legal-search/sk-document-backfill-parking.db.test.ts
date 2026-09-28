@@ -12,6 +12,7 @@
  * source version the decision no longer holds is dropped.
  */
 
+import { Panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -27,6 +28,7 @@ import {
   loadPendingDocuments,
   markDocumentUnavailable,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
+  MAX_REQUEUE_PARKED_DOCUMENTS,
   parkDocumentFetch,
   requeueParkedDocuments,
 } from "@/api/lib/legal-search/sk-document-backfill";
@@ -88,6 +90,8 @@ const SEEDS: readonly Seed[] = [
 let testDb: TestDatabase;
 let scopedDb: ScopedDb;
 let sourceId: SafeId<"caseLawSource">;
+/** Whether this file inserted the source, and so must remove it. */
+let sourceOwnership: "created" | "borrowed" = "borrowed";
 const seeded = new Map<string, SafeId<"caseLawDecision">>();
 const suffix = Bun.randomUUIDv7().slice(0, 8);
 
@@ -141,18 +145,29 @@ beforeAll(async () => {
       await callback(testDb),
   );
 
-  const [source] = await testDb
-    .insert(caseLawSources)
-    .values({
-      adapterKey: ADAPTER_KEYS.SK_COURTS,
-      name: `SK parking ${suffix}`,
-      enabled: false,
-    })
-    .returning({ id: caseLawSources.id });
-  if (!source) {
-    throw new Error("expected source row");
+  // The queue resolves its source by adapter key, which is unique, so a
+  // source another file left behind is reused rather than duplicated.
+  const existing = await testDb.query.caseLawSources.findFirst({
+    where: { adapterKey: { eq: ADAPTER_KEYS.SK_COURTS } },
+    columns: { id: true },
+  });
+  if (existing) {
+    sourceId = existing.id;
+  } else {
+    const [source] = await testDb
+      .insert(caseLawSources)
+      .values({
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        name: `SK parking ${suffix}`,
+        enabled: false,
+      })
+      .returning({ id: caseLawSources.id });
+    if (!source) {
+      throw new Error("expected source row");
+    }
+    sourceId = source.id;
+    sourceOwnership = "created";
   }
-  sourceId = source.id;
 
   for (const seed of SEEDS) {
     await insertDecision(seed);
@@ -163,6 +178,9 @@ afterAll(async () => {
   await testDb
     .delete(caseLawDecisions)
     .where(inArray(caseLawDecisions.id, [...seeded.values()]));
+  if (sourceOwnership === "created") {
+    await testDb.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+  }
   await releaseTestDb();
 });
 
@@ -425,4 +443,23 @@ describe("a stale claim", () => {
       documentFetchAttempts: 1,
     });
   });
+});
+
+test("a requeue outside its bound is refused before it touches a row", async () => {
+  for (const limit of [
+    0,
+    -1,
+    1.5,
+    Number.NaN,
+    MAX_REQUEUE_PARKED_DOCUMENTS + 1,
+  ]) {
+    const thrown = await rejectionOf(
+      requeueParkedDocuments({ scopedDb, sourceId, limit }),
+    );
+
+    expect({ limit, panicked: Panic.is(thrown) }).toEqual({
+      limit,
+      panicked: true,
+    });
+  }
 });

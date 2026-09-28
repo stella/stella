@@ -5,6 +5,7 @@ import {
 import {
   countParkedDocuments,
   loadDeferredDocumentSourceId,
+  MAX_REQUEUE_PARKED_DOCUMENTS,
   requeueParkedDocuments,
 } from "@/api/lib/legal-search/sk-document-backfill";
 
@@ -27,10 +28,7 @@ import {
  * the report.
  */
 
-/** Rows one run requeues at most, so its single statement stays bounded. */
-const MAX_REQUEUE = 5000;
-
-const USAGE = `Usage: bun run src/scripts/requeue-sk-documents.ts [--requeue <n>], n <= ${MAX_REQUEUE}`;
+const USAGE = `Usage: bun run src/scripts/requeue-sk-documents.ts [--requeue <n>], n <= ${MAX_REQUEUE_PARKED_DOCUMENTS}`;
 
 const parseRequeueLimit = (argv: readonly string[]): number | undefined => {
   if (argv.length === 0) {
@@ -42,7 +40,7 @@ const parseRequeueLimit = (argv: readonly string[]): number | undefined => {
     value === undefined ||
     rest.length > 0 ||
     !/^[1-9]\d*$/u.test(value) ||
-    Number(value) > MAX_REQUEUE
+    Number(value) > MAX_REQUEUE_PARKED_DOCUMENTS
   ) {
     console.error(USAGE);
     process.exit(1);

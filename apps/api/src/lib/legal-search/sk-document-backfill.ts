@@ -1206,10 +1206,13 @@ export const countParkedDocuments = async (
   return row?.parked ?? 0;
 };
 
+/** Decisions one requeue resets at most, so its one statement stays bounded. */
+export const MAX_REQUEUE_PARKED_DOCUMENTS = 5000;
+
 export type RequeueParkedDocumentsOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
-  /** Decisions requeued by this call at most. */
+  /** Decisions requeued by this call at most: 1 to `MAX_REQUEUE_PARKED_DOCUMENTS`. */
   limit: number;
 };
 
@@ -1225,8 +1228,17 @@ export const requeueParkedDocuments = async ({
   limit,
   scopedDb,
   sourceId,
-}: RequeueParkedDocumentsOptions): Promise<number> =>
-  await scopedDb(async (tx) => {
+}: RequeueParkedDocumentsOptions): Promise<number> => {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > MAX_REQUEUE_PARKED_DOCUMENTS
+  ) {
+    return panic(
+      `requeue limit must be an integer from 1 to ${MAX_REQUEUE_PARKED_DOCUMENTS}, got ${limit}`,
+    );
+  }
+  return await scopedDb(async (tx) => {
     const parked = tx
       .select({ id: caseLawDecisions.id })
       .from(caseLawDecisions)
@@ -1241,6 +1253,7 @@ export const requeueParkedDocuments = async ({
     });
     return requeued.length;
   });
+};
 
 /**
  * Outcomes of one document fetch: the document, a decision the source
