@@ -174,8 +174,12 @@ test(
                AND attname = ${column}
           `),
         ).at(0);
-        expect(row?.["n_distinct"]).toBeCloseTo(expected);
-        expect([null, "{}"]).toContain(row?.["values"]);
+        if (!isRecord(row)) {
+          panic(`Missing synthetic column stats for ${table}.${column}`);
+        }
+        expect(row["n_distinct"]).toBeCloseTo(expected);
+        const commonValues = row["values"];
+        expect(commonValues === null || commonValues === "{}").toBe(true);
       }
 
       const oldNodes = await explainNodes(
