@@ -324,7 +324,7 @@ describe("organization file usage", () => {
       .where(eq(usageEntitlements.id, entitlementId));
   });
 
-  test("capacity reduction preserves bytes and rejects later durable writes", async () => {
+  test("capacity reduction permits no-growth overwrites and rejects new objects", async () => {
     const existing = await reserveOrganizationFileBytes(
       input("fixture/over-cap", 17),
       db(),
@@ -337,6 +337,19 @@ describe("organization file usage", () => {
     await testDb
       .delete(usageSeatAssignments)
       .where(eq(usageSeatAssignments.id, assignmentId));
+    const replacement = await reserveOrganizationFileBytes(
+      {
+        ...input("fixture/over-cap", 17),
+        contentSha256Hex: "a".repeat(64),
+      },
+      db(),
+    );
+    expect(replacement).toMatchObject({ value: { status: "reserved" } });
+    if (Result.isOk(replacement)) {
+      expect(
+        Result.isOk(await commitOrganizationFileBytes(replacement.value, db())),
+      ).toBe(true);
+    }
     const blocked = await reserveOrganizationFileBytes(
       input("fixture/after-reduction", 1),
       db(),

@@ -28,7 +28,13 @@ export const createReconcileOrganizationFileReservationsTask =
       "fileReservations.committed": settled.committed,
       "fileReservations.deleted": settled.deleted,
       "fileReservations.released": settled.released,
+      "fileReservations.mismatched": settled.mismatched,
     });
+    if (settled.mismatched > 0) {
+      logger.warn("scheduler.organization_file_reservations_mismatched", {
+        "fileReservations.mismatched": settled.mismatched,
+      });
+    }
   };
 
 export const reconcileOrganizationFileReservations =

@@ -1,15 +1,23 @@
 /**
- * Run explicitly before enabling FEATURE_FILE_USAGE_LIMITS. It pages through
- * stored organization objects and chat attachments, then imports the actual
- * object lengths. Replaying a page changes no count for unchanged objects.
+ * Stop every API, worker, and other storage writer before running this script.
+ * Keep them stopped until FEATURE_FILE_USAGE_LIMITS is enabled and the writers
+ * restart with that setting. Pass --writers-quiesced-through-enable only after
+ * confirming that window. The flag-off path does not record new writes, so a
+ * live backfill can miss objects written after their organization was scanned.
+ * The script pages through stored organization objects and chat attachments;
+ * replaying a page changes no count for unchanged objects.
  */
 import { panic, Result } from "better-result";
-import { asc, eq, gt, and } from "drizzle-orm";
+import { asc, eq, gt, and, isNotNull, or } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
-import { chatThreads, userFiles } from "@/api/db/schema";
+import {
+  chatThreads,
+  organizationFileObjects,
+  userFiles,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   openMaintenanceDb,
@@ -36,6 +44,11 @@ import {
 
 const PAGE_SIZE = 200;
 const RESERVATION_STALE_AFTER_MS = 60 * 60 * 1000;
+if (!process.argv.includes("--writers-quiesced-through-enable")) {
+  panic(
+    "Stop all storage writers through FEATURE_FILE_USAGE_LIMITS enablement, then pass --writers-quiesced-through-enable",
+  );
+}
 const db = openMaintenanceDb({ readOnly: true });
 const ledgerDb = openOrganizationFileUsageDb();
 
@@ -118,6 +131,7 @@ let orgCursor: SafeId<"organization"> | null = null;
 let imported = 0;
 let removed = 0;
 let settledReservations = 0;
+let mismatchedReservations = 0;
 while (true) {
   const organizations = await readOrganizationPage(orgCursor);
   if (organizations.length === 0) {
@@ -201,6 +215,7 @@ while (true) {
       ).unwrap();
       settledReservations +=
         settledBatch.committed + settledBatch.deleted + settledBatch.released;
+      mismatchedReservations += settledBatch.mismatched;
     } while (
       settledBatch.scanned ===
       ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT
@@ -212,6 +227,22 @@ while (true) {
       ? null
       : brandPersistedOrganizationId(lastOrganization.id);
 }
+const unsettled = await ledgerDb.transaction(
+  async (tx) =>
+    await tx
+      .select({ objectKey: organizationFileObjects.objectKey })
+      .from(organizationFileObjects)
+      .where(
+        or(
+          eq(organizationFileObjects.status, "reserved"),
+          isNotNull(organizationFileObjects.pendingSizeBytes),
+        ),
+      )
+      .limit(1),
+);
+if (unsettled.length > 0) {
+  panic("File usage backfill left unsettled writes; reconcile before enabling");
+}
 console.log(
-  `Reconciled ${imported} stored objects; removed ${removed} absent ledger rows; settled ${settledReservations} reservations.`,
+  `Reconciled ${imported} stored objects; removed ${removed} absent ledger rows; settled ${settledReservations} reservations; ${mismatchedReservations} mismatched reservations remain pending.`,
 );

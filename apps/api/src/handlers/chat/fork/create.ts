@@ -39,7 +39,10 @@ import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import {
+  copyOrganizationFile,
+  OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
@@ -235,52 +238,41 @@ type UserFileCopyOutcome =
 
 const copyUserFileObject = async ({
   destinationKey,
+  fileUsageDb,
   organizationId,
   sizeBytes,
   sourceKey,
 }: {
   destinationKey: string;
+  fileUsageDb?: Parameters<typeof copyOrganizationFile>[0]["db"];
   organizationId: SafeId<"organization">;
   sizeBytes: number;
   sourceKey: string;
-}): Promise<Result<void, HandlerError<500>>> => {
-  const copy = async () => {
-    const result = await copyObject(sourceKey, destinationKey);
-    if (Result.isError(result)) {
-      throw result.error;
-    }
-    return result.value;
-  };
-  if (env.FEATURE_FILE_USAGE_LIMITS) {
-    const result = await writeOrganizationFile({
-      organizationId,
-      objectKey: destinationKey,
-      sizeBytes,
-      write: copy,
-    });
-    if (Result.isError(result)) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to copy chat attachment storage object",
-          cause: result.error.cause,
-        }),
-      );
-    }
+}): Promise<Result<void, HandlerError<409 | 500 | 503>>> => {
+  const copied = env.FEATURE_FILE_USAGE_LIMITS
+    ? await copyOrganizationFile({
+        organizationId,
+        objectKey: destinationKey,
+        sizeBytes,
+        ...(fileUsageDb ? { db: fileUsageDb } : {}),
+        copy: async () => await copyObject(sourceKey, destinationKey),
+        confirmedDestinationAbsentOnCopyError: (error) =>
+          isMissingS3ObjectError(error.cause),
+      })
+    : await copyObject(sourceKey, destinationKey);
+  if (Result.isOk(copied)) {
     return Result.ok();
   }
-
-  const result = await copyObject(sourceKey, destinationKey);
-  if (Result.isError(result)) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Failed to copy chat attachment storage object",
-        cause: result.error.cause,
-      }),
-    );
+  if (copied.error instanceof OrganizationFileUsageError) {
+    return Result.err(copied.error);
   }
-  return Result.ok();
+  return Result.err(
+    new HandlerError({
+      status: 500,
+      message: "Failed to copy chat attachment storage object",
+      cause: copied.error.cause,
+    }),
+  );
 };
 
 /**
@@ -292,14 +284,16 @@ const copyUserFileObject = async ({
 const copyUserFileObjects = async ({
   copiedS3Keys,
   file,
+  fileUsageDb,
   organizationId,
   userId,
 }: {
   copiedS3Keys: string[];
   file: SourceUserFileRow;
+  fileUsageDb?: Parameters<typeof copyOrganizationFile>[0]["db"];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-}): Promise<Result<UserFileCopyOutcome, HandlerError<500>>> => {
+}): Promise<Result<UserFileCopyOutcome, HandlerError<409 | 500 | 503>>> => {
   const newFileId = createSafeId<"userFile">();
   const copiedS3Key = createUserFileKey({
     fileId: newFileId,
@@ -309,12 +303,16 @@ const copyUserFileObjects = async ({
   copiedS3Keys.push(copiedS3Key);
   const copied = await copyUserFileObject({
     destinationKey: copiedS3Key,
+    fileUsageDb,
     organizationId,
     sizeBytes: file.sizeBytes,
     sourceKey: file.s3Key,
   });
   if (Result.isError(copied)) {
-    if (isMissingS3ObjectError(copied.error.cause)) {
+    if (
+      !(copied.error instanceof OrganizationFileUsageError) &&
+      isMissingS3ObjectError(copied.error.cause)
+    ) {
       return Result.ok({ kind: "source-object-missing", fileId: file.id });
     }
     return Result.err(copied.error);
@@ -371,12 +369,16 @@ const copyUserFileObjects = async ({
   }
   const thumbnailCopied = await copyUserFileObject({
     destinationKey: copiedThumbnailKey,
+    fileUsageDb,
     organizationId,
     sizeBytes: thumbnailHead?.value.contentLength ?? file.sizeBytes,
     sourceKey: sourceThumbnailKey,
   });
   if (Result.isError(thumbnailCopied)) {
-    if (isMissingS3ObjectError(thumbnailCopied.error.cause)) {
+    if (
+      !(thumbnailCopied.error instanceof OrganizationFileUsageError) &&
+      isMissingS3ObjectError(thumbnailCopied.error.cause)
+    ) {
       return Result.ok({
         kind: "copied",
         copy: {
@@ -440,8 +442,10 @@ const rollbackCopiedS3Keys = async (copiedS3Keys: string[]): Promise<void> => {
 // still awaits are settled in the copy. The fork's id comes from
 // the caller, so a retry converges on one copy instead of duplicating it.
 export const createForkThread = ({
+  fileUsageDb,
   indexChatThread = upsertChatThreadSearchDocument,
 }: {
+  fileUsageDb?: Parameters<typeof copyOrganizationFile>[0]["db"];
   /** Search-index write, which runs on the root database; supplied by the
    *  focused integration test, whose fixture only stands up a scoped one. */
   indexChatThread?: typeof upsertChatThreadSearchDocument | undefined;
@@ -665,7 +669,10 @@ export const createForkThread = ({
       }
       const forkWorkspaceId = source.workspaceId;
       const copiedS3Keys: string[] = [];
-      const copyResults: Result<UserFileCopyOutcome, HandlerError<500>>[] = [];
+      const copyResults: Result<
+        UserFileCopyOutcome,
+        HandlerError<409 | 500 | 503>
+      >[] = [];
       await consumeInBatches({
         batchSize: FORK_COPY_CONCURRENCY,
         consume: async (batch) => {
@@ -675,6 +682,7 @@ export const createForkThread = ({
                 await copyUserFileObjects({
                   copiedS3Keys,
                   file,
+                  fileUsageDb,
                   organizationId: session.activeOrganizationId,
                   userId: user.id,
                 }),
@@ -687,7 +695,7 @@ export const createForkThread = ({
       const copies: UserFileCopy[] = [];
       const missingObjectFileIds: SafeId<"userFile">[] = [];
       const missingThumbnailFileIds: SafeId<"userFile">[] = [];
-      let copyError: HandlerError<500> | undefined;
+      let copyError: HandlerError<409 | 500 | 503> | undefined;
       for (const copied of copyResults) {
         if (Result.isError(copied)) {
           copyError ??= copied.error;

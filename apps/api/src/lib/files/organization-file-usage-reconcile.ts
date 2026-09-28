@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -25,11 +25,20 @@ import {
   OrganizationFileUsageError,
   releaseOrganizationFileBytes,
 } from "@/api/lib/files/organization-file-usage";
+import type { HeadObjectResult } from "@/api/lib/s3-presign";
 
 export const ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT = 50;
 const RETRY_DELAY_MS = 5 * 60_000;
+const HASH_READ_TIMEOUT_MS = 5 * 60_000;
 const UUID_KEY_PART = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 const S3_LAST_MODIFIED_PRECISION_MS = 1000;
+const unsettledObject = or(
+  eq(organizationFileObjects.status, "reserved"),
+  and(
+    eq(organizationFileObjects.status, "committed"),
+    isNotNull(organizationFileObjects.pendingSizeBytes),
+  ),
+);
 
 type ReconcileOptions = {
   db: Pick<MaintenanceDb, "transaction">;
@@ -120,6 +129,64 @@ const isDurablyReferenced = async (
   );
 };
 
+type ReferencedReservationMatchOptions = {
+  expectedSha256Hex: string | null;
+  head: HeadObjectResult;
+  objectKey: string;
+  pendingSizeBytes: bigint | null;
+  reservationStartedAt: Date;
+  signal: AbortSignal | undefined;
+  sizeBytes: bigint;
+};
+
+const matchesReferencedReservation = async ({
+  expectedSha256Hex,
+  head,
+  objectKey,
+  pendingSizeBytes,
+  reservationStartedAt,
+  signal,
+  sizeBytes,
+}: ReferencedReservationMatchOptions) => {
+  if (
+    head.contentLength !== Number(pendingSizeBytes ?? sizeBytes) ||
+    (expectedSha256Hex === null &&
+      (head.lastModified === null ||
+        head.lastModified.getTime() + S3_LAST_MODIFIED_PRECISION_MS <
+          reservationStartedAt.getTime()))
+  ) {
+    return Result.ok(false);
+  }
+  if (expectedSha256Hex === null) {
+    return Result.ok(true);
+  }
+  if (head.checksumSHA256 !== null) {
+    return Result.ok(
+      Buffer.from(head.checksumSHA256, "base64").toString("hex") ===
+        expectedSha256Hex,
+    );
+  }
+  const { hashS3ObjectSha256WithSignal } = await import("@/api/lib/s3");
+  const read = await Result.tryPromise({
+    try: async () =>
+      await hashS3ObjectSha256WithSignal(
+        objectKey,
+        signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(HASH_READ_TIMEOUT_MS)])
+          : AbortSignal.timeout(HASH_READ_TIMEOUT_MS),
+      ),
+    catch: (cause) =>
+      new OrganizationFileUsageError({
+        message: "Referenced file could not be verified",
+        reason: "storage_unavailable",
+        cause,
+      }),
+  });
+  return Result.isError(read)
+    ? Result.err(read.error)
+    : Result.ok(read.value === expectedSha256Hex);
+};
+
 /** A bounded sweep settles old fresh-key writes without relying on a retry of the same key. */
 export const reconcileAbandonedOrganizationFileReservations = async ({
   db,
@@ -152,7 +219,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           .from(organizationFileObjects)
           .where(
             and(
-              eq(organizationFileObjects.status, "reserved"),
+              unsettledObject,
               isNotNull(organizationFileObjects.writeId),
               lte(
                 organizationFileObjects.reservationStartedAt,
@@ -176,6 +243,7 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
     let committed = 0;
     let deleted = 0;
     let released = 0;
+    let mismatched = 0;
     for (const candidate of candidates) {
       signal?.throwIfAborted();
       const recoveryWriteId = Bun.randomUUIDv7();
@@ -189,14 +257,17 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           .for("update");
         const current = await tx
           .select({
+            status: organizationFileObjects.status,
             sizeBytes: organizationFileObjects.sizeBytes,
+            pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+            expectedSha256Hex: organizationFileObjects.expectedSha256Hex,
             reservationStartedAt: organizationFileObjects.reservationStartedAt,
           })
           .from(organizationFileObjects)
           .where(
             and(
               eq(organizationFileObjects.objectKey, candidate.objectKey),
-              eq(organizationFileObjects.status, "reserved"),
+              unsettledObject,
               eq(organizationFileObjects.writeId, candidate.writeId ?? ""),
               lte(
                 organizationFileObjects.reservationStartedAt,
@@ -220,11 +291,13 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         return {
           ...current,
           reservationStartedAt: current.reservationStartedAt,
-          referenced: await isDurablyReferenced(
-            tx,
-            candidate.organizationId,
-            candidate.objectKey,
-          ),
+          referenced:
+            current.status === "committed" ||
+            (await isDurablyReferenced(
+              tx,
+              candidate.organizationId,
+              candidate.objectKey,
+            )),
         };
       });
       if (!claim) {
@@ -249,18 +322,18 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         continue;
       }
       if (claim.referenced) {
-        if (
-          head.value.contentLength !== Number(claim.sizeBytes) ||
-          head.value.lastModified === null ||
-          head.value.lastModified.getTime() + S3_LAST_MODIFIED_PRECISION_MS <
-            claim.reservationStartedAt.getTime()
-        ) {
-          return yield* Result.err(
-            new OrganizationFileUsageError({
-              message: "Referenced file does not match its reservation",
-              reason: "storage_unavailable",
-            }),
-          );
+        const matches = await matchesReferencedReservation({
+          expectedSha256Hex: claim.expectedSha256Hex,
+          head: head.value,
+          objectKey: candidate.objectKey,
+          pendingSizeBytes: claim.pendingSizeBytes,
+          reservationStartedAt: claim.reservationStartedAt,
+          signal,
+          sizeBytes: claim.sizeBytes,
+        });
+        if (!(yield* matches)) {
+          mismatched += 1;
+          continue;
         }
         const settled = await commitOrganizationFileBytes(reservation, db);
         yield* settled;
@@ -282,5 +355,6 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
       committed,
       deleted,
       released,
+      mismatched,
     });
   });

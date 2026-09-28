@@ -33,6 +33,9 @@ describe("chat thumbnail backfill query", () => {
         ? initializer.body.statements.find(ts.isIfStatement)
         : undefined;
     expect(branch).toBeDefined();
+    if (!branch) {
+      return;
+    }
     const callsInnerJoin = (node: ts.Node) => {
       let found = false;
       const visit = (child: ts.Node) => {
@@ -48,13 +51,13 @@ describe("chat thumbnail backfill query", () => {
       visit(node);
       return found;
     };
-    expect(callsInnerJoin(branch!.thenStatement)).toBe(false);
+    expect(callsInnerJoin(branch.thenStatement)).toBe(false);
     expect(
       initializer &&
         ts.isArrowFunction(initializer) &&
         ts.isBlock(initializer.body) &&
         initializer.body.statements
-          .slice(initializer.body.statements.indexOf(branch!) + 1)
+          .slice(initializer.body.statements.indexOf(branch) + 1)
           .some(callsInnerJoin),
     ).toBe(true);
   });

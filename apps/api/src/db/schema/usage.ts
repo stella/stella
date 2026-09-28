@@ -693,6 +693,8 @@ export const FILE_USAGE_OBJECT_STATUSES = ["reserved", "committed"] as const;
 const FILE_USAGE_OBJECT_STATUS_SQL_VALUES = FILE_USAGE_OBJECT_STATUSES.map(
   (status) => sql.raw(`'${status}'`),
 );
+const currentUserOwnsOrganizationFileUsage = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_usage'::regclass)`;
+const currentUserOwnsOrganizationFileObjects = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_objects'::regclass)`;
 
 export const organizationFileUsage = p.pgTable(
   "organization_file_usage",
@@ -715,6 +717,12 @@ export const organizationFileUsage = p.pgTable(
       "organization_file_usage_nonneg",
       sql`committed_bytes >= 0 AND reserved_bytes >= 0`,
     ),
+    p.pgPolicy("organization_file_usage_owner_access", {
+      for: "all",
+      to: "public",
+      using: currentUserOwnsOrganizationFileUsage,
+      withCheck: currentUserOwnsOrganizationFileUsage,
+    }),
     p.pgPolicy("organization_file_usage_select", {
       for: "select",
       to: stella,
@@ -764,6 +772,12 @@ export const organizationFileObjects = p.pgTable(
       "organization_file_objects_status_domain",
       sql`status IN (${sql.join(FILE_USAGE_OBJECT_STATUS_SQL_VALUES, sql`, `)})`,
     ),
+    p.pgPolicy("organization_file_objects_owner_access", {
+      for: "all",
+      to: "public",
+      using: currentUserOwnsOrganizationFileObjects,
+      withCheck: currentUserOwnsOrganizationFileObjects,
+    }),
     p.pgPolicy("organization_file_objects_select", {
       for: "select",
       to: stella,

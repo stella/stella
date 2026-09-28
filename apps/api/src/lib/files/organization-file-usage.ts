@@ -299,9 +299,9 @@ export const reserveOrganizationFileBytes = async (
             entitlement.storageBytesPerAssignment * BigInt(assignments);
           const nextBytes =
             counter.committedBytes + counter.reservedBytes + additionalBytes;
-          const shrinksExisting =
-            existing && BigInt(sizeBytes) < existing.sizeBytes;
-          if (nextBytes > cap && !shrinksExisting) {
+          const doesNotGrowExisting =
+            existing && BigInt(sizeBytes) <= existing.sizeBytes;
+          if (nextBytes > cap && !doesNotGrowExisting) {
             return { status: "capacity_exceeded" as const };
           }
         }
@@ -693,6 +693,7 @@ export const writeOrganizationFile = async <T>(
 export const copyOrganizationFile = async <T, E>(
   input: FileUsageInput & {
     copy: () => Promise<Result<T, E>>;
+    confirmedDestinationAbsentOnCopyError?: (error: E) => boolean;
     db?: FileUsageDb;
   },
 ): Promise<Result<T, E | OrganizationFileUsageError>> => {
@@ -708,6 +709,17 @@ export const copyOrganizationFile = async <T, E>(
     return Result.err(copied.error);
   }
   if (Result.isError(copied.value)) {
+    // Only a copy error that proves the destination was never written may
+    // release the reservation; timeouts still need object-state recovery.
+    if (input.confirmedDestinationAbsentOnCopyError?.(copied.value.error)) {
+      const released = await releaseOrganizationFileBytes(
+        reservation.value,
+        input.db,
+      );
+      if (Result.isError(released)) {
+        return Result.err(released.error);
+      }
+    }
     return Result.err(copied.value.error);
   }
   const committed = await commitOrganizationFileBytes(

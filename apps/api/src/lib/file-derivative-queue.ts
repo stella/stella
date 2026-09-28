@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { Worker } from "bullmq";
+import { DelayedError, Worker } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -48,7 +49,11 @@ import {
   shouldGenerateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
-import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import {
+  FILE_RESERVATION_ABANDON_DELAY_MS,
+  OrganizationFileUsageError,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -75,6 +80,32 @@ const GENERATE_PDF_JOB_NAME = "generate-pdf";
 const GENERATE_THUMBNAIL_JOB_NAME = "generate-thumbnail";
 const WORKER_CONCURRENCY = 3;
 const DEFAULT_JOB_ATTEMPTS = 3;
+const RESERVATION_RETRY_DELAY_MS = FILE_RESERVATION_ABANDON_DELAY_MS + 60_000;
+
+export const deferFileDerivativeForPendingReservation = async ({
+  error,
+  job,
+  now = Temporal.Now.instant().epochMilliseconds,
+}: {
+  error: unknown;
+  job: {
+    moveToDelayed: (timestamp: number, token?: string) => Promise<void>;
+    token?: string;
+  };
+  now?: number;
+}): Promise<never> => {
+  if (
+    !(error instanceof OrganizationFileUsageError) ||
+    error.reason !== "reservation_busy"
+  ) {
+    throw error;
+  }
+
+  // The same-key reservation cannot be reused until its object-state grace
+  // expires. BullMQ's delayed transition leaves the attempt budget intact.
+  await job.moveToDelayed(now + RESERVATION_RETRY_DELAY_MS, job.token);
+  throw new DelayedError();
+};
 
 const lockActiveWorkspaceForDerivative = async (
   tx: Transaction,
@@ -304,11 +335,15 @@ export const initFileDerivativeWorker = () => {
   const worker = new Worker<FileDerivativeJobData>(
     QUEUE_NAME,
     async (job) => {
-      if (job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-        await processImageThumbnailJob(job.data);
-        return;
+      try {
+        if (job.name === GENERATE_THUMBNAIL_JOB_NAME) {
+          await processImageThumbnailJob(job.data);
+          return;
+        }
+        await processPdfDerivativeJob(job.data);
+      } catch (error) {
+        await deferFileDerivativeForPendingReservation({ error, job });
       }
-      await processPdfDerivativeJob(job.data);
     },
     {
       connection: workerConnection,
