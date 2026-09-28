@@ -252,6 +252,12 @@ type SplitPropertiesForBudgetOptions<TProperty> = StructuredOutputTarget & {
  * Partitions properties, in order, into the largest consecutive groups whose
  * schema still fits the provider budget. A single property that cannot fit
  * alone is an error: no split of the batch would make that request legal.
+ *
+ * Adding a property never shrinks the schema, so whether a prefix fits is
+ * monotone in its length. Each chunk's end is found by doubling the candidate
+ * length until one does not fit, then bisecting: a chunk of `k` properties
+ * costs O(log k) schema builds instead of one per property, which kept the
+ * whole batch quadratic when a generous budget let it all fit in one chunk.
  */
 export const splitPropertiesForBudget = <TProperty>({
   buildSchema,
@@ -262,38 +268,42 @@ export const splitPropertiesForBudget = <TProperty>({
   TProperty[][],
   StructuredOutputBudgetError
 > => {
+  const check = (start: number, length: number) =>
+    checkStructuredOutputBudget({
+      provider,
+      modelId,
+      schema: buildSchema(properties.slice(start, start + length)),
+    });
   const chunks: TProperty[][] = [];
-  let current: TProperty[] = [];
+  let start = 0;
 
-  for (const property of properties) {
-    current.push(property);
-    const withProperty = checkStructuredOutputBudget({
-      provider,
-      modelId,
-      schema: buildSchema(current),
-    });
-    if (Result.isOk(withProperty)) {
-      continue;
-    }
-    if (current.length === 1) {
-      return Result.err(withProperty.error);
-    }
-
-    current.pop();
-    chunks.push(current);
-    current = [property];
-    const alone = checkStructuredOutputBudget({
-      provider,
-      modelId,
-      schema: buildSchema(current),
-    });
+  while (start < properties.length) {
+    const remaining = properties.length - start;
+    const alone = check(start, 1);
     if (Result.isError(alone)) {
       return Result.err(alone.error);
     }
-  }
-
-  if (current.length > 0) {
-    chunks.push(current);
+    // `fits` always fits; `refused`, when set, is known not to.
+    let fits = 1;
+    let refused: number | undefined;
+    while (refused === undefined && fits < remaining) {
+      const candidate = Math.min(fits * 2, remaining);
+      if (Result.isOk(check(start, candidate))) {
+        fits = candidate;
+      } else {
+        refused = candidate;
+      }
+    }
+    while (refused !== undefined && refused - fits > 1) {
+      const candidate = Math.floor((fits + refused) / 2);
+      if (Result.isOk(check(start, candidate))) {
+        fits = candidate;
+      } else {
+        refused = candidate;
+      }
+    }
+    chunks.push(properties.slice(start, start + fits));
+    start += fits;
   }
 
   return Result.ok(chunks);

@@ -24,6 +24,7 @@ import {
   installPgliteCorpusProjectionRevisionFence,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteWorkspaceAccessObjects,
@@ -631,6 +632,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
+  await installPglitePdfSigningTokenScopes(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

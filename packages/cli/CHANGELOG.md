@@ -1,5 +1,25 @@
 # @stll/cli
 
+## 2.1.0
+
+### Minor Changes
+
+- [#3926](https://github.com/stella/stella/pull/3926) [`f35fccb`](https://github.com/stella/stella/commit/f35fccbc454ac204ea42477182a5b3879508e4a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add correspondence read, handling, and sender-approval capabilities.
+
+- [#3923](https://github.com/stella/stella/pull/3923) [`84be555`](https://github.com/stella/stella/commit/84be555cc854258d47451b00c8bbf3bd26bd7ed0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add entity checks: screen a company by IČO or a person by name and birth date against the Czech insolvency register (ISIR). Each check answers clear, found (with typed findings), unavailable, or not-covered; a source error, timeout, outage page, or unparseable answer is never reported as clear. The CLI gains `contact check-counterparty`.
+
+- [#3924](https://github.com/stella/stella/pull/3924) [`bc046e0`](https://github.com/stella/stella/commit/bc046e03f32cf54173e07afaed5c46447c739aac) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `cz-vat-reliability` entity check: the Czech VAT register's unreliable-payer status and published bank accounts for a DIČ. An IČO is sent as `CZ` + IČO and the result marks the DIČ as derived. A DIČ the register does not hold is reported as `not-registered`, never as clear.
+
+### Patch Changes
+
+- [#3939](https://github.com/stella/stella/pull/3939) [`a65a76b`](https://github.com/stella/stella/commit/a65a76b1ffd9cd85f729512f5e6db305199aea13) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Capability commands read the capability output from the `result` envelope the server returns, so pages still render as tables with their resume cursor.
+
+- [#4003](https://github.com/stella/stella/pull/4003) [`10e27ce`](https://github.com/stella/stella/commit/10e27cece28db716aa4fa51831fcad59c927a000) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Command help describes the lenient input readings: page sizes clamp, range dates accept a bare year or month, and statute ELIs accept short spellings.
+
+- [#4005](https://github.com/stella/stella/pull/4005) [`79de8e7`](https://github.com/stella/stella/commit/79de8e752d185eefb9ef67af49e71120b2f2385c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Command help no longer points at tools a surface does not expose.
+
+- [#3921](https://github.com/stella/stella/pull/3921) [`df1ebaf`](https://github.com/stella/stella/commit/df1ebaf973d8b0278bdde978a24d62412aad2c80) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `orsr.lookupFullRecordByIco` (history, filed documents, related persons) and the opt-in `detail: "full"` registry lookup.
+
 ## 2.0.2
 
 ### Patch Changes

@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useShallow } from "zustand/react/shallow";
 
 import { Skeleton } from "@stll/ui/skeleton";
+import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -307,9 +308,11 @@ const PDFSearchHighlightBox = ({
     <div
       ref={highlightRef}
       className={cn(
-        isActive
-          ? "search-document-highlight bg-highlight/90 ring-highlight-foreground/30 absolute rounded-xs ring-1"
-          : "search-document-highlight bg-highlight/45 absolute rounded-xs",
+        "search-document-highlight absolute",
+        textMarkClass({
+          ...SEARCH_HIT_MARK,
+          state: isActive ? "active" : "rest",
+        }),
       )}
       data-active={isActive ? "true" : undefined}
       data-search-highlight={true}

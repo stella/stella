@@ -4,6 +4,7 @@ import {
   withModelPlaceholdersOmitted,
   withNullOptionalsOmitted,
 } from "@/api/lib/json-schema/null-optionals";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
 const schema = {
   type: "object",
@@ -100,6 +101,223 @@ describe("a model's placeholder in an optional field", () => {
     expect(withModelPlaceholdersOmitted(union, { d: null })).toEqual({
       d: null,
     });
+  });
+
+  test("a null is omitted where an open sibling branch only tolerates the field", () => {
+    // The sibling takes any extra field without declaring it, so its
+    // tolerance does not make the null a value.
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            a: { type: "array", items: { type: "string" } },
+            d: { type: "array", items: { type: "integer" } },
+          },
+          required: ["a"],
+          additionalProperties: false,
+        },
+        { type: "object", properties: { b: { type: ["string", "null"] } } },
+      ],
+    };
+    expect(withModelPlaceholdersOmitted(union, { a: [], d: null })).toEqual({
+      a: [],
+    });
+  });
+
+  test("a null is omitted though a closed sibling branch that cannot take the value declares it", () => {
+    // The sibling's required fields are all present, so only the field it
+    // does not declare (`d`) rules it out.
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            d: { type: "string", enum: ["fast", "slow"] },
+            a: { type: "integer" },
+            b: { type: "boolean" },
+          },
+        },
+        {
+          type: "object",
+          properties: {
+            b: { type: "boolean" },
+            c: {
+              type: "object",
+              properties: { a: { type: "string" } },
+              additionalProperties: false,
+            },
+            a: { anyOf: [{ type: ["string", "null"] }, { type: "boolean" }] },
+          },
+          required: ["b", "c"],
+          additionalProperties: false,
+        },
+      ],
+    };
+    expect(
+      withModelPlaceholdersOmitted(union, {
+        d: "fast",
+        b: true,
+        c: {},
+        a: null,
+      }),
+    ).toEqual({ d: "fast", b: true, c: {} });
+  });
+
+  test("each null is kept by a branch declaring its own field", () => {
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: { x: { type: "string" }, y: { type: "string" } },
+        },
+        {
+          anyOf: [
+            { type: "object", properties: { x: { type: ["string", "null"] } } },
+            { type: "object", properties: { y: { type: ["string", "null"] } } },
+          ],
+        },
+      ],
+    };
+    expect(withModelPlaceholdersOmitted(union, { x: null, y: null })).toEqual({
+      x: null,
+      y: null,
+    });
+  });
+
+  test("a null is omitted though a sibling branch the value cannot fit declares it", () => {
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            c: { type: "boolean" },
+            d: { type: "string", minLength: 1 },
+          },
+          required: ["c"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            c: { type: "array", items: { type: "integer" } },
+            d: { type: ["string", "null"] },
+          },
+          additionalProperties: false,
+        },
+      ],
+    };
+    const read = withModelPlaceholdersOmitted(union, { c: false, d: null });
+    expect(
+      violationsOf(
+        CHAT_ORACLE.providerWireToolInput,
+        Bun.deepEquals(read, { c: false }) ? [] : [{ read }],
+      ),
+    ).toEqual([]);
+  });
+
+  // A sibling branch the value cannot fit must not keep a null the fitting
+  // branch refuses, whichever constraint rules it out.
+  const refusesUnfitSibling = (
+    union: unknown,
+    sent: unknown,
+    expected: unknown,
+  ) => {
+    const read = withModelPlaceholdersOmitted(union, sent);
+    expect(
+      violationsOf(
+        CHAT_ORACLE.providerWireToolInput,
+        Bun.deepEquals(read, expected) ? [] : [{ read }],
+      ),
+    ).toEqual([]);
+  };
+  const fitting = {
+    type: "object",
+    properties: { flag: { type: "integer" }, d: { type: "string" } },
+  };
+
+  test("a sibling branch whose constant the value does not equal keeps no null", () => {
+    refusesUnfitSibling(
+      {
+        anyOf: [
+          fitting,
+          {
+            type: "object",
+            const: { flag: 2, d: null },
+            properties: { flag: {}, d: { type: ["string", "null"] } },
+          },
+        ],
+      },
+      { flag: 1, d: null },
+      { flag: 1 },
+    );
+  });
+
+  test("a closed sibling branch whose patterns do not name a field keeps no null", () => {
+    refusesUnfitSibling(
+      {
+        anyOf: [
+          fitting,
+          {
+            type: "object",
+            properties: { d: { type: ["string", "null"] } },
+            patternProperties: { "^x_": {} },
+            additionalProperties: false,
+          },
+        ],
+      },
+      { flag: 1, d: null },
+      { flag: 1 },
+    );
+  });
+
+  test("an array member too short for the array keeps no null in its items", () => {
+    refusesUnfitSibling(
+      {
+        anyOf: [
+          {
+            type: "array",
+            items: { type: "object", properties: { b: { type: "integer" } } },
+          },
+          {
+            type: "array",
+            maxItems: 1,
+            items: {
+              type: "object",
+              properties: { b: { type: ["integer", "null"] } },
+            },
+          },
+        ],
+      },
+      [{ b: null }, { b: 2 }],
+      [{}, { b: 2 }],
+    );
+  });
+
+  test("a null one array member's items declare stays, though a sibling member's refuse it", () => {
+    const union = {
+      anyOf: [
+        {
+          type: "array",
+          items: { type: "object", properties: { b: { type: "integer" } } },
+        },
+        {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { b: { type: ["string", "null"] } },
+          },
+        },
+      ],
+    };
+    const sent = [{ b: null }];
+    const read = withModelPlaceholdersOmitted(union, sent);
+    expect(
+      violationsOf(
+        CHAT_ORACLE.providerWireToolInput,
+        Bun.deepEquals(read, sent) ? [] : [{ read, sent }],
+      ),
+    ).toEqual([]);
   });
 
   test("an array under a union reads its items' placeholders", () => {

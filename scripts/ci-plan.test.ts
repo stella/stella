@@ -212,6 +212,28 @@ test("the generated-output guards skip unrelated pull requests but never full de
   }
 });
 
+test("route tree freshness follows route inputs and full-depth runs", () => {
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/web/src/routes/law/route.tsx",
+    "apps/web/vite.config.ts",
+    "apps/web/route-tree.config.ts",
+    "apps/web/scripts/generate-route-tree.ts",
+    "apps/web/src/routeTree.gen.ts",
+    "bun.lock",
+  ]) {
+    expect(runSelector([file], ["route_tree_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+  expect(runSelector(["docs/changelog/x.md"], ["route_tree_required"])).toEqual(
+    ["false"],
+  );
+  expect(
+    runSelector(["docs/changelog/x.md"], ["route_tree_required"], "full"),
+  ).toEqual(["true"]);
+});
+
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
 
 const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
@@ -753,6 +775,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
   ).steps;
   for (const [name, scope] of [
     ["Web API types drift guard", "web_api_types_required"],
+    ["Route tree drift guard", "route_tree_required"],
     ["Published export map guard", "published_exports_required"],
   ] as const) {
     const condition = steps.find((step) => step.name === name)?.if ?? "";

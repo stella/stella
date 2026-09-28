@@ -23,6 +23,7 @@ export default defineConfig({
           DESKTOP_ROOT,
           "selfhost-connect-dialog.html",
         ),
+        "pdf-sign-dialog": path.join(DESKTOP_ROOT, "pdf-sign-dialog.html"),
       },
     },
   },

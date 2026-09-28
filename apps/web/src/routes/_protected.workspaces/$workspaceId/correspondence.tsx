@@ -31,6 +31,7 @@ import {
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
+import { CorrespondenceDrops } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-drops";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import {
@@ -92,6 +93,7 @@ function CorrespondencePage() {
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-5 p-4">
           <AddressCard workspaceId={workspaceId} />
+          <CorrespondenceDrops workspaceId={workspaceId} />
           <Suspense fallback={<CorrespondenceListSkeleton />}>
             <CorrespondenceList workspaceId={workspaceId} />
           </Suspense>

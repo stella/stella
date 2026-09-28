@@ -24,6 +24,11 @@ import readEntities from "@/api/handlers/entities/list";
 import moveEntity from "@/api/handlers/entities/move";
 import requestOcr from "@/api/handlers/entities/ocr/create";
 import openDesktopEditSession from "@/api/handlers/entities/open-desktop-edit-session";
+import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoffs";
+import {
+  cancelPdfSigningSession,
+  readPdfSigningSessionStatus,
+} from "@/api/handlers/entities/pdf-signing-sessions";
 import organizeSuggestions from "@/api/handlers/entities/placements/suggest";
 import publishFolioCollabVersion from "@/api/handlers/entities/publish-folio-collab-version";
 import readFieldFile from "@/api/handlers/entities/read-field-file";
@@ -149,6 +154,26 @@ export const entitiesRoute = new Elysia({
     {
       params: readDesktopEditHandoffStatus.config.params,
       permissions: readDesktopEditHandoffStatus.config.permissions,
+    },
+  )
+  .post("/pdf-signing-handoffs", createPdfSigningHandoff.handler, {
+    body: createPdfSigningHandoff.config.body,
+    permissions: createPdfSigningHandoff.config.permissions,
+  })
+  .get(
+    "/pdf-signing-sessions/:sessionId",
+    readPdfSigningSessionStatus.handler,
+    {
+      params: readPdfSigningSessionStatus.config.params,
+      permissions: readPdfSigningSessionStatus.config.permissions,
+    },
+  )
+  .post(
+    "/pdf-signing-sessions/:sessionId/cancel",
+    cancelPdfSigningSession.handler,
+    {
+      params: cancelPdfSigningSession.config.params,
+      permissions: cancelPdfSigningSession.config.permissions,
     },
   )
   .post("/folio-collab-rooms/join", joinFolioCollabRoom.handler, {
