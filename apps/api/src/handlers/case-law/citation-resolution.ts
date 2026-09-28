@@ -144,6 +144,7 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
  * the column, so the sheet travels as a bind parameter; the column's CHECK
  * keeps it to digits, which carry no `LIKE` metacharacter.
  */
+// sql-perf-allow: bounded by CITATION_CANDIDATE_SCAN_CAP candidates per walk
 const sheetMatchSql = sql`
   b.cited_sheet_number IS NOT NULL
   AND (

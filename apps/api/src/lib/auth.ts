@@ -1695,6 +1695,7 @@ export const resolveMemberAuthorization = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
+        // sql-perf-allow: bounded by one workspaceId and one member per user and organization
         or(
           membershipExists,
           and(
@@ -1823,6 +1824,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        // sql-perf-allow: bounded by one workspaceId and LIMITS.organizationMembersCount members
         or(
           membershipExists,
           and(

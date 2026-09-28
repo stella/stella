@@ -424,16 +424,13 @@ export const caseLawSearchPlan = ({
   // a property of the row and the query, not of the page, so the keyset cursor
   // stays valid across pages.
   const representativeFilter = sql`
-    (
-      m.language_group_key IS NULL
-      OR NOT EXISTS (
+      NOT EXISTS (
         SELECT 1
         FROM matched sibling
         WHERE sibling.language_group_key = m.language_group_key
           AND (sibling.sort_key, sibling.decision_id)
             > (m.sort_key, m.decision_id)
       )
-    )
   `;
 
   const hitsQuery = sql`

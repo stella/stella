@@ -26,6 +26,7 @@ export default eslintCompatPlugin({
           "leading-wildcard": message("Leading-wildcard LIKE"),
           "s3-key-like": message("LIKE on an S3-key column"),
           "group-by-expression": message("Corpus GROUP BY expression"),
+          "or-subquery": message("OR with a subquery operand"),
           comment: "{{reason}}",
         },
       },
@@ -47,10 +48,13 @@ export default eslintCompatPlugin({
                 data: { reason: error.message },
               });
             }
-            if (hits.length <= (baseline.get(relative) ?? 0)) {
-              return;
-            }
+            const legacyHits = hits.filter((hit) => hit.kind !== "or-subquery");
+            const legacyOverBaseline =
+              legacyHits.length > (baseline.get(relative) ?? 0);
             for (const hit of hits) {
+              if (hit.kind !== "or-subquery" && !legacyOverBaseline) {
+                continue;
+              }
               context.report({
                 loc: { line: hit.line, column: hit.column },
                 messageId: hit.kind,

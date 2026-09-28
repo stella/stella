@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   analyzeSqlPerf,
   listSqlPerfAllowComments,
+  reportSqlPerfOrColumns,
 } from "./sql-perf-detector.ts";
 
 /* oxlint-disable eslint/no-template-curly-in-string -- test inputs contain literal template syntax */
@@ -207,4 +208,110 @@ test("comment inventory recognizes same-line comments and ignores string content
       "apps/api/src/handlers/example.ts",
     ),
   ).toEqual([{ line: 2, reason: "index name_trgm_idx" }]);
+});
+
+test("flags the decision identity OR/subquery shape", () => {
+  const source = [
+    'import { and, eq, inArray, or } from "drizzle-orm";',
+    "const predicate = or(",
+    "  inArray(caseLawDecisions.ecli, [value, upperValue]),",
+    "  inArray(caseLawDecisions.id, tx.select({ id: identifiers.decisionId }).from(identifiers).where(and(eq(identifiers.type, kind), eq(identifiers.normalizedValue, value)))),",
+    ");",
+  ].join("\n");
+  expect(kinds(source)).toEqual(["or-subquery"]);
+});
+
+test("flags aliased Drizzle imports but not unrelated functions with the same names", () => {
+  expect(
+    kinds(
+      'import { or as anyOf, inArray as among } from "drizzle-orm"; anyOf(eq(a, b), among(table.id, db.select().from(other)));',
+    ),
+  ).toEqual(["or-subquery"]);
+  expect(
+    kinds(
+      'import * as d from "drizzle-orm"; d.or(d.eq(a, b), d.notExists(db.select().from(other)));',
+    ),
+  ).toEqual(["or-subquery"]);
+  expect(
+    kinds(
+      'import { or as anyOf, exists as isPresent } from "drizzle-orm"; anyOf(eq(a, b), isPresent(db.select().from(other)));',
+    ),
+  ).toEqual(["or-subquery"]);
+  expect(kinds("or(eq(a, b), exists(db.select().from(other)))")).toEqual([]);
+  expect(
+    kinds(
+      'import type { or, exists } from "drizzle-orm"; or(eq(a, b), exists(db.select().from(other)));',
+    ),
+  ).toEqual([]);
+});
+
+test("accepts the UNION ALL identity lookup and scalar OR predicates", () => {
+  expect(
+    kinds(
+      [
+        'import { and, eq, inArray, or } from "drizzle-orm";',
+        'import { unionAll } from "drizzle-orm/pg-core";',
+        "inArray(caseLawDecisions.id, unionAll(tx.select({ id: caseLawDecisions.id }).from(caseLawDecisions), tx.select({ id: identifiers.decisionId }).from(identifiers)));",
+        "or(eq(caseLawDecisions.ecli, value), eq(caseLawDecisions.ecli, upperValue));",
+        "or(gt(caseLawDecisions.decisionDate, date), and(eq(caseLawDecisions.decisionDate, date), gt(caseLawDecisions.id, id)));",
+        "or(eq(a.status, ready), eq(a.status, pending));",
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});
+
+test.each([
+  "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR id IN (SELECT decision_id FROM case_law_decision_identifiers)`",
+  "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR EXISTS (SELECT 1 FROM case_law_decision_identifiers)`",
+  "sql`SELECT id FROM case_law_decisions WHERE ecli = ${ecli} OR NOT EXISTS (SELECT 1 FROM case_law_decision_identifiers)`",
+])("flags SQL-text OR/subquery: %s", (source) => {
+  expect(kinds(source)).toEqual(["or-subquery"]);
+});
+
+test("does not read OR/subquery syntax inside a SQL string or comment", () => {
+  expect(
+    kinds(
+      "sql`SELECT 'OR EXISTS (SELECT 1)' AS note -- OR id IN (SELECT 1)\nFROM case_law_decisions`",
+    ),
+  ).toEqual([]);
+});
+
+test("an allowed bounded OR/subquery does not consume the old baseline", () => {
+  const source = [
+    'import { or, notExists } from "drizzle-orm";',
+    "// sql-perf-allow: bounded by one indexed row",
+    "const predicate = or(eq(user.id, id), notExists(tx.select().from(member)));",
+  ].join("\n");
+  expect(analyzeSqlPerf(source, "apps/api/src/handlers/example.ts")).toEqual({
+    hits: [],
+    commentErrors: [],
+  });
+});
+
+test("reports corpus cross-column ORs while excluding keysets and tenant tables", () => {
+  const source = [
+    'import { and, eq, gt, or } from "drizzle-orm";',
+    "or(eq(caseLawDecisions.country, country), eq(caseLawDecisions.court, court));",
+    "or(eq(caseLawDecisions.country, country), eq(caseLawDecisions.country, otherCountry));",
+    "or(gt(caseLawDecisions.decisionDate, date), and(eq(caseLawDecisions.decisionDate, date), gt(caseLawDecisions.id, id)));",
+    "and(eq(entities.workspaceId, workspaceId), or(eq(entities.status, active), eq(entities.type, kind)));",
+    "or(eq(legislationDocuments.country, country), eq(legislationDocuments.language, language));",
+  ].join("\n");
+  expect(
+    reportSqlPerfOrColumns(source, "apps/api/src/handlers/example.ts").map(
+      (hit) => hit.line,
+    ),
+  ).toEqual([2, 6]);
+});
+
+test("reports SQL-text cross-column OR but leaves a keyset continuation alone", () => {
+  const source = [
+    "sql`SELECT id FROM case_law_decisions WHERE case_law_decisions.country = ${country} OR case_law_decisions.court = ${court}`;",
+    "sql`SELECT id FROM case_law_decisions WHERE (case_law_decisions.decision_date > ${date}) OR (case_law_decisions.decision_date = ${date} AND case_law_decisions.id > ${id})`;",
+  ].join("\n");
+  expect(
+    reportSqlPerfOrColumns(source, "apps/api/src/handlers/example.ts").map(
+      (hit) => hit.line,
+    ),
+  ).toEqual([1]);
 });

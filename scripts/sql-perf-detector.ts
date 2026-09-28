@@ -1,15 +1,22 @@
 // Static SQL shapes that can scan an input larger than the returned page.
 //
-// Flagged: a leading LIKE wildcard, any LIKE on an S3-key column, and a
-// function or cast in GROUP BY over a corpus relation. Prefix LIKE on other
-// columns, SELECT-only expressions, schema constraints, and plain strings pass.
+// Flagged: a leading LIKE wildcard, any LIKE on an S3-key column, a
+// function or cast in GROUP BY over a corpus relation, and OR with a subquery
+// operand. Prefix LIKE on other columns, SELECT-only expressions, schema
+// constraints, and plain strings pass.
 // Analysis follows same-file const bindings; imported or runtime-built SQL is
 // opaque. This detector is shared by oxlint and the baseline counter.
 
 import ts from "typescript";
 
+import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
+
 export type SqlPerfHit = {
-  kind: "leading-wildcard" | "s3-key-like" | "group-by-expression";
+  kind:
+    | "leading-wildcard"
+    | "s3-key-like"
+    | "group-by-expression"
+    | "or-subquery";
   line: number;
   column: number;
   /**
@@ -31,6 +38,8 @@ const GROUP_EXPRESSION =
 const GROUP_NON_COLUMNS =
   /\b(?:to_char|date_trunc|extract|substring|split_part|coalesce|lower|cast|text|year|month|day|from|for|as|null|true|false|now|current_date|current_timestamp)\b/giu;
 const SQL_STRING = /'(?:''|[^'])*'/gu;
+const SQL_OR_SUBQUERY =
+  /\bOR\b\s*\(*\s*(?:(?:[a-z_][\w."]*|__SQL_EXPR_\d+__)\s+)?(?:IN\s*\(\s*SELECT\b|(?:NOT\s+)?EXISTS\s*\()/giu;
 const S3_KEY = /(?:\b[a-z][\w]*_s3_key\b|\b[a-z][\w]*S3Key\b)/iu;
 const REASON =
   /^(?:small table\s+[a-z][\w.]*\b|index\s+[a-z][\w.]*\b|bounded by\s+\S[\s\S]*)/iu;
@@ -73,6 +82,63 @@ const isGroupByCall = (
 ): node is ts.CallExpression & { expression: ts.PropertyAccessExpression } =>
   ts.isPropertyAccessExpression(node.expression) &&
   node.expression.name.text === "groupBy";
+
+type DrizzleImports = {
+  names: Map<string, string>;
+  namespaces: Set<string>;
+};
+
+const drizzleImports = (file: ts.SourceFile): DrizzleImports => {
+  const names = new Map<string, string>();
+  const namespaces = new Set<string>();
+  for (const statement of file.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "drizzle-orm"
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (statement.importClause?.isTypeOnly || bindings === undefined) {
+      continue;
+    }
+    if (ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+      continue;
+    }
+    for (const specifier of bindings.elements) {
+      if (!specifier.isTypeOnly) {
+        names.set(
+          specifier.name.text,
+          specifier.propertyName?.text ?? specifier.name.text,
+        );
+      }
+    }
+  }
+  return { names, namespaces };
+};
+
+const drizzleCallName = (
+  call: ts.CallExpression,
+  imports: DrizzleImports,
+): string | undefined => {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee)) {
+    return imports.names.get(callee.text);
+  }
+  return ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    imports.namespaces.has(callee.expression.text)
+    ? callee.name.text
+    : undefined;
+};
+
+const sqlWithoutLiterals = (text: string): string =>
+  text
+    .replace(SQL_STRING, (literal) => " ".repeat(literal.length))
+    .replace(/--[^\n]*/gu, (comment) => " ".repeat(comment.length))
+    .replace(/\/\*[\s\S]*?\*\//gu, (comment) => " ".repeat(comment.length));
 
 const textOfTemplate = (node: ts.TemplateLiteral): string =>
   ts.isNoSubstitutionTemplateLiteral(node) ? node.text : node.head.text;
@@ -181,6 +247,319 @@ const resolve = (
   return initializer === undefined
     ? expression
     : resolve(initializer, bindings, depth + 1);
+};
+
+const hasSelectBuilder = (
+  expression: ts.Expression,
+  bindings: ConstBindings,
+  file: ts.SourceFile,
+  depth = 0,
+): boolean => {
+  if (depth > 12) {
+    return false;
+  }
+  const value = resolve(expression, bindings);
+  if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
+    return /\bSELECT\b/iu.test(
+      sqlWithoutLiterals(sqlParts(file, value.template).sql),
+    );
+  }
+  if (
+    ts.isCallExpression(value) &&
+    ts.isPropertyAccessExpression(value.expression) &&
+    /^select(?:Distinct|DistinctOn)?$/u.test(value.expression.name.text)
+  ) {
+    return true;
+  }
+  let found = false;
+  ts.forEachChild(value, (child) => {
+    if (
+      ts.isExpression(child) &&
+      hasSelectBuilder(child, bindings, file, depth + 1)
+    ) {
+      found = true;
+    }
+  });
+  return found;
+};
+
+type SubqueryOperandContext = {
+  imports: DrizzleImports;
+  bindings: ConstBindings;
+  file: ts.SourceFile;
+};
+
+const hasSubqueryOperand = (
+  expression: ts.Expression,
+  context: SubqueryOperandContext,
+  depth = 0,
+): boolean => {
+  if (depth > 12) {
+    return false;
+  }
+  const { imports, bindings, file } = context;
+  const value = resolve(expression, bindings);
+  if (ts.isCallExpression(value)) {
+    const name = drizzleCallName(value, imports);
+    if (name === "exists" || name === "notExists") {
+      return true;
+    }
+    if (
+      name === "inArray" &&
+      value.arguments[1] !== undefined &&
+      hasSelectBuilder(value.arguments[1], bindings, file)
+    ) {
+      return true;
+    }
+  }
+  let found = false;
+  ts.forEachChild(value, (child) => {
+    if (
+      ts.isExpression(child) &&
+      hasSubqueryOperand(child, context, depth + 1)
+    ) {
+      found = true;
+    }
+  });
+  return found;
+};
+
+const COMPARISONS = new Set([
+  "eq",
+  "ne",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "like",
+  "ilike",
+  "inArray",
+  "isNull",
+  "isNotNull",
+]);
+const CURSOR_COMPARISONS = new Set(["gt", "gte", "lt", "lte"]);
+const REPORT_CORPUS_TABLES = new Set([
+  ...HIGH_VOLUME_TABLES,
+  "legislation_documents",
+  "legislation_search_documents",
+]);
+
+const sqlTableName = (name: string): string =>
+  name.replaceAll(/([a-z\d])([A-Z])/gu, "$1_$2").toLowerCase();
+
+const isCorpusColumn = (column: string, bindings: ConstBindings): boolean => {
+  const owner = column.slice(0, column.lastIndexOf("."));
+  if (REPORT_CORPUS_TABLES.has(sqlTableName(owner))) {
+    return true;
+  }
+  const alias = bindings.get(owner)?.at(0)?.initializer;
+  return (
+    alias !== undefined &&
+    ts.isCallExpression(alias) &&
+    ts.isIdentifier(alias.expression) &&
+    alias.expression.text === "alias" &&
+    alias.arguments[0] !== undefined &&
+    REPORT_CORPUS_TABLES.has(sqlTableName(alias.arguments[0].getText()))
+  );
+};
+
+const comparisonColumn = (
+  expression: ts.Expression,
+  imports: DrizzleImports,
+  bindings: ConstBindings,
+  file: ts.SourceFile,
+): string | undefined => {
+  const value = resolve(expression, bindings);
+  if (
+    !ts.isCallExpression(value) ||
+    !COMPARISONS.has(drizzleCallName(value, imports) ?? "")
+  ) {
+    return undefined;
+  }
+  const column = value.arguments[0];
+  return column !== undefined && ts.isPropertyAccessExpression(column)
+    ? column.getText(file)
+    : undefined;
+};
+
+const comparisonColumns = (
+  expression: ts.Expression,
+  imports: DrizzleImports,
+  bindings: ConstBindings,
+  file: ts.SourceFile,
+): Set<string> => {
+  const columns = new Set<string>();
+  const visit = (node: ts.Node) => {
+    if (ts.isExpression(node)) {
+      const column = comparisonColumn(node, imports, bindings, file);
+      if (column !== undefined) {
+        columns.add(column);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(resolve(expression, bindings));
+  return columns;
+};
+
+const isKeysetOr = (
+  call: ts.CallExpression,
+  imports: DrizzleImports,
+  bindings: ConstBindings,
+  file: ts.SourceFile,
+): boolean => {
+  const left = call.arguments[0];
+  const right = call.arguments[1];
+  if (
+    call.arguments.length !== 2 ||
+    left === undefined ||
+    right === undefined ||
+    !ts.isCallExpression(left) ||
+    !CURSOR_COMPARISONS.has(drizzleCallName(left, imports) ?? "") ||
+    !ts.isCallExpression(right) ||
+    drizzleCallName(right, imports) !== "and" ||
+    right.arguments.length !== 2
+  ) {
+    return false;
+  }
+  const leftColumn = comparisonColumn(left, imports, bindings, file);
+  const equality = right.arguments.find(
+    (argument) =>
+      ts.isCallExpression(argument) &&
+      drizzleCallName(argument, imports) === "eq",
+  );
+  const continuation = right.arguments.find(
+    (argument) =>
+      ts.isCallExpression(argument) &&
+      CURSOR_COMPARISONS.has(drizzleCallName(argument, imports) ?? ""),
+  );
+  if (
+    leftColumn === undefined ||
+    equality === undefined ||
+    continuation === undefined ||
+    !ts.isCallExpression(equality) ||
+    !ts.isCallExpression(continuation) ||
+    left.arguments[1] === undefined ||
+    equality.arguments[1] === undefined
+  ) {
+    return false;
+  }
+  const rightColumns = comparisonColumns(right, imports, bindings, file);
+  const continuationColumn = comparisonColumn(
+    continuation,
+    imports,
+    bindings,
+    file,
+  );
+  return (
+    comparisonColumn(equality, imports, bindings, file) === leftColumn &&
+    continuationColumn !== undefined &&
+    continuationColumn !== leftColumn &&
+    rightColumns.has(leftColumn) &&
+    left.arguments[1].getText(file) === equality.arguments[1].getText(file)
+  );
+};
+
+export type SqlPerfReportHit = {
+  line: number;
+  column: number;
+};
+
+/** Discovery only: cross-column ORs need plan sampling before enforcement. */
+export const reportSqlPerfOrColumns = (
+  source: string,
+  filename: string,
+): SqlPerfReportHit[] => {
+  const file = ts.createSourceFile(
+    filename,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const bindings = constBindings(file);
+  const imports = drizzleImports(file);
+  const hits: SqlPerfReportHit[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && drizzleCallName(node, imports) === "or") {
+      const columns = new Set(
+        node.arguments.flatMap((argument) => [
+          ...comparisonColumns(argument, imports, bindings, file),
+        ]),
+      );
+      if (
+        columns.size > 1 &&
+        !isKeysetOr(node, imports, bindings, file) &&
+        [...columns].some((column) => isCorpusColumn(column, bindings))
+      ) {
+        hits.push(location(file, node.getStart(file)));
+      }
+    }
+    if (ts.isTaggedTemplateExpression(node) && isSqlTag(node)) {
+      const { sql, offsets, expressions } = sqlParts(file, node.template);
+      const visible = sqlWithoutLiterals(sql);
+      const aliases = new Map<string, string>();
+      for (const match of visible.matchAll(
+        /\b(?:FROM|JOIN)\s+([a-z_][\w.]*|__SQL_EXPR_\d+__)\s+(?:AS\s+)?([a-z_]\w*)/giu,
+      )) {
+        const table = match[1];
+        const name = match[2];
+        if (table !== undefined && name !== undefined) {
+          aliases.set(name, table);
+        }
+      }
+      const corpusSqlColumn = (column: string): boolean => {
+        const expressionIndex = /__SQL_EXPR_(\d+)__/u.exec(column)?.[1];
+        if (expressionIndex !== undefined) {
+          const expression = expressions[Number(expressionIndex)];
+          return (
+            expression !== undefined &&
+            isCorpusColumn(expression.getText(file), bindings)
+          );
+        }
+        const owner = column.slice(0, column.lastIndexOf("."));
+        const table = aliases.get(owner) ?? owner;
+        const tableExpressionIndex = /__SQL_EXPR_(\d+)__/u.exec(table)?.[1];
+        if (tableExpressionIndex !== undefined) {
+          const expression = expressions[Number(tableExpressionIndex)];
+          return (
+            expression !== undefined &&
+            REPORT_CORPUS_TABLES.has(sqlTableName(expression.getText(file)))
+          );
+        }
+        return REPORT_CORPUS_TABLES.has(sqlTableName(table));
+      };
+      for (const match of visible.matchAll(/\bOR\b/giu)) {
+        const left =
+          visible
+            .slice(0, match.index)
+            .split(/\b(?:WHERE|AND|OR)\b/iu)
+            .at(-1) ?? "";
+        const right =
+          visible
+            .slice(match.index + match[0].length)
+            .split(/\b(?:AND|OR|ORDER|GROUP|LIMIT|HAVING)\b/iu)
+            .at(0) ?? "";
+        const columnPattern =
+          /(__SQL_EXPR_\d+__|[a-z_][\w.]*)\s*(?:=|<>|!=|<=|>=|<|>|(?:NOT\s+)?I?LIKE\b|IN\s*\()/giu;
+        const leftColumn = [...left.matchAll(columnPattern)].at(-1)?.[1];
+        const rightColumn = [...right.matchAll(columnPattern)].at(0)?.[1];
+        if (
+          leftColumn !== undefined &&
+          rightColumn !== undefined &&
+          leftColumn !== rightColumn &&
+          (corpusSqlColumn(leftColumn) || corpusSqlColumn(rightColumn))
+        ) {
+          hits.push(
+            location(file, offsets[match.index] ?? node.getStart(file)),
+          );
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return hits;
 };
 
 const startsWithWildcard = (
@@ -343,6 +722,8 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
     filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
   const bindings = constBindings(file);
+  const imports = drizzleImports(file);
+  const subqueryOperandContext = { imports, bindings, file };
   const rawHits: SqlPerfHit[] = [];
   const seen = new Set<string>();
   const add = (kind: SqlPerfHit["kind"], offset: number, holder: ts.Node) => {
@@ -368,6 +749,9 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       return;
     }
     const { sql, offsets, expressions } = sqlParts(file, node.template);
+    for (const match of sqlWithoutLiterals(sql).matchAll(SQL_OR_SUBQUERY)) {
+      add("or-subquery", offsets[match.index] ?? node.getStart(file), node);
+    }
     for (const match of /\bCHECK\s*\(/iu.test(sql) ? [] : sql.matchAll(LIKE)) {
       const index = match.index;
       const after = sql.slice(index + match[0].length);
@@ -436,6 +820,14 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       inspectSql(node);
     }
     if (ts.isCallExpression(node)) {
+      if (
+        drizzleCallName(node, imports) === "or" &&
+        node.arguments.some((argument) =>
+          hasSubqueryOperand(argument, subqueryOperandContext),
+        )
+      ) {
+        add("or-subquery", node.getStart(file), node);
+      }
       if (isLikeCall(node) && node.arguments.length >= 2) {
         const column = node.arguments[0];
         const pattern = node.arguments[1];
