@@ -1480,6 +1480,7 @@
     "displayName": "Attēlojamais vārds",
     "document": "Dokuments",
     "documentName": "Dokumenta nosaukums",
+    "documentPage": "<bdi>{document}</bdi> · {page}. lpp.",
     "documentReference": "Dokumenta atsauces numurs",
     "documentTitle": "Dokumenta nosaukums",
     "documentation": "Dokumentācija",

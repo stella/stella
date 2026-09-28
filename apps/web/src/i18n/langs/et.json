@@ -1480,6 +1480,7 @@
     "displayName": "Kuvatav nimi",
     "document": "Dokument",
     "documentName": "Dokumendi nimi",
+    "documentPage": "<bdi>{document}</bdi> · lk {page}",
     "documentReference": "Dokumendi viitenumber",
     "documentTitle": "Dokumendi pealkiri",
     "documentation": "Dokumentatsioon",

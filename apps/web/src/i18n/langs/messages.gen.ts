@@ -1483,6 +1483,7 @@ type Messages = {
     "displayName": "Display name";
     "document": "Document";
     "documentName": "Document name";
+    "documentPage": "<bdi>{document}</bdi> · p. {page}";
     "documentReference": "Document reference";
     "documentTitle": "Document title";
     "documentation": "Documentation";

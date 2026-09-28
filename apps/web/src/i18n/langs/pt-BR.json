@@ -1480,6 +1480,7 @@
     "displayName": "Nome de exibição",
     "document": "Documento",
     "documentName": "Nome do documento",
+    "documentPage": "<bdi>{document}</bdi> · pág. {page}",
     "documentReference": "Referência do documento",
     "documentTitle": "Título do documento",
     "documentation": "Documentação",

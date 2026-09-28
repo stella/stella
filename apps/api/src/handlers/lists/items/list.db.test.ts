@@ -3,7 +3,8 @@
  * so an item without a detail row lists `factDetails: null` while an item with
  * one lists the whole object, whichever of its optional columns are empty.
  * How the join's nullable columns map onto that object is decided by the
- * database driver's row mapper, so only a real database shows it.
+ * database driver's row mapper, so only a real database shows it. The same
+ * holds for the first source each item lists, read through a lateral join.
  */
 
 import { Result } from "better-result";
@@ -17,7 +18,9 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
+  entityVersions,
   legalListFactDetails,
+  legalListItemSources,
   legalListItems,
   legalLists,
   workspaces,
@@ -44,6 +47,10 @@ const listId = createSafeId<"legalList">();
 const undatedFactId = createSafeId<"entity">();
 const datedFactId = createSafeId<"entity">();
 const bareFactId = createSafeId<"entity">();
+const emailDocumentId = createSafeId<"entity">();
+const emailVersionId = createSafeId<"entityVersion">();
+const minutesDocumentId = createSafeId<"entity">();
+const minutesVersionId = createSafeId<"entityVersion">();
 
 beforeAll(
   async () => {
@@ -123,6 +130,78 @@ beforeAll(
           confidence: "high",
         },
       ]);
+
+      await tx.insert(entities).values([
+        {
+          id: emailDocumentId,
+          workspaceId,
+          kind: "document" as const,
+          name: "Email bundle.pdf",
+          createdBy: userId,
+        },
+        {
+          id: minutesDocumentId,
+          workspaceId,
+          kind: "document" as const,
+          name: "Board minutes.docx",
+          createdBy: userId,
+        },
+      ]);
+      await tx.insert(entityVersions).values([
+        { id: emailVersionId, workspaceId, entityId: emailDocumentId },
+        { id: minutesVersionId, workspaceId, entityId: minutesDocumentId },
+      ]);
+      const email = {
+        sourceEntityId: emailDocumentId,
+        sourceEntityVersionId: emailVersionId,
+      };
+      const minutes = {
+        sourceEntityId: minutesDocumentId,
+        sourceEntityVersionId: minutesVersionId,
+      };
+      const itemSource = (
+        itemEntityId: SafeId<"entity">,
+        createdAt: string,
+        values: Pick<
+          typeof legalListItemSources.$inferInsert,
+          | "sourceEntityId"
+          | "sourceEntityVersionId"
+          | "locator"
+          | "verificationStatus"
+        >,
+      ): typeof legalListItemSources.$inferInsert => ({
+        id: createSafeId<"legalListItemSource">(),
+        workspaceId,
+        listId,
+        itemEntityId,
+        createdAt: new Date(createdAt),
+        createdBy: userId,
+        ...values,
+      });
+      await tx.insert(legalListItemSources).values([
+        // The dated fact's oldest source was rejected, so the next one leads.
+        itemSource(datedFactId, "2026-01-01T00:00:00Z", {
+          ...minutes,
+          locator: { type: "docx-block", blockId: "p4" },
+          verificationStatus: "rejected",
+        }),
+        itemSource(datedFactId, "2026-01-03T00:00:00Z", {
+          ...minutes,
+          locator: { type: "document" },
+          verificationStatus: "verified",
+        }),
+        itemSource(datedFactId, "2026-01-02T00:00:00Z", {
+          ...email,
+          locator: { type: "pdf-page", pageNumber: 488 },
+          verificationStatus: "unverified",
+        }),
+        // A fact whose only source was rejected lists none.
+        itemSource(undatedFactId, "2026-01-01T00:00:00Z", {
+          ...email,
+          locator: { type: "pdf-page", pageNumber: 2 },
+          verificationStatus: "rejected",
+        }),
+      ]);
     });
   },
   { timeout: 30_000 },
@@ -201,4 +280,34 @@ test("returns the date of a dated fact", async () => {
 
 test("an item without details has none", async () => {
   expect(await factDetailsOf(bareFactId)).toBeNull();
+});
+
+const firstSourceOf = async (entityId: SafeId<"entity">) => {
+  const item = (await listedItems()).find((row) => row.id === entityId);
+  if (!item) {
+    throw new Error(`item ${entityId} missing from the listing`);
+  }
+  return item.firstSource;
+};
+
+test("lists an item's oldest source that is not rejected", async () => {
+  expect(await firstSourceOf(datedFactId)).toEqual({
+    documentId: emailDocumentId,
+    documentName: "Email bundle.pdf",
+    locator: { type: "pdf-page", pageNumber: 488 },
+  });
+});
+
+test("an item whose sources were all rejected lists none", async () => {
+  expect(await firstSourceOf(undatedFactId)).toBeNull();
+});
+
+test("an item without sources lists none, once per item", async () => {
+  const items = await listedItems();
+  expect(items.map((item) => item.id)).toEqual([
+    undatedFactId,
+    datedFactId,
+    bareFactId,
+  ]);
+  expect(await firstSourceOf(bareFactId)).toBeNull();
 });

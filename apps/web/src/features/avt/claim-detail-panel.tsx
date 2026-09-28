@@ -39,6 +39,8 @@ import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
 import { FactDate } from "@/features/avt/fact-date";
+import { EvidenceFactSource } from "@/features/avt/fact-source";
+import { evidenceQuoteSource } from "@/features/avt/fact-source.logic";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   ConfBadge,
@@ -203,6 +205,7 @@ export const ClaimDetailPanel = ({
                 onReviewEvent({ kind: "record-conflict", resolution })
               }
               review={review}
+              workspaceId={workspaceId}
             />
           )}
 
@@ -214,7 +217,12 @@ export const ClaimDetailPanel = ({
               {[...supports, ...conflicts].map((ref) => {
                 const fact = factsById.get(ref.factEntityId);
                 return fact === undefined ? null : (
-                  <FactCard fact={fact} key={ref.factEntityId} rel={ref.rel} />
+                  <FactCard
+                    fact={fact}
+                    key={ref.factEntityId}
+                    rel={ref.rel}
+                    workspaceId={workspaceId}
+                  />
                 );
               })}
             </section>
@@ -632,9 +640,11 @@ const ScoreSection = ({
 };
 
 const FactCard = ({
+  workspaceId,
   fact,
   rel,
 }: {
+  workspaceId: string;
   fact: EvidenceFact;
   rel: ClaimFactRelation;
 }) => {
@@ -663,15 +673,21 @@ const FactCard = ({
         </ReviewStatusBadge>
         <ConfBadge level={fact.confidence} />
       </div>
-      <FactBody fact={fact} />
+      <FactBody fact={fact} workspaceId={workspaceId} />
     </article>
   );
 };
 
-const FactBody = ({ fact }: { fact: EvidenceFact }) => {
+const FactBody = ({
+  workspaceId,
+  fact,
+}: {
+  workspaceId: string;
+  fact: EvidenceFact;
+}) => {
   const t = useTranslations();
-  const quote =
-    fact.sources.find((source) => source.quote !== null)?.quote ?? null;
+  const source = evidenceQuoteSource(fact.sources);
+  const quote = source?.quote ?? null;
   return (
     <div className="space-y-2 px-3 py-2.5">
       <p className="text-sm leading-relaxed" dir="auto">
@@ -688,6 +704,7 @@ const FactBody = ({ fact }: { fact: EvidenceFact }) => {
         </p>
       )}
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <EvidenceFactSource source={source} workspaceId={workspaceId} />
         {fact.evidenceKind !== null && <span>{fact.evidenceKind}</span>}
         <FactDate
           occurredOn={fact.occurredOn}
@@ -704,6 +721,7 @@ const FactBody = ({ fact }: { fact: EvidenceFact }) => {
 };
 
 type RecordConflictBlockProps = {
+  workspaceId: string;
   disabled: boolean;
   conflict: RecordConflict;
   review: ClaimReview | null;
@@ -717,6 +735,7 @@ type RecordConflictBlockProps = {
 };
 
 const RecordConflictBlock = ({
+  workspaceId,
   conflict,
   disabled,
   review,
@@ -782,7 +801,9 @@ const RecordConflictBlock = ({
               </span>
               <ConfBadge level={record.fact?.confidence ?? null} />
             </div>
-            {record.fact !== undefined && <FactBody fact={record.fact} />}
+            {record.fact !== undefined && (
+              <FactBody fact={record.fact} workspaceId={workspaceId} />
+            )}
             <Button
               disabled={disabled}
               onClick={() =>

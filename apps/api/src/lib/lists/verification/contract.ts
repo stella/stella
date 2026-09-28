@@ -142,6 +142,9 @@ export const VERIFICATION_RUN_ACTIVE_STATUSES = [
 export type VerificationEvidenceSource = {
   sourceEntityId: SafeId<"entity">;
   sourceEntityVersionId: SafeId<"entityVersion">;
+  /** The document's name when the run started. Absent on runs pinned before
+   *  names were recorded; readers fall back to the document's current name. */
+  sourceName?: string;
   locator: LegalListSourceLocator;
   quote: string | null;
 };
@@ -220,6 +223,7 @@ export const VERIFICATION_LIMITS = {
   SOURCES_PER_FACT_MAX: 5,
   /** Documents one latest-verification read may name. */
   LATEST_READ_DOCUMENTS_MAX: 200,
-  /** Characters of a fact's text or a source quote pinned on a run. */
+  /** Characters of a fact's text, a source quote or a source's document
+   *  name pinned on a run. */
   EVIDENCE_TEXT_MAX: 2000,
 } as const;

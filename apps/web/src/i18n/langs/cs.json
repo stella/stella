@@ -1480,6 +1480,7 @@
     "displayName": "Zobrazované jméno",
     "document": "Dokument",
     "documentName": "Název dokumentu",
+    "documentPage": "<bdi>{document}</bdi> · str. {page}",
     "documentReference": "Referenční číslo dokumentu",
     "documentTitle": "Název dokumentu",
     "documentation": "Dokumentace",
