@@ -58,7 +58,6 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
-import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 /**
  * Legislation ingestion. The canonical, source-agnostic entry is
@@ -439,22 +438,59 @@ const storeSourceRaw = async ({
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
 };
 
-/**
- * The disposition every write under this contract stores. The contract can
- * only express a version with a placeable window, so each write states it
- * effective; a row that says otherwise is a changed row, not an unchanged one.
- */
-const STORED_DISPOSITION = {
-  windowDisposition: "effective",
-  windowDispositionBasis: null,
-} as const satisfies Pick<
-  typeof legislationDocuments.$inferInsert,
-  "windowDisposition" | "windowDispositionBasis"
+type StoredClassification = Required<
+  Pick<
+    typeof legislationDocuments.$inferInsert,
+    "expressionKind" | "windowDisposition" | "windowDispositionBasis"
+  >
 >;
 
-const hasStoredDisposition = (row: StoredVersion): boolean =>
-  row.windowDisposition === STORED_DISPOSITION.windowDisposition &&
-  row.windowDispositionBasis === STORED_DISPOSITION.windowDispositionBasis;
+/**
+ * What the input says the version is. The contract can only express a
+ * version with a placeable window, so every write states it effective; its
+ * kind follows the input's version shape. A row that says otherwise is a
+ * changed row, not an unchanged one.
+ */
+const storedClassification = (
+  input: LegislationDocumentInput,
+): StoredClassification => ({
+  expressionKind:
+    input.version.type === "unversioned" ? "unversioned" : "consolidation",
+  windowDisposition: "effective",
+  windowDispositionBasis: null,
+});
+
+const hasStoredClassification = (
+  row: StoredVersion,
+  classification: StoredClassification,
+): boolean =>
+  row.expressionKind === classification.expressionKind &&
+  row.windowDisposition === classification.windowDisposition &&
+  row.windowDispositionBasis === classification.windowDispositionBasis;
+
+/**
+ * Serialise every write that could give one publisher identity a row: the
+ * claim of a legacy row and the insert of a new one. Until the identity is
+ * unique in the database (a later release builds that index online), this
+ * transaction-scoped lock is what keeps two writers from storing one version
+ * twice.
+ */
+const lockExpressionIdentity = async (
+  tx: Transaction,
+  input: LegislationDocumentInput,
+  publisherId: string,
+): Promise<void> => {
+  const key = JSON.stringify([
+    "legislation-expression",
+    input.sourceId,
+    input.eli,
+    input.language,
+    publisherId,
+  ]);
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`,
+  );
+};
 
 const STORED_VERSION_COLUMNS = {
   id: legislationDocuments.id,
@@ -467,6 +503,7 @@ const STORED_VERSION_COLUMNS = {
   astS3Key: legislationDocuments.astS3Key,
   sourceRawS3Key: legislationDocuments.sourceRawS3Key,
   sourceRawContentType: legislationDocuments.sourceRawContentType,
+  expressionKind: legislationDocuments.expressionKind,
   windowDisposition: legislationDocuments.windowDisposition,
   windowDispositionBasis: legislationDocuments.windowDispositionBasis,
 };
@@ -480,6 +517,7 @@ type StoredVersion = {
   astS3Key: string | null;
   sourceRawS3Key: string | null;
   sourceRawContentType: string | null;
+  expressionKind: string;
   windowDisposition: string;
   windowDispositionBasis: string | null;
 };
@@ -496,19 +534,34 @@ const workOf = (input: LegislationDocumentInput): SQL | undefined =>
     eq(legislationDocuments.language, input.language),
   );
 
+const selectStoredVersionTx = async (
+  tx: Transaction,
+  where: SQL | undefined,
+): Promise<StoredVersion | undefined> =>
+  (
+    await tx
+      .select(STORED_VERSION_COLUMNS)
+      .from(legislationDocuments)
+      .where(where)
+      // Deterministic should a duplicate ever exist.
+      .orderBy(asc(legislationDocuments.id))
+      .limit(1)
+  ).at(0);
+
 const selectStoredVersion = async (
   scopedDb: ScopedDb,
   where: SQL | undefined,
 ): Promise<StoredVersion | undefined> =>
-  (
-    await scopedDb((tx) =>
-      tx
-        .select(STORED_VERSION_COLUMNS)
-        .from(legislationDocuments)
-        .where(where)
-        .limit(1),
-    )
-  ).at(0);
+  await scopedDb(async (tx) => await selectStoredVersionTx(tx, where));
+
+const byPublisherId = (
+  input: LegislationDocumentInput,
+  publisherId: string,
+): SQL | undefined =>
+  and(
+    workOf(input),
+    eq(legislationDocuments.publisherExpressionId, publisherId),
+  );
 
 const findByPublisherId = async ({
   input,
@@ -517,13 +570,7 @@ const findByPublisherId = async ({
 }: StoredVersionLookup & {
   publisherId: string;
 }): Promise<StoredVersion | undefined> =>
-  await selectStoredVersion(
-    scopedDb,
-    and(
-      workOf(input),
-      eq(legislationDocuments.publisherExpressionId, publisherId),
-    ),
-  );
+  await selectStoredVersion(scopedDb, byPublisherId(input, publisherId));
 
 type LegacyRowColumns = {
   metadata: SQLWrapper;
@@ -555,7 +602,10 @@ const legacyIdentityMatch = (
   const native = publisherId.slice(separator + 1);
   if (input.version.type === "unversioned") {
     return native === `work:${input.eli}`
-      ? { match: sql`${legacy.versionValidFrom} IS NULL`, preference: sql`0` }
+      ? {
+          match: sql`${legacy.versionValidFrom} IS NULL`,
+          preference: sql`${legacy.versionValidFrom} IS NULL DESC`,
+        }
       : null;
   }
   const storedIri = sql`(${legacy.metadata}->>'versionIri')`;
@@ -597,6 +647,7 @@ const claimLegacyVersion = async ({
   }
   await scopedDb(async (tx) => {
     await declareWriterContract(tx);
+    await lockExpressionIdentity(tx, input, publisherId);
     const unclaimed = tx
       .select({ id: legacy.id })
       .from(legacy)
@@ -702,6 +753,7 @@ export const processLegislationDocument = async (
   const window = storedWindow(input.version);
   const sourceHash = legislationSourceHash(input, window);
   const expectedContentHash = corpusContentHash({ text, sections, ast });
+  const classification = storedClassification(input);
 
   let existing = await findStoredVersion({ input, window, scopedDb });
   const existingCorpusPlan =
@@ -730,7 +782,7 @@ export const processLegislationDocument = async (
   if (
     existing?.sourceHash === sourceHash &&
     corpusAlreadySettled &&
-    hasStoredDisposition(existing)
+    hasStoredClassification(existing, classification)
   ) {
     await settleLegislationCorpusProjection({
       documentId: existing.id,
@@ -770,7 +822,7 @@ export const processLegislationDocument = async (
     documentUrl: input.documentUrl ?? null,
     metadata: input.metadata ?? {},
     sourceHash,
-    ...STORED_DISPOSITION,
+    ...classification,
     ...sourceRaw,
     ...(corpus.mode === "off"
       ? {
@@ -782,61 +834,39 @@ export const processLegislationDocument = async (
       : {}),
   };
 
-  const updateStored = async (row: StoredVersion) =>
-    await scopedDb(async (tx) => {
-      await declareWriterContract(tx);
-      // audit: skip — background legislation ingestion; public data, not user actions
+  /**
+   * Update the version's row, or insert it. Under the identity lock a writer
+   * that found nothing looks once more before inserting: a concurrent writer
+   * may have stored the version since, and then its row is this version's row.
+   */
+  const written = await scopedDb(async (tx) => {
+    await declareWriterContract(tx);
+    const publisherId = input.expression?.publisherId;
+    let row = existing;
+    if (row === undefined && publisherId !== undefined) {
+      await lockExpressionIdentity(tx, input, publisherId);
+      row = await selectStoredVersionTx(tx, byPublisherId(input, publisherId));
+    }
+    // audit: skip — background legislation ingestion; public data, not user actions
+    if (row !== undefined) {
       await tx
         .update(legislationDocuments)
         .set({ ...values, updatedAt: new Date() })
         .where(eq(legislationDocuments.id, row.id));
-      return row.id;
-    });
-  const insertVersion = async () =>
-    await scopedDb(async (tx) => {
-      await declareWriterContract(tx);
-      // audit: skip — background legislation ingestion; public data, not user actions
-      const [row] = await tx
-        .insert(legislationDocuments)
-        .values({
-          ...values,
-          publisherExpressionId: input.expression?.publisherId ?? null,
-        })
-        .returning({ id: legislationDocuments.id });
-      if (!row) {
-        panic("Failed to insert legislation document");
-      }
-      return row.id;
-    });
-
-  let inserted = false;
-  let id: SafeId<"legislationDocument">;
-  if (existing) {
-    id = await updateStored(existing);
-  } else {
-    try {
-      id = await insertVersion();
-      inserted = true;
-    } catch (error) {
-      // A concurrent writer stored the same version first. Its row is this
-      // version's row, found once more by identity; anything else is a real
-      // conflict and is raised as one.
-      const concurrent =
-        input.expression !== undefined &&
-        isPgError(error, PG_ERROR.UNIQUE_VIOLATION)
-          ? await findByPublisherId({
-              input,
-              publisherId: input.expression.publisherId,
-              scopedDb,
-            })
-          : undefined;
-      if (concurrent === undefined) {
-        throw error;
-      }
-      existing = concurrent;
-      id = await updateStored(concurrent);
+      return { id: row.id, row };
     }
-  }
+    const [insertedRow] = await tx
+      .insert(legislationDocuments)
+      .values({ ...values, publisherExpressionId: publisherId ?? null })
+      .returning({ id: legislationDocuments.id });
+    if (!insertedRow) {
+      panic("Failed to insert legislation document");
+    }
+    return { id: insertedRow.id, row: undefined };
+  });
+  const { id } = written;
+  const inserted = written.row === undefined;
+  existing = written.row;
 
   await reportWindowJunctions({ input, window, documentId: id, scopedDb });
 

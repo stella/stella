@@ -307,8 +307,56 @@ describe("legislation writer identity", () => {
 
     const rows = await rowsOf("2015/92");
     expect(rows).toHaveLength(1);
-    expect(results.map(({ id }) => id)).toEqual([rows[0]?.id, rows[0]?.id]);
+    const row = rows.at(0) ?? panic("expected the version's row");
+    expect(results.map(({ id }) => id)).toEqual([row.id, row.id]);
     expect(results.filter(({ inserted }) => inserted)).toHaveLength(1);
+  });
+
+  test("two writers storing one version under different starts converge on one row", async () => {
+    // Both miss, find nothing to claim, miss again, then both insert: the
+    // identity lock makes the second find the first's row.
+    const [first, second] = lockstepWriters([1, 2, 3]);
+    const iri = iriOf("2015/93", "version-a");
+
+    const results = await Promise.all([
+      store(version({ act: "2015/93", validFrom: "2022-01-01", iri }), first),
+      store(version({ act: "2015/93", validFrom: "2022-02-01", iri }), second),
+    ]);
+
+    const rows = await rowsOf("2015/93");
+    expect(rows).toHaveLength(1);
+    const row = rows.at(0) ?? panic("expected the version's row");
+    expect(results.map(({ id }) => id)).toEqual([row.id, row.id]);
+  });
+
+  test("a work kept as one text is stored as unversioned, and a legacy row is reclassified", async () => {
+    const act = "2009/86";
+    const unversioned = {
+      ...version({ act, validFrom: "2009-01-01" }),
+      version: { type: "unversioned" as const },
+      expression: { publisherId: `${NAMESPACE}:work:eli/cz/sb/${act}` },
+    };
+    const legacy = await store({ ...unversioned, expression: undefined });
+    // A row written before kinds were stored reads as a consolidation.
+    await db
+      .update(legislationDocuments)
+      .set({ expressionKind: "consolidation" })
+      .where(eq(legislationDocuments.id, legacy.id));
+
+    const replay = await store(unversioned);
+
+    expect(replay).toMatchObject({ id: legacy.id, skipped: false });
+    const [row] = await db
+      .select({
+        kind: legislationDocuments.expressionKind,
+        publisherId: legislationDocuments.publisherExpressionId,
+      })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.id, legacy.id));
+    expect(row).toEqual({
+      kind: "unversioned",
+      publisherId: `${NAMESPACE}:work:eli/cz/sb/${act}`,
+    });
   });
 
   test("a stored IRI naming another version is not adopted or overwritten", async () => {

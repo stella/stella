@@ -135,10 +135,10 @@ ALTER TABLE "legislation_sources"
 -- same state; no other constraint and no data is touched.
 ALTER TABLE "legislation_sources"
   DROP CONSTRAINT IF EXISTS "legislation_sources_expression_namespace_shape";--> statement-breakpoint
--- Validated in place: the table holds one row per publisher.
 ALTER TABLE "legislation_sources"
   ADD CONSTRAINT "legislation_sources_expression_namespace_shape"
-  CHECK ("expression_namespace" IS NULL OR "expression_namespace" ~ '^[a-z][a-z0-9-]{0,31}$');--> statement-breakpoint
+  CHECK ("expression_namespace" IS NULL OR "expression_namespace" ~ '^[a-z][a-z0-9-]{0,31}$')
+  NOT VALID;--> statement-breakpoint
 
 -- stella-migration-safety: reviewed drop-object - Drops only the trigger the
 -- next statement re-creates, so a retried migration re-enters the same state.
@@ -228,6 +228,10 @@ SET statement_timeout = '10min';
 SET lock_timeout = '1s';
 --> statement-breakpoint
 
+-- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID constraint added above, outside the additive DDL transaction so its scan does not retain earlier locks.
+ALTER TABLE "legislation_sources"
+  VALIDATE CONSTRAINT "legislation_sources_expression_namespace_shape";
+--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID constraint added above, outside the additive DDL transaction so its scan does not retain earlier locks.
 ALTER TABLE "legislation_documents"
   VALIDATE CONSTRAINT "legislation_documents_expression_kind_values";

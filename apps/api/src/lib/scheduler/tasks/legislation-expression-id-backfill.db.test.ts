@@ -12,6 +12,7 @@ import {
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
 import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -69,7 +70,7 @@ const cursor = async (): Promise<unknown> =>
       .where(eq(schedulerJobs.id, JOB_ID))
   ).at(0)?.payload?.["cursor"];
 
-const idsOf = async (ids: readonly string[]) =>
+const idsOf = async (ids: readonly SafeId<"legislationDocument">[]) =>
   (
     await db
       .select({
@@ -81,9 +82,17 @@ const idsOf = async (ids: readonly string[]) =>
       .orderBy(asc(legislationDocuments.id))
   ).map(({ publisherId }) => publisherId);
 
+type LegacyRowOptions = {
+  metadata?: Record<string, unknown>;
+  sourceId?: SafeId<"legislationSource">;
+};
+
 const insertLegacy = async (
   n: number,
-  { metadata = { versionIri: iri(n) }, sourceId = SOURCE_ID } = {},
+  {
+    metadata = { versionIri: iri(n) },
+    sourceId = SOURCE_ID,
+  }: LegacyRowOptions = {},
 ) => {
   await db.insert(legislationDocuments).values({
     id: documentId(n),
@@ -220,6 +229,34 @@ describe("legislation expression id backfill", () => {
     expect(await idsOf([documentId(9), documentId(10)])).toEqual([
       `esel:${iri(10)}`,
       null,
+    ]);
+  });
+
+  test("an id too long to store, or one two unclaimed rows could take, is left for the census", async () => {
+    await insertLegacy(12, {
+      metadata: { versionIri: `https://example.test/${"x".repeat(1100)}` },
+    });
+    await insertLegacy(13);
+    await db.insert(legislationDocuments).values({
+      id: documentId(14),
+      sourceId: SOURCE_ID,
+      eli: "eli/cz/sb/2000/13",
+      title: "A second unclaimed row naming the same version",
+      country: "CZE",
+      language: "cs",
+      versionValidFrom: "2021-01-01",
+      metadata: { versionIri: iri(13) },
+    });
+    await insertLegacy(15);
+
+    // The rows around them are still claimed: nothing poisons the page.
+    await run(createLegislationExpressionIdBackfill());
+
+    expect(await idsOf([12, 13, 14, 15].map(documentId))).toEqual([
+      null,
+      null,
+      null,
+      `esel:${iri(15)}`,
     ]);
   });
 

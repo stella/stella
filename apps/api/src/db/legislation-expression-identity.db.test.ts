@@ -207,7 +207,7 @@ describe("legislation expression identity columns", () => {
           statement,
         ),
       );
-    expect(constraintStatements).toHaveLength(constraintNames.length * 2 + 3);
+    expect(constraintStatements).toHaveLength(constraintNames.length * 3);
     for (const statement of constraintStatements) {
       await db.execute(sql.raw(statement));
     }

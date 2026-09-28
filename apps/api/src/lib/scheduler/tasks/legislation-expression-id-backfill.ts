@@ -26,6 +26,9 @@ type BackfillBounds = {
 
 const DEFAULT_BOUNDS: BackfillBounds = { pageRows: 1000, pagesPerRun: 10 };
 
+/** `legislation_documents.publisher_expression_id` is `varchar(1024)`. */
+const PUBLISHER_ID_MAX_LENGTH = 1024;
+
 type ExpressionIdCursor = SafeId<"legislationDocument"> | null;
 
 const backfillCursor = (
@@ -52,9 +55,10 @@ export type ExpressionIdPage =
  * Only rows whose id is still null are touched, so a page replayed after a
  * crash, or racing the writer's own claim of the same row, changes nothing a
  * second time. A row is left alone when its source has no namespace yet, when
- * it stores no IRI (it waits for its writer to supply one), or when another
- * row of the same work already carries that id (the duplicate is left for the
- * census rather than guessed at).
+ * it stores no IRI (it waits for its writer to supply one), when the id would
+ * not fit the column, or when another row of the same work already carries,
+ * or could equally claim, that id (the duplicate is left for the census rather
+ * than guessed at).
  */
 export const claimExpressionIdPageTx = async (
   tx: Transaction,
@@ -82,6 +86,7 @@ export const claimExpressionIdPageTx = async (
   )`;
   const publisherId = sql<string>`${namespace} || ':' || ${versionIri}`;
   const sibling = alias(legislationDocuments, "sibling");
+  const twin = alias(legislationDocuments, "twin");
   const claimed = await tx
     .update(legislationDocuments)
     // An identity attachment, not an edit: `updated_at` keeps its value.
@@ -96,6 +101,26 @@ export const claimExpressionIdPageTx = async (
         sql`${namespace} IS NOT NULL`,
         isNull(legislationDocuments.publisherExpressionId),
         sql`coalesce(${versionIri}, '') <> ''`,
+        // An id that does not fit the column would fail the whole page, and
+        // every later run with it; such a row is left for the census.
+        sql`length(${publisherId}) <= ${PUBLISHER_ID_MAX_LENGTH}`,
+        // Two unclaimed rows of one work naming the same version: which one
+        // it is cannot be told here, so neither is claimed.
+        notExists(
+          tx
+            .select({ id: twin.id })
+            .from(twin)
+            .where(
+              and(
+                eq(twin.sourceId, legislationDocuments.sourceId),
+                eq(twin.eli, legislationDocuments.eli),
+                eq(twin.language, legislationDocuments.language),
+                sql`${twin.id} <> ${legislationDocuments.id}`,
+                isNull(twin.publisherExpressionId),
+                sql`(${twin.metadata}->>'versionIri') = ${versionIri}`,
+              ),
+            ),
+        ),
         notExists(
           tx
             .select({ id: sibling.id })
