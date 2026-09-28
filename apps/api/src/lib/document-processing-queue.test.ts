@@ -19,6 +19,7 @@ import {
   resolveSearchIndexReplayBatch,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
+  storeOcrSearchablePdfDerivative,
   tryEnqueueDocumentProcessingRun,
   writeRepairScanCursor,
 } from "@/api/lib/document-processing-queue";
@@ -198,11 +199,59 @@ describe("OCR derivative durability", () => {
       "await readTenantS3ArrayBuffer(",
       "await createOcrSearchablePdf(",
       "await writeTenantS3Object(",
-      "await writeOrganizationFile(",
     ]) {
       expect(stageSource).toContain(storageCall);
     }
     expect(stageSource).toContain("code: SEARCHABLE_PDF_FAILURE_CODE");
+  });
+
+  test("uses the metered OCR write when file usage limits are enabled", async () => {
+    const calls: string[] = [];
+    const pdfBytes = new Uint8Array([1, 2, 3]);
+    const result = await storeOcrSearchablePdfDerivative({
+      objectKey: "org/workspace/ocr/run.pdf",
+      organizationId: toSafeId<"organization">(
+        "019864b8-48d0-7f37-94d5-948e3bcf3f40",
+      ),
+      pdfBytes,
+      usageLimitsEnabled: true,
+      writePdf: async () => {
+        calls.push("storage");
+      },
+      writeMetered: async ({ objectKey, organizationId, sizeBytes, write }) => {
+        expect(objectKey).toBe("org/workspace/ocr/run.pdf");
+        expect(String(organizationId)).toBe(
+          "019864b8-48d0-7f37-94d5-948e3bcf3f40",
+        );
+        expect(sizeBytes).toBe(pdfBytes.byteLength);
+        calls.push("metered");
+        await write();
+        return Result.ok();
+      },
+    });
+    expect(Result.isOk(result)).toBe(true);
+    expect(calls).toEqual(["metered", "storage"]);
+  });
+
+  test("writes the OCR derivative directly when file usage limits are disabled", async () => {
+    const calls: string[] = [];
+    const result = await storeOcrSearchablePdfDerivative({
+      objectKey: "org/workspace/ocr/run.pdf",
+      organizationId: toSafeId<"organization">(
+        "019864b8-48d0-7f37-94d5-948e3bcf3f40",
+      ),
+      pdfBytes: new Uint8Array([1, 2, 3]),
+      usageLimitsEnabled: false,
+      writePdf: async () => {
+        calls.push("storage");
+      },
+      writeMetered: async () => {
+        calls.push("metered");
+        return Result.ok();
+      },
+    });
+    expect(Result.isOk(result)).toBe(true);
+    expect(calls).toEqual(["storage"]);
   });
 
   test("retries derivative failures within the bounded attempt budget", () => {

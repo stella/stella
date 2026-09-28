@@ -18,10 +18,11 @@
  *   bun apps/api/scripts/backfill-image-thumbnails.ts chat     # chat files only
  */
 
-import { Result } from "better-result";
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
-import { chatThreads, userFiles } from "@/api/db/schema";
+import { userFiles } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
@@ -42,20 +43,16 @@ import {
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
+  brandPersistedOrganizationId,
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 
+import { buildChatThumbnailQuery } from "./backfill-image-thumbnails.helpers";
+
 const BATCH_SIZE = 200;
 
 const db = openMaintenanceDb({ readOnly: false });
-
-const THUMBNAILABLE_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-];
 
 type EntityFieldRow = {
   field_id: string;
@@ -66,11 +63,6 @@ type EntityFieldRow = {
   workspace_id: string;
   organization_id: string;
 };
-
-type ChatFileRow = Pick<
-  typeof userFiles.$inferSelect,
-  "id" | "userId" | "mimeType" | "s3Key"
-> & { organizationId: SafeId<"organization"> };
 
 /** Bounds the cleanup delete; a stuck socket must not stall the backfill. */
 const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
@@ -161,35 +153,19 @@ const backfillEntityFields = async (): Promise<number> => {
   return enqueued;
 };
 
+const readChatFilePage = async (cursor: SafeId<"userFile"> | null) =>
+  await db.transaction(
+    async (tx) =>
+      await buildChatThumbnailQuery(tx, cursor, env.FEATURE_FILE_USAGE_LIMITS),
+  );
+
 const backfillChatFiles = async (): Promise<number> => {
   let cursor: SafeId<"userFile"> | null = null;
   let generated = 0;
 
   for (;;) {
-    const afterCursor = cursor ? gt(userFiles.id, cursor) : undefined;
     // db-await-in-loop: keyset page per iteration; the page is the batch
-    const rows: ChatFileRow[] = await db.transaction(
-      async (tx) =>
-        await tx
-          .select({
-            id: userFiles.id,
-            userId: userFiles.userId,
-            mimeType: userFiles.mimeType,
-            s3Key: userFiles.s3Key,
-            organizationId: chatThreads.organizationId,
-          })
-          .from(userFiles)
-          .innerJoin(chatThreads, eq(userFiles.threadId, chatThreads.id))
-          .where(
-            and(
-              isNull(userFiles.thumbnailFileId),
-              inArray(userFiles.mimeType, THUMBNAILABLE_MIME_TYPES),
-              afterCursor,
-            ),
-          )
-          .orderBy(asc(userFiles.id))
-          .limit(BATCH_SIZE),
-    );
+    const rows = await readChatFilePage(cursor);
 
     if (rows.length === 0) {
       break;
@@ -217,17 +193,36 @@ const backfillChatFiles = async (): Promise<number> => {
         mimeType: THUMBNAIL_MIME_TYPE,
         userId: brandPersistedUserId(row.userId),
       });
-      const written = await writeOrganizationFile({
-        organizationId: row.organizationId,
-        objectKey: thumbnailKey,
-        sizeBytes: thumbnail.value.webp.byteLength,
-        write: async () =>
-          await writeS3ObjectWithRetry({
-            contentType: THUMBNAIL_MIME_TYPE,
-            data: thumbnail.value.webp,
-            key: thumbnailKey,
-          }),
-      });
+      let written;
+      if (env.FEATURE_FILE_USAGE_LIMITS) {
+        if (
+          !("organizationId" in row) ||
+          typeof row.organizationId !== "string"
+        ) {
+          return panic("Tracked chat thumbnail query omitted organization id");
+        }
+        written = await writeOrganizationFile({
+          organizationId: brandPersistedOrganizationId(row.organizationId),
+          objectKey: thumbnailKey,
+          sizeBytes: thumbnail.value.webp.byteLength,
+          write: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: THUMBNAIL_MIME_TYPE,
+              data: thumbnail.value.webp,
+              key: thumbnailKey,
+            }),
+        });
+      } else {
+        written = await Result.tryPromise({
+          try: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: THUMBNAIL_MIME_TYPE,
+              data: thumbnail.value.webp,
+              key: thumbnailKey,
+            }),
+          catch: (cause) => cause,
+        });
+      }
       if (Result.isError(written)) {
         throw written.error;
       }

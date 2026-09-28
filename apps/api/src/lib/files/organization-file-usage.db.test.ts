@@ -276,6 +276,54 @@ describe("organization file usage", () => {
     await removeOrganizationFileBytes(object.objectKey, db());
   });
 
+  test("configured file capacity remains enforced for non-consumable entitlements", async () => {
+    const now = Date.now();
+    const cases = [
+      {
+        status: "active",
+        currentPeriodStart: new Date(now - 120_000),
+        currentPeriodEnd: new Date(now - 60_000),
+      },
+      {
+        status: "cancelled",
+        currentPeriodStart: new Date(now - 60_000),
+        currentPeriodEnd: new Date(now + 60_000),
+      },
+      {
+        status: "paused",
+        currentPeriodStart: new Date(now - 60_000),
+        currentPeriodEnd: new Date(now + 60_000),
+      },
+      {
+        status: "past_due",
+        currentPeriodStart: new Date(now - 60_000),
+        currentPeriodEnd: new Date(now + 60_000),
+      },
+    ] as const;
+    for (const [index, state] of cases.entries()) {
+      await testDb
+        .update(usageEntitlements)
+        .set(state)
+        .where(eq(usageEntitlements.id, entitlementId));
+      const reserved = await reserveOrganizationFileBytes(
+        input(`fixture/non-consumable-${index}`, 30),
+        db(),
+      );
+      expect(Result.isError(reserved)).toBe(true);
+      if (Result.isError(reserved)) {
+        expect(reserved.error.reason).toBe("capacity_exceeded");
+      }
+    }
+    await testDb
+      .update(usageEntitlements)
+      .set({
+        status: "active",
+        currentPeriodStart: new Date(now - 60_000),
+        currentPeriodEnd: new Date(now + 60_000),
+      })
+      .where(eq(usageEntitlements.id, entitlementId));
+  });
+
   test("capacity reduction preserves bytes and rejects later durable writes", async () => {
     const existing = await reserveOrganizationFileBytes(
       input("fixture/over-cap", 17),

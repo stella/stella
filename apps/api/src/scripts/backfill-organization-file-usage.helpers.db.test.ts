@@ -103,7 +103,7 @@ describe("organization file usage backfill", () => {
     };
     expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(2);
     expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(0);
-    expect(checked).toEqual([absentKey, presentKey, presentKey]);
+    expect(checked).toEqual([absentKey, absentKey, presentKey, presentKey]);
     const rows = await testDb
       .select({ objectKey: organizationFileObjects.objectKey })
       .from(organizationFileObjects)
@@ -115,6 +115,53 @@ describe("organization file usage backfill", () => {
       .where(eq(organizationFileUsage.organizationId, ids.orgA))
       .then((matches) => matches.at(0));
     expect(usage?.committedBytes).toBe(3n);
+  });
+
+  test("preserves a committed object written after the first absence check", async () => {
+    const objectKey = `${ids.orgA}/workspace_1/files/written-during-backfill`;
+    expect(
+      Result.isOk(
+        await reconcileOrganizationFileObject(
+          { organizationId: ids.orgA, objectKey, sizeBytes: 3 },
+          ledgerDb(),
+        ),
+      ),
+    ).toBe(true);
+    let checks = 0;
+    const removed = await reconcileAbsentOrganizationFileObjects({
+      db: ledgerDb(),
+      organizationId: ids.orgA,
+      objectExists: async (key) => {
+        if (key !== objectKey) {
+          return true;
+        }
+        checks += 1;
+        if (checks === 1) {
+          const written = await reconcileOrganizationFileObject(
+            { organizationId: ids.orgA, objectKey, sizeBytes: 8 },
+            ledgerDb(),
+          );
+          expect(Result.isOk(written)).toBe(true);
+          return false;
+        }
+        return true;
+      },
+      staleBefore: new Date("2026-01-01T00:00:00Z"),
+    });
+    expect(removed).toBe(0);
+    expect(checks).toBe(2);
+    const object = await testDb
+      .select({ sizeBytes: organizationFileObjects.sizeBytes })
+      .from(organizationFileObjects)
+      .where(eq(organizationFileObjects.objectKey, objectKey))
+      .then((matches) => matches.at(0));
+    expect(object?.sizeBytes).toBe(8n);
+    const counter = await testDb
+      .select({ committedBytes: organizationFileUsage.committedBytes })
+      .from(organizationFileUsage)
+      .where(eq(organizationFileUsage.organizationId, ids.orgA))
+      .then((matches) => matches.at(0));
+    expect(counter?.committedBytes).toBe(11n);
   });
 
   test("releases only old missing reservations and preserves pending present objects", async () => {

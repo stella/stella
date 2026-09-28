@@ -743,6 +743,10 @@ export const organizationFileObjects = p.pgTable(
     p
       .index("organization_file_objects_org_status_key_idx")
       .on(table.organizationId, table.status, table.objectKey),
+    p
+      .index("organization_file_objects_pending_reconcile_idx")
+      .on(table.status, table.updatedAt, table.objectKey)
+      .where(sql`${table.writeId} IS NOT NULL`),
     p.check("organization_file_objects_size_nonneg", sql`size_bytes >= 0`),
     p.check(
       "organization_file_objects_pending_size_nonneg",

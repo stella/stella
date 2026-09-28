@@ -46,6 +46,10 @@ CREATE TABLE "organization_file_objects" (
 CREATE INDEX "organization_file_objects_org_status_key_idx"
   ON "organization_file_objects" ("organization_id", "status", "object_key");--> statement-breakpoint
 
+CREATE INDEX "organization_file_objects_pending_reconcile_idx"
+  ON "organization_file_objects" ("status", "updated_at", "object_key")
+  WHERE "write_id" IS NOT NULL;--> statement-breakpoint
+
 ALTER TABLE "organization_file_usage" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "organization_file_usage" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "organization_file_objects" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

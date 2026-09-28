@@ -131,6 +131,14 @@ export const reconcileAbsentOrganizationFileObjects = async ({
         ) {
           return false;
         }
+        // Writers take the same counter lock before writing S3. A second HEAD
+        // under that lock closes the gap after the first absence check.
+        if (
+          !isTemporaryOrganizationObjectKey(organizationId, objectKey) &&
+          (await objectExists(objectKey))
+        ) {
+          return false;
+        }
         await tx
           .delete(organizationFileObjects)
           .where(eq(organizationFileObjects.objectKey, objectKey));

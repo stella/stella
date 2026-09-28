@@ -15,7 +15,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockAssignmentCapacity } from "@/api/lib/usage/assignment-capacity";
-import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 
 type OrganizationFileUsageErrorProps = {
   message: string;
@@ -98,7 +97,7 @@ const fileUsageDb = async (): Promise<FileUsageDb> => {
 };
 
 const FILE_RESERVATION_RECOVERY_DELAY_MS = 5 * 60_000;
-const FILE_RESERVATION_ABANDON_DELAY_MS = 60 * 60_000;
+export const FILE_RESERVATION_ABANDON_DELAY_MS = 60 * 60_000;
 const S3_LAST_MODIFIED_PRECISION_MS = 1000;
 
 const recoverOrganizationFileReservation = async (
@@ -280,9 +279,6 @@ export const reserveOrganizationFileBytes = async (
 
         const entitlement = await tx
           .select({
-            status: usageEntitlements.status,
-            currentPeriodStart: usageEntitlements.currentPeriodStart,
-            currentPeriodEnd: usageEntitlements.currentPeriodEnd,
             storageBytesPerAssignment: usagePolicies.storageBytesPerAssignment,
           })
           .from(usageEntitlements)
@@ -293,11 +289,7 @@ export const reserveOrganizationFileBytes = async (
           .where(eq(usageEntitlements.organizationId, organizationId))
           .limit(1)
           .then((rows) => rows.at(0));
-        if (
-          entitlement &&
-          isEntitlementConsumableAt(entitlement) &&
-          entitlement.storageBytesPerAssignment !== null
-        ) {
+        if (entitlement && entitlement.storageBytesPerAssignment !== null) {
           const assignments = await tx
             .select({ value: count() })
             .from(usageSeatAssignments)

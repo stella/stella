@@ -94,7 +94,11 @@ import { createReconciliationProgress } from "@/api/lib/document-processing-reco
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
-import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import {
+  writeOrganizationFile,
+  type FileUsageInput,
+  type OrganizationFileUsageError,
+} from "@/api/lib/files/organization-file-usage";
 import { logger } from "@/api/lib/observability/logger";
 import {
   isLocalDocumentOcrConfigured,
@@ -169,6 +173,37 @@ const REPAIR_SCAN_CURSOR_CAS_SCRIPT = `
 `;
 const SOURCE_SUPERSEDED_CANCELLATION_CODE = "source_superseded";
 
+type OcrDerivativeStore = (
+  input: FileUsageInput & { write: () => Promise<void> },
+) => Promise<Result<void, OrganizationFileUsageError>>;
+
+export const storeOcrSearchablePdfDerivative = async ({
+  objectKey,
+  organizationId,
+  pdfBytes,
+  usageLimitsEnabled,
+  writePdf,
+  writeMetered = writeOrganizationFile,
+}: {
+  objectKey: string;
+  organizationId: SafeId<"organization">;
+  pdfBytes: Uint8Array;
+  usageLimitsEnabled: boolean;
+  writePdf: () => Promise<void>;
+  writeMetered?: OcrDerivativeStore;
+}): Promise<Result<void, OrganizationFileUsageError>> => {
+  if (!usageLimitsEnabled) {
+    await writePdf();
+    return Result.ok();
+  }
+  return await writeMetered({
+    objectKey,
+    organizationId,
+    sizeBytes: pdfBytes.byteLength,
+    write: writePdf,
+  });
+};
+
 /**
  * Builds and stores the run's cached searchable PDF.
  *
@@ -218,15 +253,12 @@ const writeOcrSearchablePdfDerivative = async ({
           scope,
           signal: lifecycleSignal,
         });
-      if (!env.FEATURE_FILE_USAGE_LIMITS) {
-        await writePdf();
-        return;
-      }
-      const fileWrite = await writeOrganizationFile({
+      const fileWrite = await storeOcrSearchablePdfDerivative({
         objectKey,
         organizationId: run.organizationId,
-        sizeBytes: searchablePdf.value.byteLength,
-        write: writePdf,
+        pdfBytes: searchablePdf.value,
+        usageLimitsEnabled: env.FEATURE_FILE_USAGE_LIMITS,
+        writePdf,
       });
       if (Result.isError(fileWrite)) {
         throw fileWrite.error;

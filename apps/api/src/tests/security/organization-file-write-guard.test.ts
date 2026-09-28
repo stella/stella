@@ -26,7 +26,7 @@ const writeCommands = new Set([
 const ledgerCalls = new Set([
   "writeOrganizationFile",
   "copyOrganizationFile",
-  "reserveOrganizationFileBytes",
+  "storeOcrSearchablePdfDerivative",
 ]);
 
 type WriteSite = {
@@ -35,6 +35,7 @@ type WriteSite = {
   ordinal: number;
   operation: string;
   ledgerBound: boolean;
+  flagOff: boolean;
 };
 
 // These writes never create metered organization file objects. A changed call
@@ -59,16 +60,24 @@ const exemptions = {
   "scripts/seed-templates.ts:writeS3ObjectWithRetry:1": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:0": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:1": "fixture",
+  "src/handlers/uploads/update.ts:copyObject:0": "reservation_flow",
+  "src/handlers/uploads/update.ts:writeS3ObjectWithRetry:0": "reservation_flow",
+  "src/handlers/chat/fork/create.ts:copyObject:1": "flag_off",
 } as const satisfies Record<
   string,
-  "export" | "public_corpus" | "temporary" | "fixture"
+  | "export"
+  | "public_corpus"
+  | "temporary"
+  | "fixture"
+  | "reservation_flow"
+  | "flag_off"
 >;
 
 // Exact per-file counts close the gap where a new direct write lands in a
 // function that already calls the ledger. Updating a count requires review of
 // that file's new write site and key classification.
 const expectedWriteCounts = {
-  "scripts/backfill-image-thumbnails.ts": 1,
+  "scripts/backfill-image-thumbnails.ts": 2,
   "scripts/seed-dev.ts": 2,
   "scripts/seed-email-viewer-demo.ts": 1,
   "scripts/seed-templates.ts": 2,
@@ -105,35 +114,113 @@ const invokedName = (
     return imports.get(callee.text) ?? callee.text;
   }
   if (ts.isPropertyAccessExpression(callee)) {
+    if (callee.name.text === "write") {
+      const receiver = callee.expression;
+      if (
+        (ts.isCallExpression(receiver) &&
+          ts.isIdentifier(receiver.expression) &&
+          (imports.get(receiver.expression.text) ??
+            receiver.expression.text) === "getS3") ||
+        (ts.isIdentifier(receiver) && imports.get(receiver.text) === "getS3")
+      ) {
+        return "getS3.write";
+      }
+    }
     return callee.name.text;
   }
   return null;
 };
 
-const enclosingLedgerCall = (
+const isFlagOff = (node: ts.Node): boolean => {
+  let child = node;
+  let current = node.parent;
+  while (!ts.isSourceFile(current)) {
+    if (ts.isIfStatement(current)) {
+      const condition = current.expression.getText();
+      if (
+        (condition === "!env.FEATURE_FILE_USAGE_LIMITS" &&
+          child === current.thenStatement) ||
+        (condition === "env.FEATURE_FILE_USAGE_LIMITS" &&
+          child === current.elseStatement)
+      ) {
+        return true;
+      }
+    }
+    if (ts.isConditionalExpression(current)) {
+      const condition = current.condition.getText();
+      if (
+        (condition === "!env.FEATURE_FILE_USAGE_LIMITS" &&
+          child === current.whenTrue) ||
+        (condition === "env.FEATURE_FILE_USAGE_LIMITS" &&
+          child === current.whenFalse)
+      ) {
+        return true;
+      }
+    }
+    child = current;
+    current = current.parent;
+  }
+  return false;
+};
+
+const ledgerCallback = (
   node: ts.Node,
+  ast: ts.SourceFile,
   imports: ReadonlyMap<string, string>,
 ): boolean => {
   let current = node.parent;
-  let outerFunction: ts.Node | null = null;
   while (!ts.isSourceFile(current)) {
-    if (
-      ts.isCallExpression(current) &&
-      ledgerCalls.has(invokedName(current, imports) ?? "")
-    ) {
-      return true;
-    }
     if (ts.isFunctionLike(current)) {
-      outerFunction = current;
+      const fn = current;
+      const parent = fn.parent;
+      if (
+        ts.isPropertyAssignment(parent) &&
+        (parent.name.getText(ast) === "write" ||
+          parent.name.getText(ast) === "copy") &&
+        ts.isObjectLiteralExpression(parent.parent) &&
+        ts.isCallExpression(parent.parent.parent) &&
+        ledgerCalls.has(invokedName(parent.parent.parent, imports) ?? "")
+      ) {
+        return true;
+      }
+      if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+        const callbackName = parent.name.text;
+        let passedToLedger = false;
+        const visit = (candidate: ts.Node) => {
+          if (
+            ts.isCallExpression(candidate) &&
+            ledgerCalls.has(invokedName(candidate, imports) ?? "") &&
+            candidate.arguments.some(
+              (arg) =>
+                ts.isObjectLiteralExpression(arg) &&
+                arg.properties.some(
+                  (property) =>
+                    (ts.isPropertyAssignment(property) &&
+                      (property.name.getText(ast) === "write" ||
+                        property.name.getText(ast) === "copy") &&
+                      ts.isIdentifier(property.initializer) &&
+                      property.initializer.text === callbackName) ||
+                    (ts.isShorthandPropertyAssignment(property) &&
+                      property.name.text === callbackName &&
+                      ((callbackName === "writePdf" &&
+                        invokedName(candidate, imports) ===
+                          "storeOcrSearchablePdfDerivative") ||
+                        callbackName === "write" ||
+                        callbackName === "copy")),
+                ),
+            )
+          ) {
+            passedToLedger = true;
+          }
+          ts.forEachChild(candidate, visit);
+        };
+        visit(parent.parent.parent.parent);
+        return passedToLedger;
+      }
     }
     current = current.parent;
   }
-  return (
-    outerFunction !== null &&
-    [...ledgerCalls].some((name) =>
-      outerFunction.getText().includes(`${name}(`),
-    )
-  );
+  return false;
 };
 
 const scan = (file: string, source: string): WriteSite[] => {
@@ -154,12 +241,50 @@ const scan = (file: string, source: string): WriteSite[] => {
       );
     }
   }
+  const visitAliases = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const initializer = node.initializer;
+      if (initializer && ts.isIdentifier(initializer)) {
+        const target = imports.get(initializer.text) ?? initializer.text;
+        if (writeHelpers.has(target) || target === "getS3") {
+          imports.set(node.name.text, target);
+        }
+      }
+      if (
+        initializer &&
+        ts.isCallExpression(initializer) &&
+        ts.isIdentifier(initializer.expression) &&
+        (imports.get(initializer.expression.text) ??
+          initializer.expression.text) === "getS3"
+      ) {
+        imports.set(node.name.text, "getS3");
+      }
+      if (
+        initializer &&
+        ts.isPropertyAccessExpression(initializer) &&
+        initializer.name.text === "write" &&
+        ts.isCallExpression(initializer.expression) &&
+        ts.isIdentifier(initializer.expression.expression) &&
+        (imports.get(initializer.expression.expression.text) ??
+          initializer.expression.expression.text) === "getS3"
+      ) {
+        imports.set(node.name.text, "getS3.write");
+      }
+    }
+    ts.forEachChild(node, visitAliases);
+  };
+  visitAliases(ast);
   const ordinals = new Map<string, number>();
   const sites: WriteSite[] = [];
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
       const name = invokedName(node, imports);
-      if (name && (writeHelpers.has(name) || writeCommands.has(name))) {
+      if (
+        name &&
+        (writeHelpers.has(name) ||
+          writeCommands.has(name) ||
+          name === "getS3.write")
+      ) {
         const ordinal = ordinals.get(name) ?? 0;
         ordinals.set(name, ordinal + 1);
         sites.push({
@@ -167,7 +292,8 @@ const scan = (file: string, source: string): WriteSite[] => {
           name,
           ordinal,
           operation: node.getText(ast).replace(/\s+/gu, " "),
-          ledgerBound: enclosingLedgerCall(node, imports),
+          ledgerBound: ledgerCallback(node, ast, imports),
+          flagOff: isFlagOff(node),
         });
       }
     }
@@ -206,6 +332,38 @@ describe("durable organization file writes", () => {
     expect(aliased).toMatchObject([
       { ledgerBound: false, name: "writeS3ObjectWithRetry" },
     ]);
+
+    const sibling = scan(
+      "src/example.ts",
+      "const save = async () => { await writeOrganizationFile({ write: async () => await writeS3ObjectWithRetry({ key }) }); await writeS3ObjectWithRetry({ key }); };",
+    );
+    expect(sibling).toMatchObject([
+      { ledgerBound: true },
+      { ledgerBound: false },
+    ]);
+
+    const sameNameInAnotherScope = scan(
+      "src/example.ts",
+      "const first = () => { const persist = async () => await writeS3ObjectWithRetry({ key }); }; const second = () => { const persist = async () => await writeS3ObjectWithRetry({ key }); return writeOrganizationFile({ write: persist }); };",
+    );
+    expect(sameNameInAnotherScope).toMatchObject([
+      { ledgerBound: false },
+      { ledgerBound: true },
+    ]);
+
+    expect(
+      scan("src/example.ts", "await getS3().write(key, data)"),
+    ).toMatchObject([{ ledgerBound: false, name: "getS3.write" }]);
+    expect(
+      scan(
+        "src/example.ts",
+        "const client = getS3(); const save = writeS3ObjectWithRetry; const rawWrite = getS3().write; await client.write(key, data); await save({ key, data }); await rawWrite(key, data);",
+      ),
+    ).toMatchObject([
+      { ledgerBound: false, name: "getS3.write" },
+      { ledgerBound: false, name: "writeS3ObjectWithRetry" },
+      { ledgerBound: false, name: "getS3.write" },
+    ]);
   });
 
   test("all direct storage writes have a ledger boundary or an explicit exemption", async () => {
@@ -238,7 +396,9 @@ describe("durable organization file writes", () => {
         ]),
     );
     expect(counts).toEqual(expectedWriteCounts);
-    const unbound = allSites.filter((site) => !site.ledgerBound);
+    const unbound = allSites.filter(
+      (site) => !site.ledgerBound && !site.flagOff,
+    );
     const exemptionIds = unbound.map(
       (site) => `${site.file}:${site.name}:${site.ordinal}`,
     );
@@ -276,6 +436,21 @@ describe("durable organization file writes", () => {
         case "fixture":
           expect(site.file.startsWith("scripts/seed-")).toBe(true);
           break;
+        case "reservation_flow": {
+          const source = await Bun.file(
+            path.join(root, "apps/api", site.file),
+          ).text();
+          expect(source).toContain("reserveOrganizationFileBytes(");
+          expect(source).toContain("commitOrganizationFileBytes(");
+          break;
+        }
+        case "flag_off": {
+          const source = await Bun.file(
+            path.join(root, "apps/api", site.file),
+          ).text();
+          expect(source).toContain("if (env.FEATURE_FILE_USAGE_LIMITS)");
+          break;
+        }
       }
     }
   });

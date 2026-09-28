@@ -18,6 +18,10 @@ import {
 import { createUserFileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { reconcileOrganizationFileObject } from "@/api/lib/files/organization-file-usage";
+import {
+  ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT,
+  reconcileAbandonedOrganizationFileReservations,
+} from "@/api/lib/files/organization-file-usage-reconcile";
 import { isMissingS3ObjectError, listS3ObjectPage } from "@/api/lib/s3";
 import { headObject } from "@/api/lib/s3-presign";
 import {
@@ -113,6 +117,7 @@ const readUserFilePage = async ({
 let orgCursor: SafeId<"organization"> | null = null;
 let imported = 0;
 let removed = 0;
+let settledReservations = 0;
 while (true) {
   const organizations = await readOrganizationPage(orgCursor);
   if (organizations.length === 0) {
@@ -186,6 +191,20 @@ while (true) {
         Temporal.Now.instant().epochMilliseconds - RESERVATION_STALE_AFTER_MS,
       ),
     });
+    let settledBatch;
+    do {
+      settledBatch = (
+        await reconcileAbandonedOrganizationFileReservations({
+          db: ledgerDb,
+          organizationId,
+        })
+      ).unwrap();
+      settledReservations +=
+        settledBatch.committed + settledBatch.deleted + settledBatch.released;
+    } while (
+      settledBatch.scanned ===
+      ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT
+    );
   }
   const lastOrganization = organizations.at(-1);
   orgCursor =
@@ -194,5 +213,5 @@ while (true) {
       : brandPersistedOrganizationId(lastOrganization.id);
 }
 console.log(
-  `Reconciled ${imported} stored objects; removed ${removed} absent ledger rows.`,
+  `Reconciled ${imported} stored objects; removed ${removed} absent ledger rows; settled ${settledReservations} reservations.`,
 );
