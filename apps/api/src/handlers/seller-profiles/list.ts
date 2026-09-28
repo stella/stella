@@ -10,7 +10,53 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { brandPersistedSellerProfileId } from "@/api/lib/safe-id-boundaries";
+
+type SellerProfileRow = typeof sellerProfiles.$inferSelect;
+
+const UNPROJECTED_SELLER_PROFILE_COLUMNS = [
+  // Tenant scope is fixed by the active organization and archived rows are excluded.
+  "organizationId",
+  "archivedAt",
+] as const satisfies readonly (keyof SellerProfileRow)[];
+
+const SELLER_PROFILE_LIST_COLUMNS = {
+  id: sellerProfiles.id,
+  legalName: sellerProfiles.legalName,
+  registrationId: sellerProfiles.registrationId,
+  vatId: sellerProfiles.vatId,
+  addressLine1: sellerProfiles.addressLine1,
+  addressLine2: sellerProfiles.addressLine2,
+  city: sellerProfiles.city,
+  postalCode: sellerProfiles.postalCode,
+  country: sellerProfiles.country,
+  iban: sellerProfiles.iban,
+  bic: sellerProfiles.bic,
+  accountNumber: sellerProfiles.accountNumber,
+  defaultCurrency: sellerProfiles.defaultCurrency,
+  footerNotes: sellerProfiles.footerNotes,
+  isDefault: sellerProfiles.isDefault,
+  createdAt: sellerProfiles.createdAt,
+  updatedAt: sellerProfiles.updatedAt,
+};
+
+type MissingSellerProfileListColumn = UnprojectedColumns<
+  SellerProfileRow,
+  typeof SELLER_PROFILE_LIST_COLUMNS,
+  (typeof UNPROJECTED_SELLER_PROFILE_COLUMNS)[number]
+>;
+type UnexpectedSellerProfileListColumn = UnbackedProjectionKeys<
+  SellerProfileRow,
+  typeof SELLER_PROFILE_LIST_COLUMNS,
+  (typeof UNPROJECTED_SELLER_PROFILE_COLUMNS)[number]
+>;
+
+true satisfies MissingSellerProfileListColumn extends never ? true : never;
+true satisfies UnexpectedSellerProfileListColumn extends never ? true : never;
 
 const config = {
   description:
@@ -60,23 +106,7 @@ export default createSafeRootHandler(
       safeDb((tx) =>
         tx
           .select({
-            id: sellerProfiles.id,
-            legalName: sellerProfiles.legalName,
-            registrationId: sellerProfiles.registrationId,
-            vatId: sellerProfiles.vatId,
-            addressLine1: sellerProfiles.addressLine1,
-            addressLine2: sellerProfiles.addressLine2,
-            city: sellerProfiles.city,
-            postalCode: sellerProfiles.postalCode,
-            country: sellerProfiles.country,
-            iban: sellerProfiles.iban,
-            bic: sellerProfiles.bic,
-            accountNumber: sellerProfiles.accountNumber,
-            defaultCurrency: sellerProfiles.defaultCurrency,
-            footerNotes: sellerProfiles.footerNotes,
-            isDefault: sellerProfiles.isDefault,
-            createdAt: sellerProfiles.createdAt,
-            updatedAt: sellerProfiles.updatedAt,
+            ...SELLER_PROFILE_LIST_COLUMNS,
             createdAtCursor: cursorCodec.cursorValue.as("created_at_cursor"),
           })
           .from(sellerProfiles)

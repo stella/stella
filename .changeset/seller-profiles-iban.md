@@ -1,5 +1,6 @@
 ---
 "@stll/invoicing": minor
+"@stll/cli": minor
 ---
 
-Add IBAN normalization and country-specific validation for billing account details.
+Add issuer profile commands and IBAN validation for billing account details.
