@@ -70,17 +70,18 @@ describe("seller profile creation", () => {
       },
       insert: () => ({
         values: (values: Record<string, unknown>) => {
-          expect(values.isDefault).toBe(true);
-          expect(values.iban).toBe("GB82WEST12345698765432");
-          expect(values.accountNumber).toBe("sensitive-account-number");
+          expect(values["isDefault"]).toBe(true);
+          expect(values["iban"]).toBe("GB82WEST12345698765432");
+          expect(values["accountNumber"]).toBe("sensitive-account-number");
           return {
             returning: async () => [{ id: profileId, isDefault: true }],
           };
         },
       }),
     });
-    const safeDb = asTestRaw<SafeDb>(async (operation) =>
-      Result.ok(await operation(tx)),
+    const safeDb = asTestRaw<SafeDb>(
+      async <T>(operation: (tx: Transaction) => Promise<T>) =>
+        Result.ok(await operation(tx)),
     );
     let auditEvent: Parameters<AuditRecorder>[1] | undefined;
     const recordAuditEvent: AuditRecorder = async (auditTx, event) => {

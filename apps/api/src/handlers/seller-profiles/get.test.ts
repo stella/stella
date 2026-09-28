@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -15,21 +16,22 @@ const profileId = toSafeId<"sellerProfile">("seller_profile_other_org");
 describe("seller profile reads", () => {
   test("returns 404 when the profile does not belong to the active organization", async () => {
     let where: unknown;
-    const safeDb = asTestRaw<SafeDb>(async (operation) =>
-      Result.ok(
-        await operation(
-          asTestRaw({
-            query: {
-              sellerProfiles: {
-                findFirst: async (options: { where: unknown }) => {
-                  where = options.where;
-                  return undefined;
+    const safeDb = asTestRaw<SafeDb>(
+      async <T>(operation: (tx: Transaction) => Promise<T>) =>
+        Result.ok(
+          await operation(
+            asTestRaw<Transaction>({
+              query: {
+                sellerProfiles: {
+                  findFirst: async (options: { where: unknown }) => {
+                    where = options.where;
+                    return undefined;
+                  },
                 },
               },
-            },
-          }),
+            }),
+          ),
         ),
-      ),
     );
     const context = asTestRaw<GetContext>({
       params: { sellerProfileId: profileId },

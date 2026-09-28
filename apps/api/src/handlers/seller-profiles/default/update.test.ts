@@ -36,8 +36,9 @@ describe("changing the default seller profile", () => {
         }),
       }),
     });
-    const safeDb = asTestRaw<SafeDb>(async (operation) =>
-      Result.ok(await operation(tx)),
+    const safeDb = asTestRaw<SafeDb>(
+      async <T>(operation: (tx: Transaction) => Promise<T>) =>
+        Result.ok(await operation(tx)),
     );
     let auditEvent: Parameters<AuditRecorder>[1] | undefined;
     const recordAuditEvent: AuditRecorder = async (auditTx, event) => {

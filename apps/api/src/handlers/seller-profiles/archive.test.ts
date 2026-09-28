@@ -28,8 +28,9 @@ describe("seller profile archiving", () => {
         },
       }),
     });
-    const safeDb = asTestRaw<SafeDb>(async (operation) =>
-      Result.ok(await operation(tx)),
+    const safeDb = asTestRaw<SafeDb>(
+      async <T>(operation: (tx: Transaction) => Promise<T>) =>
+        Result.ok(await operation(tx)),
     );
     const recordAuditEvent: AuditRecorder = async (auditTx, event) => {
       expect(auditTx).toBe(tx);
@@ -53,7 +54,7 @@ describe("seller profile archiving", () => {
 
     expect(result).toEqual({ id: profileId, archived: true });
     expect(update).toMatchObject({ isDefault: false });
-    expect(update?.archivedAt).toBeInstanceOf(Date);
+    expect(update?.["archivedAt"]).toBeInstanceOf(Date);
     expect(auditEvent).toMatchObject({
       action: "delete",
       resourceType: "seller_profile",

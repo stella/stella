@@ -27,8 +27,9 @@ describe("seller profile listing", () => {
         }),
       }),
     });
-    const safeDb = asTestRaw<SafeDb>(async (operation) =>
-      Result.ok(await operation(tx)),
+    const safeDb = asTestRaw<SafeDb>(
+      async <T>(operation: (tx: Transaction) => Promise<T>) =>
+        Result.ok(await operation(tx)),
     );
     const organizationId = toSafeId<"organization">("org_test");
     const context = asTestRaw<ListContext>({
