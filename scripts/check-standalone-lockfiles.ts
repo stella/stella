@@ -191,12 +191,15 @@ const readInstallPolicy = (source: string): InstallPolicy => {
 const normalizeQuotes = (value: string): string =>
   value.replaceAll(/^["']|["']$/gu, "");
 
-const normalizeDir = (value: string): string =>
-  normalizeQuotes(value)
-    .replace(/^\.\//u, "")
-    .replace(/^\//u, "")
-    .replace(/\/+$/u, "")
-    .replace(/^\.$/u, "");
+/** Repo-relative, no leading `./` or `/`, no trailing `/`; the root is "". */
+const normalizeDir = (value: string): string => {
+  const normalized = path.posix.normalize(normalizeQuotes(value) || ".");
+  const relative = normalized.startsWith("/")
+    ? normalized.slice(1)
+    : normalized;
+  const trimmed = relative.endsWith("/") ? relative.slice(0, -1) : relative;
+  return trimmed === "." ? "" : trimmed;
+};
 
 const readDependabot = (source: string): DependabotBunUpdate[] => {
   const parsed: unknown = Bun.YAML.parse(source);
