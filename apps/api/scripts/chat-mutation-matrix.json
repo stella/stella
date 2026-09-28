@@ -771,6 +771,20 @@
         "test": "keeps every card after an approval on a message that already holds a tool result"
       },
       "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-arguments-canonical-spacing",
+      "fix": "#4007",
+      "behaviour": "A tool call's arguments reach the model as compact JSON with sorted keys however the model spaced them, as the stored input is written back on every later request.",
+      "status": "active",
+      "file": "src/handlers/chat/tool-json-key-order.ts",
+      "search": "    const args = toolArgumentsWithSortedKeys(call.function.arguments);",
+      "replace": "    const args = withSortedJsonKeys(call.function.arguments);",
+      "scenario": {
+        "file": "src/handlers/chat/tool-json-key-order.test.ts",
+        "test": "of a call's arguments reach the model alike however the model spaced them"
+      },
+      "oracle": "chat.provider.prefix-stable"
     }
   ]
 }

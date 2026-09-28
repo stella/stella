@@ -6,9 +6,11 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   sortToolJsonKeys,
+  toolArgumentsWithSortedKeys,
   withSortedJsonKeys,
 } from "@/api/handlers/chat/tool-json-key-order";
 import { isRecord } from "@/api/lib/type-guards";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 
 /** `value` with every object's keys in reverse order. */
 const withReversedKeys = (value: unknown): unknown => {
@@ -52,6 +54,41 @@ describe("the JSON keys of tool calls and results", () => {
     for (const text of ["Deleted the draft.", '{ "b": 1, "a": 2 }', "1.0"]) {
       expect(withSortedJsonKeys(text)).toBe(text);
     }
+  });
+
+  test("of a call's arguments reach the model alike however the model spaced them", () => {
+    // The model's spelling live, and the stored input written back on the
+    // thread's next request.
+    const spoken = '{ "query": "NDA", "limit": 5 }';
+    const stored = JSON.stringify(JSON.parse(spoken));
+    expect(stored).not.toBe(spoken);
+    const argumentsSent = (text: string) => {
+      const messages: ModelMessage[] = [
+        {
+          content: "",
+          role: "assistant",
+          toolCalls: [
+            {
+              function: { arguments: text, name: "search_templates" },
+              id: "call-1",
+              type: "function",
+            },
+          ],
+        },
+      ];
+      return (sortToolJsonKeys(messages) ?? messages)[0]?.toolCalls?.[0]
+        ?.function.arguments;
+    };
+    const live = argumentsSent(spoken);
+    const later = argumentsSent(stored);
+    expect(
+      violationsOf(
+        CHAT_ORACLE.providerPrefixStable,
+        live === later ? [] : [{ later, live }],
+      ),
+    ).toEqual([]);
+    // Arguments cut off mid-JSON are sent as they are.
+    expect(toolArgumentsWithSortedKeys('{"query":"nd')).toBe('{"query":"nd');
   });
 
   test("are sorted in tool calls and tool results only", () => {

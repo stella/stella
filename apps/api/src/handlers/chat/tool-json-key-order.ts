@@ -26,22 +26,42 @@ const withSortedKeys = (value: unknown): unknown => {
 };
 
 /**
- * `text` with every object's keys sorted, when it is JSON as `JSON.stringify`
- * writes it. Any other text (prose, JSON spelled another way) is returned as
- * it is: rewriting it could change more than key order.
+ * `text` as JSON with every object's keys sorted, or undefined when it is not
+ * JSON.
  */
-export const withSortedJsonKeys = (text: string): string => {
+const sortedJsonOf = (
+  text: string,
+): { json: string; value: unknown } | undefined => {
   let value: unknown;
   try {
     value = JSON.parse(text);
   } catch {
-    return text;
+    return undefined;
   }
-  if (JSON.stringify(value) !== text) {
-    return text;
-  }
-  return JSON.stringify(withSortedKeys(value));
+  return { json: JSON.stringify(withSortedKeys(value)), value };
 };
+
+/**
+ * `text` with every object's keys sorted, when it is JSON as `JSON.stringify`
+ * writes it. Any other text (prose, JSON spelled another way) is returned as
+ * it is: a tool result is stored as the text it was, and rewriting that could
+ * change more than key order.
+ */
+export const withSortedJsonKeys = (text: string): string => {
+  const sorted = sortedJsonOf(text);
+  return sorted === undefined || JSON.stringify(sorted.value) !== text
+    ? text
+    : sorted.json;
+};
+
+/**
+ * A tool call's arguments with every object's keys sorted and no whitespace,
+ * when they are JSON at all. The thread stores the parsed arguments and writes
+ * them again with `JSON.stringify`, so the model's own spelling does not
+ * survive the first request either way.
+ */
+export const toolArgumentsWithSortedKeys = (text: string): string =>
+  sortedJsonOf(text)?.json ?? text;
 
 const withSortedToolJson = (message: ModelMessage): ModelMessage => {
   if (message.role === "tool" && typeof message.content === "string") {
@@ -52,7 +72,7 @@ const withSortedToolJson = (message: ModelMessage): ModelMessage => {
     return message;
   }
   const toolCalls = message.toolCalls.map((call) => {
-    const args = withSortedJsonKeys(call.function.arguments);
+    const args = toolArgumentsWithSortedKeys(call.function.arguments);
     return args === call.function.arguments
       ? call
       : { ...call, function: { ...call.function, arguments: args } };
