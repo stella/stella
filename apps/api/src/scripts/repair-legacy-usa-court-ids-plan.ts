@@ -5,8 +5,8 @@
 import { sql, type SQL } from "drizzle-orm";
 
 import { legacyTrustedUsaCourts } from "@/api/lib/case-law/decision-court-identity";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
-import { executedRows } from "@/api/scripts/repair-decision-dates-plan";
 
 /**
  * The column exactly as migration 20261002120400_case_law_decision_court_id
