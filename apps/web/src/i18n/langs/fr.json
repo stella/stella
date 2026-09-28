@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "p. ex. Standard 2025"
     },
     "revertToDraft": "Repasser en brouillon",
+    "savedNarratives": {
+      "empty": "Enregistrez une description pour la réutiliser.",
+      "save": "Enregistrer la description",
+      "title": "Descriptions enregistrées"
+    },
     "selectMatter": "Sélectionner un dossier...",
     "selectMatterToStart": "Sélectionnez un dossier pour démarrer",
     "selectedCount": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}",

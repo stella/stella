@@ -60,10 +60,11 @@ export const CHAT_ORACLE = {
    *  the message holding the calls it was produced with. */
   providerTranscriptSettled: "chat.provider.transcript-settled",
   /** Every model request of a thread begins with the whole prompt of the
-   *  one before it, so the provider's prompt cache holds. */
+   *  one before it: its tools, system prompt and messages, in cache order
+   *  (`chat-prompt-prefix.ts`), so the provider's prompt cache holds. */
   providerPrefixStable: "chat.provider.prefix-stable",
   /** Once a turn is over, every later model call of the thread is handed
-   *  each of its tool results the same way (up to key order): a request
+   *  each of its tool results in the same text: a request
    *  reads the earlier turns as stored, as the next one will. */
   providerResultsStable: "chat.provider.results-stable",
   /** The cards on screen and the interactions stored are exactly the ones the

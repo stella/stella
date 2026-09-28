@@ -39,6 +39,7 @@ type PersonalTimeEntry = {
   durationMinutes: number;
   id: string;
   narrative: string;
+  narrativeLanguage: string | null;
   source: TimeEntrySource;
   status: TimeEntryStatus;
   timerStartedAt: string | null;
@@ -155,6 +156,7 @@ const listPersonalTimeEntries = async ({
         durationMinutes,
         id,
         narrative,
+        narrativeLanguage,
         source,
         status,
         timerStartedAt,
@@ -164,6 +166,7 @@ const listPersonalTimeEntries = async ({
         durationMinutes,
         id,
         narrative,
+        narrativeLanguage,
         source,
         status,
         timerStartedAt,

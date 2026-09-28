@@ -7,6 +7,7 @@ import {
   CORPUS_INDEX_CLUSTER_CONFIG,
   CORPUS_INDEX_COMMIT,
   CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS,
+  CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
@@ -625,6 +626,50 @@ test("ingest fails when the engine reports rejected documents", async () => {
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain("rejected 1 of 2");
+    expect(result.error.rejection).toBe("unknown");
+  }
+});
+
+test("a compatible partial receipt remains unknown", async () => {
+  responseBody = {
+    num_docs_for_processing: 2,
+    num_ingested_docs: 1,
+    num_rejected_docs: 1,
+  };
+
+  const result = await getCorpusIndexClient("q09").ingestBatch(
+    "legal_corpus_v1_cze",
+    '{"document_id":"a"}\n{"document_id":"b"}',
+    CORPUS_INDEX_COMMIT.waitFor,
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.rejection).toBe("unknown");
+  }
+});
+
+test("ingest HTTP failures classify whether the batch was rejected", async () => {
+  Object.assign(envBase, {
+    CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
+  });
+  for (const [status, rejection] of [
+    [413, "definite"],
+    [404, "unknown"],
+    [429, "transient"],
+    [503, "unknown"],
+  ] as const) {
+    responseStatus = status;
+    const result = await getCorpusIndexClient("q09").ingestBatch(
+      "legal_corpus_v1_cze",
+      '{"document_id":"a"}',
+      CORPUS_INDEX_COMMIT.waitFor,
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.status).toBe(status);
+      expect(result.error.rejection).toBe(rejection);
+    }
   }
 });
 
@@ -1038,6 +1083,10 @@ test("the ingest budget outlasts the engine's commit wait", () => {
   );
 });
 
+test("the published ingest content limit is Quickwit's 10 MiB boundary", () => {
+  expect(CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES).toBe(10 * 1024 * 1024);
+});
+
 test("ingest succeeds when every document is accepted", async () => {
   responseBody = { num_docs_for_processing: 2 };
 
@@ -1104,6 +1153,27 @@ test("queued ingest rejects a partial V2 receipt", async () => {
   );
 
   expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.rejection).toBe("unknown");
+  }
+});
+
+test("an ingest receipt with zero ingested and rejected documents is definite", async () => {
+  responseBody = {
+    num_docs_for_processing: 2,
+    num_ingested_docs: 0,
+    num_rejected_docs: 2,
+  };
+
+  const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
+    "case_law_v5_cs_sk",
+    '{"document_id":"a"}\n{"document_id":"b"}',
+  );
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.rejection).toBe("definite");
+  }
 });
 
 test("final-generation ingest rejects missing or partial V2 counters", async () => {
