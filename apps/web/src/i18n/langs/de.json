@@ -889,6 +889,7 @@
       "apiKey": "API-Schlüssel",
       "none": "Keine Einrichtung"
     },
+    "skillNeedsUnavailableTools": "Wird im Chat nicht angeboten. Benötigt ein Tool, das dort nicht verfügbar ist: {tools}",
     "toolNames": {
       "anonymize": "Anonymisieren",
       "createDocx": "DOCX erstellen",

@@ -889,6 +889,7 @@
       "apiKey": "API-võti",
       "none": "Seadistus puudub"
     },
+    "skillNeedsUnavailableTools": "Vestluses seda ei pakuta. See vajab tööriista, mis seal pole saadaval: {tools}",
     "toolNames": {
       "anonymize": "Anonüümimine",
       "createDocx": "Loo DOCX",

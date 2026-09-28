@@ -14,6 +14,7 @@ import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import sendMessage from "@/api/handlers/chat/send-message";
+import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
@@ -64,6 +65,9 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   })
   .get("/model-options", getModelOptions.handler, {
     permissions: getModelOptions.config.permissions,
+  })
+  .get("/skill-availability", listUnavailableChatSkills.handler, {
+    permissions: listUnavailableChatSkills.config.permissions,
   })
   .post("/improve-prompt", improvePrompt.handler, {
     body: improvePrompt.config.body,

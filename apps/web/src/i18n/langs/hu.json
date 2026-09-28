@@ -889,6 +889,7 @@
       "apiKey": "API-kulcs",
       "none": "Nincs beállítás"
     },
+    "skillNeedsUnavailableTools": "A csevegésben nem jelenik meg. Olyan eszközt igényel, amely ott nem érhető el: {tools}",
     "toolNames": {
       "anonymize": "Anonimizálás",
       "createDocx": "DOCX létrehozása",

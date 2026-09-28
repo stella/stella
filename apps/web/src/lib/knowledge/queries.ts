@@ -69,6 +69,11 @@ export const knowledgeKeys = {
       skillId,
       "detail",
     ],
+    // Under `all` so every skill change refreshes it with the list.
+    chatUnavailable: (organizationId: string) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      "chat-unavailable",
+    ],
     revisions: (organizationId: string, skillId: string) => [
       ...knowledgeKeys.skills.all(organizationId),
       skillId,
@@ -793,6 +798,23 @@ export const skillsOptions = (organizationId: string) =>
     },
     initialPageParam: "",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+/**
+ * The caller's skills chat cannot offer, with the tools each lacks. The
+ * server decides this over chat's own tool set; the composer menus only read
+ * it.
+ */
+export const chatUnavailableSkillsOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.chatUnavailable(organizationId),
+    queryFn: async ({ signal }) => {
+      const response = await api.chat["skill-availability"].get({
+        fetch: { signal },
+      });
+      return unwrapEden(response).unavailable;
+    },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

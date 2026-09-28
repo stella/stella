@@ -167,6 +167,10 @@ import {
   hydrateRegistryToolOutputRefs,
   resolveRegistryToolOutputRefs,
 } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
+import {
+  chatToolNamesForSkills,
+  type ChatSkillToolContext,
+} from "@/api/handlers/chat/tools/skill-tool-availability";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -2096,6 +2100,107 @@ export const createSendMessage = (
           toolWorkspaceIds,
           workspaceStatusById,
         });
+        // Reads the assistant makes without an approval, such as a skill
+        // loaded by `load-skill`.
+        const recordReadAuditEvent = createAuditRecorder({
+          execution: {
+            performer: {
+              type: "agent",
+              id: "stella-assistant",
+              name: "Stella AI",
+            },
+            trigger: {
+              type: "user_dispatch",
+              userId: user.id,
+              source: "chat",
+              sourceId: body.threadId,
+            },
+            runId: parsedMessage.message.id,
+          },
+        });
+        // Every input the turn's tool set is built from except the skill
+        // catalog and connector tools, which are known only later. Skill
+        // availability is decided over the same inputs before the catalog
+        // reaches the prompt, so an offered skill always has its tools.
+        const chatToolContext = {
+          createAIAbortSignal: createMeteredAIAbortSignal,
+          organizationId: session.activeOrganizationId,
+          memberRole: memberRole.role,
+          orgAIConfig,
+          promptCachingEnabled,
+          usageLane: turnLane.lane,
+          pinServerValidatedWorkspaceId,
+          requestWorkspaceId: workspaceId,
+          refRegistry,
+          toolDefectMemo,
+          safeDb,
+          scopedDb,
+          threadId: body.threadId,
+          workspaceId,
+          thirdPartyBoundary,
+          excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
+          pastChatScope: resolvePastChatScope({
+            threadWorkspaceId: workspaceId,
+            contextMatterIds: effectiveContextMatterIds,
+          }),
+          userId: user.id,
+          toolWorkspaceIds,
+          activeFile: activeFileForTools,
+          hasActiveDocxEditClient:
+            hasActiveDocxFileClient ||
+            body.activeDraft !== undefined ||
+            body.activeTemplate !== undefined,
+          hasActiveDocxFileClient,
+          docxSuggestionSurface,
+          browserClient: resolveBrowserClientCapability(body.browserClient),
+          editApplyMode,
+          docxEditRepresentation,
+          webSearchEnabled: thread.data.webSearchEnabled,
+          webSearchProviders,
+          disabledNativeToolSlugs,
+          registryDispatch,
+          recordAuditEvent: createAuditRecorder({
+            execution: {
+              // Every tool that receives this recorder is classified as a
+              // mutation and executes only after the current user approves it.
+              approval: {
+                status: "approved",
+                userId: user.id,
+              },
+              performer: {
+                type: "agent",
+                id: "stella-assistant",
+                name: "Stella AI",
+              },
+              trigger: {
+                type: "user_dispatch",
+                userId: user.id,
+                source: "chat",
+                sourceId: body.threadId,
+              },
+              runId: parsedMessage.message.id,
+            },
+            ...(workspaceId === null ? {} : { workspaceId }),
+          }),
+          recordReadAuditEvent,
+          resolveMemorySourceWorkspaceIds: () =>
+            resolveMemorySourceWorkspaceIds({
+              accessibleWorkspaceIds: accessibleSet,
+              contextMatterIds: effectiveContextMatterIds,
+              dataWorkspaceIds: dataScopeAfterIncomingMessage,
+              registeredWorkspaceIds: refRegistry.getRegisteredWorkspaceIds(),
+              workspaceId,
+            }),
+          workspaceStatusById,
+        } satisfies ChatSkillToolContext;
+        let skillToolNames: ReadonlySet<string> | undefined;
+        const offeredToolNamesForSkills = () => {
+          skillToolNames ??= chatToolNamesForSkills({
+            ...chatToolContext,
+            toolScope: body.toolScope,
+          });
+          return skillToolNames;
+        };
         const chatContextResult = await prepareChatContext({
           activeDecision: body.activeDecision,
           activeDraft: body.activeDraft,
@@ -2111,6 +2216,7 @@ export const createSendMessage = (
           latestUserMessageId: parsedMessage.message.id,
           messageWindow: messagesForContextResult.value,
           organizationId: session.activeOrganizationId,
+          offeredToolNamesForSkills,
           safeDb,
           sendMode: body.sendMode,
           toolAvailability: {
@@ -2184,97 +2290,11 @@ export const createSendMessage = (
         // folio-agents `read_document`/`find_text` tools are narrower
         // still — `hasActiveDocxFileClient` only, since Template Studio
         // mounts no watcher to resolve them.
-        // Reads the assistant makes without an approval, such as a skill
-        // loaded by `load-skill`.
-        const recordReadAuditEvent = createAuditRecorder({
-          execution: {
-            performer: {
-              type: "agent",
-              id: "stella-assistant",
-              name: "Stella AI",
-            },
-            trigger: {
-              type: "user_dispatch",
-              userId: user.id,
-              source: "chat",
-              sourceId: body.threadId,
-            },
-            runId: parsedMessage.message.id,
-          },
-        });
         const chatTools = getChatTools({
-          createAIAbortSignal: createMeteredAIAbortSignal,
-          organizationId: session.activeOrganizationId,
-          memberRole: memberRole.role,
-          orgAIConfig,
-          promptCachingEnabled,
-          usageLane: turnLane.lane,
-          pinServerValidatedWorkspaceId,
-          requestWorkspaceId: workspaceId,
-          refRegistry,
-          toolDefectMemo,
-          safeDb,
-          scopedDb,
-          threadId: body.threadId,
-          workspaceId,
-          thirdPartyBoundary,
-          excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
-          pastChatScope: resolvePastChatScope({
-            threadWorkspaceId: workspaceId,
-            contextMatterIds: effectiveContextMatterIds,
-          }),
-          userId: user.id,
-          toolWorkspaceIds,
-          activeFile: activeFileForTools,
-          hasActiveDocxEditClient:
-            hasActiveDocxFileClient ||
-            body.activeDraft !== undefined ||
-            body.activeTemplate !== undefined,
-          hasActiveDocxFileClient,
-          docxSuggestionSurface,
-          browserClient: resolveBrowserClientCapability(body.browserClient),
-          editApplyMode,
-          docxEditRepresentation,
-          webSearchEnabled: thread.data.webSearchEnabled,
-          webSearchProviders,
+          ...chatToolContext,
           externalTools: externalMcpTools?.tools ?? {},
-          disabledNativeToolSlugs,
-          registryDispatch,
           skillMetadata: chatContext.skillMetadata,
           activeSkillContext: chatContext.activeSkillContext,
-          recordAuditEvent: createAuditRecorder({
-            execution: {
-              // Every tool that receives this recorder is classified as a
-              // mutation and executes only after the current user approves it.
-              approval: {
-                status: "approved",
-                userId: user.id,
-              },
-              performer: {
-                type: "agent",
-                id: "stella-assistant",
-                name: "Stella AI",
-              },
-              trigger: {
-                type: "user_dispatch",
-                userId: user.id,
-                source: "chat",
-                sourceId: body.threadId,
-              },
-              runId: parsedMessage.message.id,
-            },
-            ...(workspaceId === null ? {} : { workspaceId }),
-          }),
-          recordReadAuditEvent,
-          resolveMemorySourceWorkspaceIds: () =>
-            resolveMemorySourceWorkspaceIds({
-              accessibleWorkspaceIds: accessibleSet,
-              contextMatterIds: effectiveContextMatterIds,
-              dataWorkspaceIds: dataScopeAfterIncomingMessage,
-              registeredWorkspaceIds: refRegistry.getRegisteredWorkspaceIds(),
-              workspaceId,
-            }),
-          workspaceStatusById,
         });
         // A named scope narrows the streaming turn to its server-defined
         // allowlist (validation above stays broad so persisted tool parts
@@ -2669,6 +2689,8 @@ type PrepareChatContextProps = {
   latestMentions: readonly ChatMention[];
   latestUserMessageId: string;
   messageWindow: ChatMessage[];
+  /** The turn's tool names, for deciding which skills it can offer. */
+  offeredToolNamesForSkills: () => ReadonlySet<string>;
   organizationId: SafeId<"organization">;
   refRegistry: ReturnType<typeof createChatRefRegistry>;
   safeDb: SafeDb;
@@ -2714,6 +2736,7 @@ const prepareChatContext = async ({
   latestMentions,
   latestUserMessageId,
   messageWindow,
+  offeredToolNamesForSkills,
   organizationId,
   refRegistry,
   safeDb,
@@ -2748,6 +2771,7 @@ const prepareChatContext = async ({
         contextMatterIds,
         hasReachableMatter,
         memberRole,
+        offeredToolNamesForSkills,
         organizationId,
         practiceJurisdictions,
         refRegistry,

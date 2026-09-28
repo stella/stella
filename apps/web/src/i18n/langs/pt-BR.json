@@ -889,6 +889,7 @@
       "apiKey": "Chave de API",
       "none": "Sem configuração"
     },
+    "skillNeedsUnavailableTools": "Não é oferecida no chat. Precisa de uma ferramenta que não está disponível lá: {tools}",
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Criar DOCX",
