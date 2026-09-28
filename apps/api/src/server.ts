@@ -86,6 +86,7 @@ import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templ
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
+import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
@@ -462,6 +463,7 @@ const api = new Elysia()
       .use(ratesRoute)
       .use(expensesRoute)
       .use(invoicesRoute)
+      .use(sellerProfilesRoute)
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
       .use(sharepointRoute)

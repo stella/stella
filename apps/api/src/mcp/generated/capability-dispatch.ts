@@ -784,6 +784,25 @@ export const CAPABILITY_DISPATCH = {
   "reports.views.export": {
     load: async () => await import("@/api/handlers/reports/views/export"),
   },
+  "seller-profiles.archive": {
+    load: async () => await import("@/api/handlers/seller-profiles/archive"),
+  },
+  "seller-profiles.create": {
+    load: async () => await import("@/api/handlers/seller-profiles/create"),
+  },
+  "seller-profiles.default.update": {
+    load: async () =>
+      await import("@/api/handlers/seller-profiles/default/update"),
+  },
+  "seller-profiles.get": {
+    load: async () => await import("@/api/handlers/seller-profiles/get"),
+  },
+  "seller-profiles.list": {
+    load: async () => await import("@/api/handlers/seller-profiles/list"),
+  },
+  "seller-profiles.update": {
+    load: async () => await import("@/api/handlers/seller-profiles/update"),
+  },
   "signals.acceptances.create": {
     load: async () => await import("@/api/handlers/signals/acceptances/create"),
   },

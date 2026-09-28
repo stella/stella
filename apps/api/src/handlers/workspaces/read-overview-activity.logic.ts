@@ -193,6 +193,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   rate_table: null,
   report_export: null,
   saved_search: null,
+  seller_profile: null,
   signal: null,
   style_set: null,
   template: null,
