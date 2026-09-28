@@ -546,7 +546,7 @@
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
       },
-      "oracle": "chat.provider.results-stable"
+      "oracle": "chat.provider.transcript-settled"
     },
     {
       "id": "superseding-turn-opens-with-stored-message",
@@ -995,6 +995,20 @@
         "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
       },
       "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "stored-result-content-stable",
+      "fix": "#4007",
+      "behaviour": "The result that closes a call of a turn that already ended exists only for the model and is rebuilt on every request, so it reads the same each time instead of changing an earlier turn's result.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "replace": "    stepResults.push(errorToolResult(part.id, `${UNRESOLVED_CALL_ERROR} ${String(performance.now())}`));",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an ask-user card that still waits"
+      },
+      "oracle": "chat.provider.results-stable"
     }
   ]
 }
