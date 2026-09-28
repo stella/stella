@@ -655,7 +655,7 @@ const decisionMismatchCount = async (
     const derivedKeys = new Set(
       identifiers.map(
         (identifier) =>
-          `${identifier.type}\u0000${normalizeDecisionIdentifier(identifier)}`,
+          `${identifier.type}\u0000${normalizeDecisionIdentifierIn(row.country, identifier)}`,
       ),
     );
     const actual = new Set(
