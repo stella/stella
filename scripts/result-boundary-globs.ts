@@ -132,6 +132,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
+  "packages/invoicing/src/**/*.ts",
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
