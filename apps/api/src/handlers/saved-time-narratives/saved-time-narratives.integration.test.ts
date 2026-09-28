@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { savedTimeNarratives } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -38,10 +38,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
-    for (const id of createdIds) {
+    if (createdIds.length > 0) {
       await testDb
         .delete(savedTimeNarratives)
-        .where(eq(savedTimeNarratives.id, id));
+        .where(inArray(savedTimeNarratives.id, createdIds));
     }
   } finally {
     await releaseRlsFixture();
