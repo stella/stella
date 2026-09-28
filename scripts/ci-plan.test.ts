@@ -217,6 +217,7 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
     "apps/web/src/routes/index.tsx",
     "apps/web/src/routes/law/route.tsx",
     "apps/web/vite.config.ts",
+    "apps/web/route-tree.config.ts",
     "apps/web/scripts/generate-route-tree.ts",
     "apps/web/src/routeTree.gen.ts",
     "bun.lock",

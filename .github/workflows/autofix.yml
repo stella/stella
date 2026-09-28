@@ -160,7 +160,7 @@ jobs:
         run: |
           set -euo pipefail
           files="$(gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename')"
-          inputs='^(apps/api/|packages/|apps/web/src/(generated/|routes/|routeTree\.gen\.ts$)|apps/web/(package\.json|vite\.config\.ts|scripts/generate-route-tree\.ts)$|\.oxfmtrc\.json$|scripts/(ownership|design-tokens-doc)\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
+          inputs='^(apps/api/|packages/|apps/web/src/(generated/|routes/|routeTree\.gen\.ts$)|apps/web/(package\.json|vite\.config\.ts|route-tree\.config\.ts|scripts/generate-route-tree\.ts)$|\.oxfmtrc\.json$|scripts/(ownership|design-tokens-doc)\.ts$|DESIGN\.md$|docs/(capability-coverage|module-ownership)\.md$|chatgpt-app-submission\.json$|bun\.lock$|package\.json$)'
           if [[ "$(wc -l <<<"$files")" -ge 3000 ]] || grep -qE "$inputs" <<<"$files"; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else

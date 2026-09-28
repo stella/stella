@@ -268,7 +268,7 @@ describe("derived-file regeneration boundary", () => {
       "apps/api/",
       "packages/",
       "apps/web/src/(generated/|routes/|routeTree",
-      String.raw`apps/web/(package\.json|vite\.config\.ts|scripts/generate-route-tree\.ts)$`,
+      String.raw`apps/web/(package\.json|vite\.config\.ts|route-tree\.config\.ts|scripts/generate-route-tree\.ts)$`,
       String.raw`\.oxfmtrc\.json$`,
       String.raw`scripts/(ownership|design-tokens-doc)\.ts$`,
       String.raw`bun\.lock$`,

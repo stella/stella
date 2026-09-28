@@ -335,7 +335,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/src/routeTree.gen.ts|bun.lock)
+              apps/web/src/routes/*|apps/web/vite.config.ts|apps/web/route-tree.config.ts|apps/web/scripts/generate-route-tree.ts|apps/web/src/routeTree.gen.ts|bun.lock)
                 route_tree_required=true
                 ;;
             esac

@@ -51,6 +51,7 @@ export const DOC_SOURCES = {
       "@tanstack/react-table",
       "@tanstack/react-table-devtools",
       "@tanstack/react-virtual",
+      "@tanstack/router-generator",
       "@tanstack/table-core",
     ],
     markdownPages: {

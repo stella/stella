@@ -4,8 +4,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ROUTE_TREE_GENERATOR_OPTIONS } from "../route-tree.config.ts";
+
 const webRoot = fileURLToPath(new URL("..", import.meta.url));
-const output = path.join(webRoot, "src/routeTree.gen.ts");
+const output = path.join(
+  webRoot,
+  ROUTE_TREE_GENERATOR_OPTIONS.generatedRouteTree,
+);
 const check = process.argv.slice(2).includes("--check");
 
 if (process.argv.slice(2).some((arg) => arg !== "--check")) {
@@ -22,10 +27,7 @@ const generatedRouteTree = checkDirectory
 
 try {
   const config = getConfig(
-    {
-      routesDirectory: "src/routes",
-      generatedRouteTree,
-    },
+    { ...ROUTE_TREE_GENERATOR_OPTIONS, generatedRouteTree },
     webRoot,
   );
   await new Generator({ config, root: webRoot }).run();

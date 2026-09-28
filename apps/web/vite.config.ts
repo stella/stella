@@ -18,6 +18,7 @@ import {
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 
 import { REACT_COMPILER_OPTIONS } from "./react-compiler-options.ts";
+import { ROUTE_TREE_GENERATOR_OPTIONS } from "./route-tree.config.ts";
 
 const APP_ROOT = import.meta.dirname;
 const BUN_GLOBAL_STORE_ROOT = path.resolve(
@@ -325,6 +326,7 @@ export default defineConfig(({ mode }) => {
     ensurePluginOption(
       tanstackStart({
         router: {
+          ...ROUTE_TREE_GENERATOR_OPTIONS,
           codeSplittingOptions: {
             defaultBehavior: [
               ["component"],
