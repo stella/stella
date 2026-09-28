@@ -125,6 +125,45 @@ describe("a model's placeholder in an optional field", () => {
     });
   });
 
+  test("a null is omitted though a closed sibling branch that cannot take the value declares it", () => {
+    // The sibling's required fields are all present, so only the field it
+    // does not declare (`d`) rules it out.
+    const union = {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            d: { type: "string", enum: ["fast", "slow"] },
+            a: { type: "integer" },
+            b: { type: "boolean" },
+          },
+        },
+        {
+          type: "object",
+          properties: {
+            b: { type: "boolean" },
+            c: {
+              type: "object",
+              properties: { a: { type: "string" } },
+              additionalProperties: false,
+            },
+            a: { anyOf: [{ type: ["string", "null"] }, { type: "boolean" }] },
+          },
+          required: ["b", "c"],
+          additionalProperties: false,
+        },
+      ],
+    };
+    expect(
+      withModelPlaceholdersOmitted(union, {
+        d: "fast",
+        b: true,
+        c: {},
+        a: null,
+      }),
+    ).toEqual({ d: "fast", b: true, c: {} });
+  });
+
   test("each null is kept by a branch declaring its own field", () => {
     const union = {
       anyOf: [

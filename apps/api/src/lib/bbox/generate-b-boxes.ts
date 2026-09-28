@@ -6,6 +6,7 @@ import type {
   GenerateBBoxesProps,
   GenerateBBoxesResult,
 } from "@/api/lib/bbox/generate-b-boxes-shared";
+import { savePdfForModelInput } from "@/api/lib/files/pdf-signatures";
 
 export const generateBBoxes = async ({
   abortSignal,
@@ -18,7 +19,7 @@ export const generateBBoxes = async ({
 }: GenerateBBoxesProps): Promise<GenerateBBoxesResult> => {
   const pagePdf = await pdf.extractPages([pageNumber - 1]);
   const page = pagePdf.getPage(0);
-  const pdfData = await pagePdf.save();
+  const pdfData = await savePdfForModelInput(pagePdf);
 
   if (!page) {
     panic(`Page ${pageNumber} doesn't exist in the PDF`);

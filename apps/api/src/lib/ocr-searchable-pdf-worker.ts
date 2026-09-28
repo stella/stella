@@ -2,7 +2,9 @@
  * Sandboxed searchable-PDF worker.
  *
  * stdin: four-byte big-endian JSON length, OCR payload JSON, source PDF bytes
- * stdout: source PDF with an invisible OCR text layer
+ * stdout: source PDF with an invisible OCR text layer, or the source unchanged
+ *         when it is signed or encrypted; the OCR text then lives only in the
+ *         extracted-text and search data
  */
 
 import { PDF } from "@libpdf/core";
@@ -12,6 +14,10 @@ import type {
   DocumentOcrLine,
   DocumentOcrPayload,
 } from "@/api/lib/document-processing-contract";
+import {
+  findPdfRewriteBlocker,
+  savePdfRewrite,
+} from "@/api/lib/files/pdf-signatures";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -124,17 +130,18 @@ const parseInput = (
 const pageHasNativeText = (page: ReturnType<PDF["getPages"]>[number]) =>
   page.extractText().lines.some((line) => line.text.trim().length > 0);
 
-try {
-  const fontPath =
-    process.argv.at(2) ?? fail("Searchable-PDF font is not configured");
-  const { payload, source } = parseInput(
-    new Uint8Array(await Bun.stdin.arrayBuffer()),
-  );
-  const pdf = await PDF.load(source);
+const addTextLayer = async ({
+  fontPath,
+  payload,
+  pdf,
+  source,
+}: {
+  fontPath: string;
+  payload: DocumentOcrPayload;
+  pdf: PDF;
+  source: Uint8Array;
+}): Promise<Uint8Array> => {
   const pages = pdf.getPages();
-  if (pages.length !== payload.pages.length) {
-    fail("OCR page count does not match source PDF");
-  }
   const font = pdf.embedFont(await Bun.file(fontPath).bytes());
 
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
@@ -170,7 +177,29 @@ try {
     }
   }
 
-  const output = Buffer.from(await pdf.save({ subsetFonts: true }));
+  const saved = await savePdfRewrite({
+    pdf,
+    source,
+    options: { subsetFonts: true },
+  });
+  return saved.status === "saved" ? saved.bytes : source;
+};
+
+try {
+  const fontPath =
+    process.argv.at(2) ?? fail("Searchable-PDF font is not configured");
+  const { payload, source } = parseInput(
+    new Uint8Array(await Bun.stdin.arrayBuffer()),
+  );
+  const pdf = await PDF.load(source);
+  if (pdf.getPageCount() !== payload.pages.length) {
+    fail("OCR page count does not match source PDF");
+  }
+  const outputBytes =
+    findPdfRewriteBlocker({ pdf, source }) === null
+      ? await addTextLayer({ fontPath, payload, pdf, source })
+      : source;
+  const output = Buffer.from(outputBytes);
   await new Promise<void>((resolve, reject) => {
     process.stdout.write(output, (error) => {
       if (error) {

@@ -10,7 +10,57 @@
     {
       "request": {
         "method": "POST",
-        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream"
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream",
+        "shape": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "text": "[prompt]"
+                  }
+                ]
+              }
+            ],
+            "inferenceConfig": {
+              "maxTokens": 16,
+              "temperature": 0
+            },
+            "toolConfig": {
+              "tools": [
+                {
+                  "toolSpec": {
+                    "name": "mcp__external__delete",
+                    "inputSchema": {
+                      "json": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": ["name"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "description": "Delete a draft by name."
+                  }
+                }
+              ],
+              "toolChoice": {
+                "auto": {}
+              }
+            }
+          }
+        }
       },
       "response": {
         "status": 200,

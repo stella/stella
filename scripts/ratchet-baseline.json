@@ -134,7 +134,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 261,
+    "count": 262,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -248,7 +248,8 @@
       "apps/api/src/lib/legal-search/corpus-tombstones.ts": 1,
       "apps/api/src/lib/legal-search/reconciliation-store.ts": 6,
       "apps/api/src/lib/legal-search/sk-document-backfill.ts": 4,
-      "apps/api/src/lib/lists/verification/run-queue.ts": 5,
+      "apps/api/src/lib/lists/verification/run-persistence.ts": 3,
+      "apps/api/src/lib/lists/verification/run-queue.ts": 3,
       "apps/api/src/lib/mcp-upstream/connections.ts": 3,
       "apps/api/src/lib/organization-storage-teardown.ts": 4,
       "apps/api/src/lib/pending-upload-keys.ts": 1,
