@@ -21,12 +21,14 @@ const DIRECTORY_FILES: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-const plan = (argv: readonly string[]) =>
+const planWithMissing = (argv: readonly string[]) =>
   planTestRuns({
     argv,
     pathKind: (arg) => ON_DISK[arg] ?? "missing",
     testFilesIn: (directory) => DIRECTORY_FILES[directory] ?? [],
   });
+
+const plan = (argv: readonly string[]) => planWithMissing(argv).runs;
 
 describe("planTestRuns", () => {
   test("without paths, runs every kind and passes flags to each", () => {
@@ -121,7 +123,24 @@ describe("planTestRuns", () => {
         argv: ["src/features/avt"],
         pathKind: () => "directory",
         testFilesIn: () => [],
-      }),
+      }).runs,
     ).toEqual([]);
+  });
+
+  test("reports a mistyped path instead of running it as a filter", () => {
+    expect(planWithMissing(["src/features/avt/verdcit.test.ts"])).toEqual({
+      runs: [],
+      missingPaths: ["src/features/avt/verdcit.test.ts"],
+    });
+    expect(planWithMissing(["format.test.ts", "-t", "x"]).missingPaths).toEqual(
+      ["format.test.ts"],
+    );
+  });
+
+  test("a bare name that is not a path stays a filter", () => {
+    const { runs, missingPaths } = planWithMissing(["verdict"]);
+
+    expect(missingPaths).toEqual([]);
+    expect(runs.map((run) => run.label)).toEqual(["unit", "dom", "e2e-unit"]);
   });
 });

@@ -15,6 +15,12 @@ export type TestRun = {
 
 export type PathKind = "file" | "directory" | "missing";
 
+export type TestRunPlan = {
+  readonly runs: readonly TestRun[];
+  /** Path-like arguments that name nothing on disk. */
+  readonly missingPaths: readonly string[];
+};
+
 type TestRunPlanInput = {
   readonly argv: readonly string[];
   /** Whether a positional argument names a file or directory on disk. */
@@ -44,6 +50,16 @@ const normalize = (filePath: string): string =>
 
 const isDomTest = (filePath: string): boolean =>
   filePath.endsWith(DOM_TEST_SUFFIX);
+
+/**
+ * A missing argument that looks like a path is a mistyped path, not a name
+ * filter: passing it on would let Bun match some other file by substring.
+ */
+const looksLikePath = (arg: string): boolean =>
+  arg.includes("/") ||
+  arg.includes("\\") ||
+  arg.endsWith(".test.ts") ||
+  arg.endsWith(".test.tsx");
 
 const isE2eUnitTest = (filePath: string): boolean => {
   const normalized = normalize(filePath);
@@ -78,15 +94,17 @@ const VALUE_OPTIONS = new Set([
  * With no paths, the three default runs, each carrying the pass-through flags.
  * With paths, only the named files, grouped by kind; a directory expands to
  * the test files under it. An argument is a path only when it exists on disk
- * and is not the value of an option such as `-t "<name>"`.
+ * and is not the value of an option such as `-t "<name>"`; a path-like
+ * argument that names nothing is reported rather than run as a filter.
  */
 export const planTestRuns = ({
   argv,
   pathKind,
   testFilesIn,
-}: TestRunPlanInput): readonly TestRun[] => {
+}: TestRunPlanInput): TestRunPlan => {
   const flags: string[] = [];
   const files: string[] = [];
+  const missingPaths: string[] = [];
   let namedPaths = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index] ?? panic("Argument index out of range");
@@ -109,16 +127,25 @@ export const planTestRuns = ({
     } else if (kind === "directory") {
       namedPaths = true;
       files.push(...testFilesIn(arg).map(normalize));
+    } else if (looksLikePath(arg)) {
+      missingPaths.push(arg);
     } else {
       flags.push(arg);
     }
   }
 
+  if (missingPaths.length > 0) {
+    return { runs: [], missingPaths };
+  }
+
   if (!namedPaths) {
-    return DEFAULT_RUNS.map((run) => ({
-      label: run.label,
-      args: [...run.args, ...flags],
-    }));
+    return {
+      runs: DEFAULT_RUNS.map((run) => ({
+        label: run.label,
+        args: [...run.args, ...flags],
+      })),
+      missingPaths,
+    };
   }
 
   const unique = [...new Set(files)];
@@ -134,7 +161,7 @@ export const planTestRuns = ({
   const toPath = (file: string): string =>
     path.win32.isAbsolute(file) ? file : `./${file}`;
 
-  return [
+  const runs = [
     {
       label: "unit",
       args: [...unit.map(toPath), ...flags],
@@ -153,4 +180,5 @@ export const planTestRuns = ({
   ]
     .filter((run) => run.count > 0)
     .map(({ label, args }) => ({ label, args }));
+  return { runs, missingPaths };
 };

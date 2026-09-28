@@ -27,7 +27,15 @@ const testFilesIn = (directory: string): readonly string[] =>
     .map((file) => path.join(directory, file))
     .toSorted();
 
-const runs = planTestRuns({ argv: Bun.argv.slice(2), pathKind, testFilesIn });
+const { runs, missingPaths } = planTestRuns({
+  argv: Bun.argv.slice(2),
+  pathKind,
+  testFilesIn,
+});
+if (missingPaths.length > 0) {
+  console.error(`No such test path: ${missingPaths.join(", ")}`);
+  process.exit(1);
+}
 if (runs.length === 0) {
   console.error("No test files matched the given paths.");
   process.exit(1);
