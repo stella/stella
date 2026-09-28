@@ -340,6 +340,7 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
       "citationAuthority",
       "country",
       "court",
+      "courtId",
       "id",
       "languageGroupKey",
     ]);

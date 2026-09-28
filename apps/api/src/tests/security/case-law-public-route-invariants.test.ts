@@ -225,6 +225,11 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The read handle the gated reads run through.",
   },
+  "apps/api/src/lib/case-law/decision-court-id-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "The court-id CHECK fragment and the jurisdictions it covers; no query.",
+  },
   "apps/api/src/lib/case-law/decision-row-columns.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The column list a public row is selected with; no query.",
