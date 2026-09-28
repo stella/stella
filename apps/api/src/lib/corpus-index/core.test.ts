@@ -95,8 +95,26 @@ describe("splitIngestRequests", () => {
     const group = [builtRow("huge", 1, "x".repeat(500))];
 
     expect(() => splitIngestRequests(group, 100)).toThrow(
-      "exceeding the 100-byte request limit",
+      "exceeding the 100-byte document limit",
     );
+  });
+
+  test("a larger allowed document occupies its own request", () => {
+    const oversized = builtRow("large", 1, "x".repeat(120));
+    const group = [
+      builtRow("before", 1, "x"),
+      oversized,
+      builtRow("after", 1, "x"),
+    ];
+    const requests = splitIngestRequests(group, 100, {
+      maxSingleDocumentBytes: 200,
+    });
+
+    expect(
+      requests.map(({ entries }) => entries.map(({ row }) => row.id)),
+    ).toEqual([["before"], ["large"], ["after"]]);
+    expect(utf8Bytes(requests[1]?.ndjson ?? "")).toBeGreaterThan(100);
+    expect(ingestedIds(requests)).toEqual(["before:0", "large:0", "after:0"]);
   });
 
   test("the budget counts UTF-8 bytes, not code units", () => {

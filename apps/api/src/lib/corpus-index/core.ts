@@ -32,11 +32,15 @@ class IngestDocumentTooLargeError extends TaggedError(
  *
  * Splits at document boundaries, including within a row. The request metadata
  * retains the row for each part so callers can track all requests contributing
- * to that row.
+ * to that row. A document allowed above the batch budget occupies a request
+ * alone, up to the separate single-document ceiling.
  */
+type SplitIngestRequestOptions = { maxSingleDocumentBytes?: number };
+
 export const splitIngestRequests = <TRow>(
   group: readonly BuiltRow<TRow>[],
   maxBytes: number,
+  { maxSingleDocumentBytes = maxBytes }: SplitIngestRequestOptions = {},
 ): IngestRequest<TRow>[] => {
   const requests: IngestRequest<TRow>[] = [];
   let entries: BuiltRow<TRow>[] = [];
@@ -63,9 +67,9 @@ export const splitIngestRequests = <TRow>(
       const line = JSON.stringify(doc);
       // Measure UTF-8 bytes: legal text is often non-ASCII.
       const lineBytes = Buffer.byteLength(line, "utf-8");
-      if (lineBytes > maxBytes) {
+      if (lineBytes > maxSingleDocumentBytes) {
         throw new IngestDocumentTooLargeError({
-          message: `An ingest document is ${lineBytes} bytes, exceeding the ${maxBytes}-byte request limit`,
+          message: `An ingest document is ${lineBytes} bytes, exceeding the ${maxSingleDocumentBytes}-byte document limit`,
         });
       }
       const separatorBytes = lines.length === 0 ? 0 : 1;

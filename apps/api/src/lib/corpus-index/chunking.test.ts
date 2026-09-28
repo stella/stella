@@ -187,6 +187,16 @@ describe("chunkLegislationDocument preserves and bounds legislation", () => {
     expect(chunks.every(({ anchorId }) => anchorId === null)).toBe(true);
     expectLegislationBudget(chunks.map(({ text }) => text));
   });
+
+  test("streams dense fallback boundaries across a large source", () => {
+    const source = "x\n\n".repeat(4 * 1024 * 1024);
+    const chunks = legislationChunks(source);
+    const texts = chunks.map(({ text }) => text);
+
+    expect(texts.join("")).toBe(source);
+    expect(chunks.length).toBeGreaterThan(8);
+    expectLegislationBudget(texts);
+  });
 });
 
 describe("chunkDocument preserves the document", () => {

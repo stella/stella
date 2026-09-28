@@ -208,6 +208,69 @@ test("append requests are byte-planned before any external effect", () => {
   }
 });
 
+test("single-document cap admits exactly 9.5 MiB and rejects the next byte", () => {
+  const base = {
+    document_id: "0198e331-e578-7000-8000-000000000011",
+    projection_revision: FIRST_REVISION,
+    text: "",
+  };
+  const overhead = Buffer.byteLength(JSON.stringify(base), "utf-8");
+  const text = "x".repeat(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES - overhead,
+  );
+  const atCap = planCorpusProjectionAppendRequests([
+    {
+      revision: FIRST_REVISION,
+      documents: [{ ...base, text }],
+    },
+  ]);
+  expect(atCap.isOk()).toBe(true);
+  if (atCap.isOk()) {
+    expect(atCap.value).toHaveLength(1);
+    expect(Buffer.byteLength(atCap.value[0]?.ndjson ?? "", "utf-8")).toBe(
+      CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+    );
+  }
+  const overCap = planCorpusProjectionAppendRequests([
+    {
+      revision: FIRST_REVISION,
+      documents: [{ ...base, text: `${text}x` }],
+    },
+  ]);
+  expect(overCap.isErr()).toBe(true);
+  if (overCap.isErr()) {
+    expect(overCap.error.code).toBe("revision_too_large");
+  }
+});
+
+test("multi-document requests stay within 8 MiB around a large singleton", () => {
+  const documents = [
+    {
+      document_id: "0198e331-e578-7000-8000-000000000011",
+      projection_revision: FIRST_REVISION,
+      text: "x".repeat(LIMITS.corpusIndexIngestMaxBytes),
+    },
+    {
+      document_id: "0198e331-e578-7000-8000-000000000012",
+      projection_revision: FIRST_REVISION,
+      text: "small",
+    },
+  ];
+  const planned = planCorpusProjectionAppendRequests([
+    { revision: FIRST_REVISION, documents },
+  ]);
+  expect(planned.isOk()).toBe(true);
+  if (planned.isOk()) {
+    expect(planned.value).toHaveLength(2);
+    expect(
+      Buffer.byteLength(planned.value[0]?.ndjson ?? "", "utf-8"),
+    ).toBeGreaterThan(CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES);
+    expect(
+      Buffer.byteLength(planned.value[1]?.ndjson ?? "", "utf-8"),
+    ).toBeLessThanOrEqual(CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES);
+  }
+});
+
 test("one revision is split into requests under both byte ceilings", () => {
   const entry = largeRevisionEntry(FIRST_REVISION);
   const planned = planCorpusProjectionAppendRequests([entry]);

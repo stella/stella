@@ -8,7 +8,6 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
-import { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import type {
@@ -580,44 +579,34 @@ const prepareProjectionEntry = (
   material: CorpusProjectionMaterial,
   payload: Awaited<ReturnType<typeof loadCorpusProjectionPayload>>,
 ): Result<PreparedProjectionEntry, PreparedProjectionFailure> => {
-  // The `catch` mapper is what keeps the thrown error itself: the one-argument
-  // form wraps the cause, and the `instanceof ChunkBudgetError` below — the
-  // difference between blocking one oversized revision and panicking the whole
-  // cycle — would never match again.
-  const built = Result.try({
-    catch: (cause: unknown) => cause,
-    try: () => {
-      switch (material.family) {
-        case "case_law":
-          return buildCorpusProjectionDocuments({
-            family: material.family,
-            manifest: material.manifest,
-            input: material.input,
-            payload,
-            revision: material.lease.intentId,
-          });
-        case "legislation":
-          return buildCorpusProjectionDocuments({
-            family: material.family,
-            manifest: material.manifest,
-            input: material.input,
-            payload,
-            revision: material.lease.intentId,
-          });
-        default:
-          material satisfies never;
-          return panic(`Unhandled material: ${String(material)}`);
-      }
-    },
-  });
-  if (built.isErr()) {
-    if (built.error instanceof ChunkBudgetError) {
-      return Result.err({
-        kind: "revision_too_large",
-        message: "projection payload exceeds the structural build ceiling",
-      });
+  const built = (() => {
+    switch (material.family) {
+      case "case_law":
+        return buildCorpusProjectionDocuments({
+          family: material.family,
+          manifest: material.manifest,
+          input: material.input,
+          payload,
+          revision: material.lease.intentId,
+        });
+      case "legislation":
+        return buildCorpusProjectionDocuments({
+          family: material.family,
+          manifest: material.manifest,
+          input: material.input,
+          payload,
+          revision: material.lease.intentId,
+        });
+      default:
+        material satisfies never;
+        return panic(`Unhandled material: ${String(material)}`);
     }
-    return panic("Corpus projection builder violated its manifest contract");
+  })();
+  if (built.isErr()) {
+    return Result.err({
+      kind: "revision_too_large",
+      message: "projection payload exceeds the structural build ceiling",
+    });
   }
   const entry = {
     revision: material.lease.intentId,

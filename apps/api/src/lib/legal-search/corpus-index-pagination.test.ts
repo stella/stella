@@ -651,11 +651,8 @@ describe("split legislation stays one hit across cursor pages", () => {
     const acts = ["act-a", "act-b", "act-c", "act-d"];
     // Split acts can have many matching passages. Interleaving the hits also
     // ensures grouping does not depend on passages being adjacent.
-    engineHits = [0, 1, 2].flatMap((passage) =>
-      acts.map((documentId) => ({
-        document_id: documentId,
-        chunk_id: `${documentId}:${passage}`,
-      })),
+    engineHits = [0, 1, 2].flatMap(() =>
+      acts.map((documentId) => ({ document_id: documentId })),
     );
 
     const readLegislationPage = async (parsedCursor: SearchCursor | null) =>

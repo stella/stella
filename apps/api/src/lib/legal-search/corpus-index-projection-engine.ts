@@ -164,10 +164,10 @@ export const planCorpusProjectionAppendRequests = (
         );
       }
       const lineBytes = Buffer.byteLength(JSON.stringify(document), "utf-8");
-      if (lineBytes > CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES) {
+      if (lineBytes > CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES) {
         return invalidAppend(
           "revision_too_large",
-          "one corpus projection document exceeds the ingest request ceiling",
+          "one corpus projection document exceeds the single-document ceiling",
           revisions,
         );
       }
@@ -185,6 +185,10 @@ export const planCorpusProjectionAppendRequests = (
   const requests = splitIngestRequests(
     entries.map((entry) => ({ row: entry, docs: [...entry.documents] })),
     CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+    {
+      maxSingleDocumentBytes:
+        CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+    },
   );
   return Result.ok(
     requests.map(({ entries: requestEntries, ndjson }) => ({
