@@ -124,11 +124,11 @@ test(
   async () => {
     for (const { directory, indexName } of [
       {
-        directory: "20260928160000_case_law_live_legacy_raw_source_idx",
+        directory: "20260928171000_case_law_live_legacy_raw_source_idx",
         indexName: "case_law_decisions_live_legacy_raw_source_idx",
       },
       {
-        directory: "20260928160100_case_law_source_id_page_idx",
+        directory: "20260928171100_case_law_source_id_page_idx",
         indexName: "case_law_decisions_source_id_page_idx",
       },
     ]) {
