@@ -704,7 +704,7 @@
     },
     {
       "id": "unlisted-stop-answer-finishes",
-      "fix": "unlisted stop reasons",
+      "fix": "#4053",
       "behaviour": "A response the provider ends with a stop reason no SDK lists yet finishes when the step wrote an answer and called no tool, instead of failing the turn.",
       "status": "active",
       "file": "src/lib/chat/provider-stop-reasons.ts",
@@ -718,7 +718,7 @@
     },
     {
       "id": "unlisted-stop-silent-fails",
-      "fix": "unlisted stop reasons",
+      "fix": "#4053",
       "behaviour": "A response the provider ends with a stop reason no SDK lists yet fails when the step wrote nothing the user sees, instead of finishing as an empty answer.",
       "status": "active",
       "file": "src/lib/chat/provider-stop-reasons.ts",
