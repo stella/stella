@@ -11,6 +11,7 @@ const ON_DISK: Readonly<Record<string, PathKind>> = {
   "src/features/avt": "directory",
   scripts: "directory",
   "/repo/apps/web/e2e/unit/deferred-cleanup.test.ts": "file",
+  "C:\\repo\\apps\\web\\src\\lib\\format.test.ts": "file",
 };
 
 const DIRECTORY_FILES: Readonly<Record<string, readonly string[]>> = {
@@ -105,6 +106,12 @@ describe("planTestRuns", () => {
           "/repo/apps/web/e2e/unit/deferred-cleanup.test.ts",
         ],
       },
+    ]);
+  });
+
+  test("keeps drive-rooted absolute paths as given", () => {
+    expect(plan(["C:\\repo\\apps\\web\\src\\lib\\format.test.ts"])).toEqual([
+      { label: "unit", args: ["C:/repo/apps/web/src/lib/format.test.ts"] },
     ]);
   });
 

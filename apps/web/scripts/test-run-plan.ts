@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import path from "node:path";
 
 /**
  * Splits `bun run test` arguments into the `bun test` invocations the web
@@ -129,9 +130,9 @@ export const planTestRuns = ({
     (file) => !isDomTest(file) && !isE2eUnitTest(file),
   );
   // Bun reads a bare relative name as a filter, so relative paths are pinned
-  // with `./`; absolute paths already resolve.
+  // with `./`; absolute paths (POSIX, drive-rooted or UNC) already resolve.
   const toPath = (file: string): string =>
-    file.startsWith("/") ? file : `./${file}`;
+    path.win32.isAbsolute(file) ? file : `./${file}`;
 
   return [
     {
