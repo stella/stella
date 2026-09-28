@@ -237,7 +237,6 @@ describe("reading a reporter citation entry", () => {
 const reporterRef = (value: string) =>
   ({ type: "identifier", kind: "reporter", value }) as const;
 
-
 const hit = (caseNumber: string, ecli: string | null = null) => ({
   caseNumber,
   ecli,
@@ -421,9 +420,8 @@ describe("the hits that are the named decision", () => {
       expect(
         exactDecisionMatches(
           { type: "identifier", kind: "neutral", value: "[2020] uksc 1" },
-          [
-          neutral,
-        ]),
+          [neutral],
+        ),
       ).toEqual([neutral]);
       expect(
         exactDecisionMatches(reporterRef("[2020] UKSC 1"), [neutral]),

@@ -115,35 +115,33 @@ beforeAll(
         languageGroupKey: "identity-reported",
       },
     ]);
-    await db
-      .insert(caseLawDecisionIdentifiers)
-      .values([
-        identifierRow(
-          "CZE",
-          supremeId,
-          DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-          "23 Cdo 1572/2012",
-        ),
-        identifierRow(
-          "CZE",
-          supremeId,
-          DECISION_IDENTIFIER_TYPES.ECLI,
-          "ECLI:CZ:NS:2012:23.CDO.1572.2012.1",
-        ),
-        identifierRow(
-          "USA",
-          reportedId,
-          DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
-          "347 U. S. Rep. 483",
-        ),
-        // The other spelling the plenary decision declares.
-        identifierRow(
-          "CZE",
-          plenaryId,
-          DECISION_IDENTIFIER_TYPES.ECLI,
-          "ECLI:CZ:US:2011:Pl.US.24.10",
-        ),
-      ]);
+    await db.insert(caseLawDecisionIdentifiers).values([
+      identifierRow(
+        "CZE",
+        supremeId,
+        DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        "23 Cdo 1572/2012",
+      ),
+      identifierRow(
+        "CZE",
+        supremeId,
+        DECISION_IDENTIFIER_TYPES.ECLI,
+        "ECLI:CZ:NS:2012:23.CDO.1572.2012.1",
+      ),
+      identifierRow(
+        "USA",
+        reportedId,
+        DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        "347 U. S. Rep. 483",
+      ),
+      // The other spelling the plenary decision declares.
+      identifierRow(
+        "CZE",
+        plenaryId,
+        DECISION_IDENTIFIER_TYPES.ECLI,
+        "ECLI:CZ:US:2011:Pl.US.24.10",
+      ),
+    ]);
   },
   { timeout: DB_TEST_TIMEOUT_MS },
 );
