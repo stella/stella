@@ -2,8 +2,8 @@ import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { narrativeLanguageSchema } from "@/api/lib/narrative-language";
 
-import { narrativeLanguageSchema } from "./narrative-language";
 import { createTimeEntryHandler } from "./time-entry-insert";
 
 const createTimeEntryBodySchema = t.Object({

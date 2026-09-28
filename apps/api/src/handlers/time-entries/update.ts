@@ -11,7 +11,6 @@ import {
   canApproveTimeEntries,
   canManageTimeEntry,
 } from "@/api/handlers/time-entries/authorization";
-import { narrativeLanguageSchema } from "@/api/handlers/time-entries/narrative-language";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -26,6 +25,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { narrativeLanguageSchema } from "@/api/lib/narrative-language";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";

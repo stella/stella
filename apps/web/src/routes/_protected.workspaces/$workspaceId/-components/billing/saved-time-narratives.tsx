@@ -5,7 +5,6 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { BookmarkIcon, BookmarkPlusIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -25,6 +24,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { BookmarkIcon, BookmarkPlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
@@ -119,7 +119,9 @@ export const SavedTimeNarratives = ({
     onError: reportError,
   });
 
-  const items = savedQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const items = savedQuery.data
+    ? savedQuery.data.pages.flatMap((page) => page.items)
+    : [];
   const isolateName = (savedName: string) => `\u2068${savedName}\u2069`;
 
   return (
