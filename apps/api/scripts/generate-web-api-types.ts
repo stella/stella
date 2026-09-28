@@ -15,8 +15,9 @@
 //   identity (`X extends UIMessage<infer T>`) and brands keyed by a unique
 //   symbol the package does not export.
 // - A type reached more than once, or recursively, becomes a local alias named
-//   from a hash of the path where the traversal first reaches it, so adding a
-//   route renames nothing elsewhere.
+//   from a hash of its smallest path, with no union or intersection positions
+//   in it (see lib/web-api-alias-names.ts), so adding a route renames only a
+//   type it reaches along a smaller path than before.
 // - Anything the printer cannot express structurally falls back to
 //   `typeToString` and is reported; the identity check then decides.
 // - A route's `response` prints as the client reads it: JSON carries a `Date`
@@ -25,7 +26,6 @@
 //   expanded). The identity check runs on the same printout with `Date` kept.
 
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
@@ -36,6 +36,11 @@ import {
   isReadonlyProperty,
   lateBoundNameType,
 } from "./lib/typescript-internals";
+import {
+  ALIAS_NAME,
+  type AliasGraphEdge,
+  nameAliases,
+} from "./lib/web-api-alias-names";
 
 const API_DIR = path.resolve(import.meta.dir, "..");
 const REPO_ROOT = path.resolve(API_DIR, "../..");
@@ -57,7 +62,6 @@ const HEADER = [
   `// ${CONTRACT_TYPE} in apps/api/src/eden-contract.ts. Do not edit.`,
   `// Regenerate: ${REGENERATE_COMMAND}`,
 ];
-const ALIAS_HASH_LENGTH = 10;
 
 // --- Program ------------------------------------------------------------------
 
@@ -173,7 +177,6 @@ const packageOfFile = (fileName: string): string | undefined => {
 
 type TypeNode = {
   body: string;
-  path: string;
   references: number;
   recursive: boolean;
 };
@@ -236,7 +239,7 @@ type PrinterOptions = {
   responseDates: ResponseDates;
 };
 
-const printContract = ({
+export const printContract = ({
   program,
   contractSource,
   webDependencies,
@@ -451,6 +454,18 @@ const printContract = ({
   const wireNodeIds = new Map<ts.Type, number>();
   const onStack = new Set<number>();
   const pathStack: string[] = [];
+  // Every reach of a node, relative to the node whose body is printing, so
+  // names can use the smallest path rather than the first one visited.
+  const edges: AliasGraphEdge[] = [];
+  const printing: { id: number; depth: number }[] = [];
+  const reach = (id: number) => {
+    const parent = printing.at(-1);
+    edges.push({
+      from: parent?.id,
+      to: id,
+      path: pathStack.slice(parent?.depth ?? 0).join("/"),
+    });
+  };
   const at = <T>(segment: string, run: () => T): T => {
     pathStack.push(segment);
     try {
@@ -476,6 +491,7 @@ const printContract = ({
     const existing = ids.get(type);
     if (existing !== undefined) {
       const node = nodes[existing] ?? panic(`missing node ${existing}`);
+      reach(existing);
       node.references += 1;
       if (onStack.has(existing)) {
         node.recursive = true;
@@ -485,14 +501,16 @@ const printContract = ({
     const id = nodes.length;
     const node: TypeNode = {
       body: "",
-      path: pathStack.join("/"),
       references: 1,
       recursive: false,
     };
     nodes.push(node);
     ids.set(type, id);
+    reach(id);
     onStack.add(id);
+    printing.push({ id, depth: pathStack.length });
     node.body = body();
+    printing.pop();
     onStack.delete(id);
     return token(id);
   };
@@ -721,9 +739,7 @@ const printContract = ({
         return kept.length === 0
           ? "never"
           : kept
-              .map((member, index) =>
-                at(`|${index}`, () => unionMember(member)),
-              )
+              .map((member) => at("|", () => unionMember(member)))
               .join(" | ");
       });
       members.push(
@@ -866,17 +882,15 @@ const printContract = ({
     if (type.isUnion()) {
       const { types } = type;
       return memo(type, () =>
-        types
-          .map((member, index) => at(`|${index}`, () => unionMember(member)))
-          .join(" | "),
+        types.map((member) => at("|", () => unionMember(member))).join(" | "),
       );
     }
     if (type.isIntersection()) {
       const { types } = type;
       return memo(type, () =>
         types
-          .map((member, index) => {
-            const printed = at(`&${index}`, () => print(member));
+          .map((member) => {
+            const printed = at("&", () => print(member));
             return /[|]|=>/u.test(printed) &&
               !printed.startsWith("\uE000") &&
               !printed.startsWith("{")
@@ -952,19 +966,7 @@ const printContract = ({
     }));
 
   // --- resolve tokens: inline single-use nodes, alias shared or recursive ones
-  const aliasNames = new Map<number, string>();
-  const usedAliasNames = new Set<string>();
-  for (const [id, node] of nodes.entries()) {
-    if (!node.recursive && node.references === 1) {
-      continue;
-    }
-    const name = `T${createHash("sha256").update(node.path).digest("hex").slice(0, ALIAS_HASH_LENGTH)}`;
-    if (usedAliasNames.has(name)) {
-      panic(`generate-web-api-types: alias name collision ${name}`);
-    }
-    usedAliasNames.add(name);
-    aliasNames.set(id, name);
-  }
+  const aliasNames = nameAliases(nodes, edges);
   const inlined = new Map<number, string>();
   const resolve = (text: string): string =>
     text.replaceAll(TOKEN, (_match, rawId: string) => {
@@ -1001,7 +1003,7 @@ const printContract = ({
   const pending = declarations.map(({ text }) => text);
   while (pending.length > 0) {
     const text = pending.shift() ?? "";
-    for (const match of text.matchAll(/\bT[0-9a-f]{10}\b/gu)) {
+    for (const match of text.matchAll(ALIAS_NAME)) {
       const id = aliasIdsByName.get(match[0]);
       if (id === undefined || emitted.has(id)) {
         continue;
@@ -1267,4 +1269,6 @@ const main = () => {
   );
 };
 
-main();
+if (import.meta.main) {
+  main();
+}
