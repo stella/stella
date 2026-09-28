@@ -3,7 +3,15 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { UnavailableSkillIds } from "@/components/chat-editor-slash-items";
+import { useBrowserClientConnected } from "@/features/chat/browser-control/browser-extension-bridge";
+import { useOptionalChatAnonymized } from "@/lib/chat-anonymized-store";
 import { chatUnavailableSkillsOptions } from "@/lib/knowledge/queries";
+import {
+  chatSkillAvailabilityQuery,
+  chatSkillMenuAvailability,
+  type ChatSkillMenuAvailability,
+  type ComposerSkillChatContext,
+} from "@/lib/prompts/chat-skill-availability.logic";
 
 /**
  * The skills chat cannot offer the caller, keyed by id, with the tools each
@@ -23,7 +31,10 @@ export const useChatUnavailableSkills = (
       data === undefined
         ? undefined
         : new Map(
-            data.map(({ missingTools, skillId }) => [skillId, missingTools]),
+            data.unavailable.map(({ missingTools, skillId }) => [
+              skillId,
+              missingTools,
+            ]),
           ),
     [data],
   );
@@ -37,5 +48,37 @@ export const useChatUnavailableSkillIds = (
   return useMemo(
     () => (unavailable === undefined ? undefined : new Set(unavailable.keys())),
     [unavailable],
+  );
+};
+
+/**
+ * Skill availability for a composer's own chat: its send mode, web search,
+ * open document, edit mode, matter and browser extension, each read live, so
+ * the menu follows a switch the moment it flips. Without `chat` (a composer
+ * that does not say which chat it is) it answers for the widest chat, as the
+ * menus did before. `undefined` while the answer for this chat is loading.
+ */
+export const useComposerSkillAvailability = ({
+  chat,
+  organizationId,
+}: {
+  chat: ComposerSkillChatContext | undefined;
+  organizationId: string;
+}): ChatSkillMenuAvailability => {
+  const anonymized = useOptionalChatAnonymized(chat?.threadRef);
+  const browserExtension = useBrowserClientConnected();
+  const query =
+    chat === undefined
+      ? undefined
+      : chatSkillAvailabilityQuery({ anonymized, browserExtension, chat });
+  const known = query !== null;
+  const { data } = useQuery({
+    ...chatUnavailableSkillsOptions(organizationId, query ?? undefined),
+    enabled: known,
+  });
+  // A chat not known yet reads no answer, not the widest chat's cached one.
+  return useMemo(
+    () => (known ? chatSkillMenuAvailability(data) : undefined),
+    [data, known],
   );
 };

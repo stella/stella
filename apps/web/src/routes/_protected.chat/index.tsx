@@ -531,6 +531,17 @@ function ChatIndex() {
               mcpOrganizationId={activeOrganizationId}
               models={composerModels}
               reservedCommands={{ hasPersistedThread: false }}
+              skillChat={{
+                document: null,
+                threadRef,
+                webSearch:
+                  chatDraftMeta === undefined
+                    ? null
+                    : {
+                        available: chatDraftMeta.webSearchAvailable,
+                        enabled: chatDraftMeta.webSearchEnabled,
+                      },
+              }}
               skillsOrganizationId={activeOrganizationId}
               dock={
                 chatDraftMeta === undefined ? (

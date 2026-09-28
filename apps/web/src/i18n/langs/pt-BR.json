@@ -978,7 +978,15 @@
       "searchFiles": "Pesquisar arquivos",
       "searchMatters": "Pesquisar casos",
       "searchMcpServers": "Pesquisar servidores MCP...",
-      "searchSkills": "Pesquisar habilidades"
+      "searchSkills": "Pesquisar habilidades",
+      "skillNeeds": {
+        "browserExtension": "Conecte a extensão do navegador para usar esta habilidade",
+        "document": "Abra um documento para usar esta habilidade",
+        "matter": "Inicie um chat em um caso para usar esta habilidade",
+        "rawSendMode": "Indisponível em chats anonimizados",
+        "reviewEdits": "Mude as edições para revisão manual para usar esta habilidade",
+        "webSearch": "Ative a busca na web para usar esta habilidade"
+      }
     },
     "contextMeter": {
       "attachments": "Documentos anexados",

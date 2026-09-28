@@ -686,6 +686,14 @@ export const ChatTabPanel = ({
             pendingCount={0}
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}
+            skillChat={{
+              document: null,
+              threadRef,
+              webSearch: {
+                available: data.webSearchAvailable,
+                enabled: data.webSearchEnabled,
+              },
+            }}
             skillsOrganizationId={activeOrganizationId}
             status={isGenerating ? "generating" : "idle"}
             dock={

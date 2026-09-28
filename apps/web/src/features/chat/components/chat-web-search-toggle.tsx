@@ -28,12 +28,14 @@ type ChatWebSearchToggleProps = {
   size?: "icon-sm" | "icon-xs" | undefined;
 };
 
-export const ChatWebSearchToggle = ({
-  disabled = false,
-  enabled,
-  threadRef,
-  size = "icon-sm",
-}: ChatWebSearchToggleProps) => {
+/**
+ * Turns the thread's web search on or off: remembers the choice for new
+ * chats and flips the thread optimistically until the server confirms. The
+ * toggle and a skill row's "turn on web search" fix share it.
+ */
+export const useSetChatWebSearch = (
+  threadRef: ChatThreadRef,
+): ((enabled: boolean) => void) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const setEnabledPreference = useChatWebSearchPreferenceStore(
@@ -98,6 +100,20 @@ export const ChatWebSearchToggle = ({
     },
   });
 
+  return (nextEnabled: boolean) => {
+    setEnabledPreference(nextEnabled);
+    mutate(nextEnabled);
+  };
+};
+
+export const ChatWebSearchToggle = ({
+  disabled = false,
+  enabled,
+  threadRef,
+  size = "icon-sm",
+}: ChatWebSearchToggleProps) => {
+  const t = useTranslations();
+  const setWebSearch = useSetChatWebSearch(threadRef);
   const tooltipKey = enabled
     ? "chat.webSearch.toggleOff"
     : "chat.webSearch.toggleOn";
@@ -115,9 +131,7 @@ export const ChatWebSearchToggle = ({
       data-pressed={enabled ? "" : undefined}
       disabled={disabled}
       onClick={() => {
-        const next = !enabled;
-        setEnabledPreference(next);
-        mutate(next);
+        setWebSearch(!enabled);
       }}
       size={size}
       tooltip={t(tooltipKey)}

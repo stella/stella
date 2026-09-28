@@ -755,6 +755,14 @@ export const ChatThreadPage = ({
                     reservedCommands={{
                       hasPersistedThread: messages.length > 0,
                     }}
+                    skillChat={{
+                      document: null,
+                      threadRef,
+                      webSearch: {
+                        available: data.webSearchAvailable,
+                        enabled: data.webSearchEnabled,
+                      },
+                    }}
                     skillsOrganizationId={activeOrganizationId}
                     onNewThread={messages.length > 0 ? startNewThread : null}
                     dock={

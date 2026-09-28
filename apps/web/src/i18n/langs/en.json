@@ -978,7 +978,15 @@
       "searchFiles": "Search files",
       "searchMatters": "Search matters",
       "searchMcpServers": "Search MCP servers...",
-      "searchSkills": "Search skills"
+      "searchSkills": "Search skills",
+      "skillNeeds": {
+        "browserExtension": "Connect the browser extension to use this skill",
+        "document": "Open a document to use this skill",
+        "matter": "Start a chat in a matter to use this skill",
+        "rawSendMode": "Not available in anonymized chats",
+        "reviewEdits": "Switch edits to manual review to use this skill",
+        "webSearch": "Turn on web search to use this skill"
+      }
     },
     "contextMeter": {
       "attachments": "Attached documents",
