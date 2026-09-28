@@ -48,13 +48,12 @@ type BrowserExtensionBridgeRuntime = {
 
 let bridgeRuntime: BrowserExtensionBridgeRuntime | null = null;
 
-/** Called whenever whether a browser client is connected may have changed. */
-const connectionListeners = new Set<() => void>();
+/** Fires whenever whether a browser client is connected may have changed. */
+const connectionEvents = new EventTarget();
+const CONNECTION_CHANGED = "connection-changed";
 
 const notifyConnectionListeners = (): void => {
-  for (const listener of connectionListeners) {
-    listener();
-  }
+  connectionEvents.dispatchEvent(new Event(CONNECTION_CHANGED));
 };
 
 const getBridgeRuntime = (): BrowserExtensionBridgeRuntime => {
@@ -225,9 +224,9 @@ const isBrowserClientConnected = (): boolean =>
   getBrowserClientCapability() !== undefined;
 
 const subscribeBrowserClientConnection = (listener: () => void) => {
-  connectionListeners.add(listener);
+  connectionEvents.addEventListener(CONNECTION_CHANGED, listener);
   return () => {
-    connectionListeners.delete(listener);
+    connectionEvents.removeEventListener(CONNECTION_CHANGED, listener);
   };
 };
 

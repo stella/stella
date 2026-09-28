@@ -238,8 +238,8 @@ describe("a skill no chat can run", () => {
       answer({ [WEB_SKILL]: [CHAT_SKILL_CONTEXT_NEED.webSearch] }),
       chatWith({ available: true, enabled: false }),
     );
-    expect(rows.map(({ skillId }) => skillId).toSorted()).toEqual(
-      [PLAIN_SKILL, WEB_SKILL].toSorted(),
+    expect(new Set(rows.map(({ skillId }) => skillId))).toEqual(
+      new Set([PLAIN_SKILL, WEB_SKILL]),
     );
     expect(rows.find(({ skillId }) => skillId === PLAIN_SKILL)?.state).toEqual({
       status: "offered",

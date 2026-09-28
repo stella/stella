@@ -139,12 +139,10 @@ export const chatSkillAvailabilityQuery = ({
 
 type AvailabilityResponse = {
   unavailable: readonly { skillId: string }[];
-  unavailableHere?:
-    | readonly {
-        needs: readonly ChatSkillContextNeed[];
-        skillId: string;
-      }[]
-    | undefined;
+  unavailableHere: readonly {
+    needs: readonly ChatSkillContextNeed[];
+    skillId: string;
+  }[];
 };
 
 /**
@@ -166,10 +164,7 @@ export const chatSkillMenuAvailability = (
     ? undefined
     : {
         blockedHere: new Map(
-          (data.unavailableHere ?? []).map(({ needs, skillId }) => [
-            skillId,
-            needs,
-          ]),
+          data.unavailableHere.map(({ needs, skillId }) => [skillId, needs]),
         ),
         hidden: new Set(data.unavailable.map(({ skillId }) => skillId)),
       };
@@ -231,8 +226,11 @@ export const chatSkillRowState = ({
 }): ChatSkillRowState => {
   const needs =
     skillId === null ? undefined : availability?.blockedHere.get(skillId);
-  const [need] = needs ?? [];
-  if (needs === undefined || need === undefined) {
+  if (needs === undefined) {
+    return OFFERED;
+  }
+  const [need] = needs;
+  if (need === undefined) {
     return OFFERED;
   }
   return {
@@ -269,7 +267,7 @@ export const chatSkillAvailabilityKey = (
         query.anonymized,
         query.browserExtension,
         query.webSearch,
-        query.contextMatterIds ?? [],
+        query.contextMatterIds ?? null,
         query.document ?? null,
         query.documentId ?? null,
         query.editApplyMode ?? null,
