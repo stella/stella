@@ -9,6 +9,7 @@ import {
   TIME_ENTRY_SUGGESTION_STATUS,
   timeEntrySuggestions,
 } from "@/api/db/schema";
+import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { loadTimeSuggestions } from "@/api/handlers/time-entries/suggestions/load";
 import {
   timeSuggestionDateSchema,
@@ -22,8 +23,10 @@ import {
 } from "@/api/handlers/time-entries/time-entry-insert";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { readTimePolicy } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 const SUGGESTION_UNAVAILABLE_HINT =
   "The suggestion was already accepted or dismissed, or the day's activity " +
@@ -38,7 +41,7 @@ const acceptDecisionSchema = t.Object({
       "Minutes to record; the suggestion's engaged minutes unless edited",
   }),
   narrative: t.String({
-    minLength: 1,
+    minLength: 0,
     maxLength: 10_000,
     description: "Description of the work",
   }),
@@ -78,6 +81,7 @@ type DecisionContext = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
+  memberRole: AuthorizedMemberRole;
   recordAuditEvent: AuditRecorder;
   body: DecisionBody;
 };
@@ -87,6 +91,7 @@ const acceptSuggestion = async function* ({
   organizationId,
   workspaceId,
   userId,
+  memberRole,
   recordAuditEvent,
   body,
 }: DecisionContext & {
@@ -113,8 +118,13 @@ const acceptSuggestion = async function* ({
     );
   }
 
+  const policy = yield* Result.await(
+    readTimePolicy({ safeDb, organizationId }),
+  );
   const prepared = yield* prepareTimeEntryInsert({
     safeDb,
+    policy,
+    canApprove: canApproveTimeEntries(memberRole),
     workspaceId,
     userId,
     body: {
@@ -288,6 +298,7 @@ const createTimeSuggestionDecision = createSafeHandler(
     recordAuditEvent,
     safeDb,
     session,
+    memberRole,
     user,
     workspaceId,
   }) {
@@ -296,6 +307,7 @@ const createTimeSuggestionDecision = createSafeHandler(
       organizationId: session.activeOrganizationId,
       workspaceId,
       userId: user.id,
+      memberRole,
       recordAuditEvent,
       body,
     };

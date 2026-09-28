@@ -298,7 +298,6 @@ export const LIMITS = {
   workspaceActivityPageSizeMax: 10,
   activeTimersPerUser: 1,
   timeEntryMaxAgeDays: 90,
-  billingIncrementMinutes: 6,
   /** Two activity signals closer than this belong to one suggested entry. */
   timeSuggestionMergeGapMinutes: 15,
   /** Engaged time assumed after the last observed signal of a cluster. */
