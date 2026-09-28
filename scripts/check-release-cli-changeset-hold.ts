@@ -172,7 +172,7 @@ export const parseHoldArgs = (args: readonly string[]): HoldOptions => {
   let openReleases: number | null = null;
   let isReleasePullRequest: boolean | null = null;
   for (let index = 0; index < args.length; index += 2) {
-    const flag = args[index];
+    const flag = args[index] ?? panic(USAGE);
     const value = args.at(index + 1) ?? panic(USAGE);
     switch (flag) {
       case "--root":
