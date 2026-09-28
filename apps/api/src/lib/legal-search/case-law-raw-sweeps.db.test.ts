@@ -144,10 +144,10 @@ test(
       const create = migration
         .split("--> statement-breakpoint")
         .find((part) =>
-          part.includes(`CREATE INDEX CONCURRENTLY "${String(indexName)}"`),
+          part.includes(`CREATE INDEX CONCURRENTLY "${indexName}"`),
         );
       if (create === undefined) {
-        panic(`Migration has no CREATE INDEX for ${String(indexName)}.`);
+        panic(`Migration has no CREATE INDEX for ${indexName}.`);
       }
       const copyName = `${indexName}_migration`;
       await client.query(

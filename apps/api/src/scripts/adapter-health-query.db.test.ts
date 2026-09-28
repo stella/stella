@@ -149,7 +149,7 @@ test(
           limit: 2,
         })}`,
       );
-      const rows = isRecord(explained) ? explained["rows"] : explained;
+      const rows = isRecord(explained) ? explained.rows : explained;
       if (!Array.isArray(rows)) {
         return panic("EXPLAIN returned no rows array.");
       }

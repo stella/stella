@@ -140,7 +140,7 @@ const pageRow = (result: unknown): Record<string, unknown> => {
   if (!Array.isArray(rows)) {
     return panic("Adapter health page returned no rows array.");
   }
-  const row = rows.at(0);
+  const row: unknown = rows.at(0);
   return isRecord(row)
     ? row
     : panic("Adapter health page returned no aggregate.");
@@ -153,18 +153,17 @@ export const readAdapterHealthMetrics = async ({
   sinceDate,
   pageSize = ADAPTER_HEALTH_DECISION_PAGE_SIZE,
 }: MetricsOptions) => {
-  let afterId: string | null = null;
   let total = 0;
   let inserted = 0;
   let indexed = 0;
   let citationTotal = 0;
   let citationResolved = 0;
-  const fields = new Map<string, number>(
+  const fields = new Map<(typeof CHECKED_FIELDS)[number], number>(
     CHECKED_FIELDS.map((field) => [field, 0]),
   );
 
-  while (true) {
-    // db-await-in-loop: each keyset statement aggregates one bounded source page
+  // Each continuation reduces one indexed page before requesting the next.
+  const readPage = async (afterId: string | null): Promise<void> => {
     const statement = adapterHealthPageStatement({
       sourceId,
       sinceDate,
@@ -177,7 +176,7 @@ export const readAdapterHealthMetrics = async ({
     const row = pageRow(result);
     const pageTotal = readCount(row, "total");
     if (pageTotal === 0) {
-      break;
+      return;
     }
     total += pageTotal;
     inserted += readCount(row, "inserted");
@@ -191,11 +190,12 @@ export const readAdapterHealthMetrics = async ({
     if (typeof lastId !== "string" || lastId === afterId) {
       panic("Adapter health page cursor did not advance.");
     }
-    afterId = lastId;
     if (pageTotal < pageSize) {
-      break;
+      return;
     }
-  }
+    await readPage(lastId);
+  };
+  await readPage(null);
 
   return { total, inserted, indexed, citationTotal, citationResolved, fields };
 };

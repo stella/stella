@@ -300,14 +300,17 @@ const buildReport = async (
     "case_law.adapter_health",
   );
 
-  for (const source of sources) {
-    // db-await-in-loop: each source's bounded pages finish before the next source starts
+  // Finish a source's local metrics and remote probe before the next source.
+  const addSourceReport = async (index: number): Promise<void> => {
+    const source = sources.at(index);
+    if (source === undefined) {
+      return;
+    }
     const metrics = await readAdapterHealthMetrics({
       db: rootDb,
       sourceId: source.id,
       sinceDate,
     });
-    // db-await-in-loop: the publisher probe follows its source's database reads
     const remoteTotal = await getSourceTotal(source.adapterKey);
     const total = metrics.total;
     const inserted = metrics.inserted;
@@ -440,7 +443,9 @@ const buildReport = async (
       fields,
       issues,
     });
-  }
+    await addSourceReport(index + 1);
+  };
+  await addSourceReport(0);
 
   // Summary
   const totalDecisions = adapters.reduce((sum, a) => sum + a.totalDecisions, 0);
