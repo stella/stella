@@ -210,6 +210,7 @@ test("unreadable payloads are persisted as they are read, not once the batch dra
 });
 
 test("a planner-rejected cap-plus-one revision is persisted as blocked", async () => {
+  const reservedAt = new Date("2026-08-25T13:00:00.000Z");
   const row = documentRow(REVISIONS + 1);
   await db.insert(legislationDocuments).values(row);
   const descriptor = deriveCorpusIndexProjectionDescriptor(
@@ -241,9 +242,9 @@ test("a planner-rejected cap-plus-one revision is persisted as blocked", async (
     desiredEpoch: EPOCH,
     desiredFingerprint: descriptor.fingerprint,
     desiredIndexId: descriptor.indexId,
+    updatedAt: reservedAt,
   });
 
-  const reservedAt = new Date("2026-08-25T13:00:00.000Z");
   const lease = (
     await db.transaction(
       async (tx) =>

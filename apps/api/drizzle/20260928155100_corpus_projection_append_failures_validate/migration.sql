@@ -12,13 +12,15 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID check from the preceding migration outside the DDL transaction.
 ALTER TABLE "corpus_index_projection_states"
-  VALIDATE CONSTRAINT "corpus_index_projection_states_failure_kind_values";--> statement-breakpoint
+  -- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID check from the preceding migration outside the DDL transaction.
+  VALIDATE CONSTRAINT "corpus_index_projection_states_failure_kind_values";
+--> statement-breakpoint
 
--- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID check from the preceding migration outside the DDL transaction.
 ALTER TABLE "corpus_index_projection_states"
-  VALIDATE CONSTRAINT "corpus_index_projection_states_work_shape";--> statement-breakpoint
+  -- squawk-ignore prefer-robust-stmts -- Validates the NOT VALID check from the preceding migration outside the DDL transaction.
+  VALIDATE CONSTRAINT "corpus_index_projection_states_work_shape";
+--> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint
 SET lock_timeout = '1s';

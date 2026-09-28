@@ -110,6 +110,23 @@ const DRIZZLE_DIR = new URL("../../../drizzle/", import.meta.url);
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
+const clearDecisionIntents = async (): Promise<void> => {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(1937007986, 1)`);
+    await tx
+      .update(corpusIndexGenerations)
+      .set({ status: "retiring" })
+      .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
+    await tx
+      .delete(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.entityId, DECISION_ID));
+    await tx
+      .update(corpusIndexGenerations)
+      .set({ status: "building" })
+      .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
+  });
+};
+
 const setDatabaseClock = async (now: Date): Promise<void> => {
   await db.execute(
     sql.raw(`
@@ -1195,9 +1212,7 @@ test("expired append leases charge unknown attempts and block at the limit", asy
     lastFailureKind: "append_unknown",
   });
 
-  await db
-    .delete(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.entityId, DECISION_ID));
+  await clearDecisionIntents();
   const nextStartedAt = new Date(expiredAt.getTime() + 5 * 60_000);
   await db
     .update(corpusIndexProjectionStates)
@@ -1308,9 +1323,7 @@ test("alternating definite and unknown append failures share one attempt count",
       });
     });
     if (index < outcomes.length - 1) {
-      await db
-        .delete(corpusIndexProjectionIntents)
-        .where(eq(corpusIndexProjectionIntents.entityId, DECISION_ID));
+      await clearDecisionIntents();
     }
   }
 
@@ -1350,9 +1363,7 @@ test("repeated unknown append outcomes block after the fifth actual attempt", as
       });
     });
     if (index < 4) {
-      await db
-        .delete(corpusIndexProjectionIntents)
-        .where(eq(corpusIndexProjectionIntents.entityId, DECISION_ID));
+      await clearDecisionIntents();
     }
   }
 
@@ -1467,9 +1478,7 @@ test("transient append failures charge the shared counter and block at their hig
     lastFailureKind: "append_unknown",
   });
 
-  await db
-    .delete(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.entityId, DECISION_ID));
+  await clearDecisionIntents();
   const beforeLimit = new Date(attemptedAt.getTime() + 5000);
   await db
     .update(corpusIndexProjectionStates)
@@ -1534,9 +1543,7 @@ test("batch rejection keeps retries singleton until a single rejection blocks", 
   ]);
 
   // Model completed revision cleanup so the same desired revision can retry.
-  await db
-    .delete(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.entityId, DECISION_ID));
+  await clearDecisionIntents();
   const singleLease = await reserveOneLease(
     new Date(attemptedAt.getTime() + 5000),
   );
@@ -1566,9 +1573,7 @@ test("batch rejection keeps retries singleton until a single rejection blocks", 
     { workStatus: "retry_scheduled", failureAttempts: 1 },
   ]);
 
-  await db
-    .delete(corpusIndexProjectionIntents)
-    .where(eq(corpusIndexProjectionIntents.entityId, DECISION_ID));
+  await clearDecisionIntents();
   const secondSingleAt = new Date(attemptedAt.getTime() + 10_000);
   const secondSingleLease = await reserveOneLease(secondSingleAt);
   expect(secondSingleLease.appendMode).toBe("single");

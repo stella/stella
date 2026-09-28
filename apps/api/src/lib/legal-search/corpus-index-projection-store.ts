@@ -847,7 +847,8 @@ const isStillDesiredProjection = (
   state: typeof corpusIndexProjectionStates.$inferSelect | undefined,
   intent: typeof corpusIndexProjectionIntents.$inferSelect,
 ): boolean =>
-  state?.desiredAction === "upsert" &&
+  state !== undefined &&
+  state.desiredAction === "upsert" &&
   state.desiredEpoch === intent.epoch &&
   state.desiredFingerprint === intent.fingerprint &&
   state.desiredIndexId === intent.indexId;
