@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import nodePath from "node:path";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
@@ -324,5 +325,43 @@ describe("account deletion FK coverage", () => {
         "exists). Remove the stale entry from ACCOUNT_DELETION_KNOWN_GAPS in " +
         "account-deletion-coverage.test.ts.",
     );
+  });
+
+  test("every exported deletion step is awaited by verifyAndDeleteUser", async () => {
+    // The table constants above prove a step exists; this proves the account
+    // deletion transaction actually runs it.
+    const stepsSource = await Bun.file(
+      nodePath.join(import.meta.dir, "account-deletion-steps.ts"),
+    ).text();
+    const deleteAccountSource = await Bun.file(
+      nodePath.join(import.meta.dir, "delete-account.ts"),
+    ).text();
+    const callerStart = deleteAccountSource.indexOf(
+      "export const verifyAndDeleteUser",
+    );
+    expect(callerStart).toBeGreaterThanOrEqual(0);
+    const callerEnd = deleteAccountSource.indexOf("\nconst ", callerStart);
+    const callerBody = new Set(deleteAccountSource.slice(
+      callerStart,
+      callerEnd === -1 ? undefined : callerEnd,
+    ));
+
+    const stepNames = [
+      ...stepsSource.matchAll(/^export const (\w+) = async\b/gmu),
+    ].map((match) => match[1]);
+    expect(stepNames).toContain("deletePersonalAiMemories");
+
+    // Read-only helper shared with the pre-deletion reassignment check and
+    // called from inside reassignActiveTaskAssignmentsAndDropMemberships.
+    const helpers = new Set(["selectActiveTaskAssignments"]);
+    expect(stepNames).toEqual(expect.arrayContaining([...helpers]));
+
+    const uncalled = stepNames.filter(
+      (name) =>
+        name !== undefined &&
+        !helpers.has(name) &&
+        !callerBody.has(`await ${name}(`),
+    );
+    expect(uncalled).toEqual([]);
   });
 });
