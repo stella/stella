@@ -76,10 +76,13 @@ $$;--> statement-breakpoint
 
 -- ADD COLUMN, ADD CONSTRAINT and CREATE TRIGGER all lock the legislation
 -- tables, which the corpus writers use without pause. Take both locks first,
--- in writer order, with bounded, retried waits; the transaction keeps them
--- until the COMMIT below. The raised lock_timeout is local to each attempt,
--- while statement_timeout bounds the whole sequence.
-SET LOCAL statement_timeout = '10min';--> statement-breakpoint
+-- in writer order, in attempts that each wait at most one second; the
+-- transaction keeps them until the COMMIT below. A failed attempt rolls back
+-- its subtransaction, which releases any lock it did take, so a documents
+-- lock is never held while the sources lock is still being waited for beyond
+-- that second. The attempts are bounded, and statement_timeout bounds the
+-- whole sequence.
+SET LOCAL statement_timeout = '5min';--> statement-breakpoint
 DO $$
 DECLARE
   attempts integer := 0;
@@ -87,22 +90,14 @@ DECLARE
 BEGIN
   LOOP
     attempts := attempts + 1;
-    PERFORM set_config(
-      'lock_timeout',
-      CASE
-        WHEN attempts <= 20 THEN '2s'
-        WHEN attempts <= 30 THEN '10s'
-        ELSE '30s'
-      END,
-      true
-    );
+    PERFORM set_config('lock_timeout', '1s', true);
     BEGIN
       LOCK TABLE "legislation_documents", "legislation_sources"
         IN ACCESS EXCLUSIVE MODE;
       EXIT;
     EXCEPTION
       WHEN lock_not_available THEN
-        IF attempts >= 36 THEN
+        IF attempts >= 60 THEN
           RAISE;
         END IF;
         IF attempts % 5 = 0 THEN
