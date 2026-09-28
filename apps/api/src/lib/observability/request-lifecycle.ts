@@ -9,7 +9,6 @@
 
 import type { Context } from "elysia";
 
-import { env } from "@/api/env";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
@@ -38,12 +37,13 @@ import {
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
-// Emit the per-request query count in local/CI runs only, so the e2e guard
-// can assert per-route budgets without deployed environments paying any
+// Emit the per-request query count in local development only, so the e2e
+// guard can assert per-route budgets without other processes paying any
 // per-query cost. Must match the logger gate in db/root.ts.
-const DB_QUERY_COUNTER_ENABLED = env.isDev;
+const DB_QUERY_COUNTER_ENABLED = isLocalDevOpen();
 
 const getRequestPath = (request: Request): string =>
   new URL(request.url).pathname;
@@ -293,7 +293,7 @@ export const completeRequest = async ({
     });
   }
 
-  if (!env.isDev && shouldLogRequest(path)) {
+  if (!isLocalDevOpen() && shouldLogRequest(path)) {
     await flushAnalytics(route);
   }
 };

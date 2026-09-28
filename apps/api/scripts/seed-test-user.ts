@@ -32,6 +32,7 @@ import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-bette
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import {
   ALL_TEST_USER_IDS,
@@ -341,10 +342,7 @@ export async function ensureTestUsers(organizationId: string = TEST_ORG.id) {
 }
 
 async function seed() {
-  if (process.env.NODE_ENV === "production") {
-    console.error("Refusing to run: NODE_ENV must not be 'production'.");
-    process.exit(1);
-  }
+  requireLocalDevOpen("Seeding");
 
   const existingUsers = await db.transaction(
     async (tx) =>

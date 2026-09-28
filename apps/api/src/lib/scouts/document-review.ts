@@ -137,7 +137,7 @@ export const emitDocumentReviewSignal = async ({
 export const maybeEmitDocumentReviewSignal = async (
   args: EmitDocumentReviewSignalArgs,
 ): Promise<void> => {
-  if (!documentScoutsEnabled(env)) {
+  if (!documentScoutsEnabled(env.FEATURE_INBOX_DOCUMENT_SCOUTS)) {
     return;
   }
   await emitDocumentReviewSignal(args);

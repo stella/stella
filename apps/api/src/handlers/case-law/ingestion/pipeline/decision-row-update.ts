@@ -16,7 +16,6 @@ import {
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import {
   payloadChangedSql,
-  rowHoldsDocument,
   storedRowDiffers,
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
@@ -33,6 +32,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";

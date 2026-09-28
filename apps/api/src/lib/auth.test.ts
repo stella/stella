@@ -10,6 +10,8 @@ import {
   test,
 } from "bun:test";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -787,28 +789,32 @@ describe("email OTP response schedule", () => {
     expect(outcome).toBe(deliveryError);
   });
 
-  test("pads only production sign-in OTP requests", () => {
+  test("pads sign-in OTP requests outside local development", () => {
     expect(
       getEmailOtpMinimumResponseDuration({
-        isDev: false,
         path: "/email-otp/send-verification-otp",
+        runtimeMode: { mode: RUNTIME_MODE.strict },
         type: "sign-in",
       }),
     ).toBeGreaterThan(0);
 
     for (const input of [
       {
-        isDev: true,
         path: "/email-otp/send-verification-otp",
+        runtimeMode: { mode: RUNTIME_MODE.open },
         type: "sign-in",
       },
       {
-        isDev: false,
         path: "/email-otp/send-verification-otp",
+        runtimeMode: { mode: RUNTIME_MODE.strict },
         type: "forget-password",
       },
-      { isDev: false, path: "/email-otp/verify-email", type: "sign-in" },
-    ]) {
+      {
+        path: "/email-otp/verify-email",
+        runtimeMode: { mode: RUNTIME_MODE.strict },
+        type: "sign-in",
+      },
+    ] as const) {
       expect(getEmailOtpMinimumResponseDuration(input)).toBe(0);
     }
   });

@@ -3,8 +3,9 @@ import { Result, TaggedError } from "better-result";
 import { verifyMailLocally } from "@/api/lib/email/inbound/authentication";
 import { parseInboundDevInput } from "@/api/lib/email/inbound/dev-input";
 import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
-const USAGE = `Development inbound ingest (NODE_ENV=development):
+const USAGE = `Development inbound ingest (NODE_ENV=development STELLA_LOCAL_DEV=1):
   bun scripts/ingest-mail.ts --file message.eml --mail-from member@example.test \\
     --rcpt-to TOKEN@inbound.example.test --remote-ip 192.0.2.1 --helo smtp.example.test \\
     --inbound-domain inbound.example.test --virus-verdict pass
@@ -23,9 +24,10 @@ const run = async () => {
     process.stdout.write(USAGE);
     return;
   }
-  if (process.env.NODE_ENV !== "development") {
+  if (!isLocalDevOpen()) {
     throw new InboundDevRunError({
-      message: "Inbound development ingest requires NODE_ENV=development",
+      message:
+        "Inbound development ingest requires local development access: NODE_ENV=development with STELLA_LOCAL_DEV=1",
     });
   }
   const input = parseInboundDevInput(process.argv.slice(2));

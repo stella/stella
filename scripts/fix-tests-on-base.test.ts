@@ -334,7 +334,7 @@ describe("the verdict", () => {
         unchecked: [],
         markerWithoutReason: false,
       }).join("\n"),
-    ).toContain(`inconclusive: ${  API_TEST}`);
+    ).toContain(`inconclusive: ${API_TEST}`);
   });
 
   test("a skipped changed case is neither evidence nor a failure", () => {

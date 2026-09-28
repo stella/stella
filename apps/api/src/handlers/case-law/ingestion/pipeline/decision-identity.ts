@@ -19,6 +19,7 @@ import {
   MAX_SOURCE_IDENTITY_CANDIDATES,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { rowHoldsDocumentFor } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
 import {
@@ -190,6 +191,10 @@ const IDENTITY_COLUMNS = {
   sourceUrl: true,
 } as const;
 
+const IDENTITY_EXTRAS = {
+  hasStoredDocument: rowHoldsDocumentFor,
+};
+
 type FindExistingDecisionOptions = Pick<
   ObservedDecision,
   | "exactSourceIdentityCandidates"
@@ -234,6 +239,7 @@ const findExistingDecisionTx = async (
           })
         : { id: { eq: provisionalClaimedDecisionId } },
     columns: IDENTITY_COLUMNS,
+    extras: IDENTITY_EXTRAS,
   });
   if (
     exactClaimedDecisionId !== undefined &&
@@ -250,6 +256,7 @@ const findExistingDecisionTx = async (
         sourceDocumentId: { in: exactSourceIdentityCandidates },
       },
       columns: IDENTITY_COLUMNS,
+      extras: IDENTITY_EXTRAS,
       limit: MAX_SOURCE_IDENTITY_CANDIDATES,
     });
     const rolloutWinnerIds = [...new Set(rolloutWinners.map(({ id }) => id))];
@@ -303,6 +310,7 @@ const findExistingDecisionTx = async (
             sourceId,
           }),
           columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
         });
   const identified =
     exactIdentified ??
@@ -317,6 +325,7 @@ const findExistingDecisionTx = async (
             },
           },
           columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
         })
       : undefined);
 
@@ -335,6 +344,7 @@ const findExistingDecisionTx = async (
             sourceDocumentId: { isNull: true },
           },
           columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
           orderBy: { id: "asc" },
           limit: MAX_LEGACY_DOCKET_CANDIDATES,
         });

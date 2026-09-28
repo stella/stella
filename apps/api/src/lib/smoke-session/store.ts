@@ -26,6 +26,7 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import { runtimeMode } from "@/api/runtime-mode";
 
 const SMOKE_PRINCIPAL = {
   default: "default",
@@ -188,7 +189,7 @@ export const mintSmokeSession = async (
   // expected — the belt-and-suspenders the secret gate alone cannot provide.
   logger.warn("smoke.session_minted", {
     "smoke.org_id": record.org.id,
-    "smoke.is_dev": env.isDev,
+    "smoke.runtime_mode": runtimeMode().mode,
     "smoke.session_expires_at": expiresAt.toISOString(),
   });
 

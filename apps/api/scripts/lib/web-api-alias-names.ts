@@ -110,7 +110,7 @@ const createPathHeap = () => {
  * a node is final the first time it leaves the heap (Dijkstra over string
  * order).
  */
-export const canonicalPaths = (
+const canonicalPaths = (
   nodeCount: number,
   edges: readonly AliasGraphEdge[],
 ): string[] => {
