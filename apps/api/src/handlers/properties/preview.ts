@@ -208,8 +208,10 @@ const previewProperty = createSafeHandler(
       properties: [batchProperty],
     };
 
-    const { orgAIConfig, promptCachingEnabled } = await scopedDb(
-      async (tx) => await loadOrgAISettings(tx, session.activeOrganizationId),
+    const { orgAIConfig, promptCachingEnabled } = yield* Result.await(
+      scopedDb(
+        async (tx) => await loadOrgAISettings(tx, session.activeOrganizationId),
+      ),
     );
     const generateFn = getBatchGenerator();
 

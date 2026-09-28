@@ -9,6 +9,7 @@
  * already holds, and the BYOK key material is decrypted in process.
  */
 
+import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -24,6 +25,7 @@ import {
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mayUseInstanceModels } from "@/api/lib/organization-access-state";
 
 /** The one capability the loaders need: a single `organization_settings` select. */
@@ -47,33 +49,34 @@ const selectAISettingsRow = async (
     .then((rows) => rows.at(0));
 
 /**
- * A null config means "run on the instance provider"; throws when the org's
+ * A null config means "run on the instance provider"; refuses when the org's
  * access state bars that, as a deployment without instance keys would.
  */
 const requireInstanceFallbackAllowed = async (
   db: OrgSettingsReader,
   organizationId: SafeId<"organization">,
   orgAIConfig: OrgAIConfig | null,
-): Promise<OrgAIConfig | null> => {
+): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
   if (
     orgAIConfig === null &&
     !(await mayUseInstanceModels(db, organizationId))
   ) {
-    throw ownAIKeyRequiredError();
+    return Result.err(ownAIKeyRequiredError());
   }
-  return orgAIConfig;
+  return Result.ok(orgAIConfig);
 };
 
 /**
  * For callers that are about to use the config for an AI call. Throws a
  * typed `ConfigurationError` on a corrupt stored row (see
  * `decryptOrgAIConfigRowOrThrow`) rather than silently falling back to no
- * config, which could mis-route or mis-bill.
+ * config, which could mis-route or mis-bill. An org barred from the instance
+ * provider without a config of its own is an error result.
  */
 export const loadOrgAIConfig = async (
   db: OrgSettingsReader,
   organizationId: SafeId<"organization">,
-): Promise<OrgAIConfig | null> => {
+): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
   const rows = await db
     .select({
       aiConfigEncrypted: sql<
@@ -106,21 +109,22 @@ export type OrgAISettings = {
 export const loadOrgAISettings = async (
   db: OrgSettingsReader,
   organizationId: SafeId<"organization">,
-): Promise<OrgAISettings> => {
+): Promise<Result<OrgAISettings, HandlerError<403>>> => {
   const row = await selectAISettingsRow(db, organizationId);
   const orgAIConfig = await decryptOrgAIConfigRowOrThrow({
     decrypt: decryptAIConfig,
     organizationId,
     row,
   });
-  return {
-    orgAIConfig: await requireInstanceFallbackAllowed(
-      db,
-      organizationId,
-      orgAIConfig,
-    ),
+  const allowed = await requireInstanceFallbackAllowed(
+    db,
+    organizationId,
+    orgAIConfig,
+  );
+  return allowed.map((config) => ({
+    orgAIConfig: config,
     promptCachingEnabled: resolvePromptCachingPreference(row),
-  };
+  }));
 };
 
 export type OrgSettingsForAuth = {

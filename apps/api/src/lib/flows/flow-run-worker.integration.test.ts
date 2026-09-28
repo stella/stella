@@ -148,7 +148,7 @@ const executeFlowStepWithTestModel = async (
     enqueueStep: enqueueFlowStepMock,
     broadcastUpdate,
     createEntity,
-    loadAIConfig: async () => null,
+    loadAIConfig: async () => Result.ok(null),
     // Governed workflow on: the gate's task must carry an obligation.
     taskFeatures: { governedWorkflow: true, legalLists: false },
   });

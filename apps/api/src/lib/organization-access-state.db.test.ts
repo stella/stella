@@ -102,17 +102,13 @@ const authStatus = async (organizationId: SafeId<"organization">) =>
     )
   ).orgAIConfigStatus;
 
-const strictLoads = async (organizationId: SafeId<"organization">) => {
+const strictLoads = async (
+  organizationId: SafeId<"organization">,
+): Promise<Result<unknown, HandlerError<403>>[]> => {
   const scope = requestScope(organizationId);
   return [
-    await Result.tryPromise(
-      async () =>
-        await scope(async (tx) => await loadOrgAIConfig(tx, organizationId)),
-    ),
-    await Result.tryPromise(
-      async () =>
-        await scope(async (tx) => await loadOrgAISettings(tx, organizationId)),
-    ),
+    await scope(async (tx) => await loadOrgAIConfig(tx, organizationId)),
+    await scope(async (tx) => await loadOrgAISettings(tx, organizationId)),
   ];
 };
 
@@ -257,7 +253,9 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       expect(await authStatus(ids.orgA)).toBe(ORG_AI_CONFIG_STATUS.ok);
       const scope = requestScope(ids.orgA);
       expect(
-        await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgA)),
+        (
+          await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgA))
+        ).unwrap(),
       ).not.toBeNull();
     });
   });
@@ -276,8 +274,8 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
         for (const load of await strictLoads(organizationId)) {
           expect(Result.isError(load)).toBe(true);
           if (Result.isError(load)) {
-            expect(load.error.cause).toBeInstanceOf(HandlerError);
-            expect(load.error.cause).toMatchObject({ status: 403 });
+            expect(load.error).toBeInstanceOf(HandlerError);
+            expect(load.error).toMatchObject({ status: 403 });
           }
         }
       }
