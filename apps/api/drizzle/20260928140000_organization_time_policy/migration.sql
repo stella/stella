@@ -16,8 +16,3 @@ ALTER TABLE "organization_settings"
     CHECK ("time_edit_window_days" >= 0) NOT VALID,
   ADD CONSTRAINT "organization_settings_time_locked_month_check"
     CHECK ("time_locked_through_month" IS NULL OR (isfinite("time_locked_through_month") AND EXTRACT(MONTH FROM "time_locked_through_month" + 1) <> EXTRACT(MONTH FROM "time_locked_through_month"))) NOT VALID;--> statement-breakpoint
-
--- Validation scans existing rows without holding the ADD CONSTRAINT lock.
-ALTER TABLE "organization_settings" VALIDATE CONSTRAINT "organization_settings_time_minimum_unit_check";--> statement-breakpoint
-ALTER TABLE "organization_settings" VALIDATE CONSTRAINT "organization_settings_time_edit_window_check";--> statement-breakpoint
-ALTER TABLE "organization_settings" VALIDATE CONSTRAINT "organization_settings_time_locked_month_check";

@@ -6,6 +6,7 @@ import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const organizationId = toSafeId<"organization">("org_test");
@@ -18,6 +19,9 @@ const defaultPolicy = {
   timeLockedThroughMonth: null,
   timeNarrativeRequired: true,
 };
+
+const handlerErrorCode = (error: unknown) =>
+  error instanceof HandlerError ? error.code : undefined;
 
 const entry = {
   organizationId,
@@ -65,9 +69,9 @@ describe("time entry policy at API write paths", () => {
         },
       }),
     );
-    expect(Result.isError(result) && result.error.code).toBe(
-      "narrative_required",
-    );
+    expect(
+      Result.isError(result) ? handlerErrorCode(result.error) : undefined,
+    ).toBe("narrative_required");
   });
 
   test("an approver cannot edit the last day of a locked month", async () => {
@@ -95,9 +99,9 @@ describe("time entry policy at API write paths", () => {
         body: { id: entryId, durationMinutes: 10 },
       }),
     );
-    expect(Result.isError(result) && result.error.code).toBe(
-      "time_period_locked",
-    );
+    expect(
+      Result.isError(result) ? handlerErrorCode(result.error) : undefined,
+    ).toBe("time_period_locked");
   });
 
   test("non-approver edit window rejects an older entry", async () => {
@@ -122,9 +126,9 @@ describe("time entry policy at API write paths", () => {
         body: { id: entryId, durationMinutes: 10 },
       }),
     );
-    expect(Result.isError(result) && result.error.code).toBe(
-      "outside_edit_window",
-    );
+    expect(
+      Result.isError(result) ? handlerErrorCode(result.error) : undefined,
+    ).toBe("outside_edit_window");
   });
 
   test("an edited time zone cannot shift the existing entry into the edit window", async () => {
@@ -154,9 +158,9 @@ describe("time entry policy at API write paths", () => {
         body: { id: entryId, timezoneId: "America/Los_Angeles" },
       }),
     );
-    expect(Result.isError(result) && result.error.code).toBe(
-      "outside_edit_window",
-    );
+    expect(
+      Result.isError(result) ? handlerErrorCode(result.error) : undefined,
+    ).toBe("outside_edit_window");
   });
 
   test("non-approver cannot delete an entry outside the edit window", async () => {
@@ -181,9 +185,9 @@ describe("time entry policy at API write paths", () => {
         body: { id: entryId },
       }),
     );
-    expect(Result.isError(result) && result.error.code).toBe(
-      "outside_edit_window",
-    );
+    expect(
+      Result.isError(result) ? handlerErrorCode(result.error) : undefined,
+    ).toBe("outside_edit_window");
   });
 
   test("update rounds with a non-default unit", async () => {

@@ -118,7 +118,7 @@ export const getTimePolicyViolation = ({
   dateWorked: string;
   today: string;
   canApprove: boolean;
-  narrative?: string;
+  narrative?: string | undefined;
 }): HandlerError<400> | null => {
   const lockError = getTimePeriodLockError(policy, dateWorked);
   if (lockError) {
