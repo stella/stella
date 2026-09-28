@@ -1,17 +1,17 @@
 {
   "surfaces": {
     "default": {
-      "tools": 67,
+      "tools": 68,
       "chars": {
-        "name": 1131,
-        "title": 1166,
-        "description": 27834,
-        "inputSchema": 73908,
-        "outputSchema": 51192,
-        "annotations": 7155,
+        "name": 1149,
+        "title": 1184,
+        "description": 28457,
+        "inputSchema": 75851,
+        "outputSchema": 53525,
+        "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 168421,
+      "payloadUtf8Bytes": 173540,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807

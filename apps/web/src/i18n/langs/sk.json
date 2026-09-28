@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Overené voči {count, plural, one {# faktu} few {# faktom} many {# faktom} other {# faktom}} v stave ku dňu {checkedAt}. Neskoršie úpravy zoznamu toto overenie nemenia.",
       "failedTitle": "Overenie zlyhalo",
+      "history": {
+        "label": "História overení",
+        "loadFailed": "Predchádzajúce overenia tohto dokumentu sa nepodarilo načítať."
+      },
       "inProgress": "Porovnávanie tvrdení dokumentu s faktami zoznamu…",
       "loadFailed": "Toto overenie sa nepodarilo načítať.",
       "noClaims": "V tomto dokumente sa nenašli žiadne tvrdenia.",
@@ -1174,6 +1178,7 @@
       "business_registry_lookup": "Vyhľadávanie v obchodnom registri",
       "compare_versions": "Porovnávanie verzií",
       "configure_template_fields": "Nastaviť polia vzoru",
+      "counterparty_check": "Preverovanie protistrany",
       "create-document": "Pripravujem dokument",
       "create_matter_document": "Vytváram dokument",
       "create_reader_annotation": "Pridať zvýraznenie alebo komentár",

@@ -15,14 +15,16 @@
     "test": "bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/scripts",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/scripts",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/scripts",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
     "@formatjs/icu-messageformat-parser": "^3.5.20",
     "@stll/ai-catalog": "workspace:*",
+    "@stll/api-contract": "workspace:*",
     "@stll/locales": "workspace:*",
+    "@stll/permissions": "workspace:*",
     "@stll/time": "workspace:*",
     "better-result": "catalog:",
     "typescript": "catalog:"

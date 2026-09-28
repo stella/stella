@@ -73,6 +73,8 @@ test("nothing derives a key from the raw canonicalizer", () => {
     "handlers/case-law/ingestion/citation-extractor.ts",
     "handlers/case-law/ingestion/citation-recall.ts",
     "handlers/case-law/ingestion/pipeline/decision-plan.ts",
+    // The probe compares extracted citation keys; it does not write a column.
+    "scripts/citation-probe-coverage.ts",
   ]);
 });
 

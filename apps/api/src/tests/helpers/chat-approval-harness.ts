@@ -5,15 +5,20 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
-import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
+import {
+  decodeMessagePageCursor,
+  loadChatMessagePage,
+} from "@/api/handlers/chat/message-page";
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
+import type { SendMessageDependencies } from "@/api/handlers/chat/send-message";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -26,8 +31,11 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import {
   findLiveViewViolations,
+  findUnservedSnapshotMessages,
   findUnstoredWireResults,
   findWireIdentityViolations,
 } from "@/api/tests/helpers/chat-live-reload-invariants";
@@ -44,6 +52,9 @@ import type {
   ChatOracleId,
   OracleViolation,
 } from "@/api/tests/helpers/chat-oracles";
+import { createRefStabilityLedger } from "@/api/tests/helpers/chat-ref-stability";
+import { createTornDownRequest } from "@/api/tests/helpers/chat-request-teardown";
+import type { TornDownRequest } from "@/api/tests/helpers/chat-request-teardown";
 import { drainResponse } from "@/api/tests/helpers/chat-round-trip";
 import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 import type { ScriptedRun } from "@/api/tests/helpers/chat-scripted-provider";
@@ -63,7 +74,9 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // the browser. A web client (`openWebClient`) posts what its live view holds
 // and answers only the cards that view shows. After every send the stored
 // thread and the wire are checked, and `checkWebClient` compares what the
-// page shows live with what a reload shows.
+// page shows live with what a reload shows. Every request is torn down once
+// the handler hands its response back, so every conversation also checks
+// that the turn's run does not depend on it.
 
 export const APPROVAL_TOOL_NAME = "mcp__external__delete";
 /**
@@ -128,12 +141,21 @@ const CHAT_TURN_CANCEL_PATH =
   /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/cancel$/u;
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
 const MAX_BARRIER_POLLS = 2000;
-/** The checks a hand-built send answers for: the stored thread's. */
+/** The checks a hand-built send answers for: the stored thread's, and the
+ *  run's independence from its request. */
 const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
+  CHAT_ORACLE.persistedRefsStable,
   CHAT_ORACLE.persistedTurnOutcome,
   CHAT_ORACLE.persistedTurnSettles,
+  CHAT_ORACLE.runOutlivesRequest,
+]);
+/** How a turn ends when something cut its run short: a response read to its
+ *  end, with no Stop, cannot have ended that way. */
+const CUT_SHORT_REASONS: ReadonlySet<string> = new Set([
+  "client-disconnected",
+  "user-stop",
 ]);
 
 /** The page's connection dropping because the process serving it died. */
@@ -202,7 +224,8 @@ export const createApprovalHarness = ({
     executions.push(name);
     return await Promise.resolve({ deleted: name });
   });
-  const sendMessage = createSendMessage({
+  const refLedger = createRefStabilityLedger();
+  const sendMessageDependencies = {
     indexThread: async () => await Promise.resolve(undefined),
     loadExternalMcpTools: async () => {
       const close = async () => await Promise.resolve(undefined);
@@ -224,19 +247,45 @@ export const createApprovalHarness = ({
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     streamResponse: streamChat,
     uploadMessageFiles: uploadMessageFilesWithRollback,
-  });
-  type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
+  } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
+  /** Per thread: the send handler, recording each request's ref registry. */
+  const handlers = new Map<string, ReturnType<typeof createSendMessage>>();
+  const sendMessageOf = (threadId: string) => {
+    const known = handlers.get(threadId);
+    if (known !== undefined) {
+      return known;
+    }
+    const created = createSendMessage({
+      ...sendMessageDependencies,
+      createRefRegistry: (bindings, retired) =>
+        refLedger.track(threadId, createChatRefRegistry(bindings, retired)),
+    });
+    handlers.set(threadId, created);
+    return created;
+  };
+  type SendMessageCtx = Parameters<
+    ReturnType<typeof createSendMessage>["handler"]
+  >[0];
   type SendBody = SendMessageCtx["body"];
   const bodyByContext = new WeakMap<SendMessageCtx, SendBody>();
+  const requestByContext = new WeakMap<SendMessageCtx, TornDownRequest>();
 
   /** The handler context the route builds around a validated body. */
   const contextFromBody = (
     body: SendBody,
     signal?: AbortSignal,
   ): SendMessageCtx => {
+    const request = createTornDownRequest({
+      signal,
+      url: "http://localhost/v1/chat/send",
+    });
     const ctx = asTestRaw<SendMessageCtx>({
       body,
-      createAuditRecorder: () => async () => await Promise.resolve(),
+      // A recorder reads the request it is built for.
+      createAuditRecorder: () => {
+        request.request.headers.get("user-agent");
+        return async () => await Promise.resolve();
+      },
       getAccessibleWorkspaces: async () =>
         await Promise.resolve([
           { id: ids.wsA1, status: "active" },
@@ -250,9 +299,7 @@ export const createApprovalHarness = ({
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),
-      request: new Request("http://localhost/v1/chat/send", {
-        ...(signal === undefined ? {} : { signal }),
-      }),
+      request: request.request,
       route: "/v1/chat/send",
       safeDb,
       scopedDb,
@@ -260,7 +307,62 @@ export const createApprovalHarness = ({
       user: { id: ids.userA1 },
     });
     bodyByContext.set(ctx, body);
+    requestByContext.set(ctx, request);
     return ctx;
+  };
+
+  const requestOf = (ctx: SendMessageCtx): TornDownRequest =>
+    requestByContext.get(ctx) ??
+    panic("Send contexts come from this harness's contextFromBody");
+
+  /**
+   * The route's answer to `ctx`. Once the handler hands its response back,
+   * the request is over: it is torn down before anything reads the response.
+   */
+  const handle = async (ctx: SendMessageCtx) => {
+    const body =
+      bodyByContext.get(ctx) ??
+      panic("Send contexts come from this harness's contextFromBody");
+    const result = await sendMessageOf(body.threadId).handler(ctx);
+    requestOf(ctx).tearDown();
+    return result;
+  };
+
+  /**
+   * `chat.run.outlives-request`: reads of the request after its response,
+   * and a turn cut short although its response was read to its end without a
+   * Stop, which only the request's end could have done.
+   */
+  const findRequestDependence = async ({
+    ctx,
+    ended,
+    turnId,
+  }: {
+    ctx: SendMessageCtx;
+    ended: RecordedExchange["ended"];
+    turnId: string | null;
+  }): Promise<OracleViolation[]> => {
+    const reads = requestOf(ctx).readsAfterResponse();
+    const turn =
+      ended === "complete" && turnId !== null
+        ? await testDb.query.chatTurns.findFirst({
+            columns: {
+              cancellationReason: true,
+              interruptionReason: true,
+              status: true,
+            },
+            where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
+          })
+        : undefined;
+    const reason = turn?.interruptionReason ?? turn?.cancellationReason;
+    return violationsOf(CHAT_ORACLE.runOutlivesRequest, [
+      ...reads.map((read) => ({ readAfterResponse: read })),
+      ...(reason !== undefined &&
+      reason !== null &&
+      CUT_SHORT_REASONS.has(reason)
+        ? [{ cutShortAfterCompleteResponse: { reason, turnId } }]
+        : []),
+    ]);
   };
 
   /** A request built by hand rather than by a web client. */
@@ -391,20 +493,62 @@ export const createApprovalHarness = ({
     ];
   };
 
+  const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
+    (
+      await testDb
+        .select({
+          content: chatMessages.content,
+          id: chatMessages.id,
+          role: chatMessages.role,
+        })
+        .from(chatMessages)
+        .where(eq(chatMessages.threadId, threadId))
+        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    ).map(chatMessageFromPersisted);
+
+  /** Refs whose target moved, checked once a request of `threadId` settled. */
+  const findUnstableRefs = async (
+    threadId: SafeId<"chatThread">,
+  ): Promise<OracleViolation[]> => {
+    // As the next request reads them: under the thread owner's row scope.
+    const names = await safeDb(
+      async (tx) => await readChatThreadNames({ threadId, tx }),
+    );
+    if (Result.isError(names)) {
+      return panic("The thread's names failed to load", names.error);
+    }
+    const held = names.value.source === "ledger" ? names.value : null;
+    return refLedger.check({
+      ledger: {
+        refs: new Set(held?.refBindings.map(({ ref }) => ref)),
+        toolCallIds: new Set(held?.toolCallIds),
+      },
+      stored: await readThreadMessages(threadId),
+      threadId,
+    });
+  };
+
   /**
    * Sends `ctx` and reads the response to its end, so its terminal
    * persistence runs; then checks the chunks the browser would read and,
    * past the turn barrier, the stored thread.
    */
-  const sendAndCheck = async (ctx: SendMessageCtx) => {
+  const sendAndCheck = async (
+    ctx: SendMessageCtx,
+    { readAfterSettling = false }: { readAfterSettling?: boolean } = {},
+  ) => {
     const body =
       bodyByContext.get(ctx) ??
       panic("Send contexts come from this harness's sendContext");
     const threadId = body.threadId;
-    const result = await sendMessage.handler(ctx);
+    const result = await handle(ctx);
     if (!(result instanceof Response && result.ok)) {
       return { rejection: result, status: "rejected" } as const;
     }
+    // Unread, the run still ends on its own: nothing it does waits on the page.
+    const settledUnread = readAfterSettling
+      ? await awaitSettledTurns(threadId)
+      : [];
     const text = await drainResponse(result);
     const chunks = await readClientStreamChunks({
       response: new Response(text, { headers: result.headers }),
@@ -418,13 +562,24 @@ export const createApprovalHarness = ({
       status: "streamed",
       text,
       violations: [
+        ...settledUnread,
         ...unsettled,
+        ...(await findRequestDependence({
+          ctx,
+          ended: "complete",
+          turnId: result.headers.get(CHAT_TURN_ID_HEADER),
+        })),
         ...findWireIdentityViolations(chunks),
         ...findUnstoredWireResults({
           chunks,
           stored: await reloadView(threadId),
         }),
+        ...findUnservedSnapshotMessages({
+          chunks,
+          served: await readAllMessages(threadId),
+        }),
         ...(await findPersistedViolations(threadId)),
+        ...(await findUnstableRefs(threadId)),
       ],
     } as const;
   };
@@ -437,10 +592,11 @@ export const createApprovalHarness = ({
    */
   const send = async (
     ctx: SendMessageCtx,
+    options?: { readAfterSettling?: boolean },
   ): Promise<
     { status: "streamed" } | { rejection: unknown; status: "rejected" }
   > => {
-    const outcome = await sendAndCheck(ctx);
+    const outcome = await sendAndCheck(ctx, options);
     if (outcome.status === "rejected") {
       return outcome;
     }
@@ -485,7 +641,7 @@ export const createApprovalHarness = ({
     const threadId = body.threadId;
     const stalled = provider.stalled(threadId);
     // The dying process never sees the page go away, so no signal reaches it.
-    const result = await sendMessage.handler(contextFromBody(body));
+    const result = await handle(contextFromBody(body));
     if (!(result instanceof Response && result.ok)) {
       return statusResponse(result);
     }
@@ -506,17 +662,34 @@ export const createApprovalHarness = ({
 
   const readPage = async (
     threadId: SafeId<"chatThread">,
+    before?: SafeId<"chatMessage">,
   ): Promise<RecordedPage> => {
     const page = await loadChatMessagePage({
       safeDb,
       threadId,
       userId: ids.userA1,
+      before,
     });
     if (Result.isError(page)) {
       return panic("The thread's message page failed to load", page.error);
     }
     // The page as the browser receives it: a JSON body.
     return asTestRaw<RecordedPage>(await Response.json(page.value).json());
+  };
+
+  const readAllMessages = async (threadId: SafeId<"chatThread">) => {
+    const messages: unknown[] = [];
+    let page = await readPage(threadId);
+    messages.push(...page.messages);
+    while (page.olderCursor !== null) {
+      const before = decodeMessagePageCursor(page.olderCursor);
+      if (before === null) {
+        return panic("The thread's message page returned an invalid cursor");
+      }
+      page = await readPage(threadId, before);
+      messages.push(...page.messages);
+    }
+    return messages;
   };
 
   type RecordEnd = (
@@ -543,15 +716,19 @@ export const createApprovalHarness = ({
 
   /** Checks a response the page has read to wherever it ended. */
   const afterResponse = async ({
+    ctx,
     ended,
     endRecord,
     raw,
     text,
+    turnId,
   }: {
+    ctx: SendMessageCtx;
     endRecord: RecordEnd;
     ended: RecordedExchange["ended"];
     raw: SendBody;
     text: string;
+    turnId: string | null;
   }) => {
     const chunks = await readClientStreamChunks({
       response: new Response(text),
@@ -560,12 +737,18 @@ export const createApprovalHarness = ({
     });
     clientFindings.push(
       ...(await awaitSettledTurns(raw.threadId)),
+      ...(await findRequestDependence({ ctx, ended, turnId })),
       ...findWireIdentityViolations(chunks),
       ...findUnstoredWireResults({
         chunks,
         stored: await reloadView(raw.threadId),
       }),
+      ...findUnservedSnapshotMessages({
+        chunks,
+        served: await readAllMessages(raw.threadId),
+      }),
       ...(await findPersistedViolations(raw.threadId)),
+      ...(await findUnstableRefs(raw.threadId)),
     );
     delivered.set(raw.threadId, deliveredInterrupts(chunks));
     await endRecord({ ended, response: { body: text, status: 200 } });
@@ -578,11 +761,13 @@ export const createApprovalHarness = ({
    * socket does.
    */
   const streamLive = ({
+    ctx,
     endRecord,
     raw,
     response,
     signal,
   }: {
+    ctx: SendMessageCtx;
     endRecord: RecordEnd;
     raw: SendBody;
     response: Response;
@@ -605,10 +790,12 @@ export const createApprovalHarness = ({
       openConnections.delete(raw.threadId);
       const stopped = stoppingThreads.delete(raw.threadId);
       await afterResponse({
+        ctx,
         endRecord,
         ended: ending === "complete" && stopped ? "stopped" : ending,
         raw,
         text,
+        turnId: response.headers.get(CHAT_TURN_ID_HEADER),
       });
     };
     const done = settleResponse();
@@ -684,9 +871,10 @@ export const createApprovalHarness = ({
       }
     }
     if (liveThreads.has(raw.threadId)) {
-      const result = await sendMessage.handler(contextFromBody(raw, signal));
+      const ctx = contextFromBody(raw, signal);
+      const result = await handle(ctx);
       if (result instanceof Response && result.ok) {
-        return streamLive({ endRecord, raw, response: result, signal });
+        return streamLive({ ctx, endRecord, raw, response: result, signal });
       }
       return {
         done: Promise.resolve(),
@@ -857,18 +1045,17 @@ export const createApprovalHarness = ({
     }
   };
 
-  const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
-    (
-      await testDb
-        .select({
-          content: chatMessages.content,
-          id: chatMessages.id,
-          role: chatMessages.role,
-        })
-        .from(chatMessages)
-        .where(eq(chatMessages.threadId, threadId))
-        .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
-    ).map(chatMessageFromPersisted);
+  /**
+   * Fails when any request of `threadId` so far resolved a stored ref to
+   * another target than it named when stored (`chat.persisted.refs-stable`),
+   * for callers that do not run every oracle through `checkWebClient`.
+   */
+  const expectStableRefs = (threadId: SafeId<"chatThread">): void => {
+    const violations = refLedger.findingsOf(threadId);
+    if (violations.length > 0) {
+      panic(`The thread breaks an invariant: ${JSON.stringify(violations)}`);
+    }
+  };
 
   const lastAssistant = async (threadId: SafeId<"chatThread">) => {
     const message = (await readThreadMessages(threadId)).findLast(
@@ -952,6 +1139,7 @@ export const createApprovalHarness = ({
     },
     executions,
     expectSoundWebClient,
+    expectStableRefs,
     lastAssistant,
     openWebClient,
     readPage,

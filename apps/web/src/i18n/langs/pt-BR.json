@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Verificado em relação a {count, plural, one {# fato} other {# fatos}}, como estavam em {checkedAt}. Edições posteriores na lista não alteram esta verificação.",
       "failedTitle": "Falha na verificação",
+      "history": {
+        "label": "Histórico de verificações",
+        "loadFailed": "Não foi possível carregar as verificações anteriores deste documento."
+      },
       "inProgress": "Verificando as alegações do documento em relação aos fatos da lista…",
       "loadFailed": "Não foi possível carregar esta verificação.",
       "noClaims": "Nenhuma alegação foi encontrada neste documento.",
@@ -1174,6 +1178,7 @@
       "business_registry_lookup": "Buscando no registro de empresas",
       "compare_versions": "Comparando versões",
       "configure_template_fields": "Configurar campos do modelo",
+      "counterparty_check": "Verificando a contraparte",
       "create-document": "Preparando documento",
       "create_matter_document": "Criando documento",
       "create_reader_annotation": "Adicionar destaque ou comentário",

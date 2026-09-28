@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Geprüft anhand von {count, plural, one {# Fakt} other {# Fakten}}, wie sie am {checkedAt} vorlagen. Spätere Änderungen an der Liste wirken sich nicht auf diese Prüfung aus.",
       "failedTitle": "Prüfung fehlgeschlagen",
+      "history": {
+        "label": "Prüfverlauf",
+        "loadFailed": "Frühere Prüfungen dieses Dokuments konnten nicht geladen werden."
+      },
       "inProgress": "Die Behauptungen des Dokuments werden mit den Fakten der Liste abgeglichen …",
       "loadFailed": "Diese Prüfung konnte nicht geladen werden.",
       "noClaims": "In diesem Dokument wurden keine Behauptungen gefunden.",
@@ -1174,6 +1178,7 @@
       "business_registry_lookup": "Handelsregister durchsuchen",
       "compare_versions": "Versionen vergleichen",
       "configure_template_fields": "Vorlagenfelder konfigurieren",
+      "counterparty_check": "Gegenpartei prüfen",
       "create-document": "Dokument vorbereiten",
       "create_matter_document": "Dokument erstellen",
       "create_reader_annotation": "Hervorhebung oder Kommentar hinzufügen",

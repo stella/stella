@@ -1,3 +1,4 @@
+import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import { expect, test } from "../helpers/test";
 
 test("model picker keeps its help and workspace chrome aligned", async ({
@@ -166,7 +167,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
   // title routeError.title). Checked after every step below; declared
   // once so the assertions read the same way each time.
   const errorBoundary = page.getByRole("heading", {
-    name: "This page couldn’t be opened",
+    name: ROUTE_ERROR_HEADING,
   });
   await expect(errorBoundary).toHaveCount(0);
 

@@ -14,6 +14,7 @@ import {
   resolveE2eExecutionProfile,
 } from "../execution-profile";
 import { apiDelete, apiPut } from "../helpers/api";
+import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
 import {
   E2E_CLEANUP_TARGET_TYPE,
   registerDeferredE2eCleanup,
@@ -653,7 +654,7 @@ const comparableHref = (url: URL, assertSearch: boolean) =>
 
 const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
   await expect(
-    page.getByRole("heading", { name: "This page couldn’t be opened" }),
+    page.getByRole("heading", { name: ROUTE_ERROR_HEADING }),
     `route error boundary rendered on ${routeTemplate}`,
   ).toHaveCount(0);
 };

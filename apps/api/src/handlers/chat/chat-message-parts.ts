@@ -46,7 +46,10 @@ import type {
   PersistedToolInput,
   PersistedToolResultContent,
 } from "@/api/lib/chat/persisted-message-content";
+import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
 
@@ -557,6 +560,11 @@ const CHAT_PART_POLICY = {
     invalidHandling: "panic",
     providerVisibility: "model",
   },
+  subagent: {
+    clientAcceptance: "server-only",
+    invalidHandling: "drop",
+    providerVisibility: "ui-only",
+  },
   text: {
     clientAcceptance: "accept",
     invalidHandling: "panic",
@@ -968,6 +976,9 @@ const CHAT_PART_PERSISTENCE = {
   document: "persist",
   image: "persist",
   "structured-output": "persist",
+  // Stella runs subagents through its own tool, not TanStack's
+  // `chat({ subagents })`, so the engine never builds this part.
+  subagent: "drop",
   text: "persist",
   thinking: "persist",
   "tool-call": "persist",
@@ -1025,6 +1036,7 @@ const CHAT_PART_VALIDATORS = {
   document: isContentPartWithSource,
   image: isContentPartWithSource,
   "structured-output": isStructuredOutputPart,
+  subagent: () => false,
   text: (part) => typeof part["content"] === "string",
   thinking: (part) => typeof part["content"] === "string",
   "tool-call": (part) =>
@@ -1165,6 +1177,8 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
         value: source.value,
         ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
       };
+    case "file":
+      return panic("A validated media part has no provider file source");
     default: {
       source satisfies never;
       return panic(`Unhandled source: ${String(source)}`);
@@ -1217,6 +1231,8 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-call":
     case "tool-result":
       return part;
+    case "subagent":
+      return panic("A subagent part is never persisted");
     default: {
       part satisfies never;
       return panic(`Unhandled part: ${String(part)}`);
@@ -1592,12 +1608,49 @@ const isTanStackToolResultContentPart = (part: unknown): boolean => {
   );
 };
 
+const ANON_RESTORATION_CONFLICT_SINK = failureSink({
+  event: "chat.anon_restoration_conflict",
+  expected: [],
+});
+
+/**
+ * One message's restorations, each placeholder once. A placeholder names one
+ * original across a thread (`createChatThirdPartyBoundary` numbers every
+ * request after the thread's earlier ones), so a pair naming another original
+ * for a placeholder already held is a numbering fault: the first meaning
+ * stays, and the fault is reported without its values.
+ */
 export const mergeAnonRestorations = (
   current: ChatMessageMetadata["anonRestorations"],
   next: NonNullable<ChatMessageMetadata["anonRestorations"]>,
-): NonNullable<ChatMessageMetadata["anonRestorations"]> => ({
-  pairs: [...(current === undefined ? [] : current.pairs), ...next.pairs],
-});
+): NonNullable<ChatMessageMetadata["anonRestorations"]> => {
+  const pairs = current === undefined ? [] : [...current.pairs];
+  const named = new Map<string, string>();
+  for (const { original, placeholder } of pairs) {
+    if (!named.has(placeholder)) {
+      named.set(placeholder, original);
+    }
+  }
+  let conflicts = 0;
+  for (const pair of next.pairs) {
+    const held = named.get(pair.placeholder);
+    if (held === undefined) {
+      named.set(pair.placeholder, pair.original);
+      pairs.push(pair);
+    } else if (held !== pair.original) {
+      conflicts += 1;
+    }
+  }
+  if (conflicts > 0) {
+    observeFailure(
+      new TelemetryError({
+        message: "An anonymization placeholder named two originals",
+      }),
+      { sink: ANON_RESTORATION_CONFLICT_SINK },
+    );
+  }
+  return { pairs };
+};
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&

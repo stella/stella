@@ -33,7 +33,6 @@ import {
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,
-  readSitemapBucketShards,
   readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
@@ -810,9 +809,6 @@ describe("public-law reader role", () => {
     const shards = await listSitemapShardsHandler(caseLawDb);
     expect(shards).toMatchObject({ items: [] });
     await caseLawDb(async (tx) => {
-      await readSitemapBucketShards(tx, [
-        { country: PUBLIC_COUNTRY, month: "08", year: "2026" },
-      ]);
       await readSitemapDecisionAlternates(tx, ["reader-role-census"]);
     });
 
@@ -866,7 +862,12 @@ describe("public-law reader role", () => {
     const byDocket = await findDecisionIdsByIdentity({
       caseLawDb,
       country: "CZE",
-      identity: { type: "identifier", kind: "docket", value: "22 Cdo 1/2026" },
+      identity: {
+        type: "identifier",
+        kind: "docket",
+        jurisdiction: "CZE",
+        value: "22 Cdo 1/2026",
+      },
     });
     expect(byDocket).toEqual([]);
     const byEcli = await findDecisionIdsByIdentity({

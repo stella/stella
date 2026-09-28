@@ -308,13 +308,14 @@ export const canAcceptChatTurnOnTx = async ({
 };
 
 /**
- * A pending human interaction is represented twice: its owning turn protects
- * execution ownership, while the assistant message is what reload hydration
- * renders. Superseding only the turn leaves that canonical message inviting an
- * action the server can no longer accept. Terminalize both in this transaction
- * so a reload cannot resurrect a stale approval or question.
+ * A cancelled turn's message, with every call that can no longer run or be
+ * answered closed. A pending human interaction is represented twice: its
+ * owning turn protects execution ownership, while the assistant message is
+ * what reload hydration renders. Ending only the turn leaves that message
+ * inviting an action the server can no longer accept, and a call cut off
+ * mid-stream reading as one a client still answers.
  */
-export const cancelAwaitingAssistantMessage = ({
+export const cancelAssistantMessage = ({
   message,
   reason,
 }: {
@@ -334,8 +335,8 @@ export const cancelAwaitingAssistantMessage = ({
   });
 };
 
-/** Store `cancelAwaitingAssistantMessage` for the awaiting turn `turnId`. */
-const cancelAwaitingAssistantMessageOnTx = async ({
+/** Store `cancelAssistantMessage` for the awaiting turn `turnId`. */
+const cancelAssistantMessageOnTx = async ({
   reason,
   threadId,
   turnId,
@@ -377,7 +378,7 @@ const cancelAwaitingAssistantMessageOnTx = async ({
   if (awaitingMessage.role !== "assistant") {
     panic("Awaiting chat turn does not own an assistant message");
   }
-  const cancelledMessage = cancelAwaitingAssistantMessage({
+  const cancelledMessage = cancelAssistantMessage({
     message: chatMessageFromPersisted(awaitingMessage),
     reason,
   });
@@ -429,7 +430,7 @@ export const insertChatTurnAcceptanceOnTx = async ({
   const superseded =
     awaiting === undefined
       ? undefined
-      : await cancelAwaitingAssistantMessageOnTx({
+      : await cancelAssistantMessageOnTx({
           reason: "superseded",
           threadId: acceptance.threadId,
           turnId: awaiting.id,
@@ -626,7 +627,7 @@ const stopUnownedChatTurnOnTx = async ({
     return panic(`A stop cannot end a ${state.status} chat turn`);
   }
   if (state.status === "awaiting-user") {
-    await cancelAwaitingAssistantMessageOnTx({
+    await cancelAssistantMessageOnTx({
       reason: planned.state.reason,
       threadId: state.threadId,
       turnId: state.id,

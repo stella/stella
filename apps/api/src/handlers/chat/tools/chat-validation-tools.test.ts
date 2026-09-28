@@ -8,6 +8,7 @@ import {
   getChatTools,
   getChatValidationTools,
 } from "@/api/handlers/chat/tools/chat-tools";
+import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import { REVIEW_FOLDER_CONSISTENCY_TOOL_NAME } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   READ_DOCUMENT_TOOL_NAME,
@@ -240,6 +241,7 @@ describe("chat validation tool set", () => {
 
     // The matrix must reach each gated group, or the superset holds vacuously.
     for (const gatedToolName of [
+      COUNTERPARTY_CHECK_TOOL_NAME,
       "load-skill",
       "read-skill-resource",
       "update-current-skill-resource",
@@ -255,6 +257,23 @@ describe("chat validation tool set", () => {
       expect(exposedByRuns, gatedToolName).toContain(gatedToolName);
     }
     expect([...missing]).toEqual([]);
+  });
+
+  test("offers counterparty checks only across a raw boundary", () => {
+    const scenarios = buildRunScenarios();
+    for (const boundary of THIRD_PARTY_BOUNDARIES) {
+      const scenario = scenarios.find(
+        ({ thirdPartyBoundary }) => thirdPartyBoundary === boundary,
+      );
+      if (scenario === undefined) {
+        throw new Error(`Expected a ${boundary.type} scenario`);
+      }
+      expect(
+        registeredToolNames(getChatTools(scenario)).includes(
+          COUNTERPARTY_CHECK_TOOL_NAME,
+        ),
+      ).toBe(boundary.type === "raw");
+    }
   });
 
   // Known gaps, pinned so they can only shrink. These gates are read from

@@ -1,0 +1,56 @@
+1. Converse's RUN_ERROR carries rawEvent (toRunErrorRawEvent), as the other
+   adapters' do since TanStack/ai#985; it had none, so the provider status
+   was lost. Upstream PR to be opened; remove when released.
+2. A Converse stream that ends without messageStop throws (code
+   incomplete-stream), so chatStream reports a RUN_ERROR instead of finishing
+   the cut-off answer as stop. Upstream PR to be opened; remove when released.
+
+diff --git a/dist/esm/adapters/converse-text.js b/dist/esm/adapters/converse-text.js
+index 4541a0a03889fdcd3c29dd1e33a022a64833529d..7daf27cda1e52db12f68aec86e247f529e50d604 100644
+--- a/dist/esm/adapters/converse-text.js
++++ b/dist/esm/adapters/converse-text.js
+@@ -6,7 +6,7 @@ import { processConverseStream, throwIfConverseStreamError } from "../converse/s
+ import { buildStructuredToolConfig } from "../converse/structured-output.js";
+ import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
+ import { BaseTextAdapter } from "@tanstack/ai/adapters";
+-import { toRunErrorPayload } from "@tanstack/ai/adapter-internals";
++import { toRunErrorPayload, toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ //#region src/adapters/converse-text.ts
+ /**
+ * Bedrock Converse text adapter. Wires the Converse translation modules (message
+@@ -126,6 +126,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+ 			});
+ 		} catch (error) {
+ 			const errorPayload = toRunErrorPayload(error, `${this.name}.chatStream failed`);
++			const rawEvent = toRunErrorRawEvent(error);
+ 			options.logger.errors(`${this.name}.chatStream fatal`, {
+ 				error: errorPayload,
+ 				source: `${this.name}.chatStream`
+@@ -136,6 +137,7 @@ var BedrockConverseTextAdapter = class extends BaseTextAdapter {
+ 				timestamp: Date.now(),
+ 				message: errorPayload.message,
+ 				...errorPayload.code !== void 0 && { code: errorPayload.code },
++				...rawEvent !== void 0 && { rawEvent },
+ 				error: {
+ 					message: errorPayload.message,
+ 					...errorPayload.code !== void 0 && { code: errorPayload.code }
+diff --git a/dist/esm/converse/stream-processor.js b/dist/esm/converse/stream-processor.js
+index baef7cac6284264c0bcb4483ebb406399d5d729d..392f87b4d435ecd96c8a9b62480ae68b5a3818c1 100644
+--- a/dist/esm/converse/stream-processor.js
++++ b/dist/esm/converse/stream-processor.js
+@@ -207,12 +207,14 @@ async function* processConverseStream(stream, newMessageId, lifecycle = {}) {
+ 		timestamp: Date.now()
+ 	};
+ 	yield* closeReasoning();
++	// A stream with no messageStop was cut off: the adapter's catch reports it.
++	if (finishReason === void 0) throw Object.assign(new Error("The Converse stream ended before messageStop."), { code: "incomplete-stream" });
+ 	yield {
+ 		type: EventType.RUN_FINISHED,
+ 		runId,
+ 		threadId,
+ 		timestamp: Date.now(),
+-		finishReason: finishReason ?? "stop",
++		finishReason,
+ 		...usage && { usage }
+ 	};
+ }

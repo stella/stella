@@ -85,14 +85,24 @@ test("a docket resolves by its citation key however the reader spaces it", async
   const spaced = await findDecisionIdsByIdentity({
     caseLawDb,
     country: "CZE",
-    identity: { type: "identifier", kind: "docket", value: "Pl. ÚS 24/10" },
+    identity: {
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "CZE",
+      value: "Pl. ÚS 24/10",
+    },
   });
   expect(spaced).toEqual([plenaryId]);
 
   const unscoped = await findDecisionIdsByIdentity({
     caseLawDb,
     country: undefined,
-    identity: { type: "identifier", kind: "docket", value: "23 Cdo 1572/2012" },
+    identity: {
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "CZE",
+      value: "23 Cdo 1572/2012",
+    },
   });
   expect(unscoped).toEqual([supremeId]);
 });
@@ -114,14 +124,24 @@ test("an identifier nobody holds, or held in another jurisdiction, resolves to n
   const unknown = await findDecisionIdsByIdentity({
     caseLawDb,
     country: "CZE",
-    identity: { type: "identifier", kind: "docket", value: "22 Cdo 1/2026" },
+    identity: {
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "CZE",
+      value: "22 Cdo 1/2026",
+    },
   });
   expect(unknown).toEqual([]);
 
   const elsewhere = await findDecisionIdsByIdentity({
     caseLawDb,
     country: "SVK",
-    identity: { type: "identifier", kind: "docket", value: "Pl. ÚS 24/10" },
+    identity: {
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "CZE",
+      value: "Pl. ÚS 24/10",
+    },
   });
   expect(elsewhere).toEqual([]);
 });

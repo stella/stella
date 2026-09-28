@@ -1,9 +1,10 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { VerificationRunStatus } from "@/features/avt/types";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const RUN_POLL_INTERVAL_MS = 2500;
@@ -54,6 +55,13 @@ export const avtKeys = {
     [
       ...avtKeys.latestAll(workspaceId),
       documents.map(documentFileKey).toSorted(),
+    ] as const,
+  historyAll: (workspaceId: string) =>
+    [...avtKeys.all(workspaceId), "history"] as const,
+  history: (workspaceId: string, entityId: string, fileFieldId: string) =>
+    [
+      ...avtKeys.historyAll(workspaceId),
+      documentFileKey({ entityId, fileFieldId }),
     ] as const,
 };
 
@@ -124,6 +132,52 @@ export const latestVerificationsOptions = (key: LatestVerificationsKey) =>
       for (const run of runs.values()) {
         if (runPollInterval(run.status) !== false) {
           return runPollInterval(run.status);
+        }
+      }
+      return false;
+    },
+  });
+
+const HISTORY_PAGE_SIZE = 20;
+
+/**
+ * Every verification of one document, newest first, a page at a time. Polls
+ * while a loaded run is still waiting or checking, so its status settles in
+ * the picker without a reload.
+ */
+export const verificationHistoryOptions = ({
+  workspaceId,
+  entityId,
+  fileFieldId,
+}: DocumentFile & { workspaceId: string }) =>
+  infiniteQueryOptions({
+    queryKey: avtKeys.history(workspaceId, entityId, fileFieldId),
+    queryFn: async ({ pageParam, signal }) => {
+      const response = await api
+        .lists({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .verifications.get({
+          query: {
+            entityId: toSafeId<"entity">(entityId),
+            fileFieldId: toSafeId<"field">(fileFieldId),
+            limit: HISTORY_PAGE_SIZE,
+            ...(pageParam !== null && { cursor: pageParam }),
+          },
+          fetch: { signal },
+        });
+      return unwrapEden(response);
+    },
+    initialPageParam: nullableStringCursorSeed(),
+    getNextPageParam: (page) => page.nextCursor,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data === undefined) {
+        return false;
+      }
+      for (const page of data.pages) {
+        for (const run of page.items) {
+          if (runPollInterval(run.status) !== false) {
+            return runPollInterval(run.status);
+          }
         }
       }
       return false;

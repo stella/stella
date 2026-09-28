@@ -1,5 +1,9 @@
 import { EventType } from "@tanstack/ai";
-import type { AnyTextAdapter, StreamChunk, TokenUsage } from "@tanstack/ai";
+import type {
+  AdapterYieldChunk,
+  AnyTextAdapter,
+  TokenUsage,
+} from "@tanstack/ai";
 import { panic, TaggedError } from "better-result";
 
 // A scripted provider: each provider iteration answers with the next scripted
@@ -36,6 +40,8 @@ export type ScriptedTurn =
       code?: string | undefined;
       message: string;
       type: "error";
+      /** What the provider reported before the call failed. */
+      usage?: ScriptedTurnUsage | undefined;
     }
   | {
       /** The provider call fails before it yields anything. */
@@ -140,7 +146,7 @@ async function* scriptedStepChunks({
   step: ScriptedStep;
   threadId: string;
   timestamp: number;
-}): AsyncGenerator<StreamChunk> {
+}): AsyncGenerator<AdapterYieldChunk> {
   if (step.reasoning !== undefined) {
     // A provider mints a fresh id for every thinking block; message ids here
     // repeat across requests, so these must not derive from them.
@@ -285,7 +291,7 @@ export class ScriptedProviderError extends TaggedError(
 export async function* scriptedTurnChunks(
   turn: ScriptedTurn,
   { index, model, runId, signal, threadId }: ScriptedTurnContext,
-): AsyncGenerator<StreamChunk> {
+): AsyncGenerator<AdapterYieldChunk> {
   // A provider answers asynchronously; so does the script.
   await Promise.resolve();
   if (turn.type === "fail-before-output") {
@@ -303,7 +309,7 @@ export async function* scriptedTurnChunks(
     threadId,
     model,
     timestamp,
-  } satisfies StreamChunk;
+  } satisfies AdapterYieldChunk;
   switch (turn.type) {
     case "tool-call": {
       yield* scriptedStepChunks({
@@ -333,20 +339,20 @@ export async function* scriptedTurnChunks(
         role: "assistant",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TEXT_MESSAGE_CONTENT,
         messageId,
         delta: turn.text,
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TEXT_MESSAGE_END,
         messageId,
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.RUN_FINISHED,
         runId,
@@ -355,7 +361,7 @@ export async function* scriptedTurnChunks(
         model,
         timestamp,
         usage: turn.usage ?? DEFAULT_TURN_USAGE,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       return;
     }
     case "step": {
@@ -375,9 +381,10 @@ export async function* scriptedTurnChunks(
         type: EventType.RUN_ERROR,
         message: turn.message,
         ...(turn.code === undefined ? {} : { code: turn.code }),
+        ...(turn.usage === undefined ? {} : { usage: turn.usage }),
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       return;
     }
     default: {

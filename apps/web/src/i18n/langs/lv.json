@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Pārbaudīts pret {count, plural, zero {# faktu} one {# faktu} other {# faktus}}, kādi tie bija {checkedAt}. Vēlākas izmaiņas sarakstā šo pārbaudi nemaina.",
       "failedTitle": "Pārbaude neizdevās",
+      "history": {
+        "label": "Pārbaužu vēsture",
+        "loadFailed": "Neizdevās ielādēt šī dokumenta iepriekšējās pārbaudes."
+      },
       "inProgress": "Notiek dokumenta apgalvojumu pārbaude pret saraksta faktiem…",
       "loadFailed": "Neizdevās ielādēt šo pārbaudi.",
       "noClaims": "Šajā dokumentā apgalvojumi nav atrasti.",
@@ -1174,6 +1178,7 @@
       "business_registry_lookup": "Meklēšana uzņēmumu reģistrā",
       "compare_versions": "Versiju salīdzināšana",
       "configure_template_fields": "Konfigurēt veidnes laukus",
+      "counterparty_check": "Pretpuses pārbaude",
       "create-document": "Dokumenta sagatavošana",
       "create_matter_document": "Dokumenta izveide",
       "create_reader_annotation": "Pievienot izcēlumu vai komentāru",

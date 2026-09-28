@@ -42,6 +42,7 @@ import {
   SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -249,6 +250,15 @@ const decisionBy = async (
     (row) => row.sourceDocumentId === sourceDocumentId,
   ) ?? panic(`no decision ${sourceDocumentId}`);
 
+const observationOrderOf = async (id: SafeId<"caseLawDecision">) =>
+  (
+    await db
+      .select({ order: caseLawDecisions.sourceObservationOrder })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, id))
+      .limit(1)
+  ).at(0)?.order ?? panic(`no observation order for ${id}`);
+
 const publishedIds = async (sourceId: SafeId<"caseLawSource">) =>
   (
     await db
@@ -375,6 +385,7 @@ describe("reasons published apart from their ruling", () => {
     });
     // Readable meanwhile, and typed as what it is.
     const standalone = await decisionBy(fixture.sourceId, "339001");
+    const standaloneOrder = await observationOrderOf(standalone.id);
     expect(standalone.decisionType).toBe(
       PL_COURTS_STANDALONE_REASONS_DECISION_TYPE,
     );
@@ -402,6 +413,10 @@ describe("reasons published apart from their ruling", () => {
     // second holder of the docket or a second copy of the citations.
     const absorbed = await decisionBy(fixture.sourceId, "339001");
     expect(absorbed.id).toBe(standalone.id);
+    expect(absorbed.sourceHash).toBeNull();
+    expect(await observationOrderOf(absorbed.id)).toBeGreaterThan(
+      standaloneOrder,
+    );
     expect(absorbed.fulltext).toBeNull();
     expect(absorbed.citationKey).toBeNull();
     expect(absorbed.metadata?.[ABSORBED_INTO_METADATA_KEY]).toEqual({
@@ -411,6 +426,29 @@ describe("reasons published apart from their ruling", () => {
     });
     expect(await citationsOf(absorbed.id)).toEqual([]);
     expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);
+  });
+
+  test("an absorption older than the standalone row's last observation leaves it alone", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const before = await decisionBy(fixture.sourceId, "339001");
+    const standaloneOrder = await observationOrderOf(before.id);
+
+    const outcome = await absorbStandaloneSupplementRow({
+      scopedDb,
+      sourceId: fixture.sourceId,
+      kind: "reasons",
+      sourceDocumentId: "339001",
+      judgmentId: createSafeId<"caseLawDecision">(),
+      observationOrder: standaloneOrder,
+    });
+
+    expect(outcome).toEqual(
+      Result.ok({ type: "superseded", decisionId: before.id }),
+    );
+    expect(await decisionBy(fixture.sourceId, "339001")).toEqual(before);
+    expect(await observationOrderOf(before.id)).toBe(standaloneOrder);
+    expect(await publishedIds(fixture.sourceId)).toEqual(["339001"]);
   });
 
   test("ingesting the same reasons or the same ruling again is a fixed point", async () => {

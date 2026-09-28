@@ -28,7 +28,6 @@ const finishToolResult = {
   toolCallId: FINISH_TOOL_CALL_ID,
   messageId: "finish-result",
   content: CANARY_COMPLETION_MARKER,
-  model: MODEL,
 } satisfies CanaryHarnessChunk;
 
 const runFinished = {
@@ -43,7 +42,6 @@ const runStarted = {
   type: EventType.RUN_STARTED,
   runId: RUN_ID,
   threadId: THREAD_ID,
-  model: MODEL,
 } satisfies CanaryHarnessChunk;
 
 const text = (delta: string) =>
@@ -51,7 +49,6 @@ const text = (delta: string) =>
     type: EventType.TEXT_MESSAGE_CONTENT,
     messageId: "assistant-message",
     delta,
-    model: MODEL,
   }) satisfies CanaryHarnessChunk;
 
 const observe = (chunks: CanaryHarnessChunk[]) => {
@@ -209,6 +206,17 @@ describe("real harness completion protocol", () => {
     expect(
       observe([runStarted, finishToolStart, finishToolResult, interrupted]),
     ).toBe("canary harness run was interrupted");
+  });
+
+  test("rejects a cancelled terminal event after a finish result", () => {
+    const cancelled = {
+      ...runFinished,
+      outcome: { type: "cancelled" },
+    } satisfies CanaryHarnessChunk;
+
+    expect(
+      observe([runStarted, finishToolStart, finishToolResult, cancelled]),
+    ).toBe("canary harness run was cancelled");
   });
 
   test("surfaces a text-limit failure before the stream is drained", () => {

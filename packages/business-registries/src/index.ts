@@ -15,6 +15,7 @@ export * as brreg from "./brreg/index.js";
 export * as companiesHouse from "./companies-house/index.js";
 export * as denue from "./denue/index.js";
 export * as edgar from "./edgar/index.js";
+export * as entityChecks from "./entity-checks/index.js";
 export * as gcis from "./gcis/index.js";
 export * as krs from "./krs/index.js";
 export * as orsr from "./orsr/index.js";

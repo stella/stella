@@ -46,8 +46,8 @@ const createWorkspaceDocumentInputSchema = v.strictObject({
 
 // Mirrors the shape `buildCreatedDocumentToolOutput` returns (fileName +
 // ref-mediated mention fields) — the same output the client-executed
-// `create-document` tool and the `create-from-legal-source` REST endpoint
-// use, so the model links to the new document the same way everywhere. No
+// `create-document` tool uses, so the model links to the new document the
+// same way everywhere. No
 // raw `entityId` / `entityVersionId` is included: the codebase's chat tools
 // never hand the model a raw tenant UUID (see `ChatRefRegistry`'s
 // dehydrate/hydrate boundary), so those stay server-side.

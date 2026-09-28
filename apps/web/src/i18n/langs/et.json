@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Kontrollitud {count, plural, one {# fakti} other {# fakti}} põhjal seisuga {checkedAt}. Loendi hilisemad muudatused seda kontrolli ei muuda.",
       "failedTitle": "Kontroll nurjus",
+      "history": {
+        "label": "Kontrollide ajalugu",
+        "loadFailed": "Selle dokumendi varasemaid kontrolle ei õnnestunud laadida."
+      },
       "inProgress": "Dokumendi väidete kontrollimine loendi faktide alusel…",
       "loadFailed": "Seda kontrolli ei õnnestunud laadida.",
       "noClaims": "Sellest dokumendist ei leitud ühtegi väidet.",
@@ -1174,6 +1178,7 @@
       "business_registry_lookup": "Äriregistrist otsimine",
       "compare_versions": "Versioonide võrdlemine",
       "configure_template_fields": "Seadista malli väljad",
+      "counterparty_check": "Vastaspoole kontrollimine",
       "create-document": "Dokumendi ettevalmistamine",
       "create_matter_document": "Dokumendi loomine",
       "create_reader_annotation": "Lisa esiletõst või kommentaar",

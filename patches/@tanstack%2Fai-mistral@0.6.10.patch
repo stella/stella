@@ -1,0 +1,171 @@
+1. The run's abort signal reaches every Mistral request: the raw stream
+   fetch and structuredOutput's chat.complete (ai-mistral 0.6.11 on
+   upstream main has neither). Upstream PR to be opened; remove when released.
+2. A non-OK response's error carries its HTTP status and parsed body, and the
+   RUN_ERROR forwards them as rawEvent, as the SDK-based adapters do since
+   TanStack/ai#985. The rethrow after RUN_ERROR is upstream's (tested) and
+   stays. Upstream PR to be opened; remove when released.
+3. finish_reason model_length reads as length, and finish_reason error ends
+   the run in a RUN_ERROR (code incomplete-stream, as TanStack/ai#1494 names
+   a cut-off stream) instead of a finished answer. Upstream PR to be opened;
+   remove when released.
+4. A stream that ends without a finish_reason ends in a RUN_ERROR (code
+   incomplete-stream) instead of finishing as stop, and a data line that is
+   not JSON fails the run instead of being skipped with a warning. Upstream
+   PR to be opened; remove when released.
+5. The RUN_ERROR for finish_reason error carries the usage on its chunk.
+   Upstream PR to be opened; remove when released.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index 0ff9bc8751c8a07900ff09b09a3f76a2aace203d..f14590e1e1fb51752a81b758d94294964475963c 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -4,6 +4,7 @@ import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../uti
+ import { createToolInputNormalizer } from "../utils/tool-input-normalizer.js";
+ import { isFileSource, unsupportedFileSourceError } from "@tanstack/ai";
+ import { BaseTextAdapter } from "@tanstack/ai/adapters";
++import { toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ import { undoNullWidening } from "@tanstack/ai-utils";
+ //#region src/adapters/text.ts
+ /** Cast an event object to StreamChunk. Adapters construct events with string
+@@ -49,7 +50,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 			hasEmittedRunStarted: false
+ 		};
+ 		try {
+-			const stream = this.fetchRawMistralStream(requestParams, this.rawConfig);
++			const stream = this.fetchRawMistralStream(requestParams, this.rawConfig, options.request?.signal ?? void 0);
+ 			yield* this.processMistralStreamChunks(stream, options, aguiState);
+ 		} catch (error) {
+ 			const err = error;
+@@ -63,6 +64,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					timestamp
+ 				});
+ 			}
++			const rawEvent = toRunErrorRawEvent(err);
+ 			yield asChunk({
+ 				type: "RUN_ERROR",
+ 				runId: aguiState.runId,
+@@ -70,6 +72,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 				timestamp,
+ 				message: err.message || "Unknown error",
+ 				code: err.code,
++				...rawEvent !== void 0 && { rawEvent },
+ 				error: {
+ 					message: err.message || "Unknown error",
+ 					code: err.code
+@@ -95,7 +98,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					strict
+ 				}
+ 			}
+-		});
++		}, chatOptions.request?.signal ? { signal: chatOptions.request.signal } : void 0);
+ 		const rawText = response.choices[0]?.message?.content;
+ 		const textContent = typeof rawText === "string" ? rawText : "";
+ 		let parsed;
+@@ -257,7 +260,29 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					});
+ 				}
+ 				const finishReason = choice.finish_reason;
+-				if (finishReason) {
++				// An `error` finish means the model failed before it finished: the
++				// run ends in a RUN_ERROR, not a RUN_FINISHED.
++				if (finishReason === "error" && !hasEmittedRunFinished) {
++					hasEmittedRunFinished = true;
++					yield asChunk({
++						type: "RUN_ERROR",
++						runId: aguiState.runId,
++						model: chunkModel,
++						timestamp,
++						message: "The model stopped with an error before it finished.",
++						code: "incomplete-stream",
++						...chunk.usage && { usage: {
++							promptTokens: chunk.usage.prompt_tokens || 0,
++							completionTokens: chunk.usage.completion_tokens || 0,
++							totalTokens: chunk.usage.total_tokens || 0
++						} },
++						error: {
++							message: "The model stopped with an error before it finished.",
++							code: "incomplete-stream"
++						}
++					});
++				}
++				if (finishReason && finishReason !== "error") {
+ 					if (finishReason === "tool_calls" || toolCallsInProgress.size > 0) for (const [, toolCall] of toolCallsInProgress) {
+ 						if (!toolCall.started || !toolCall.id || !toolCall.name || toolCall.ended) continue;
+ 						const parsedInput = parseToolCallInput(toolCall, normalizeToolInput);
+@@ -273,7 +298,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 							input: parsedInput
+ 						});
+ 					}
+-					const computedFinishReason = finishReason === "tool_calls" || hasEmittedToolCall ? "tool_calls" : finishReason === "length" ? "length" : "stop";
++					const computedFinishReason = finishReason === "tool_calls" || hasEmittedToolCall ? "tool_calls" : finishReason === "length" || finishReason === "model_length" ? "length" : "stop";
+ 					if (reasoningMessageId !== null && !hasClosedReasoning) {
+ 						hasClosedReasoning = true;
+ 						yield asChunk({
+@@ -354,14 +379,18 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					});
+ 				}
+ 				hasEmittedRunFinished = true;
++				// No chunk carried a finish_reason: the stream was cut off.
+ 				yield asChunk({
+-					type: "RUN_FINISHED",
++					type: "RUN_ERROR",
+ 					runId: aguiState.runId,
+-					threadId: aguiState.threadId,
+ 					model: lastChunkModel,
+ 					timestamp,
+-					usage: void 0,
+-					finishReason: hasEmittedToolCall ? "tool_calls" : "stop"
++					message: "The provider stream ended before a finish reason.",
++					code: "incomplete-stream",
++					error: {
++						message: "The provider stream ended before a finish reason.",
++						code: "incomplete-stream"
++					}
+ 				});
+ 			}
+ 		} catch (error) {
+@@ -415,7 +444,7 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 	* parses the SSE stream manually, bypassing the SDK's Zod validation which
+ 	* rejects streaming tool call chunks that omit `name` in argument deltas.
+ 	*/
+-	async *fetchRawMistralStream(params, config) {
++	async *fetchRawMistralStream(params, config, signal) {
+ 		const serverURL = (config.baseURL ?? config.serverURL ?? "https://api.mistral.ai").replace(/\/+$/, "").replace(/\/v1$/, "");
+ 		const url = config.resolveRequestUrl?.(true) ?? `${serverURL}/v1/chat/completions`;
+ 		const body = this.toWireBody(params);
+@@ -427,11 +456,19 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 		const response = await fetch(url, {
+ 			method: "POST",
+ 			headers,
+-			body: JSON.stringify(body)
++			body: JSON.stringify(body),
++			...signal !== void 0 && { signal }
+ 		});
+ 		if (!response.ok) {
+ 			const errorText = await response.text();
+-			throw new Error(`Mistral API error ${response.status}: ${errorText}`);
++			const apiError = new Error(`Mistral API error ${response.status}: ${errorText}`);
++			// The status and the provider's error body, as the SDK-based adapters' errors carry them.
++			apiError.status = response.status;
++			try {
++				const body = JSON.parse(errorText);
++				if (body && typeof body === "object" && !Array.isArray(body)) apiError.error = body;
++			} catch {}
++			throw apiError;
+ 		}
+ 		if (!response.body) throw new Error("Mistral API returned a response with no body. This may indicate a proxy or runtime that does not support streaming.");
+ 		const reader = response.body.getReader();
+@@ -453,10 +490,8 @@ var MistralTextAdapter = class extends BaseTextAdapter {
+ 					try {
+ 						parsed = JSON.parse(data);
+ 					} catch (e) {
+-						if (e instanceof SyntaxError) {
+-							console.warn(`[mistral] skipped unparseable SSE chunk: ${data.slice(0, 200)}`);
+-							continue;
+-						}
++						// A chunk that does not parse lost part of the answer.
++						if (e instanceof SyntaxError) throw Object.assign(new Error("Mistral stream carried a chunk that is not JSON."), { cause: e });
+ 						throw e;
+ 					}
+ 					if (parsed && typeof parsed === "object" && "error" in parsed && !("choices" in parsed)) {

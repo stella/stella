@@ -1,0 +1,130 @@
+SAFETY-family finish reasons and a blocked prompt (promptFeedback with no
+candidate) finish as content_filter instead of stop or no terminal event.
+Upstream PR to be opened; remove when released.
+
+A stream with no finish reason ends in a RUN_ERROR (code
+incomplete-stream) instead of no terminal event, and the chat stream's
+RUN_ERROR carries the latest usageMetadata the stream reported.
+Upstream PR to be opened; remove when released.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index d666a56cdf0202b946fad5317770b36763773c77..97dbdb9f1edffa1eb1ba5b64865474deac51e509 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -7,6 +7,17 @@ import { FinishReason } from "@google/genai";
+ import { EventType, fileReferenceFor, isFileSource, normalizeSystemPrompts } from "@tanstack/ai";
+ import { toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ import { BaseTextAdapter } from "@tanstack/ai/adapters";
++/** Finish reasons that mean the provider blocked or filtered the response. */
++var CONTENT_FILTER_FINISH_REASONS = new Set([
++	FinishReason.SAFETY,
++	FinishReason.RECITATION,
++	FinishReason.BLOCKLIST,
++	FinishReason.PROHIBITED_CONTENT,
++	FinishReason.SPII,
++	FinishReason.IMAGE_SAFETY,
++	FinishReason.IMAGE_PROHIBITED_CONTENT,
++	FinishReason.IMAGE_RECITATION
++]);
+ //#region src/adapters/text.ts
+ /**
+ * Fallback MIME types for URL-sourced media parts that don't specify one.
+@@ -98,13 +109,14 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 		}
+ 		const mappedOptions = this.mapCommonOptionsToGemini(options);
+ 		const { logger } = options;
++		const reported = {};
+ 		try {
+ 			logger.request(`activity=chat provider=gemini model=${this.model} messages=${options.messages.length} tools=${options.tools?.length ?? 0} stream=true`, {
+ 				provider: "gemini",
+ 				model: this.model
+ 			});
+ 			const result = await this.client.models.generateContentStream(mappedOptions);
+-			yield* this.processStreamChunks(result, options, logger);
++			yield* this.processStreamChunks(result, options, logger, reported);
+ 		} catch (error) {
+ 			const rawEvent = toRunErrorRawEvent(error);
+ 			logger.errors("gemini.chatStream fatal", {
+@@ -117,6 +129,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 				timestamp: Date.now(),
+ 				message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream.",
+ 				...rawEvent !== void 0 && { rawEvent },
++				...reported.usageMetadata && { usage: buildGeminiUsage(reported.usageMetadata) },
+ 				error: { message: error instanceof Error ? error.message : "An unknown error occurred during the chat stream." }
+ 			};
+ 		}
+@@ -332,8 +345,9 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 		}
+ 		return textContent;
+ 	}
+-	async *processStreamChunks(result, options, logger) {
++	async *processStreamChunks(result, options, logger, reported = {}) {
+ 		const model = options.model;
++		let hasEmittedTerminal = false;
+ 		let accumulatedContent = "";
+ 		let accumulatedThinking = "";
+ 		const toolCallMap = /* @__PURE__ */ new Map();
+@@ -349,6 +363,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 		let hasEmittedStepStarted = false;
+ 		for await (const chunk of result) {
+ 			logger.provider(`provider=gemini`, { chunk });
++			if (chunk.usageMetadata) reported.usageMetadata = chunk.usageMetadata;
+ 			if (!hasEmittedRunStarted) {
+ 				hasEmittedRunStarted = true;
+ 				yield {
+@@ -360,6 +375,20 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 					parentRunId: options.parentRunId
+ 				};
+ 			}
++			// A blocked prompt returns no candidate at all, only the block reason:
++			// the response ends here, as a filter stop.
++			if (chunk.promptFeedback?.blockReason && !chunk.candidates?.length) {
++				yield {
++					type: EventType.RUN_FINISHED,
++					runId,
++					threadId,
++					model,
++					timestamp: Date.now(),
++					finishReason: "content_filter",
++					...chunk.usageMetadata && { usage: buildGeminiUsage(chunk.usageMetadata) }
++				};
++				return;
++			}
+ 			if (chunk.candidates?.[0]?.content?.parts) {
+ 				const parts = chunk.candidates[0].content.parts;
+ 				for (const part of parts) {
+@@ -521,6 +550,7 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 				};
+ 			}
+ 			if (chunk.candidates?.[0]?.finishReason) {
++				hasEmittedTerminal = true;
+ 				const finishReason = chunk.candidates[0].finishReason;
+ 				for (const [toolCallId, toolCallData] of toolCallMap.entries()) {
+ 					let parsedInput = {};
+@@ -580,11 +610,25 @@ var GeminiTextAdapter = class extends BaseTextAdapter {
+ 					threadId,
+ 					model,
+ 					timestamp: Date.now(),
+-					finishReason: toolCallMap.size > 0 ? "tool_calls" : "stop",
++					finishReason: toolCallMap.size > 0 ? "tool_calls" : CONTENT_FILTER_FINISH_REASONS.has(finishReason) ? "content_filter" : "stop",
+ 					...chunk.usageMetadata && { usage: buildGeminiUsage(chunk.usageMetadata) }
+ 				};
+ 			}
+ 		}
++		// No candidate carried a finish reason: the stream was cut off.
++		if (hasEmittedRunStarted && !hasEmittedTerminal) yield {
++			type: EventType.RUN_ERROR,
++			runId,
++			model,
++			timestamp: Date.now(),
++			message: "The provider stream ended before a finish reason.",
++			code: "incomplete-stream",
++			...reported.usageMetadata && { usage: buildGeminiUsage(reported.usageMetadata) },
++			error: {
++				message: "The provider stream ended before a finish reason.",
++				code: "incomplete-stream"
++			}
++		};
+ 	}
+ 	convertContentPartToGemini(part) {
+ 		switch (part.type) {

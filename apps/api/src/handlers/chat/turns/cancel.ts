@@ -5,7 +5,7 @@ import {
   readChatTurnView,
   stopChatTurnOnTx,
 } from "@/api/handlers/chat/chat-turn-persistence";
-import { stopLocalChatTurnProducer } from "@/api/handlers/chat/chat-turn-producers";
+import { stopLocalChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -70,7 +70,7 @@ const cancelChatTurn = createSafeRootHandler(
       case "requested": {
         // The intent is committed, so an owner elsewhere settles on it too;
         // this only spares a run this process produces the poll's delay.
-        const localRun = stopLocalChatTurnProducer(stop.executionId);
+        const localRun = stopLocalChatTurnRun(stop.executionId);
         if (localRun !== null) {
           await settledWithin(localRun, LOCAL_STOP_SETTLE_WAIT_MS);
         }

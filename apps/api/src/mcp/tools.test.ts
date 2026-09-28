@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -24,6 +24,15 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import {
+  CZ_INSOLVENCY_SOURCE,
+  CZ_VAT_RELIABILITY_SOURCE,
+  EntityCheckInputError,
+} from "@stll/business-registries/entity-checks";
+import type {
+  EntityCheckResult,
+  runEntityCheck as runEntityCheckForTest,
+} from "@stll/business-registries/entity-checks";
 
 import {
   entities,
@@ -1417,6 +1426,177 @@ describe("OpenAI-compatible MCP tools", () => {
         handler: { slug: "orsr" },
         detail: "full",
       });
+    });
+  });
+
+  describe("check_counterparty", () => {
+    const source = CZ_INSOLVENCY_SOURCE;
+    const company = { type: "company-id", value: "26863154" } as const;
+    const clearOutcome = {
+      status: "clear",
+      kind: "cz-insolvency",
+      source,
+      subject: company,
+      checkedAt: "2026-09-26T14:00:00Z",
+      sourceDataAsOf: null,
+      record: null,
+    } satisfies EntityCheckResult;
+    const outcomes = [
+      clearOutcome,
+      {
+        status: "found",
+        kind: "cz-vat-reliability",
+        source: CZ_VAT_RELIABILITY_SOURCE,
+        subject: {
+          type: "tax-id",
+          value: "CZ00121100",
+          derivedFrom: { type: "company-id", value: "00121100" },
+        },
+        checkedAt: "2026-09-26T14:00:00Z",
+        sourceDataAsOf: null,
+        totalMatches: 1,
+        findings: [{ type: "unreliable-vat-payer", publishedOn: "2017-03-16" }],
+        record: {
+          subjectType: "vat-payer",
+          name: "LIDRU, A.S.",
+          address: "153, LIBOTENICE, 41201 LIBOTENICE, Česká republika",
+          taxOfficeCode: "456",
+          publishedAccounts: [
+            {
+              account: "258795779/0600",
+              publishedOn: "2023-07-26",
+              withdrawnOn: null,
+            },
+          ],
+        },
+      },
+      {
+        status: "not-registered",
+        kind: "cz-vat-reliability",
+        source: CZ_VAT_RELIABILITY_SOURCE,
+        subject: { type: "tax-id", value: "CZ12345679", derivedFrom: null },
+        checkedAt: "2026-09-26T14:00:00Z",
+        sourceDataAsOf: null,
+      },
+      {
+        status: "found",
+        kind: "cz-insolvency",
+        source,
+        subject: company,
+        checkedAt: "2026-09-26T14:00:00Z",
+        sourceDataAsOf: "2026-09-26T13:26:35.000Z",
+        totalMatches: 1,
+        findings: [
+          {
+            fileNumber: "25 INS 10525/2016",
+            court: "Krajský soud v Ostravě",
+            phase: "ongoing",
+            stateCode: "REORGANIZ",
+            matchedBy: "company-id",
+            debtor: {
+              name: "Správa pohledávek OKD, a.s.",
+              firstName: null,
+              companyId: "26863154",
+              birthDate: null,
+              address: "Stonavská 2179, 735 06 Karviná",
+            },
+            insolvencyDeclaredOn: "2016-05-09",
+            insolvencyEndedOn: null,
+            url: "https://isir.justice.cz/isir/ueu/evidence_upadcu_detail.do?id=3BD92F3EAA724B37ACCEDD86B31BE055",
+          },
+        ],
+        record: null,
+      },
+      {
+        status: "unavailable",
+        kind: "cz-insolvency",
+        source,
+        subject: company,
+        checkedAt: "2026-09-26T14:00:00Z",
+        reason: "outage-page",
+        detail: "200",
+      },
+      {
+        status: "not-covered",
+        kind: "cz-insolvency",
+        source,
+        subject: company,
+        reason: "subject-type-not-supported",
+        supportedSubjectTypes: ["person"],
+      },
+    ] satisfies EntityCheckResult[];
+
+    const callWith = async (
+      runEntityCheck: typeof runEntityCheckForTest,
+      args: Record<string, unknown>,
+    ) => {
+      const baseContext = createContext();
+      return await handleMcpToolCall({
+        args,
+        context: {
+          ...baseContext,
+          testDependencies: { ...baseContext.testDependencies, runEntityCheck },
+        },
+        toolName: "check_counterparty",
+      });
+    };
+
+    test.each(outcomes)(
+      "returns a $status outcome as data, never as an error",
+      async (outcome) => {
+        const result = await callWith(
+          async () => Result.ok(structuredClone(outcome)),
+          {
+            check: "cz-insolvency",
+            subject: { type: "company-id", company_id: "26863154" },
+          },
+        );
+        expect(result.isError).toBeUndefined();
+        expect(parseToolPayload(result)).toEqual(outcome);
+      },
+    );
+
+    test("reads a person subject and a localized birth date", async () => {
+      const runEntityCheck = mock<typeof runEntityCheckForTest>(async () =>
+        Result.ok(clearOutcome),
+      );
+      await callWith(runEntityCheck, {
+        check: "cz-insolvency",
+        subject: {
+          type: "person",
+          first_name: "Jan",
+          last_name: "Novák",
+          birth_date: "15. 3. 1980",
+        },
+      });
+      expect(runEntityCheck.mock.calls.at(0)?.at(0)).toMatchObject({
+        kind: "cz-insolvency",
+        subject: {
+          type: "person",
+          firstName: "Jan",
+          lastName: "Novák",
+          birthDate: "1980-03-15",
+        },
+      });
+    });
+
+    test("reports a subject the source rejects as a validation error", async () => {
+      const result = await callWith(
+        async () =>
+          Result.err(
+            new EntityCheckInputError({
+              message: "Company ID must be a valid Czech IČO (8 digits)",
+            }),
+          ),
+        {
+          check: "cz-insolvency",
+          subject: { type: "company-id", company_id: "26863155" },
+        },
+      );
+      expectValidationMessage(
+        result,
+        "Company ID must be a valid Czech IČO (8 digits)",
+      );
     });
   });
 

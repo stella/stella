@@ -148,7 +148,16 @@ export const readOutputCeilingStopAsLength = async function* (
       case EventType.REASONING_MESSAGE_CONTENT:
       case EventType.REASONING_MESSAGE_END:
       case EventType.REASONING_END:
-      case EventType.REASONING_ENCRYPTED_VALUE: {
+      case EventType.REASONING_ENCRYPTED_VALUE:
+      case EventType.REASONING_MESSAGE_CHUNK:
+      case EventType.TEXT_MESSAGE_CHUNK:
+      case EventType.TOOL_CALL_CHUNK:
+      case EventType.ACTIVITY_SNAPSHOT:
+      case EventType.ACTIVITY_DELTA:
+      case EventType.RAW:
+      case EventType.SUBAGENT_STARTED:
+      case EventType.SUBAGENT_FINISHED:
+      case EventType.SUBAGENT_ERROR: {
         break;
       }
       default: {
@@ -303,7 +312,7 @@ export const withProviderStreamContract = (
     withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
-          withUniqueToolCallIds(adapter.chatStream(options), options.messages),
+          withUniqueToolCallIds(adapter.chatStream(options), options),
         ),
         options,
       ),

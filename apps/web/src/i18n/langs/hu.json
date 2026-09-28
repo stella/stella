@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Ellenőrizve {count, plural, one {# tény} other {# tény}} alapján, ahogyan azok {checkedAt} napon álltak. A lista későbbi módosításai nem változtatják meg ezt az ellenőrzést.",
       "failedTitle": "Az ellenőrzés sikertelen",
+      "history": {
+        "label": "Ellenőrzési előzmények",
+        "loadFailed": "A dokumentum korábbi ellenőrzéseit nem sikerült betölteni."
+      },
       "inProgress": "Az irat állításainak összevetése a lista tényeivel…",
       "loadFailed": "Ezt az ellenőrzést nem sikerült betölteni.",
       "noClaims": "Ebben az iratban nem található állítás.",
@@ -1174,6 +1178,7 @@
       "business_registry_lookup": "Keresés a cégnyilvántartásban",
       "compare_versions": "Verziók összehasonlítása",
       "configure_template_fields": "Sablonmezők beállítása",
+      "counterparty_check": "Szerződő fél ellenőrzése",
       "create-document": "Dokumentum előkészítése",
       "create_matter_document": "Dokumentum létrehozása",
       "create_reader_annotation": "Kiemelés vagy megjegyzés hozzáadása",

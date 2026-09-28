@@ -7,9 +7,11 @@ import {
   toolDefinition,
 } from "@tanstack/ai";
 import type {
+  AdapterYieldChunk,
   AnyTextAdapter,
   ModelMessage,
   StreamChunk,
+  TokenUsage,
   ToolCallPart,
   UIMessage,
 } from "@tanstack/ai";
@@ -62,6 +64,7 @@ import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DatabaseError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -102,8 +105,8 @@ import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
 
 /** A run whose history the engine holds exactly as stored. */
 const NOTHING_REWRITTEN: StoredHistory = {
+  loadServed: async () => await Promise.resolve(Result.ok(new Map())),
   rewrittenOnAcceptance: [],
-  storedForms: new Map(),
 };
 
 const collectChunks = async (
@@ -280,7 +283,7 @@ const createScriptedAdapter = (
       threadId: resolvedThreadId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     // Provider adapters open a text message only when text arrives; a
     // tool-only iteration (Gemini, OpenAI Responses) carries no
     // TEXT_MESSAGE_START, so only the first scripted turn emits one.
@@ -291,7 +294,7 @@ const createScriptedAdapter = (
         role: "assistant",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
     }
     yield {
       type: EventType.TOOL_CALL_START,
@@ -299,20 +302,20 @@ const createScriptedAdapter = (
       toolCallName: toolName,
       parentMessageId: messageId,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TOOL_CALL_ARGS,
       toolCallId: callId,
       delta: argumentsText,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TOOL_CALL_END,
       toolCallId: callId,
       ...(input === undefined ? {} : { input }),
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: resolvedRunId,
@@ -321,7 +324,7 @@ const createScriptedAdapter = (
       model,
       timestamp,
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
   },
   structuredOutput: () => {
     throw new Error("Structured output is not part of this fixture");
@@ -352,27 +355,27 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
       threadId: resolvedThreadId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_START,
       messageId,
       role: "assistant",
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_CONTENT,
       messageId,
       delta: text,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_END,
       messageId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: resolvedRunId,
@@ -381,7 +384,7 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
       model,
       timestamp,
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
   },
   structuredOutput: () => {
     throw new Error("Structured output is not part of this fixture");
@@ -489,7 +492,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
           code: "aborted",
           model,
           timestamp,
-        } satisfies StreamChunk;
+        } satisfies AdapterYieldChunk;
         return;
       }
       yield {
@@ -498,26 +501,26 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         threadId: resolvedThreadId,
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_START,
         toolCallId: "call-1",
         toolCallName: "run-code",
         parentMessageId: "provider-message-1",
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_ARGS,
         toolCallId: "call-1",
         delta: '{"source":"1 + 1"}',
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_END,
         toolCallId: "call-1",
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.RUN_FINISHED,
         runId: resolvedRunId,
@@ -525,7 +528,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         finishReason: "tool_calls",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
     },
     structuredOutput: () => {
       throw new Error("Structured output is not part of this fixture");
@@ -564,6 +567,80 @@ const persistCutTurn = async (cause: TurnCut) => {
     { abortSignal: abortController.signal, deadlineSignal: deadline.signal },
   );
 };
+
+/** A model call that fails after the provider reported usage, having
+ *  written `text` first (none when empty). */
+const createFailingAfterUsageAdapter = ({
+  text,
+  usage,
+}: {
+  text: string;
+  usage: TokenUsage;
+}): AnyTextAdapter => ({
+  kind: "text",
+  name: "failing-after-usage",
+  model: "failing-after-usage",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ runId, threadId }) {
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: runId ?? "run-1",
+      threadId: threadId ?? "thread-1",
+    } satisfies StreamChunk;
+    if (text !== "") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "provider-message-1",
+        role: "assistant",
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "provider-message-1",
+        delta: text,
+      } satisfies StreamChunk;
+    }
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "The provider stream ended with an error.",
+      code: "incomplete-stream",
+      usage,
+    } satisfies StreamChunk;
+  },
+  structuredOutput: () => {
+    throw new Error("Structured output is not part of this fixture");
+  },
+});
+
+describe("a turn whose model call fails after reporting usage", () => {
+  for (const text of ["", "The cass"]) {
+    test(`stores the usage on the failed turn's message (text: ${JSON.stringify(text)})`, async () => {
+      const usage = {
+        promptTokens: 24,
+        completionTokens: 2,
+        totalTokens: 26,
+      } satisfies TokenUsage;
+      const { finish } = await persistNativeInterruptTurn(
+        chat({
+          adapter: createFailingAfterUsageAdapter({ text, usage }),
+          messages: [{ role: "user", content: "Reply." }],
+          threadId: "thread-1",
+        }),
+      );
+
+      expect(finish?.outcome).toMatchObject({ type: "failed" });
+      expect(finish?.responseMessage.metadata).toMatchObject({
+        usage: chatMessageUsageFromTokenUsage(usage),
+      });
+    });
+  }
+});
 
 describe("a turn cut while the model was thinking", () => {
   test("settles as interrupted, not as a completion with no answer", async () => {
@@ -3448,6 +3525,7 @@ const createBoundary = (
   pipelineContext: createPipelineContext(),
   placeholderOffsets: new Map<string, number>(),
   literalPlaceholderAliases: new Map<string, string>(),
+  historicalRedactionMap: new Map<string, string>(),
   redactionMap: new Map(pairs),
   sourcePlaceholders: new Set<string>(),
   type: "anonymized",
@@ -3676,6 +3754,38 @@ describe("chat stream refs", () => {
     expect(assistant).toHaveProperty("parts");
     expect(JSON.stringify(assistant)).not.toContain(ref);
     expect(JSON.stringify(assistant)).toContain(resolved);
+  });
+
+  test("reports a failed served-history read as a terminal stream error", async () => {
+    const chunks = await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks([
+          buildEngineSnapshot([]),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "later",
+            delta: "later content",
+          },
+        ]),
+        storedHistory: {
+          loadServed: async () =>
+            Result.err(
+              new DatabaseError({ message: "sensitive storage detail" }),
+            ),
+          rewrittenOnAcceptance: [],
+        },
+      }),
+    );
+
+    expect(chunks).toEqual([
+      {
+        type: EventType.RUN_ERROR,
+        code: "unknown",
+        message: "unknown",
+        timestamp: expect.any(Number),
+      },
+    ]);
+    expect(JSON.stringify(chunks)).not.toContain("sensitive storage detail");
   });
 
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
@@ -4438,7 +4548,7 @@ describe("a superseded client-tool call in the engine's history", () => {
       settleHistoryForRun({
         messages: supersededHistory,
         resumedMessageId: undefined,
-      }).engine,
+      }),
     );
 
     expect(finish?.outcome).toEqual({ type: "completed" });

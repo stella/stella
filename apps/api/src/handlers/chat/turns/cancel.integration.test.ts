@@ -1,4 +1,5 @@
 import { RUN_CANCEL_REASON } from "@tanstack/ai";
+import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
@@ -35,7 +36,7 @@ import {
   stopChatTurnOnTx,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
-import { registerChatTurnProducer } from "@/api/handlers/chat/chat-turn-producers";
+import { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import type { CreateDocumentToolOutput } from "@/api/handlers/chat/tools/create-document-tool";
 import { CREATE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
@@ -44,6 +45,7 @@ import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { EMPTY_CHAT_THREAD_NAMES_READ } from "@/api/lib/chat/thread-names";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -101,6 +103,10 @@ const unwrap = <T>(result: Result<T, unknown>): T =>
     : result.value;
 
 const USER_STOP = { reason: "user-stop", type: "cancelled" } as const;
+const NO_THREAD_NAMES = {
+  added: { refBindings: [], toolCallIds: [] },
+  read: EMPTY_CHAT_THREAD_NAMES_READ,
+};
 
 const seedAcceptedTurn = async () => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
@@ -304,6 +310,57 @@ const noAudit: AuditRecorder = async () => {
   await Promise.resolve();
 };
 
+/**
+ * A run that produces nothing until it is cut short, then stores the cut the
+ * way `streamChat`'s processor does.
+ */
+const produceUntilCut = ({
+  execution,
+  heartbeatMs,
+  threadId,
+}: {
+  execution: ChatTurnExecution;
+  heartbeatMs?: number;
+  threadId: SafeId<"chatThread">;
+}) => {
+  const run = new ChatTurnRun({
+    connectors: undefined,
+    deadlineMs: 60_000,
+    heartbeatMs,
+    owner: {
+      execution,
+      owningAssistantMessage: undefined,
+      recordAuditEvent: noAudit,
+      safeDb,
+      threadId,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+    },
+  });
+  const { signal } = run.control.abortController;
+  const output = async function* (): AsyncGenerator<StreamChunk> {
+    if (!signal.aborted) {
+      await new Promise((resolve) => {
+        signal.addEventListener("abort", resolve, { once: true });
+      });
+    }
+    await run.settle(async () => {
+      unwrap(
+        await persistInterruptedChatTurn({
+          execution,
+          recordAuditEvent: noAudit,
+          safeDb,
+          threadId,
+          userId: ids.userA1,
+          workspaceId: ids.wsA1,
+        }),
+      );
+    });
+  };
+  const response = run.produce(output());
+  return { response, run };
+};
+
 describe("stopping a chat turn", () => {
   test("cancels an accepted turn, which then never starts", async () => {
     const { threadId, turnId, userMessageId } = await seedAcceptedTurn();
@@ -377,6 +434,7 @@ describe("stopping a chat turn", () => {
     unwrap(
       await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadNames: NO_THREAD_NAMES,
         existingIds: new Set(),
         execution,
         outcome: { type: "completed" },
@@ -441,33 +499,14 @@ describe("stopping a chat turn", () => {
 
   test("aborts a run this process produces and answers once it is settled", async () => {
     const { execution, threadId, turnId } = await seedRunningTurn();
-    const abortController = new AbortController();
-    const producer = registerChatTurnProducer({
-      abortController,
-      execution,
-      safeDb,
-    });
-    // The owner: a stopped run stores the stop, as `streamChat` does.
-    abortController.signal.addEventListener(
-      "abort",
-      () => {
-        void persistInterruptedChatTurn({
-          execution,
-          recordAuditEvent: noAudit,
-          safeDb,
-          threadId,
-          userId: ids.userA1,
-          workspaceId: ids.wsA1,
-        }).then(producer.settled);
-      },
-      { once: true },
-    );
+    const { response, run } = produceUntilCut({ execution, threadId });
 
     expect(await stop({ threadId, turnId })).toEqual({
       body: { turn: { id: turnId, reason: "user-stop", status: "cancelled" } },
       status: 200,
     });
-    expect(abortController.signal.reason).toBe(RUN_CANCEL_REASON);
+    expect(run.control.abortController.signal.reason).toBe(RUN_CANCEL_REASON);
+    await response.body?.cancel();
   });
 
   test("an owner on another instance finds the stop at its renewal and its poll", async () => {
@@ -475,30 +514,23 @@ describe("stopping a chat turn", () => {
     expect(
       unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
     ).toBe("owned");
-    const abortController = new AbortController();
-    const producer = registerChatTurnProducer({
-      abortController,
+    const { response, run } = produceUntilCut({
       execution,
-      pollMs: 5,
-      safeDb,
+      heartbeatMs: 5,
+      threadId,
     });
-    try {
-      // Recorded as another instance's endpoint records it: no local abort.
-      expect((await recordStop({ threadId, turnId })).type).toBe("requested");
-      expect(
-        unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
-      ).toBe("stop-requested");
-      for (
-        let poll = 0;
-        poll < 400 && !abortController.signal.aborted;
-        poll += 1
-      ) {
-        await Bun.sleep(5);
-      }
-      expect(abortController.signal.reason).toBe(RUN_CANCEL_REASON);
-    } finally {
-      producer.settled();
-    }
+    // Recorded as another instance's endpoint records it: no local abort.
+    expect((await recordStop({ threadId, turnId })).type).toBe("requested");
+    expect(
+      unwrap(await renewChatTurnExecutionLease({ execution, safeDb })),
+    ).toBe("stop-requested");
+    await run.settled;
+    expect(run.control.abortController.signal.reason).toBe(RUN_CANCEL_REASON);
+    expect(await readTurn(turnId)).toMatchObject({
+      cancellationReason: "user-stop",
+      status: "cancelled",
+    });
+    await response.body?.cancel();
   });
 });
 
@@ -515,6 +547,7 @@ const finalizeAs =
   async ({ execution, threadId }) =>
     await finalizeAssistantTurn({
       acceptedSendMode: null,
+      threadNames: NO_THREAD_NAMES,
       existingIds: new Set(),
       execution,
       outcome,
@@ -638,6 +671,7 @@ describe("a running turn's owner, once the user asked to stop", () => {
     const finish = async () =>
       await finalizeAssistantTurn({
         acceptedSendMode: null,
+        threadNames: NO_THREAD_NAMES,
         existingIds: new Set(),
         execution,
         outcome: { type: "completed" },

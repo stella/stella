@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Patikrinta pagal {count, plural, one {# faktą} few {# faktus} many {# faktų} other {# fakto}}, buvusius tokius, kokie buvo {checkedAt}. Vėlesni sąrašo pakeitimai šio tikrinimo nekeičia.",
       "failedTitle": "Tikrinimas nepavyko",
+      "history": {
+        "label": "Tikrinimų istorija",
+        "loadFailed": "Nepavyko įkelti ankstesnių šio dokumento tikrinimų."
+      },
       "inProgress": "Tikrinami dokumento teiginiai pagal sąrašo faktus…",
       "loadFailed": "Nepavyko įkelti šio tikrinimo.",
       "noClaims": "Šiame dokumente teiginių nerasta.",
@@ -1174,6 +1178,7 @@
       "business_registry_lookup": "Ieškoma įmonių registre",
       "compare_versions": "Lyginamos versijos",
       "configure_template_fields": "Konfigūruoti šablono laukus",
+      "counterparty_check": "Tikrinama priešinga šalis",
       "create-document": "Ruošiamas dokumentas",
       "create_matter_document": "Kuriamas dokumentas",
       "create_reader_annotation": "Pridėti paryškinimą ar komentarą",

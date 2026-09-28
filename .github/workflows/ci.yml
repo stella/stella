@@ -9,9 +9,22 @@ on:
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
+    inputs:
+      depth:
+        description: >-
+          Suite depth. `fast` runs the guards, lint, typecheck, unit tests
+          and builds; `full` adds the heavy suites.
+        type: choice
+        options: [fast, full]
+        default: fast
 
+# A newer manual run replaces an older one on the same branch instead of
+# queueing beside it for runners; manual runs on other branches stay put.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: >-
+    ${{ github.event_name == 'workflow_dispatch'
+    && format('ci-dispatch-{0}', github.ref)
+    || format('{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: true
 
 permissions: {}
@@ -39,7 +52,6 @@ jobs:
       # services, other platforms). Every heavy job gates on
       # `suite_depth == 'full'`.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
-      changeset_required: ${{ github.event_name == 'pull_request' }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       # JSON matrix `include` list for api-image-smoke.
@@ -56,8 +68,10 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
+      web_api_types_required: ${{ steps.changed-files.outputs.web_api_types_required }}
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
@@ -65,26 +79,34 @@ jobs:
       - name: Resolve suite depth
         id: depth
         env:
+          DISPATCH_DEPTH: ${{ inputs.depth }}
           EVENT_NAME: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
         run: |
-          # Full on merge_group and workflow_dispatch, and on a pull request
-          # labelled `ci:full`, which a merge that bypasses the queue needs.
-          # The labels are read live rather than from the event payload, so
-          # re-running a pull request run after the label is added (what
-          # ci-full-label.yml does) plans full depth.
-          if [[ "$EVENT_NAME" != "pull_request" ]]; then
-            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          labels=$(gh api "repos/$REPO/issues/$PR_NUMBER/labels" --paginate --jq '.[].name')
-          if grep -Fxq 'ci:full' <<< "$labels"; then
-            echo "suite_depth=full" >> "$GITHUB_OUTPUT"
-          else
-            echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
-          fi
+          # Full on merge_group only: the heavy suites check the tree that
+          # will land, once, in the merge queue. A pull request plans fast.
+          # A manual run takes its `depth` input.
+          case "$EVENT_NAME" in
+            merge_group)
+              echo "suite_depth=full" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            workflow_dispatch)
+              if [[ "$DISPATCH_DEPTH" != "fast" && "$DISPATCH_DEPTH" != "full" ]]; then
+                echo "::error::Unknown suite depth '$DISPATCH_DEPTH'; choose fast or full."
+                exit 1
+              fi
+              echo "suite_depth=$DISPATCH_DEPTH" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            pull_request)
+              echo "suite_depth=fast" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            *)
+              echo "::error::No suite depth for event '$EVENT_NAME'."
+              exit 1
+              ;;
+          esac
 
       - name: Check if PR is trusted
         id: check
@@ -146,9 +168,14 @@ jobs:
         if: >-
           steps.check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch'
+        # Full history for merge-base diffs, but blobless: commits and trees
+        # are enough to list changed paths, and git fetches any other blob a
+        # step reads (a `git show <base>:<file>`, say) on first access. Jobs
+        # that never look past HEAD keep the default shallow checkout.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Check changed file scope
@@ -162,6 +189,11 @@ jobs:
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            # e2e-landing runs, and builds the landing site, at full depth only.
+            landing_build_required=true
+            if [[ "$SUITE_DEPTH" == "full" ]]; then
+              landing_build_required=false
+            fi
             {
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
@@ -171,15 +203,17 @@ jobs:
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
               echo "e2e_landing_required=true"
-              echo "landing_build_required=true"
+              echo "landing_build_required=$landing_build_required"
               echo "legal_atlas_image_required=true"
               echo "marketing_screenshots_required=true"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
               echo "model_catalog_drift_required=true"
               echo "package_checks_required=true"
+              echo "published_exports_required=true"
               echo "release_typecheck_required=false"
               echo "stack_redaction_browsers_required=true"
+              echo "web_api_types_required=true"
               echo "web_build_required=true"
               echo "web_image_smoke_required=true"
               echo "windows_scripts_required=true"
@@ -207,8 +241,10 @@ jobs:
               echo "mobile_build_required=false"
               echo "model_catalog_drift_required=false"
               echo "package_checks_required=true"
+              echo "published_exports_required=false"
               echo "release_typecheck_required=false"
               echo "stack_redaction_browsers_required=false"
+              echo "web_api_types_required=false"
               echo "web_build_required=false"
               echo "web_image_smoke_required=false"
               echo "windows_scripts_required=false"
@@ -246,8 +282,10 @@ jobs:
           migration_rehearsal_required=false
           mobile_build_required=false
           model_catalog_drift_required=false
+          published_exports_required=false
           release_typecheck_required=false
           stack_redaction_browsers_required=false
+          web_api_types_required=false
           web_build_required=false
           web_image_smoke_required=false
           windows_scripts_required=false
@@ -343,6 +381,24 @@ jobs:
                 web_image_smoke_required=true
                 ;;
             esac
+            # The web API types drift guard compiles the API program from
+            # apps/api/tsconfig.json (API sources, the workspace packages
+            # they import, the root ambient types, installed type
+            # packages) and compares the printout with the committed file
+            # under apps/web/src/generated, importing by name the packages
+            # apps/web/package.json lists.
+            case "$file" in
+              apps/api/*|apps/web/package.json|apps/web/src/generated/*|packages/*|patches/*|types/*|bun.lock|bunfig.toml|package.json|.github/workflows/ci.yml)
+                web_api_types_required=true
+                ;;
+            esac
+            # The published export map guard builds, prepares and packs
+            # workspace packages with the publish scripts it imports.
+            case "$file" in
+              packages/*|patches/*|scripts/check-published-exports.ts|scripts/prepare-publish.ts|scripts/publish-manifest.ts|scripts/published-export-guards.ts|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
+                published_exports_required=true
+                ;;
+            esac
           done
 
           # A pull request builds the API image for arm64, the production
@@ -351,6 +407,20 @@ jobs:
           api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"}]'
           if [[ "$SUITE_DEPTH" == "full" || "$version_changed" == "true" ]]; then
             api_image_platforms='[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
+          fi
+
+          # Full depth (the merge queue, a manual full run) runs the
+          # slow generated-output guards whatever the diff touched.
+          if [[ "$SUITE_DEPTH" == "full" ]]; then
+            published_exports_required=true
+            web_api_types_required=true
+          fi
+
+          # e2e-landing runs the same landing build before it tests the
+          # preview, so when it is planned a separate landing build only
+          # repeats that work.
+          if [[ "$SUITE_DEPTH" == "full" && "$e2e_landing_required" == "true" ]]; then
+            landing_build_required=false
           fi
 
           # The production e2e shards consume web-build's artifact, so any
@@ -377,8 +447,10 @@ jobs:
             echo "mobile_build_required=$mobile_build_required"
             echo "model_catalog_drift_required=$model_catalog_drift_required"
             echo "package_checks_required=$package_checks_required"
+            echo "published_exports_required=$published_exports_required"
             echo "release_typecheck_required=$release_typecheck_required"
             echo "stack_redaction_browsers_required=$stack_redaction_browsers_required"
+            echo "web_api_types_required=$web_api_types_required"
             echo "web_build_required=$web_build_required"
             echo "web_image_smoke_required=$web_image_smoke_required"
             echo "windows_scripts_required=$windows_scripts_required"
@@ -387,67 +459,6 @@ jobs:
           if [[ "$package_checks_required" != "true" ]]; then
             echo "::notice::Only provenance files changed; skipping package CI checks."
           fi
-
-  changeset:
-    name: Changeset present for published package changes
-    needs: ci-plan
-    if: >-
-      needs.ci-plan.outputs.changeset_required == 'true'
-      && needs.ci-plan.outputs.trusted == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Load release policy
-        # scripts/changeset-policy.json is the single source of truth for which
-        # paths are release-gated: scripts/changeset-guard.ts matches the same
-        # lists at pre-push, so this failure reaches the developer before CI
-        # spends a whole run to report it. Inlining the lists here again would
-        # let the two sides gate different paths.
-        id: policy
-        run: |
-          {
-            echo "release_paths<<POLICY_EOF"
-            jq -er '.releasePaths[]' scripts/changeset-policy.json
-            echo "POLICY_EOF"
-            echo "generated_paths<<POLICY_EOF"
-            jq -er '.generatedPaths[]' scripts/changeset-policy.json
-            echo "POLICY_EOF"
-            echo "package_files<<POLICY_EOF"
-            jq -er '.packageFiles[]' scripts/changeset-policy.json
-            echo "POLICY_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
-
-      - name: Published package lists match the release policy
-        # CONTRIBUTING.md and .changeset/README.md tell contributors which
-        # packages need a changeset. Both are rendered from the same policy
-        # this job gates on, so neither can name a different set. The script
-        # reads only the policy file and needs no dependency install.
-        run: bun scripts/check-published-package-lists.ts --check
-
-      - name: Changeset packages match changed files
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
-
-      - name: Enforce release intent
-        # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
-        with:
-          release-paths: ${{ steps.policy.outputs.release_paths }}
-          generated-paths: ${{ steps.policy.outputs.generated_paths }}
-          package-files: ${{ steps.policy.outputs.package_files }}
-          version-file: bun.lock
 
   # The agent sandbox must be exercised before the standalone protected
   # canary can exist on the default branch. This job is safe for draft PRs: it
@@ -475,7 +486,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Bun
@@ -553,16 +563,16 @@ jobs:
           docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
 
   # The repository guards. The suites this job used to run serially after them
-  # are ci-tests and ci-browser: the runners are two-core, so the way to
-  # shorten the critical path is more jobs, not more threads. The three share
-  # nothing but the checkout and the install.
+  # are ci-tests and ci-browser, which run as separate jobs so they overlap
+  # instead of queueing behind one another. The three share nothing but the
+  # checkout and the install.
   ci-checks:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.trusted == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 25m, matching code-quality/typecheck-baseline.
+    # 25m, matching code-quality.
     timeout-minutes: 25
     permissions:
       contents: read
@@ -572,6 +582,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -592,6 +603,53 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
+
+      # The changeset gate for pull requests. It reads only the policy file
+      # and git history, so it runs here, before any dependency install.
+      - name: Load release policy
+        # scripts/changeset-policy.json is the single source of truth for which
+        # paths are release-gated: scripts/changeset-guard.ts matches the same
+        # lists at pre-push, so this failure reaches the developer before CI
+        # spends a whole run to report it. Inlining the lists here again would
+        # let the two sides gate different paths.
+        if: github.event_name == 'pull_request'
+        id: policy
+        run: |
+          {
+            echo "release_paths<<POLICY_EOF"
+            jq -er '.releasePaths[]' scripts/changeset-policy.json
+            echo "POLICY_EOF"
+            echo "generated_paths<<POLICY_EOF"
+            jq -er '.generatedPaths[]' scripts/changeset-policy.json
+            echo "POLICY_EOF"
+            echo "package_files<<POLICY_EOF"
+            jq -er '.packageFiles[]' scripts/changeset-policy.json
+            echo "POLICY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Published package lists match the release policy
+        # CONTRIBUTING.md and .changeset/README.md tell contributors which
+        # packages need a changeset. Both are rendered from the same policy
+        # these steps gate on, so neither can name a different set. The script
+        # reads only the policy file and needs no dependency install.
+        if: github.event_name == 'pull_request'
+        run: bun scripts/check-published-package-lists.ts --check
+
+      - name: Changeset packages match changed files
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun scripts/changeset-guard.ts --base "$BASE_SHA" --packages-only
+
+      - name: Changeset present for published package changes
+        # The repository owner publishes this versioned shared contract.
+        if: github.event_name == 'pull_request'
+        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
+        with:
+          release-paths: ${{ steps.policy.outputs.release_paths }}
+          generated-paths: ${{ steps.policy.outputs.generated_paths }}
+          package-files: ${{ steps.policy.outputs.package_files }}
+          version-file: bun.lock
 
       - name: Validate AI skills
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1016,7 +1074,9 @@ jobs:
           bun apps/api/scripts/export-capability-catalog.ts --check
 
       - name: Web API types drift guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.web_api_types_required == 'true'
         # apps/web type-checks against API types printed from the API's own
         # inference instead of compiling the API. `--check` fails when the
         # committed file is stale and asserts each printed type is identical
@@ -1226,7 +1286,9 @@ jobs:
       # subpath from the built dist, so a missing build entry or an unshipped
       # file fails here rather than after publication.
       - name: Published export map guard
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.published_exports_required == 'true'
         run: |
           bun scripts/check-published-exports.ts packages/auth-model
           bun scripts/check-published-exports.ts packages/ai-catalog
@@ -1314,7 +1376,7 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/code-check-affected.test.ts
 
-      # The pre-push guard and the `changeset` job above must gate the same
+      # The pre-push guard and the changeset steps above must gate the same
       # paths. This fails when they diverge, when a policy pathspec goes stale,
       # and when a newly published package is missing from the policy file.
       - name: Test changeset guard
@@ -1417,6 +1479,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -1483,6 +1546,12 @@ jobs:
           && matrix.shard == 'rest'
         run: bun --cwd .claude/mcp test
 
+      # The API test runner sizes its parallel lanes from the runner's cores
+      # and memory (apps/api/scripts/test-lanes.ts); print what it sees.
+      - name: Runner resources
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: nproc; free -g
+
       - name: Test
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
@@ -1516,7 +1585,7 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     permissions:
       contents: read
 
@@ -1525,6 +1594,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -1674,6 +1744,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -1796,11 +1867,14 @@ jobs:
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6379
         run: bun --filter @stll/collab test src/server.test.ts
 
-  # These suites use Postgres behavior that PGlite cannot reproduce (partial
-  # indexes, advisory locks, roles, and policies). The runner derives its file
-  # set from the gate each suite declares; PR and nightly coverage therefore
-  # share one source of truth instead of mirrored YAML manifests.
-  postgres-suites:
+  # API suites that need real services, at full depth only. The Postgres
+  # suites use behavior PGlite cannot reproduce (partial indexes, advisory
+  # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
+  # workers. Each runner derives its file set from the gate the suites declare,
+  # so PR and nightly coverage share one source of truth instead of mirrored
+  # YAML manifests. Both services start with the job and one install serves
+  # both runners.
+  service-suites:
     needs: ci-plan
     if: >-
       needs.ci-plan.outputs.package_checks_required == 'true'
@@ -1825,6 +1899,15 @@ jobs:
           --health-cmd "pg_isready -U stella_owner -d stella"
           --health-interval 5s
           --health-timeout 5s
+          --health-retries 10
+      valkey:
+        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 2s
+          --health-timeout 2s
           --health-retries 10
 
     steps:
@@ -1853,47 +1936,10 @@ jobs:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
-  # API suites that drive real BullMQ queues and workers against Valkey. The
-  # runner discovers every suite that declares the Valkey gate. Like the
-  # Postgres suites, they run at full depth only.
-  valkey-suites:
-    needs: ci-plan
-    if: >-
-      needs.ci-plan.outputs.package_checks_required == 'true'
-      && (needs.ci-plan.outputs.trusted == 'true'
-          || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.suite_depth == 'full'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-
-    services:
-      valkey:
-        image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
+      # Independent of the Postgres verdict: a failure there should not hide
+      # this runner's result.
       - name: Run Valkey-gated API suites
+        if: ${{ !cancelled() }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
@@ -1915,7 +1961,7 @@ jobs:
       && needs.ci-plan.outputs.migration_rehearsal_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 12
     permissions:
       contents: read
       packages: read # pull the promoted release's API image
@@ -2036,7 +2082,7 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     permissions:
       contents: read
 
@@ -2045,6 +2091,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
           submodules: true
 
@@ -2206,7 +2253,7 @@ jobs:
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.web_image_smoke_required == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 8
     permissions:
       contents: read
 
@@ -2290,7 +2337,8 @@ jobs:
   # but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
   # here on every PR that could plausibly affect the landing
-  # output.
+  # output. When e2e-landing is planned, ci-plan leaves this job out:
+  # e2e-landing runs the same build before its browser checks.
   landing-build:
     needs: ci-plan
     if: >-
@@ -2335,18 +2383,19 @@ jobs:
       && needs.web-build.result == 'success'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 12
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        # The route network baseline runs alone against its stack, so it
+        # gets a leg of its own instead of lengthening a Playwright shard.
+        shard: [1, 2, network-baseline]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Bun
@@ -2420,12 +2469,10 @@ jobs:
 
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
-      # continue-on-error keeps the shard and the diagnostic uploads running
-      # after a regression; the step's outcome fails the job at the end.
       - name: Check route network baseline
-        id: network-baseline
-        if: steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
-        continue-on-error: true
+        if: >-
+          steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard == 'network-baseline'
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
@@ -2434,7 +2481,10 @@ jobs:
 
       # Playwright clears its report directory at the next invocation.
       - name: Upload network baseline blob report
-        if: always() && steps.e2e-stack.outputs.status == 'ready' && matrix.shard == 1
+        if: >-
+          always()
+          && steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard == 'network-baseline'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: network-baseline-blob
@@ -2442,7 +2492,9 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: >-
+          steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard != 'network-baseline'
         env:
           E2E_EXECUTION_PROFILE: ci-production-parallel
           E2E_EXPECT_DEV_ROUTES: "false"
@@ -2456,6 +2508,7 @@ jobs:
           always()
           && !cancelled()
           && steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard != 'network-baseline'
         env:
           E2E_EXECUTION_PROFILE: standard
           E2E_EXPECT_DEV_ROUTES: "false"
@@ -2467,7 +2520,10 @@ jobs:
           --grep-invert="route-smoke.spec.ts"
 
       - name: Upload Playwright blob report
-        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        if: >-
+          always()
+          && steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard != 'network-baseline'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-blob-${{ matrix.shard }}
@@ -2475,7 +2531,10 @@ jobs:
           retention-days: 7
 
       - name: Upload route-smoke Playwright blob report
-        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        if: >-
+          always()
+          && steps.e2e-stack.outputs.status == 'ready'
+          && matrix.shard != 'network-baseline'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-blob-route-smoke-${{ matrix.shard }}
@@ -2491,12 +2550,6 @@ jobs:
             /tmp/api.log
             /tmp/web-production.log
           retention-days: 7
-
-      - name: Fail on route network baseline regression
-        if: steps.network-baseline.outcome == 'failure'
-        run: |
-          echo "Route network baseline regressed; see the network-baseline-blob artifact."
-          exit 1
 
   stack-redaction-browsers:
     needs: ci-plan
@@ -2552,7 +2605,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Bun
@@ -2807,46 +2859,36 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  e2e:
+  # One HTML report from the browser suites' blob reports, when a suite
+  # failed. Diagnostic only: ci-result evaluates the suites themselves, so
+  # nothing waits for this job and it runs only once a failure has decided the
+  # outcome.
+  e2e-report:
+    needs: [ci-plan, e2e-production-shard, e2e-vite-canary]
     if: >-
-      always()
-      && needs.ci-plan.outputs.suite_depth == 'full'
-    needs: [ci-plan, e2e-production-shard, e2e-vite-canary, e2e-landing]
+      !cancelled()
+      && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && (needs.e2e-production-shard.result == 'failure'
+          || needs.e2e-vite-canary.result == 'failure')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
       - name: Checkout
-        if: >-
-          (needs.e2e-production-shard.result == 'failure'
-           || needs.e2e-vite-canary.result == 'failure')
-          && needs.ci-plan.outputs.e2e_core_required == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Setup Bun
-        if: >-
-          (needs.e2e-production-shard.result == 'failure'
-           || needs.e2e-vite-canary.result == 'failure')
-          && needs.ci-plan.outputs.e2e_core_required == 'true'
         uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
 
       - name: Install dependencies
-        if: >-
-          (needs.e2e-production-shard.result == 'failure'
-           || needs.e2e-vite-canary.result == 'failure')
-          && needs.ci-plan.outputs.e2e_core_required == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Download Playwright blob reports
-        if: >-
-          (needs.e2e-production-shard.result == 'failure'
-           || needs.e2e-vite-canary.result == 'failure')
-          && needs.ci-plan.outputs.e2e_core_required == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: playwright-blob-*
@@ -2854,46 +2896,14 @@ jobs:
           merge-multiple: true
 
       - name: Merge Playwright reports
-        if: >-
-          (needs.e2e-production-shard.result == 'failure'
-           || needs.e2e-vite-canary.result == 'failure')
-          && needs.ci-plan.outputs.e2e_core_required == 'true'
         run: cd apps/web && bunx playwright merge-reports --reporter html all-blob-reports
 
       - name: Upload merged Playwright report
-        if: >-
-          (needs.e2e-production-shard.result == 'failure'
-           || needs.e2e-vite-canary.result == 'failure')
-          && needs.ci-plan.outputs.e2e_core_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: apps/web/playwright-report/
           retention-days: 7
-
-      - name: Evaluate browser checks
-        env:
-          LANDING_RESULT: ${{ needs.e2e-landing.result }}
-          PRODUCTION_RESULT: ${{ needs.e2e-production-shard.result }}
-          VITE_CANARY_RESULT: ${{ needs.e2e-vite-canary.result }}
-        run: |
-          cancelled=false
-          for result in "$PRODUCTION_RESULT" "$VITE_CANARY_RESULT" "$LANDING_RESULT"; do
-            case "$result" in
-              success|skipped)
-                ;;
-              cancelled)
-                cancelled=true
-                ;;
-              *)
-                echo "::error::Browser checks ended with $result"
-                exit 1
-                ;;
-            esac
-          done
-          if [[ "$cancelled" == "true" ]]; then
-            echo "Browser checks were cancelled; a newer run is authoritative."
-          fi
 
   # Build the final API image and rehearse it at every depth. The image build
   # runs the runtime-asset stage on the runner filesystem; the smoke then
@@ -2912,7 +2922,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.ci-plan.outputs.api_image_platforms) }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 8
     permissions:
       contents: read
     steps:
@@ -3185,7 +3195,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Rust
@@ -3241,15 +3250,13 @@ jobs:
     needs:
       [
         ci-plan,
-        changeset,
         agent-sandbox-docker,
         ci-checks,
         ci-browser,
         ci-tests,
         collab-redis,
         code-quality,
-        postgres-suites,
-        valkey-suites,
+        service-suites,
         release-typecheck,
         typecheck-baseline,
         web-build,
@@ -3261,7 +3268,6 @@ jobs:
         e2e-production-shard,
         e2e-vite-canary,
         e2e-landing,
-        e2e,
         stack-redaction-browsers,
         api-image-deps,
         api-image-smoke,
@@ -3272,10 +3278,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # A skipped plan passes only while the pull request is still a draft.
+      pull-requests: read
     steps:
       - name: Evaluate CI outcome
         env:
           EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
           # Every job in `needs`, so a job added there is evaluated without a
           # hand-kept list; scripts/ci-plan.test.ts requires every job to be
           # in `needs`.
@@ -3292,14 +3303,12 @@ jobs:
             "agent-sandbox-docker": "agent_sandbox_docker_required",
             "api-image-deps": "api_image_deps_required",
             "api-image-smoke": "api_image_smoke_required",
-            "changeset": "changeset_required",
             "ci-browser": null,
             "ci-checks": null,
             "ci-tests": null,
             "code-quality": "package_checks_required",
             "collab-redis": "collab_redis_required",
             "desktop-clippy": "desktop_rust_checks_required",
-            "e2e": null,
             "e2e-landing": "e2e_landing_required",
             "e2e-production-shard": "e2e_core_required",
             "e2e-vite-canary": "e2e_core_required",
@@ -3308,11 +3317,10 @@ jobs:
             "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
-            "postgres-suites": "package_checks_required",
             "release-typecheck": "release_typecheck_required",
+            "service-suites": "package_checks_required",
             "stack-redaction-browsers": "stack_redaction_browsers_required",
             "typecheck-baseline": "package_checks_required",
-            "valkey-suites": "package_checks_required",
             "web-build": "web_build_required",
             "web-image-smoke": "web_image_smoke_required",
             "windows-scripts": "windows_scripts_required"
@@ -3322,17 +3330,27 @@ jobs:
           FAST_REQUIRED: >-
             ["api-image-smoke", "web-image-smoke"]
         run: |
-          # When the CI plan was skipped (draft PR), all downstream
-          # jobs are also skipped. This is expected and should not
-          # block the PR.
+          # The plan skips a draft pull request, and every job with it. The
+          # event's draft flag can be stale: a push to a draft followed by
+          # marking it ready queues the draft run after the ready one, which
+          # it then cancels. So the skip passes only while the pull request is
+          # still a draft; a ready one has to run its checks.
           if [[ "$PLAN_RESULT" == "skipped" ]]; then
-            echo "CI plan skipped. Passing."
-            exit 0
+            draft=""
+            if [[ "$EVENT" == "pull_request" ]]; then
+              draft="$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .draft)"
+            fi
+            if [[ "$draft" == "true" ]]; then
+              echo "CI plan skipped for a draft pull request. Passing."
+              exit 0
+            fi
+            echo "::error::CI plan was skipped, but the pull request is not a draft; re-run CI Checks."
+            exit 1
           fi
 
-          # Only a pull request run is ever superseded by a newer run of
-          # the same ref; anywhere else a cancelled run certifies nothing.
-          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" == "pull_request" ]]; then
+          # Only a pull request or a manual run is ever superseded by a newer
+          # run; a cancelled merge group certifies nothing.
+          if [[ "$PLAN_RESULT" == "cancelled" && "$EVENT" != "merge_group" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
@@ -3366,10 +3384,10 @@ jobs:
               fi
               ;;
             fast)
-              # Only an unlabelled pull request plans `fast`: its heavy
-              # suites skip by design, and a cancelled job means a newer run
-              # of the same ref replaced this one.
-              if [[ "$EVENT" != "pull_request" ]]; then
+              # Only an unlabelled pull request or a manual run plans `fast`:
+              # its heavy suites skip by design, and a cancelled job means a
+              # newer run replaced this one.
+              if [[ "$EVENT" == "merge_group" ]]; then
                 echo "::error::$EVENT run planned suite depth 'fast'; the heavy suites must run."
                 exit 1
               fi
