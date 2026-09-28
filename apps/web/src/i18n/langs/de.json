@@ -801,6 +801,12 @@
       "resultsFor": "Ergebnisse für: <bdi>{query}</bdi>",
       "searchEveryWord": "Alle Wörter suchen"
     },
+    "seo": {
+      "collectionName": "Stella Rechtsprechung",
+      "description": "Öffentliche Rechtsprechungsdatenbank mit indexierbaren Gerichtsentscheidungen und Rechtsquellen.",
+      "homeDescription": "Öffentliche Rechtsdatenbank mit Gerichtsentscheidungen und konsolidierten Rechtsvorschriften; Suche nach Kennung oder Stichwörtern.",
+      "scopedDescription": "Öffentliche Rechtsprechungsdatenbank für {scope} mit indexierbaren Gerichtsentscheidungen und Rechtsquellen."
+    },
     "showWholeHeadnote": "Ganzen Leitsatz anzeigen",
     "sort": {
       "newest": "Neueste",
@@ -4337,6 +4343,7 @@
     "compareVersionMissing": "Die Vergleichsfassung ist in der Historie dieses Gesetzes nicht vorhanden.",
     "compareWholeAct": "Ganzes Gesetz vergleichen",
     "compareWithVersion": "Mit Fassung {version} vergleichen",
+    "description": "Öffentliche Datenbank konsolidierter Rechtsvorschriften, nach Rechtsakt und Fassung indexierbar.",
     "diffInserted": "Eingefügt:",
     "diffRemoved": "Gestrichen:",
     "emptyDocument": "Für diese Fassung ist kein Text verfügbar.",

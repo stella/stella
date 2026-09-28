@@ -801,6 +801,12 @@
       "resultsFor": "Výsledky pro: <bdi>{query}</bdi>",
       "searchEveryWord": "Hledat všechna slova"
     },
+    "seo": {
+      "collectionName": "Judikatura stella",
+      "description": "Veřejná databáze judikatury s indexovatelnými soudními rozhodnutími a právními prameny.",
+      "homeDescription": "Veřejná právní databáze soudních rozhodnutí a konsolidovaných právních předpisů; vyhledávejte podle identifikátoru nebo slov.",
+      "scopedDescription": "Veřejná databáze judikatury ({scope}) s indexovatelnými soudními rozhodnutími a právními prameny."
+    },
     "showWholeHeadnote": "Zobrazit celou právní větu",
     "sort": {
       "newest": "Nejnovější",
@@ -4337,6 +4343,7 @@
     "compareVersionMissing": "Verze k porovnání v historii tohoto předpisu není.",
     "compareWholeAct": "Porovnat celý předpis",
     "compareWithVersion": "Porovnat se zněním {version}",
+    "description": "Veřejná databáze konsolidovaných právních předpisů, indexovatelných podle předpisu a jeho znění.",
     "diffInserted": "Vloženo:",
     "diffRemoved": "Vypuštěno:",
     "emptyDocument": "Toto znění nemá dostupný text.",

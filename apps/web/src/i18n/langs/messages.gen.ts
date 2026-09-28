@@ -804,6 +804,12 @@ type Messages = {
       "resultsFor": "Results for: <bdi>{query}</bdi>";
       "searchEveryWord": "Search every word";
     };
+    "seo": {
+      "collectionName": "Stella case law";
+      "description": "Public case-law database with indexable court decisions and legal source materials.";
+      "homeDescription": "Public legal database: court decisions and consolidated statutes, searchable by identifier or by words.";
+      "scopedDescription": "Public case-law database for {scope}, with indexable court decisions and legal source materials.";
+    };
     "showWholeHeadnote": "Show whole headnote";
     "sort": {
       "newest": "Newest";
@@ -4340,6 +4346,7 @@ type Messages = {
     "compareVersionMissing": "The version to compare with is not in this act's history.";
     "compareWholeAct": "Compare the whole act";
     "compareWithVersion": "Compare with {version}";
+    "description": "Public database of consolidated statutes, indexable by act and version.";
     "diffInserted": "Inserted:";
     "diffRemoved": "Deleted:";
     "emptyDocument": "This version has no text available.";

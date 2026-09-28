@@ -801,6 +801,12 @@
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
+    "seo": {
+      "collectionName": "Stella tiesu prakse",
+      "description": "Publiska tiesu prakses datubāze ar indeksējamiem tiesu nolēmumiem un tiesību avotiem.",
+      "homeDescription": "Publiska juridiskā datubāze: tiesu nolēmumi un konsolidēti tiesību akti, meklējami pēc identifikatora vai vārdiem.",
+      "scopedDescription": "Publiska tiesu prakses datubāze ({scope}) ar indeksējamiem tiesu nolēmumiem un tiesību avotiem."
+    },
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
@@ -4337,6 +4343,7 @@
     "compareVersionMissing": "Salīdzināmās redakcijas šī akta vēsturē nav.",
     "compareWholeAct": "Salīdzināt visu aktu",
     "compareWithVersion": "Salīdzināt ar redakciju {version}",
+    "description": "Publiska konsolidētu tiesību aktu datubāze, indeksējama pēc akta un tā redakcijas.",
     "diffInserted": "Pievienots:",
     "diffRemoved": "Svītrots:",
     "emptyDocument": "Šai redakcijai nav pieejams teksts.",
