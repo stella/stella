@@ -83,6 +83,7 @@
     "./review-out-of-date-notice": "./src/review/review-out-of-date-notice.tsx",
     "./review-severity-dot": "./src/review/review-severity-dot.tsx",
     "./review-status-badge": "./src/review/review-status-badge.tsx",
+    "./text-mark": "./src/review/text-mark.tsx",
     "./scroll-area": "./src/components/scroll-area.tsx",
     "./scroll-to-top": "./src/components/scroll-to-top.tsx",
     "./secret-input": "./src/components/secret-input.tsx",

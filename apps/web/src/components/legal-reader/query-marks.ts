@@ -123,18 +123,3 @@ export const wordPrefixMatchEnd = (
     end += codePointWidth(codePoint);
   }
 };
-
-/** The mark a query's words wear, wherever they are shown. */
-export const SEARCH_MARK_CLASS_NAME =
-  "text-foreground bg-warning/30 font-medium dark:bg-warning/20";
-
-/**
- * The same mark, reached through a descendant selector, for markup that
- * arrived already highlighted (the search endpoint's own `<mark>` snippets).
- * Spelled out rather than derived from the constant above: Tailwind emits only
- * the classes it can read in the source, so a generated name produces no CSS.
- * `SEARCH_MARK_CLASS_NAME` and this one are checked against each other in
- * `query-marks.test.ts`.
- */
-export const SEARCH_MARK_DESCENDANT_CLASS_NAME =
-  "[&_mark]:text-foreground [&_mark]:bg-warning/30 [&_mark]:font-medium dark:[&_mark]:bg-warning/20";

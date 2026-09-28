@@ -123,6 +123,7 @@
     "@oxlint/plugins": "catalog:",
     "@shadcn/lint": "catalog:",
     "@stll/calculations": "workspace:*",
+    "@stll/invoicing": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/oxlint-config": "0.7.0",
     "@stll/property-testing": "workspace:*",
@@ -175,6 +176,7 @@
     "fast-xml-parser": "5.11.1",
     "ip-address": "10.7.2",
     "lucide-react": "1.41.0",
+    "mailauth/nodemailer": "9.1.0",
     "nanoid": "3.3.18",
     "postcss": "8.5.28",
     "prosemirror-model": "1.25.12",
@@ -269,6 +271,7 @@
     }
   },
   "patchedDependencies": {
+    "mailauth@5.0.3": "patches/mailauth@5.0.3.patch",
     "@astrojs/mdx@7.0.7": "patches/@astrojs__mdx@7.0.7.patch",
     "eslint-plugin-drizzle@0.2.3": "patches/eslint-plugin-drizzle@0.2.3.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",

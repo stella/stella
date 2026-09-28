@@ -242,6 +242,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
+    "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
+  ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
@@ -745,6 +748,10 @@ export default defineConfig({
   },
   rules: {
     ...libraryRules,
+    // The upstream rule treats String#slice like Array#slice and can turn
+    // substring checks into single-character Set membership under --fix.
+    // It has no fix-only option.
+    "unicorn/prefer-set-has": "off",
     // Design-system rules (@shadcn/lint): policy, overlap resolution, and
     // backlog handling live in scripts/design-lint-policy.ts.
     ...SHADCN_LINT_RULES,
@@ -1150,6 +1157,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -2482,6 +2490,27 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-file-input/no-raw-file-input": "error",
+      },
+    },
+    {
+      // Words in running text are marked through `@stll/ui/text-mark`, so a
+      // search hit, a reader's highlight and a verdict underline share one
+      // shape and differ only in hue and line.
+      files: [...productUiFiles],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "error",
+      },
+    },
+    {
+      // The owner and its test spell the mark out; the review badge's
+      // `highlight` tone is a status colour, not a text mark.
+      files: [
+        "packages/ui/src/review/text-mark.tsx",
+        "packages/ui/src/review/text-mark.test.ts",
+        "packages/ui/src/review/review-status-badge.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
       },
     },
     {

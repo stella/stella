@@ -1624,6 +1624,7 @@
     "profile": "Profilis",
     "properties": "Savybės",
     "queued": "Eilėje",
+    "reason": "Priežastis",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
@@ -1949,6 +1950,19 @@
     "deliveredBy": "Pristatė <address>{sender}</address>",
     "deliveredByAuthenticated": "Pristatė <address>{sender}</address> · autentiškumas patvirtintas",
     "deliveryAuthentication": "Pristatymo autentiškumo patvirtinimas",
+    "drops": {
+      "authenticationHint": "Paprašykite siuntėjo el. pašto administratoriaus sukonfigūruoti siuntimo domeno <protocol>SPF</protocol>, <protocol>DKIM</protocol> ir <protocol>DMARC</protocol>.",
+      "reasons": {
+        "attachmentRejected": "Priedas atmestas",
+        "authenticationFailed": "Pristatymo autentiškumo patvirtinti nepavyko",
+        "malformedMessage": "Laiško nepavyko perskaityti",
+        "messageTooLarge": "Laiškas per didelis",
+        "revokedAddress": "El. pašto adresas panaikintas",
+        "unauthorizedSender": "Siuntėjas neturi leidimo",
+        "unknownRecipient": "Nežinomas gavėjas"
+      },
+      "title": "Atmesti laiškai"
+    },
     "empty": "Korespondencijos dar nėra.",
     "filers": "Pateikėjai",
     "forwardedBy": "Persiuntė <address>{sender}</address>",
@@ -5182,7 +5196,6 @@
         "signedDescriptionNoVersion": "Parašas išsaugotas kaip nauja versija.",
         "signedTitle": "PDF pasirašytas",
         "stampLocation": "Vieta",
-        "stampReason": "Priežastis",
         "stampRejectedDescription": "Spaudo negalima ten padėti. Padėkite jį iš naujo ir bandykite dar kartą.",
         "stampSignedBy": "Skaitmeniniu parašu pasirašė",
         "stampTextUnrenderableDescription": "Priežasties ar vietos negalima parodyti matomame spaude. Pakeiskite tekstą arba naudokite nematomą parašą.",

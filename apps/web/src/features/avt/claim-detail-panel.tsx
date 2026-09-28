@@ -53,6 +53,7 @@ import {
   STATE_COLOR,
   SaveIndicator,
   StateChip,
+  stateHue,
   TypeChip,
 } from "@/features/avt/state-chip";
 import type {
@@ -622,7 +623,7 @@ const ScoreSection = ({
         <div
           className="h-full rounded-full"
           style={{
-            backgroundColor: STATE_COLOR[state].swatchStyle.backgroundColor,
+            backgroundColor: stateHue(state),
             width: `${String(score)}%`,
           }}
         />
