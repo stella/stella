@@ -75,6 +75,8 @@ jobs:
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
+      release_open_other: ${{ steps.release.outputs.open_other }}
+      release_is_current: ${{ steps.release.outputs.current_is_release }}
     steps:
       - name: Resolve suite depth
         id: depth
@@ -177,6 +179,36 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
+
+      # A CLI changeset that lands while a release pull request is open leaves
+      # the release a CLI change it did not version, and the release coupling
+      # guard then ejects the release from the queue. ci-checks holds such a
+      # pull request instead; this step tells it whether a release is open and
+      # whether the pull request under test is that release.
+      - name: Look for an open release
+        if: >-
+          steps.check.outputs.trusted == 'true'
+          && (github.event_name == 'pull_request'
+          || github.event_name == 'merge_group')
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          number="$PULL_REQUEST_NUMBER"
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+            if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+              echo "::error::Merge group head ref does not name a pull request: $MERGE_GROUP_HEAD_REF"
+              exit 1
+            fi
+            number="${BASH_REMATCH[1]}"
+          fi
+          bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number" \
+            >> "$GITHUB_OUTPUT"
 
       - name: Check changed file scope
         if: >-
@@ -791,6 +823,26 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
+      # The other half of that guard: while a release pull request is open, the
+      # queue holds a pull request adding a CLI changeset until the release has
+      # merged, so the release is never the one ejected. A pull request run
+      # only warns.
+      - name: Release CLI changeset hold
+        if: >-
+          github.event_name == 'pull_request'
+          || github.event_name == 'merge_group'
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+          IS_RELEASE: ${{ needs.ci-plan.outputs.release_is_current }}
+          OPEN_RELEASES: ${{ needs.ci-plan.outputs.release_open_other }}
+        run: >-
+          bun scripts/check-release-cli-changeset-hold.ts
+          --base "origin/$BASE_REF"
+          --event "$EVENT_NAME"
+          --open-releases "$OPEN_RELEASES"
+          --is-release "$IS_RELEASE"
+
       - name: CLI contract changeset guard
         if: >-
           github.event_name == 'pull_request'
@@ -1311,7 +1363,9 @@ jobs:
         run: |
           bun test scripts/check-api-deployment.test.ts
           bun test scripts/check-staging-deploy-decision.test.ts
+          bun test scripts/check-release-cli-changeset-hold.test.ts
           bash scripts/check-release-changelog.test.sh
+          bash scripts/release-pull-requests.test.sh
           bash scripts/create-release-manifest.test.sh
           bash scripts/promote-desktop-release.test.sh
 
