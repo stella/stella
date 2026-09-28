@@ -400,16 +400,14 @@ describe("AI provider canary tool contract", () => {
         }),
         provider: "anthropic",
       },
-      // SAFETY: the probe reads only the adapter and the provider options of
-      // the resolved model; nothing here reaches a provider.
-      resolveTextModel: () =>
-        ({
-          adapter,
-          keySource: "instance",
-          modelId: "claude-opus-5-5",
-          modelOptions: {},
-          provider: "anthropic",
-        }) as ResolvedTanStackTextModel,
+      // A scripted Anthropic model: nothing here reaches a provider.
+      resolveTextModel: (): ResolvedTanStackTextModel => ({
+        adapter,
+        keySource: "instance",
+        modelId: "claude-opus-5-5",
+        modelOptions: {},
+        provider: "anthropic",
+      }),
       signal: AbortSignal.timeout(5000),
     });
 
