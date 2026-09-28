@@ -1121,6 +1121,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     rateAtEntry: v.number(),
     currency: v.string(),
     narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
     invoiceNarrative: v.nullable(v.string()),
     billable: v.boolean(),
     noCharge: v.boolean(),

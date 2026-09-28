@@ -750,6 +750,9 @@ const writeDesiredStates = async (
         workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
         retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
         failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
+        appendMode: sql<
+          "batchable" | "single"
+        >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
         lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
         lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
         updatedAt: sql<Date>`clock_timestamp()`,

@@ -21,6 +21,7 @@ import {
   sql,
   unsafeCents,
   user,
+  userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
@@ -58,6 +59,7 @@ export const timeEntries = p.pgTable(
     rateAtEntry: centsColumn("rate_at_entry").notNull(),
     currency: p.varchar({ length: 3 }).notNull(),
     narrative: p.text().notNull(),
+    narrativeLanguage: p.varchar("narrative_language", { length: 64 }),
     invoiceNarrative: p.text("invoice_narrative"),
     billable: p.boolean().notNull().default(true),
     noCharge: p.boolean("no_charge").notNull().default(false),
@@ -116,6 +118,39 @@ export const timeEntries = p.pgTable(
       sql`${table.billedMinutes} >= 0`,
     ),
     ...wsOrganizationPolicies("time_entries"),
+  ],
+);
+
+export const savedTimeNarratives = p.pgTable(
+  "saved_time_narratives",
+  {
+    id: pUuid<"savedTimeNarrative">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: p.varchar({ length: 128 }).notNull(),
+    narrative: p.text().notNull(),
+    narrativeLanguage: p.varchar("narrative_language", { length: 64 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("saved_time_narratives_owner_name_id_idx")
+      .on(table.organizationId, table.userId, table.name, table.id),
+    p.check(
+      "saved_time_narratives_name_check",
+      sql`length(${table.name}) between 1 and 128`,
+    ),
+    p.check(
+      "saved_time_narratives_narrative_check",
+      sql`length(${table.narrative}) between 1 and 10000`,
+    ),
+    ...userOrganizationPolicies(),
   ],
 );
 

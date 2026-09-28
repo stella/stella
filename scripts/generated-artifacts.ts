@@ -8,7 +8,9 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const REPO_ROOT = path.join(import.meta.dir, "..");
+// `import.meta.dirname` rather than Bun's `import.meta.dir`: ownership.ts
+// imports this module and is itself loaded by oxlint.config.ts under Node.
+const REPO_ROOT = path.join(import.meta.dirname, "..");
 const FORMATTER_CONFIG = path.join(REPO_ROOT, ".oxfmtrc.json");
 
 type GeneratedArtifact = { path: string; contents: string };
