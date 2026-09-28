@@ -14,8 +14,10 @@ import {
   headClockStart,
   isReviewerSignal,
   latestRun,
+  outputOf,
   parseReviewGateConfig,
   pullRequestOutput,
+  runToRepost,
   selectSweepTargets,
   shouldDequeue,
   type OpenPullRequest,
@@ -594,6 +596,8 @@ describe("publishing", () => {
     observedAt: string,
     overrides: Partial<PublishedRun> = {},
   ): PublishedRun => ({
+    // Created in observation order unless a test says otherwise.
+    id: Date.parse(observedAt) / 1000,
     identity: { kind: "pr", pullRequest: 101, observedAt },
     status: "completed",
     conclusion: "success",
@@ -660,11 +664,55 @@ describe("publishing", () => {
     ).toBe("write");
   });
 
-  test("the latest run is the one started last", () => {
-    const early = published(OPENED, { title: "early" });
-    const late = published(minutesAfter(OPENED, 1), { title: "late" });
+  test("the latest run is the one GitHub created last", () => {
+    const early = published(OPENED, { id: 1, title: "early" });
+    const late = published(OPENED, { id: 2, title: "late" });
     expect(latestRun([late, early])?.title).toBe("late");
     expect(latestRun([])).toBeUndefined();
+  });
+
+  test("racing writers: an older observation posted last is repaired by re-posting the newest", () => {
+    const newer = published(minutesAfter(OPENED, 2), {
+      id: 1,
+      conclusion: "failure",
+      title: failing.title,
+      summary: failing.summary,
+    });
+    // Created after `newer`, though read before it.
+    const older = published(minutesAfter(OPENED, 1), { id: 2 });
+    expect(runToRepost([newer, older])).toBe(newer);
+    expect(outputOf(newer)).toEqual(failing);
+  });
+
+  test("runs created in observation order need no repair", () => {
+    const first = published(OPENED, { id: 1 });
+    const second = published(minutesAfter(OPENED, 1), { id: 2 });
+    expect(runToRepost([first, second])).toBeUndefined();
+    expect(runToRepost([])).toBeUndefined();
+  });
+
+  test("a run without this gate's identity is never re-posted", () => {
+    const foreign = published(minutesAfter(OPENED, 9), {
+      id: 1,
+      identity: null,
+    });
+    const own = published(OPENED, { id: 2 });
+    expect(runToRepost([foreign, own])).toBeUndefined();
+  });
+
+  test("a pending run re-posts as pending", () => {
+    const pending = published(OPENED, {
+      status: "in_progress",
+      conclusion: null,
+      title: "Waiting for PerPush",
+      summary: "- ⏳",
+    });
+    expect(outputOf(pending)).toEqual({
+      conclusion: "pending",
+      title: "Waiting for PerPush",
+      summary: "- ⏳",
+    });
+    expect(outputOf({ ...pending, title: null })).toBeNull();
   });
 
   test("the head clock counts only this pull request's runs", () => {

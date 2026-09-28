@@ -36,9 +36,11 @@ import {
   headClockStart,
   isReviewerSignal,
   latestRun,
+  outputOf,
   outputStatus,
   parseReviewGateConfig,
   pullRequestOutput,
+  runToRepost,
   selectSweepTargets,
   shouldDequeue,
   unknownMembershipOutput,
@@ -165,9 +167,11 @@ const THREADS_FIELDS = `
 // This gate's own runs on a commit, read through GraphQL: the repository's
 // REST allowance for the workflow token is shared with every other workflow.
 const GATE_RUNS_FIELDS = `
-  checkSuites(first: 50, filterBy: { appId: ${GATE_APP_ID}, checkName: "${CHECK_NAME}" }) {
+  checkSuites(first: 10, filterBy: { appId: ${GATE_APP_ID}, checkName: "${CHECK_NAME}" }) {
+    totalCount
     nodes { checkRuns(first: 100, filterBy: { checkName: "${CHECK_NAME}" }) {
-      nodes { externalId status conclusion title summary startedAt }
+      totalCount
+      nodes { databaseId externalId status conclusion title summary startedAt }
     } }
   }`;
 
@@ -271,17 +275,29 @@ export type PullRequestRead = PullRequestSnapshot & {
   readAt: string;
 };
 
-const parseRuns = (commit: unknown): readonly PublishedRun[] =>
-  list(commit, "checkSuites", "nodes").flatMap((suite) =>
-    list(suite, "checkRuns", "nodes").map((run) => ({
+// A partial list could hide the newest run or the first, so more runs than
+// one read returns fails the read rather than deciding from part of them.
+const parseRuns = (commit: unknown): readonly PublishedRun[] => {
+  const suites = list(commit, "checkSuites", "nodes");
+  if (integer(commit, "checkSuites", "totalCount") !== suites.length) {
+    return fail("More review-gate check suites than one read returns");
+  }
+  return suites.flatMap((suite) => {
+    const runs = list(suite, "checkRuns", "nodes");
+    if (integer(suite, "checkRuns", "totalCount") !== runs.length) {
+      return fail("More review-gate runs than one read returns");
+    }
+    return runs.map((run) => ({
+      id: integer(run, "databaseId"),
       identity: decodeIdentity(nullableText(run, "externalId")),
       status: text(run, "status").toLowerCase(),
       conclusion: nullableText(run, "conclusion")?.toLowerCase() ?? null,
       title: nullableText(run, "title"),
       summary: nullableText(run, "summary"),
       startedAt: text(run, "startedAt"),
-    })),
-  );
+    }));
+  });
+};
 
 export type Gateway = {
   readPullRequest: (number: number) => PullRequestRead;
@@ -289,6 +305,9 @@ export type Gateway = {
   readQueue: () => readonly QueueEntry[];
   readRuns: (sha: string) => readonly PublishedRun[];
   writeRun: (sha: string, output: GateOutput, identity: RunIdentity) => void;
+  // The head alone, from the cheapest read: the fallback when a full read
+  // fails and no event carried the head.
+  readHead: (number: number) => string;
   pullRequestsForSha: (sha: string) => readonly number[];
   discoverOpenPullRequests: () => readonly OpenPullRequest[];
   dequeue: (id: string) => void;
@@ -506,6 +525,13 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
         JSON.stringify(body),
       );
     },
+    readHead: (number) =>
+      runGh([
+        "api",
+        `repos/${repo}/pulls/${number}`,
+        "--jq",
+        ".head.sha",
+      ]).trim(),
     pullRequestsForSha: (sha) => {
       const pulls: unknown = JSON.parse(
         runGh(["api", `repos/${repo}/commits/${sha}/pulls`]),
@@ -566,6 +592,9 @@ export type Run = {
   revalidations: Map<number, QueueRecheck>;
   // Pull requests this run already removed from the queue.
   dequeued: Set<number>;
+  // Head commits the triggering event named, trusted only as the place to
+  // publish a blocking result when reading the pull request fails.
+  eventHeads: Map<number, string>;
   failures: string[];
 };
 
@@ -581,6 +610,7 @@ export const createRun = (
   snapshots: new Map(),
   revalidations: new Map(),
   dequeued: new Set(),
+  eventHeads: new Map(),
   failures: [],
 });
 
@@ -624,8 +654,20 @@ const publish = (
   console.log(
     `${sha.slice(0, 10)} ${encodeIdentity(identity)}: ${output.conclusion} (${output.title}) -> ${decision}`,
   );
-  if (decision === "write" && !run.dryRun) {
-    run.gateway.writeRun(sha, output, identity);
+  if (decision !== "write" || run.dryRun) {
+    return;
+  }
+  run.gateway.writeRun(sha, output, identity);
+  // Publishers for one commit can race past the decision above; settle so
+  // the newest run carries the newest observation, whoever wrote last.
+  const repost = runToRepost(run.gateway.readRuns(sha));
+  const repostIdentity = repost?.identity ?? null;
+  const repostOutput = repost === undefined ? null : outputOf(repost);
+  if (repostIdentity !== null && repostOutput !== null) {
+    console.log(
+      `${sha.slice(0, 10)}: a newer observation was overtaken; re-posting ${encodeIdentity(repostIdentity)}`,
+    );
+    run.gateway.writeRun(sha, repostOutput, repostIdentity);
   }
 };
 
@@ -821,7 +863,7 @@ const guarded = (
   }
 };
 
-const guardedPullRequest = (
+export const guardedPullRequest = (
   run: Run,
   number: number,
   { withGroups }: { withGroups: boolean },
@@ -838,7 +880,10 @@ const guardedPullRequest = (
       }
     },
     (reason) => {
-      const headSha = run.snapshots.get(number)?.headSha;
+      const headSha =
+        run.snapshots.get(number)?.headSha ??
+        run.eventHeads.get(number) ??
+        run.gateway.readHead(number);
       if (headSha !== undefined) {
         publish(run, headSha, unreadableOutput(reason), {
           kind: "pr",
@@ -927,7 +972,12 @@ const main = (argv: readonly string[]): void => {
 
   switch (command) {
     case "pr": {
-      for (const number of pullRequestNumbers(target ?? "")) {
+      const numbers = pullRequestNumbers(target ?? "");
+      const head = takeOption(argv, "--head").value;
+      for (const number of numbers) {
+        if (head !== null && head.length > 0 && numbers.length === 1) {
+          run.eventHeads.set(number, head);
+        }
         guardedPullRequest(run, number, { withGroups: true });
       }
       break;
@@ -939,6 +989,7 @@ const main = (argv: readonly string[]): void => {
       }
       const sha = target ?? fail("sha needs a commit");
       for (const number of run.gateway.pullRequestsForSha(sha)) {
+        run.eventHeads.set(number, sha);
         guardedPullRequest(run, number, { withGroups: true });
       }
       break;
@@ -957,13 +1008,15 @@ const main = (argv: readonly string[]): void => {
       );
       if (event === "merge_group") {
         guardedGroup(run, headSha);
-      } else if (numbers.length > 0) {
-        for (const number of numbers) {
-          guardedPullRequest(run, number, { withGroups: true });
-        }
       } else {
-        // Fork pull requests are not listed on a workflow run.
-        for (const number of run.gateway.pullRequestsForSha(headSha)) {
+        // Fork pull requests are not listed on a workflow run. Either way,
+        // the run's head is the reviewed pull request's head.
+        const listed =
+          numbers.length > 0
+            ? numbers
+            : run.gateway.pullRequestsForSha(headSha);
+        for (const number of listed) {
+          run.eventHeads.set(number, headSha);
           guardedPullRequest(run, number, { withGroups: true });
         }
       }

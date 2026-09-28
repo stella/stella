@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
+  fail,
   parseReviewGateConfig,
   type GateOutput,
   type PublishedRun,
@@ -17,6 +18,7 @@ import {
   createRun,
   evaluateGroupTarget,
   evaluatePullRequestTarget,
+  guardedPullRequest,
   type Gateway,
   type PullRequestRead,
 } from "./review-gate-github";
@@ -76,28 +78,39 @@ const fakeGateway = ({
   pullRequests,
   fresh = {},
   queue = [],
+  runReads = [],
+  failingReads = [],
 }: {
   pullRequests: readonly PullRequestRead[];
   // What a re-read right before acting returns; defaults to the first read.
   fresh?: Record<number, Partial<QueueRecheck>>;
   queue?: readonly QueueEntry[];
+  // Successive answers to reading a commit's gate runs; then none.
+  runReads?: readonly (readonly PublishedRun[])[];
+  // Pull requests whose full read fails.
+  failingReads?: readonly number[];
 }) => {
   const calls: Call[] = [];
   const byNumber = new Map(pullRequests.map((read) => [read.number, read]));
   const read = (number: number): PullRequestRead =>
     byNumber.get(number) ?? expect.unreachable(`no fixture for #${number}`);
+  const pendingRunReads = [...runReads];
   const gateway: Gateway = {
-    readPullRequest: read,
+    readPullRequest: (number) =>
+      failingReads.includes(number)
+        ? fail("GraphQL errors: something went wrong")
+        : read(number),
     revalidate: (number) => {
       calls.push({ kind: "revalidate", number });
       const { headSha, queued, threads } = read(number);
       return { headSha, queued, threads, ...fresh[number] };
     },
     readQueue: () => queue,
-    readRuns: (): readonly PublishedRun[] => [],
+    readRuns: (): readonly PublishedRun[] => pendingRunReads.shift() ?? [],
     writeRun: (sha, output, identity) => {
       calls.push({ kind: "write", sha, output, identity });
     },
+    readHead: (number) => headOf(number),
     pullRequestsForSha: () => [],
     discoverOpenPullRequests: () => [],
     dequeue: (id) => {
@@ -243,5 +256,96 @@ describe("dequeue from a merge group", () => {
     const write = calls.find((call) => call.kind === "write");
     expect(write?.kind === "write" && write.output.conclusion).toBe("success");
     expect(dequeued(calls)).toEqual([]);
+  });
+});
+
+describe("publishing races", () => {
+  const offender = pullRequest(1, {
+    readAt: "2026-09-28T10:05:00Z",
+    threads: { complete: true, unresolved: [THREAD] },
+  });
+  const run = (
+    id: number,
+    observedAt: string,
+    output: GateOutput,
+  ): PublishedRun => ({
+    id,
+    identity: { kind: "pr", pullRequest: 1, observedAt },
+    status: output.conclusion === "pending" ? "in_progress" : "completed",
+    conclusion: output.conclusion === "pending" ? null : output.conclusion,
+    title: output.title,
+    summary: output.summary,
+    startedAt: observedAt,
+  });
+  const success: GateOutput = {
+    conclusion: "success",
+    title: "Reviews complete, no unresolved threads",
+    summary: "- ✅",
+  };
+
+  test("a newer verdict overtaken by an older write is re-posted after the write", () => {
+    const { gateway, calls } = fakeGateway({
+      pullRequests: [offender],
+      runReads: [
+        // At decision time only an older success is visible.
+        [run(1, "2026-09-28T10:00:00Z", success)],
+        // After writing, a racing writer's older success landed last.
+        [
+          run(1, "2026-09-28T10:00:00Z", success),
+          run(2, "2026-09-28T10:05:00Z", {
+            conclusion: "failure",
+            title: "1 unresolved review thread",
+            summary: "- ❌",
+          }),
+          run(3, "2026-09-28T10:03:00Z", success),
+        ],
+      ],
+    });
+    evaluatePullRequestTarget(
+      createRun(gateway, config("shadow"), {
+        baseBranch: "main",
+        dryRun: false,
+      }),
+      1,
+    );
+    const writes = calls.flatMap((call) =>
+      call.kind === "write" ? [call] : [],
+    );
+    expect(writes).toHaveLength(2);
+    expect(writes[1]?.output.conclusion).toBe("failure");
+    expect(writes[1]?.identity.observedAt).toBe("2026-09-28T10:05:00Z");
+  });
+});
+
+describe("a failed read", () => {
+  test("still replaces the verdict with a blocking pending, on the head the event named", () => {
+    const { gateway, calls } = fakeGateway({
+      pullRequests: [pullRequest(1)],
+      failingReads: [1],
+    });
+    const state = createRun(gateway, config("shadow"), {
+      baseBranch: "main",
+      dryRun: false,
+    });
+    state.eventHeads.set(1, "e".repeat(40));
+    guardedPullRequest(state, 1, { withGroups: true });
+    const write = calls.find((call) => call.kind === "write");
+    expect(write?.kind === "write" && write.sha).toBe("e".repeat(40));
+    expect(write?.kind === "write" && write.output.conclusion).toBe("pending");
+    expect(state.failures).toHaveLength(1);
+  });
+
+  test("without an event head, falls back to looking the head up", () => {
+    const { gateway, calls } = fakeGateway({
+      pullRequests: [pullRequest(1)],
+      failingReads: [1],
+    });
+    const state = createRun(gateway, config("shadow"), {
+      baseBranch: "main",
+      dryRun: false,
+    });
+    guardedPullRequest(state, 1, { withGroups: true });
+    const write = calls.find((call) => call.kind === "write");
+    expect(write?.kind === "write" && write.sha).toBe(headOf(1));
   });
 });

@@ -2,9 +2,10 @@ name: Review Gate Monitor
 
 # Watches the Review Gate from outside it: shares no code with the evaluator,
 # so a broken evaluator cannot also silence this. It fails when a pull request
-# that is armed or queued has no `review-gate` verdict, or one stuck pending
-# past twice the longest reviewer wait, or when Review Gate's own recent runs
-# keep failing.
+# about to land has no `review-gate` verdict where the required check reads
+# it, or one stuck pending past twice the longest reviewer wait, or when
+# Review Gate's own recent runs keep failing. A queued pull request is read
+# on its merge group commit; an armed one on its head.
 on:
   schedule:
     - cron: "41 * * * *"
@@ -23,6 +24,7 @@ jobs:
     permissions:
       actions: read
       checks: read
+      contents: read
       pull-requests: read
     steps:
       - name: Check for stale gates
@@ -32,43 +34,74 @@ jobs:
           BASE: ${{ github.event.repository.default_branch }}
           # Twice the longest reviewer timeout in .github/review-gate.yml.
           STALE_MINUTES: 40
+          # The gate's newest runs on a commit, in GitHub Actions' check
+          # suites; sized to stay under GitHub's node limit per query.
+          GATE_RUNS: >-
+            checkSuites(first: 10, filterBy: { appId: 15368, checkName: "review-gate" }) {
+              nodes { checkRuns(last: 20, filterBy: { checkName: "review-gate" }) {
+                nodes { databaseId status startedAt }
+              } }
+            }
         run: |
           set -euo pipefail
           owner="${REPO%%/*}"
           name="${REPO#*/}"
-          # One page: the monitor only looks at pull requests about to land.
-          gh api graphql \
+
+          # Armed pull requests not yet queued, across every page.
+          gh api graphql --paginate \
             -f owner="$owner" -f name="$name" -f base="$BASE" \
-            -f query='
-              query($owner: String!, $name: String!, $base: String!) {
-                repository(owner: $owner, name: $name) {
-                  pullRequests(states: OPEN, baseRefName: $base, first: 100) {
+            -f query="
+              query(\$owner: String!, \$name: String!, \$base: String!, \$endCursor: String) {
+                repository(owner: \$owner, name: \$name) {
+                  pullRequests(states: OPEN, baseRefName: \$base, first: 50, after: \$endCursor) {
+                    pageInfo { hasNextPage endCursor }
                     nodes {
                       number isDraft
                       autoMergeRequest { enabledAt }
                       mergeQueueEntry { position }
-                      commits(last: 1) { nodes { commit { statusCheckRollup {
-                        contexts(first: 100) { nodes {
-                          ... on CheckRun { name status startedAt }
-                        } }
-                      } } } }
+                      commits(last: 1) { nodes { commit { $GATE_RUNS } } }
                     }
                   }
                 }
-              }' > prs.json
+              }" \
+            --jq '.data.repository.pullRequests.nodes[]
+              | select((.isDraft | not) and .autoMergeRequest != null and .mergeQueueEntry == null)
+              | {label: "#\(.number) head", commit: .commits.nodes[0].commit}' > targets.jsonl
+
+          # Queued pull requests, on the commit the queue actually tests.
+          gh api graphql \
+            -f owner="$owner" -f name="$name" -f base="$BASE" \
+            -f query="
+              query(\$owner: String!, \$name: String!, \$base: String!) {
+                repository(owner: \$owner, name: \$name) {
+                  mergeQueue(branch: \$base) {
+                    entries(first: 100) {
+                      pageInfo { hasNextPage }
+                      nodes { pullRequest { number } headCommit { $GATE_RUNS } }
+                    }
+                  }
+                }
+              }" > queue.json
+          if [ "$(jq '.data.repository.mergeQueue.entries.pageInfo.hasNextPage // false' queue.json)" = "true" ]; then
+            echo "::error::More merge queue entries than one read returns"
+            exit 1
+          fi
+          # An entry whose group commit is not built yet has nothing to read.
+          jq -c '.data.repository.mergeQueue.entries.nodes[]?
+            | select(.headCommit != null)
+            | {label: "#\(.pullRequest.number) merge group", commit: .headCommit}' \
+            queue.json >> targets.jsonl
+
           stale=$(jq -r --argjson minutes "$STALE_MINUTES" '
             (now - $minutes * 60) as $cutoff
-            | .data.repository.pullRequests.nodes[]
-            | select((.isDraft | not) and (.autoMergeRequest != null or .mergeQueueEntry != null))
-            | . as $pr
-            | [(.commits.nodes[0].commit.statusCheckRollup.contexts.nodes // [])[]
-                | select(.name == "review-gate")]
-            | (sort_by(.startedAt) | last) as $gate
-            | if $gate == null then "#\($pr.number): no review-gate verdict"
+            | . as $target
+            | [(.commit.checkSuites.nodes // [])[].checkRuns.nodes[]]
+            | (sort_by(.databaseId) | last) as $gate
+            | if $gate == null then "\($target.label): no review-gate verdict"
               elif $gate.status != "COMPLETED"
                 and ($gate.startedAt | fromdateiso8601) < $cutoff
-              then "#\($pr.number): review-gate pending since \($gate.startedAt)"
-              else empty end' prs.json)
+              then "\($target.label): review-gate pending since \($gate.startedAt)"
+              else empty end' targets.jsonl)
 
           failed=$(gh api \
             "repos/$REPO/actions/workflows/review-gate.yml/runs?status=completed&per_page=6" \

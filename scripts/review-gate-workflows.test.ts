@@ -54,10 +54,13 @@ const DEFAULT_BRANCH_TRIGGERS = [
 ];
 
 describe("the publisher", () => {
-  test("runs only on triggers that execute the default branch's definition", () => {
-    for (const trigger of Object.keys(publisher.on)) {
-      expect(DEFAULT_BRANCH_TRIGGERS).toContain(trigger);
-    }
+  // Both directions: an added trigger could run a pull request's own
+  // definition, and a dropped one silently stops pushes, the relay, or the
+  // sweep that applies timeouts and catches resolved threads.
+  test("runs on exactly the triggers that execute the default branch's definition", () => {
+    expect(Object.keys(publisher.on).toSorted()).toEqual(
+      DEFAULT_BRANCH_TRIGGERS.toSorted(),
+    );
   });
 
   test("publishes only from the default branch ref", () => {
@@ -81,7 +84,11 @@ describe("the publisher", () => {
       path.join(WORKFLOWS, "review-gate.yml"),
       "utf-8",
     );
-    expect(source).not.toMatch(/pull_request\.head\.(sha|ref)|head_ref/u);
+    // The head commit may say where to publish, never what to run: no branch
+    // name, no second fetch or checkout.
+    expect(source).not.toMatch(
+      /pull_request\.head\.ref|head_ref|git (?:fetch|checkout)|gh pr checkout/u,
+    );
   });
 
   // The token matches the configured mode, both ways: enforce mode's dequeue

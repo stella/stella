@@ -46,17 +46,18 @@ on:
         required: true
         type: number
 
-# Coalesces bursts for one target; correctness does not rest on it, since a
-# verdict read before the latest published one is never written.
+# One queue per head commit wherever the event names it, so publishers for
+# one commit run one at a time. Comments and dispatches carry no head and
+# key by pull request; the publisher settles any race those still allow.
 concurrency:
   group: >-
     review-gate-${{
-      github.event.pull_request.number
-      || github.event.issue.number
-      || inputs.pr
+      github.event.pull_request.head.sha
       || github.event.workflow_run.head_sha
       || github.event.sha
       || github.event.check_run.head_sha
+      || github.event.issue.number
+      || inputs.pr
       || 'sweep'
     }}
   cancel-in-progress: true
@@ -105,6 +106,9 @@ jobs:
           REVIEW_GATE_BASE: ${{ github.event.repository.default_branch }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number || inputs.pr }}
+          # Where to publish a blocking result if reading the pull request
+          # fails; never checked out.
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
           STATUS_SHA: ${{ github.event.sha }}
           STATUS_CONTEXT: ${{ github.event.context }}
           CHECK_SHA: ${{ github.event.check_run.head_sha }}
@@ -119,5 +123,5 @@ jobs:
             check_run) bun scripts/review-gate-github.ts sha "$CHECK_SHA" --signal "$CHECK_NAME" ;;
             workflow_run) bun scripts/review-gate-github.ts relay ;;
             schedule) bun scripts/review-gate-github.ts sweep ;;
-            *) bun scripts/review-gate-github.ts pr "$PR_NUMBER" ;;
+            *) bun scripts/review-gate-github.ts pr "$PR_NUMBER" --head "$PR_HEAD" ;;
           esac

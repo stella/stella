@@ -846,6 +846,9 @@ export const decodeIdentity = (
 };
 
 export type PublishedRun = {
+  // GitHub's id: it grows with creation, and the newest run of a name is
+  // the one a required check reads.
+  id: number;
   identity: RunIdentity | null;
   status: string;
   conclusion: string | null;
@@ -918,10 +921,53 @@ export const decidePublish = (
 /** The latest run this gate published on a commit, by start time. */
 export const latestRun = (
   runs: readonly PublishedRun[],
-): PublishedRun | undefined =>
-  runs
-    .toSorted((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
-    .at(-1);
+): PublishedRun | undefined => runs.toSorted((a, b) => a.id - b.id).at(-1);
+
+const observedTime = (run: PublishedRun): number =>
+  run.identity === null
+    ? Number.NEGATIVE_INFINITY
+    : Date.parse(run.identity.observedAt);
+
+/**
+ * Two publishers can both read the same latest run, both decide to write,
+ * and land in the reverse order of what they observed. After every write the
+ * publisher re-reads, and when the newest run no longer carries the newest
+ * observation, re-posts the run that does. The last writer always settles
+ * last, so the latest run ends up carrying the newest observation.
+ */
+export const runToRepost = (
+  runs: readonly PublishedRun[],
+): PublishedRun | undefined => {
+  const latest = latestRun(runs);
+  let newest: PublishedRun | undefined;
+  for (const run of runs) {
+    if (newest === undefined || observedTime(run) > observedTime(newest)) {
+      newest = run;
+    }
+  }
+  if (
+    latest === undefined ||
+    newest === undefined ||
+    newest.identity === null ||
+    observedTime(newest) <= observedTime(latest)
+  ) {
+    return undefined;
+  }
+  return newest;
+};
+
+/** The output a published run carries, to post it again unchanged. */
+export const outputOf = (run: PublishedRun): GateOutput | null => {
+  if (run.title === null || run.summary === null) {
+    return null;
+  }
+  if (run.status !== "completed") {
+    return { conclusion: "pending", title: run.title, summary: run.summary };
+  }
+  return run.conclusion === "success" || run.conclusion === "failure"
+    ? { conclusion: run.conclusion, title: run.title, summary: run.summary }
+    : null;
+};
 
 // --- Sweep --------------------------------------------------------------------
 
