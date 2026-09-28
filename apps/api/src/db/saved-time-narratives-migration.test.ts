@@ -55,8 +55,8 @@ test("saved narratives are isolated by user and active organization for CRUD", a
     },
   ]);
   const foreignUserInsert = await Result.tryPromise({
-    try: () =>
-      db.query(
+    try: async () =>
+      await db.query(
         "INSERT INTO saved_time_narratives (id, organization_id, user_id, name, narrative) VALUES ($1, 'org-a', 'user-b', 'Hidden', 'Secret')",
         [otherId],
       ),
@@ -67,8 +67,8 @@ test("saved narratives are isolated by user and active organization for CRUD", a
     expect(String(foreignUserInsert.error)).toMatch(/row-level security/u);
   }
   const foreignOrgInsert = await Result.tryPromise({
-    try: () =>
-      db.query(
+    try: async () =>
+      await db.query(
         "INSERT INTO saved_time_narratives (id, organization_id, user_id, name, narrative) VALUES ($1, 'org-b', 'user-a', 'Hidden', 'Secret')",
         [otherOrgId],
       ),
