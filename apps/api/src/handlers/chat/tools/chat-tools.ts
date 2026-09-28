@@ -24,7 +24,10 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
-import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
+import {
+  COUNTERPARTY_CHECK_TOOL_NAME,
+  createCounterpartyCheckTools,
+} from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -33,8 +36,12 @@ import { createCreateWorkspaceDocumentTools } from "@/api/handlers/chat/tools/cr
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
+  type ChatScriptCallTools,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
+import {
+  createFolderConsistencyReviewTools,
+  REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   createFolioAgentDocTools,
   createSuggestChangesTools,
@@ -70,7 +77,11 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
-import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools";
+import {
+  createWebSearchTools,
+  FETCH_URL_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+} from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
@@ -665,6 +676,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // `discover_tools` companion. Replaces the hand-written run-stella-query /
   // describe-stella-api pair; the read functions it exposes as `external_*`
   // bindings are ref-mediated, so no tenant UUID reaches the model.
+  // A script run reads the turn's finished tool set (assigned at the end), so
+  // a script that calls a direct tool is told to call it directly.
+  let scriptCallTools: ChatScriptCallTools = {
+    directTools: [],
+    unavailableReasons: new Map(),
+  };
   const executionTools = buildChatCodeModeTools({
     memberRole,
     organizationId,
@@ -672,6 +689,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     refRegistry,
     safeDb,
     scopedDb,
+    scriptCallTools: () => scriptCallTools,
     toolDefectMemo,
     toolWorkspaceIds,
     userId,
@@ -1024,7 +1042,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       })
     : {};
 
-  return applyChatToolPolicies({
+  const tools = applyChatToolPolicies({
     policyKinds,
     tools: {
       ...orgTools,
@@ -1052,6 +1070,23 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...subagentTools,
     },
   });
+  scriptCallTools = {
+    directTools: Object.keys(tools),
+    unavailableReasons: new Map([
+      ...(thirdPartyBoundary.type === "raw"
+        ? []
+        : [
+            COUNTERPARTY_CHECK_TOOL_NAME,
+            REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+          ].map((name) => [name, "anonymized mode is on"] as const)),
+      ...(webResearchAvailable
+        ? []
+        : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
+            (name) => [name, "web research is off for this chat"] as const,
+          )),
+    ]),
+  };
+  return tools;
 };
 
 type GetChatValidationToolsProps = Omit<

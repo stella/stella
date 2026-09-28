@@ -76,6 +76,10 @@ export const CHAT_ORACLE = {
   /** Every action the page offers on the live view is one the conversation
    *  model's commands may take there. */
   modelCoversPageActions: "chat.model.covers-page-actions",
+  /** A code-mode script that calls a direct tool gets back that tool's name
+   *  and the instruction to call it outside the script, never a bare
+   *  "not defined" the model reads as a missing tool. */
+  codeModeMisplacedCallExplained: "chat.code-mode.misplaced-call-explained",
   // Reported by the web app's rendered replay of recorded conversations
   // (`apps/web/src/components/chat/recorded-conversations.dom.test.tsx`).
   /** The rendered page shows what the stored thread says: open cards,

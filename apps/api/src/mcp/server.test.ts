@@ -1110,6 +1110,45 @@ describe("handleMcpHttpRequest", () => {
     expect(body.result.isError).toBe(true);
   });
 
+  test("points a call spelled as a chat script function at the tool it means", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    getMcpToolRequiredScopesHintMock.mockReturnValue(undefined);
+    getMcpToolDefinitionMock.mockResolvedValue(undefined);
+    listMcpToolsMock.mockResolvedValue([
+      {
+        description: "List matters",
+        inputSchema: { type: "object", properties: {} },
+        name: "list_matters",
+      },
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { arguments: {}, name: "external_list_matters" },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+    const item = body.result.content.at(0);
+    const parsed =
+      item?.type === "text"
+        ? parseUnknownToolErrorEnvelope(item.text)
+        : undefined;
+    expect(parsed?.error.hint).toBe(
+      "No such tool. Did you mean `list_matters`? Call tools/list for the full set.",
+    );
+  });
+
   test("does not fuzzy match unusually long unknown tool names", async () => {
     const context = { type: "mcp-context" };
     authenticateMcpRequestMock.mockResolvedValue(

@@ -3,8 +3,12 @@ import { describe, expect, it } from "bun:test";
 
 import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
-import { getSandboxAdmissionSnapshot } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import {
+  getSandboxAdmissionSnapshot,
+  type SandboxNameGuide,
+} from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
+import { buildScriptCallGuide } from "@/api/handlers/chat/tools/execute/script-call-guide";
 
 registerSandboxTestHygiene();
 
@@ -270,5 +274,178 @@ describe("createStellaIsolateDriver", () => {
     const [a, b] = await Promise.all([first, second]);
     expect(a).toMatchObject({ success: true });
     expect(b).toMatchObject({ success: true });
+  });
+});
+
+describe("createStellaIsolateDriver with a name guide", () => {
+  type GuidedRunProps = {
+    code: string;
+    bindings: Record<string, ToolBinding>;
+    nameGuide?: (bindingNames: readonly string[]) => SandboxNameGuide;
+  };
+
+  const chatLikeGuide = (bindingNames: readonly string[]) =>
+    buildScriptCallGuide({
+      readFunctions: bindingNames,
+      directTools: ["save_playbook", "execute_typescript"],
+      unavailableTools: new Map([["web_search", "web research is off"]]),
+    });
+
+  const runGuided = async ({
+    code,
+    bindings,
+    nameGuide = chatLikeGuide,
+  }: GuidedRunProps) => {
+    const driver = createStellaIsolateDriver({
+      concurrencyKey: nextKey(),
+      nameGuide,
+    });
+    const context = await driver.createContext({ bindings });
+    try {
+      return await context.execute(code);
+    } finally {
+      await context.dispose();
+    }
+  };
+
+  const listBindings = (calls: unknown[]) =>
+    bindingsRecord(
+      binding("external_list_documents", async (args) => {
+        calls.push(args);
+        return { documents: ["doc-1"] };
+      }),
+    );
+
+  it("answers a direct tool called in a script with the call to make instead", async () => {
+    const result = await runGuided({
+      code: `await save_playbook({ name: "NDA" }); return "saved";`,
+      bindings: listBindings([]),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toEqual({
+      name: "not-a-script-function",
+      message:
+        "`save_playbook` is a direct tool, not a script function. Call it as its own tool call outside execute_typescript. Do the reads in the script, return the data, then call `save_playbook` with it.",
+    });
+  });
+
+  it("still explains the call when the script catches the failure", async () => {
+    const result = await runGuided({
+      code: `try { await save_playbook({}); } catch (error) { return error.message; }`,
+      bindings: listBindings([]),
+    });
+    expect(result.success).toBe(true);
+    expect(result.value).toContain("`save_playbook` is a direct tool");
+  });
+
+  it("runs the read an unprefixed name means, through the same binding, and notes it once", async () => {
+    const calls: unknown[] = [];
+    const result = await runGuided({
+      code: `const a = await list_documents({ matter_id: "mat_1" });
+const b = await listDocuments({ matter_id: "mat_2" });
+const c = await list_documents({ matter_id: "mat_3" });
+return [a, b, c].map((r) => r.documents[0]);`,
+      bindings: listBindings(calls),
+    });
+    expect(result).toMatchObject({
+      success: true,
+      value: ["doc-1", "doc-1", "doc-1"],
+    });
+    expect(calls).toEqual([
+      { matter_id: "mat_1" },
+      { matter_id: "mat_2" },
+      { matter_id: "mat_3" },
+    ]);
+    expect(result.logs).toEqual([
+      "WARN: Ran `external_list_documents` for `list_documents`; use the external_ name in scripts.",
+      "WARN: Ran `external_list_documents` for `listDocuments`; use the external_ name in scripts.",
+    ]);
+  });
+
+  it("counts a redirected read against the host-call cap", async () => {
+    const driver = createStellaIsolateDriver({
+      concurrencyKey: nextKey(),
+      limits: { maxHostCalls: 2 },
+      nameGuide: chatLikeGuide,
+    });
+    const context = await driver.createContext({
+      bindings: listBindings([]),
+    });
+    try {
+      const result = await context.execute(
+        `for (let i = 0; i < 5; i++) { await list_documents({}); } return "done";`,
+      );
+      expect(result.success).toBe(false);
+      expect(result.error?.name).toBe("host-call-limit");
+    } finally {
+      await context.dispose();
+    }
+  });
+
+  it("names the closest function for a typo, without running it", async () => {
+    const calls: unknown[] = [];
+    const result = await runGuided({
+      code: `return await external_list_documnts({});`,
+      bindings: listBindings(calls),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toEqual({
+      name: "not-a-script-function",
+      message:
+        "`external_list_documnts` is not defined. Did you mean `external_list_documents`?",
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("says a tool this chat does not offer is unavailable, and why", async () => {
+    const result = await runGuided({
+      code: `return await web_search({ query: "x" });`,
+      bindings: listBindings([]),
+    });
+    expect(result.error).toEqual({
+      name: "not-a-script-function",
+      message:
+        "`web_search` is not available in this chat (web research is off). Continue without it.",
+    });
+  });
+
+  it("keeps the script's own error for any other undefined name", async () => {
+    const code = `return missingHelper(1);`;
+    const guided = await runGuided({ code, bindings: listBindings([]) });
+    const bare = await runCode({ code, bindings: listBindings([]) });
+    expect(bare.error?.name).toBe("runtime");
+    expect(guided.error).toEqual(bare.error);
+  });
+
+  it("leaves the script's own declarations and feature checks alone", async () => {
+    const result = await runGuided({
+      code: `const list_documents = () => "mine";
+return [list_documents(), typeof window, typeof save_playbook];`,
+      bindings: listBindings([]),
+    });
+    expect(result).toMatchObject({
+      success: true,
+      value: ["mine", "undefined", "function"],
+    });
+  });
+
+  it("never runs a function the run's registry does not hold", async () => {
+    const result = await runGuided({
+      code: `return await list_documents({});`,
+      bindings: listBindings([]),
+      nameGuide: () => ({
+        names: ["list_documents"],
+        resolve: () => ({
+          kind: "run",
+          target: "external_save_playbook",
+          note: "redirected",
+        }),
+        explainMissing: () => undefined,
+      }),
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.name).toBe("runtime");
+    expect(result.error?.message).toContain("list_documents is not defined");
+    expect(result.logs).toBeUndefined();
   });
 });

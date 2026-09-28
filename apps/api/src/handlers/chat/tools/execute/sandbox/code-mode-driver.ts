@@ -9,7 +9,10 @@ import { Result } from "better-result";
 
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
 import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
-import type { SandboxFunctionRegistry } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import type {
+  SandboxFunctionRegistry,
+  SandboxNameGuide,
+} from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { SANDBOX_READ_GLOBAL } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 import { SandboxError } from "@/api/lib/errors/tagged-errors";
 
@@ -45,6 +48,14 @@ export type CreateStellaIsolateDriverProps = {
    */
   concurrencyKey: string;
   limits?: Partial<SandboxLimits> | undefined;
+  /**
+   * Builds, from the run's binding names, the guide that answers a script
+   * calling something that is not one of them (see `SandboxNameGuide`).
+   * Without it a script gets the bare ReferenceError.
+   */
+  nameGuide?:
+    | ((bindingNames: readonly string[]) => SandboxNameGuide)
+    | undefined;
 };
 
 const buildRegistryFromBindings = (
@@ -131,11 +142,13 @@ const disposeIsolate = (): Promise<void> => Promise.resolve();
 export const createStellaIsolateDriver = ({
   concurrencyKey,
   limits,
+  nameGuide,
 }: CreateStellaIsolateDriverProps): IsolateDriver => ({
   // oxlint-disable-next-line typescript/promise-function-async -- returns a resolved context synchronously (a fresh isolate is created per execute() call, so there is no async setup); `async` would only trip require-await
   createContext: (config: IsolateConfig): Promise<IsolateContext> => {
     const registry = buildRegistryFromBindings(config.bindings);
     const aliasPrelude = buildBindingAliasPrelude(config.bindings);
+    const guide = nameGuide?.(Object.keys(config.bindings));
 
     const execute = async <T>(code: string): Promise<ExecutionResult<T>> => {
       const source = aliasPrelude === "" ? code : `${aliasPrelude}\n${code}`;
@@ -143,6 +156,7 @@ export const createStellaIsolateDriver = ({
         concurrencyKey,
         source,
         registry,
+        nameGuide: guide,
         ...(limits === undefined ? {} : { limits }),
       });
 
@@ -152,7 +166,8 @@ export const createStellaIsolateDriver = ({
 
       // The SandboxError reason rides in `name`, so the tagged taxonomy
       // (timeout / host-call-limit / memory / return-too-large /
-      // non-serialisable-return / forbidden-syntax / transpile / runtime)
+      // non-serialisable-return / forbidden-syntax / transpile / runtime /
+      // not-a-script-function)
       // survives code-mode's coarser `{ message, name }` error shape.
       // Console output captured before the failure rides the top-level
       // `logs` field: code-mode's execute_typescript output schema declares
