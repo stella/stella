@@ -97,7 +97,8 @@ const mcpRequestContext = async ({
       usable.map((workspace) => [workspace.id, workspace.status]),
     ),
     accessibleWorkspaces: usable,
-    grantedScopes: [],
+    // An OAuth session that may create matters and tasks.
+    grantedScopes: ["stella:matters_write"],
     memberRole: "owner",
     organizationId,
     recordAuditEvent: async () => undefined,
@@ -134,6 +135,28 @@ describe("a write that needs a matter in an organization without one", () => {
         retryable: false,
       },
     });
+  });
+
+  test("does not name save_matter to a session without its scope", async () => {
+    const context = await mcpRequestContext(await createEmptyOrganization());
+    const result = await handleMcpToolCall({
+      args: {
+        source: {
+          type: "previous",
+          document_id: "0dc54d0c-10d7-401d-897e-e801dbd0998c",
+          target_version_id: "4e919658-a448-4354-8e3a-e99911214d2c",
+        },
+        base_tracked_changes: "keep",
+        target_tracked_changes: "keep",
+        output_mode: "preview",
+      },
+      context: { ...context, grantedScopes: ["stella:documents_write"] },
+      toolName: "compare_documents",
+    });
+    expect(result.isError).toBe(true);
+    const payload = payloadOf(result);
+    expect(payload).toMatchObject({ error: { code: "not_found" } });
+    expect(JSON.stringify(payload)).not.toContain("save_matter");
   });
 
   test("answers in chat with the same offer", async () => {

@@ -468,6 +468,12 @@ type BuildChatSystemPromptProps = {
    * also enforces the constraint at call time).
    */
   contextMatterIds: SafeId<"workspace">[];
+  /**
+   * The caller reaches at least one matter. False in an organization with no
+   * matter yet (or none shared with this member): the model is told up front
+   * to offer creating one before any write that works inside a matter.
+   */
+  hasReachableMatter: boolean;
   memberRole?: { role: string } | undefined;
   practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
@@ -634,6 +640,7 @@ export const buildChatSystemPromptParts = async ({
   activeStatute,
   activeTemplate,
   contextMatterIds,
+  hasReachableMatter,
   memberRole,
   organizationId,
   practiceJurisdictions,
@@ -725,6 +732,7 @@ export const buildChatSystemPromptParts = async ({
       workspaceId === null
         ? buildContextMatterScopeSection({
             contextMatterIds,
+            hasReachableMatter,
             refRegistry,
             scope: "global",
           })
@@ -849,19 +857,25 @@ export const buildChatSystemPromptParts = async ({
 type BuildContextMatterScopeSectionProps =
   | {
       contextMatterIds: SafeId<"workspace">[];
+      hasReachableMatter: boolean;
       refRegistry: ChatRefRegistry;
       scope: "global";
       workspaceId?: never;
     }
   | {
       contextMatterIds: SafeId<"workspace">[];
+      hasReachableMatter?: never;
       refRegistry: ChatRefRegistry;
       scope: "workspace";
       workspaceId: SafeId<"workspace">;
     };
 
-const buildContextMatterScopeSection = ({
+export const NO_MATTER_SCOPE_SECTION =
+  "MATTER SCOPE: The user has no matter yet. Library, template, contact and organization work needs none. Before any write that works inside a matter (tasks, documents, field values, time entries, running a playbook), offer to create a matter: ask with `ask-user` for its name and client, create it only once they agree, then continue in it.";
+
+export const buildContextMatterScopeSection = ({
   contextMatterIds,
+  hasReachableMatter,
   refRegistry,
   scope,
   workspaceId,
@@ -882,6 +896,9 @@ const buildContextMatterScopeSection = ({
         )
       : contextMatterIds;
 
+  if (scope === "global" && !hasReachableMatter) {
+    return NO_MATTER_SCOPE_SECTION;
+  }
   if (effective.length === 0) {
     return "MATTER SCOPE: No matters are pinned to this chat. The user may ask about anything across the matters they can access. Discover relevant matters with `read.listMatters` (paginated) before answering — do NOT ask the user to name a matter unless the question is genuinely ambiguous after lookup.";
   }

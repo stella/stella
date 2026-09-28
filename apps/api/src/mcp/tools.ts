@@ -223,6 +223,29 @@ export const listMcpTools = async (
   );
 };
 
+/**
+ * Whether this session could call a static tool: the surface lists it, its
+ * feature is on, and the credential holds every scope it requires (the same
+ * checks `tools/call` applies before dispatch).
+ */
+const isStaticToolCallable = ({
+  grantedScopes,
+  mode,
+  toolName,
+}: {
+  grantedScopes: readonly string[];
+  mode: McpMode;
+  toolName: string;
+}): boolean => {
+  const definition = getStaticMcpToolDefinition(toolName, mode);
+  if (!definition || !isMcpToolFeatureEnabled(definition.feature)) {
+    return false;
+  }
+  return [definition.scope, ...(definition.additionalScopes ?? [])].every(
+    (scope) => grantedScopes.includes(scope),
+  );
+};
+
 export const handleMcpToolCall = async ({
   args,
   context,
@@ -353,6 +376,11 @@ export const handleMcpToolCall = async ({
   const needsMatter = matterRequiredResult({
     args: normalizedArgs,
     context,
+    saveMatterCallable: isStaticToolCallable({
+      grantedScopes: context.grantedScopes,
+      mode,
+      toolName: "save_matter",
+    }),
     toolName,
   });
   if (needsMatter !== null) {

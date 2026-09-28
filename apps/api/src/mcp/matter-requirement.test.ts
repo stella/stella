@@ -53,8 +53,8 @@ describe("write tool scope classification", () => {
   });
 
   test("decides every manage_organization action", () => {
-    const { byAction } = WRITE_TOOL_SCOPES.manage_organization;
-    expect(Object.keys(byAction).toSorted()).toEqual(
+    const { byValue } = WRITE_TOOL_SCOPES.manage_organization;
+    expect(Object.keys(byValue).toSorted()).toEqual(
       [...MANAGE_ORG_ACTIONS].toSorted(),
     );
     expect(
@@ -65,6 +65,20 @@ describe("write tool scope classification", () => {
         action: "update_org_settings",
       }),
     ).toBe(false);
+  });
+
+  test("compares staged uploads without a matter, stored versions in one", () => {
+    expect(
+      writeCallNeedsMatter("compare_documents", {
+        source: { type: "uploads" },
+      }),
+    ).toBe(false);
+    for (const type of ["versions", "previous"]) {
+      expect(
+        writeCallNeedsMatter("compare_documents", { source: { type } }),
+        type,
+      ).toBe(true);
+    }
   });
 
   test("keeps creating a matter and the organization library matter-free", () => {
@@ -96,6 +110,7 @@ describe("needs-a-matter result", () => {
       const result = matterRequiredResult({
         args: {},
         context: emptyOrg,
+        saveMatterCallable: true,
         toolName,
       });
       expect(result?.error, toolName).toMatchObject({
@@ -113,7 +128,12 @@ describe("needs-a-matter result", () => {
   test("lets organization-scoped writes through with no matter", () => {
     for (const toolName of scopedToolNames(WRITE_TOOL_SCOPE.organization)) {
       expect(
-        matterRequiredResult({ args: {}, context: emptyOrg, toolName }),
+        matterRequiredResult({
+          args: {},
+          context: emptyOrg,
+          saveMatterCallable: true,
+          toolName,
+        }),
         toolName,
       ).toBeNull();
     }
@@ -124,6 +144,7 @@ describe("needs-a-matter result", () => {
       matterRequiredResult({
         args: {},
         context: { ...emptyOrg, accessibleWorkspaceIds: [WORKSPACE_ID] },
+        saveMatterCallable: true,
         toolName: "save_task",
       }),
     ).toBeNull();
@@ -137,10 +158,11 @@ describe("needs-a-matter result", () => {
       matterRequiredResult({
         args: {},
         context: { accessibleWorkspaceIds: [], memberRole: "intern" },
+        saveMatterCallable: true,
         toolName: "save_task",
       }),
     );
-    expect(hint).toContain("cannot create");
+    expect(hint).toContain("role cannot create");
     expect(hint).not.toContain("save_matter");
   });
 
@@ -153,10 +175,24 @@ describe("needs-a-matter result", () => {
           credentialPermissions: { entity: ["create"] },
           memberRole: "owner",
         },
+        saveMatterCallable: true,
         toolName: "save_task",
       }),
     );
-    expect(hint).toContain("cannot create");
+    expect(hint).toContain("role cannot create");
+  });
+
+  test("names save_matter only to a session that can call it", () => {
+    const hint = hintOf(
+      matterRequiredResult({
+        args: {},
+        context: emptyOrg,
+        saveMatterCallable: false,
+        toolName: "save_task",
+      }),
+    );
+    expect(hint).toContain("connection cannot create");
+    expect(hint).not.toContain("save_matter");
   });
 
   test("ignores names outside the write registry", () => {
@@ -164,6 +200,7 @@ describe("needs-a-matter result", () => {
       matterRequiredResult({
         args: {},
         context: emptyOrg,
+        saveMatterCallable: true,
         toolName: "list_matters",
       }),
     ).toBeNull();

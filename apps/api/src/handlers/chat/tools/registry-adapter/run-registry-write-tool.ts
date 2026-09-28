@@ -240,6 +240,8 @@ export const runRegistryWriteTool = async (
   const needsMatter = matterRequiredResult({
     args: normalized.value,
     context,
+    // Chat carries no OAuth scopes, and save_matter is always projected.
+    saveMatterCallable: WRITE_TOOL_REF_FIELD_MAP.save_matter.chatProjectable,
     toolName,
   });
   if (needsMatter !== null) {
