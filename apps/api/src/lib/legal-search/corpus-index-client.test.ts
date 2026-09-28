@@ -655,6 +655,7 @@ test("ingest HTTP failures classify whether the batch was rejected", async () =>
   });
   for (const [status, rejection] of [
     [413, "definite"],
+    [404, "unknown"],
     [429, "transient"],
     [503, "unknown"],
   ] as const) {

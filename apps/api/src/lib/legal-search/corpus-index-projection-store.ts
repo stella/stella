@@ -289,7 +289,6 @@ export const reserveCorpusProjectionIntentsTx = async <
       indexId: candidate.indexId,
       leaseToken: newLeaseToken(),
       appendMode:
-        candidate.failureAttempts === 0 &&
         candidate.lastFailureKind === "append_rejected"
           ? "single"
           : "batchable",
@@ -792,8 +791,66 @@ type AbandonCorpusProjectionAppendOptions = {
 
 export const CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT = 5;
 export const CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT = 2;
-const CORPUS_PROJECTION_APPEND_RETRY_BASE_MS = 5000;
-const CORPUS_PROJECTION_APPEND_RETRY_CAP_MS = 5 * 60_000;
+export const CORPUS_PROJECTION_APPEND_TRANSIENT_ATTEMPT_LIMIT = 10;
+export const CORPUS_PROJECTION_APPEND_RETRY_BASE_MS = 5000;
+export const CORPUS_PROJECTION_APPEND_RETRY_CAP_MS = 5 * 60_000;
+
+type ProjectionFailureRowsOptions = {
+  family: CorpusFamily;
+  generation: string;
+  entityId: string;
+  intentId: ProjectionIntentId;
+  leaseToken: string;
+  status: "reserved" | "append_started";
+};
+
+/** Caller holds the writer lock; state must be locked before its intent. */
+const lockProjectionFailureRowsTx = async (
+  tx: Transaction,
+  {
+    family,
+    generation,
+    entityId,
+    intentId,
+    leaseToken,
+    status,
+  }: ProjectionFailureRowsOptions,
+) => {
+  const [state] = await tx
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(
+      and(
+        eq(corpusIndexProjectionStates.family, family),
+        eq(corpusIndexProjectionStates.generation, generation),
+        eq(corpusIndexProjectionStates.entityId, entityId),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  const [intent] = await tx
+    .select()
+    .from(corpusIndexProjectionIntents)
+    .where(
+      and(
+        eq(corpusIndexProjectionIntents.id, intentId),
+        eq(corpusIndexProjectionIntents.status, status),
+        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return { state, intent };
+};
+
+const isStillDesiredProjection = (
+  state: typeof corpusIndexProjectionStates.$inferSelect | undefined,
+  intent: typeof corpusIndexProjectionIntents.$inferSelect,
+): boolean =>
+  state?.desiredAction === "upsert" &&
+  state.desiredEpoch === intent.epoch &&
+  state.desiredFingerprint === intent.fingerprint &&
+  state.desiredIndexId === intent.indexId;
 
 /** Failed append outcomes are assumed written and cleaned exactly before retry. */
 export const abandonCorpusProjectionAppendTx = async (
@@ -831,32 +888,12 @@ export const abandonCorpusProjectionAppendTx = async (
     identity.family,
     identity.generation,
   );
-  const states = await tx
-    .select()
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, identity.family),
-        eq(corpusIndexProjectionStates.generation, identity.generation),
-        eq(corpusIndexProjectionStates.entityId, identity.entityId),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const state = states.at(0);
-  const intents = await tx
-    .select()
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.id, intentId),
-        eq(corpusIndexProjectionIntents.status, "append_started"),
-        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const intent = intents.at(0);
+  const { state, intent } = await lockProjectionFailureRowsTx(tx, {
+    ...identity,
+    intentId,
+    leaseToken,
+    status: "append_started",
+  });
   if (intent === undefined) {
     return "lease_lost";
   }
@@ -880,31 +917,22 @@ export const abandonCorpusProjectionAppendTx = async (
       updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intentId));
-  const stillDesired =
-    state?.desiredAction === "upsert" &&
-    state.desiredEpoch === intent.epoch &&
-    state.desiredFingerprint === intent.fingerprint &&
-    state.desiredIndexId === intent.indexId;
-  if (!stillDesired) {
+  if (!isStillDesiredProjection(state, intent)) {
     return "cleanup_pending";
   }
   const kind =
     rejection === "definite" || rejection === "batch_rejection"
       ? "append_rejected"
       : "append_unknown";
-  const charge = rejection === "unknown" || rejection === "definite";
-  let failureAttempts = state.failureAttempts;
-  if (rejection === "batch_rejection") {
-    failureAttempts = 0;
-  } else if (charge) {
-    failureAttempts = state.lastFailureKind === kind ? failureAttempts + 1 : 1;
+  const charge = rejection !== "batch_rejection";
+  const failureAttempts = state.failureAttempts + (charge ? 1 : 0);
+  let attemptLimit = CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT;
+  if (rejection === "definite") {
+    attemptLimit = CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT;
+  } else if (rejection === "transient") {
+    attemptLimit = CORPUS_PROJECTION_APPEND_TRANSIENT_ATTEMPT_LIMIT;
   }
-  const blocked =
-    charge &&
-    failureAttempts >=
-      (rejection === "definite"
-        ? CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT
-        : CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT);
+  const blocked = charge && failureAttempts >= attemptLimit;
   const retryDelayMs = Math.min(
     CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
     CORPUS_PROJECTION_APPEND_RETRY_BASE_MS *
@@ -918,11 +946,8 @@ export const abandonCorpusProjectionAppendTx = async (
         ? null
         : new Date(transitionAt.getTime() + retryDelayMs),
       failureAttempts,
-      lastFailureKind: rejection === "transient" ? state.lastFailureKind : kind,
-      lastFailureMessage:
-        rejection === "transient"
-          ? state.lastFailureMessage
-          : errorMessage.slice(0, 2048),
+      lastFailureKind: kind,
+      lastFailureMessage: errorMessage.slice(0, 2048),
       updatedAt: transitionAt,
     })
     .where(
@@ -1261,32 +1286,12 @@ export const classifyCorpusProjectionReservationFailureTx = async (
     return "lease_lost";
   }
   await lockCorpusIndexProjectionMutationsTx(tx, [identity]);
-  const states = await tx
-    .select()
-    .from(corpusIndexProjectionStates)
-    .where(
-      and(
-        eq(corpusIndexProjectionStates.family, identity.family),
-        eq(corpusIndexProjectionStates.generation, identity.generation),
-        eq(corpusIndexProjectionStates.entityId, identity.entityId),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const state = states.at(0);
-  const intents = await tx
-    .select()
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        eq(corpusIndexProjectionIntents.id, intentId),
-        eq(corpusIndexProjectionIntents.status, "reserved"),
-        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
-      ),
-    )
-    .limit(1)
-    .for("update");
-  const intent = intents.at(0);
+  const { state, intent } = await lockProjectionFailureRowsTx(tx, {
+    ...identity,
+    intentId,
+    leaseToken,
+    status: "reserved",
+  });
   if (intent === undefined) {
     return "lease_lost";
   }
@@ -1302,12 +1307,7 @@ export const classifyCorpusProjectionReservationFailureTx = async (
       updatedAt: transitionAt,
     })
     .where(eq(corpusIndexProjectionIntents.id, intentId));
-  const stillDesired =
-    state?.desiredAction === "upsert" &&
-    state.desiredEpoch === intent.epoch &&
-    state.desiredFingerprint === intent.fingerprint &&
-    state.desiredIndexId === intent.indexId;
-  if (!stillDesired) {
+  if (!isStillDesiredProjection(state, intent)) {
     return "stale_cancelled";
   }
   const nextFailureAttempts = sql<number>`${corpusIndexProjectionStates.failureAttempts} + 1`;

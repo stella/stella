@@ -355,7 +355,7 @@ const rejectionForHttpStatus = (
   if (status === 400 || status === 413 || status === 422) {
     return "definite";
   }
-  if (status === 429 || status === 408 || status === 404) {
+  if (status === 429 || status === 408) {
     return "transient";
   }
   return "unknown";

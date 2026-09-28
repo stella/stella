@@ -499,9 +499,6 @@ export const corpusIndexProjectionStates = p.pgTable(
           ${t.retryNotBefore} IS NOT NULL
           AND (
             (${t.failureAttempts} = 0
-              AND ${t.lastFailureKind} IS NULL
-              AND ${t.lastFailureMessage} IS NULL)
-            OR (${t.failureAttempts} = 0
               AND ${t.lastFailureKind} = 'append_rejected'
               AND ${t.lastFailureMessage} IS NOT NULL)
             OR (${t.failureAttempts} > 0

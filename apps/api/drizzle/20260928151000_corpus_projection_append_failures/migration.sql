@@ -1,10 +1,9 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
--- Projection execution has not shipped, so no running API task writes these
--- inert rows. Replace both checks in one transaction before the new failure
--- states are written.
--- stella-migration-safety: reviewed drop-constraint - Projection execution has not shipped, so no running API task writes these inert rows; this transaction immediately installs replacement constraints and rolls back atomically on failure.
+-- Replace both checks atomically; the new checks admit the additional failure
+-- states while preserving the existing work-state invariants.
+-- stella-migration-safety: reviewed drop-constraint - Drops only the two checks immediately replaced below in the same transaction; no row data or unrelated constraints are changed.
 ALTER TABLE "corpus_index_projection_states"
   DROP CONSTRAINT "corpus_index_projection_states_failure_kind_values",
   DROP CONSTRAINT "corpus_index_projection_states_work_shape";--> statement-breakpoint
@@ -31,9 +30,6 @@ ALTER TABLE "corpus_index_projection_states"
         "retry_not_before" IS NOT NULL
         AND (
           ("failure_attempts" = 0
-            AND "last_failure_kind" IS NULL
-            AND "last_failure_message" IS NULL)
-          OR ("failure_attempts" = 0
             AND "last_failure_kind" = 'append_rejected'
             AND "last_failure_message" IS NOT NULL)
           OR ("failure_attempts" > 0
