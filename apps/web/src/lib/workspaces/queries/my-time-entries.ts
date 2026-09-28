@@ -1,6 +1,6 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 
-import { api } from "@/lib/api";
+import { myTimeEntriesApi } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
@@ -23,7 +23,7 @@ export const myTimeEntriesInfiniteOptions = (
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
       unwrapEden(
-        await api["time-entries"].me.get({
+        await myTimeEntriesApi.get({
           query: {
             date,
             limit: MY_TIME_ENTRIES_PAGE_SIZE,

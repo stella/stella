@@ -27,7 +27,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import { formatMinutes } from "@/lib/format-duration";
+import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   timeEntriesInfiniteOptions,
   timeEntrySuggestionsOptions,

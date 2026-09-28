@@ -11,7 +11,10 @@ import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
-import { formatDecimalHours, formatMinutes } from "@/lib/format-duration";
+import {
+  formatDecimalHours,
+  formatMinutes,
+} from "@/lib/workspaces/format-duration";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { BatchActionBar } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar";
 import {

@@ -14,20 +14,21 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
-import { formatMinutes } from "@/lib/format-duration";
 import { localISODate } from "@/lib/local-iso-date";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
+import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
 
 export const Route = createFileRoute("/_protected/time")({
   validateSearch: (search) => ({
     date:
-      typeof search.date === "string" && parsePlainDate(search.date) !== null
-        ? search.date
+      typeof search["date"] === "string" &&
+      parsePlainDate(search["date"]) !== null
+        ? search["date"]
         : localISODate(),
   }),
   loaderDeps: ({ search }) => ({ date: search.date }),
@@ -176,7 +177,6 @@ function MyDayPage() {
                     <div className="min-w-0 flex-1 space-y-1">
                       <Link
                         className="hover:underline"
-                        from="/_protected/time"
                         params={{ workspaceId: entry.workspaceId }}
                         to="/workspaces/$workspaceId/timesheets"
                       >
