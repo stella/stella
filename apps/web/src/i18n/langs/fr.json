@@ -1624,6 +1624,7 @@
     "profile": "Profil",
     "properties": "Propriétés",
     "queued": "En file d'attente",
+    "reason": "Motif",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "Authentification de la distribution",
     "drops": {
       "authenticationHint": "Demandez à l’administrateur de la messagerie de l’expéditeur de configurer <protocol>SPF</protocol>, <protocol>DKIM</protocol> et <protocol>DMARC</protocol> pour le domaine d’envoi.",
-      "reason": "Motif",
       "reasons": {
         "attachmentRejected": "Pièce jointe rejetée",
         "authenticationFailed": "Échec de l’authentification de la distribution",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "La signature a été enregistrée comme nouvelle version.",
         "signedTitle": "PDF signé",
         "stampLocation": "Lieu",
-        "stampReason": "Motif",
         "stampRejectedDescription": "Le cachet ne peut pas être placé à cet endroit. Replacez-le et réessayez.",
         "stampSignedBy": "Signé numériquement par",
         "stampTextUnrenderableDescription": "Le motif ou le lieu ne peut pas figurer dans un cachet visible. Modifiez le texte ou utilisez une signature invisible.",

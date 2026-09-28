@@ -1624,6 +1624,7 @@
     "profile": "Profils",
     "properties": "Rekvizīti",
     "queued": "Rindā",
+    "reason": "Iemesls",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "Piegādes autentifikācija",
     "drops": {
       "authenticationHint": "Lūdziet sūtītāja e-pasta administratoram konfigurēt <protocol>SPF</protocol>, <protocol>DKIM</protocol> un <protocol>DMARC</protocol> sūtīšanas domēnam.",
-      "reason": "Iemesls",
       "reasons": {
         "attachmentRejected": "Pielikums noraidīts",
         "authenticationFailed": "Piegādes autentifikācija neizdevās",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "Paraksts saglabāts kā jauna versija.",
         "signedTitle": "PDF parakstīts",
         "stampLocation": "Vieta",
-        "stampReason": "Iemesls",
         "stampRejectedDescription": "Zīmogu tur nevar novietot. Novietojiet to vēlreiz un mēģiniet vēlreiz.",
         "stampSignedBy": "Digitāli parakstījis",
         "stampTextUnrenderableDescription": "Iemeslu vai vietu nevar parādīt redzamā zīmogā. Mainiet tekstu vai izmantojiet neredzamu parakstu.",

@@ -96,7 +96,7 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
           ),
         }),
         columnHelper.accessor("reason", {
-          header: t("correspondence.drops.reason"),
+          header: t("common.reason"),
           cell: ({ getValue, row }) => (
             <div className="space-y-1 whitespace-normal">
               <p>{t(CORRESPONDENCE_DROP_REASON_LABELS[getValue()])}</p>

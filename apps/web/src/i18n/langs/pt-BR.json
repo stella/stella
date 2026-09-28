@@ -1624,6 +1624,7 @@
     "profile": "Perfil",
     "properties": "Propriedades",
     "queued": "Na fila",
+    "reason": "Motivo",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
     "refresh": "Atualizar",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "Autenticação da entrega",
     "drops": {
       "authenticationHint": "Peça ao administrador de e-mail do remetente para configurar <protocol>SPF</protocol>, <protocol>DKIM</protocol> e <protocol>DMARC</protocol> para o domínio de envio.",
-      "reason": "Motivo",
       "reasons": {
         "attachmentRejected": "Anexo rejeitado",
         "authenticationFailed": "Falha na autenticação da entrega",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "A assinatura foi salva como uma nova versão.",
         "signedTitle": "PDF assinado",
         "stampLocation": "Local",
-        "stampReason": "Motivo",
         "stampRejectedDescription": "Não é possível colocar o carimbo nesse local. Posicione-o novamente e tente outra vez.",
         "stampSignedBy": "Assinado digitalmente por",
         "stampTextUnrenderableDescription": "O motivo ou o local não pode ser exibido em um carimbo visível. Altere o texto ou use uma assinatura invisível.",

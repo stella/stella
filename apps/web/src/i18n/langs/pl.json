@@ -1624,6 +1624,7 @@
     "profile": "Profil",
     "properties": "Właściwości",
     "queued": "W kolejce",
+    "reason": "Powód",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
     "drops": {
       "authenticationHint": "Poproś administratora poczty nadawcy o skonfigurowanie <protocol>SPF</protocol>, <protocol>DKIM</protocol> i <protocol>DMARC</protocol> dla domeny nadawczej.",
-      "reason": "Powód",
       "reasons": {
         "attachmentRejected": "Załącznik został odrzucony",
         "authenticationFailed": "Uwierzytelnienie dostarczenia nie powiodło się",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "Podpis zapisano jako nową wersję.",
         "signedTitle": "PDF podpisany",
         "stampLocation": "Miejsce",
-        "stampReason": "Powód",
         "stampRejectedDescription": "Nie można umieścić pieczęci w tym miejscu. Umieść ją ponownie i spróbuj jeszcze raz.",
         "stampSignedBy": "Podpisany cyfrowo przez",
         "stampTextUnrenderableDescription": "Powodu lub miejsca nie można pokazać w widocznej pieczęci. Zmień tekst albo użyj niewidocznego podpisu.",

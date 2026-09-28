@@ -1624,6 +1624,7 @@
     "profile": "Profil",
     "properties": "Vlastnosti",
     "queued": "Ve frontě",
+    "reason": "Důvod",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
     "refresh": "Obnovit",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "Ověření doručení",
     "drops": {
       "authenticationHint": "Požádejte správce e-mailu odesílatele o nastavení <protocol>SPF</protocol>, <protocol>DKIM</protocol> a <protocol>DMARC</protocol> pro odesílající doménu.",
-      "reason": "Důvod",
       "reasons": {
         "attachmentRejected": "Příloha byla odmítnuta",
         "authenticationFailed": "Ověření doručení selhalo",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "Podpis byl uložen jako nová verze.",
         "signedTitle": "PDF podepsáno",
         "stampLocation": "Místo",
-        "stampReason": "Důvod",
         "stampRejectedDescription": "Razítko na toto místo nelze umístit. Umístěte ho znovu a zkuste to znovu.",
         "stampSignedBy": "Digitálně podepsal",
         "stampTextUnrenderableDescription": "Důvod nebo místo nelze zobrazit ve viditelném razítku. Upravte text, nebo použijte neviditelný podpis.",

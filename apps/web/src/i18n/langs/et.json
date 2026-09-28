@@ -1624,6 +1624,7 @@
     "profile": "Profiil",
     "properties": "Omadused",
     "queued": "Ootel",
+    "reason": "Põhjus",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
     "refresh": "Värskenda",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "Edastuse autentimine",
     "drops": {
       "authenticationHint": "Paluge saatja e-posti administraatoril seadistada saatva domeeni <protocol>SPF</protocol>, <protocol>DKIM</protocol> ja <protocol>DMARC</protocol>.",
-      "reason": "Põhjus",
       "reasons": {
         "attachmentRejected": "Manus lükati tagasi",
         "authenticationFailed": "Edastuse autentimine ebaõnnestus",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "Allkiri salvestati uue versioonina.",
         "signedTitle": "PDF allkirjastatud",
         "stampLocation": "Asukoht",
-        "stampReason": "Põhjus",
         "stampRejectedDescription": "Templit ei saa sinna paigutada. Paiguta see uuesti ja proovi uuesti.",
         "stampSignedBy": "Digitaalselt allkirjastanud",
         "stampTextUnrenderableDescription": "Põhjust või asukohta ei saa nähtavas templis näidata. Muuda teksti või kasuta nähtamatut allkirja.",

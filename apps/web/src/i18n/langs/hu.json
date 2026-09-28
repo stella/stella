@@ -1624,6 +1624,7 @@
     "profile": "Profil",
     "properties": "Tulajdonságok",
     "queued": "Sorba állítva",
+    "reason": "Ok",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
     "refresh": "Frissítés",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "Kézbesítés hitelesítése",
     "drops": {
       "authenticationHint": "Kérje meg a feladó levelezési rendszergazdáját az <protocol>SPF</protocol>, <protocol>DKIM</protocol> és <protocol>DMARC</protocol> beállítására a küldő domainhez.",
-      "reason": "Ok",
       "reasons": {
         "attachmentRejected": "Elutasított melléklet",
         "authenticationFailed": "A kézbesítés hitelesítése sikertelen",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "Az aláírás új verzióként lett mentve.",
         "signedTitle": "A PDF alá van írva",
         "stampLocation": "Hely",
-        "stampReason": "Ok",
         "stampRejectedDescription": "A bélyegzőt nem lehet oda elhelyezni. Helyezd el újra, és próbáld meg ismét.",
         "stampSignedBy": "Digitálisan aláírta",
         "stampTextUnrenderableDescription": "Az ok vagy a hely nem jeleníthető meg látható bélyegzőben. Módosítsd a szöveget, vagy használj láthatatlan aláírást.",

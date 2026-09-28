@@ -1624,6 +1624,7 @@
     "profile": "الملف الشخصي",
     "properties": "الخصائص",
     "queued": "قيد الانتظار",
+    "reason": "السبب",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
     "refresh": "تحديث",
@@ -1951,7 +1952,6 @@
     "deliveryAuthentication": "مصادقة التسليم",
     "drops": {
       "authenticationHint": "اطلب من مسؤول البريد الإلكتروني لدى المرسل إعداد <protocol>SPF</protocol> و<protocol>DKIM</protocol> و<protocol>DMARC</protocol> لنطاق الإرسال.",
-      "reason": "السبب",
       "reasons": {
         "attachmentRejected": "تم رفض المرفق",
         "authenticationFailed": "فشلت مصادقة التسليم",
@@ -5196,7 +5196,6 @@
         "signedDescriptionNoVersion": "تم حفظ التوقيع كإصدار جديد.",
         "signedTitle": "تم توقيع ملف PDF",
         "stampLocation": "المكان",
-        "stampReason": "السبب",
         "stampRejectedDescription": "تعذّر وضع الختم في هذا الموضع. ضعه مرة أخرى ثم أعد المحاولة.",
         "stampSignedBy": "موقّع رقميًا من",
         "stampTextUnrenderableDescription": "لا يمكن عرض السبب أو المكان في ختم مرئي. غيّر النص أو استخدم توقيعًا غير مرئي.",
