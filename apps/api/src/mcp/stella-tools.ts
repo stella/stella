@@ -76,6 +76,7 @@ import {
   SET_PRACTICE_JURISDICTIONS_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   resolveCurrentFileSourceField,
   selectCurrentExtractedContent,
@@ -107,7 +108,6 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
-import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
 import {
   defaultLookupDecisionsByIdentity,
   defaultReadGatedDecisionCitations,

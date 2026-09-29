@@ -15,12 +15,12 @@ import { hasUsableAst } from "@stll/legal-ast/document-ast";
 import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
 import type { McpRequestContext } from "@/api/mcp/context";
-import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
 import {
   defaultReadGatedDecisionWithDocument,
   defaultReadPublicLegislationHandler,

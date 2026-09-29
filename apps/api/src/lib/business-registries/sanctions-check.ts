@@ -13,6 +13,7 @@ import type {
   SanctionsCompanyIdCountry,
   SanctionsCompanyRegistry,
 } from "@/api/lib/business-registries/sanctions-check-vocabulary";
+import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   screenSanctionsSubject,
@@ -92,7 +93,7 @@ export type SanctionsCheckDependencies = {
   organizationId: SafeId<"organization">;
   executeLookup?: typeof executeRegistryLookup | undefined;
   screen?: typeof screenSanctionsSubject | undefined;
-  loadPracticeJurisdictions?: typeof loadPracticeJurisdictions | undefined;
+  loadPracticeJurisdictions?: typeof loadPracticeCountries | undefined;
 };
 
 const invalidSubject = (message: string, hint?: string) =>
@@ -106,28 +107,12 @@ const invalidSubject = (message: string, hint?: string) =>
   );
 
 /** The countries the firm practises in, as stored codes. */
-const loadPracticeJurisdictions = async ({
-  scopedDb,
-  organizationId,
-}: {
-  scopedDb: ScopedDb;
-  organizationId: SafeId<"organization">;
-}): Promise<CountryCode[]> => {
-  const row = await scopedDb(
-    async (tx) =>
-      await tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: { practiceJurisdictions: true },
-      }),
-  );
-  // A firm without settings has not declared any practice jurisdiction.
-  if (row === undefined) {
-    return [];
-  }
-  return row.practiceJurisdictions.map(
+const loadPracticeCountries = async (
+  props: Parameters<typeof loadPracticeJurisdictions>[0],
+): Promise<CountryCode[]> =>
+  (await loadPracticeJurisdictions(props)).map(
     (jurisdiction) => jurisdiction.countryCode,
   );
-};
 
 /** A register lookup the register refused as malformed input, not one it failed to answer. */
 const isInputRejection = (error: HandlerError): boolean =>
@@ -281,7 +266,7 @@ export const runSanctionsCheck = async ({
 }): Promise<Result<SanctionsCheckResult, HandlerError>> => {
   const {
     screen = screenSanctionsSubject,
-    loadPracticeJurisdictions: loadJurisdictions = loadPracticeJurisdictions,
+    loadPracticeJurisdictions: loadJurisdictions = loadPracticeCountries,
   } = dependencies;
   const resolved = await resolveSubject(subject, dependencies);
   if (resolved.isErr()) {
