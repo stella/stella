@@ -1241,11 +1241,11 @@ const isolationCases: IsolationCase[] = [
       thread: await readChatThreadRow(chatDeleteThreadB),
     }),
     expectDenied: (result) => {
-      expect(getStatusCode(recordField(result, "response"))).toBeNull();
+      expect(recordField(result, "response")).toStrictEqual({});
       expect(recordField(result, "thread")).not.toBeNull();
     },
     expectPositive: (result) => {
-      expect(getStatusCode(recordField(result, "response"))).toBeNull();
+      expect(recordField(result, "response")).toStrictEqual({});
       expect(recordField(result, "thread")).toBeNull();
     },
   },
