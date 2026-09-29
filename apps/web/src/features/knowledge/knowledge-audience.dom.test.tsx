@@ -242,7 +242,9 @@ const createApp = () => {
 
   const routeErrorLifecycle = createRouteErrorLifecycleController({
     captureError: () => undefined,
-    captureRouteErrorLifecycle: () => undefined,
+    captureRouteErrorLifecycle: async () => {
+      await Promise.resolve();
+    },
   });
 
   const Providers = ({ children }: { children: ReactNode }) => (

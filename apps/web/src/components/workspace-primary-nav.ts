@@ -130,6 +130,10 @@ const PUBLIC_KNOWLEDGE_NAV_ITEM = {
 export type WorkspacePrimaryNavId =
   (typeof WORKSPACE_PRIMARY_NAV_ITEMS)[number]["id"];
 
+type WorkspacePrimaryNavEntry =
+  | (typeof WORKSPACE_PRIMARY_NAV_ITEMS)[number]
+  | typeof PUBLIC_KNOWLEDGE_NAV_ITEM;
+
 export const getWorkspacePrimaryNavItems = ({
   includeInbox,
   includePublicLaw,
@@ -144,7 +148,7 @@ export const getWorkspacePrimaryNavItems = ({
   /** Knowledge is readable without an account, and holds the tools. */
   publicKnowledge: boolean;
 }) =>
-  WORKSPACE_PRIMARY_NAV_ITEMS.flatMap((item) => {
+  WORKSPACE_PRIMARY_NAV_ITEMS.flatMap((item): WorkspacePrimaryNavEntry[] => {
     if (item.id === "caseLaw") {
       return includePublicLaw ? [item] : [];
     }
