@@ -423,6 +423,68 @@ describe("a producing run", () => {
     await response.body?.cancel();
   });
 
+  test("gives up its turns only once a run that settled on its own is done reading its turn", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
+    const beatStarted = Promise.withResolvers<undefined>();
+    const beatMayFinish = Promise.withResolvers<undefined>();
+    const heldDb: SafeDb = async (callback, retry) => {
+      beatStarted.resolve(undefined);
+      await beatMayFinish.promise;
+      return await safeDb(callback, retry);
+    };
+    const run = new ChatTurnRun({
+      connectors: undefined,
+      deadlineMs: 60_000,
+      heartbeat: { intervalMs: 1, renewEvery: 1000 },
+      ownership,
+      owner: {
+        execution,
+        owningAssistantMessage: undefined,
+        recordAuditEvent: noAudit,
+        safeDb: heldDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      },
+    });
+    // The run settles on its own while a beat is still reading its turn.
+    const output = async function* (): AsyncGenerator<StreamChunk> {
+      await beatStarted.promise;
+      await run.settle(async () => {
+        unwrap(
+          await safeDb(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                assistantMessageId: null,
+                execution,
+                outcome: { reason: "client-disconnected", type: "interrupted" },
+                tx,
+              }),
+          ),
+        );
+      });
+      yield* [];
+    };
+    await run.produce(output()).text();
+    expect(ownership.run(execution.executionId)).toBeUndefined();
+
+    // Giving up the process's turns from here still waits for that beat.
+    let relinquishedWith: string | undefined;
+    const relinquished = ownership.relinquish().then((end) => {
+      relinquishedWith = end;
+      return end;
+    });
+    for (let poll = 0; poll < 40; poll += 1) {
+      await Bun.sleep(1);
+    }
+    expect(relinquishedWith).toBeUndefined();
+
+    beatMayFinish.resolve(undefined);
+    expect(await relinquished).toBe("stored");
+    expect(await run.settled).toBe("stored");
+  });
+
   test("gives up its turns only once the work they left running is done", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const ownership = new ChatTurnOwnership();

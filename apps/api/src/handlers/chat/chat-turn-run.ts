@@ -496,14 +496,18 @@ export class ChatTurnRun {
   private release(): void {
     const { state } = this;
     this.state = { status: "settled" };
-    this.ownership.release(this);
     const end: ChatTurnRunEnd = this.stored ? "stored" : "unstored";
     if (state.status !== "producing") {
+      this.ownership.release(this);
       this.settledResolvers.resolve(end);
       return;
     }
     state.heartbeat.stop();
-    this.settledResolvers.resolve(state.heartbeat.idle().then(() => end));
+    // Handed to the owner before the run leaves it, so giving up the
+    // process's turns at any moment from here still waits for that beat.
+    const idle = this.ownership.followUp(state.heartbeat.idle());
+    this.ownership.release(this);
+    this.settledResolvers.resolve(idle.then(() => end));
   }
 }
 
