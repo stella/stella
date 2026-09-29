@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 
-import { STARTER_PLAYBOOKS } from "@/api/handlers/playbooks/starters";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { STARTER_PLAYBOOKS } from "@/api/lib/knowledge/starter-playbooks";
 
 const config = {
   description:

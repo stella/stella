@@ -5,7 +5,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
 import { assertPlaybookDocumentType } from "@/api/handlers/playbooks/assert-document-type";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
-import type { StarterPlaybookId } from "@/api/handlers/playbooks/starters";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
@@ -14,6 +13,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { StarterPlaybookId } from "@/api/lib/knowledge/starter-playbooks";
 import { LIMITS } from "@/api/lib/limits";
 import type {
   PlaybookPositions,

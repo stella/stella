@@ -19,6 +19,11 @@ const validManifest = {
 };
 
 describe("template pack manifest contract", () => {
+  test("defaults public display to false", () => {
+    const parsed = v.parse(packManifestSchema, validManifest);
+    expect(parsed.publicDisplay).toBe(false);
+  });
+
   test("rejects unknown fields in repo-owned manifests", () => {
     expect(v.safeParse(packManifestSchema, validManifest).success).toBe(true);
     expect(

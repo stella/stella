@@ -3,13 +3,13 @@ import { t } from "elysia";
 
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
-import {
-  findStarterPlaybook,
-  STARTER_PLAYBOOK_IDS,
-} from "@/api/handlers/playbooks/starters";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  findStarterPlaybook,
+  STARTER_PLAYBOOK_IDS,
+} from "@/api/lib/knowledge/starter-playbooks";
 
 const fromStarterBodySchema = t.Object({
   starterId: t.UnionEnum(STARTER_PLAYBOOK_IDS),
