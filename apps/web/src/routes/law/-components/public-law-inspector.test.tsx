@@ -127,7 +127,7 @@ describe("inspector dock ownership", () => {
 
     expect(owners).toEqual([
       "components/public-inspector-rail.tsx",
-      "routes/_protected.tsx",
+      "routes/-protected-app.tsx",
     ]);
   });
 });

@@ -11,6 +11,7 @@ import {
   toAPIError,
   unwrapEden,
 } from "@/lib/errors/api";
+import { memberKnowledgeKeys } from "@/lib/knowledge/knowledge-cache";
 import {
   chatSkillAvailabilityKey,
   type ChatSkillAvailabilityQuery,
@@ -59,8 +60,7 @@ const PLAYBOOK_DETAIL_KEY_SEGMENT = "detail";
 // An organization's Knowledge rows sit under one audience + org prefix, so no
 // other source of Knowledge data can share a cache entry with them.
 const memberKnowledgeKey = (organizationId: string, section: string) => [
-  "knowledge",
-  "member",
+  ...memberKnowledgeKeys.all(),
   organizationId,
   section,
 ];

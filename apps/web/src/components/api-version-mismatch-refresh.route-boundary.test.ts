@@ -10,7 +10,7 @@ describe("version refresh route boundary", () => {
     const rootRouteSource = await Bun.file(rootRoutePath).text();
 
     expect(rootRouteSource).toMatch(
-      /<ApiVersionMismatchProvider>\s*<Outlet \/>/u,
+      /<ApiVersionMismatchProvider>\s*<AppFrameHost>\s*<Outlet \/>\s*<\/AppFrameHost>/u,
     );
   });
 
