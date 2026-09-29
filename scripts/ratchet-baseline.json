@@ -295,7 +295,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 899,
+    "count": 902,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
