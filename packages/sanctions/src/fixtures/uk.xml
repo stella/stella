@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Designations>
+  <DateGenerated>21/09/2026</DateGenerated>
+  <Designation>
+    <DateDesignated>15/04/2025</DateDesignated>
+    <UniqueID>UK-100</UniqueID>
+    <OFSIGroupID>100</OFSIGroupID>
+    <Names>
+      <Name><Name1>Alex</Name1><Name6>Example</Name6><NameType>Primary Name</NameType></Name>
+      <Name><Name1>Alex</Name1><Name6>Example</Name6><NameType>Alias</NameType><AliasStrength>Low quality a.k.a</AliasStrength></Name>
+      <Name><Name1>Alek</Name1><Name6>Example</Name6><NameType>Alias</NameType><AliasStrength>Good quality a.k.a</AliasStrength></Name>
+      <Name><Name1>Lex</Name1><Name6>Example</Name6><NameType>Alias</NameType><AliasStrength>Low quality a.k.a</AliasStrength></Name>
+    </Names>
+    <NonLatinNames><NonLatinName><NameNonLatinScript>Алекс Пример</NameNonLatinScript></NonLatinName></NonLatinNames>
+    <RegimeName>Sample regime</RegimeName>
+    <IndividualEntityShip>Individual</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <Addresses><Address><AddressLine1>1 Sample Street</AddressLine1><AddressLine4>Example City</AddressLine4><AddressPostalCode>AB1 2CD</AddressPostalCode><AddressCountry>United Kingdom</AddressCountry></Address></Addresses>
+    <CryptoWalletAddresses><CryptoWalletAddress>0xAbCd123</CryptoWalletAddress></CryptoWalletAddresses>
+    <IndividualDetails><Individual>
+      <DOBs><DOB>12/08/1975</DOB><DOB>dd/09/1975</DOB><DOB>dd/mm/1975</DOB><DOB>00/00/1975</DOB><DOB>15/08/19yy</DOB></DOBs>
+      <PassportDetails><Passport><PassportNumber>P123456</PassportNumber></Passport></PassportDetails>
+      <Nationalities><Nationality>United Kingdom</Nationality><Nationality>Canada</Nationality></Nationalities>
+      <NationalIdentifierDetails><NationalIdentifier><NationalIdentifierNumber>N123456</NationalIdentifierNumber></NationalIdentifier></NationalIdentifierDetails>
+    </Individual></IndividualDetails>
+  </Designation>
+  <Designation>
+    <DateDesignated>01/02/2026</DateDesignated>
+    <UniqueID>UK-200</UniqueID>
+    <Names><Name><Name6>Sample Trading Ltd</Name6><NameType>Primary name</NameType></Name></Names>
+    <RegimeName>Sample regime</RegimeName>
+    <IndividualEntityShip>Entity</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <EntityDetails><Entity><BusinessRegistrationNumbers><BusinessRegistrationNumber>REG-200</BusinessRegistrationNumber></BusinessRegistrationNumbers></Entity></EntityDetails>
+  </Designation>
+  <Designation>
+    <DateDesignated>05/03/2026</DateDesignated>
+    <UniqueID>UK-300</UniqueID>
+    <Names><Name><Name6>Sample Vessel</Name6><NameType>Primary Name</NameType></Name></Names>
+    <RegimeName>Sample regime</RegimeName>
+    <IndividualEntityShip>Ship</IndividualEntityShip>
+    <DesignationSource>UK</DesignationSource>
+    <ShipDetails><Ship><IMONumbers><IMONumber>1234567</IMONumber></IMONumbers></Ship></ShipDetails>
+  </Designation>
+</Designations>
