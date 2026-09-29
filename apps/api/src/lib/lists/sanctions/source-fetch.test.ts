@@ -21,6 +21,7 @@ const UN_FIXTURE = path.join(FIXTURES, "un.xml");
 const OFAC_SDN_FIXTURE = path.join(FIXTURES, "ofac-sdn.xml");
 const OFAC_NON_SDN_FIXTURE = path.join(FIXTURES, "ofac-non-sdn.xml");
 const UK_FIXTURE = path.join(FIXTURES, "uk.xml");
+const SECO_FIXTURE = path.join(FIXTURES, "seco.xml");
 
 /** Serves a fixture file as a successful stream and records requested URLs. */
 const fixtureStream = (
@@ -389,5 +390,76 @@ describe("HTTP validators for same-day editions", () => {
       options(UN_FIXTURE, { "Last-Modified": "Wed, 23 Sep 2026 18:42:07 GMT" }),
     );
     expect(marker.unwrap().lastModified).toBeNull();
+  });
+});
+
+describe("SECO list refresh", () => {
+  test("reads the edition from the root date at the start of the export", async () => {
+    const { fetchStreamRequest, requested } = fixtureStream(SECO_FIXTURE);
+    const marker = await fetchSanctionsMarker("ch", {
+      signal: new AbortController().signal,
+      fetchStreamRequest,
+    });
+
+    const downloadUrl = SANCTIONS_SOURCES.ch.download.urls[0];
+    expect(marker.unwrap()).toEqual({
+      source: "ch",
+      version: { source: "ch", publishedAt: "2026-09-04", fileId: null },
+      downloadUrl,
+      lastModified: null,
+    });
+    expect(requested).toEqual([downloadUrl]);
+  });
+
+  test("parses the export it identified as the SECO source", async () => {
+    const marker = (
+      await fetchSanctionsMarker("ch", {
+        signal: new AbortController().signal,
+        fetchStreamRequest: fixtureStream(SECO_FIXTURE).fetchStreamRequest,
+      })
+    ).unwrap();
+
+    const edition = await fetchSanctionsEdition(marker, {
+      signal: new AbortController().signal,
+      fetchStreamRequest: fixtureStream(SECO_FIXTURE).fetchStreamRequest,
+    });
+
+    const { parsed, contentHash } = edition.unwrap();
+    expect(parsed.version).toEqual(marker.version);
+    expect(parsed.entries.length).toBe(3);
+    expect(
+      parsed.entries.every(
+        (entry) => entry.source === "ch" && entry.issuer === "CH",
+      ),
+    ).toBe(true);
+    expect(contentHash).toBe(
+      new Bun.CryptoHasher("sha256")
+        .update(await Bun.file(SECO_FIXTURE).arrayBuffer())
+        .digest("hex"),
+    );
+  });
+
+  test("reports an export without a root date as a parse failure", async () => {
+    let attempts = 0;
+    const marker = await fetchSanctionsMarker("ch", {
+      signal: new AbortController().signal,
+      fetchStreamRequest: async () => {
+        attempts += 1;
+        return Result.ok({
+          body: new Blob([
+            '<?xml version="1.0"?><swiss-sanctions-list list-type="whole-list"><target ssid="1"/></swiss-sanctions-list>',
+          ]).stream(),
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        });
+      },
+    });
+
+    expect(marker.isErr()).toBe(true);
+    if (marker.isErr()) {
+      expect(marker.error.code).toBe("parse-failed");
+    }
+    expect(attempts).toBe(1);
   });
 });

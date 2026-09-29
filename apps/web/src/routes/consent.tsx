@@ -39,6 +39,7 @@ import {
   translateOAuthScopeEntry,
 } from "@/lib/oauth-scopes";
 import { managementRoles } from "@/lib/organization/consts";
+import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -85,7 +86,7 @@ function ConsentPage() {
   });
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const { data: organizations } = authClient.useListOrganizations();
+  const { data: organizations } = useQuery(organizationListOptions);
   const { data: currentUserRole } = useQuery({
     ...roleOptions,
     enabled: activeOrganizationId !== null,
