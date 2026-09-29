@@ -1,6 +1,6 @@
 ---
 name: conventions-perf
-description: 'Apply when a performance-guard check (network baseline, bundle baseline, DB query count, loader-prefetch lint, RC bailouts) fails or when touching a hot route/endpoint.'
+description: "Apply when a performance-guard check (network baseline, bundle baseline, DB query count, loader-prefetch lint, RC bailouts) fails or when touching a hot route/endpoint."
 ---
 
 # Performance Guard Conventions
