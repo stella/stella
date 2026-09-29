@@ -25,7 +25,7 @@ import {
   receivePublicFeedback,
 } from "@/api/handlers/feedback/intake";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
-import { resolveClientIp } from "@/api/lib/client-ip";
+import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
@@ -39,7 +39,10 @@ export const feedbackPublicRoute = new Elysia({ prefix: "/public" }).post(
     }
     return await receivePublicFeedback({
       rawBody: body,
-      clientIp: resolveClientIp(request, server ?? null),
+      clientIp: resolveRateLimitClientAddress({
+        request,
+        server: server ?? null,
+      }),
     });
   },
   {

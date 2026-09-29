@@ -1,6 +1,6 @@
 import Elysia from "elysia";
 
-import { resolveClientIp } from "@/api/lib/client-ip";
+import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
   MCP_ANONYMIZED_HTTP_PATH,
@@ -160,7 +160,12 @@ export const createMcpRoute = ({
       MCP_HTTP_PATH,
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
-          options: { clientIp: resolveClientIp(request, server ?? null) },
+          options: {
+            clientIp: resolveRateLimitClientAddress({
+              request,
+              server: server ?? null,
+            }),
+          },
           request,
           set,
         }),
@@ -174,7 +179,10 @@ export const createMcpRoute = ({
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
           options: {
-            clientIp: resolveClientIp(request, server ?? null),
+            clientIp: resolveRateLimitClientAddress({
+              request,
+              server: server ?? null,
+            }),
             mode: "documents",
           },
           request,
@@ -187,7 +195,10 @@ export const createMcpRoute = ({
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
           options: {
-            clientIp: resolveClientIp(request, server ?? null),
+            clientIp: resolveRateLimitClientAddress({
+              request,
+              server: server ?? null,
+            }),
             mode: "anonymized",
           },
           request,
@@ -200,7 +211,10 @@ export const createMcpRoute = ({
       async ({ request, server, set }) =>
         await handleMcpTransportRoute({
           options: {
-            clientIp: resolveClientIp(request, server ?? null),
+            clientIp: resolveRateLimitClientAddress({
+              request,
+              server: server ?? null,
+            }),
             mode: "law",
           },
           request,
