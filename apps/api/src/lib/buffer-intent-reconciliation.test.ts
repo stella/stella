@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const s3DeleteMock = mock(
@@ -527,54 +528,68 @@ test("retires orphaned cleanup ownership after exact-key deletion", async () => 
   expect(retired).toBe(1);
 });
 
-test("retains orphaned cleanup ownership when exact-key deletion fails", async () => {
-  let retired = 0;
-  const tx = asTestRaw<Transaction>({
-    delete: () => ({
-      where: async () => {
-        retired += 1;
-      },
-    }),
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          orderBy: () => ({
-            limit: () => ({
-              for: async () => [
-                {
-                  attemptCount: 0,
-                  id: pendingUploadId,
-                  objectKey: `${organizationId}/${workspaceId}/orphan.docx`,
-                  status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
-                },
-              ],
+test.each(["exception", "ledger"] as const)(
+  "retains orphaned cleanup ownership when exact-key deletion fails: %s",
+  async (failure) => {
+    let retired = 0;
+    const tx = asTestRaw<Transaction>({
+      delete: () => ({
+        where: async () => {
+          retired += 1;
+        },
+      }),
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              limit: () => ({
+                for: async () => [
+                  {
+                    attemptCount: 0,
+                    id: pendingUploadId,
+                    objectKey: `${organizationId}/${workspaceId}/orphan.docx`,
+                    status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+                  },
+                ],
+              }),
             }),
           }),
         }),
       }),
-    }),
-    update: () => ({
-      set: () => ({ where: async () => undefined }),
-    }),
-  });
-  const safeDb = asTestRaw<SafeDb>(
-    async <T>(run: (transaction: Transaction) => Promise<T>) =>
-      await Result.tryPromise({
-        try: async () => await run(tx),
-        catch: (cause) => cause,
+      update: () => ({
+        set: () => ({ where: async () => undefined }),
       }),
-  );
-  s3DeleteMock.mockRejectedValueOnce(new Error("object deletion failed"));
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      async <T>(run: (transaction: Transaction) => Promise<T>) =>
+        await Result.tryPromise({
+          try: async () => await run(tx),
+          catch: (cause) => cause,
+        }),
+    );
+    const deleteObject =
+      failure === "exception"
+        ? async () => {
+            throw new Error("object deletion failed");
+          }
+        : async () =>
+            Result.err(
+              new OrganizationFileUsageError({
+                message: "Ledger unavailable",
+                reason: "storage_unavailable",
+              }),
+            );
 
-  const claimed = await reconcileBufferObjectCleanupIntents({
-    deleteObject: s3DeleteMock,
-    limit: 1,
-    safeDb,
-  });
+    const claimed = await reconcileBufferObjectCleanupIntents({
+      deleteObject,
+      limit: 1,
+      safeDb,
+    });
 
-  expect(claimed).toBe(1);
-  expect(retired).toBe(0);
-});
+    expect(claimed).toBe(1);
+    expect(retired).toBe(0);
+  },
+);
 
 test("stops an in-flight object cleanup when the scheduler aborts", async () => {
   const updates: UpdateValues[] = [];

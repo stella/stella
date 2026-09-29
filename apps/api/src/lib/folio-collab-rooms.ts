@@ -135,13 +135,16 @@ const deleteStoredRoomFile = async ({
     workspaceId,
   });
 
-  const deleted = await deleteOrganizationFileWithSignal(
-    key,
-    AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
-  ).catch((error: unknown) => {
-    captureError(error, { roomId, storageKey: key });
-    return Result.ok(undefined);
-  });
+  const deleted = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await deleteOrganizationFileWithSignal(
+          key,
+          AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
+        ),
+      catch: (cause) => cause,
+    }),
+  );
   if (Result.isError(deleted)) {
     captureError(deleted.error, { roomId, storageKey: key });
   }

@@ -236,8 +236,8 @@ export const createStoredTemplate = async function* ({
       : getS3().delete(s3Key);
     deleteCandidate
       .then((deleted) => {
-        if (deleted && Result.isError(deleted)) {
-          captureError(deleted.error);
+        if (deleted) {
+          deleted.match({ err: captureError, ok: () => undefined });
         }
         return undefined;
       })
@@ -260,8 +260,8 @@ export const createStoredTemplate = async function* ({
       : getS3().delete(s3Key);
     deleteCandidate
       .then((deleted) => {
-        if (deleted && Result.isError(deleted)) {
-          captureError(deleted.error);
+        if (deleted) {
+          deleted.match({ err: captureError, ok: () => undefined });
         }
         return undefined;
       })

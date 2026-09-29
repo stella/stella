@@ -86,8 +86,10 @@ export const sweepExpiredFileComparisonUploads = async ({
           ),
         catch: (cause) => cause,
       });
-      const deletion = Result.isError(deleted) ? deleted : deleted.value;
-      if (deletion && Result.isError(deletion)) {
+      const deletion = Result.flatten(
+        deleted.map((value) => value ?? Result.ok(undefined)),
+      );
+      if (Result.isError(deletion)) {
         // The row stays, so the next tick retries this key.
         captureError(deletion.error, {
           fileComparisonUploadId: row.id,

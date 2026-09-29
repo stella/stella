@@ -292,16 +292,10 @@ const cleanupUploadedS3Keys = async ({
   );
 
   for (const result of results) {
-    if (result.status === "rejected") {
-      captureError(result.reason, {
-        operation: "upload-s3-cleanup",
-        fileId,
-        workspaceId,
-      });
-      continue;
-    }
-    if (Result.isError(result.value)) {
-      captureError(result.value.error, {
+    const cleanup =
+      result.status === "rejected" ? Result.err(result.reason) : result.value;
+    if (Result.isError(cleanup)) {
+      captureError(cleanup.error, {
         operation: "upload-s3-cleanup",
         fileId,
         workspaceId,

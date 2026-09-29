@@ -788,8 +788,10 @@ const reconcileStaleBufferIntentBatch = async ({
           ),
         catch: (cause) => cause,
       });
-      const deleted = Result.isError(cleanup) ? cleanup : cleanup.value;
-      if (deleted && Result.isError(deleted)) {
+      const deleted = Result.flatten(
+        cleanup.map((value) => value ?? Result.ok(undefined)),
+      );
+      if (Result.isError(deleted)) {
         if (signal?.aborted) {
           return null;
         }
@@ -925,14 +927,16 @@ export const reconcileBufferObjectCleanupIntents = async ({
           ),
         catch: (cause) => cause,
       });
-      const deleted = Result.isError(cleanup) ? cleanup : cleanup.value;
-      if (deleted && Result.isError(deleted) && !signal?.aborted) {
+      const deleted = Result.flatten(
+        cleanup.map((value) => value ?? Result.ok(undefined)),
+      );
+      if (Result.isError(deleted) && !signal?.aborted) {
         captureError(deleted.error, {
           pendingUploadId: row.id,
           stage: "buffer-object-cleanup-reconcile",
         });
       }
-      if (deleted && Result.isError(deleted)) {
+      if (Result.isError(deleted)) {
         return null;
       }
       if (row.status === BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED) {

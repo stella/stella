@@ -139,23 +139,23 @@ export const finalizeEntityVersion = async function* ({
   }
 
   const cleanupFinalObject = async (stage: string) => {
-    await withTimeout(
-      async (signal) => {
-        const deleted = await deleteOrganizationFileWithSignal(
-          finalKey,
-          signal,
-        );
-        if (Result.isError(deleted)) {
-          captureError(deleted.error, { entityId, fieldId, stage });
-        }
-      },
-      {
-        label: "entity-version-final-cleanup.delete",
-        timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-      },
-    ).catch((error: unknown) =>
-      captureError(error, { entityId, fieldId, stage }),
+    const deleted = Result.flatten(
+      await Result.tryPromise({
+        try: async () =>
+          await withTimeout(
+            async (signal) =>
+              await deleteOrganizationFileWithSignal(finalKey, signal),
+            {
+              label: "entity-version-final-cleanup.delete",
+              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+            },
+          ),
+        catch: (cause) => cause,
+      }),
     );
+    if (Result.isError(deleted)) {
+      captureError(deleted.error, { entityId, fieldId, stage });
+    }
   };
 
   let finalized:
