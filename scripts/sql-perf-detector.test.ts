@@ -389,6 +389,18 @@ test.each([
     "each operand parenthesized, in the reverse order",
     "sql`SELECT id FROM jobs WHERE ( ( id > ${cursor}::uuid ) OR ( ${cursor}::uuid IS NULL ) ) ORDER BY id LIMIT 20`",
   ],
+  [
+    "operands in doubled parentheses",
+    "connection.query('SELECT id FROM t WHERE (($1 IS NULL)) OR ((id > $1)) LIMIT 10', [cursor]);",
+  ],
+  [
+    "a schema-qualified cast",
+    "connection.query('SELECT id FROM t WHERE $1::pg_catalog.uuid IS NULL OR id > $1::pg_catalog.uuid LIMIT 10', [cursor]);",
+  ],
+  [
+    "a schema-qualified cast, in the reverse order",
+    "connection.query('SELECT id FROM t WHERE id > $1::pg_catalog.uuid OR $1::pg_catalog.uuid IS NULL LIMIT 10', [cursor]);",
+  ],
 ])("flags an optional keyset bound in %s", (_, source) => {
   expect(kinds(source)).toEqual(["optional-keyset"]);
 });

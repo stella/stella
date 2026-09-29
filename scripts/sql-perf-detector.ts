@@ -62,17 +62,17 @@ const KEYSET_PARAMETER = String.raw`(\$\d{1,4}|__SQL_EXPR_\d{1,4}__)`;
 // In a migration's routine body the cursor is also a PL/pgSQL variable or a
 // record field (`job."cursor_id"`).
 const MIGRATION_KEYSET_PARAMETER = String.raw`(?<![\w."$])(\$\d{1,4}|[a-z_]\w{0,62}(?:\."?[a-z_]\w{0,62}"?)?)`;
-const KEYSET_CAST = String.raw`(?:\s{0,64}::\s{0,64}[a-z_]\w{0,63}(?:\[\])?)?`;
+const KEYSET_CAST = String.raw`(?:\s{0,64}::\s{0,64}[a-z_]\w{0,63}(?:\.[a-z_]\w{0,63})?(?:\[\])?)?`;
 const KEYSET_COLUMN = String.raw`(?:__SQL_EXPR_\d{1,4}__|[a-z_"][\w."]{0,255})`;
 const KEYSET_RANGE = String.raw`\s{0,64}(?:<=|>=|<|>)\s{0,64}`;
 const KEYSET_NULL = String.raw`\s{1,64}IS\s{1,64}NULL`;
 const optionalKeysetPatterns = (parameter: string): RegExp[] => [
   new RegExp(
-    String.raw`${parameter}${KEYSET_CAST}${KEYSET_NULL}\s{0,64}\)?\s{1,64}OR\s{1,64}\(?\s{0,64}${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}`,
+    String.raw`${parameter}${KEYSET_CAST}${KEYSET_NULL}(?:\s{0,64}\)){0,4}\s{1,64}OR\s{1,64}(?:\(\s{0,64}){0,4}${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}`,
     "giu",
   ),
   new RegExp(
-    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}\s{0,64}\)?\s{1,64}OR\s{1,64}\(?\s{0,64}${parameter}${KEYSET_CAST}${KEYSET_NULL}`,
+    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}(?:\s{0,64}\)){0,4}\s{1,64}OR\s{1,64}(?:\(\s{0,64}){0,4}${parameter}${KEYSET_CAST}${KEYSET_NULL}`,
     "giu",
   ),
 ];
