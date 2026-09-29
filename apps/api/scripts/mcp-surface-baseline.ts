@@ -951,7 +951,7 @@ const runComparisonSelfTest = (failures: string[]) => {
     label: "tool count is exact",
     current: lawRows({
       edit: (tools) => {
-        tools.list_matters = {
+        tools["list_matters"] = {
           title: 0,
           description: 0,
           inputSchema: 0,
@@ -1020,7 +1020,7 @@ const runComparisonSelfTest = (failures: string[]) => {
       tools: Object.fromEntries(
         Object.entries(documents.tools).map(([tool, audiences]) => [
           tool,
-          { documents: audiences.law ?? panic(tool) },
+          { documents: audiences["law"] ?? panic(tool) },
         ]),
       ),
     },
