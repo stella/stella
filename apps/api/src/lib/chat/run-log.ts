@@ -1,5 +1,5 @@
 import type { StreamChunk, StreamDurability } from "@tanstack/ai";
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 import {
   and,
   asc,
@@ -296,6 +296,8 @@ export const createChatRunLog = ({
           .orderBy(asc(chatRunLogEntries.batchIndex))
           .limit(chunks.length + 1);
         if (alreadyStored.length > 0) {
+          // The batch id is minted per fingerprint above, so its stored rows
+          // can only be this exact batch.
           if (
             alreadyStored.length !== chunks.length ||
             alreadyStored.some((row, index) => {
@@ -306,9 +308,7 @@ export const createChatRunLog = ({
               );
             })
           ) {
-            throw new ChatRunLogError({
-              message: "Chat run log retry differs from stored batch",
-            });
+            panic("Chat run log retry differs from stored batch");
           }
           return alreadyStored.map((row) => BigInt(row.seq).toString());
         }
