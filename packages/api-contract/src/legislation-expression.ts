@@ -54,14 +54,22 @@ export type LegislationWindowDispositionBasis =
   (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)[keyof typeof LEGISLATION_WINDOW_DISPOSITION_BASES][number];
 
 /**
- * The kinds whose window can answer "which text applied then". A promulgated
- * text sits next to the consolidation that opens the same day and never
- * answers for it.
+ * Whether each kind's window can answer "which text applied then". Total over
+ * the kinds, so a kind added above fails to compile here until someone
+ * decides. A promulgated text sits next to the consolidation that opens the
+ * same day and never answers for it.
  */
-export const LEGISLATION_APPLICABLE_EXPRESSION_KINDS = [
-  "consolidation",
-  "unversioned",
-] as const satisfies readonly LegislationExpressionKind[];
+export const LEGISLATION_EXPRESSION_KIND_APPLIES = {
+  consolidation: true,
+  promulgated: false,
+  unversioned: true,
+} as const satisfies Record<LegislationExpressionKind, boolean>;
+
+/** The kinds decided applicable above, in declaration order. */
+export const LEGISLATION_APPLICABLE_EXPRESSION_KINDS: readonly LegislationExpressionKind[] =
+  LEGISLATION_EXPRESSION_KINDS.filter(
+    (kind) => LEGISLATION_EXPRESSION_KIND_APPLIES[kind],
+  );
 
 /** The one disposition whose window can answer a point-in-time read. */
 export const LEGISLATION_APPLICABLE_WINDOW_DISPOSITION =
@@ -76,7 +84,7 @@ export type LegislationExpressionEligibility = {
 /**
  * Whether a version can ever answer a point-in-time read: an effective window
  * of an applicable kind. Every applicability decision starts here; its SQL
- * twin in the API is built from the same two constants, so a date can never
+ * twin in the API is built from the same declarations, so a date can never
  * be matched against a version this says cannot apply.
  */
 export const isEligibleLegislationExpression = ({
@@ -84,9 +92,7 @@ export const isEligibleLegislationExpression = ({
   windowDisposition,
 }: LegislationExpressionEligibility): boolean =>
   windowDisposition === LEGISLATION_APPLICABLE_WINDOW_DISPOSITION &&
-  LEGISLATION_APPLICABLE_EXPRESSION_KINDS.some(
-    (kind) => kind === expressionKind,
-  );
+  LEGISLATION_APPLICABLE_EXPRESSION_KINDS.includes(expressionKind);
 
 /**
  * Why a point-in-time read has no answer although the Work exists and a
