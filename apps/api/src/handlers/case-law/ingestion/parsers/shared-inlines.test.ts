@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
+import { readFileSync } from "node:fs";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import {
