@@ -39,7 +39,7 @@ export const SITEMAP_SHARD_SPLIT_THRESHOLD = Math.floor(
  * `case_law_decisions_sitemap_shard_idx` in its own order, a page at a time,
  * so each statement's work is bounded by this and not by the corpus.
  */
-const SITEMAP_REFRESH_PAGE_SIZE = 20_000;
+export const SITEMAP_REFRESH_PAGE_SIZE = 20_000;
 
 /** Both budgets in milliseconds. */
 export type SitemapRefreshBudget = {
