@@ -29,7 +29,7 @@ const idBefore = (id: string): string => {
 const versionId = (): string => {
   for (;;) {
     const id = Bun.randomUUIDv7();
-    if (id.slice(-1) !== "0") {
+    if (!id.endsWith("0")) {
       return id;
     }
   }
