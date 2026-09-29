@@ -174,10 +174,11 @@ type LimitBound = { rows: number | null } | null;
 const tighterBound = (bound: LimitBound, node: PlanNode): LimitBound => {
   const planRows = node["Plan Rows"];
   const rows = typeof planRows === "number" ? planRows : null;
-  if (bound === null || bound.rows === null) {
+  const boundRows = bound?.rows ?? null;
+  if (boundRows === null) {
     return { rows };
   }
-  return { rows: rows === null ? bound.rows : Math.min(bound.rows, rows) };
+  return { rows: rows === null ? boundRows : Math.min(boundRows, rows) };
 };
 
 /**
@@ -203,7 +204,7 @@ const childLimitBound = (
   if (nodeType === "Limit") {
     return tighterBound(bound, node);
   }
-  if (bound === null || field(node, "Filter") !== null) {
+  if (nodeType === null || bound === null || field(node, "Filter") !== null) {
     return null;
   }
   switch (nodeType) {
@@ -352,6 +353,9 @@ const mitigationViolations = (
         mitigation.reason.trim().length > 0
         ? []
         : ["heap-fetch budget needs a nonnegative number and a reason"];
+    default:
+      mitigation satisfies never;
+      return panic("Unhandled heap-fetch mitigation");
   }
 };
 
