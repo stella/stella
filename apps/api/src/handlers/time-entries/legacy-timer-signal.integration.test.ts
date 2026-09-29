@@ -17,7 +17,6 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import { DatabaseRlsError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import {
   createTestIds,
@@ -233,21 +232,36 @@ test("signal writes cannot hide a running clock or expose another organization's
     .update(member)
     .set({ role: "admin" })
     .where(eq(member.id, ids.memberA2org));
+  expect(
+    await anotherMember((tx) =>
+      tx
+        .update(timeEntryTimerStates)
+        .set({ state: "paused" })
+        .where(eq(timeEntryTimerStates.entryId, entryId))
+        .returning(),
+    ),
+  ).toEqual([]);
+  expect(await signal(entryId)).toBe("running");
   await expect(
-    anotherMember((tx) =>
+    createScopedDb(
+      db,
+      [ids.wsA2],
+      ids.orgA,
+      ids.userA2,
+    )((tx) =>
       tx
         .update(timeEntryTimerStates)
         .set({ state: "paused" })
         .where(eq(timeEntryTimerStates.entryId, entryId)),
     ),
-  ).rejects.toThrow(DatabaseRlsError);
+  ).rejects.toMatchObject({ cause: { code: "42501" } });
   await expect(
     ownerDb()((tx) =>
       tx
         .delete(timeEntryTimerStates)
         .where(eq(timeEntryTimerStates.entryId, entryId)),
     ),
-  ).rejects.toThrow(DatabaseRlsError);
+  ).rejects.toMatchObject({ cause: { code: "42501" } });
   expect(await signal(entryId)).toBe("running");
   expect(
     await createScopedDb(
@@ -270,7 +284,7 @@ test("a paused signal cannot be fabricated for a direct running entry", async ()
         state: "paused",
       }),
     ),
-  ).rejects.toThrow(DatabaseRlsError);
+  ).rejects.toMatchObject({ cause: { code: "42501" } });
   expect(await signal(entryId)).toBeUndefined();
   expect(await memberGuard(entryId)).toMatchObject({ code: "running_timer" });
 });
@@ -292,7 +306,7 @@ test("a paused signal cannot be moved onto a direct running entry", async () => 
         .set({ entryId: directId })
         .where(eq(timeEntryTimerStates.entryId, projectedId)),
     ),
-  ).rejects.toThrow(DatabaseRlsError);
+  ).rejects.toMatchObject({ cause: { code: "42501" } });
   expect(await signal(projectedId)).toBe("paused");
   expect(await signal(directId)).toBeUndefined();
   expect(await memberGuard(directId)).toMatchObject({ code: "running_timer" });

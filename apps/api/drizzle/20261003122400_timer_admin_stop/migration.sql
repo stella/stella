@@ -93,7 +93,10 @@ BEGIN
       WHERE entry_id = OLD.legacy_time_entry_id
         AND organization_id = OLD.organization_id AND user_id = OLD.user_id;
       -- FK cascades may remove the entry projection before unlinking its timer.
-      IF NOT FOUND AND pg_trigger_depth() = 1 THEN
+      IF NOT FOUND AND EXISTS (
+        SELECT 1 FROM public.time_entries
+        WHERE id = OLD.legacy_time_entry_id AND organization_id = OLD.organization_id AND user_id = OLD.user_id
+      ) THEN
         RAISE EXCEPTION 'Linked timer signal is missing' USING ERRCODE = '23514';
       END IF;
     END IF;
@@ -109,7 +112,12 @@ BEGIN
       WHERE entry_id = OLD.legacy_time_entry_id
         AND organization_id = OLD.organization_id AND user_id = OLD.user_id;
       -- FK cascades may remove the entry projection before unlinking its timer.
-      IF NOT FOUND AND pg_trigger_depth() = 1 THEN
+      IF NOT FOUND AND (
+        NEW.legacy_time_entry_id IS NOT NULL OR EXISTS (
+          SELECT 1 FROM public.time_entries
+          WHERE id = OLD.legacy_time_entry_id AND organization_id = OLD.organization_id AND user_id = OLD.user_id
+        )
+      ) THEN
         RAISE EXCEPTION 'Linked timer signal is missing' USING ERRCODE = '23514';
       END IF;
     END IF;
@@ -131,6 +139,7 @@ SELECT legacy_time_entry_id, organization_id, user_id, state FROM "time_timers" 
 ALTER TABLE "time_entry_timer_states" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "time_entry_timer_states" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE ON "time_entry_timer_states" TO stella;--> statement-breakpoint
+REVOKE DELETE ON "time_entry_timer_states" FROM stella;--> statement-breakpoint
 CREATE POLICY "member_select" ON "time_entry_timer_states" FOR SELECT TO stella USING (
   organization_id = (SELECT current_setting('app.organization_id', true))
   AND EXISTS (SELECT 1 FROM "member" WHERE "member".organization_id = "time_entry_timer_states".organization_id AND "member".user_id = (SELECT current_setting('app.user_id', true)))

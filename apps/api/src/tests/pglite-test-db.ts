@@ -29,6 +29,7 @@ import {
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
+  installPgliteTimeEntryTimerSignals,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 
@@ -685,6 +686,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }
+  await installPgliteTimeEntryTimerSignals(db);
 
   return client;
 };
