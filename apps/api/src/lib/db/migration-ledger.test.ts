@@ -334,14 +334,9 @@ describe("migration dependencies", () => {
     ).toEqual({ dependencies: [], lines: [] });
   });
 
-  test("the real migration corpus has no dependency headers", async () => {
+  test("the real migration corpus has valid dependencies", async () => {
     const bundle = readMigrationFiles({ migrationsFolder: MIGRATIONS_DIR });
-    const headers = bundle.flatMap(({ name, sql }) =>
-      parseRequiresHeader(
-        sql.join("--> statement-breakpoint"),
-      ).dependencies.map((dependency) => ({ name, dependency })),
-    );
-    expect(headers).toEqual([]);
+    expect(validateRequires({ bundle, appliedNames: new Set() })).toEqual([]);
   });
 
   test("historical billing prose is ignored by the parser but flagged for a new file", async () => {

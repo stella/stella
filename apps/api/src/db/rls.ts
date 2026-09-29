@@ -4,11 +4,13 @@ import * as p from "drizzle-orm/pg-core";
 
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
+import { INGESTION_ROLE_NAME } from "./role-names";
+
 export const stella = p.pgRole("stella").existing();
 
 // Narrow write role used only by the case-law ingestion daemon.
 // Bootstrapped in 20260516000000_case_law_ingestion_role.
-export const stellaIngestion = p.pgRole("stella_ingestion").existing();
+export const stellaIngestion = p.pgRole(INGESTION_ROLE_NAME).existing();
 
 // The v0.7.22 case-law reader remains intact for the bounded rollout window.
 // Remove it after that release can no longer be deployed or used for rollback.
