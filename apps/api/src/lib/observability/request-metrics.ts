@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -144,4 +146,55 @@ export const emitFailureMetric = (input: FailureMetricInput): void => {
       timestamp: Temporal.Now.instant().epochMilliseconds,
     }),
   );
+};
+
+const CHAT_RUN_LOG_METRIC = {
+  appendDuration: "ChatRunLogAppendDuration",
+  rows: "ChatRunLogRows",
+  bytes: "ChatRunLogBytes",
+} as const;
+
+type ChatRunLogMetric =
+  | { type: "append"; durationMs: number }
+  | { type: "turn"; rows: number; bytes: number };
+
+export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
+  const payload = (() => {
+    switch (metric.type) {
+      case "append":
+        return {
+          values: { [CHAT_RUN_LOG_METRIC.appendDuration]: metric.durationMs },
+          metrics: [
+            { Name: CHAT_RUN_LOG_METRIC.appendDuration, Unit: "Milliseconds" },
+          ],
+        };
+      case "turn":
+        return {
+          values: {
+            [CHAT_RUN_LOG_METRIC.rows]: metric.rows,
+            [CHAT_RUN_LOG_METRIC.bytes]: metric.bytes,
+          },
+          metrics: [
+            { Name: CHAT_RUN_LOG_METRIC.rows, Unit: "Count" },
+            { Name: CHAT_RUN_LOG_METRIC.bytes, Unit: "Bytes" },
+          ],
+        };
+      default:
+        metric satisfies never;
+        return panic("Unhandled chat run log metric");
+    }
+  })();
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: payload.metrics,
+        },
+      ],
+    },
+    ...payload.values,
+  });
 };

@@ -8,6 +8,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -1616,6 +1617,50 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await storedSlugs(["concurrent-a", "concurrent-b"])).toEqual(
         beforeReplay,
       );
+    });
+
+    test("concurrent inserts racing for a free base slug take it and one deterministic candidate", async () => {
+      const racer = (publisherId: string) => ({
+        ...decisionAt("Okresný súd Race", publisherId),
+        caseNumber: "7Co/31/2024",
+      });
+      const failures: unknown[] = [];
+      const recordingDb: ScopedDb = async (transactionWork) => {
+        try {
+          return await scopedDb(transactionWork);
+        } catch (error) {
+          failures.push(error);
+          throw error;
+        }
+      };
+
+      await Promise.all(
+        ["race-a", "race-b"].map(
+          async (publisherId) =>
+            await processDecision({
+              input: racer(publisherId),
+              observationOrder: 1n,
+              sourceId,
+              scopedDb: recordingDb,
+              observedAt: new Date("2026-07-31T12:00:00.000Z"),
+            }),
+        ),
+      );
+
+      const candidate = (publisherId: string) =>
+        createCaseLawDecisionSlugCandidate({
+          baseSlug: "7co-31-2024",
+          identity: `${sourceId}\u0000document\u0000${publisherId}`,
+          attempt: 1,
+        });
+      const [slugA, slugB] = await storedSlugs(["race-a", "race-b"]);
+      expect([slugA, slugB]).toEqual(
+        slugA === "7co-31-2024"
+          ? ["7co-31-2024", candidate("race-b")]
+          : [candidate("race-a"), "7co-31-2024"],
+      );
+      // The loser moved to its candidate inside its own row write.
+      expect(failures).toEqual([]);
     });
 
     test("concurrent versions of one publisher id converge without dropping the loser", async () => {
