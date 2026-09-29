@@ -7,6 +7,8 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import { caseLawSectionHeading } from "@stll/legal-ast/case-law-heading";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import {
   PUBLISHER_SUMMARY_ROLES,
   isApparatusRole,
@@ -189,20 +191,54 @@ export const decisionCaseName = ({
 };
 
 /**
+ * The reference the reader's reference line shows. For a docket primary, the
+ * document's own case-number header wins, since it keeps the court's printed
+ * spelling. Any other primary (a reporter or neutral citation) is shown as
+ * stored: the document's header is then the docket, which stays visible in
+ * the text itself and must not displace the citation.
+ */
+export const decisionDisplayReference = ({
+  ast,
+  caseNumber,
+  caseNumberType,
+}: {
+  ast: DocumentAst | null;
+  caseNumber: string;
+  caseNumberType: DecisionPrimaryReferenceType;
+}): string => {
+  if (caseNumberType !== DECISION_IDENTIFIER_TYPES.CASE_NUMBER) {
+    return caseNumber;
+  }
+  const caseNumberBlock = ast?.blocks.find(
+    (block) => block.type === "paragraph" && block.role === "case-number",
+  );
+  return caseNumberBlock?.plainText ?? caseNumber;
+};
+
+/**
  * Remove structural metadata that the reader renders elsewhere. Content is
  * never hidden by matching its words: a court's title and constitutional
- * formula are part of the decision and remain visible as AST headings.
+ * formula are part of the decision and remain visible as AST headings. The
+ * case-number header is the reference line only for a docket primary; under
+ * any other primary it is the docket, which nothing else shows, so it stays.
  */
-export const visibleDecisionBlocks = (ast: DocumentAst | null): Block[] => {
+export const visibleDecisionBlocks = (
+  ast: DocumentAst | null,
+  caseNumberType: DecisionPrimaryReferenceType,
+): Block[] => {
   if (ast === null) {
     return [];
   }
 
+  const docketIsReferenceLine =
+    caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const visible: Block[] = [];
   let inReasoning = false;
   for (const block of ast.blocks) {
     if (
-      (block.type === "paragraph" && block.role === "case-number") ||
+      (docketIsReferenceLine &&
+        block.type === "paragraph" &&
+        block.role === "case-number") ||
       (block.type === "table" && block.role === "related-proceedings")
     ) {
       continue;

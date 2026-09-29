@@ -7,7 +7,7 @@ import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   bareCitationKey,
-  citationKeyOf,
+  decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   extractCitations,
   isSelfCitation,
@@ -41,6 +41,8 @@ import {
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
+import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
+import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   TEXT_ENCODING_INCOMPLETE,
@@ -412,8 +414,10 @@ export const planDecisionWrite = async ({
     (caseNumber) => bareCitationKey(caseNumber),
   );
 
+  const caseNumberType = parsePrimaryReferenceType(result.caseNumberType);
   const decisionIdentifiers = decisionIdentifiersFromMetadata({
     caseNumber: result.caseNumber,
+    caseNumberType,
     ecli: result.ecli ?? null,
     identifiers: result.identifiers,
     jurisdiction: result.country,
@@ -434,7 +438,13 @@ export const planDecisionWrite = async ({
     preserveStoredDocument,
   });
 
-  const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
+  const languageGroupKey = decisionLanguageGroupKey({
+    caseNumber: result.caseNumber,
+    country: result.country,
+    ecli: result.ecli,
+    sourceDocumentId: result.sourceDocumentId,
+    sourceId,
+  });
 
   const {
     corpusPayload,
@@ -451,7 +461,10 @@ export const planDecisionWrite = async ({
     pendingMirrorPayload,
   });
 
-  const incomingCitationKey = citationKeyOf(result.caseNumber);
+  const incomingCitationKey = decisionCitationKeyOf({
+    caseNumber: result.caseNumber,
+    caseNumberType,
+  });
   return {
     // Built here, outside the write transaction: classifying a citation
     // reads the polarity rules, and the write path must not hold a row
@@ -467,6 +480,7 @@ export const planDecisionWrite = async ({
       scopedDb,
       sections,
     }),
+    caseNumberType,
     corpusPayload,
     corpusPlan,
     identifierRows,

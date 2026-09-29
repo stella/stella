@@ -18,6 +18,7 @@ import {
 export const publicDecisionRowColumns = () => ({
   id: caseLawDecisions.id,
   caseNumber: caseLawDecisions.caseNumber,
+  caseNumberType: caseLawDecisions.caseNumberType,
   slug: caseLawDecisions.slug,
   ecli: caseLawDecisions.ecli,
   court: caseLawDecisions.court,
