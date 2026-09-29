@@ -57,9 +57,13 @@ describe("deferred document queue shape", () => {
     expect(MAX_PRIORITY_FETCH_ATTEMPTS).toBeLessThan(
       MAX_DOCUMENT_FETCH_ATTEMPTS,
     );
+    // The parked threshold is a literal, not a parameter: it has to match
+    // the parked index's predicate under a generic plan too.
     const parked = compileCondition(parkedDocumentPredicate);
-    expect(parked.sql).toContain(`"document_fetch_attempts" >=`);
-    expect(parked.params).toContain(MAX_DOCUMENT_FETCH_ATTEMPTS);
+    expect(parked.sql).toContain(
+      `"document_fetch_attempts" >= ${MAX_DOCUMENT_FETCH_ATTEMPTS}`,
+    );
+    expect(parked.params).not.toContain(MAX_DOCUMENT_FETCH_ATTEMPTS);
   });
 });
 

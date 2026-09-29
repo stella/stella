@@ -6,6 +6,8 @@ import {
   p,
   pUuid,
   safeOrganizationId,
+  storedFileScanState,
+  storedFileScanStateCheck,
   user,
   timestamptz,
 } from "./common";
@@ -20,6 +22,7 @@ export const styleSets = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
+    scanState: storedFileScanState(),
     cleanupS3Key: p.varchar("cleanup_s3_key", { length: 512 }),
     sizeBytes: p.integer("size_bytes").notNull(),
     createdBy: p
@@ -42,6 +45,7 @@ export const styleSets = p.pgTable(
       .index("style_sets_pending_package_cleanup_idx")
       .on(table.updatedAt, table.id)
       .where(sql`${table.cleanupS3Key} IS NOT NULL`),
+    storedFileScanStateCheck("style_sets_scan_state_check", table.scanState),
     ...orgPolicies(),
   ],
 );

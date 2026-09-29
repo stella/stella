@@ -27,6 +27,7 @@ import {
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { isLookupFormatKey } from "@/api/lib/docx/types";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { scanPlaceholders } from "./discover-placeholders";
@@ -1054,10 +1055,10 @@ const analyzeHeadersAndFooters = async (
 // ── Public API ───────────────────────────────────────────
 
 export const discoverTemplate = async (
-  docxBuffer: Buffer,
+  file: ScannedFile,
 ): Promise<DiscoveredTemplate> => {
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(docxBuffer);
+  const zip = await JSZip.loadAsync(file.bytes);
   const emptyResult: DiscoveredTemplate = {
     placeholders: [],
     fields: [],

@@ -96,6 +96,10 @@ import {
 } from "@/api/lib/legal-search/parsers/sk-courts";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
+import {
+  documentFetchParked,
+  MAX_DOCUMENT_FETCH_ATTEMPTS,
+} from "@/api/lib/legal-search/sk-document-parking-sql";
 import type { PendingDocumentTierLoaders } from "@/api/lib/legal-search/sk-document-queue";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
@@ -342,15 +346,10 @@ const PENDING_DOCUMENT_COLUMNS = {
 };
 
 /**
- * Attempts after which a decision leaves the walk altogether.
- *
- * A document the source never serves would otherwise come back after
- * every cooldown for as long as the corpus exists, and each return is a
- * download. A parked decision keeps its NULL text, so it stays countable
- * and `requeueParkedDocuments` puts it back when the cause is fixed. A
- * reader who opens it still fetches it directly.
+ * Attempts after which a decision leaves the walk altogether. Defined beside
+ * the SQL that tests it, which the schema's parked-row index shares.
  */
-export const MAX_DOCUMENT_FETCH_ATTEMPTS = 8;
+export { MAX_DOCUMENT_FETCH_ATTEMPTS };
 
 /**
  * How long the queue leaves a decision alone after its first attempt.
@@ -458,10 +457,18 @@ export const remainingDocumentPredicate = and(
   ),
 );
 
-/** Pending, and out of the walk until an operator requeues it. */
+/**
+ * Pending, and out of the walk until an operator requeues it.
+ *
+ * The attempt test is `documentFetchParked`, the text that also defines
+ * `case_law_decisions_document_parked_idx`, so the planner can prove this
+ * predicate implies the index's and read the few parked rows from it instead
+ * of the pending backlog. The rest of the pending predicate stays a heap
+ * filter.
+ */
 export const parkedDocumentPredicate = and(
   pendingDocumentPredicate,
-  gte(caseLawDecisions.documentFetchAttempts, MAX_DOCUMENT_FETCH_ATTEMPTS),
+  documentFetchParked(caseLawDecisions.documentFetchAttempts),
 );
 
 /** Oldest request first, so a reader waits for one drain at most. */
@@ -1186,19 +1193,58 @@ export const parkDocumentFetch = async ({
   return parked.length > 0 ? "parked" : "superseded";
 };
 
+/**
+ * The source's parked decisions.
+ *
+ * Parked rows are few and the pending backlog they sit in is most of the
+ * source, so both parked reads below must come from
+ * `case_law_decisions_document_parked_idx` (source, id) rather than from the
+ * pending index; `parkedDocumentPredicate` is written so the planner can
+ * match it. Exported as statement builders so the query-plan test explains
+ * the same SQL these functions run.
+ */
+const parkedDocumentsOf = (sourceId: SafeId<"caseLawSource">) =>
+  and(eq(caseLawDecisions.sourceId, sourceId), parkedDocumentPredicate);
+
+/** Count of the source's parked decisions, one bounded index scan. */
+export const parkedDocumentCountQuery = (
+  tx: Transaction,
+  sourceId: SafeId<"caseLawSource">,
+) =>
+  tx
+    .select({ parked: sql<number>`count(*)::int` })
+    .from(caseLawDecisions)
+    .where(parkedDocumentsOf(sourceId));
+
+/**
+ * The first `limit` parked decisions in id order: an ordered range of the
+ * parked index, stopped by the limit. A requeue resets the attempt count,
+ * which takes a row out of that index, so the next call's head is the next
+ * parked id without a cursor.
+ */
+export const parkedDocumentIdsQuery = ({
+  limit,
+  sourceId,
+  tx,
+}: {
+  limit: number;
+  sourceId: SafeId<"caseLawSource">;
+  tx: Transaction;
+}) =>
+  tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(parkedDocumentsOf(sourceId))
+    .orderBy(asc(caseLawDecisions.id))
+    .limit(limit);
+
 /** Parked decisions of the deferred-document source. */
 export const countParkedDocuments = async (
   scopedDb: ScopedDb,
   sourceId: SafeId<"caseLawSource">,
 ): Promise<number> => {
   const [row] = await scopedDb(
-    async (tx) =>
-      await tx
-        .select({ parked: sql<number>`count(*)::int` })
-        .from(caseLawDecisions)
-        .where(
-          and(eq(caseLawDecisions.sourceId, sourceId), parkedDocumentPredicate),
-        ),
+    async (tx) => await parkedDocumentCountQuery(tx, sourceId),
   );
   return row?.parked ?? 0;
 };
@@ -1236,14 +1282,7 @@ export const requeueParkedDocuments = async ({
     );
   }
   return await scopedDb(async (tx) => {
-    const parked = tx
-      .select({ id: caseLawDecisions.id })
-      .from(caseLawDecisions)
-      .where(
-        and(eq(caseLawDecisions.sourceId, sourceId), parkedDocumentPredicate),
-      )
-      .orderBy(asc(caseLawDecisions.id))
-      .limit(limit);
+    const parked = parkedDocumentIdsQuery({ limit, sourceId, tx });
     const requeued = await writeFetchBookkeeping(tx, {
       set: { documentFetchAttempts: 0 },
       where: inArray(caseLawDecisions.id, parked),

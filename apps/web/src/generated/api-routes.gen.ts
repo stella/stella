@@ -19111,6 +19111,7 @@ export type WebRoutes = {
               items: Array<{
                 id: T406326c84f;
                 caseNumber: string;
+                caseNumberType: Tdf198f5601;
                 slug: Tbe0400fa4c;
                 ecli: Tbe0400fa4c;
                 court: string;
@@ -19555,7 +19556,7 @@ export type WebRoutes = {
                     citationText: string;
                     sectionIndex: T588d0ee653;
                     treatment: Tf8140c6ae1;
-                    decision: (T408e0f164e | null);
+                    decision: (T3cf2d0a2c7 | null);
                   }>;
                   nextCursor: Tbe0400fa4c;
                   limit: number;
@@ -19676,7 +19677,7 @@ export type WebRoutes = {
                       citationText: string;
                       sectionIndex: T588d0ee653;
                       treatment: Tf8140c6ae1;
-                      decision: T408e0f164e;
+                      decision: T3cf2d0a2c7;
                     }>;
                   });
                   400: Tb2f04eed16;
@@ -20118,9 +20119,10 @@ export type WebRoutes = {
                   country: string;
                   identifiers: T3fbc5ba165;
                   createdAt: string;
-                  decisionDate: Tbe0400fa4c;
                   ecli: Tbe0400fa4c;
+                  decisionDate: Tbe0400fa4c;
                   caseNumber: string;
+                  caseNumberType: Tdf198f5601;
                   decisionId: string;
                   decisionType: Tbe0400fa4c;
                   citationAuthority: number;
@@ -35060,6 +35062,22 @@ type T3c3fa57c15 = {
   line1: string;
 };
 
+type T3cf2d0a2c7 = {
+  id: T406326c84f;
+  caseNumber: string;
+  caseNumberType: Tdf198f5601;
+  country: string;
+  court: string;
+  decisionDate: Tbe0400fa4c;
+  decisionType: Tbe0400fa4c;
+  ecli: Tbe0400fa4c;
+  language: string;
+  languageAlternates: ReadonlyArray<T32fdeee18e>;
+  slug: Tbe0400fa4c;
+} & {
+  citationAuthority: number;
+};
+
 type T3dc3e2ca32 = {
   label?: string;
   text: string;
@@ -35109,21 +35127,6 @@ type T4042d27c41 = {
 
 type T406326c84f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawDecision";
-};
-
-type T408e0f164e = {
-  id: T406326c84f;
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: Tbe0400fa4c;
-  decisionType: Tbe0400fa4c;
-  ecli: Tbe0400fa4c;
-  language: string;
-  languageAlternates: ReadonlyArray<T32fdeee18e>;
-  slug: Tbe0400fa4c;
-} & {
-  citationAuthority: number;
 };
 
 type T417792d11a = {
@@ -37398,6 +37401,7 @@ type Ta0e1c4f807 = T12163e1f6a | {
     anchorPrefix: string;
   };
   caseNumber: string;
+  caseNumberType: Tdf198f5601;
   slug: Tbe0400fa4c;
   ecli: Tbe0400fa4c;
   identifiers: T3fbc5ba165;
@@ -39101,6 +39105,8 @@ type Tdf07e1b328 = {
   text: string;
   id: string;
 };
+
+type Tdf198f5601 = "case-number" | "neutral-citation" | "reporter-citation";
 
 type Tdf2b0d1150 = string | null;
 

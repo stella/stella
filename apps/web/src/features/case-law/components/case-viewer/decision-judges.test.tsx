@@ -8,6 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -88,6 +89,7 @@ const renderDecision = (judges: readonly DecisionJudge[]): string =>
       activeMatchIndex={-1}
       decision={{
         caseNumber: "Pl. ÚS 1/2026",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         court: "Ústavní soud",
         courtAbbreviation: null,
         courtTier: "constitutional",
