@@ -27,6 +27,23 @@ export const applicationRlsRolePostureViolation = (
   return null;
 };
 
+export type IngestionRolePosture = Pick<
+  ApplicationRlsRolePosture,
+  "canAssumeRole"
+>;
+
+export const ingestionRolePostureViolation = (
+  posture: IngestionRolePosture | undefined,
+): string | null => {
+  if (posture === undefined) {
+    return "Ingestion role is missing.";
+  }
+  if (!posture.canAssumeRole) {
+    return "Database login must be able to assume the ingestion role. Run `bun run db:migrate` to grant SET rights.";
+  }
+  return null;
+};
+
 /** Role attributes of the database login the process connects with. */
 export type DatabaseLoginPosture = {
   loginName: string;
