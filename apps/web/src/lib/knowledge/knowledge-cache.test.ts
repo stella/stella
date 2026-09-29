@@ -49,7 +49,6 @@ describe("resetKnowledgeCache", () => {
     resolveRead("org-a data");
     await read.catch(() => undefined);
 
-    expect(queryClient.getQueryData(key)).toBeUndefined();
     expect(queryClient.getQueryCache().find({ queryKey: key })).toBeUndefined();
   });
 });
@@ -89,7 +88,7 @@ describe("resetVisitorCache", () => {
     resolveRead(["matter of org-a"]);
     await Promise.resolve();
 
-    expect(queryClient.getQueryData(key)).toBeUndefined();
+    expect(queryClient.getQueryCache().find({ queryKey: key })).toBeUndefined();
     unsubscribe();
   });
 });
