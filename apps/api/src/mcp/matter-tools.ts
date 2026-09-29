@@ -1136,8 +1136,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
   }),
 ]);
 
-/** Shared with the chat tool, so both surfaces accept the same call. */
-export const CHECK_COUNTERPARTY_INPUT_SCHEMA = v.strictObject({
+const checkCounterpartyInputSchema = v.strictObject({
   check: v.pipe(
     v.picklist(COUNTERPARTY_CHECK_KINDS),
     v.description(
@@ -1158,8 +1157,13 @@ export const CHECK_COUNTERPARTY_INPUT_SCHEMA = v.strictObject({
   ),
 });
 
-const checkCounterpartyArgsSchema = nullAsAbsent(
-  CHECK_COUNTERPARTY_INPUT_SCHEMA,
+/**
+ * Shared with the chat tool: both surfaces run the call through the same
+ * agent-input boundary (country names, lower-case codes, null placeholders)
+ * and then parse it with this schema, so they accept the same call.
+ */
+export const CHECK_COUNTERPARTY_ARGS_SCHEMA = nullAsAbsent(
+  checkCounterpartyInputSchema,
 );
 
 const invalidCounterpartySubject = (message: string, hint: string) =>
@@ -1229,7 +1233,7 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(checkCounterpartyArgsSchema, args);
+  const parsed = v.safeParse(CHECK_COUNTERPARTY_ARGS_SCHEMA, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
@@ -2508,14 +2512,15 @@ export const MATTER_TOOL_DEFINITIONS = [
       "records), not-registered (no record; not a clearance), unavailable " +
       "(no answer: NOT cleared) or not-covered (cannot screen this " +
       "subject, or needs the tax ID). The sanctions check returns one " +
-      "outcome per list in `lists`, naming the edition screened and " +
-      "whether the list binds the firm: clear, possible-match (resembling " +
-      "entries with score and conflicting fields; each needs human review, " +
-      "none is a confirmed hit) or unavailable (stale or not loaded, or " +
-      "the company's name unreadable from its register: NOT cleared). Its " +
-      "top-level status is clear only when every list is. Person matches " +
-      "rely on name and birth date: compare the record before relying on one.",
-    inputSchema: checkCounterpartyArgsSchema,
+      "outcome per list in `lists`, with whether it binds the firm: clear " +
+      "or possible-match (resembling entries with score and conflicting " +
+      "fields; each needs human review, none is confirmed), naming " +
+      "the edition screened; or unavailable (stale, not loaded, or the " +
+      "company name unreadable: NOT cleared), whose edition fields name " +
+      "the latest edition on file, not one screened. Top-level status is " +
+      "clear only when every list is. Person matches rest on name and " +
+      "birth date: compare the record first.",
+    inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {
       check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
       "subject.birth_date": { kind: AGENT_INPUT_NORMALIZATION_KIND.date },

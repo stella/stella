@@ -5,16 +5,16 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28750,
+        "description": 28773,
         "inputSchema": 85042,
-        "outputSchema": 56795,
+        "outputSchema": 57087,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 186294,
+      "payloadUtf8Bytes": 186609,
       "largestDescription": {
-        "tool": "create_template",
-        "chars": 807
+        "tool": "check_counterparty",
+        "chars": 809
       },
       "largestInputSchema": {
         "tool": "save_playbook",
@@ -22,7 +22,7 @@
       },
       "largestOutputSchema": {
         "tool": "check_counterparty",
-        "chars": 3880
+        "chars": 4172
       }
     },
     "documents": {

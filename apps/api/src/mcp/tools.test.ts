@@ -1820,6 +1820,39 @@ describe("OpenAI-compatible MCP tools", () => {
         ]);
       });
 
+      test("passes the check's own next step with a subject it refuses", async () => {
+        const result = await callSanctions(
+          async () => panic("The lists must not be screened"),
+          { type: "tax-id", tax_id: "CZ45274649" },
+        );
+        const error = validationEnvelope(result);
+        expect(error["code"]).toBe("validation_error");
+        expect(error["message"]).toBe(
+          "The sanctions check screens a name, and a tax ID alone has none",
+        );
+        expect(error["hint"]).toEqual(expect.stringContaining("company-id"));
+      });
+
+      test("takes a full birth date beside a year that agrees with it", async () => {
+        const runSanctionsCheck = mock<typeof runSanctionsCheckForTest>(
+          async () => Result.ok(structuredClone(sanctionsResult)),
+        );
+        await callSanctions(runSanctionsCheck, {
+          type: "person",
+          first_name: "Ivan",
+          last_name: "Sidorov",
+          birth_date: "1960-05-12",
+          date_of_birth: { precision: "year", year: 1960 },
+        });
+        expect(runSanctionsCheck.mock.calls.at(0)?.at(0)?.subject).toEqual({
+          type: "person",
+          firstName: "Ivan",
+          lastName: "Sidorov",
+          dateOfBirth: { precision: "day", year: 1960, month: 5, day: 12 },
+          nationalityCodes: [],
+        });
+      });
+
       test("asks for one birth date when the two given disagree", async () => {
         const result = await callSanctions(
           async () => panic("The lists must not be screened"),

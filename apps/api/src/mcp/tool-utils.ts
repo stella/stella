@@ -723,6 +723,10 @@ export const internalFailureResult = (
         // the envelope carries the same `issues[].path` detail a schema
         // rejection does instead of collapsing to one line of prose.
         issues: error.issues,
+        // The handler's own next step for input it refused: authored text
+        // about the call, never internal detail. Other refusals keep the
+        // envelope's default hint.
+        ...(code === "validation_error" && { hint: error.hint }),
       });
     }
   }
