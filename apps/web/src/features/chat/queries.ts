@@ -1563,12 +1563,14 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
 export const groupedChatThreadsOptions = ({
   activeOrganizationId,
   search,
+  userId,
 }: GroupedChatThreadsKey) => {
   const normalizedSearch = search?.trim() || undefined;
   return infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads({
       activeOrganizationId,
       search: normalizedSearch,
+      userId,
     }),
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     refetchOnWindowFocus: false,
@@ -1659,13 +1661,13 @@ export const chatThreadTitleOptions = ({
     queryFn: async () => await fetchChatThreadTitle(key),
   });
 
-// Match every cached `chatKeys.groupedThreads` entry, whatever org and search
-// term it carries: the invalidator cannot reconstruct the org id, so it walks
-// by structural shape instead.
+// Match every cached `chatKeys.groupedThreads` entry, whatever org, user and
+// search term it carries: the invalidator cannot reconstruct those ids, so it
+// walks by structural shape instead.
 const matchesGroupedChatThreads = (queryKey: readonly unknown[]): boolean =>
   queryKey.at(0) === "chat" &&
-  queryKey.at(2) === "threads" &&
-  queryKey.at(3) === "grouped";
+  queryKey.at(3) === "threads" &&
+  queryKey.at(4) === "grouped";
 
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
   await queryClient.invalidateQueries({

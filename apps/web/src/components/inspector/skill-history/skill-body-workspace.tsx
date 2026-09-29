@@ -91,27 +91,35 @@ export const SkillBodyWorkspace = ({
   // (a restore, an accepted proposal) needs a fresh instance.
   const [editorGeneration, setEditorGeneration] = useState(0);
 
-  const detail = useQuery(skillDetailOptions(organizationId, skillId));
+  const detail = useQuery(skillDetailOptions(organizationId, user.id, skillId));
   const role = useQuery(roleOptions);
   const organization = useQuery(organizationOptions(organizationId));
-  const revisions = useQuery(skillRevisionsOptions(organizationId, skillId));
-  const proposals = useQuery(skillProposalsOptions(organizationId, skillId));
+  const revisions = useQuery(
+    skillRevisionsOptions(organizationId, user.id, skillId),
+  );
+  const proposals = useQuery(
+    skillProposalsOptions(organizationId, user.id, skillId),
+  );
 
   const compareRevisionId =
     mode.type === "live" ? mode.compareRevisionId : null;
   const comparedRevision = useQuery(
-    skillRevisionOptions(organizationId, skillId, compareRevisionId),
+    skillRevisionOptions(organizationId, user.id, skillId, compareRevisionId),
   );
 
   const openProposalId = mode.type === "proposal" ? mode.proposalId : null;
 
   const commenting = mode.type === "live" && mode.commenting;
   const comments = useQuery({
-    ...skillCommentsOptions(organizationId, skillId),
+    ...skillCommentsOptions(organizationId, user.id, skillId),
     enabled: commenting,
   });
 
-  const actions = useSkillHistoryActions({ organizationId, skillId });
+  const actions = useSkillHistoryActions({
+    organizationId,
+    skillId,
+    userId: user.id,
+  });
 
   const authorName = createMemberNameLookup({
     members: organization.data?.members,

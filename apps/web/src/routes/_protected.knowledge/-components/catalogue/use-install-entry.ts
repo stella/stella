@@ -24,7 +24,7 @@ export const useInstallEntry = (organizationId: string) => {
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({
-          queryKey: catalogueKeys.list(organizationId),
+          queryKey: catalogueKeys.all(organizationId),
         }),
         "use-install-entry.invalidate",
       );

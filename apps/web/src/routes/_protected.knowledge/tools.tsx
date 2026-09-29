@@ -128,8 +128,12 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
   validateSearch: searchSchema,
   loader: async ({ context }) => {
     const orgId = context.user.activeOrganizationId;
+    const userId = context.user.id;
     const [, settings, role] = await Promise.all([
-      ensureRouteQueryData(context.queryClient, catalogueOptions(orgId)),
+      ensureRouteQueryData(
+        context.queryClient,
+        catalogueOptions(orgId, userId),
+      ),
       ensureRouteQueryData(
         context.queryClient,
         organizationSettingsOptions(orgId),
@@ -195,7 +199,7 @@ function ToolsPage() {
           });
           detached(
             queryClient.invalidateQueries({
-              queryKey: catalogueKeys.list(organizationId),
+              queryKey: catalogueKeys.all(organizationId),
             }),
             "knowledge-tools.invalidate",
           );

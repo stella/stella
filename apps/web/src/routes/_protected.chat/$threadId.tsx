@@ -51,7 +51,7 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
       Promise.all([
         prefetchNonCriticalInfiniteQuery(
           queryClient,
-          skillsOptions(organizationId),
+          skillsOptions(organizationId, context.user.id),
           onPrefetchError,
         ),
         prefetchRouteQuery(

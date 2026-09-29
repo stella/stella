@@ -1,4 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -26,8 +27,13 @@ export const TimesheetWeekView = ({
   const t = useTranslations();
   const format = useFormatter();
 
+  const userId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.id,
+  });
+
   const { data: entries } = useSuspenseQuery(
-    timeEntriesOptions(workspaceId, {
+    timeEntriesOptions(workspaceId, userId, {
       dateFrom: weekStart,
       dateTo: weekEnd,
     }),

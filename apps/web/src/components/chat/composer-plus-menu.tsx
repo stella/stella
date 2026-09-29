@@ -80,6 +80,7 @@ import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -581,6 +582,7 @@ const ComposerSkillsMenu = ({
   const t = useTranslations();
   const navigate = useNavigate();
   const { activeOrganizationId, chat, editor, reservedCommands } = skills;
+  const { id: userId } = useAuthenticatedUser();
   const [submenuOpen, setSubmenuOpen] = useState(false);
   const open = host.kind === "shortcut" ? host.open : submenuOpen;
   const [search, setSearch] = useState("");
@@ -593,7 +595,7 @@ const ComposerSkillsMenu = ({
     isFetchingNextPage,
     isPending: isLoadingSkills,
   } = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId),
+    ...skillsOptions(activeOrganizationId, userId),
     enabled,
   });
 
@@ -601,6 +603,7 @@ const ComposerSkillsMenu = ({
     chat,
     enabled,
     organizationId: activeOrganizationId,
+    userId,
   });
   // Only skills no chat can run leave the menu; one this chat alone cannot
   // run stays, disabled, with what the chat lacks.
@@ -1074,6 +1077,7 @@ const ComposerMcpSubmenu = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { activeOrganizationId } = mcp;
+  const { id: userId } = useAuthenticatedUser();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -1083,7 +1087,7 @@ const ComposerMcpSubmenu = ({
     enabled,
   });
   const { data: connectionsData, isPending: isLoadingConnections } = useQuery({
-    ...mcpConnectionsOptions(activeOrganizationId),
+    ...mcpConnectionsOptions(activeOrganizationId, userId),
     enabled,
   });
 
@@ -1130,7 +1134,7 @@ const ComposerMcpSubmenu = ({
     }
     detached(
       queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.mcp.connections(activeOrganizationId),
+        queryKey: knowledgeKeys.mcp.connections(activeOrganizationId, userId),
       }),
       "composer-plus-menu.invalidate",
     );

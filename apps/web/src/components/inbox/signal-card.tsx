@@ -54,6 +54,7 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { snoozeUntil } from "@/lib/inbox/inbox.logic";
@@ -85,6 +86,7 @@ export const SignalCard = ({
   const canResolve = usePermissions({ signal: ["resolve"] });
   const canChat = usePermissions({ chat: ["create"] });
   const queryClient = useQueryClient();
+  const userId = useAuthenticatedUser().id;
   const [busy, setBusy] = useState(false);
   const isOpen =
     signal.status === SIGNAL_STATUS.NEW ||
@@ -110,11 +112,11 @@ export const SignalCard = ({
     }
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: inboxKeys.all(organizationId),
+        queryKey: inboxKeys.all(organizationId, userId),
       }),
       // Signals are rows of the shared views window.
       queryClient.invalidateQueries({
-        queryKey: entityViewKeys.all(organizationId),
+        queryKey: entityViewKeys.all(organizationId, userId),
       }),
       ...(invalidateMyWork
         ? [queryClient.invalidateQueries({ queryKey: myWorkKeys.all })]

@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_protected/inbox/")({
   loader: async ({ context }) => {
     await ensureRouteQueryData(
       context.queryClient,
-      entityViewsOptions(context.user.activeOrganizationId),
+      entityViewsOptions(context.user.activeOrganizationId, context.user.id),
     );
   },
   head: () => ({ meta: [{ title: pageTitle("navigation.inbox") }] }),

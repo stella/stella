@@ -80,13 +80,17 @@ export const TemplatePickerDialog = ({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.id,
+  });
   const canDeleteTemplate = usePermissions({ view: ["delete"] });
   const [previewLayout, setPreviewLayout] = useState<ViewLayoutType | null>(
     null,
   );
   const { data: templates, isPending } = useQuery({
     ...viewTemplatesOptions({
-      key: { organizationId },
+      key: { organizationId, userId },
       context: { workspaceId },
     }),
     enabled: open,

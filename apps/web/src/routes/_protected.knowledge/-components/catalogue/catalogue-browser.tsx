@@ -33,6 +33,7 @@ import {
   type ToolsCatalogueKind,
 } from "@/features/knowledge/views/tools/tools-catalogue-view";
 import { useMountEffect } from "@/hooks/use-effect";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -352,7 +353,11 @@ const CatalogueEntryRow = ({
 }: CatalogueEntryRowProps) => {
   const t = useTranslations();
   const install = useInstallEntry(organizationId);
-  const chatUnavailableSkills = useChatUnavailableSkills(organizationId);
+  const { id: userId } = useAuthenticatedUser();
+  const chatUnavailableSkills = useChatUnavailableSkills(
+    organizationId,
+    userId,
+  );
   const chatMissingTools =
     entry.kind === "skill" && entry.chatSkillId !== null
       ? chatUnavailableSkills?.get(entry.chatSkillId)

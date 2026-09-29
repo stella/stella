@@ -9,16 +9,18 @@ import {
 type DownloadReportExportOptions = {
   exportId: string;
   queryClient: QueryClient;
+  userId: string;
   workspaceId: string;
 };
 
 export const downloadReportExport = async ({
   exportId,
   queryClient,
+  userId,
   workspaceId,
 }: DownloadReportExportOptions) => {
   const detail = await queryClient.query(
-    reportExportDetailOptions({ exportId, workspaceId }),
+    reportExportDetailOptions({ exportId, userId, workspaceId }),
   );
   if (detail.status !== "completed" || detail.downloadUrl === null) {
     await queryClient.invalidateQueries({
