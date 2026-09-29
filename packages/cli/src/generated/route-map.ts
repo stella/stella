@@ -3486,7 +3486,7 @@ export const generatedRouteMap: RouteNode = {
                 cursor: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 512,
+                  maxLength: 1844,
                   description:
                     "Opaque cursor from a previous search_legislation call",
                 },
@@ -27328,7 +27328,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         cursor: {
-                          maxLength: 512,
+                          maxLength: 1844,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",

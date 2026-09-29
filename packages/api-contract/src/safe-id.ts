@@ -110,6 +110,7 @@ export type SafeIdType =
   | "legislationDocument"
   | "legislationIndexJob"
   | "legislationSource"
+  | "legislationWorkName"
   | "legalList"
   | "legalListColumn"
   | "legalListGenerationCandidate"
