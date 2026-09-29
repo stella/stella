@@ -19,7 +19,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
 import type { Block } from "@/api/handlers/case-law/document-ast";
 import {
@@ -56,7 +56,7 @@ export type PlNcourtContent = {
   html: string;
   /** Every distinct statute link, in document order. */
   legalReferences: PlNcourtLegalReference[];
-  /** Element names the rendering has no rule for, each once. */
+  /** Unexpected element names, or #text/#cdata for stray text, each once. */
   unmappedMarkup: string[];
   /**
    * The text of every paragraph, title and unit name, read off the XML
@@ -100,7 +100,7 @@ const textOf = (node: AnyNode): string => {
   if (isText(node)) {
     return node.data;
   }
-  return isTag(node) ? node.children.map(textOf).join("") : "";
+  return isTag(node) || isCDATA(node) ? node.children.map(textOf).join("") : "";
 };
 
 const attributeOf = (element: Element, name: string): string =>
@@ -109,6 +109,12 @@ const attributeOf = (element: Element, name: string): string =>
 const renderInline = (node: AnyNode, state: RenderState): string => {
   if (isText(node)) {
     return escapeHtml(node.data);
+  }
+  if (isCDATA(node)) {
+    if (textOf(node).trim().length > 0) {
+      state.unmapped.add("#cdata");
+    }
+    return node.children.map((child) => renderInline(child, state)).join("");
   }
   if (!isTag(node)) {
     return "";
@@ -182,7 +188,7 @@ type ItemRuns = {
   item: string;
   renderRun: (items: Element[]) => string;
   /** Children with nothing to render in place. */
-  skip: ReadonlySet<string>;
+  skip: (child: Element) => boolean;
 };
 
 const renderItemRuns = (
@@ -198,13 +204,16 @@ const renderItemRuns = (
       run = [];
     }
   };
-  for (const child of childElements(element)) {
-    if (child.name === item) {
+  for (const child of element.children) {
+    if (isTag(child) && child.name === item) {
       run.push(child);
-    } else if (!skip.has(child.name)) {
-      flush();
-      parts.push(renderBlock(child, state));
+      continue;
     }
+    if (isTag(child) ? skip(child) : textOf(child).trim().length === 0) {
+      continue;
+    }
+    flush();
+    parts.push(renderBlock(child, state));
   }
   flush();
   return parts.join("\n");
@@ -218,21 +227,22 @@ const renderTable = (element: Element, state: RenderState): string =>
         .map((row) => {
           // A paragraph straight in a row, outside its cells, is a cell of
           // its own rather than lost.
-          const cells = childElements(row)
-            .filter((cell) => !LAYOUT_TAGS.has(cell.name))
+          const cells = row.children
+            .filter((cell) =>
+              isTag(cell)
+                ? !LAYOUT_TAGS.has(cell.name)
+                : textOf(cell).trim().length > 0,
+            )
             .map(
               (cell) =>
-                `<td>${cell.name === "xClmn" ? renderBlocks(cell, state) : renderBlock(cell, state)}</td>`,
+                `<td>${isTag(cell) && cell.name === "xClmn" ? renderBlocks(cell, state) : renderBlock(cell, state)}</td>`,
             )
             .join("\n");
           return `<tr>${cells}</tr>`;
         })
         .join("\n")}</table>`,
-    skip: LAYOUT_TAGS,
+    skip: (child) => LAYOUT_TAGS.has(child.name),
   });
-
-/** The list's own marker, stated once for every item. */
-const LIST_MARKER_TAGS = new Set([...LAYOUT_TAGS, "xBullet"]);
 
 const renderList = (element: Element, state: RenderState): string => {
   const bullet = childElements(element).find(
@@ -249,14 +259,17 @@ const renderList = (element: Element, state: RenderState): string => {
           (item) => `<dt>${marker}</dt>\n<dd>${renderBlocks(item, state)}</dd>`,
         )
         .join("\n")}</dl>`,
-    skip: LIST_MARKER_TAGS,
+    skip: (child) => child === bullet || LAYOUT_TAGS.has(child.name),
   });
 };
 
 const renderUnit = (element: Element, state: RenderState): string => {
-  const children = childElements(element);
-  const name = children.find((child) => child.name === "xName");
-  const rest = children.filter((child) => child !== name);
+  const name = childElements(element).find((child) => child.name === "xName");
+  const rest = element.children.filter(
+    (child) =>
+      child !== name && (isTag(child) || textOf(child).trim().length > 0),
+  );
+
   if (element.attribs["xIsTitle"] === "true") {
     const heading =
       name === undefined ? "" : `<h2>${escapeHtml(textOf(name).trim())}</h2>`;
@@ -265,7 +278,12 @@ const renderUnit = (element: Element, state: RenderState): string => {
   // A numbered point: its number opens its first paragraph, as printed.
   const label = unitLabel(name);
   const [first, ...others] = rest;
-  if (first?.name === "xText" && label.length > 0) {
+  if (
+    first !== undefined &&
+    isTag(first) &&
+    first.name === "xText" &&
+    label.length > 0
+  ) {
     return `<p>${escapeHtml(label)} ${renderInlines(first, state)}</p>${others
       .map((child) => renderBlock(child, state))
       .join("\n")}`;
@@ -274,7 +292,17 @@ const renderUnit = (element: Element, state: RenderState): string => {
   return `${opening}${rest.map((child) => renderBlock(child, state)).join("\n")}`;
 };
 
-const renderBlock = (element: Element, state: RenderState): string => {
+const renderBlock = (element: AnyNode, state: RenderState): string => {
+  if (!isTag(element)) {
+    if (
+      (!isText(element) && !isCDATA(element)) ||
+      textOf(element).trim().length === 0
+    ) {
+      return "";
+    }
+    state.unmapped.add(isText(element) ? "#text" : "#cdata");
+    return `<p>${renderInline(element, state)}</p>`;
+  }
   switch (element.name) {
     case "xText":
       return `<p>${renderInlines(element, state)}</p>`;
@@ -299,7 +327,8 @@ const renderBlock = (element: Element, state: RenderState): string => {
 };
 
 const renderBlocks = (element: Element, state: RenderState): string =>
-  childElements(element)
+  element.children
+    .filter((child) => isTag(child) || textOf(child).trim().length > 0)
     .map((child) => renderBlock(child, state))
     .join("\n");
 
@@ -320,8 +349,11 @@ export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
   };
   const children = childElements(root);
   const name = children.find((child) => child.name === "xName");
-  const html = children
-    .filter((child) => child !== name)
+  const html = root.children
+    .filter(
+      (child) =>
+        child !== name && (isTag(child) || textOf(child).trim().length > 0),
+    )
     .map((child) => renderBlock(child, state))
     .join("\n");
   const title =
@@ -341,15 +373,29 @@ const TEXT_ELEMENTS = new Set(["xText", "xTitle", "xName"]);
 
 const sourceParagraphsOf = (root: Element): string[] => {
   const paragraphs: string[] = [];
-  const walk = (element: Element): void => {
-    for (const child of childElements(element)) {
-      if (!TEXT_ELEMENTS.has(child.name)) {
-        walk(child);
-        continue;
+  const walk = (node: AnyNode): void => {
+    if (isTag(node)) {
+      if (LAYOUT_TAGS.has(node.name)) {
+        return;
       }
-      // The root's own name is the document's label, not its text.
-      const text =
-        element === root ? "" : textOf(child).replace(/\s+/gu, " ").trim();
+      if (TEXT_ELEMENTS.has(node.name)) {
+        // Only the root's own name labels the document rather than its text.
+        const text =
+          node.parent === root && node.name === "xName"
+            ? ""
+            : textOf(node).replace(/\s+/gu, " ").trim();
+        if (text.length > 0) {
+          paragraphs.push(text);
+        }
+        return;
+      }
+      for (const child of node.children) {
+        walk(child);
+      }
+      return;
+    }
+    if (isText(node) || isCDATA(node)) {
+      const text = textOf(node).replace(/\s+/gu, " ").trim();
       if (text.length > 0) {
         paragraphs.push(text);
       }

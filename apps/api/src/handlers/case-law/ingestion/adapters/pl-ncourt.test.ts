@@ -713,6 +713,137 @@ describe("the document", () => {
     },
   );
 
+  test.each([
+    "xPart",
+    "xUnit",
+    "xBlock",
+    "xRows",
+    "xRow",
+    "xClmn",
+    "xEnum",
+    "xEnumElem",
+  ])("text and CDATA directly in %s stay in document order", (tag) => {
+    const child = (text: string) => {
+      const paragraph = `<xText>${text}</xText>`;
+      switch (tag) {
+        case "xRows":
+          return `<xRow><xClmn>${paragraph}</xClmn></xRow>`;
+        case "xRow":
+          return `<xClmn>${paragraph}</xClmn>`;
+        case "xEnum":
+          return `<xEnumElem>${paragraph}</xEnumElem>`;
+        case "xPart":
+        case "xUnit":
+        case "xBlock":
+        case "xClmn":
+        case "xEnumElem":
+          return paragraph;
+        default: {
+          tag satisfies never;
+          return panic("unexpected paragraph container");
+        }
+      }
+    };
+    const wrap = (text: string) => {
+      const container = `<${tag}>${text}</${tag}>`;
+      switch (tag) {
+        case "xPart":
+          return container;
+        case "xRow":
+          return `<xPart><xRows>${container}</xRows></xPart>`;
+        case "xClmn":
+          return `<xPart><xRows><xRow>${container}</xRow></xRows></xPart>`;
+        case "xEnumElem":
+          return `<xPart><xEnum>${container}</xEnum></xPart>`;
+        case "xUnit":
+        case "xBlock":
+        case "xRows":
+        case "xEnum":
+          return `<xPart>${container}</xPart>`;
+        default: {
+          tag satisfies never;
+          return panic("unexpected document container");
+        }
+      }
+    };
+    const content =
+      readPlNcourtContent(
+        wrap(
+          `${child("Before")} Bare &amp; text <![CDATA[CDATA <content>]]>${child("After")}`,
+        ),
+      ) ?? panic("the document did not read");
+    expect(content.unmappedMarkup).toEqual(["#text", "#cdata"]);
+    expect(content.sourceParagraphs).toEqual([
+      "Before",
+      "Bare & text",
+      "CDATA <content>",
+      "After",
+    ]);
+    expect(content.html).toContain("<p> Bare &amp; text </p>");
+    expect(content.html).toContain("<p>CDATA &lt;content&gt;</p>");
+    const parsed = parsePlDecisionContent({
+      caseNumber: "I C 1/15",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "ordered-text",
+    });
+    const text = parsed.fulltext;
+    for (const fragment of [
+      "Before",
+      "Bare & text",
+      "CDATA <content>",
+      "After",
+    ]) {
+      expect(text.split(fragment)).toHaveLength(2);
+    }
+    expect(text.indexOf("Before")).toBeLessThan(text.indexOf("Bare & text"));
+    expect(text.indexOf("Bare & text")).toBeLessThan(
+      text.indexOf("CDATA <content>"),
+    );
+    expect(text.indexOf("CDATA <content>")).toBeLessThan(text.indexOf("After"));
+    const whitespace =
+      readPlNcourtContent(wrap(" \n <![CDATA[ \n ]]>")) ??
+      panic("the whitespace document did not read");
+    expect(whitespace.unmappedMarkup).toEqual([]);
+    expect(whitespace.sourceParagraphs).toEqual([]);
+    expect(whitespace.html).not.toContain("<p>");
+  });
+
+  test("CDATA inside a paragraph stays beside its inline text", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xText>Before <![CDATA[<quoted>]]> after</xText></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe("<p>Before &lt;quoted&gt; after</p>");
+    expect(content.sourceParagraphs).toEqual(["Before <quoted> after"]);
+    expect(content.unmappedMarkup).toEqual(["#cdata"]);
+  });
+
+  test("later list bullets appear once between their neighbouring items", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xEnum><xBullet>-</xBullet><xEnumElem><xText>First item</xText></xEnumElem><xBullet>Second marker</xBullet><xEnumElem><xText>Second item</xText></xEnumElem><xBullet>Third marker</xBullet></xEnum></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe(
+      "<dl><dt>-</dt>\n<dd><p>First item</p></dd></dl>\n<p>Second marker</p>\n<dl><dt>-</dt>\n<dd><p>Second item</p></dd></dl>\n<p>Third marker</p>",
+    );
+    expect(content.sourceParagraphs).toEqual([
+      "-",
+      "First item",
+      "Second marker",
+      "Second item",
+      "Third marker",
+    ]);
+    expect(content.unmappedMarkup).toEqual(["xBullet"]);
+  });
+
   test("a superscript stays apart from the number it follows", () => {
     const content = readPlNcourtContent(
       "<xPart><xBlock><xText>art. 353<xSUPx>1</xSUPx> k.c.</xText></xBlock></xPart>",
