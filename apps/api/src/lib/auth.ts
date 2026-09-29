@@ -127,6 +127,10 @@ import {
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes, isRecord } from "@/api/lib/type-guards";
+import {
+  checkMemberAdmission,
+  MEMBER_CAPACITY_REACHED_ERROR_CODE,
+} from "@/api/lib/usage/member-capacity";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
@@ -857,6 +861,24 @@ const createAuth = () => {
     twoFactorPlugin,
   ) satisfies BetterAuthPlugin;
 
+  const refuseBeyondMemberCapacity = async (
+    organizationId: SafeId<"organization">,
+    kind: "invitation" | "membership",
+  ): Promise<void> => {
+    const admission = await checkMemberAdmission(rootDb, {
+      organizationId,
+      kind,
+    });
+    // Better Auth rejects a request from an organization hook by the
+    // APIError it throws.
+    if (Result.isError(admission)) {
+      throw new APIError("FORBIDDEN", {
+        error: MEMBER_CAPACITY_REACHED_ERROR_CODE,
+        message: admission.error.message,
+      });
+    }
+  };
+
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
@@ -1220,6 +1242,27 @@ const createAuth = () => {
               enqueueCleanup: enqueueEntityDeletionCleanup,
               requestIds: teardown.value.requestIds,
             });
+          },
+          // A readable refusal before the plugin writes anything; the
+          // `member_organization_capacity` trigger is what holds the bound
+          // under concurrent additions.
+          async beforeCreateInvitation({ organization: org }) {
+            await refuseBeyondMemberCapacity(
+              brandPersistedOrganizationId(org.id),
+              "invitation",
+            );
+          },
+          async beforeAcceptInvitation({ organization: org }) {
+            await refuseBeyondMemberCapacity(
+              brandPersistedOrganizationId(org.id),
+              "membership",
+            );
+          },
+          async beforeAddMember({ organization: org }) {
+            await refuseBeyondMemberCapacity(
+              brandPersistedOrganizationId(org.id),
+              "membership",
+            );
           },
           async afterRemoveMember({
             member: removedMember,
@@ -1939,10 +1982,10 @@ const resolveValidateAuth = async (
 
   // Read before the request scope exists, at the same boundary as the
   // membership lookup above, so it goes through the same connection.
-  const orgSettings = await loadOrgSettingsForAuth(
-    rootDb,
-    activeOrganizationId,
-  );
+  const orgSettings = await loadOrgSettingsForAuth(rootDb, {
+    organizationId: activeOrganizationId,
+    userId,
+  });
   const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the

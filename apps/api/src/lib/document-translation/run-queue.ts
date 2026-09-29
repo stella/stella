@@ -379,7 +379,7 @@ const createAIContext = async (
   run: ClaimedRun,
 ): Promise<Result<BilingualAIContext, HandlerError>> => {
   const settings = await actor.scopedDb(
-    async (tx) => await loadOrgAISettings(tx, actor.organizationId),
+    async (tx) => await loadOrgAISettings(tx, actor),
   );
   if (Result.isError(settings)) {
     return Result.err(settings.error);

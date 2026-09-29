@@ -11,7 +11,7 @@ import { nameAliases } from "./lib/web-api-alias-names";
 
 const CONTRACT_FILE = "/virtual/eden-contract.ts";
 
-const aliasesOf = (source: string): Map<string, string> => {
+const programOf = (source: string) => {
   const options: ts.CompilerOptions = {
     strict: true,
     noEmit: true,
@@ -36,13 +36,40 @@ const aliasesOf = (source: string): Map<string, string> => {
   if (contractSource === undefined) {
     throw new Error("contract not loaded");
   }
-  const result = printContract({
+  return { program, contractSource, checker: program.getTypeChecker() };
+};
+
+const printSource = ({
+  program,
+  contractSource,
+}: ReturnType<typeof programOf>) =>
+  printContract({
     program,
     contractSource,
     webDependencies: new Set(),
     responseDates: "wire",
   });
-  return new Map(result.aliases.map(({ name, text }) => [name, text]));
+
+const aliasesOf = (source: string): Map<string, string> =>
+  new Map(
+    printSource(programOf(source)).aliases.map(({ name, text }) => [
+      name,
+      text,
+    ]),
+  );
+
+// A type alias declared in the contract module, resolved by the checker.
+const declaredType = (
+  { checker, contractSource }: ReturnType<typeof programOf>,
+  name: string,
+): ts.Type => {
+  const symbol = checker
+    .getSymbolsInScope(contractSource, ts.SymbolFlags.TypeAlias)
+    .find((candidate) => candidate.getName() === name);
+  if (symbol === undefined) {
+    throw new Error(`type ${name} not declared`);
+  }
+  return checker.getDeclaredTypeOfSymbol(symbol);
 };
 
 const SHARED = `
@@ -114,6 +141,71 @@ export type WebApiContract = {
 };
 `;
     expect(aliasesOf(reordered)).toEqual(aliasesOf(BEFORE));
+  });
+});
+
+// The compiler orders union members by type id, so by whichever member the
+// checker created first. `Primer` is resolved before printing and creates the
+// same member types in the opposite order; the contract itself is identical.
+const REVIEW = `
+type Review = {
+  impact?: "unknown" | "neutral" | "favourable" | "unfavourable";
+  score: 3 | 1 | 2 | 10 | null | undefined;
+  size: 10n | 2n;
+  mode: boolean | "auto";
+  list: string[] | number[];
+  tag: string | null;
+};
+export type WebApiContract = {
+  WebRoutes: {
+    reviews: { get: { response: { 200: Review; 404: { error: string } } } };
+  };
+};
+`;
+const PRIMER = `
+type Primer =
+  | "unfavourable" | "favourable" | "neutral" | "auto"
+  | 10 | 2 | 1 | 3 | 2n | 10n | number[] | string[];
+`;
+
+describe("generate-web-api-types union member order", () => {
+  const printed = (primed: boolean) => {
+    const compiled = programOf(`${primed ? PRIMER : ""}${REVIEW}`);
+    if (primed) {
+      declaredType(compiled, "Primer");
+    }
+    const review = declaredType(compiled, "Review");
+    const compilerOrder = compiled.checker
+      .getPropertiesOfType(review)
+      .map((property) => {
+        const type = compiled.checker.getTypeOfSymbol(property);
+        return (type.isUnion() ? type.types : [type]).map((member) =>
+          compiled.checker.typeToString(member),
+        );
+      });
+    return { compilerOrder, result: printSource(compiled) };
+  };
+
+  test("prints the same text whichever member the checker created first", () => {
+    const natural = printed(false);
+    const primed = printed(true);
+    // The fixture reaches the fault: the compiler's own member order differs.
+    expect(primed.compilerOrder).not.toEqual(natural.compilerOrder);
+    expect(primed.result.declarations).toEqual(natural.result.declarations);
+    expect(primed.result.aliases).toEqual(natural.result.aliases);
+  });
+
+  test("orders literals by value, then null, then undefined", () => {
+    const [routes] = printed(false).result.declarations;
+    const text = routes?.text ?? "";
+    expect(text).toContain(
+      'impact?: "favourable" | "neutral" | "unfavourable" | "unknown" | undefined;',
+    );
+    expect(text).toContain("score: (1 | 2 | 3 | 10 | null | undefined);");
+    expect(text).toContain("size: (2n | 10n);");
+    expect(text).toContain('mode: ("auto" | false | true);');
+    expect(text).toContain("list: (Array<number> | Array<string>);");
+    expect(text).toContain("tag: (string | null)");
   });
 });
 

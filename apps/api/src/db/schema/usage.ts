@@ -126,6 +126,10 @@ export const usagePolicies = p.pgTable(
     storageBytesPerAssignment: p.bigint("storage_bytes_per_assignment", {
       mode: "bigint",
     }),
+    // Operator-seeded member bound, read through the
+    // `organization_member_capacity` database function together with the
+    // seat count of a per-seat policy. Null = the policy sets no bound.
+    maxMembers: p.integer("max_members"),
     // Hidden by default: a seeded policy only appears in the catalog
     // endpoint once the operator explicitly marks it public.
     visibility: p
@@ -180,6 +184,10 @@ export const usagePolicies = p.pgTable(
     p.check(
       "usage_policies_storage_bytes_nonneg",
       sql`storage_bytes_per_assignment IS NULL OR storage_bytes_per_assignment >= 0`,
+    ),
+    p.check(
+      "usage_policies_max_members_positive",
+      sql`max_members IS NULL OR max_members > 0`,
     ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")

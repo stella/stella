@@ -65,6 +65,12 @@ const usagePolicySeedSchema = v.pipe(
       ),
       null,
     ),
+    maxMembers: v.optional(
+      v.nullable(
+        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(PG_INT4_MAX)),
+      ),
+      null,
+    ),
     visibility: v.optional(v.picklist(USAGE_POLICY_VISIBILITIES), "hidden"),
     sortOrder: v.optional(
       v.pipe(
@@ -132,6 +138,7 @@ const seed = async (): Promise<void> => {
             seedPolicy.storageBytesPerAssignment === null
               ? null
               : BigInt(seedPolicy.storageBytesPerAssignment),
+          maxMembers: seedPolicy.maxMembers,
           visibility: seedPolicy.visibility,
           sortOrder: seedPolicy.sortOrder,
         })
@@ -151,6 +158,7 @@ const seed = async (): Promise<void> => {
               seedPolicy.storageBytesPerAssignment === null
                 ? null
                 : BigInt(seedPolicy.storageBytesPerAssignment),
+            maxMembers: seedPolicy.maxMembers,
             visibility: seedPolicy.visibility,
             sortOrder: seedPolicy.sortOrder,
           },
