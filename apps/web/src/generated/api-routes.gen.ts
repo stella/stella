@@ -3488,7 +3488,7 @@ export type WebRoutes = {
               taxId?: string;
               birthDate?: string;
               companyId?: string;
-              check: Ta70e9835f3;
+              check: ("cz-insolvency" | "cz-vat-reliability" | "sanctions");
               subjectType: ("company-id" | "organization" | "person" | "tax-id");
             };
             params: T5e3ac29766;
@@ -3523,19 +3523,19 @@ export type WebRoutes = {
                 status: ("clear" | "possible-match" | "unavailable");
                 checkedAt: string;
                 cutoff: number;
-                lists: Array<((Td7507827a3 & Tf0ef1a069d & {
+                lists: Array<((T304328c782 & Tf0ef1a069d & {
                   status: "clear";
                   reason: null;
                   totalMatches: 0;
                   truncated: false;
                   possibleMatches: T9449cd95bd;
-                }) | (Td7507827a3 & Tf0ef1a069d & {
+                }) | (T304328c782 & Tf0ef1a069d & {
                   status: "possible-match";
                   reason: null;
                   totalMatches: number;
                   truncated: Tfddd645dc8;
                   possibleMatches: [Teae76f4456, ...Teae76f4456[]];
-                }) | (Td7507827a3 & {
+                }) | (T304328c782 & {
                   status: "unavailable";
                   reason: ("access-denied" | "company-not-found" | "load-failed" | "not-loaded" | "registry-unavailable" | "stale");
                   editionId: Tbe0400fa4c;
@@ -3555,7 +3555,7 @@ export type WebRoutes = {
                     type: "company-id";
                     value: string;
                     country: T4b2953aefa;
-                    registry: T347d72c6fa;
+                    registry: ("ares" | "rpo");
                   } | null;
                 } | {
                   type: "person";
@@ -32308,30 +32308,14 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   __toolSide: "client";
   name: "counterparty_check";
   description: string;
-  inputSchema?: {
-    readonly "~standard": {
-      readonly jsonSchema: Tc49e8b2305;
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T8781f5ded9 | undefined;
-    };
-  } & {
-    readonly "~standard": {
-      readonly validate: {
-        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T6456781f78 | Promise<(Tfc86db9c4b | T6456781f78)>);
-      };
-      readonly version: 1;
-      readonly vendor: string;
-      readonly types?: T8781f5ded9 | undefined;
-    };
-  };
+  inputSchema?: tanstack_ai_JSONSchema;
   outputSchema?: undefined;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T78e9417443, context?: Tc88149628d): unknown;
+    (args: unknown, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -33416,7 +33400,7 @@ export type ChatUITools = {
     output: unknown;
   };
   counterparty_check: {
-    input: T78e9417443;
+    input: unknown;
     output: unknown;
   };
   boe_search_legislation: {
@@ -35706,6 +35690,18 @@ type T3012ed5aad = {
   readonly issues?: undefined;
 };
 
+type T304328c782 = {
+  source: ("ch" | "cz" | "eu" | "uk" | "un" | "us-non-sdn" | "us-sdn");
+  issuer: ("CH" | "CZ" | "EU" | "GB" | "UA" | "UN" | "US");
+  classification: ("binding" | "informational");
+  pendingUpdate: {
+    code: ("below-minimum" | "contracted" | "source-mismatch" | "stale");
+    heldAt: string;
+    previousCount: T588d0ee653;
+    nextCount: T588d0ee653;
+  } | null;
+};
+
 type T310abc7c1b = {
   pattern: Tbe0400fa4c;
   range: Tbe0400fa4c;
@@ -36868,11 +36864,6 @@ type T641b83000f = {
   readonly issues?: undefined;
 };
 
-type T6456781f78 = {
-  readonly value: Tc3e3523a04;
-  readonly issues?: undefined;
-};
-
 type T64c3504dad = {
   skillName: string;
 };
@@ -37364,41 +37355,6 @@ type T78cf7de591 = {
   workspaceId: string;
 };
 
-type T78e9417443 = {
-  check: Ta70e9835f3;
-  subject: {
-    type: "company-id";
-    company_id: string;
-    country?: string | undefined;
-  } | {
-    type: "tax-id";
-    tax_id: string;
-  } | {
-    type: "person";
-    first_name: string;
-    last_name: string;
-    birth_date?: string | undefined;
-    date_of_birth?: {
-      precision: "year";
-      year: number;
-    } | {
-      precision: "month";
-      year: number;
-      month: number;
-    } | {
-      precision: "day";
-      year: number;
-      month: number;
-      day: number;
-    } | undefined;
-    nationality_codes?: Array<string> | undefined;
-  } | {
-    type: "organization";
-    name: string;
-    company_id?: string | undefined;
-  };
-};
-
 type T7906e8b72f = "private" | "team";
 
 type T79f23715fc = {
@@ -37693,11 +37649,6 @@ type T870458a513 = "matters" | "organization";
 type T8723d9d642 = {
   code?: string;
   message: string;
-};
-
-type T8781f5ded9 = {
-  readonly input: T78e9417443;
-  readonly output: Tc3e3523a04;
 };
 
 type T87d6a3582a = {
@@ -38501,8 +38452,6 @@ type Ta70c642bca = {
   output?: Tddb0458281;
 } & T4d73965770;
 
-type Ta70e9835f3 = "cz-insolvency" | "cz-vat-reliability" | "sanctions";
-
 type Ta716eb8a48 = {
   dataBoxes?: Array<{
     label?: string;
@@ -39226,41 +39175,6 @@ type Tc38488b75b = {
   status: "error";
 };
 
-type Tc3e3523a04 = {
-  check: Ta70e9835f3;
-  subject: {
-    type: "company-id";
-    company_id: string;
-    country?: string | undefined;
-  } | {
-    type: "tax-id";
-    tax_id: string;
-  } | {
-    type: "person";
-    first_name: string;
-    last_name: string;
-    birth_date?: string | undefined;
-    date_of_birth?: {
-      precision: "year";
-      year: number;
-    } | {
-      precision: "month";
-      year: number;
-      month: number;
-    } | {
-      precision: "day";
-      year: number;
-      month: number;
-      day: number;
-    } | undefined;
-    nationality_codes?: Array<string> | undefined;
-  } | {
-    type: "organization";
-    name: string;
-    company_id?: string | undefined;
-  };
-};
-
 type Tc42c89297d = {
   text?: string;
   snippet?: string;
@@ -39753,14 +39667,6 @@ type Td6c4fb13a4 = string & valibot_Brand<"SafeId"> & {
 
 type Td6d5acce5e = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "signal";
-};
-
-type Td7507827a3 = {
-  source: ("cz" | "eu" | "uk" | "un" | "us-non-sdn" | "us-sdn");
-  issuer: ("CH" | "CZ" | "EU" | "GB" | "UA" | "UN" | "US");
-  issuerName: string;
-  classification: ("binding" | "informational");
-  checkedAt: string;
 };
 
 type Td7a8af8a91 = {
