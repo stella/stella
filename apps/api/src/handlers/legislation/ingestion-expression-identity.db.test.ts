@@ -21,6 +21,7 @@ import type {
   VersionWindowEnd,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -429,7 +430,7 @@ describe("legislation writer identity", () => {
       .where(eq(legislationDocuments.id, stored.id));
 
     // The same content: only the disposition differs from what is stored.
-    const relisted = await store(input);
+    const relisted = await store({ ...input, origin: "live" });
 
     expect(relisted).toMatchObject({ id: stored.id, skipped: false });
     expect(await rowsOf(act)).toEqual([
@@ -634,8 +635,13 @@ describe("legislation writer identity", () => {
     }
   });
 
-  test("a live listing lifts only a withdrawal for being unlisted; a snapshot or a replay lifts none", async () => {
-    const origins = ["live", "bulk-snapshot", "stored-raw-replay"] as const;
+  test("a live listing lifts only a withdrawal for being unlisted; a snapshot, a replay or an unstated origin lifts none", async () => {
+    const origins = [
+      "live",
+      "bulk-snapshot",
+      "stored-raw-replay",
+      undefined,
+    ] as const;
     const bases = [
       "publisher-unlisted",
       "listed-not-stored",
@@ -659,7 +665,7 @@ describe("legislation writer identity", () => {
         // The same content: only the observation's origin varies.
         await store({ ...input, origin });
         const [after] = await rowsOf(`2031/${act}`);
-        outcomes[`${basis} ${origin}`] =
+        outcomes[`${basis} ${origin ?? "unstated"}`] =
           `${after?.disposition ?? "missing"} ${after?.basis ?? ""}`.trim();
       }
     }
@@ -668,14 +674,107 @@ describe("legislation writer identity", () => {
       "publisher-unlisted live": "effective",
       "publisher-unlisted bulk-snapshot": "withdrawn publisher-unlisted",
       "publisher-unlisted stored-raw-replay": "withdrawn publisher-unlisted",
+      "publisher-unlisted unstated": "withdrawn publisher-unlisted",
       "listed-not-stored live": "effective",
       "listed-not-stored bulk-snapshot": "withdrawn listed-not-stored",
       "listed-not-stored stored-raw-replay": "withdrawn listed-not-stored",
+      "listed-not-stored unstated": "withdrawn listed-not-stored",
       "deferred-promulgated live": "withdrawn deferred-promulgated",
       "deferred-promulgated bulk-snapshot": "withdrawn deferred-promulgated",
       "deferred-promulgated stored-raw-replay":
         "withdrawn deferred-promulgated",
+      "deferred-promulgated unstated": "withdrawn deferred-promulgated",
     });
+  });
+
+  test("a withdrawal committed between the writer's read and its write is kept", async () => {
+    const act = "2021/98";
+    const input = version({ act, validFrom: "2021-06-01" });
+    const stored = await store(input);
+    const revised = { ...input, title: "Revised", origin: "live" } as const;
+    // The census commits right after the writer's lookup, before its write.
+    let calls = 0;
+    const interleaved: ScopedDb = async (fn) => {
+      const result = await scopedDb(fn);
+      calls += 1;
+      if (calls === 1) {
+        await db
+          .update(legislationDocuments)
+          .set({
+            windowDisposition: "withdrawn",
+            windowDispositionBasis: "deferred-promulgated",
+          })
+          .where(eq(legislationDocuments.id, stored.id));
+      }
+      return result;
+    };
+
+    const written = await store(revised, interleaved);
+    const replayed = await store(revised);
+
+    expect(written).toMatchObject({ id: stored.id, skipped: false });
+    // The payload is refreshed, the withdrawal kept, and the hash is the one
+    // the kept classification gives, so the next pass is a fixed point.
+    expect(await rowsOf(act)).toEqual([
+      expect.objectContaining({
+        title: "Revised",
+        disposition: "withdrawn",
+        basis: "deferred-promulgated",
+      }),
+    ]);
+    expect(replayed).toMatchObject({ id: stored.id, skipped: true });
+  });
+
+  test("a typed version on a key another version holds fails loudly and changes nothing", async () => {
+    // Until the version-window keys are retired, a start is still a key: the
+    // version replaced the day it opened shares its start with its successor,
+    // and a work holds one version without a start.
+    const uniqueViolation = async (input: LegislationDocumentInput) => {
+      const error = await store(input).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      let cause: unknown = error;
+      while (isRecord(cause) && typeof cause["code"] !== "string") {
+        cause = cause["cause"];
+      }
+      return isRecord(cause) ? cause["code"] : error;
+    };
+    const act = "2022/99";
+    await store(version({ act, validFrom: "2023-01-01" }));
+    await store({
+      ...version({ act, validFrom: "2000-01-01", iri: iriOf(act, "a") }),
+      version: {
+        type: "never-in-force",
+        validFrom: null,
+        end: { type: "open" },
+        basis: "publisher-flag",
+      },
+    });
+    const before = await rowsOf(act);
+
+    const replacedSameDay = await uniqueViolation({
+      ...version({ act, validFrom: "2023-01-01", iri: iriOf(act, "b") }),
+      version: {
+        type: "never-in-force",
+        validFrom: "2023-01-01",
+        end: { type: "last-day-in-force", on: "2022-12-31" },
+        basis: "replaced-same-day",
+      },
+    });
+    const secondWithoutStart = await uniqueViolation({
+      ...version({ act, validFrom: "2000-01-01", iri: iriOf(act, "c") }),
+      version: {
+        type: "invalid-window",
+        validFrom: null,
+        end: { type: "open" },
+        basis: "missing-start",
+      },
+    });
+
+    expect(before).toHaveLength(2);
+    expect([replacedSameDay, secondWithoutStart]).toEqual(["23505", "23505"]);
+    expect(await rowsOf(act)).toEqual(before);
   });
 
   // Last: it retires the version-window key the other tests still rely on,

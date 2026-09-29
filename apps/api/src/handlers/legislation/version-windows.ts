@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { LEGISLATION_WINDOW_DISPOSITION_BASES } from "@stll/api-contract/legislation-expression";
 import { Temporal } from "@stll/time";
 
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
@@ -111,6 +112,13 @@ export const storedWindow = (version: VersionWindow): StoredWindow => {
     // and the junction check would not see it (it compares neighbours, not a
     // window with itself). One the publisher really states that way is
     // declared `invalid-window`.
+    // Nor can a window with no start; the publisher's own start-less version
+    // is `invalid-window` / `missing-start`.
+    if (shape === "missing-start") {
+      return panic("legislation version window has no start", {
+        end: version.end,
+      });
+    }
     if (shape === "zero-length" || shape === "reversed") {
       return panic("legislation version window closes on or before it opens", {
         validFrom: opens?.toString(),
@@ -119,6 +127,19 @@ export const storedWindow = (version: VersionWindow): StoredWindow => {
       });
     }
   } else {
+    // Read as data, not trusted as typed: a connector may pass a basis its
+    // disposition does not have, or one this contract does not know.
+    const bases: readonly string[] | undefined =
+      LEGISLATION_WINDOW_DISPOSITION_BASES[version.type];
+    if (bases === undefined || !bases.includes(version.basis)) {
+      return panic(
+        "legislation version window basis is not its disposition's",
+        {
+          type: version.type,
+          basis: version.basis,
+        },
+      );
+    }
     const shapes: readonly string[] | null = BASIS_SHAPES[version.basis];
     if (shapes !== null && !shapes.includes(shape)) {
       return panic("legislation version window does not match its basis", {

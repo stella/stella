@@ -526,8 +526,9 @@ const LIFTED_BY_A_LIVE_LISTING: readonly LegislationWindowDispositionBasis[] = [
  * What the row will say the version is: what the input states, unless the
  * stored row is a withdrawal this observation cannot lift. Then the row keeps
  * exactly what it holds (kind, disposition and basis), and only its payload is
- * refreshed. A snapshot or a replay of a stored payload proves what the
- * publisher listed then, not now, so it lifts none.
+ * refreshed. Only an observation declared `live` lifts one: a snapshot, a
+ * replay of a stored payload, or a writer that states no origin proves what
+ * the publisher listed at some point, not now.
  */
 const storedClassification = (
   input: LegislationDocumentInput,
@@ -538,7 +539,7 @@ const storedClassification = (
     return stated;
   }
   const lifted =
-    (input.origin ?? "live") === "live" &&
+    input.origin === "live" &&
     existing.windowDispositionBasis !== null &&
     LIFTED_BY_A_LIVE_LISTING.includes(existing.windowDispositionBasis);
   return lifted
@@ -621,25 +622,27 @@ const workOf = (input: LegislationDocumentInput): SQL | undefined =>
     eq(legislationDocuments.language, input.language),
   );
 
-const selectStoredVersionTx = async (
+const storedVersionQuery = (tx: Transaction, where: SQL | undefined) =>
+  tx
+    .select(STORED_VERSION_COLUMNS)
+    .from(legislationDocuments)
+    .where(where)
+    // Deterministic should a duplicate ever exist.
+    .orderBy(asc(legislationDocuments.id))
+    .limit(1);
+
+/** The row, locked for the write that decides from it. */
+const lockStoredVersionTx = async (
   tx: Transaction,
   where: SQL | undefined,
 ): Promise<StoredVersion | undefined> =>
-  (
-    await tx
-      .select(STORED_VERSION_COLUMNS)
-      .from(legislationDocuments)
-      .where(where)
-      // Deterministic should a duplicate ever exist.
-      .orderBy(asc(legislationDocuments.id))
-      .limit(1)
-  ).at(0);
+  (await storedVersionQuery(tx, where).for("update")).at(0);
 
 const selectStoredVersion = async (
   scopedDb: ScopedDb,
   where: SQL | undefined,
 ): Promise<StoredVersion | undefined> =>
-  await scopedDb(async (tx) => await selectStoredVersionTx(tx, where));
+  await scopedDb(async (tx) => (await storedVersionQuery(tx, where)).at(0));
 
 const byPublisherId = (
   input: LegislationDocumentInput,
@@ -842,8 +845,8 @@ export const processLegislationDocument = async (
   const expectedContentHash = corpusContentHash({ text, sections, ast });
 
   let existing = await findStoredVersion({ input, window, scopedDb });
-  const classification = storedClassification(input, stated, existing);
-  const sourceHash = legislationSourceHash(input, window, classification);
+  let classification = storedClassification(input, stated, existing);
+  let sourceHash = legislationSourceHash(input, window, classification);
   const existingCorpusPlan =
     existing === undefined
       ? null
@@ -909,8 +912,6 @@ export const processLegislationDocument = async (
     sourceUrl: input.sourceUrl ?? null,
     documentUrl: input.documentUrl ?? null,
     metadata: input.metadata ?? {},
-    sourceHash,
-    ...classification,
     ...sourceRaw,
     ...(corpus.mode === "off"
       ? {
@@ -926,35 +927,64 @@ export const processLegislationDocument = async (
    * Update the version's row, or insert it. Under the identity lock a writer
    * that found nothing looks once more before inserting: a concurrent writer
    * may have stored the version since, and then its row is this version's row.
+   *
+   * The row is read again under its lock and the classification decided from
+   * that read, not the one before the payload write: a withdrawal committed in
+   * between is what the row now says, and a write decided from the older read
+   * would lift it.
    */
   const written = await scopedDb(async (tx) => {
     await declareWriterContract(tx);
     const publisherId = input.expression?.publisherId;
-    let row = existing;
+    let row =
+      existing === undefined
+        ? undefined
+        : await lockStoredVersionTx(
+            tx,
+            eq(legislationDocuments.id, existing.id),
+          );
     if (row === undefined && publisherId !== undefined) {
       await lockExpressionIdentity(tx, input, publisherId);
-      row = await selectStoredVersionTx(tx, byPublisherId(input, publisherId));
+      row = await lockStoredVersionTx(tx, byPublisherId(input, publisherId));
     }
+    const decided = storedClassification(input, stated, row);
+    const decidedValues = {
+      ...values,
+      ...decided,
+      sourceHash: legislationSourceHash(input, window, decided),
+    };
     // audit: skip — background legislation ingestion; public data, not user actions
     if (row !== undefined) {
       await tx
         .update(legislationDocuments)
-        .set({ ...values, updatedAt: new Date() })
+        .set({ ...decidedValues, updatedAt: new Date() })
         .where(eq(legislationDocuments.id, row.id));
-      return { id: row.id, row };
+      return {
+        id: row.id,
+        row,
+        classification: decided,
+        sourceHash: decidedValues.sourceHash,
+      };
     }
     const [insertedRow] = await tx
       .insert(legislationDocuments)
-      .values({ ...values, publisherExpressionId: publisherId ?? null })
+      .values({ ...decidedValues, publisherExpressionId: publisherId ?? null })
       .returning({ id: legislationDocuments.id });
     if (!insertedRow) {
       panic("Failed to insert legislation document");
     }
-    return { id: insertedRow.id, row: undefined };
+    return {
+      id: insertedRow.id,
+      row: undefined,
+      classification: decided,
+      sourceHash: decidedValues.sourceHash,
+    };
   });
   const { id } = written;
   const inserted = written.row === undefined;
   existing = written.row;
+  classification = written.classification;
+  sourceHash = written.sourceHash;
 
   await reportWindowJunctions({
     input,
@@ -1136,8 +1166,13 @@ export const runLegislationIngestion = async ({
     for (const document of documents) {
       const checked = restrictLegislationDocumentUrls({
         // The runner holds the source row, so it stamps the identity rather
-        // than making every adapter recover it from its config.
-        document: { ...document, sourceId: source.id },
+        // than making every adapter recover it from its config. A page an
+        // adapter fetched is live unless the adapter says otherwise.
+        document: {
+          ...document,
+          sourceId: source.id,
+          origin: document.origin ?? "live",
+        },
         hostPolicy: adapter.outboundHostPolicy,
       });
       for (const refusal of checked.refusals) {

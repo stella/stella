@@ -60,11 +60,11 @@ export type VersionWindowEnd =
   | { type: "last-day-in-force"; on: string };
 
 /** Why a version the publisher states never applied carries that reading. */
-export type NeverInForceBasis =
+type NeverInForceBasis =
   (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)["never-in-force"][number];
 
 /** Which way a publisher's stated window fails to place a single day. */
-export type InvalidWindowBasis =
+type InvalidWindowBasis =
   (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)["invalid-window"][number];
 
 /**
@@ -159,10 +159,12 @@ export type LegislationDocumentInput = {
    */
   expression?: LegislationExpressionIdentity | undefined;
   /**
-   * Where the observation comes from; omitted means live. Only a live one
-   * restores a withdrawn version, and only one withdrawn for no longer being
-   * listed: an observation of what the publisher listed earlier does not
-   * prove it lists the version now.
+   * Where the observation comes from. Only one declared `live` restores a
+   * withdrawn version, and only one withdrawn for no longer being listed: an
+   * observation of what the publisher listed earlier does not prove it lists
+   * the version now. Omitted, it restores none, so a writer that predates the
+   * field cannot lift a withdrawal. `runLegislationIngestion` states `live`
+   * for the pages it fetches.
    */
   origin?: LegislationObservationOrigin | undefined;
   fulltext?: string | null;

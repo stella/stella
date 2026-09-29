@@ -247,6 +247,34 @@ describe("a window that cannot apply, stored as stated", () => {
     }
   });
 
+  test("a connector's untyped input is named, not stored or thrown as a TypeError", () => {
+    // What a connector outside the type system can still pass.
+    const untyped = (value: unknown): VersionWindow =>
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- stands in for a connector that bypasses the contract's types
+      value as VersionWindow;
+
+    expect(() =>
+      storedWindow(
+        untyped({
+          type: "consolidation",
+          validFrom: null,
+          end: { type: "open" },
+        }),
+      ),
+    ).toThrow("has no start");
+    for (const [type, basis] of [
+      ["invalid-window", "publisher-flag"],
+      ["never-in-force", "reversed"],
+      ["never-in-force", "not-a-basis"],
+    ] as const) {
+      expect(() =>
+        storedWindow(
+          untyped({ type, validFrom: null, end: { type: "open" }, basis }),
+        ),
+      ).toThrow("basis is not its disposition's");
+    }
+  });
+
   test("a window that cannot apply is still read strictly", () => {
     expect(() =>
       storedWindow({
