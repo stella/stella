@@ -12,7 +12,8 @@ type BaselineEntry = {
 };
 type Baseline = Record<string, BaselineEntry>;
 
-const fail = (message: string): never => {
+// The explicit annotation lets TypeScript narrow after `fail(...)` calls.
+const fail: (message: string) => never = (message) => {
   process.stderr.write(`${message}\n`);
   process.exit(1);
 };
@@ -216,10 +217,11 @@ const usage = `Usage:
 
 const option = (args: string[], name: string): string => {
   const index = args.indexOf(name);
-  if (index === -1 || !args[index + 1] || args[index + 1]?.startsWith("--")) {
+  const value = index === -1 ? undefined : args[index + 1];
+  if (!value || value.startsWith("--")) {
     return fail(`missing value for ${name}\n${usage}`);
   }
-  return args[index + 1];
+  return value;
 };
 
 const main = (): void => {

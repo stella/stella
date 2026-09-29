@@ -147,9 +147,9 @@ describe("network baseline scope", () => {
       expect(validateBaselineFile(validPath)).toEqual({ "/": entry(1) });
       writeFileSync(oversizedPath, " ".repeat(5 * 1024 * 1024 + 1));
       symlinkSync(validPath, symlinkPath);
-      for (const [file, message] of [
-        [oversizedPath, "exceeds"],
-        [symlinkPath, "must not be a symlink"],
+      for (const { file, message } of [
+        { file: oversizedPath, message: "exceeds" },
+        { file: symlinkPath, message: "must not be a symlink" },
       ]) {
         const result = Bun.spawnSync([
           "bun",
