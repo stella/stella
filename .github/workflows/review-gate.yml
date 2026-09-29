@@ -28,10 +28,10 @@ on:
   # A re-request for a review restarts that reviewer's wait.
   issue_comment:
     types: [created]
-  # Reviewers that report as a commit status or a check run.
+  # Reviewers that report as a commit status. None reports as a check run,
+  # so there is no `check_run` trigger, whose runs would all be no-ops on
+  # other apps' checks; a test holds the triggers to the configured signals.
   status:
-  check_run:
-    types: [completed]
   workflow_run:
     workflows: [Review Gate Signal]
     types: [requested]
@@ -47,17 +47,17 @@ on:
         type: number
 
 # A run joins its group before the job's `if:` is read, so every event lands
-# here, including the many statuses and check runs no reviewer sends. GitHub
-# also replaces a pending run whenever another joins its group, whatever
-# cancel-in-progress says, so only a group of its own keeps a run.
+# here, including the statuses no reviewer sends. GitHub also replaces a
+# pending run whenever another joins its group, whatever cancel-in-progress
+# says, so only a group of its own keeps a run.
 #
 # Own groups, which nothing supersedes:
 # - a pull request event's run, listed among the pull request's own checks,
 #   where a cancelled run shows as a failure;
 # - a merge group's run, its commit's only evaluation until the next sweep;
-# - statuses and check runs, which arrive from every app, and only the script
-#   can tell a reviewer's from the rest: sharing a group would let any app's
-#   no-op replace a pending evaluation;
+# - statuses, which arrive from every app, and only the script can tell a
+#   reviewer's from the rest: sharing a group would let any app's no-op
+#   replace a pending evaluation;
 # - the sweep, the fallback for everything else, never cut short mid-pass.
 #
 # Shared groups: review relays queue per head commit, and comments and
@@ -69,7 +69,7 @@ concurrency:
     review-gate-${{
       github.event_name == 'pull_request_target' && format('run-{0}', github.run_id)
       || github.event.workflow_run.event == 'merge_group' && format('run-{0}', github.run_id)
-      || contains(fromJSON('["status","check_run"]'), github.event_name) && format('run-{0}', github.run_id)
+      || github.event_name == 'status' && format('run-{0}', github.run_id)
       || github.event_name == 'schedule' && format('run-{0}', github.run_id)
       || github.event.workflow_run.head_sha
       || github.event.issue.number
@@ -84,9 +84,9 @@ jobs:
   publish:
     # Only the default branch's definition publishes; a dispatch from another
     # branch would otherwise run that branch's copy with a write token.
-    # Whether a status or check run comes from a reviewer is decided by the
-    # script against .github/review-gate.yml, the one list of reviewers; a
-    # run for anyone else's exits there without an API call.
+    # Whether a status comes from a reviewer is decided by the script against
+    # .github/review-gate.yml, the one list of reviewers; a run for anyone
+    # else's exits there without an API call.
     if: >-
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
       && (github.event_name != 'pull_request_target'
@@ -96,7 +96,6 @@ jobs:
           && github.event.comment.user.type != 'Bot'
           && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)))
       && (github.event_name != 'status' || github.event.state != 'pending')
-      && (github.event_name != 'check_run' || github.event.check_run.app.slug != 'github-actions')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -130,8 +129,6 @@ jobs:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           STATUS_SHA: ${{ github.event.sha }}
           STATUS_CONTEXT: ${{ github.event.context }}
-          CHECK_SHA: ${{ github.event.check_run.head_sha }}
-          CHECK_NAME: ${{ github.event.check_run.name }}
           RELAY_EVENT: ${{ github.event.workflow_run.event }}
           RELAY_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           RELAY_PULL_REQUESTS: ${{ join(github.event.workflow_run.pull_requests.*.number, ',') }}
@@ -139,7 +136,6 @@ jobs:
           set -euo pipefail
           case "$EVENT_NAME" in
             status) bun scripts/review-gate-github.ts sha "$STATUS_SHA" --signal "$STATUS_CONTEXT" ;;
-            check_run) bun scripts/review-gate-github.ts sha "$CHECK_SHA" --signal "$CHECK_NAME" ;;
             workflow_run) bun scripts/review-gate-github.ts relay ;;
             schedule) bun scripts/review-gate-github.ts sweep ;;
             *) bun scripts/review-gate-github.ts pr "$PR_NUMBER" --head "$PR_HEAD" ;;

@@ -78,15 +78,33 @@ const DEFAULT_BRANCH_TRIGGERS = [
   "workflow_dispatch",
 ];
 
+// The triggers that carry a reviewer's own report, each needed exactly when
+// some configured reviewer reports that way: without one, that reviewer is
+// heard only by the sweep; with one no reviewer needs, every run is a no-op
+// that still waits for a runner.
+const SIGNAL_TRIGGERS: Record<string, boolean> = {
+  status: config.reviewers.some(({ done }) => done.commitStatus !== null),
+  check_run: config.reviewers.some(({ done }) => done.checkRun !== null),
+};
+
 describe("the publisher", () => {
   // Both directions: an added trigger could run a pull request's own
   // definition, and a dropped one silently stops pushes, the relay, or the
   // sweep that applies timeouts and catches resolved threads.
   test("runs on exactly the triggers that execute the default branch's definition", () => {
     expect(Object.keys(publisher.on).toSorted()).toEqual(
-      DEFAULT_BRANCH_TRIGGERS.toSorted(),
+      DEFAULT_BRANCH_TRIGGERS.filter(
+        (trigger) => SIGNAL_TRIGGERS[trigger] !== false,
+      ).toSorted(),
     );
   });
+
+  test.each(Object.entries(SIGNAL_TRIGGERS))(
+    "has the %s trigger exactly when a configured reviewer reports that way",
+    (trigger, needed) => {
+      expect(Object.hasOwn(publisher.on, trigger)).toBe(needed);
+    },
+  );
 
   test("publishes only from the default branch ref", () => {
     for (const job of Object.values(publisher.jobs)) {
@@ -182,9 +200,9 @@ describe("the publisher's concurrency", () => {
       `github.event_name == 'pull_request_target' && ${OWN_GROUP}`,
       // The group commit's only evaluation until the next sweep.
       `github.event.workflow_run.event == 'merge_group' && ${OWN_GROUP}`,
-      // Every app's statuses and check runs arrive, and only the script can
-      // tell a reviewer's from the rest: a no-op must never replace a run.
-      `contains(fromJSON('["status","check_run"]'), github.event_name) && ${OWN_GROUP}`,
+      // Every app's statuses arrive, and only the script can tell a
+      // reviewer's from the rest: a no-op must never replace a run.
+      `github.event_name == 'status' && ${OWN_GROUP}`,
       // The sweep, the fallback for every group, never cut short mid-pass.
       `github.event_name == 'schedule' && ${OWN_GROUP}`,
     ]);
