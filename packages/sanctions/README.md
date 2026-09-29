@@ -25,6 +25,7 @@ a credential.
 | Czech national sanctions list            | [MFA publication page](https://mzv.gov.cz/jnp/cz/zahranicni_vztahy/sankcni_politika/sankcni_seznam_cr/vnitrostatni_sankcni_seznam.html) | `parseCzList({ csv, fileNameOrUrl })` | date in the file name            | Dated CSV link on the publication page                                                                   |
 | US OFAC SDN                              | [SLS SDN XML](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML)                                       | `parseOfacList("us-sdn", stream)`     | `Publish_Date`                   | HTTP HEAD `Last-Modified`                                                                                |
 | US OFAC consolidated non-SDN             | [SLS consolidated XML](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONSOLIDATED.XML)                     | `parseOfacList("us-non-sdn", stream)` | `Publish_Date`                   | HTTP HEAD `Last-Modified`                                                                                |
+| UK Sanctions List                        | [FCDO XML](https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml)                                                                | `parseUkList(stream)`                 | `DateGenerated`                  | HTTP HEAD `Last-Modified`                                                                                |
 
 Every parser returns a `Result`: the complete list or a
 `SanctionsListParseError`, never the entries read before a problem. The XML
@@ -37,6 +38,12 @@ A parse proves a file well formed, not complete. Before a new edition replaces
 the one in use, `checkListReplacement({ previous, next })` refuses a first
 edition below the source's minimum and an edition that shrank more than the
 source's policy allows.
+
+The [UK Sanctions List](https://www.gov.uk/government/publications/the-uk-sanctions-list)
+is the UK's official list. Its XML distinguishes individuals, entities and ships;
+the parser keeps names and alias strengths, partial birth dates, nationalities,
+identifiers, addresses and regime names. A date with an unknown day or month
+keeps only the stated precision.
 
 ## Screening
 
@@ -80,3 +87,4 @@ The library code is Apache-2.0. Source data has separate terms:
 | [UN Security Council list](https://main.un.org/securitycouncil/en/content/un-sc-consolidated-list)                                                      | [UN website terms](https://www.un.org/Depts/los/LEGISLATIONANDTREATIES/terms_and_conditions.htm).                                                                    |
 | [Czech MFA list](https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html)                                                                   | Published on the [MFA open data page](https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html).                                                          |
 | [US OFAC lists](https://ofac.treasury.gov/sanctions-list-service)                                                                                       | US federal government work is [public domain under 17 USC § 105](https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec105.htm). |
+| [UK Sanctions List](https://www.gov.uk/government/publications/the-uk-sanctions-list)                                                                   | Terms are on the [publication page](https://www.gov.uk/government/publications/the-uk-sanctions-list).                                                               |

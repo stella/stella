@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 2.3.0
+
+### Minor Changes
+
+- [#4029](https://github.com/stella/stella/pull/4029) [`bcab39c`](https://github.com/stella/stella/commit/bcab39c2a58be121e96bf383abc8618386b190a4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add optional birth date and nationality fields for person contacts.
+
 ## 2.2.5
 
 ### Patch Changes
