@@ -1,5 +1,5 @@
-import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
 import type { InvoiceDocumentType } from "@stll/api-contract";
@@ -27,8 +27,10 @@ type ValidateInvoiceDocumentOptions = {
   documentType: InvoiceDocumentType;
   originalInvoiceId: SafeId<"invoice"> | null;
   currency: string;
-  totalAmount?: number;
-};
+} & (
+  | { invoiceId: SafeId<"invoice">; totalAmount: number }
+  | { invoiceId?: never; totalAmount?: never }
+);
 
 /** The linked document is authorized and stable until this transaction commits. */
 export const validateInvoiceDocument = async (
@@ -39,6 +41,7 @@ export const validateInvoiceDocument = async (
     originalInvoiceId,
     currency,
     totalAmount,
+    invoiceId,
   }: ValidateInvoiceDocumentOptions,
 ): Promise<Result<void, HandlerError>> => {
   if (documentType !== "credit_note") {
@@ -74,7 +77,7 @@ export const validateInvoiceDocument = async (
       ),
     )
     .limit(1)
-    .for("share");
+    .for("update");
   const original = rows.at(0);
   if (!original) {
     return Result.err(
@@ -112,14 +115,35 @@ export const validateInvoiceDocument = async (
       }),
     );
   }
+  if (totalAmount === undefined) {
+    return Result.ok(undefined);
+  }
+  // The original row serializes reservations across every related credit note.
+  const credits = await tx
+    .select({
+      amount: sql<string>`coalesce(sum(abs(${invoices.totalAmount})), 0)`,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.workspaceId, workspaceId),
+        eq(invoices.originalInvoiceId, originalInvoiceId),
+        ne(invoices.status, INVOICE_STATUS.VOID),
+        ne(invoices.id, invoiceId),
+      ),
+    );
+  const credited = credits.at(0);
+  if (!credited) {
+    return panic("Credit aggregate did not return a row");
+  }
   if (
-    totalAmount !== undefined &&
-    Math.abs(totalAmount) > original.totalAmount
+    BigInt(credited.amount) + BigInt(Math.abs(totalAmount)) >
+    BigInt(original.totalAmount)
   ) {
     return Result.err(
       new HandlerError({
         status: 422,
-        message: "Credit note total cannot exceed its original invoice",
+        message: "Credit notes together cannot exceed their original invoice",
       }),
     );
   }

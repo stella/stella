@@ -673,6 +673,7 @@ export const recalculateInvoiceTotals = async (
     return Result.err(totals.error);
   }
   const valid = await validateInvoiceDocument(tx, {
+    invoiceId: scope.invoiceId,
     workspaceId: scope.workspaceId,
     documentType: stored.documentType,
     originalInvoiceId: stored.originalInvoiceId,

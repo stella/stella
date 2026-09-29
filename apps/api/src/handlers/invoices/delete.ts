@@ -38,9 +38,28 @@ const deleteInvoice = createSafeHandler(
         });
 
         if (!invoice) {
-          return { ok: false as const };
+          return {
+            ok: false as const,
+            reason: "Invoice not found or not in draft status",
+          };
         }
 
+        const linkedCredit = await tx
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.workspaceId, workspaceId),
+              eq(invoices.originalInvoiceId, invoice.id),
+            ),
+          )
+          .limit(1);
+        if (linkedCredit.at(0)) {
+          return {
+            ok: false as const,
+            reason: "Invoice is referenced by a credit note",
+          };
+        }
         const restoredTimeEntries = await tx
           .update(timeEntries)
           .set({
@@ -130,7 +149,7 @@ const deleteInvoice = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 409,
-          message: "Invoice not found or not in draft status",
+          message: txResult.reason,
         }),
       );
     }

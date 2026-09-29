@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
@@ -224,6 +224,28 @@ const transitionInvoice = createSafeHandler(
             }),
           );
         }
+        if (body.action === "void" || body.action === "revert_to_draft") {
+          const credit = await tx
+            .select({ id: invoices.id })
+            .from(invoices)
+            .where(
+              and(
+                eq(invoices.workspaceId, workspaceId),
+                eq(invoices.originalInvoiceId, existing.id),
+                ne(invoices.status, INVOICE_STATUS.VOID),
+              ),
+            )
+            .limit(1);
+          if (credit.at(0)) {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message:
+                  "Void linked credit notes before changing their original invoice",
+              }),
+            );
+          }
+        }
         const set: Partial<typeof invoices.$inferInsert> = {
           status: transition.to,
           updatedAt: now,
@@ -239,6 +261,7 @@ const transitionInvoice = createSafeHandler(
         }
         if (body.action === "finalize") {
           const valid = await validateInvoiceDocument(tx, {
+            invoiceId: existing.id,
             workspaceId,
             documentType: existing.documentType,
             originalInvoiceId: existing.originalInvoiceId,

@@ -9,9 +9,17 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { INVOICE_STATUS, invoiceLines, invoices } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  INVOICE_STATUS,
+  invoiceLines,
+  invoices,
+  timeEntries,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createInvoice from "@/api/handlers/invoices/create";
+import deleteInvoice from "@/api/handlers/invoices/delete";
+import addEntries from "@/api/handlers/invoices/entries/add";
 import createLine from "@/api/handlers/invoices/lines/create";
 import updateLine from "@/api/handlers/invoices/lines/update";
 import transitionInvoice from "@/api/handlers/invoices/transition";
@@ -31,6 +39,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 let testDb: TestDatabase;
 let ids: TestIds;
+const seededEntries: SafeId<"timeEntry">[] = [];
 const seededIds: SafeId<"invoice">[] = [];
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -43,6 +52,11 @@ afterAll(async () => {
       .delete(invoiceLines)
       .where(inArray(invoiceLines.invoiceId, seededIds));
     await testDb.delete(invoices).where(inArray(invoices.id, seededIds));
+  }
+  if (seededEntries.length > 0) {
+    await testDb
+      .delete(timeEntries)
+      .where(inArray(timeEntries.id, seededEntries));
   }
   await releaseRlsFixture();
 });
@@ -150,6 +164,37 @@ const addLine = async (invoiceId: SafeId<"invoice">, amount: number) =>
       body: lineBody(amount),
     }),
   );
+
+const changeStatus = async (
+  invoiceId: SafeId<"invoice">,
+  action: "finalize" | "void" | "revert_to_draft",
+) =>
+  await transitionInvoice.handler(
+    contextFor(transitionInvoice.handler, {
+      params: { workspaceId: ids.wsA1, invoiceId },
+      body: { action },
+    }),
+  );
+const seedEntry = async () => {
+  const id = createSafeId<"timeEntry">();
+  seededEntries.push(id);
+  await testDb.insert(timeEntries).values({
+    id,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    workItemId: ids.entityA1,
+    dateWorked: "2026-09-29",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 60,
+    rateAtEntry: cents(100),
+    currency: "USD",
+    narrative: "Work",
+    status: BILLING_STATUS.APPROVED,
+  });
+  return id;
+};
 
 describe("invoice document types", () => {
   test("credit notes reject wrong-workspace, draft, void and credit-note originals", async () => {
@@ -301,6 +346,133 @@ describe("invoice document types", () => {
         contextFor(updateInvoice.handler, {
           params: { workspaceId: ids.wsA1, invoiceId },
           body: { originalInvoiceId: await seedOriginal() },
+        }),
+      ),
+    ).toMatchObject({ code: 409 });
+  });
+  test("credit notes refuse entry attachments and type conversion without consuming unbilled work", async () => {
+    const originalInvoiceId = await seedOriginal();
+    const timeEntryId = await seedEntry();
+    expect(
+      await createInvoice.handler(
+        contextFor(createInvoice.handler, {
+          params: { workspaceId: ids.wsA1 },
+          body: {
+            documentType: "credit_note",
+            originalInvoiceId,
+            invoiceDate: "2026-09-29",
+            currency: "USD",
+            timeEntryIds: [timeEntryId],
+          },
+        }),
+      ),
+    ).toMatchObject({ code: 422 });
+    const invoiceId = createdId(await createCredit(originalInvoiceId));
+    expect(
+      await addEntries.handler(
+        contextFor(addEntries.handler, {
+          params: { workspaceId: ids.wsA1, invoiceId },
+          body: { timeEntryIds: [timeEntryId] },
+        }),
+      ),
+    ).toMatchObject({ code: 422 });
+    for (const source of [
+      { type: "time_entry", timeEntryId },
+      { type: "expense", expenseId: createSafeId<"expense">() },
+    ] as const) {
+      expect(
+        await createLine.handler(
+          contextFor(createLine.handler, {
+            params: { workspaceId: ids.wsA1, invoiceId },
+            body: { source, vatRateBps: 0, vatTreatment: "domestic_vat" },
+          }),
+        ),
+      ).toMatchObject({ code: 422 });
+    }
+    expect(
+      await testDb.query.timeEntries.findFirst({
+        where: { id: { eq: timeEntryId } },
+        columns: { status: true, invoiceId: true },
+      }),
+    ).toEqual({ status: BILLING_STATUS.APPROVED, invoiceId: null });
+    const draftId = createdId(
+      await createInvoice.handler(
+        contextFor(createInvoice.handler, {
+          params: { workspaceId: ids.wsA1 },
+          body: {
+            invoiceDate: "2026-09-29",
+            currency: "USD",
+            timeEntryIds: [timeEntryId],
+          },
+        }),
+      ),
+    );
+    expect(
+      await updateInvoice.handler(
+        contextFor(updateInvoice.handler, {
+          params: { workspaceId: ids.wsA1, invoiceId: draftId },
+          body: { documentType: "credit_note", originalInvoiceId },
+        }),
+      ),
+    ).toMatchObject({ code: 422 });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: draftId } },
+        columns: { documentType: true, totalAmount: true },
+      }),
+    ).toEqual({ documentType: "invoice", totalAmount: cents(100) });
+  });
+
+  test("cumulative credits serialize concurrent reservations and release capacity on void", async () => {
+    const originalInvoiceId = await seedOriginal();
+    const first = createdId(await createCredit(originalInvoiceId));
+    const second = createdId(await createCredit(originalInvoiceId));
+    const results = await Promise.all([
+      addLine(first, 600),
+      addLine(second, 600),
+    ]);
+    expect(
+      results.filter((result) => "code" in result && result.code === 422),
+    ).toHaveLength(1);
+    const credited = await testDb.query.invoices.findMany({
+      where: { id: { in: [first, second] } },
+      columns: { id: true, totalAmount: true },
+    });
+    expect(
+      credited.reduce((sum, row) => sum + Math.abs(row.totalAmount), 0),
+    ).toBe(726);
+    const winner = credited.find((row) => row.totalAmount < 0);
+    const loser = credited.find((row) => row.totalAmount === 0);
+    if (!winner || !loser) {
+      return panic("Expected one credit reservation");
+    }
+    expect(await changeStatus(winner.id, "finalize")).toEqual({
+      id: winner.id,
+    });
+    expect(await changeStatus(winner.id, "void")).toEqual({ id: winner.id });
+    expect(await addLine(loser.id, 1000)).toMatchObject({
+      totals: { grossAmountMinor: -1210 },
+    });
+  });
+
+  test("linked credit notes protect original transitions and deletion", async () => {
+    const originalInvoiceId = await seedOriginal();
+    const creditId = createdId(await createCredit(originalInvoiceId));
+    for (const action of ["void", "revert_to_draft"] as const) {
+      expect(await changeStatus(originalInvoiceId, action)).toMatchObject({
+        code: 409,
+      });
+    }
+    expect(await changeStatus(creditId, "finalize")).toEqual({ id: creditId });
+    expect(await changeStatus(creditId, "void")).toEqual({ id: creditId });
+    expect(await changeStatus(originalInvoiceId, "revert_to_draft")).toEqual({
+      id: originalInvoiceId,
+    });
+    expect(
+      await deleteInvoice.handler(
+        contextFor(deleteInvoice.handler, {
+          params: { workspaceId: ids.wsA1, invoiceId: originalInvoiceId },
+          body: {},
         }),
       ),
     ).toMatchObject({ code: 409 });

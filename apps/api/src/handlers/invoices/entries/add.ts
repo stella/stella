@@ -124,7 +124,12 @@ const validateAttachmentInputs = (
             id: { eq: invoiceId },
             workspaceId: { eq: workspaceId },
           },
-          columns: { id: true, status: true, currency: true },
+          columns: {
+            id: true,
+            status: true,
+            currency: true,
+            documentType: true,
+          },
         }),
       ),
     );
@@ -140,6 +145,15 @@ const validateAttachmentInputs = (
         new HandlerError({
           status: 409,
           message: "Entries can only be added to draft invoices",
+        }),
+      );
+    }
+
+    if (invoice.documentType === "credit_note") {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Credit notes cannot bill time entries or expenses",
         }),
       );
     }
@@ -324,6 +338,14 @@ const addEntries = createSafeHandler(
           new HandlerError({
             status: 409,
             message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+          }),
+        );
+      }
+      if (invoiceCheck.documentType === "credit_note") {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Credit notes cannot bill time entries or expenses",
           }),
         );
       }

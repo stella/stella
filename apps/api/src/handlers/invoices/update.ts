@@ -1,8 +1,11 @@
 import { Result } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { InvoiceDocumentType } from "@stll/api-contract";
+import {
+  INVOICE_LINE_SOURCE,
+  type InvoiceDocumentType,
+} from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";
@@ -148,10 +151,11 @@ const buildInvoiceUpdateAuditChanges = (
 type InvoiceEntriesScope = {
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
+  lines: "all" | "entry-sourced";
 };
 const invoiceHasEntries = async (
   tx: Transaction,
-  { invoiceId, workspaceId }: InvoiceEntriesScope,
+  { invoiceId, workspaceId, lines }: InvoiceEntriesScope,
 ) => {
   const line = await tx
     .select({ id: invoiceLines.id })
@@ -160,6 +164,9 @@ const invoiceHasEntries = async (
       and(
         eq(invoiceLines.invoiceId, invoiceId),
         eq(invoiceLines.workspaceId, workspaceId),
+        lines === "entry-sourced"
+          ? ne(invoiceLines.source, INVOICE_LINE_SOURCE.MANUAL)
+          : undefined,
       ),
     )
     .limit(1);
@@ -273,7 +280,24 @@ const updateInvoice = createSafeHandler(
               }),
             );
           }
+          if (
+            documentType === "credit_note" &&
+            documentType !== existing.documentType &&
+            (await invoiceHasEntries(tx, {
+              invoiceId: params.invoiceId,
+              workspaceId,
+              lines: "entry-sourced",
+            }))
+          ) {
+            return Result.err(
+              new HandlerError({
+                status: 422,
+                message: "Credit notes cannot bill time entries or expenses",
+              }),
+            );
+          }
           const valid = await validateInvoiceDocument(tx, {
+            invoiceId: params.invoiceId,
             workspaceId,
             documentType,
             originalInvoiceId,
@@ -311,6 +335,7 @@ const updateInvoice = createSafeHandler(
             (await invoiceHasEntries(tx, {
               invoiceId: params.invoiceId,
               workspaceId,
+              lines: "all",
             }))
           ) {
             return Result.ok({ status: "currency-has-entries" });

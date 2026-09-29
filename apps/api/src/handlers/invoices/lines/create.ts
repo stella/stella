@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { t } from "elysia";
+import { type Static, t } from "elysia";
 
 import type { InvoiceTotals } from "@stll/invoicing";
 
@@ -59,6 +59,24 @@ const createLineBodySchema = t.Object({
   vatTreatment: tVatTreatment,
 });
 
+const prepareManualDraft = ({
+  source,
+  vatRateBps,
+  vatTreatment,
+}: Static<typeof createLineBodySchema>) => {
+  if (source.type !== "manual") {
+    return Result.ok(null);
+  }
+  return manualLineDraft({
+    description: source.description,
+    quantity: source.quantity,
+    unit: source.unit ?? null,
+    unitPrice: cents(source.unitPriceMinor),
+    vatRateBps,
+    vatTreatment,
+  });
+};
+
 const lineParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
@@ -93,16 +111,7 @@ const createInvoiceLine = createSafeHandler(
       vatTreatment: body.vatTreatment,
     };
     const { source } = body;
-    const manualDraft: InvoiceLineDraft | null =
-      source.type === "manual"
-        ? yield* manualLineDraft({
-            description: source.description,
-            quantity: source.quantity,
-            unit: source.unit ?? null,
-            unitPrice: cents(source.unitPriceMinor),
-            ...vat,
-          })
-        : null;
+    const manualDraft = yield* prepareManualDraft(body);
     const now = new Date();
 
     const txResult = await resultTx(
@@ -130,6 +139,17 @@ const createInvoiceLine = createSafeHandler(
           );
         }
 
+        if (
+          invoice.documentType === "credit_note" &&
+          source.type !== "manual"
+        ) {
+          return Result.err(
+            new HandlerError({
+              status: 422,
+              message: "Credit notes cannot bill time entries or expenses",
+            }),
+          );
+        }
         const capacity = await checkInvoiceLineCapacity(
           tx,
           { invoiceId: params.invoiceId, workspaceId },

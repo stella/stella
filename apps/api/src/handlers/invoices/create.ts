@@ -180,6 +180,14 @@ const createInvoice = createSafeHandler(
       async (tx): Promise<Result<CreateInvoiceResult, HandlerError>> => {
         const documentType = body.documentType ?? "invoice";
         const originalInvoiceId = body.originalInvoiceId ?? null;
+        if (documentType === "credit_note" && body.timeEntryIds.length > 0) {
+          return Result.err(
+            new HandlerError({
+              status: 422,
+              message: "Credit notes cannot bill time entries or expenses",
+            }),
+          );
+        }
         const valid = await validateInvoiceDocument(tx, {
           workspaceId,
           documentType,
