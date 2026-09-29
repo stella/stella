@@ -26653,7 +26653,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         cursor: {
-                          maxLength: 512,
+                          maxLength: 1844,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
