@@ -15,6 +15,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { PUBLIC_PACK_IDS } from "../src/public-packs";
 import {
   packIndexSchema,
   packManifestSchema,
@@ -190,7 +191,7 @@ const readPack = ({
     description: manifest.description,
     license: manifest.license,
     licenseUrl: manifest.licenseUrl ?? null,
-    publicDisplay: manifest.publicDisplay,
+    publicDisplay: PUBLIC_PACK_IDS.some((id) => id === manifest.id),
     source: manifest.source ?? null,
     authors: manifest.authors,
     jurisdictions: manifest.jurisdictions,

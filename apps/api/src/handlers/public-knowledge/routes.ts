@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import {
   createBundledTemplatePackCatalogue,
   type TemplatePackCatalogue,
@@ -7,9 +8,22 @@ import {
 
 import { env } from "@/api/env";
 import { createPublicKnowledgeEndpoints } from "@/api/handlers/public-knowledge/endpoints";
+import type { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
+import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+
+let bundledCatalogue: TemplatePackCatalogue | null = null;
+
+const PUBLIC_KNOWLEDGE_PATH = "/public/knowledge";
+const VERSIONED_PUBLIC_KNOWLEDGE_PATH = `${STELLA_API_VERSION_PREFIX}${PUBLIC_KNOWLEDGE_PATH}`;
+const isPublicKnowledgePath = (path: string) =>
+  path === PUBLIC_KNOWLEDGE_PATH ||
+  path.startsWith(`${PUBLIC_KNOWLEDGE_PATH}/`) ||
+  path === VERSIONED_PUBLIC_KNOWLEDGE_PATH ||
+  path.startsWith(`${VERSIONED_PUBLIC_KNOWLEDGE_PATH}/`);
 
 export const createPublicKnowledgeRoute = (
   catalogue: () => TemplatePackCatalogue,
+  renderPreview?: typeof renderTemplatePreview,
 ) => {
   const {
     listPacks,
@@ -18,14 +32,31 @@ export const createPublicKnowledgeRoute = (
     readTemplatePreview,
     listStarters,
     readStarter,
-  } = createPublicKnowledgeEndpoints(catalogue);
-  return new Elysia({ prefix: "/public/knowledge" })
-    .onBeforeHandle(({ set }) => {
+  } = createPublicKnowledgeEndpoints(catalogue, renderPreview);
+  return new Elysia({ prefix: PUBLIC_KNOWLEDGE_PATH })
+    .onRequest(({ request, set }) => {
+      if (isPublicKnowledgePath(new URL(request.url).pathname)) {
+        set.headers["Cache-Control"] = "no-store";
+      }
+    })
+    .onBeforeHandle(({ path, set }) => {
+      if (!isPublicKnowledgePath(path)) {
+        return;
+      }
       if (!env.FEATURE_PUBLIC_KNOWLEDGE) {
         set.status = 404;
         return { error: "Not Found" } as const;
       }
-      set.headers["Cache-Control"] = "public, max-age=300";
+      return undefined;
+    })
+    .onAfterHandle(({ path, responseValue, set }) => {
+      if (!isPublicKnowledgePath(path)) {
+        return;
+      }
+      const status = resolveResponseStatus({ response: responseValue, set });
+      if (status >= 200 && status < 300) {
+        set.headers["Cache-Control"] = "public, max-age=300";
+      }
     })
     .get("/template-packs", listPacks.handler)
     .get("/template-packs/:packId", readPack.handler, {
@@ -51,6 +82,9 @@ export const createPublicKnowledgeRoute = (
     });
 };
 
-export const publicKnowledgeRoute = createPublicKnowledgeRoute(() =>
-  createBundledTemplatePackCatalogue(env.TEMPLATE_PACKS_CONTENT_DIR),
+export const publicKnowledgeRoute = createPublicKnowledgeRoute(
+  () =>
+    (bundledCatalogue ??= createBundledTemplatePackCatalogue(
+      env.TEMPLATE_PACKS_CONTENT_DIR,
+    )),
 );

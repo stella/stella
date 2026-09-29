@@ -43,7 +43,7 @@ const previewTemplateHandler = async function* ({
     );
   }
 
-  const docxBytes = await readS3ArrayBuffer(template.s3Key);
+  const docxBytes = Buffer.from(await readS3ArrayBuffer(template.s3Key));
   return Result.ok(await renderTemplatePreview(docxBytes));
 };
 

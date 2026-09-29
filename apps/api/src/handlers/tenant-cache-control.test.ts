@@ -13,7 +13,8 @@ const app = new Elysia()
   .use(playbooksRoute)
   .use(catalogueRoute)
   .use(clausesRoute)
-  .use(publicKnowledgeRoute);
+  .use(publicKnowledgeRoute)
+  .get("/unrelated-success", () => ({ ok: true }));
 
 describe("tenant route cache policy", () => {
   test("keeps authentication failures from tenant routes out of caches", async () => {
@@ -39,5 +40,15 @@ describe("tenant route cache policy", () => {
     } finally {
       env.FEATURE_PUBLIC_KNOWLEDGE = previous;
     }
+  });
+
+  test("public hooks do not change unrelated successful responses", async () => {
+    const response = await app.handle(
+      new Request("http://localhost/unrelated-success"),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).not.toBe(
+      "public, max-age=300",
+    );
   });
 });

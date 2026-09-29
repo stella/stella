@@ -46,7 +46,9 @@ describe("public knowledge routes", () => {
         "/public/knowledge/playbook-starters",
         "/public/knowledge/playbook-starters/nda",
       ]) {
-        expect((await request(path)).status).toBe(404);
+        const response = await request(path);
+        expect(response.status).toBe(404);
+        expect(response.headers.get("Cache-Control")).toBe("no-store");
       }
     });
   });
@@ -57,9 +59,17 @@ describe("public knowledge routes", () => {
         "/public/knowledge/template-packs/not-public",
         "/public/knowledge/template-packs/not-public/templates/nda",
         "/public/knowledge/template-packs/not-public/templates/nda/preview",
+        "/public/knowledge/playbook-starters/unknown",
       ]) {
-        expect((await request(path)).status).toBe(404);
+        const response = await request(path);
+        expect(response.status).toBe(404);
+        expect(response.headers.get("Cache-Control")).toBe("no-store");
       }
+      const invalid = await request(
+        `/public/knowledge/template-packs/${"a".repeat(65)}`,
+      );
+      expect(invalid.status).toBeGreaterThanOrEqual(400);
+      expect(invalid.headers.get("Cache-Control")).toBe("no-store");
       const privatePack = FIXTURE_TEMPLATE_PACKS.at(0);
       if (!privatePack) {
         throw new Error("Fixture pack missing");
@@ -80,7 +90,67 @@ describe("public knowledge routes", () => {
           new Request(`http://localhost${path}`),
         );
         expect(response.status).toBe(404);
+        expect(response.headers.get("Cache-Control")).toBe("no-store");
       }
+    });
+  });
+
+  test("two preview requests render the static bytes once", async () => {
+    await withFeature(true, async () => {
+      const pack = FIXTURE_TEMPLATE_PACKS.at(0);
+      const template = pack?.templates.at(0);
+      if (!pack || !template) {
+        throw new Error("Fixture template missing");
+      }
+      const catalogue = createFixtureTemplatePackCatalogue([
+        { ...pack, publicDisplay: true },
+      ]);
+      let renders = 0;
+      const route = createPublicKnowledgeRoute(
+        () => catalogue,
+        async () => {
+          renders += 1;
+          return {
+            paragraphs: [],
+            charCount: 0,
+            structureErrors: [],
+            clauseSlots: [],
+          };
+        },
+      );
+      const path = `/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`;
+      const first = await route.handle(new Request(`http://localhost${path}`));
+      const second = await route.handle(new Request(`http://localhost${path}`));
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(await first.text()).toBe(await second.text());
+      expect(renders).toBe(1);
+    });
+  });
+
+  test("renderer failures are not shared-cacheable", async () => {
+    await withFeature(true, async () => {
+      const pack = FIXTURE_TEMPLATE_PACKS.at(0);
+      const template = pack?.templates.at(0);
+      if (!pack || !template) {
+        throw new Error("Fixture template missing");
+      }
+      const catalogue = createFixtureTemplatePackCatalogue([
+        { ...pack, publicDisplay: true },
+      ]);
+      const route = createPublicKnowledgeRoute(
+        () => catalogue,
+        async () => {
+          throw new Error("Preview failed");
+        },
+      );
+      const response = await route.handle(
+        new Request(
+          `http://localhost/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`,
+        ),
+      );
+      expect(response.status).toBe(500);
+      expect(response.headers.get("Cache-Control")).toBe("no-store");
     });
   });
 

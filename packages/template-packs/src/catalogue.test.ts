@@ -13,6 +13,7 @@ import {
   FIXTURE_TEMPLATE_PACKS as FIXTURE_PACKS,
 } from "./fixtures/catalogue";
 import { GENERATED_TEMPLATE_PACKS } from "./packs.gen";
+import { PUBLIC_PACK_IDS } from "./public-packs";
 import type { GeneratedTemplatePack } from "./schema";
 
 const MISSING_CONTENT_ROOT = path.join(
@@ -31,12 +32,12 @@ if (!fixtureTemplate) {
 }
 
 describe("template pack catalogue", () => {
-  test("only the CC0 general-legal pack permits public display", () => {
+  test("only license-checked packs permit public display", () => {
     expect(
       GENERATED_TEMPLATE_PACKS.filter((pack) => pack.publicDisplay).map(
         (pack) => pack.id,
       ),
-    ).toEqual(["general-legal"]);
+    ).toEqual(PUBLIC_PACK_IDS);
     expect(FIXTURE_PACKS.every((pack) => !pack.publicDisplay)).toBe(true);
   });
 

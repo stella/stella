@@ -56,9 +56,16 @@ const starterParams = t.Object({
   id: t.String({ minLength: 1, maxLength: 64 }),
 });
 
+const MAX_CACHED_PREVIEWS = 64;
+
 export const createPublicKnowledgeEndpoints = (
   catalogue: () => TemplatePackCatalogue,
+  renderPreview: typeof renderTemplatePreview = renderTemplatePreview,
 ) => {
+  const previewCache = new Map<
+    string,
+    ReturnType<typeof renderTemplatePreview>
+  >();
   const publicPack = (packId: string) => {
     const pack = catalogue().get(packId);
     return pack?.publicDisplay ? pack : null;
@@ -119,21 +126,45 @@ export const createPublicKnowledgeEndpoints = (
     },
     async function* ({ params }) {
       const pack = publicPack(params.packId);
-      if (!pack?.templates.some((item) => item.slug === params.templateId)) {
-        return notFound();
-      }
-      const docx = await catalogue().readTemplateDocx({
-        packId: params.packId,
-        slug: params.templateId,
-      });
-      if (Result.isError(docx)) {
-        return notFound();
-      }
-      const preview = yield* Result.await(
-        Result.tryPromise(
-          async () => await renderTemplatePreview(docx.value.bytes),
-        ),
+      const template = pack?.templates.find(
+        (item) => item.slug === params.templateId,
       );
+      if (!template) {
+        return notFound();
+      }
+
+      let pending = previewCache.get(template.sha256);
+      if (!pending) {
+        const docx = await catalogue().readTemplateDocx({
+          packId: params.packId,
+          slug: params.templateId,
+        });
+        if (Result.isError(docx)) {
+          return notFound();
+        }
+        pending = previewCache.get(template.sha256);
+        if (!pending) {
+          const render = Promise.resolve().then(() =>
+            renderPreview(docx.value.bytes),
+          );
+          previewCache.set(template.sha256, render);
+          if (previewCache.size > MAX_CACHED_PREVIEWS) {
+            const oldest = previewCache.keys().next().value;
+            if (oldest !== undefined) {
+              previewCache.delete(oldest);
+            }
+          }
+          pending = render;
+        }
+      }
+      const outcome = await Result.tryPromise(async () => await pending);
+      if (
+        Result.isError(outcome) &&
+        previewCache.get(template.sha256) === pending
+      ) {
+        previewCache.delete(template.sha256);
+      }
+      const preview = yield* outcome;
       return Result.ok(preview);
     },
   );

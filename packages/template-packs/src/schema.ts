@@ -85,8 +85,6 @@ export const packManifestSchema = v.strictObject({
   /** SPDX identifier. */
   license: nonEmptyString,
   licenseUrl: optionalString,
-  /** Whether pack content may be displayed publicly without a workspace. */
-  publicDisplay: v.optional(v.boolean(), false),
   source: v.optional(templatePackSourceSchema),
   authors: v.optional(v.array(templatePackAuthorSchema), []),
   /** Empty means jurisdiction-agnostic. */
