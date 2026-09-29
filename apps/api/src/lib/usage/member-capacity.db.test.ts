@@ -348,7 +348,6 @@ describe("member insert guard", () => {
       for (let index = 0; index < 3; index += 1) {
         expect(await tryAddMember(tx, organizationId)).toBe("added");
       }
-      enforce();
       expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(
         null,
       );
@@ -390,26 +389,52 @@ describe("member insert guard", () => {
 });
 
 describe("checkMemberAdmission", () => {
-  test("admits everything while the flag is off", async () => {
+  test("refuses readably where the database bound applies, whatever the flag", async () => {
+    env.FEATURE_ORG_ACCESS_STATE = false;
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
         entitlement: { priceBasis: "per_seat", maxMembers: 1, seats: 1 },
       });
       await insertMember(tx, organizationId, await insertUser(tx));
+      expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(1);
+      for (const kind of ["membership", "invitation"] as const) {
+        const admission = await checkMemberAdmission(tx, {
+          organizationId,
+          kind,
+        });
+        expect(Result.isError(admission) && admission.error.code).toBe(
+          MEMBER_CAPACITY_REACHED_ERROR_CODE,
+        );
+      }
+      // The insert the refusal prevents is the one the trigger stops.
+      expect(await tryAddMember(tx, organizationId)).toBe("refused");
+    });
+  });
+
+  test("admits as before where no policy sets a member bound, with the flag off", async () => {
+    env.FEATURE_ORG_ACCESS_STATE = false;
+    await withRolledBackTx(async (tx) => {
+      const organizationId = await insertOrganization(tx, {
+        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+        entitlement: { priceBasis: "per_seat", maxMembers: null, seats: 1 },
+      });
+      await insertMember(tx, organizationId, await insertUser(tx));
       expect(await readOrganizationMemberCapacity(tx, organizationId)).toBe(
         null,
       );
-      const admission = await checkMemberAdmission(tx, {
-        organizationId,
-        kind: "membership",
-      });
-      expect(Result.isOk(admission)).toBe(true);
+      for (const kind of ["membership", "invitation"] as const) {
+        const admission = await checkMemberAdmission(tx, {
+          organizationId,
+          kind,
+        });
+        expect(Result.isOk(admission)).toBe(true);
+      }
+      expect(await tryAddMember(tx, organizationId)).toBe("added");
     });
   });
 
   test("counts pending invitations against the capacity, not expired ones", async () => {
-    enforce();
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -457,7 +482,6 @@ describe("checkMemberAdmission", () => {
   });
 
   test("refuses a membership at capacity", async () => {
-    enforce();
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -477,7 +501,6 @@ describe("checkMemberAdmission", () => {
 
 describe("checkMemberCapacityChange", () => {
   test("refuses a capacity below the current members and removes nobody", async () => {
-    enforce();
     await withRolledBackTx(async (tx) => {
       const organizationId = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
@@ -506,7 +529,8 @@ describe("checkMemberCapacityChange", () => {
     });
   });
 
-  test("never refuses an organization on self-managed keys or with the flag off", async () => {
+  test("never refuses an organization on self-managed keys or a change to no bound", async () => {
+    env.FEATURE_ORG_ACCESS_STATE = false;
     await withRolledBackTx(async (tx) => {
       const selfManaged = await insertOrganization(tx, {
         state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
@@ -520,17 +544,24 @@ describe("checkMemberCapacityChange", () => {
         await insertMember(tx, organizationId, await insertUser(tx));
         await insertMember(tx, organizationId, await insertUser(tx));
       }
-      const unenforced = await checkMemberCapacityChange(tx, {
+      const unbounded = await checkMemberCapacityChange(tx, {
         organizationId: bounded,
-        nextCapacity: 1,
+        nextCapacity: null,
       });
-      expect(Result.isOk(unenforced)).toBe(true);
-      enforce();
+      expect(Result.isOk(unbounded)).toBe(true);
       const exempt = await checkMemberCapacityChange(tx, {
         organizationId: selfManaged,
         nextCapacity: 1,
       });
       expect(Result.isOk(exempt)).toBe(true);
+      // A bound the trigger would enforce is checked with the flag off too.
+      const lower = await checkMemberCapacityChange(tx, {
+        organizationId: bounded,
+        nextCapacity: 1,
+      });
+      expect(Result.isError(lower) && lower.error.code).toBe(
+        MEMBER_CAPACITY_BELOW_MEMBERS_ERROR_CODE,
+      );
     });
   });
 });

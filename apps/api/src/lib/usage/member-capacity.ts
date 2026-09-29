@@ -8,11 +8,11 @@
  * policy that predates the column) bounds nothing. The
  * `member_organization_capacity`
  * trigger enforces it inside every inserting transaction; the checks here
- * refuse earlier with a readable error, and only while
- * `FEATURE_ORG_ACCESS_STATE` is on, without a query while it is off.
+ * read the same bound, whatever `FEATURE_ORG_ACCESS_STATE` says, so a request
+ * the trigger would stop is refused earlier with a readable error.
  *
- * The same organizations admit only members holding a seat assignment to AI
- * work, whichever key pays for it.
+ * While the flag is on, the same organizations admit only members holding a
+ * seat assignment to AI work, whichever key pays for it.
  */
 
 import { Result } from "better-result";
@@ -43,17 +43,14 @@ const memberCapacityReachedError = () =>
   });
 
 /**
- * The organization's member capacity, or null when nothing bounds it. Null
- * while the flag is off, without a query. The capacity function executes on
- * the owner connection only.
+ * The organization's member capacity, or null when nothing bounds it: the
+ * value the member insert trigger enforces. The capacity function executes
+ * on the owner connection only.
  */
 export const readOrganizationMemberCapacity = async (
   db: Pick<Transaction, "select">,
   organizationId: SafeId<"organization">,
 ): Promise<number | null> => {
-  if (!env.FEATURE_ORG_ACCESS_STATE) {
-    return null;
-  }
   const rows = await db
     .select({
       capacity: sql<
@@ -165,8 +162,8 @@ export const memberCapacityOf = ({
  * Refuses moving the organization to a capacity below its current member
  * count: a seat reduction or a policy with a lower member bound waits until
  * members leave, and no member is ever removed to make room. An organization
- * whose recorded state keeps it unbounded is not refused. Always allowed
- * while the flag is off, without a query.
+ * whose recorded state keeps it unbounded is not refused, and neither is a
+ * capacity of null (a policy without a member bound).
  */
 export const checkMemberCapacityChange = async (
   db: Pick<Transaction, "select">,
@@ -178,7 +175,7 @@ export const checkMemberCapacityChange = async (
     nextCapacity: number | null;
   },
 ): Promise<Result<void, HandlerError<409>>> => {
-  if (!env.FEATURE_ORG_ACCESS_STATE || nextCapacity === null) {
+  if (nextCapacity === null) {
     return Result.ok(undefined);
   }
   const bounded = await db
