@@ -132,6 +132,7 @@ describe("policy coverage", () => {
     "case_law_ingestion_events",
     "case_law_ingestion_failures",
     "case_law_polarity_rules",
+    "case_law_search_backfill_failures",
     "case_law_search_documents",
     "case_law_sources",
     "legislation_sources",

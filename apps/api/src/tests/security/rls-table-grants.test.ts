@@ -74,6 +74,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // coverage ledger it sits beside: read by the ingestion status rollup,
   // written only by the reconciliation loop.
   "case_law_reconciliation_items",
+  // A derived search projection's retry ledger; ingestion alone writes it.
+  "case_law_search_backfill_failures",
   // Where the citation-resolution walk had got to. Operational progress the
   // status rollup reads; only the resolution loop advances it.
   "case_law_citation_resolution_progress",

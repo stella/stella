@@ -19,8 +19,10 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawSearchBackfillFailures,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
@@ -310,6 +312,210 @@ test(
       ).toHaveLength(1);
     } finally {
       error.mockRestore();
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a repeatedly failing decision parks while later decisions continue, then retries when its source changes",
+  async () => {
+    const failingId = createSafeId<"caseLawDecision">();
+    const laterId = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "11 Cdo 1/1990",
+      country: "CZE",
+      court: "Nejvyšší soud",
+      createdAt: new Date("1990-01-01T00:00:00Z"),
+      fulltext: "Rozhodnutí s chybou konfigurace.",
+      id: failingId,
+      language: "xy",
+      sourceId,
+    });
+    const failingConfig: typeof resolveConfig = async (language) => {
+      if (language === "xy") {
+        throw new Error("fts configuration unavailable");
+      }
+      return await resolveConfig(language);
+    };
+    try {
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const result = await backfillSearchIndex(
+          scopedDb,
+          2,
+          failingConfig,
+          withTestProjectionDb,
+        );
+        const failure = (
+          await db
+            .select()
+            .from(caseLawSearchBackfillFailures)
+            .where(eq(caseLawSearchBackfillFailures.decisionId, failingId))
+        ).at(0);
+        expect(result).toMatchObject({ found: 1, indexed: 0 });
+        expect(failure?.attemptCount).toBe(attempt);
+        expect(failure?.lastErrorClass).toBeTruthy();
+        expect(failure?.status).toBe(
+          attempt === 3
+            ? CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED
+            : CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN,
+        );
+        expect(failure?.nextEligibleAt === null).toBe(attempt === 3);
+        expect(result.parked).toEqual({
+          type: "parked",
+          count: attempt === 3 ? 1 : 0,
+        });
+        if (attempt < 3) {
+          await db
+            .update(caseLawSearchBackfillFailures)
+            .set({ nextEligibleAt: new Date("2000-01-01T00:00:00Z") })
+            .where(eq(caseLawSearchBackfillFailures.decisionId, failingId));
+        }
+      }
+
+      await db.insert(caseLawDecisions).values({
+        caseNumber: "11 Cdo 2/1990",
+        country: "CZE",
+        court: "Nejvyšší soud",
+        createdAt: new Date("1991-01-01T00:00:00Z"),
+        fulltext: "Pozdější rozhodnutí má být indexováno.",
+        id: laterId,
+        language: "cs",
+        sourceId,
+      });
+      const progressed = await backfillSearchIndex(
+        scopedDb,
+        2,
+        failingConfig,
+        withTestProjectionDb,
+      );
+      expect(progressed).toMatchObject({
+        found: 1,
+        indexed: 1,
+        parked: { type: "parked", count: 1 },
+      });
+      expect(
+        await db
+          .select({ decisionId: caseLawSearchDocuments.decisionId })
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, laterId)),
+      ).toHaveLength(1);
+
+      await db
+        .update(caseLawDecisions)
+        .set({ updatedAt: new Date("2030-01-01T00:00:00Z") })
+        .where(eq(caseLawDecisions.id, failingId));
+      const retried = await backfillSearchIndex(
+        scopedDb,
+        2,
+        failingConfig,
+        withTestProjectionDb,
+      );
+      const reset = (
+        await db
+          .select()
+          .from(caseLawSearchBackfillFailures)
+          .where(eq(caseLawSearchBackfillFailures.decisionId, failingId))
+      ).at(0);
+      expect(retried).toMatchObject({ found: 1, indexed: 0 });
+      expect(reset?.attemptCount).toBe(1);
+      expect(reset?.status).toBe(
+        CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN,
+      );
+      expect(retried.parked).toEqual({ type: "parked", count: 0 });
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [failingId, laterId]));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a transient failure waits for its cooldown and successful indexing clears the marker",
+  async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "12 Cdo 1/1990",
+      country: "CZE",
+      court: "Nejvyšší soud",
+      createdAt: new Date("1989-01-01T00:00:00Z"),
+      fulltext: "Rozhodnutí s přechodnou chybou.",
+      id: decisionId,
+      language: "xz",
+      sourceId,
+    });
+    const failingConfig: typeof resolveConfig = async () => {
+      throw new Error("temporary fts failure");
+    };
+    try {
+      const failed = await backfillSearchIndex(
+        scopedDb,
+        2,
+        failingConfig,
+        withTestProjectionDb,
+      );
+      expect(failed).toMatchObject({ found: 1, indexed: 0 });
+      const failure = (
+        await db
+          .select()
+          .from(caseLawSearchBackfillFailures)
+          .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId))
+      ).at(0);
+      expect(failure?.attemptCount).toBe(1);
+      expect(failure?.nextEligibleAt?.getTime()).toBeGreaterThan(Date.now());
+
+      await backfillSearchIndex(
+        scopedDb,
+        2,
+        failingConfig,
+        withTestProjectionDb,
+      );
+      expect(
+        (
+          await db
+            .select({
+              attemptCount: caseLawSearchBackfillFailures.attemptCount,
+            })
+            .from(caseLawSearchBackfillFailures)
+            .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId))
+        ).at(0)?.attemptCount,
+      ).toBe(1);
+      expect(
+        await db
+          .select()
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, decisionId)),
+      ).toHaveLength(0);
+
+      await db
+        .update(caseLawSearchBackfillFailures)
+        .set({ nextEligibleAt: new Date("2000-01-01T00:00:00Z") })
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId));
+      const indexed = await backfillSearchIndex(
+        scopedDb,
+        2,
+        resolveConfig,
+        withTestProjectionDb,
+      );
+      expect(indexed).toMatchObject({ found: 1, indexed: 1 });
+      expect(
+        await db
+          .select()
+          .from(caseLawSearchBackfillFailures)
+          .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(caseLawSearchDocuments)
+          .where(eq(caseLawSearchDocuments.decisionId, decisionId)),
+      ).toHaveLength(1);
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
     }
   },
   DB_TEST_TIMEOUT_MS,

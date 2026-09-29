@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, gt, isNull, notExists, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { union } from "drizzle-orm/pg-core";
@@ -7,8 +7,10 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
+  caseLawSearchBackfillFailures,
   caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
@@ -18,7 +20,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resolveLocalFtsConfig } from "@/api/lib/case-law/local-case-law-config";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { errorSystemFields } from "@/api/lib/errors/utils";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   setCorpusBackfillStatementTimeout,
   withDedicatedCorpusBackfillDb,
@@ -34,6 +37,102 @@ import {
 } from "@/api/lib/search/preview-passages";
 
 const SEARCH_INDEX_CONCURRENCY = 4;
+const SEARCH_BACKFILL_RETRY_DELAYS_MS = [60_000, 5 * 60_000] as const;
+const SEARCH_BACKFILL_MAX_ATTEMPTS = SEARCH_BACKFILL_RETRY_DELAYS_MS.length + 1;
+const ERROR_CLASS_MAX_LENGTH = 80;
+
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both operands remain PostgreSQL timestamptz columns; neither is round-tripped through a JS Date
+const matchingSearchBackfillSourceVersion = sql`${caseLawSearchBackfillFailures.sourceUpdatedAt} = ${caseLawDecisions.updatedAt}`;
+
+// A marker is only authoritative for the source version that failed. The
+// decision PK probe excludes cooling and parked work without walking the
+// failure table ahead of the created-at candidate index.
+const eligibleSearchBackfillDecision = sql`NOT EXISTS (
+  SELECT 1 FROM ${caseLawSearchBackfillFailures}
+  WHERE ${caseLawSearchBackfillFailures.decisionId} = ${caseLawDecisions.id}
+    AND ${matchingSearchBackfillSourceVersion}
+    AND (
+      ${caseLawSearchBackfillFailures.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
+      OR ${caseLawSearchBackfillFailures.nextEligibleAt} > now()
+    )
+)`;
+
+type SearchBackfillFailure = {
+  decisionId: SafeId<"caseLawDecision">;
+  sourceUpdatedAt: string;
+  error: unknown;
+};
+
+type SearchBackfillDisposition =
+  | { type: "cooldown"; attempts: number }
+  | { type: "parked"; attempts: number }
+  | { type: "superseded" };
+
+const recordSearchBackfillFailure = async (
+  scopedDb: ScopedDb,
+  { decisionId, sourceUpdatedAt, error }: SearchBackfillFailure,
+): Promise<SearchBackfillDisposition> => {
+  const sameSource = sql`failure.source_updated_at = EXCLUDED.source_updated_at`;
+  const nextAttempts = sql`CASE WHEN ${sameSource}
+    THEN LEAST(failure.attempt_count + 1, ${SEARCH_BACKFILL_MAX_ATTEMPTS})
+    ELSE 1 END`;
+  const nextEligibleAt = sql`CASE
+    WHEN ${nextAttempts} >= ${SEARCH_BACKFILL_MAX_ATTEMPTS} THEN NULL
+    WHEN ${nextAttempts} = 1
+      THEN now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[0]}::bigint * interval '1 millisecond')
+    ELSE now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[1]}::bigint * interval '1 millisecond')
+  END`;
+  const errorClass = errorTag(error).slice(0, ERROR_CLASS_MAX_LENGTH);
+  const row = await scopedDb(async (tx) =>
+    // audit: skip — durable retry state for a derived public search projection
+    executedRows(
+      await tx.execute(sql`INSERT INTO case_law_search_backfill_failures AS failure (
+        decision_id, source_updated_at, attempt_count, last_error_class,
+        status, next_eligible_at, last_failed_at
+      )
+      SELECT
+        decision.id, decision.updated_at, 1, ${errorClass},
+        ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN},
+        now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[0]}::bigint * interval '1 millisecond'),
+        now()
+      FROM case_law_decisions AS decision
+      WHERE decision.id = ${decisionId}
+        AND decision.updated_at = ${sourceUpdatedAt}::timestamptz
+      ON CONFLICT (decision_id) DO UPDATE SET
+        source_updated_at = EXCLUDED.source_updated_at,
+        attempt_count = ${nextAttempts},
+        last_error_class = EXCLUDED.last_error_class,
+        status = CASE
+          WHEN ${nextAttempts} >= ${SEARCH_BACKFILL_MAX_ATTEMPTS}
+            THEN ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
+          ELSE ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN}
+        END,
+        next_eligible_at = ${nextEligibleAt},
+        last_failed_at = now()
+      RETURNING attempt_count, status`),
+    ).at(0),
+  );
+  if (row === undefined) {
+    return { type: "superseded" };
+  }
+  if (
+    typeof row !== "object" ||
+    row === null ||
+    !("attempt_count" in row) ||
+    typeof row.attempt_count !== "number" ||
+    !("status" in row)
+  ) {
+    return panic("Search backfill failure record is malformed");
+  }
+  switch (row.status) {
+    case CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN:
+      return { type: "cooldown", attempts: row.attempt_count };
+    case CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED:
+      return { type: "parked", attempts: row.attempt_count };
+    default:
+      return panic("Search backfill failure status is unknown");
+  }
+};
 
 type ProjectionWriteScope =
   | { type: "shared"; scopedDb: ScopedDb }
@@ -150,6 +249,9 @@ export const indexDecision = async (
         await tx
           .delete(caseLawSearchDocuments)
           .where(eq(caseLawSearchDocuments.decisionId, decision.id));
+        await tx
+          .delete(caseLawSearchBackfillFailures)
+          .where(eq(caseLawSearchBackfillFailures.decisionId, decision.id));
         return;
       }
       await tx.execute(sql`
@@ -193,6 +295,10 @@ export const indexDecision = async (
       SET preview_generation = ${previewGeneration}::uuid
       WHERE decision_id = ${decision.id}
     `);
+      // audit: skip — a successful derived projection clears its retry state
+      await tx
+        .delete(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decision.id));
     });
   };
 
@@ -227,7 +333,11 @@ export const indexDecision = async (
  * indexed successfully; the caller schedules its next poll off `found`
  * (an all-failing batch is pending work, not an idle projection).
  */
-type SearchIndexBackfillResult = { found: number; indexed: number };
+type SearchIndexBackfillResult = {
+  found: number;
+  indexed: number;
+  parked: { type: "parked"; count: number };
+};
 
 export const backfillSearchIndex = async (
   scopedDb: ScopedDb,
@@ -235,10 +345,9 @@ export const backfillSearchIndex = async (
   resolveConfig: typeof resolveLocalFtsConfig = resolveLocalFtsConfig,
   withProjectionDb: typeof withDedicatedCorpusBackfillDb = withDedicatedCorpusBackfillDb,
 ): Promise<SearchIndexBackfillResult> => {
-  // Find decisions that need (re)indexing. ASC order so the backlog
-  // clears in insertion order, avoiding a "poison pill" where a
-  // consistently-failing decision at the top of DESC blocks the
-  // rest of the queue.
+  // Find decisions that need (re)indexing. ASC order clears the backlog in
+  // insertion order; the failure marker lets later rows pass a cooling or
+  // parked decision.
   //
   // Split into two queries because Postgres' planner can't use
   // any index for `LEFT JOIN ... WHERE x IS NULL OR y > z` — the
@@ -258,7 +367,12 @@ export const backfillSearchIndex = async (
 
   const missing = await scopedDb((tx) =>
     tx
-      .select({ id: caseLawDecisions.id })
+      .select({
+        id: caseLawDecisions.id,
+        sourceUpdatedAt: sql<string>`${caseLawDecisions.updatedAt}::text`.as(
+          "source_updated_at",
+        ),
+      })
       .from(caseLawDecisions)
       .innerJoin(
         caseLawSources,
@@ -277,6 +391,7 @@ export const backfillSearchIndex = async (
                 eq(caseLawSearchDocuments.decisionId, caseLawDecisions.id),
               ),
           ),
+          eligibleSearchBackfillDecision,
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt))
@@ -290,6 +405,9 @@ export const backfillSearchIndex = async (
         .select({
           id: caseLawDecisions.id,
           createdAt: caseLawDecisions.createdAt,
+          sourceUpdatedAt: sql<string>`${caseLawDecisions.updatedAt}::text`.as(
+            "source_updated_at",
+          ),
         })
         .from(caseLawDecisions)
         .innerJoin(
@@ -306,6 +424,7 @@ export const backfillSearchIndex = async (
             redistributableCaseLawSource,
             publishedCaseLawDecision,
             predicate,
+            eligibleSearchBackfillDecision,
           ),
         )
         .orderBy(asc(caseLawDecisions.createdAt))
@@ -337,7 +456,10 @@ export const backfillSearchIndex = async (
     // A later row in either branch cannot enter the merged first page.
     const candidates = union(updated, missingPreview).as("stale_candidates");
     return tx
-      .select({ id: candidates.id })
+      .select({
+        id: candidates.id,
+        sourceUpdatedAt: candidates.sourceUpdatedAt,
+      })
       .from(candidates)
       .orderBy(asc(candidates.createdAt))
       .limit(staleLimit);
@@ -345,18 +467,20 @@ export const backfillSearchIndex = async (
 
   const rows = [...missing, ...stale];
 
-  const indexRow = async (row: { id: string }): Promise<number> => {
+  const indexRow = async (row: {
+    id: string;
+    sourceUpdatedAt: string;
+  }): Promise<number> => {
+    const decisionId = brandPersistedCaseLawDecisionId(row.id);
     const indexed = (
       await Result.tryPromise({
         try: async () =>
           await withProjectionDb(
             async (dedicatedDb) =>
-              await indexDecision(
-                brandPersistedCaseLawDecisionId(row.id),
-                scopedDb,
-                resolveConfig,
-                { type: "dedicated", scopedDb: dedicatedDb },
-              ),
+              await indexDecision(decisionId, scopedDb, resolveConfig, {
+                type: "dedicated",
+                scopedDb: dedicatedDb,
+              }),
           ),
         catch: (cause) => cause,
       })
@@ -364,12 +488,18 @@ export const backfillSearchIndex = async (
     if (Result.isOk(indexed)) {
       return 1;
     }
+    const retry = await recordSearchBackfillFailure(scopedDb, {
+      decisionId,
+      sourceUpdatedAt: row.sourceUpdatedAt,
+      error: indexed.error,
+    });
     captureError(indexed.error, {
       decisionId: row.id,
       step: "backfillSearchIndex",
     });
     logger.error("case_law.search_index.backfill_failed", {
       decisionId: row.id,
+      retry,
       ...errorSystemFields(indexed.error),
       ...pgErrorFields(indexed.error),
     });
@@ -388,7 +518,32 @@ export const backfillSearchIndex = async (
     indexed += result;
   }
 
-  return { found: rows.length, indexed };
+  const parked = await scopedDb(async (tx) => {
+    const row = (
+      await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(caseLawSearchBackfillFailures)
+        .innerJoin(
+          caseLawDecisions,
+          and(
+            eq(caseLawSearchBackfillFailures.decisionId, caseLawDecisions.id),
+            matchingSearchBackfillSourceVersion,
+          ),
+        )
+        .where(
+          eq(
+            caseLawSearchBackfillFailures.status,
+            CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED,
+          ),
+        )
+    ).at(0);
+    return row?.count ?? panic("Search backfill parked count is missing");
+  });
+  return {
+    found: rows.length,
+    indexed,
+    parked: { type: "parked", count: parked },
+  };
 };
 
 /**
@@ -401,10 +556,13 @@ export const removeDecisionFromIndex = async (
   scopedDb: ScopedDb,
 ): Promise<void> => {
   // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
+  await scopedDb(async (tx) => {
     // audit: skip — search index maintenance; rebuilds derived state
-    return tx
+    await tx
       .delete(caseLawSearchDocuments)
       .where(eq(caseLawSearchDocuments.decisionId, decisionId));
+    await tx
+      .delete(caseLawSearchBackfillFailures)
+      .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId));
   });
 };
