@@ -58,6 +58,7 @@ import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -338,6 +339,7 @@ const streamChatStub = mock(
 );
 
 const sendChatMessage = createSendMessage({
+  compactMessagesForContext,
   createRefRegistry: createChatRefRegistry,
   indexThread: async () => undefined,
   loadExternalMcpTools: async () => {
