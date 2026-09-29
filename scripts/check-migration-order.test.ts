@@ -1,106 +1,124 @@
 import { describe, expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { findMigrationOrderViolation } from "./check-migration-order";
+import {
+  findMigrationIdentityViolation,
+  readMigrationChanges,
+} from "./check-migration-order";
 
-describe("migration ordering", () => {
-  test("accepts strictly newer migration timestamps", () => {
+const migrationDirectory = (name: string) => `apps/api/drizzle/${name}`;
+
+describe("migration identity", () => {
+  test("accepts a migration stamped before one already on the base branch", () => {
     expect(
-      findMigrationOrderViolation({
-        baseDirectories: ["20260801120000_existing", "20260801130000_latest"],
-        newDirectories: [
-          "apps/api/drizzle/20260801140000_first",
-          "apps/api/drizzle/20260801150000_second",
+      findMigrationIdentityViolation({
+        addedDirectories: [migrationDirectory("20260801110000_late_arrival")],
+        removedDirectories: [],
+      }),
+    ).toBeNull();
+  });
+
+  test("accepts two new migrations with the same timestamp", () => {
+    expect(
+      findMigrationIdentityViolation({
+        addedDirectories: [
+          migrationDirectory("20260801140000_first"),
+          migrationDirectory("20260801140000_second"),
         ],
+        removedDirectories: [],
       }),
     ).toBeNull();
   });
 
-  test("rejects a migration older than the latest base migration", () => {
+  test("rejects a directory without the timestamp prefix", () => {
+    const directory = migrationDirectory("report_export_result_field");
     expect(
-      findMigrationOrderViolation({
-        baseDirectories: ["20260801130000_latest"],
-        newDirectories: ["apps/api/drizzle/20260801110000_late_arrival"],
+      findMigrationIdentityViolation({
+        addedDirectories: [directory],
+        removedDirectories: [],
       }),
-    ).toEqual({
-      type: "not-after-base",
-      directory: "apps/api/drizzle/20260801110000_late_arrival",
-      timestamp: "20260801110000",
-      previousTimestamp: "20260801130000",
-    });
+    ).toEqual({ type: "invalid-name", directory });
   });
 
-  test("rejects duplicate timestamps among new migrations", () => {
+  test("rejects deleting a base migration", () => {
+    const directory = migrationDirectory("20260801120000_existing");
     expect(
-      findMigrationOrderViolation({
-        baseDirectories: ["20260801130000_latest"],
-        newDirectories: [
-          "apps/api/drizzle/20260801140000_first",
-          "apps/api/drizzle/20260801140000_second",
-        ],
+      findMigrationIdentityViolation({
+        addedDirectories: [],
+        removedDirectories: [directory],
       }),
-    ).toMatchObject({
-      type: "not-after-base",
-      timestamp: "20260801140000",
-      previousTimestamp: "20260801140000",
-    });
+    ).toEqual({ type: "removed-base-migration", directory });
   });
 
-  // The motivating race: the branch is generated against an older tip, and a
-  // higher-timestamped migration lands on the base branch before it merges.
-  // Already-migrated databases record the higher timestamp and never apply the
-  // lower one, so the DDL silently never runs.
-  test("rejects a migration that the base branch overtook after it was generated", () => {
+  test("rejects renaming a base migration", () => {
+    const directory = migrationDirectory("20260801120000_existing");
     expect(
-      findMigrationOrderViolation({
-        baseDirectories: [
-          "20260816140000_branch_point",
-          "20260816200000_landed_meanwhile",
-        ],
-        newDirectories: ["apps/api/drizzle/20260816150000_generated_earlier"],
+      findMigrationIdentityViolation({
+        addedDirectories: [migrationDirectory("20260801130000_renamed")],
+        removedDirectories: [directory],
       }),
-    ).toMatchObject({
-      type: "not-after-base",
-      timestamp: "20260816150000",
-      previousTimestamp: "20260816200000",
-    });
+    ).toEqual({ type: "removed-base-migration", directory });
   });
 
-  test("a pull request that adds no migrations has nothing to violate", () => {
+  test("accepts a pull request without migration changes", () => {
     expect(
-      findMigrationOrderViolation({
-        baseDirectories: ["20260816200000_landed_meanwhile"],
-        newDirectories: [],
+      findMigrationIdentityViolation({
+        addedDirectories: [],
+        removedDirectories: [],
       }),
     ).toBeNull();
   });
 
-  test("the first migration in an empty tree is accepted", () => {
-    expect(
-      findMigrationOrderViolation({
-        baseDirectories: [],
-        newDirectories: ["apps/api/drizzle/20260801120000_initial"],
-      }),
-    ).toBeNull();
-  });
+  test("a folder rename appears as a deletion and an addition in git", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "migration-identity-"));
+    const runGit = (...arguments_: string[]) => {
+      const result = Bun.spawnSync(["git", ...arguments_], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(0);
+      return result.stdout.toString();
+    };
+    try {
+      runGit("init", "-b", "main");
+      runGit("config", "user.name", "Test User");
+      runGit("config", "user.email", "test@example.com");
+      runGit("config", "commit.gpgsign", "false");
+      const original = migrationDirectory("20260801120000_original");
+      const renamed = migrationDirectory("20260801130000_renamed");
+      mkdirSync(path.join(cwd, original), { recursive: true });
+      writeFileSync(path.join(cwd, original, "migration.sql"), "SELECT 1;\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Initial migration");
+      runGit("switch", "-c", "feature");
+      renameSync(path.join(cwd, original), path.join(cwd, renamed));
+      runGit("add", "-A");
+      runGit("commit", "-m", "Rename migration");
 
-  test("base directories without timestamps do not raise the floor", () => {
-    expect(
-      findMigrationOrderViolation({
-        baseDirectories: ["meta", "20260801120000_existing"],
-        newDirectories: ["apps/api/drizzle/20260801130000_next"],
-      }),
-    ).toBeNull();
-  });
-
-  test("rejects migration directories without canonical timestamps", () => {
-    expect(
-      findMigrationOrderViolation({
-        baseDirectories: [],
-        newDirectories: ["apps/api/drizzle/report_export_result_field"],
-      }),
-    ).toEqual({
-      type: "invalid-name",
-      directory: "apps/api/drizzle/report_export_result_field",
-    });
+      expect(
+        runGit(
+          "-c",
+          "diff.renames=true",
+          "diff",
+          "--name-status",
+          "main...HEAD",
+        ),
+      ).toContain("R100");
+      expect(readMigrationChanges({ baseRef: "main", cwd })).toEqual({
+        addedDirectories: [renamed],
+        removedDirectories: [original],
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });
