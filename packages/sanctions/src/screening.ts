@@ -101,7 +101,7 @@ type BirthDateComparison =
 const birthDateMatch = (
   query: QueryBirthDate,
   listed: BirthDate,
-): "exact" | "approximate" | "mismatch" => {
+): BirthDateComparison => {
   const tolerance = listed.circa ? CIRCA_YEARS : 0;
   const yearWithin = (from: number, to: number) =>
     query.year >= from - tolerance && query.year <= to + tolerance;
@@ -127,6 +127,14 @@ const birthDateMatch = (
       return yearWithin(listed.year, listed.year) && monthAgrees(listed.month)
         ? "approximate"
         : "mismatch";
+    case "month-day":
+      if (query.month === undefined || query.day === undefined) {
+        return "not-compared";
+      }
+      if (query.month === listed.month && query.day === listed.day) {
+        return "approximate";
+      }
+      return listed.circa ? "not-compared" : "mismatch";
     case "year":
       return yearWithin(listed.year, listed.year) ? "approximate" : "mismatch";
     case "year-range":
@@ -154,7 +162,10 @@ const compareBirthDates = (
   if (outcomes.has("exact")) {
     return "exact";
   }
-  return outcomes.has("approximate") ? "approximate" : "mismatch";
+  if (outcomes.has("approximate")) {
+    return "approximate";
+  }
+  return outcomes.has("not-compared") ? "not-compared" : "mismatch";
 };
 
 export type ScreeningQuery = {

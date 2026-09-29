@@ -81,6 +81,7 @@ export const CHAT_RESOURCE_LINK_DISPOSITION = {
   [RESOURCE_TYPE.SAVED_SEARCH]: { type: "unsupported" },
   [RESOURCE_TYPE.SELLER_PROFILE]: { type: "unsupported" },
   [RESOURCE_TYPE.SAVED_TIME_NARRATIVE]: { type: "unsupported" },
+  [RESOURCE_TYPE.NUMBER_SERIES]: { type: "unsupported" },
   [RESOURCE_TYPE.STYLE_SET]: { type: "unsupported" },
   [RESOURCE_TYPE.TEMPLATE]: { type: "unsupported" },
   [RESOURCE_TYPE.TEMPLATE_CATEGORY]: { type: "unsupported" },
