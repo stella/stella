@@ -3,8 +3,8 @@ import { eq, inArray } from "drizzle-orm";
 
 import type { SanctionsSource } from "@stll/sanctions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { sanctionsEditions, sanctionsSources } from "@/api/db/schema";
+import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
@@ -66,7 +66,7 @@ const freshnessReason = ({
   return null;
 };
 
-const loadSanctionsRows = async (db: ScopedDb, ids: SanctionsSource[]) =>
+const loadSanctionsRows = async (db: SanctionsReadDb, ids: SanctionsSource[]) =>
   await db(
     async (tx) =>
       await tx
@@ -199,7 +199,7 @@ export const readSanctionsFreshness = async ({
   db,
   now = new Date(),
 }: {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   now?: Date | undefined;
 }): Promise<SanctionsSourceFreshness[]> => {
   const ids = sanctionsSourceIds();

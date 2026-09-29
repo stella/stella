@@ -582,3 +582,20 @@ export const installPgliteMigration = async ({
     await db.execute(sql.raw(statement));
   }
 };
+
+/** Derive public sanctions column grants from the migration rather than mirror them. */
+export const installPglitePublicSanctionsGrants = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const migration = nodePath.join(
+    DRIZZLE_DIR,
+    "20261003122300_public_sanctions_reader",
+    "migration.sql",
+  );
+  for (const statement of readMigrationStatements(migration)) {
+    const sqlStatement = executableSql(statement);
+    if (sqlStatement.startsWith("GRANT ")) {
+      await db.execute(sql.raw(sqlStatement));
+    }
+  }
+};

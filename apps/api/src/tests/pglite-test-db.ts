@@ -28,6 +28,7 @@ import {
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
+  installPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
@@ -640,6 +641,9 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await db.execute(sql.raw("CREATE ROLE stella_caselaw_reader NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_public_law_reader NOLOGIN"));
   await db.execute(
+    sql.raw("CREATE ROLE stella_public_sanctions_reader NOLOGIN"),
+  );
+  await db.execute(
     sql.raw("CREATE ROLE stella_case_law_analysis_writer NOLOGIN"),
   );
   await db.execute(
@@ -655,6 +659,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   for (const statement of sqlStatements) {
     await db.execute(sql.raw(statement));
   }
+  await installPglitePublicSanctionsGrants(db);
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
   await installPgliteCorpusProjectionRevisionFence(db);

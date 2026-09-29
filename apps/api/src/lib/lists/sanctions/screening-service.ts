@@ -19,10 +19,10 @@ import type {
   ScreeningQuery,
 } from "@stll/sanctions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classification";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import type { SanctionsSourceFreshness } from "@/api/lib/lists/sanctions/freshness";
+import type { SanctionsReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { sharedSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import type {
@@ -282,7 +282,7 @@ const toPossibleMatch = (
 });
 
 type ScreenListProps = {
-  db: ScopedDb;
+  db: SanctionsReadDb;
   freshness: SanctionsSourceFreshness;
   query: ScreeningQuery;
   base: ListOutcomeBase;
@@ -357,7 +357,7 @@ const screenList = async ({
 
 export type ScreenSanctionsSubjectProps = {
   /** Any handle that may read the global sanctions tables. */
-  db: ScopedDb;
+  db: SanctionsReadDb;
   subject: SanctionsScreeningSubject;
   /** The firm's practice jurisdictions; empty labels every list informational. */
   practiceJurisdictions: readonly CountryCode[];

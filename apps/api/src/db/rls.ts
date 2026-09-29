@@ -20,6 +20,11 @@ export const stellaPublicLawReader = p
   .pgRole("stella_public_law_reader")
   .existing();
 
+// Anonymous sanctions screening may read only the global reference lists.
+export const stellaPublicSanctionsReader = p
+  .pgRole("stella_public_sanctions_reader")
+  .existing();
+
 // Operator login that pre-computes decision analyses. It reads a narrow column
 // set of the two case-law relations the computation needs and may write exactly
 // one column, case_law_decisions.analysis.
@@ -764,6 +769,14 @@ export const globalCaseLawPolicies = () => [
     to: stellaIngestion,
     using: allowAllRows,
     withCheck: allowAllRows,
+  }),
+];
+
+export const publicSanctionsReaderPolicies = () => [
+  p.pgPolicy("public_sanctions_reader_access", {
+    for: "select",
+    to: stellaPublicSanctionsReader,
+    using: allowAllRows,
   }),
 ];
 
