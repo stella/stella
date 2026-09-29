@@ -18,7 +18,7 @@
 // `<Navigate>`, or a component that calls `useNavigate()` from a mount effect
 // and renders only a static pending splash. A component keeps the route in
 // `success` status so it never enters the redirected-match state, and an inert
-// fallback fires no queries. See apps/web/src/routes/_protected.knowledge/skills.tsx
+// fallback fires no queries. See apps/web/src/routes/knowledge/skills.tsx
 // (`<Navigate>`) or apps/web/src/routes/index.tsx (async dispatch).
 //
 // Conditional guards are intentionally allowed: a handler with a reachable
@@ -197,7 +197,7 @@ export default eslintCompatPlugin({
             "load promise that Suspense cannot absorb. Redirect from a mounted " +
             "inert component instead — render <Navigate>, or call useNavigate() " +
             "from useMountEffect and render a static pending splash. See " +
-            "apps/web/src/routes/_protected.knowledge/skills.tsx. Conditional " +
+            "apps/web/src/routes/knowledge/skills.tsx. Conditional " +
             "guards that fall through to render a route are fine.",
         },
       },

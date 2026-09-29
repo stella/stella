@@ -43,7 +43,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(getActiveSkillChatContext(tab)).toEqual({
@@ -67,7 +67,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(
@@ -104,7 +104,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(
@@ -135,7 +135,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(getActiveSkillChatContext(tab)).toBeUndefined();
@@ -156,7 +156,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(getActiveSkillChatContext(tab)).toBeUndefined();

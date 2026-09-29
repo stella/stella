@@ -909,7 +909,7 @@ describe("revive suggestion", () => {
       id: "test-bound-view:tpl-1",
       label: "NDA template",
       payload: { templateId: "tpl-1" },
-      ownerRouteId: "/_protected/knowledge/templates",
+      ownerRouteId: "/knowledge/templates",
     });
 
     useInspectorTabsStore
@@ -946,7 +946,7 @@ describe("revive suggestion", () => {
       id: "test-grouped-bound-view:tpl-1",
       label: "NDA template",
       payload: { templateId: "tpl-1" },
-      ownerRouteId: "/_protected/knowledge/templates",
+      ownerRouteId: "/knowledge/templates",
     });
     const groupId = store.createGroup({ name: "Templates", color: "blue" });
     store.setTabGroup("test-grouped-bound-view:tpl-1", groupId);
@@ -964,13 +964,13 @@ describe("revive suggestion", () => {
       id: "test-owned-view:1",
       label: "Owned",
       payload: {},
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     });
     const tabIds = () =>
       useInspectorTabsStore.getState().tabs.map(({ id }) => id);
 
     store.closeTabsOutsideRoutes(
-      new Set(["__root__", "/_protected", "/_protected/knowledge/tools"]),
+      new Set(["__root__", "/_protected", "/knowledge/tools"]),
     );
     expect(tabIds()).toEqual(["thread-1", "test-owned-view:1"]);
 
@@ -986,11 +986,11 @@ describe("revive suggestion", () => {
       id: "test-owned-view:router",
       label: "Owned",
       payload: {},
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     });
 
     resolvedRouteIdsStore.setState({
-      routeIds: new Set(["__root__", "/_protected/knowledge/tools"]),
+      routeIds: new Set(["__root__", "/knowledge/tools"]),
     });
     expect(useInspectorTabsStore.getState().tabs.map(({ id }) => id)).toEqual([
       "test-owned-view:router",

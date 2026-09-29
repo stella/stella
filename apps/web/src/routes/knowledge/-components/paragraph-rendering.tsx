@@ -1,0 +1,89 @@
+import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { scanMarkers } from "@stll/template-conditions";
+import { TextMark } from "@stll/ui/text-mark";
+import { cn } from "@stll/ui/utils";
+
+import { CONDITIONAL_KINDS } from "@/routes/knowledge/-components/directive-kinds";
+import type { BlockDirectiveKind } from "@/routes/knowledge/-components/directive-kinds";
+
+// ── Types ────────────────────────────────────────────
+
+// ── Sub-components ───────────────────────────────────
+
+export const HighlightedText = ({ text }: { text: string }) => {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const marker of scanMarkers(text)) {
+    if (marker.start > lastIndex) {
+      parts.push(text.slice(lastIndex, marker.start));
+    }
+
+    // Plain fields read as the prominent "to fill" token; clause slots,
+    // numbering markers, and block directives sit a touch softer.
+    const isField = marker.meta.kind === "placeholder";
+
+    parts.push(
+      <TextMark
+        key={marker.start}
+        tone={isField ? "warning" : "muted"}
+        variant="fill"
+      >
+        {marker.raw}
+      </TextMark>,
+    );
+    lastIndex = marker.end;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
+};
+
+export const DirectiveLabel = ({
+  kind,
+  expression,
+}: {
+  kind: BlockDirectiveKind;
+  expression: string;
+}) => {
+  const t = useTranslations("templates");
+  const isConditional = CONDITIONAL_KINDS.includes(kind);
+
+  const label = (() => {
+    switch (kind) {
+      case "if":
+        return t("directiveIf", { expression });
+      case "elif":
+        return t("directiveElif", { expression });
+      case "else":
+        return t("directiveElse");
+      case "endif":
+        return t("directiveEndIf");
+      case "for":
+        return t("directiveFor", { expression });
+      case "endfor":
+        return t("directiveEndFor");
+      default:
+        kind satisfies never;
+        return panic(`Unhandled kind: ${String(kind)}`);
+    }
+  })();
+
+  return (
+    <span
+      className={cn(
+        "text-xs font-medium",
+        isConditional
+          ? "text-foreground dark:text-foreground-muted"
+          : "text-success",
+      )}
+    >
+      {label}
+    </span>
+  );
+};

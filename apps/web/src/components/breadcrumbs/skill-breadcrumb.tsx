@@ -5,7 +5,7 @@ import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillDetailOptions } from "@/lib/knowledge/queries";
 
-const skillRoute = getRouteApi("/_protected/knowledge/tools_/$skillId");
+const skillRoute = getRouteApi("/knowledge/tools_/$skillId");
 
 export const SkillBreadcrumb = () => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;

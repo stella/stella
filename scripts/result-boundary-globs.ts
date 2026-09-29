@@ -379,7 +379,7 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/web/src/routes/_protected.chat" },
   { reason: "unreviewed", unit: "apps/web/src/routes/_protected.contacts" },
   { reason: "unreviewed", unit: "apps/web/src/routes/_protected.inbox" },
-  { reason: "unreviewed", unit: "apps/web/src/routes/_protected.knowledge" },
+  { reason: "unreviewed", unit: "apps/web/src/routes/knowledge" },
   { reason: "unreviewed", unit: "apps/web/src/routes/_protected.settings" },
   { reason: "unreviewed", unit: "apps/web/src/routes/_protected.workspaces" },
   { reason: "unreviewed", unit: "apps/web/src/routes/auth" },

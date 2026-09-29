@@ -754,11 +754,14 @@ const readAuthenticatedRouteTemplates = async (): Promise<string[]> => {
 };
 
 // The generated route tree types every authenticated `to` path against a
-// `Protected*` route (the `_protected` layout). Deriving the smoke set from
-// that structural marker, rather than a hand-maintained prefix allow-list,
-// means a newly added authenticated top-level section fails the coverage test
-// until it is either smoked or placed in INTENTIONALLY_NOT_SMOKED.
-const PROTECTED_ROUTE_LINE = /^'(?<path>[^']+)':\s*typeof\s+Protected/u;
+// `Protected*` route (the `_protected` layout) or a `Knowledge*` route (the
+// Knowledge tree, which keeps the same sign-in guard beside it). Deriving the
+// smoke set from those structural markers, rather than a hand-maintained
+// prefix allow-list, means a newly added authenticated top-level section
+// fails the coverage test until it is either smoked or placed in
+// INTENTIONALLY_NOT_SMOKED.
+const PROTECTED_ROUTE_LINE =
+  /^'(?<path>[^']+)':\s*typeof\s+(?:Protected|Knowledge)/u;
 
 const parseAuthenticatedRouteTemplate = (line: string): string | null =>
   PROTECTED_ROUTE_LINE.exec(line.trimStart())?.groups?.["path"] ?? null;

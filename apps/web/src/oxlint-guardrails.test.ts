@@ -217,7 +217,7 @@ describe("custom oxlint guardrails", () => {
 
   test("tools route keeps heavy catalogue UI behind Suspense", () => {
     const toolsRouteSource = readRootFixture(
-      "apps/web/src/routes/_protected.knowledge/tools.tsx",
+      "apps/web/src/routes/knowledge/tools.tsx",
     );
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-static-catalogue-route-import.ts",
@@ -247,9 +247,7 @@ describe("custom oxlint guardrails", () => {
     expect(configSource).toContain(
       "no-static-catalogue-route-import/no-static-catalogue-route-import",
     );
-    expect(configSource).toContain(
-      "apps/web/src/routes/_protected.knowledge/tools.tsx",
-    );
+    expect(configSource).toContain("apps/web/src/routes/knowledge/tools.tsx");
   });
 
   test("devtools shell lazy-loads TanStack panels", () => {
