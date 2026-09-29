@@ -22,6 +22,7 @@ import {
   settleChatTurnOnTx,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -81,6 +82,7 @@ const builtRegistries: ChatRefRegistry[] = [];
 let beforeAcceptance: ((tx: Transaction) => Promise<void>) | undefined;
 
 const sendMessage = createSendMessage({
+  compactMessagesForContext,
   createRefRegistry: (bindings, retired) => {
     const registry = createChatRefRegistry(bindings, retired);
     builtRegistries.push(registry);

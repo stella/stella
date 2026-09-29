@@ -20,6 +20,7 @@ import {
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import type { SendMessageDependencies } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -298,6 +299,7 @@ export const createApprovalHarness = ({
         webSearchProvider: null,
       }),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
+    compactMessagesForContext,
     streamResponse: streamChat,
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;

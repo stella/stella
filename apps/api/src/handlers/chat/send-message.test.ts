@@ -15,6 +15,7 @@ import {
   createSendMessage,
   shouldLoadExternalMcpToolsForStreaming,
 } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
@@ -82,7 +83,9 @@ const rollbackUnpersistedChatSideEffectsMock = mock(
     >[0],
   ) => await realRollbackUnpersistedChatSideEffects(options),
 );
+const compactMessagesForContextMock = mock(compactMessagesForContext);
 const sendMessage = createSendMessage({
+  compactMessagesForContext: compactMessagesForContextMock,
   createRefRegistry: createChatRefRegistry,
   indexThread: upsertChatThreadSearchDocumentMock,
   loadExternalMcpTools: loadExternalMcpToolsForUserMock,
@@ -168,6 +171,16 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   }
   const query = "query" in transaction ? transaction.query : undefined;
   return {
+    execute: async (statement: SQL) => {
+      if (
+        !new PgDialect()
+          .sqlToQuery(statement)
+          .sql.includes("chat_turn_run_id_taken")
+      ) {
+        throw new Error("Unexpected SQL execution in chat send test");
+      }
+      return { rows: [{ taken: false }] };
+    },
     select: selectChatMessages,
     ...transaction,
     query: {
@@ -1082,6 +1095,102 @@ describe("send message disconnect handling", () => {
         route: "/v1/chat/send",
       },
     ]);
+  });
+
+  test("rejects a taken run id before metered context compaction", async () => {
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: () =>
+        table === chatTurns
+          ? {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: turnId }],
+              }),
+            }
+          : undefined,
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        if (table === chatTurns) {
+          turnUpdates.push(values);
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
+    const lookup = mock(async (statement: SQL) => {
+      expect(new PgDialect().sqlToQuery(statement).sql).toContain(
+        "chat_turn_run_id_taken",
+      );
+      return { rows: [{ taken: true }] };
+    });
+    compactMessagesForContextMock.mockClear();
+    loadExternalMcpToolsForUserMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          execute: lookup,
+          insert,
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: withThreadNameReads(selectWithThreadLock),
+          update,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: { message: "The run id already names another chat turn" },
+    });
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(compactMessagesForContextMock).not.toHaveBeenCalled();
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        failureCode: "internal",
+        failureRetryable: false,
+        status: "failed",
+      }),
+    );
   });
 
   test("stops before connector discovery when the client disconnects during persistence", async () => {

@@ -44,7 +44,9 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { isRecord } from "@/api/lib/type-guards";
 
 /** Maximum time a metered provider call may run before the server aborts it. */
 export const CHAT_METERED_PROVIDER_TIMEOUT_MS = 10 * 60 * 1000;
@@ -1151,6 +1153,32 @@ export const startChatTurnRun = async ({
   }
   return started;
 };
+
+/** Advisory preflight check; startChatTurnRun remains the atomic run-id fence. */
+export const isChatTurnRunIdTaken = async ({
+  execution,
+  runId,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  runId: string;
+  safeDb: SafeDb;
+}): Promise<Result<boolean, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    const result = await tx.execute(sql`
+      SELECT public.chat_turn_run_id_taken(
+        ${execution.id}::uuid,
+        ${execution.executionId}::uuid,
+        ${runId}::text
+      ) AS taken
+    `);
+    const row = executedRows(result).at(0);
+    const taken = isRecord(row) ? row["taken"] : undefined;
+    if (typeof taken !== "boolean") {
+      panic("Chat turn run-id lookup returned an invalid value");
+    }
+    return taken;
+  });
 
 /**
  * Where an execution stands with its turn: still owning it, owning it with a

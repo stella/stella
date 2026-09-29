@@ -81,6 +81,7 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
+  isChatTurnRunIdTaken,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
@@ -1589,6 +1590,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
@@ -1599,6 +1601,7 @@ export type SendMessageDependencies = {
 };
 
 const SEND_MESSAGE_DEPENDENCIES: SendMessageDependencies = {
+  compactMessagesForContext,
   createRefRegistry: createChatRefRegistry,
   indexThread: upsertChatThreadSearchDocument,
   loadExternalMcpTools: loadExternalMcpToolsForUser,
@@ -2028,6 +2031,23 @@ export const createSendMessage = (
           turnExecution,
         } = acceptedTurnResult.value;
 
+        const runIdTaken = yield* Result.await(
+          isChatTurnRunIdTaken({
+            execution: turnExecution,
+            runId: body.runId,
+            safeDb,
+          }),
+        );
+        if (runIdTaken) {
+          await lifecycle.failCurrentTurn("internal", false);
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "The run id already names another chat turn",
+            }),
+          );
+        }
+
         // Refs live as long as the thread, not the request: an interactive
         // answer is a new request, and every ref its history shows the model
         // must keep its target. Read now that this request owns the turn:
@@ -2085,21 +2105,22 @@ export const createSendMessage = (
           );
         }
 
-        const messagesForContextResult = await compactMessagesForContext({
-          abortSignal: createMeteredAIAbortSignal(),
-          boundary: thirdPartyBoundary,
-          chatModelOverride,
-          messages: messagesForContextInput,
-          organizationId: session.activeOrganizationId,
-          orgAIConfig,
-          reasoningEffort: chatReasoningEffort,
-          safeDb,
-          tenantWorkspaceIds: accessibleWorkspaceIds,
-          threadId: body.threadId,
-          usageLane: turnLane.lane,
-          userId: user.id,
-          workspaceId,
-        });
+        const messagesForContextResult =
+          await dependencies.compactMessagesForContext({
+            abortSignal: createMeteredAIAbortSignal(),
+            boundary: thirdPartyBoundary,
+            chatModelOverride,
+            messages: messagesForContextInput,
+            organizationId: session.activeOrganizationId,
+            orgAIConfig,
+            reasoningEffort: chatReasoningEffort,
+            safeDb,
+            tenantWorkspaceIds: accessibleWorkspaceIds,
+            threadId: body.threadId,
+            usageLane: turnLane.lane,
+            userId: user.id,
+            workspaceId,
+          });
         if (Result.isError(messagesForContextResult)) {
           await lifecycle.failCurrentTurn("provider-error", true);
           return Result.err(messagesForContextResult.error);
