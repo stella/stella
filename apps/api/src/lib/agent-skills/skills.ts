@@ -95,6 +95,16 @@ const isBuiltInSkill = (skillName: string): boolean => {
   return builtInSkillNames.has(skillName);
 };
 
+/**
+ * Whether `slug` names a built-in for this caller: an enabled installed row
+ * the caller can use shadows the built-in with the same slug, everywhere a
+ * skill is resolved by name. `enabledInstalledSlugs` holds those rows' slugs.
+ */
+export const resolvesToBuiltInSkill = (
+  slug: string,
+  enabledInstalledSlugs: { has: (slug: string) => boolean },
+): boolean => !enabledInstalledSlugs.has(slug) && isBuiltInSkill(slug);
+
 export const ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS = 30_000;
 
 type ChatSkillContext = {
@@ -103,7 +113,10 @@ type ChatSkillContext = {
   userId: SafeId<"user">;
 };
 
-/** A built-in has no row, so `skillName` alone names it. */
+/**
+ * A built-in has no row, so `skillName` alone names it, unless an enabled
+ * installed row with that slug shadows it, as on every other path.
+ */
 type ActiveChatSkillRequest = {
   skillId?: SafeId<"agentSkill"> | undefined;
   skillName: string;
@@ -174,10 +187,29 @@ export const resolveActiveSkillContext = async ({
     });
   }
 
-  if (!isBuiltInSkill(skillName)) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Skill not found" }),
-    );
+  const installed = await findInstalledSkills({
+    organizationId,
+    safeDb,
+    skillNames: [skillName],
+    userId,
+  });
+  if (Result.isError(installed)) {
+    return Result.err(installed.error);
+  }
+  if (!resolvesToBuiltInSkill(skillName, installed.value)) {
+    const row = installed.value.get(skillName);
+    if (!row) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Skill not found" }),
+      );
+    }
+    return await resolveInstalledActiveSkill({
+      activeSkill: { skillId: row.id, skillName },
+      memberRole,
+      organizationId,
+      safeDb,
+      userId,
+    });
   }
 
   const skill = loadSkill(skillName);
@@ -459,7 +491,7 @@ export const loadAvailableChatSkills = async ({
   }
   const rows = [...rowsResult.value.values()];
   const builtIns = skillNames
-    .filter((name) => !rowsResult.value.has(name) && isBuiltInSkill(name))
+    .filter((name) => resolvesToBuiltInSkill(name, rowsResult.value))
     .map((name): [string, LoadedChatSkill] => [name, loadBuiltInSkill(name)]);
   if (rows.length === 0) {
     return Result.ok(new Map(builtIns));

@@ -230,14 +230,46 @@ describe("an installed row and a built-in with the same slug", () => {
     await testDb.delete(agentSkills).where(eq(agentSkills.id, id));
   });
 
+  test("an enabled row shadows the built-in as the active skill picked by name", async () => {
+    const id = await insertShadow(true);
+
+    const active = unwrap(
+      await resolveActiveSkillContext({
+        ...callerA(),
+        activeSkill: { skillName: name },
+        memberRole: { role: "owner" },
+      }),
+    );
+
+    expect(active).toMatchObject({
+      body: "Installed shadow body",
+      displayName: `Shadow of ${name}`,
+      id,
+      source: "installed",
+      toolName: name,
+    });
+    await testDb.delete(agentSkills).where(eq(agentSkills.id, id));
+  });
+
   test("a disabled row leaves the built-in served", async () => {
     const id = await insertShadow(false);
 
     const loaded = unwrap(
       await loadAvailableChatSkills({ ...callerA(), skillNames: [name] }),
     );
+    const active = unwrap(
+      await resolveActiveSkillContext({
+        ...callerA(),
+        activeSkill: { skillName: name },
+        memberRole: { role: "owner" },
+      }),
+    );
 
     expect(loaded.get(name)).toMatchObject({ source: "built-in" });
+    expect(active).toMatchObject({
+      body: loadSkill(name).body,
+      source: "built-in",
+    });
     await testDb.delete(agentSkills).where(eq(agentSkills.id, id));
   });
 });
