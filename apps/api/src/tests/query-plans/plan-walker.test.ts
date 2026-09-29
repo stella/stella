@@ -259,6 +259,122 @@ test("a batched mitigation needs the observed LIMIT within its page size", () =>
   ]);
 });
 
+test("a pinned heap-fetch exception covers only its scan until it expires", () => {
+  const aggregatePlan = (index: string) =>
+    scanOccurrences({
+      "Node Type": "Limit",
+      "Plan Rows": 5,
+      Plans: [
+        {
+          "Node Type": "Aggregate",
+          Plans: [
+            {
+              "Node Type": "Append",
+              Plans: [
+                coveringScan({ "Index Name": index }),
+                coveringScan({ "Index Name": "case_law_decisions_other_idx" }),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+  const exception = {
+    scan: {
+      position: "root/0/0/0",
+      relation: "case_law_decisions",
+      nodeType: "Index Only Scan",
+      index: "case_law_decisions_sitemap_shard_idx",
+    },
+    reason: "per-row lookup under an aggregate",
+    rework: "bound the query",
+    expiresOn: "2026-10-13",
+  };
+  const onDay = (day: string) => new Date(`${day}T12:00:00Z`);
+  const onlyPinned = aggregatePlan("case_law_decisions_sitemap_shard_idx");
+  const pinnedScan = onlyPinned.filter(
+    ({ position }) => position === "root/0/0/0",
+  );
+
+  // Matching: the pinned scan is covered on and before the expiry day.
+  expect(
+    heapFetchRiskViolations(
+      pinnedScan,
+      "aggregate",
+      undefined,
+      [exception],
+      onDay("2026-10-13"),
+    ),
+  ).toEqual([]);
+  // Never covers another scan of the same plan.
+  expect(
+    heapFetchRiskViolations(
+      onlyPinned,
+      "aggregate",
+      undefined,
+      [exception],
+      onDay("2026-09-29"),
+    ),
+  ).toEqual([
+    "root/0/0/1: heap-fetch risk on case_law_decisions: declare one mitigation",
+  ]);
+  // Expired: fails after the expiry day and names the rework.
+  expect(
+    heapFetchRiskViolations(
+      pinnedScan,
+      "aggregate",
+      undefined,
+      [exception],
+      onDay("2026-10-14"),
+    ),
+  ).toEqual([
+    "heap-fetch exception for root/0/0/0 on case_law_decisions expired on 2026-10-13: bound the query",
+  ]);
+  // Stale: the plan changed, so the exception must be removed.
+  const stale =
+    "heap-fetch exception for root/0/0/0 on case_law_decisions is stale: the plan has no such risky Index Only Scan/case_law_decisions_sitemap_shard_idx; remove it";
+  expect(
+    heapFetchRiskViolations(
+      aggregatePlan("case_law_decisions_changed_idx").filter(
+        ({ position }) => position === "root/0/0/0",
+      ),
+      "aggregate",
+      undefined,
+      [exception],
+      onDay("2026-09-29"),
+    ),
+  ).toEqual([
+    stale,
+    "root/0/0/0: heap-fetch risk on case_law_decisions: declare one mitigation",
+  ]);
+  expect(
+    heapFetchRiskViolations(
+      scanOccurrences({
+        "Node Type": "Limit",
+        "Plan Rows": 5,
+        Plans: [{ "Node Type": "Append", Plans: [coveringScan()] }],
+      }),
+      "aggregate",
+      undefined,
+      [{ ...exception, scan: { ...exception.scan, position: "root/0/0" } }],
+      onDay("2026-09-29"),
+    ),
+  ).toEqual([stale.replace("root/0/0/0", "root/0/0")]);
+  // Declared twice, or without a rework or a real date.
+  expect(
+    heapFetchRiskViolations(
+      pinnedScan,
+      "aggregate",
+      undefined,
+      [exception, exception, { ...exception, rework: " " }],
+      onDay("2026-09-29"),
+    ),
+  ).toEqual([
+    "heap-fetch exception for root/0/0/0 on case_law_decisions is declared twice",
+    "heap-fetch exception for root/0/0/0 on case_law_decisions needs a reason, a rework and an expiry date",
+  ]);
+});
+
 test("flags an unbounded covering scan but leaves an Index Scan alone", () => {
   const scans = scanOccurrences({
     "Node Type": "Append",

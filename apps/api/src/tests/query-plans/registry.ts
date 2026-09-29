@@ -42,6 +42,7 @@ import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
 import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
 import type {
   AccessPath,
+  HeapFetchException,
   HeapFetchMitigation,
 } from "@/api/tests/query-plans/plan-walker";
 import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";
@@ -54,6 +55,7 @@ type QueryPlanEntry = {
   seed: "case-law" | "legislation";
   planMode?: "covering-index";
   heapFetchMitigation?: HeapFetchMitigation;
+  heapFetchExceptions?: readonly HeapFetchException[];
   contract: {
     scans: readonly AccessPath[];
     allowSeqScan?: string;
@@ -280,6 +282,20 @@ export const QUERY_PLAN_REGISTRY = [
         tx,
       }),
     seed: "case-law",
+    heapFetchExceptions: [
+      {
+        scan: {
+          position: "root/0/0/0/0/1/1",
+          relation: "case_law_decisions",
+          nodeType: "Index Only Scan",
+          index: "case_law_decisions_search_candidate_idx",
+        },
+        reason:
+          "Per-citing-row index-only lookup under an aggregate; the only Limit is above the aggregates.",
+        rework: "perf(case-law): bound the citation summary query",
+        expiresOn: "2026-10-13",
+      },
+    ],
     contract: planContracts["case-law.citation-summary"],
   },
   {
@@ -295,6 +311,13 @@ export const QUERY_PLAN_REGISTRY = [
         asOf: sql`CURRENT_DATE`,
       }),
     seed: "legislation",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      // Two correlated covering SubPlans, about one row each, per listed row.
+      rows: 2 * 21,
+      reason:
+        "Each version SubPlan run reads about one row, and the SubPlans run at most once per row under the outer Limit(21).",
+    },
     contract: planContracts["legislation.list"],
   },
   {

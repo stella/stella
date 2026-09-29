@@ -208,7 +208,12 @@ for (const entry of QUERY_PLAN_REGISTRY) {
       assertPlan(
         [
           ...violations,
-          ...heapFetchRiskViolations(scans, entry.class, mitigation),
+          ...heapFetchRiskViolations(
+            scans,
+            entry.class,
+            mitigation,
+            "heapFetchExceptions" in entry ? entry.heapFetchExceptions : [],
+          ),
         ],
         scans,
       );

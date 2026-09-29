@@ -41,6 +41,20 @@ export type HeapFetchMitigation =
   | { type: "snapshot"; relation: string }
   | { type: "heapFetchBudget"; rows: number; reason: string };
 
+/**
+ * A dated exception for one exact covering scan, while a rework is pending.
+ * It fails once it expires, and once the plan no longer has that risky scan.
+ */
+export type HeapFetchException = {
+  scan: Pick<ScanOccurrence, "position" | "relation" | "nodeType"> & {
+    index: string;
+  };
+  reason: string;
+  rework: string;
+  /** Last day the exception holds, as YYYY-MM-DD (UTC). */
+  expiresOn: string;
+};
+
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
 
 const field = (node: PlanNode, name: string): string | null => {
@@ -245,18 +259,56 @@ export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
   return scans;
 };
 
-/** Unbounded covering scans can visit heap pages when visibility bits are clear. */
-export const heapFetchRiskViolations = (
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const exceptionViolations = (
+  riskyScans: readonly ScanOccurrence[],
+  exceptions: readonly HeapFetchException[],
+  today: Date,
+): { violations: string[]; excepted: Set<ScanOccurrence> } => {
+  const violations: string[] = [];
+  const excepted = new Set<ScanOccurrence>();
+  const todayIso = today.toISOString().slice(0, 10);
+  for (const exception of exceptions) {
+    const { scan, reason, rework, expiresOn } = exception;
+    const label = `heap-fetch exception for ${scan.position} on ${scan.relation}`;
+    if (
+      reason.trim().length === 0 ||
+      rework.trim().length === 0 ||
+      !ISO_DATE.test(expiresOn) ||
+      Number.isNaN(Date.parse(expiresOn))
+    ) {
+      violations.push(`${label} needs a reason, a rework and an expiry date`);
+      continue;
+    }
+    if (todayIso > expiresOn) {
+      violations.push(`${label} expired on ${expiresOn}: ${rework}`);
+    }
+    const match = riskyScans.find(
+      (candidate) =>
+        candidate.position === scan.position &&
+        candidate.relation === scan.relation &&
+        candidate.nodeType === scan.nodeType &&
+        candidate.index === scan.index,
+    );
+    if (match === undefined) {
+      violations.push(
+        `${label} is stale: the plan has no such risky ${scan.nodeType}/${scan.index}; remove it`,
+      );
+    } else if (excepted.has(match)) {
+      violations.push(`${label} is declared twice`);
+    } else {
+      excepted.add(match);
+    }
+  }
+  return { violations, excepted };
+};
+
+const mitigationViolations = (
   scans: readonly ScanOccurrence[],
-  scanClass: "point" | "page" | "aggregate",
-  mitigation?: HeapFetchMitigation,
+  coveringScans: readonly ScanOccurrence[],
+  mitigation: HeapFetchMitigation | undefined,
 ): string[] => {
-  const coveringScans = scans.filter(
-    ({ relation, nodeType }) =>
-      guardedTables.has(relation) &&
-      nodeType === "Index Only Scan" &&
-      scanClass !== "point",
-  );
   const riskyScans = coveringScans.filter(({ limitAbove }) => !limitAbove);
   if (mitigation === undefined) {
     return riskyScans.map(
@@ -301,6 +353,34 @@ export const heapFetchRiskViolations = (
         ? []
         : ["heap-fetch budget needs a nonnegative number and a reason"];
   }
+};
+
+/** Unbounded covering scans can visit heap pages when visibility bits are clear. */
+export const heapFetchRiskViolations = (
+  scans: readonly ScanOccurrence[],
+  scanClass: "point" | "page" | "aggregate",
+  mitigation?: HeapFetchMitigation,
+  exceptions: readonly HeapFetchException[] = [],
+  today: Date = new Date(),
+): string[] => {
+  const guardedCovering = scans.filter(
+    ({ relation, nodeType }) =>
+      guardedTables.has(relation) &&
+      nodeType === "Index Only Scan" &&
+      scanClass !== "point",
+  );
+  const exceptionResult = exceptionViolations(
+    guardedCovering.filter(({ limitAbove }) => !limitAbove),
+    exceptions,
+    today,
+  );
+  const coveringScans = guardedCovering.filter(
+    (scan) => !exceptionResult.excepted.has(scan),
+  );
+  return [
+    ...exceptionResult.violations,
+    ...mitigationViolations(scans, coveringScans, mitigation),
+  ];
 };
 
 /** The workspace access view appears as `aw` over its base tables in EXPLAIN. */
