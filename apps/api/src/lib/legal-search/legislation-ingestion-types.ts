@@ -76,6 +76,9 @@ export type LegislationExpressionIdentity = {
   publisherId: string;
 };
 
+/** How an observation reached the writer. */
+export type LegislationObservationOrigin = "live" | "stored-raw-replay";
+
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {
   /**
@@ -104,6 +107,13 @@ export type LegislationDocumentInput = {
    * that can name the publisher's version supplies it.
    */
   expression?: LegislationExpressionIdentity | undefined;
+  /**
+   * Where the observation comes from. A reparse of a payload stored earlier
+   * (`stored-raw-replay`) proves what the publisher served then, not that it
+   * still lists the version, so it never restores a withdrawn one; only a
+   * live fetch does. Omitted means live.
+   */
+  origin?: LegislationObservationOrigin | undefined;
   fulltext?: string | null;
   sections?: DecisionSection[] | null;
   ast?: DocumentAst | EmptyAst | null;
