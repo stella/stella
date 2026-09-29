@@ -71,7 +71,7 @@ export const withDedicatedReservedSession = async <
       if (property === "unsafe") {
         return (...args: Parameters<TSession["unsafe"]>) => {
           signal.throwIfAborted();
-          return target.unsafe(...args);
+          return Reflect.apply(target.unsafe, target, args);
         };
       }
       const value = Reflect.get(target, property, target);

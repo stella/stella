@@ -382,8 +382,8 @@ test(
         expect(failure?.nextEligibleAt === null).toBe(attempt === 3);
         if (attempt < 3) {
           expect(
-            failure?.nextEligibleAt?.getTime() -
-              failure?.lastFailedAt.getTime(),
+            (failure?.nextEligibleAt?.getTime() ?? Number.NaN) -
+              (failure?.lastFailedAt.getTime() ?? Number.NaN),
           ).toBe(attempt === 1 ? 60_000 : 5 * 60_000);
         }
         expect(result.parked).toEqual({
@@ -590,7 +590,8 @@ test("infrastructure timeouts cool down without consuming the row's retry budget
         CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN,
       );
       expect(
-        marker?.nextEligibleAt?.getTime() - marker?.lastFailedAt.getTime(),
+        (marker?.nextEligibleAt?.getTime() ?? Number.NaN) -
+          (marker?.lastFailedAt.getTime() ?? Number.NaN),
       ).toBe(60_000);
       await db
         .update(caseLawSearchBackfillFailures)
@@ -808,7 +809,14 @@ test("removal clears markers and unpublished decisions do not inflate parked cou
       .where(eq(caseLawDecisions.id, decisionId));
     await db
       .update(caseLawSources)
-      .set({ descriptor: { allowsRedistribution: false } })
+      .set({
+        descriptor: {
+          license: "restricted",
+          attribution: null,
+          allowsRedistribution: false,
+          allowsDerivedAi: false,
+        },
+      })
       .where(eq(caseLawSources.id, sourceId));
     expect((await backfillSearchIndex(scopedDb, 2)).parked).toEqual({
       type: "parked",

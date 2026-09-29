@@ -232,8 +232,11 @@ const createResolver = (load: SourceLoader): Resolver => {
         return undefined;
       }
       const found = binding(file, base.text);
-      const object = found && unwrap(found.expression);
-      if (object === undefined || !ts.isObjectLiteralExpression(object)) {
+      if (found === undefined) {
+        return undefined;
+      }
+      const object = unwrap(found.expression);
+      if (!ts.isObjectLiteralExpression(object)) {
         return undefined;
       }
       const property = object.properties.find(
@@ -263,7 +266,10 @@ const createResolver = (load: SourceLoader): Resolver => {
       node.expression.name.text === "raw" &&
       node.arguments.length === 1
     ) {
-      return evaluate(node.arguments[0], file, seen);
+      const [argument] = node.arguments;
+      return argument === undefined
+        ? undefined
+        : evaluate(argument, file, seen);
     }
     return undefined;
   };
@@ -339,13 +345,19 @@ const inspectSql = (sql: string): string[] => {
     .replaceAll(/\/\*[\s\S]*?\*\//gu, " ")
     .replaceAll(/--[^\n]*/gu, " ");
   for (const match of withoutComments.matchAll(SETTING_CALL)) {
-    const name = settingName(match[1]);
+    const rawName = match[1];
+    const name = rawName === undefined ? undefined : settingName(rawName);
     if (name === undefined || TIMEOUT_SETTINGS.has(name)) {
       findings.push(name ?? "dynamic set_config name");
     }
   }
   for (const match of withoutComments.matchAll(SETTING_COMMAND)) {
-    const name = match[1].replace(/^"(.*)"$/u, "$1").toLowerCase();
+    const rawName = match[1];
+    if (rawName === undefined) {
+      findings.push("dynamic timeout setting");
+      continue;
+    }
+    const name = rawName.replace(/^"(.*)"$/u, "$1").toLowerCase();
     if (
       TIMEOUT_SETTINGS.has(name) ||
       name === "all" ||

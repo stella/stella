@@ -597,7 +597,8 @@ export const backfillSearchIndex = async (
     });
     logger.error("case_law.search_index.backfill_failed", {
       decisionId: row.id,
-      retry,
+      retry: retry.type,
+      ...("attempts" in retry ? { attempts: retry.attempts } : {}),
       ...errorSystemFields(indexed.error),
       ...pgErrorFields(indexed.error),
     });
