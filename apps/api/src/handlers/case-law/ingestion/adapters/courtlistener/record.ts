@@ -385,7 +385,10 @@ const schemaDiagnostics = (
     reason: COURTLISTENER_REJECTION_REASON.SCHEMA_DRIFT,
     diagnostics: drift.flatMap((issue) => {
       const path = v.getDotPath(issue) ?? "$";
-      const columns = ROW_TABLES[path.split(".")[0] ?? ""] ?? [];
+      const columns = ROW_TABLES[path.split(".").at(0) ?? ""];
+      if (columns === undefined) {
+        panic(`CourtListener row drift has no declared columns: ${path}`);
+      }
       const { missing, notText, unexpected } = columnDrift(
         columns,
         issue.input,
