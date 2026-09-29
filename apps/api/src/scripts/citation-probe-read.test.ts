@@ -57,7 +57,26 @@ describe("citation probe run", () => {
   test("sampled keys with no fulfilled document reads make the run unusable", () => {
     expect(hasNoUsableDocuments(3, [])).toBe(true);
     expect(hasNoUsableDocuments(0, [])).toBe(false);
-    expect(hasNoUsableDocuments(3, [{ empty: true }])).toBe(true);
-    expect(hasNoUsableDocuments(3, [{ empty: false }])).toBe(false);
+    expect(hasNoUsableDocuments(3, [{ empty: true, unread: false }])).toBe(
+      true,
+    );
+    expect(hasNoUsableDocuments(3, [{ empty: false, unread: false }])).toBe(
+      false,
+    );
+  });
+
+  test("a run whose every document went unread is unusable", () => {
+    expect(
+      hasNoUsableDocuments(2, [
+        { empty: false, unread: true },
+        { empty: false, unread: true },
+      ]),
+    ).toBe(true);
+    expect(
+      hasNoUsableDocuments(2, [
+        { empty: false, unread: true },
+        { empty: false, unread: false },
+      ]),
+    ).toBe(false);
   });
 });

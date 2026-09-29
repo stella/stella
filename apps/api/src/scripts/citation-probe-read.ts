@@ -39,5 +39,5 @@ export const readAst = async (
 
 export const hasNoUsableDocuments = (
   sampledKeys: number,
-  docs: readonly { empty: boolean }[],
-): boolean => sampledKeys > 0 && docs.every((doc) => doc.empty);
+  docs: readonly { empty: boolean; unread: boolean }[],
+): boolean => sampledKeys > 0 && docs.every((doc) => doc.empty || doc.unread);
