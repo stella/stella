@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
-    "requireAccount": {
-      "askAboutDocument": "Crie uma conta gratuita para perguntar sobre este documento",
-      "askInChat": "Crie uma conta gratuita para perguntar isso no chat",
-      "description": "Você voltará a esta página assim que sua conta estiver pronta.",
-      "generateHeadnotes": "Crie uma conta gratuita para gerar ementas com IA",
-      "refineSearch": "Crie uma conta gratuita para melhorar sua pesquisa com IA",
-      "writeResearchQuestion": "Crie uma conta gratuita para fazer uma pergunta a estes resultados"
-    },
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
     "signIn": "Faça login",
@@ -604,6 +596,7 @@
       },
       "generate": "Gerar ementas com IA",
       "holdingAnchor": "Ir para o parágrafo",
+      "invitation": "Com uma conta gratuita, a IA prepara notas de trabalho sobre esta decisão.",
       "topics": "Temas",
       "treatment": "Tratamento posterior"
     },
@@ -889,6 +882,7 @@
       "apiKey": "Chave de API",
       "none": "Sem configuração"
     },
+    "skillNeedsUnavailableTools": "Não é oferecida no chat. Precisa de uma ferramenta que não está disponível lá: {tools}",
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Criar DOCX",
@@ -982,7 +976,15 @@
       "searchFiles": "Pesquisar arquivos",
       "searchMatters": "Pesquisar casos",
       "searchMcpServers": "Pesquisar servidores MCP...",
-      "searchSkills": "Pesquisar habilidades"
+      "searchSkills": "Pesquisar habilidades",
+      "skillNeeds": {
+        "browserExtension": "Conecte a extensão do navegador para usar esta habilidade",
+        "document": "Abra um documento para usar esta habilidade",
+        "matter": "Inicie um chat em um caso para usar esta habilidade",
+        "rawSendMode": "Indisponível em chats anonimizados",
+        "reviewEdits": "Mude as edições para revisão manual para usar esta habilidade",
+        "webSearch": "Ative a busca na web para usar esta habilidade"
+      }
     },
     "contextMeter": {
       "attachments": "Documentos anexados",
@@ -1067,6 +1069,10 @@
       "loadError": "Falha ao carregar itens"
     },
     "messageTimestampToday": "Hoje, {time}",
+    "mockModel": {
+      "description": "Respostas prontas do modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
@@ -1796,6 +1802,7 @@
       "title": "Campos personalizados",
       "value": "Valor do campo"
     },
+    "datePrecision": "Precisão da data",
     "deleteContact": "Excluir cliente",
     "deleteContactBlockedByMatters": "Este contato ainda está atribuído como cliente em casos. Reatribua ou exclua esses casos antes de excluir o contato.",
     "deleteContactConfirmDescription": "Tem certeza de que deseja excluir este contato? Esta ação não pode ser desfeita.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "Código postal",
       "billingAddressState": "Estado",
       "color": "Cor",
+      "day": "Dia",
       "defaultHourlyRate": "Taxa horária padrão",
       "firstName": "Primeiro nome",
       "lastName": "Sobrenome",
       "middleName": "Nome do meio",
+      "month": "Mês",
+      "nationalities": "Nacionalidades",
       "paymentTermDays": "Condições de pagamento (dias)",
       "prefix": "Prefixo",
       "registrationNumber": "Número de registro",
       "suffix": "Sufixo",
-      "taxId": "CPF/CNPJ"
+      "taxId": "CPF/CNPJ",
+      "year": "Ano"
     },
     "filterOrganizations": "Organizações",
     "filterPersons": "Pessoas",
@@ -1923,11 +1934,14 @@
       "title": "Importar contatos",
       "validateFailed": "Não foi possível verificar estes contatos."
     },
+    "invalidDateOfBirth": "Insira uma data de nascimento válida.",
+    "invalidNationalityCodes": "Insira códigos de nacionalidade válidos.",
     "mattersAsClient": "Casos como cliente",
     "newContact": "Novo contato",
     "noContactsDescription": "Crie seu primeiro contato para começar a vinculá-los aos casos.",
     "noContactsFound": "Nenhum contato encontrado",
     "noMattersAsClient": "Este contato não é cliente em nenhum caso.",
+    "personalDetails": "Dados pessoais",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Residencial",
@@ -1935,7 +1949,14 @@
       "office": "Escritório",
       "other": "Outro"
     },
+    "precision": {
+      "day": "Data completa",
+      "month": "Mês e ano",
+      "year": "Somente o ano"
+    },
+    "saved": "Os dados do contato foram salvos.",
     "search": "Pesquisar contatos...",
+    "searchCountries": "Buscar países",
     "title": "Clientes",
     "type": {
       "organization": "Organização",
@@ -4368,7 +4389,13 @@
     "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versão não tem texto disponível.",
     "emptyState": "Nenhuma norma encontrada.",
+    "expression": {
+      "invalidWindow": "Datas do editor inconsistentes",
+      "promulgated": "Texto promulgado",
+      "withdrawn": "O editor não o publica mais"
+    },
     "inForceSince": "Em vigor desde {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Decisões de referência",
     "noVersionInForce": "Nenhuma versão desta norma estava em vigor na data escolhida.",
     "openEnded": "hoje",
@@ -4388,18 +4415,22 @@
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "publisherWindowInconsistent": "Não é possível determinar a versão em vigor nesta data: os dados do editor são inconsistentes.",
     "resolvedAlias": "Reconhecido como {label}",
     "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
     "showInText": "Mostrar no texto",
+    "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
       "current": "Em vigor",
       "draft": "Em projeto",
       "ended": "Não está mais em vigor",
       "future": "Futura",
       "historical": "Substituída",
-      "repealed": "Revogada"
+      "neverInForce": "Nunca entrou em vigor",
+      "repealed": "Revogada",
+      "unknown": "Situação incerta"
     },
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}"

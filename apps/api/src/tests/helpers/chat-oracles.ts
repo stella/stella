@@ -19,6 +19,8 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A turn that streamed holds the id of the run its request started. */
+  persistedRunIdentity: "chat.persisted.run-identity",
   /** A thread an earlier release stored loads on the current code, serves
    *  every message, part and answer it held, and keeps them once continued;
    *  and what the current code stores has a fixture. */
@@ -47,6 +49,9 @@ export const CHAT_ORACLE = {
   liveEqualsReload: "chat.live.equals-reload",
   /** (d) Every tool call and result appears exactly once, live and reloaded. */
   liveToolPartsOnce: "chat.live.tool-parts-once",
+  /** The skills the composer offers in a chat are exactly the ones a send
+   *  from that chat runs rather than names unavailable. */
+  skillsMenuMatchesSend: "chat.skills.menu-matches-send",
   /** The route accepts every request the web client builds for its own
    *  thread. */
   clientRequestsAccepted: "chat.client.requests-accepted",

@@ -27,7 +27,9 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   description:
@@ -92,15 +94,23 @@ export const createCloneBuiltinReportTemplate = (
       );
       const name = existing ? `${builtin.name} (copy)` : builtin.name;
 
-      const buffer = await builtin.loadBuffer();
+      const fileName = `${name}.docx`;
+      // The built-in's bytes are stored like any upload: scanned first.
+      const file = yield* Result.await(
+        scanUploadForHandler({
+          bytes: await builtin.loadBuffer(),
+          declaredMimeType: DOCX_MIME_TYPE,
+          fileName,
+        }),
+      );
 
       const created = yield* dependencies.createStoredTemplate({
         safeDb,
         organizationId,
         userId: user.id,
-        buffer,
+        file,
         name,
-        fileName: `${name}.docx`,
+        fileName,
         kind: "report",
         recordAuditEvent,
       });

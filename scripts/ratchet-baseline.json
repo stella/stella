@@ -63,7 +63,7 @@
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 49,
+    "count": 57,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/src/agent-auth/id-jag.ts": 1,
@@ -71,11 +71,14 @@
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/agent-auth-idjag.ts": 1,
       "apps/api/src/lib/agent-auth.ts": 1,
-      "apps/api/src/lib/auth.ts": 1,
+      "apps/api/src/lib/auth.ts": 2,
+      "apps/api/src/lib/business-registries/desktop/auth.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
+      "apps/api/src/lib/case-law-ingestion-db.ts": 1,
       "apps/api/src/lib/case-law/analysis-store.ts": 1,
       "apps/api/src/lib/case-law/case-law-config-store.ts": 1,
-      "apps/api/src/lib/case-law/maintenance-lane.ts": 1,
+      "apps/api/src/lib/case-law/local-case-law-config.ts": 1,
+      "apps/api/src/lib/case-law/maintenance-lane.ts": 2,
       "apps/api/src/lib/confirmation-otp.ts": 1,
       "apps/api/src/lib/db/account-row.ts": 1,
       "apps/api/src/lib/db/assert-better-auth-oauth-policy.ts": 1,
@@ -83,9 +86,10 @@
       "apps/api/src/lib/db/feedback-report-store.ts": 1,
       "apps/api/src/lib/db/maintenance-db.ts": 1,
       "apps/api/src/lib/delete-account.ts": 1,
-      "apps/api/src/lib/desktop-edit-handoffs.ts": 1,
+      "apps/api/src/lib/desktop-edit-handoffs.ts": 2,
       "apps/api/src/lib/desktop-edit-sessions.ts": 1,
       "apps/api/src/lib/dev-seed-session-store.ts": 1,
+      "apps/api/src/lib/email/inbound/runtime.ts": 1,
       "apps/api/src/lib/entity-versions/manual-ocr-request-run.ts": 1,
       "apps/api/src/lib/extraction-runs/request-run-store.ts": 1,
       "apps/api/src/lib/flows/flow-run-completion-notice.ts": 1,
@@ -95,12 +99,12 @@
       "apps/api/src/lib/guide-progress.ts": 1,
       "apps/api/src/lib/health/probe-database.ts": 1,
       "apps/api/src/lib/hosted-usage-provider/webhook-store.ts": 1,
-      "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts": 1,
       "apps/api/src/lib/machine-api-key-queries.ts": 1,
       "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/oauth-connections.ts": 1,
       "apps/api/src/lib/operator-read-db.ts": 1,
       "apps/api/src/lib/public-law-read-db.ts": 1,
+      "apps/api/src/lib/root-scoped-db.ts": 1,
       "apps/api/src/lib/scheduler/jobs.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 1,
@@ -113,19 +117,60 @@
       "apps/api/src/lib/sharepoint-disable-purge.ts": 1,
       "apps/api/src/lib/smoke-session/store.ts": 1,
       "apps/api/src/lib/workspace-deletion.ts": 1,
+      "apps/api/src/mcp/context.ts": 1,
       "apps/api/src/scripts/document-processing-worker.ts": 1
     }
   },
+  "root-connection-type-imports": {
+    "count": 31,
+    "files": {
+      "apps/api/src/lib/account-deletion-effect-store.ts": 1,
+      "apps/api/src/lib/bilingual/run-queue.ts": 1,
+      "apps/api/src/lib/bullmq-queue.ts": 1,
+      "apps/api/src/lib/case-law/maintenance-lane.ts": 1,
+      "apps/api/src/lib/case-law/sitemap-shard-refresh.ts": 1,
+      "apps/api/src/lib/document-processing-automatic-request.ts": 1,
+      "apps/api/src/lib/document-processing-manual-ocr-restore.ts": 1,
+      "apps/api/src/lib/document-processing-queue.ts": 1,
+      "apps/api/src/lib/document-processing-request.ts": 1,
+      "apps/api/src/lib/document-review/run-queue.ts": 1,
+      "apps/api/src/lib/document-translation/run-queue.ts": 1,
+      "apps/api/src/lib/entity-deletion-effect-store.ts": 1,
+      "apps/api/src/lib/extraction-runs/store.ts": 1,
+      "apps/api/src/lib/flows/automated-run-cap.ts": 1,
+      "apps/api/src/lib/flows/flow-executor.ts": 1,
+      "apps/api/src/lib/flows/flow-run-actor.ts": 1,
+      "apps/api/src/lib/flows/flow-run-worker.ts": 1,
+      "apps/api/src/lib/flows/start-automated-flow-run.ts": 1,
+      "apps/api/src/lib/legal-search/pg-fts-browse-facet-refresh.ts": 1,
+      "apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.ts": 1,
+      "apps/api/src/lib/memory/compaction-transcript.ts": 1,
+      "apps/api/src/lib/report-export-enqueue.ts": 1,
+      "apps/api/src/lib/report-export-notification-recovery.ts": 1,
+      "apps/api/src/lib/report-export-recovery.ts": 1,
+      "apps/api/src/lib/scheduler/types.ts": 1,
+      "apps/api/src/lib/scouts/document-deadlines.ts": 1,
+      "apps/api/src/lib/scouts/work-attention.ts": 1,
+      "apps/api/src/lib/search/projection-repair-queue.ts": 1,
+      "apps/api/src/lib/style-set-package-cleanup-queue.ts": 1,
+      "apps/api/src/lib/workflow/orphan-cells.ts": 1,
+      "apps/api/src/scripts/adapter-health-query.ts": 1
+    }
+  },
   "implicit-root-connection-shapes": {
-    "count": 13,
+    "count": 18,
     "files": {
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
+      "apps/api/src/lib/case-law-ingestion-db.ts": 1,
       "apps/api/src/lib/case-law/local-case-law-config.ts": 1,
       "apps/api/src/lib/delete-account.ts": 1,
+      "apps/api/src/lib/desktop-edit-handoffs.ts": 1,
+      "apps/api/src/lib/email/inbound/runtime.ts": 1,
       "apps/api/src/lib/folio-collab-rooms.ts": 1,
       "apps/api/src/lib/folio-collab-service-room.ts": 1,
       "apps/api/src/lib/public-law-read-db.ts": 1,
+      "apps/api/src/lib/root-scoped-db.ts": 2,
       "apps/api/src/lib/scheduler/runner.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 2,
       "apps/api/src/lib/search/index-entity.ts": 1,
@@ -134,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 262,
+    "count": 266,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -192,7 +237,7 @@
       "apps/api/src/handlers/entities/placements/suggest.ts": 1,
       "apps/api/src/handlers/entities/publish-folio-collab-version.ts": 1,
       "apps/api/src/handlers/fields/upsert.ts": 1,
-      "apps/api/src/handlers/legislation/ingestion.ts": 3,
+      "apps/api/src/handlers/legislation/ingestion.ts": 4,
       "apps/api/src/handlers/legislation/search-index.ts": 2,
       "apps/api/src/handlers/legislation/slug-backfill.ts": 1,
       "apps/api/src/handlers/lists/generation-candidates/commit-settled-run.ts": 1,
@@ -259,14 +304,17 @@
       "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.ts": 2,
       "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts": 1,
       "apps/api/src/lib/scheduler/tasks/flow-run-orphan-reconcile.ts": 1,
+      "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts": 1,
       "apps/api/src/lib/scheduler/tasks/search-chat-index.ts": 1,
       "apps/api/src/lib/scheduler/tasks/search-projection-repair.ts": 1,
       "apps/api/src/lib/scheduler/tasks/search-semantic-timestamps.ts": 2,
       "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts": 1,
       "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts": 1,
       "apps/api/src/lib/style-set-package-cleanup-queue.ts": 1,
+      "apps/api/src/lib/style-sets.ts": 1,
       "apps/api/src/lib/templates/lookup-formats/set-user-default.ts": 1,
       "apps/api/src/lib/templates/record-use.ts": 1,
+      "apps/api/src/lib/templates/write-template.ts": 1,
       "apps/api/src/lib/uploads/entity-create.ts": 1,
       "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts": 1,
       "apps/api/src/lib/uploads/file-comparison/sweep.ts": 1,
@@ -294,7 +342,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 899,
+    "count": 902,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -413,6 +461,8 @@
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 3,
+      "apps/api/src/lib/legal-search/decision-language-identity.ts": 2,
+      "apps/api/src/lib/legal-search/decision-primary-reference.ts": 1,
       "apps/api/src/lib/legal-search/ingestion-normalization.ts": 4,
       "apps/api/src/lib/legal-search/sk-document-backfill.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 2,
@@ -897,11 +947,8 @@
     "files": {}
   },
   "scanned-file-boundary-suppressions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/lib/docx/extract-text.ts": 1,
-      "apps/api/src/lib/style-set-editor.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "no-direct-buffer-cleanup-intent-delete-suppressions": {
     "count": 0,
@@ -938,7 +985,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 116,
+    "count": 120,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -974,7 +1021,9 @@
       "apps/api/src/lib/account-deletion-steps.ts": 1,
       "apps/api/src/lib/auth-artifacts.ts": 1,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
+      "apps/api/src/lib/case-law/sitemap-shard-refresh.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
+      "apps/api/src/lib/chat/run-log.ts": 2,
       "apps/api/src/lib/email/inbound/persistence.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
@@ -983,6 +1032,7 @@
       "apps/api/src/lib/legal-search/corpus-pack-batch.ts": 1,
       "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
+      "apps/api/src/lib/scheduler/tasks/chat-run-log-retention.ts": 1,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 6,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 5,
       "apps/api/src/lib/scheduler/tasks/memory-curator.ts": 1,
@@ -1070,7 +1120,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 293,
+    "count": 294,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1201,7 +1251,7 @@
       "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
-      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
+      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 2,
       "apps/web/src/features/chat/hooks/use-chat-session.ts": 4,
       "apps/web/src/features/chat/queries.ts": 1,
       "apps/web/src/hooks/use-effect.ts": 2,

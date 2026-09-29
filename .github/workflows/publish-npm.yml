@@ -38,6 +38,9 @@ on:
       - packages/workspace-model/CHANGELOG.md
       - packages/workspace-ui/CHANGELOG.md
       - packages/stable-stringify/CHANGELOG.md
+      - packages/time/CHANGELOG.md
+      - packages/text-normalize/CHANGELOG.md
+      - packages/agent-input/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
@@ -66,6 +69,9 @@ on:
           - workspace-model
           - workspace-ui
           - stable-stringify
+          - time
+          - text-normalize
+          - agent-input
           - cli
         default: all
       publish:
@@ -438,6 +444,33 @@ jobs:
         with:
           name: npm-tarball-stable-stringify
           path: release-artifacts/stable-stringify/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload time tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'time')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-time
+          path: release-artifacts/time/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload text-normalize tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'text-normalize')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-text-normalize
+          path: release-artifacts/text-normalize/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload agent-input tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'agent-input')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-agent-input
+          path: release-artifacts/agent-input/
           retention-days: 1
           if-no-files-found: error
 

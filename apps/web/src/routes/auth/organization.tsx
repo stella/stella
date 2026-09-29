@@ -5,6 +5,7 @@ import { useForm } from "@tanstack/react-form";
 import {
   type QueryClient,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import {
@@ -49,10 +50,12 @@ import {
   getSignedOauthQueryFromHash,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
+import { organizationListOptions } from "@/lib/organization/queries";
 import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
 import {
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
+  onboardingNavigation,
 } from "@/lib/redirect";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
@@ -152,7 +155,8 @@ const OrganizationSkeleton = () => (
 );
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
-  const { data: organizations, isPending } = authClient.useListOrganizations();
+  const { data: organizations, isPending } = useQuery(organizationListOptions);
+  const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
   const hasOrganizations = (organizations?.length ?? 0) > 0;
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,
@@ -162,7 +166,7 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
     (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
 
   if (hydrated && !isPending && !hasOrganizations && !isOauthPostLogin) {
-    return <Navigate replace to="/onboarding" />;
+    return <Navigate {...onboardingNavigation(redirectTo)} />;
   }
 
   if (!hydrated || isPending || (!hasOrganizations && !isOauthPostLogin)) {

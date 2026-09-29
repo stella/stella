@@ -17,8 +17,10 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -38,6 +40,7 @@ import {
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
+import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import {
   identifyOrganizationJurisdictions,
   normalizePracticeJurisdictions,
@@ -112,8 +115,10 @@ import {
   defaultSearchDecisionsHandler,
   isReadCaseLawDecisionSuccess,
   isSearchCaseLawSuccess,
+  type ReadCaseLawDecisionSuccess,
   type SearchCaseLawSuccess,
 } from "@/api/mcp/public-law-handlers";
+import { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { serializeAuthorizedCorpusMcpResourceName } from "@/api/mcp/resource-serialization";
 import {
   defineTextFieldSpec,
@@ -895,19 +900,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Search case law within one country. `queries` carries several " +
-      "phrasings of one question and merges their results; matchedQueries " +
-      "names the phrasings that returned each hit. `limit` is the merged " +
-      "page, split evenly across them. Filters: court, language, dates, " +
-      "decision type, source_id (a `facets.source` bucket's `value`). " +
-      `\`sort\` defaults to '${DEFAULT_SEARCH_SORT}'. Facets and total ` +
+      "Search case law within one country. `queries` carries phrasings of " +
+      "one question and merges their results; matchedQueries names the " +
+      "phrasings behind each hit. `limit` is the merged page, split evenly " +
+      "across them. Filters: court, language, dates, decision type, " +
+      "source_id (a `facets.source` bucket's `value`). Facets and total " +
       "describe ONE query's whole set: first page of a single-query call " +
       "only, null otherwise. Function words are not required terms; " +
       "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
       "`strict` requires every word. Each hit carries citationAuthority " +
-      "(the score the ranking blends in), matchingPassages (at least 1) and " +
-      "a route-independent resourceName. read_case_law_citations gives the " +
-      "polarity of the citing decisions.",
+      "(the score ranking blends in), matchingPassages, a route-independent " +
+      "resourceName and caseNumber, its citable reference: not always a " +
+      "docket. read_case_law_decision types it; read_case_law_citations " +
+      "gives citing polarity.",
     inputSchema: searchCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -936,17 +941,17 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Resolve case references to decisions: docket numbers as the courts " +
-      "write them (a trailing sheet number is ignored) and ECLIs. Answered " +
-      "from the identity columns, never by ranking text, so a hit is the " +
-      "decision named, not one citing it. Every `identifiers[]` entry is " +
-      "answered on its own, in input order, under `status`: `found` carries " +
-      "that decision's id, resourceName, appUrl, docket, court, date and " +
-      "ECLI; `ambiguous` carries the candidates: a docket is unique to a " +
-      "court, not to the corpus, and picking one would cite the wrong " +
-      "court; `not_found` says what to call instead; `lookup_failed` means " +
-      "the read did not complete, so retry that entry. Use this when the " +
-      "user names a case; use search_case_law when they describe one. Pass " +
-      "a `found` decisionId to read_case_law_decision for the text.",
+      "write them and ECLIs. Answered from identity columns, not ranked " +
+      "text: a hit is the decision named, not one citing it. Each " +
+      "`identifiers[]` entry is answered on its own, in input order, under " +
+      "`status`: `found` carries that decision's id, resourceName, appUrl, " +
+      "caseNumber (citable reference, not always a docket), court, date and " +
+      "ECLI; `ambiguous` carries the candidates: a docket is unique per " +
+      "court, not per corpus, so none is picked; `not_found` says what to " +
+      "call instead; `lookup_failed`: the read did not complete; retry that " +
+      "entry. Use this when the user names a case; use search_case_law when " +
+      "they describe one. Pass a `found` decisionId to " +
+      "read_case_law_decision for the text and typed identifiers.",
     inputSchema: lookupCaseLawArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -2006,6 +2011,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   // search required, so the request it would have made is what answers that
   // rather than a second reading of the filters.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const requests = queries.map((query, index) => {
     // Three states, not two: a string continues this phrasing, `undefined` is
     // its first page, and `null` means it ended on an earlier one. Only a
@@ -2033,7 +2039,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       subCursor,
       interpretation: interpretDecisionQuery(
         body,
-        parseDecisionQuery(query, { grammar }),
+        parseDecisionQuery(query, { grammar, reporters }),
       ),
     };
   });
@@ -2232,6 +2238,19 @@ const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
   status: DECISION_READ_STATUS.notFound,
 });
 
+/**
+ * The primary reference's kind and every typed identifier, only where the
+ * primary is not a docket: there `caseNumber` would otherwise read as one,
+ * and the docket, if any, is among the identifiers.
+ */
+const nonDocketReference = ({
+  caseNumberType,
+  identifiers,
+}: Pick<ReadCaseLawDecisionSuccess, "caseNumberType" | "identifiers">) =>
+  caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+    ? {}
+    : { caseNumberType, identifiers: [...identifiers] };
+
 type DecisionItemOptions = {
   decisionId: string;
   /** See `decisionDocumentState`: the deployment's half of the answer. */
@@ -2309,6 +2328,7 @@ const decisionItemResult = ({
         slug: read.slug,
       }),
       caseNumber: read.caseNumber,
+      ...nonDocketReference(read),
       citationsFrom: read.citationsFrom,
       citationsTo: read.citationsTo,
       country: read.country,
@@ -2520,6 +2540,10 @@ const decisionIdentityOf = (row: DecisionIdentityRow) => ({
     slug: row.slug,
   }),
   caseNumber: row.caseNumber,
+  // As in search: the kind is named only where the reference is not a docket.
+  ...(row.caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+    ? {}
+    : { caseNumberType: row.caseNumberType }),
   court: row.court,
   decisionDate: row.decisionDate,
   decisionId: row.id,
@@ -2620,6 +2644,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
   // lookup that classified an identifier differently from the search beside it
   // would decline a reference that search resolves.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const lookup =
     context.testDependencies?.lookupDecisionsByIdentity ??
     defaultLookupDecisionsByIdentity;
@@ -2637,7 +2662,10 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
         // The sheet number names a page of the court file, not the decision,
         // so it is dropped before the grammars see the reference.
         const { caseNumber } = splitCaseReference(identifier);
-        const intent = parseDecisionQuery(caseNumber, { grammar });
+        const intent = parseDecisionQuery(caseNumber, {
+          grammar,
+          reporters,
+        });
         if (intent.type !== "identifier") {
           return [identifier, { type: "not_an_identifier" }];
         }
@@ -2668,7 +2696,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
           identifier,
           {
             type: "matches",
-            matches: exactDecisionMatches(intent, read.value),
+            matches: exactDecisionMatches(intent, read.value, { reporters }),
           },
         ];
       },
@@ -2748,6 +2776,10 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
                 slug: item.decision.slug,
               }),
               caseNumber: item.decision.caseNumber,
+              ...(item.decision.caseNumberType ===
+              DECISION_IDENTIFIER_TYPES.CASE_NUMBER
+                ? {}
+                : { caseNumberType: item.decision.caseNumberType }),
               citationAuthority: item.decision.citationAuthority,
               court: item.decision.court,
               decisionDate: item.decision.decisionDate,
@@ -2781,16 +2813,7 @@ const handleReadContactTool: TypedMcpToolHandler<
         id: { eq: contactId },
         organizationId: { eq: context.organizationId },
       },
-      columns: {
-        id: true,
-        type: true,
-        displayName: true,
-        firstName: true,
-        lastName: true,
-        organizationName: true,
-        emails: true,
-        phones: true,
-      },
+      columns: READ_CONTACT_COLUMNS,
     }),
   );
 
@@ -2812,6 +2835,8 @@ const handleReadContactTool: TypedMcpToolHandler<
     // number fields are anonymized in place below.
     emails: arrayOrEmpty(contact.emails),
     phones: arrayOrEmpty(contact.phones),
+    dateOfBirth: dateOfBirthFromColumns(contact),
+    nationalityCodes: contact.nationalityCodes,
   } satisfies v.InferInput<typeof READ_CONTACT_PROJECTION>;
 
   const textFields = runTextFieldSpecs(
@@ -2819,7 +2844,15 @@ const handleReadContactTool: TypedMcpToolHandler<
     payload,
   );
 
-  return { egress: "structured", payload, textFields };
+  return {
+    egress: "structured",
+    payload,
+    textFields,
+    redactInAnonymized: () => {
+      payload.dateOfBirth = null;
+      payload.nationalityCodes = [];
+    },
+  };
 };
 
 const handleSetPracticeJurisdictionsTool: TypedMcpToolHandler<

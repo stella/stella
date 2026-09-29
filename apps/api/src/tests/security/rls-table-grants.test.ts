@@ -106,6 +106,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // the ingestion pipeline.
   "case_law_judges",
   "case_law_decision_judges",
+  // A directory court's rank: global legal data read by case-law search and
+  // citation scoring, written only by its seed migrations and the seed script.
+  "case_law_court_directory_ranks",
   // Addresses erased out of shared corpus packs: every corpus read consults
   // them before it fetches, and only the erasure path writes them.
   "case_law_corpus_tombstones",
@@ -126,6 +129,11 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // mutates the state machine.
   "corpus_index_projection_states",
   "corpus_index_projection_intents",
+  // Global reference editions are read by request code and written by ingestion.
+  "sanctions_sources",
+  "sanctions_editions",
+  "sanctions_entry_payloads",
+  "sanctions_edition_entries",
 ]);
 
 // Request transactions append names alongside chat messages and read them on

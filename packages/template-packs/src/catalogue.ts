@@ -75,9 +75,15 @@ export const createTemplatePackCatalogue = ({
   packs,
   contentRoot,
 }: CreateTemplatePackCatalogueOptions): TemplatePackCatalogue => {
-  const available = existsSync(path.join(contentRoot, PACKS_DIRECTORY))
-    ? packs
-    : [];
+  const available = packs.filter(
+    (pack) =>
+      pack.templates.length > 0 &&
+      pack.templates.every((template) =>
+        existsSync(
+          path.join(contentRoot, PACKS_DIRECTORY, pack.id, template.file),
+        ),
+      ),
+  );
   const packsById = new Map(available.map((pack) => [pack.id, pack] as const));
 
   const get = (packId: string) => packsById.get(packId) ?? null;

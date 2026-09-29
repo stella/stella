@@ -1,34 +1,63 @@
 {
   "name": "@stll/agent-input",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Lenient readers for values agents write: dates, date bounds, date-format specs, numbers, booleans, locales, countries, enum and vocabulary values, ids, ELIs, string lists",
+  "keywords": [
+    "agent",
+    "input",
+    "lenient",
+    "llm",
+    "normalization",
+    "parsing",
+    "validation"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/agent-input",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/agent-input"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "clean": "git clean -xdf .cache .turbo node_modules",
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/agent-input",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-input",
-    "format": "bun ../../scripts/run-oxfmt.ts ."
+    "format": "bun ../../scripts/run-oxfmt.ts .",
+    "prepack": "bun run build"
   },
   "dependencies": {
-    "@stll/country-codes": "workspace:*",
-    "@stll/template-conditions": "workspace:*",
-    "@stll/text-normalize": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/country-codes": "workspace:^",
+    "@stll/template-conditions": "workspace:^",
+    "@stll/text-normalize": "workspace:^",
+    "@stll/time": "workspace:^",
     "better-result": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "tsdown": "catalog:"
   }
 }

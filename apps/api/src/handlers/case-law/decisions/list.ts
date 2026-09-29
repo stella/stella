@@ -282,11 +282,13 @@ export const listDecisionsHandler = async (
       const presentation = courtPresentation(courtWeights, {
         country: decision.country,
         court: decision.court,
+        courtId: decision.courtId,
         ecli: decision.ecli,
       });
       return {
         id: decision.id,
         caseNumber: decision.caseNumber,
+        caseNumberType: decision.caseNumberType,
         slug: decision.slug,
         ecli: decision.ecli,
         court: decision.court,

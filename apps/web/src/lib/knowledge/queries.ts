@@ -11,6 +11,10 @@ import {
   toAPIError,
   unwrapEden,
 } from "@/lib/errors/api";
+import {
+  chatSkillAvailabilityKey,
+  type ChatSkillAvailabilityQuery,
+} from "@/lib/prompts/chat-skill-availability.logic";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import {
   agentSkillsQueryRoot,
@@ -52,6 +56,15 @@ const FILL_DISCOVER_SEGMENT = "fill-discover";
 
 const PLAYBOOK_DETAIL_KEY_SEGMENT = "detail";
 
+// An organization's Knowledge rows sit under one audience + org prefix, so no
+// other source of Knowledge data can share a cache entry with them.
+const memberKnowledgeKey = (organizationId: string, section: string) => [
+  "knowledge",
+  "member",
+  organizationId,
+  section,
+];
+
 export const knowledgeKeys = {
   skills: {
     root: agentSkillsQueryRoot(),
@@ -68,6 +81,15 @@ export const knowledgeKeys = {
       ...knowledgeKeys.skills.all(organizationId),
       skillId,
       "detail",
+    ],
+    // Under `all` so every skill change refreshes it with the list.
+    chatUnavailable: (
+      organizationId: string,
+      chat?: ChatSkillAvailabilityQuery,
+    ) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      "chat-unavailable",
+      chatSkillAvailabilityKey(chat),
     ],
     revisions: (organizationId: string, skillId: string) => [
       ...knowledgeKeys.skills.all(organizationId),
@@ -105,7 +127,8 @@ export const knowledgeKeys = {
     ],
   },
   templates: {
-    all: (organizationId: string) => ["templates", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "templates"),
     list: (organizationId: string, { categoryId, limit }: TemplatesPageKey) => [
       ...knowledgeKeys.templates.all(organizationId),
       "list",
@@ -173,10 +196,12 @@ export const knowledgeKeys = {
     ],
   },
   templateCategories: {
-    all: (organizationId: string) => ["template-categories", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "template-categories"),
   },
   templateRecipes: {
-    all: (organizationId: string) => ["template-recipes", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "template-recipes"),
   },
   clauses: {
     all: (organizationId: string) => ["clauses", organizationId],
@@ -207,7 +232,8 @@ export const knowledgeKeys = {
     ],
   },
   playbooks: {
-    all: (organizationId: string) => ["playbooks", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "playbooks"),
     list: (organizationId: string, { limit }: PlaybooksPageKey) => [
       ...knowledgeKeys.playbooks.all(organizationId),
       "list",
@@ -233,7 +259,8 @@ export const knowledgeKeys = {
     ],
   },
   playbookStarters: {
-    all: (organizationId: string) => ["playbook-starters", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "playbook-starters"),
   },
   flows: {
     all: (organizationId: string) => ["flows", organizationId],
@@ -793,6 +820,29 @@ export const skillsOptions = (organizationId: string) =>
     },
     initialPageParam: "",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+/**
+ * The caller's skills chat cannot offer, with the tools each lacks. The
+ * server decides this over chat's own tool set; the composer menus only read
+ * it. Without `chat` it answers for the widest chat the caller could open;
+ * with it, also which skills that chat cannot run and what it lacks. Cached
+ * per chat, so flipping a switch back reuses the earlier answer.
+ */
+export const chatUnavailableSkillsOptions = (
+  organizationId: string,
+  chat?: ChatSkillAvailabilityQuery,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.chatUnavailable(organizationId, chat),
+    queryFn: async ({ signal }) => {
+      const response = await api.chat["skill-availability"].get({
+        fetch: { signal },
+        ...(chat === undefined ? {} : { query: chat }),
+      });
+      return unwrapEden(response);
+    },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

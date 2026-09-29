@@ -64,7 +64,7 @@ let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let replay: ProviderWireReplay;
-let previousMockAI: boolean;
+let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
@@ -289,7 +289,7 @@ const approveToolCall = async (provider: ProviderWireProvider) => {
     expect(prompts.calls()).toBe(3);
   } finally {
     client.dispose();
-    harness.close();
+    await harness.close();
     replay.answerSideCalls(undefined);
   }
 };
@@ -312,7 +312,7 @@ const rateLimitedTurn = async (provider: ProviderWireProvider) => {
     expect(harness.executions).toEqual([]);
   } finally {
     client.dispose();
-    harness.close();
+    await harness.close();
   }
 };
 

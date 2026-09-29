@@ -10,6 +10,7 @@ import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
+  DECISION_PRIMARY_REFERENCE_TYPES,
 } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
@@ -70,6 +71,7 @@ import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-l
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
+import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 
 import {
   caseLawAnalysisReaderPolicies,
@@ -316,6 +318,9 @@ const DECISION_IDENTIFIER_TYPE_SQL_VALUES = Object.values(
   DECISION_IDENTIFIER_TYPES,
 ).map((type) => sql.raw(`'${type}'`));
 
+const DECISION_PRIMARY_REFERENCE_TYPE_SQL_VALUES =
+  DECISION_PRIMARY_REFERENCE_TYPES.map((type) => sql.raw(`'${type}'`));
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -455,12 +460,27 @@ export const caseLawDecisions = p.pgTable(
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    /** The decision's primary citable reference; `caseNumberType` says what kind. */
     caseNumber: p.varchar("case_number", { length: 256 }).notNull(),
+    /**
+     * Whether `caseNumber` is a docket or a reporter or neutral citation. The
+     * identifier rows are an unordered set, so they cannot say which of them
+     * is the primary; this column does.
+     */
+    caseNumberType: p
+      .varchar("case_number_type", {
+        length: 32,
+        enum: DECISION_PRIMARY_REFERENCE_TYPES,
+      })
+      .default(DECISION_IDENTIFIER_TYPES.CASE_NUMBER)
+      .notNull(),
     /**
      * `caseNumber` under `bareCitationKey`. A citation's text canonicalizes
      * to the same key, so resolution is an indexed equality join rather than
      * a scan. Null when the case number does not canonicalize, which keeps
-     * unresolvable rows out of the join instead of matching on "".
+     * unresolvable rows out of the join instead of matching on "", and when
+     * it is not a docket: citations reach such a decision through its typed
+     * identifiers.
      */
     citationKey: p.varchar("citation_key", { length: 128 }),
     slug: p.varchar({ length: 256 }),
@@ -628,6 +648,10 @@ export const caseLawDecisions = p.pgTable(
     p.check(
       "case_law_decisions_projection_epoch_nonnegative",
       sql`${t.projectionEpoch} >= 0`,
+    ),
+    p.check(
+      "case_law_decisions_case_number_type_values",
+      sql`${t.caseNumberType} IN (${sql.join(DECISION_PRIMARY_REFERENCE_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "case_law_decisions_corpus_mirror_status_values",
@@ -871,6 +895,26 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_document_pending_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+    // Deferred-document queue, parked decisions: the pending rows that used
+    // up their attempts. The pending index above holds every decision whose
+    // text lives outside `fulltext`, so counting or requeueing parked rows
+    // through it walks most of the source to find a few. This one holds
+    // only rows that ever reached the threshold, keyed (source, id) for the
+    // count and the requeue's id-ordered batch. The attempt test is
+    // `documentFetchParked`, the same text the parked reads apply, so the
+    // two cannot drift and leave the index unmatched; the rest of the
+    // pending predicate stays a heap filter.
+    //
+    // Cost: an attempt-count change can no longer be a HOT update, so each
+    // claim of a document writes an entry to every index on the table.
+    // Accepted because the walk's rate is modest and a successful fill
+    // already rewrites indexed columns of the same row.
+    p
+      .index("case_law_decisions_document_parked_idx")
+      .on(t.sourceId, t.id)
+      .where(
+        sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${documentFetchParked(t.documentFetchAttempts)}`,
+      ),
     // Same rule as on the citation side: null means "does not canonicalize",
     // and an empty string would make every such decision a candidate for
     // every such citation.
@@ -2663,6 +2707,32 @@ export const caseLawCourtWeights = p.pgTable(
       .uniqueIndex("case_law_court_weights_country_pattern_idx")
       .on(t.country, t.courtPattern),
     p.index("case_law_court_weights_country_idx").on(t.country),
+    ...globalCaseLawPolicies(),
+    ...caseLawAnalysisReaderPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+export const caseLawCourtDirectoryRanks = p.pgTable(
+  "case_law_court_directory_ranks",
+  {
+    country: p.text().notNull(),
+    courtId: p.text("court_id").notNull(),
+    tier: p.smallint().notNull(),
+    weight: p.smallint().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_court_directory_ranks_pkey",
+      columns: [t.country, t.courtId],
+    }),
+    // Row security is forced; the seed migrations write as the owner.
+    p.pgPolicy("case_law_court_directory_rank_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
     ...globalCaseLawPolicies(),
     ...caseLawAnalysisReaderPolicies(),
     ...publicLawReaderPolicies(),

@@ -5,10 +5,13 @@
  * Run: bun apps/api/src/scripts/generate-spa-filled.ts
  */
 
+import { Result } from "better-result";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { fillTemplate } from "../lib/docx/patch-template";
+import { scanUpload } from "../lib/file-scan/scan-upload";
+import { DOCX_MIME_TYPE } from "../mime-types";
 
 const TEMPLATE = new URL(
   "../lib/docx/fixtures/spa-template-with-placeholders.docx",
@@ -27,9 +30,17 @@ const MOCK_VALUES = {
 };
 
 const run = async () => {
-  const { buffer } = await fillTemplate(TEMPLATE, MOCK_VALUES);
+  const template = await scanUpload({
+    bytes: await Bun.file(TEMPLATE).arrayBuffer(),
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: path.basename(TEMPLATE),
+  });
+  if (Result.isError(template)) {
+    throw template.error;
+  }
+  const { file } = await fillTemplate(template.value, MOCK_VALUES);
   const outputPath = path.join(tmpdir(), "stella-spa-filled.docx");
-  await Bun.write(outputPath, buffer);
+  await Bun.write(outputPath, file.bytes);
   console.log(`Wrote ${outputPath}`);
 };
 

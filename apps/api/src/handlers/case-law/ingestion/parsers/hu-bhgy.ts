@@ -629,6 +629,43 @@ export const huDecisionDateFrom = (line: string): string | undefined => {
  */
 const CLOSING_LINE = /^\p{Lu}[\p{L}\-\s]{2,30},\s*\d{4}\./u;
 
+/** The date is where the line ends: `2021. március 3.`, `30. napján`. */
+const DATE_ENDS_LINE = /\d{1,2}\.(?:\s*napján\.?)?$/u;
+
+/**
+ * The date of a closing line a soft break put inside a longer paragraph.
+ *
+ * A break renders as a newline inside one line rather than ending it
+ * (`runContentText` maps `break` to "\n"), so a body paragraph built with
+ * `\line` carries the place-and-date line after its own text, where a match
+ * anchored to the paragraph's start never sees it. Each visual line after the
+ * first is read on its own, as `huDocketFrom` reads the header; the first is
+ * the paragraph's start, which the closing-line rule already reads.
+ *
+ * Inside running text a sentence can open like a closing line (`Az elsőfokú
+ * bíróság Budapest, 2021. március 3. napján kelt ítéletét`), so here the line
+ * has to be the formula and nothing more: it ends with the date.
+ */
+const closingDateAfterSoftBreak = (text: string): string | undefined => {
+  const lines = text.split("\n");
+  for (const [index, rawLine] of lines.entries()) {
+    // The certification's own place and date follow its marker; a paragraph
+    // that runs on into it has no decision date past that point.
+    if (headingKey(rawLine).includes(KIADMANY)) {
+      return undefined;
+    }
+    const trimmed = rawLine.trim();
+    const date =
+      index > 0 && CLOSING_LINE.test(trimmed) && DATE_ENDS_LINE.test(trimmed)
+        ? huDecisionDateFrom(trimmed)
+        : undefined;
+    if (date !== undefined) {
+      return date;
+    }
+  }
+  return undefined;
+};
+
 /**
  * The decision kinds this collection prints, lowercase, as rule 8 requires.
  * Longest first, so `jogegységi határozat` is not read as `határozat`.
@@ -991,6 +1028,13 @@ export const parseHuBhgyDecision = (
   let region: Region = "front";
   let titleEmitted = false;
   let decisionDate: string | undefined;
+  /**
+   * A closing line found after a soft break inside a body paragraph. Only a
+   * fallback: a closing line that opens its own paragraph is the formula
+   * itself and wins wherever it stands. Among either kind the first wins, as
+   * a later place-and-date line is the kiadmány's, not the decision's.
+   */
+  let softBreakDate: string | undefined;
   /** Lines before the first section heading, where the kind is printed. */
   const titleLines: string[] = [];
 
@@ -1136,6 +1180,10 @@ export const parseHuBhgyDecision = (
     }
 
     // ── Body text ──
+    //
+    // A footnote returned above, so a note's date-shaped line never dates the
+    // decision; nor does the kiadmány's, which opens the closing region first.
+    softBreakDate ??= closingDateAfterSoftBreak(line.text);
     const numbered = COURT_PARAGRAPH_NUMBER.exec(line.text);
     const inlines = inlinesOf(line.runs);
     const number = numbered?.groups?.["number"];
@@ -1204,6 +1252,7 @@ export const parseHuBhgyDecision = (
     blocks,
   );
 
+  decisionDate ??= softBreakDate;
   const documentDocket = huDocketFrom(lineTexts);
   const ast: DocumentAst = {
     version: 1,

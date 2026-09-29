@@ -28,6 +28,8 @@ import { panic } from "better-result";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
+import { parseBunLockText } from "./bun-lock-text";
+
 const ROOT = path.resolve(import.meta.dir, "..");
 
 const readJson = async (filePath: string): Promise<Record<string, unknown>> =>
@@ -68,19 +70,12 @@ const workspaceDirs = (await Promise.all(workspaceGlobs.map(dirsForGlob)))
 
 const lockText = await Bun.file(path.join(ROOT, "bun.lock")).text();
 
-// bun.lock is JSON-with-trailing-commas ("JSONC"-flavored), not strict JSON,
-// so a plain JSON.parse fails on it as-is. Trailing commas only ever appear
-// directly before a closing `}`/`]`, and that exact sequence cannot occur
-// inside any of bun.lock's own string values (workspace paths, package
-// names/versions/specifiers, or the base64 `sha512-...` integrity hashes),
-// so stripping them is a safe, structure-preserving normalize. Parsing the
-// whole file once and reading `workspaces[dir].version` from the resulting
-// object is immune to bun's key ordering or nested-object shape — unlike a
-// per-block regex, there is no block to mis-extract.
+// Parsing the whole file once and reading `workspaces[dir].version` from the
+// resulting object is immune to bun's key ordering or nested-object shape.
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const parsedLock: unknown = JSON.parse(lockText.replace(/,(\s*[}\]])/gu, "$1"));
+const parsedLock = parseBunLockText(lockText);
 if (!isRecord(parsedLock) || !isRecord(parsedLock["workspaces"])) {
   panic("bun.lock did not parse into the expected { workspaces: {...} } shape");
 }

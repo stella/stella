@@ -648,7 +648,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["case-law", "lookup"],
             toolName: "lookup_case_law",
             description:
-              "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs.",
+              "Resolve case references to decisions: docket numbers as the courts write them and ECLIs.",
             flags: [
               {
                 flag: "--identifiers",
@@ -2175,8 +2175,16 @@ export const generatedRouteMap: RouteNode = {
                 description: "Free-text notes; pass null to clear",
                 required: false,
               },
+              {
+                flag: "--nationality-codes",
+                prop: "nationality_codes",
+                kind: "string-array",
+                repeatable: true,
+                description: "Nationality countries; pass [] to clear",
+                required: false,
+              },
             ],
-            inputOnly: [],
+            inputOnly: ["date_of_birth"],
             paginated: false,
             followable: true,
             windowedText: false,
@@ -2250,6 +2258,100 @@ export const generatedRouteMap: RouteNode = {
                     },
                   ],
                   description: "Free-text notes; pass null to clear",
+                },
+                date_of_birth: {
+                  anyOf: [
+                    {
+                      anyOf: [
+                        {
+                          type: "object",
+                          properties: {
+                            precision: {
+                              enum: ["year"],
+                              type: "string",
+                            },
+                            year: {
+                              type: "integer",
+                              minimum: 1000,
+                              maximum: 9999,
+                            },
+                          },
+                          required: ["precision", "year"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            precision: {
+                              enum: ["month"],
+                              type: "string",
+                            },
+                            year: {
+                              type: "integer",
+                              minimum: 1000,
+                              maximum: 9999,
+                            },
+                            month: {
+                              type: "integer",
+                              minimum: 1,
+                              maximum: 12,
+                            },
+                          },
+                          required: ["precision", "year", "month"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            precision: {
+                              enum: ["day"],
+                              type: "string",
+                            },
+                            year: {
+                              type: "integer",
+                              minimum: 1000,
+                              maximum: 9999,
+                            },
+                            month: {
+                              type: "integer",
+                              minimum: 1,
+                              maximum: 12,
+                            },
+                            day: {
+                              type: "integer",
+                              minimum: 1,
+                              maximum: 31,
+                            },
+                          },
+                          required: ["precision", "year", "month", "day"],
+                          additionalProperties: false,
+                        },
+                      ],
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "Date of birth with known year, month, or day precision; pass null to clear",
+                },
+                nationality_codes: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    maxLength: 64,
+                    description:
+                      "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                    "x-stella-agent-input": {
+                      kind: "country",
+                      country: {
+                        spelling: "alpha-2",
+                        tool: "save_contact",
+                      },
+                    },
+                  },
+                  maxItems: 250,
+                  description: "Nationality countries; pass [] to clear",
                 },
               },
             },
@@ -11772,6 +11874,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "suffix",
                   },
                   {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--nationality-codes",
+                    prop: "nationalityCodes",
+                    required: false,
+                    part: "body",
+                    partPath: "nationalityCodes",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--organization-name",
@@ -11939,6 +12050,7 @@ export const generatedRouteMap: RouteNode = {
                   },
                 ],
                 inputOnly: [
+                  "body.dateOfBirth",
                   "body.emails",
                   "body.phones",
                   "body.addresses",
@@ -11988,6 +12100,82 @@ export const generatedRouteMap: RouteNode = {
                         suffix: {
                           maxLength: 32,
                           type: "string",
+                        },
+                        dateOfBirth: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year"],
+                              properties: {
+                                precision: {
+                                  const: "year",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year", "month"],
+                              properties: {
+                                precision: {
+                                  const: "month",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                                month: {
+                                  minimum: 1,
+                                  maximum: 12,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year", "month", "day"],
+                              properties: {
+                                precision: {
+                                  const: "day",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                                month: {
+                                  minimum: 1,
+                                  maximum: 12,
+                                  type: "integer",
+                                },
+                                day: {
+                                  minimum: 1,
+                                  maximum: 31,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                        nationalityCodes: {
+                          maxItems: 250,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            pattern: "^[A-Z]{2}$",
+                            type: "string",
+                          },
                         },
                         organizationName: {
                           maxLength: 512,
@@ -12595,6 +12783,74 @@ export const generatedRouteMap: RouteNode = {
                                 maxLength: 50000,
                                 type: "string",
                               },
+                              dateOfBirth: {
+                                anyOf: [
+                                  {
+                                    additionalProperties: false,
+                                    type: "object",
+                                    required: ["precision", "year"],
+                                    properties: {
+                                      precision: {
+                                        const: "year",
+                                        type: "string",
+                                      },
+                                      year: {
+                                        type: "integer",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    additionalProperties: false,
+                                    type: "object",
+                                    required: ["precision", "year", "month"],
+                                    properties: {
+                                      precision: {
+                                        const: "month",
+                                        type: "string",
+                                      },
+                                      year: {
+                                        type: "integer",
+                                      },
+                                      month: {
+                                        type: "integer",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    additionalProperties: false,
+                                    type: "object",
+                                    required: [
+                                      "precision",
+                                      "year",
+                                      "month",
+                                      "day",
+                                    ],
+                                    properties: {
+                                      precision: {
+                                        const: "day",
+                                        type: "string",
+                                      },
+                                      year: {
+                                        type: "integer",
+                                      },
+                                      month: {
+                                        type: "integer",
+                                      },
+                                      day: {
+                                        type: "integer",
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                              nationalityCodes: {
+                                maxItems: 250,
+                                type: "array",
+                                items: {
+                                  maxLength: 50000,
+                                  type: "string",
+                                },
+                              },
                               metadata: {
                                 type: "object",
                                 properties: {
@@ -12919,6 +13175,8 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 inputOnly: [
                   "body.type",
+                  "body.dateOfBirth",
+                  "body.nationalityCodes",
                   "body.emails",
                   "body.phones",
                   "body.addresses",
@@ -13003,6 +13261,103 @@ export const generatedRouteMap: RouteNode = {
                             {
                               maxLength: 32,
                               type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        dateOfBirth: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              anyOf: [
+                                {
+                                  additionalProperties: false,
+                                  type: "object",
+                                  required: ["precision", "year"],
+                                  properties: {
+                                    precision: {
+                                      const: "year",
+                                      type: "string",
+                                    },
+                                    year: {
+                                      minimum: 1000,
+                                      maximum: 9999,
+                                      type: "integer",
+                                    },
+                                  },
+                                },
+                                {
+                                  additionalProperties: false,
+                                  type: "object",
+                                  required: ["precision", "year", "month"],
+                                  properties: {
+                                    precision: {
+                                      const: "month",
+                                      type: "string",
+                                    },
+                                    year: {
+                                      minimum: 1000,
+                                      maximum: 9999,
+                                      type: "integer",
+                                    },
+                                    month: {
+                                      minimum: 1,
+                                      maximum: 12,
+                                      type: "integer",
+                                    },
+                                  },
+                                },
+                                {
+                                  additionalProperties: false,
+                                  type: "object",
+                                  required: [
+                                    "precision",
+                                    "year",
+                                    "month",
+                                    "day",
+                                  ],
+                                  properties: {
+                                    precision: {
+                                      const: "day",
+                                      type: "string",
+                                    },
+                                    year: {
+                                      minimum: 1000,
+                                      maximum: 9999,
+                                      type: "integer",
+                                    },
+                                    month: {
+                                      minimum: 1,
+                                      maximum: 12,
+                                      type: "integer",
+                                    },
+                                    day: {
+                                      minimum: 1,
+                                      maximum: 31,
+                                      type: "integer",
+                                    },
+                                  },
+                                },
+                              ],
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        nationalityCodes: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxItems: 250,
+                              uniqueItems: true,
+                              type: "array",
+                              items: {
+                                pattern: "^[A-Z]{2}$",
+                                type: "string",
+                              },
                             },
                             {
                               type: "null",
@@ -31212,6 +31567,467 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "number-series": {
+          kind: "route",
+          children: {
+            archive: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "archive"],
+                capabilityId: "number-series.archive",
+                description:
+                  "Archive a number series so it cannot allocate another number.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "create"],
+                capabilityId: "number-series.create",
+                description:
+                  "Create a document number series in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--pattern",
+                    prop: "pattern",
+                    required: true,
+                    part: "body",
+                    partPath: "pattern",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 6,
+                    repeatable: false,
+                    flag: "--padding",
+                    prop: "padding",
+                    required: true,
+                    part: "body",
+                    partPath: "padding",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--seller-profile-id",
+                    prop: "sellerProfileId",
+                    required: false,
+                    part: "body",
+                    partPath: "sellerProfileId",
+                  },
+                ],
+                inputOnly: ["body.documentType"],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["documentType", "name", "pattern", "padding"],
+                      properties: {
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        pattern: {
+                          minLength: 5,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        padding: {
+                          minimum: 1,
+                          maximum: 6,
+                          type: "integer",
+                        },
+                        sellerProfileId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "default-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "default-update"],
+                capabilityId: "number-series.default.update",
+                description:
+                  "Set the default active series for its document type.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            get: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "get"],
+                capabilityId: "number-series.get",
+                description: "Read one active document number series.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "list"],
+                capabilityId: "number-series.list",
+                description:
+                  "List active document number series in the active organization.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            preview: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "preview"],
+                capabilityId: "number-series.preview",
+                description:
+                  "Preview the next number for a date without reserving it. A concurrent issue can change the result.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--issue-date",
+                    prop: "issueDate",
+                    required: true,
+                    part: "query",
+                    partPath: "issueDate",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      required: ["issueDate"],
+                      properties: {
+                        issueDate: {
+                          format: "date",
+                          minLength: 10,
+                          maxLength: 10,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "update"],
+                capabilityId: "number-series.update",
+                description:
+                  "Update an active number series. Pattern and padding lock after first allocation.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--pattern",
+                    prop: "pattern",
+                    required: false,
+                    part: "body",
+                    partPath: "pattern",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 6,
+                    repeatable: false,
+                    flag: "--padding",
+                    prop: "padding",
+                    required: false,
+                    part: "body",
+                    partPath: "padding",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--seller-profile-id",
+                    prop: "sellerProfileId",
+                    required: false,
+                    part: "body",
+                    partPath: "sellerProfileId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        pattern: {
+                          minLength: 5,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        padding: {
+                          minimum: 1,
+                          maximum: 6,
+                          type: "integer",
+                        },
+                        sellerProfileId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "organization-settings": {
           kind: "route",
           children: {
@@ -31225,7 +32041,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "organization-settings.ai-availability.get",
                 description:
-                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, and whether the reduced-cost deferred service tier can be used. Booleans only, so any member may read it.",
+                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, whether the reduced-cost deferred service tier can be used, and whether a local development stack answers with canned replies instead of a model. Booleans only, so any member may read it.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -49459,6 +50275,62 @@ export const generatedRouteMap: RouteNode = {
                         },
                         hasActiveTimer: {
                           type: "boolean",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "me-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "me-list"],
+                capabilityId: "time-entries.me.list",
+                description:
+                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Work date in YYYY-MM-DD format",
+                    flag: "--date",
+                    prop: "date",
+                    required: true,
+                    part: "query",
+                    partPath: "date",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      required: ["date"],
+                      properties: {
+                        date: {
+                          format: "date",
+                          description: "Work date in YYYY-MM-DD format",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
                         },
                       },
                     },

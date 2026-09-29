@@ -243,6 +243,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
+    "no-custom-account-modal/no-custom-account-modal",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -330,6 +333,10 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
+  ]),
+  fixtureRuleOverride("legislation-window.fixture.ts", [
+    "legislation-window/legislation-window-through-helper",
+    "legislation-window/legislation-window-hint-display-only",
   ]),
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
@@ -1159,6 +1166,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
+    "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
@@ -1248,6 +1256,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
+    "./.oxlint-plugins/legislation-window.ts",
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
@@ -1492,6 +1501,55 @@ export default defineConfig({
       },
     },
     {
+      // A legislation version's dates answer "which text applied then" only
+      // through the eligibility rule in legislation-validity-window.ts, which
+      // joins window disposition and expression kind into every comparison.
+      // The publisher's successor-start hint is display-only.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "legislation-window/legislation-window-through-helper": "error",
+        "legislation-window/legislation-window-hint-display-only": "error",
+      },
+    },
+    {
+      // The comparison's owners: the helper and its web twin, which check
+      // eligibility first; the schema's partial unique indexes; the writer's
+      // identity lookup and junction report, which place the version being
+      // stored; and tests, which build and assert windows by hand.
+      files: [
+        "apps/api/src/lib/legal-search/legislation-validity-window.ts",
+        "apps/web/src/features/case-law/statute-version.ts",
+        "apps/api/src/db/schema/legislation.ts",
+        "apps/api/src/handlers/legislation/ingestion.ts",
+        "apps/api/src/**/*.test.ts",
+        "apps/web/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "legislation-window/legislation-window-through-helper": "off",
+      },
+    },
+    {
+      // The hint's owners: the schema, the writer that persists and hashes
+      // it, and the display projections that label a version with it. No
+      // applicability read, citator, provision linking or search projection
+      // is among them.
+      files: [
+        "apps/api/src/db/schema/legislation.ts",
+        "apps/api/src/handlers/legislation/ingestion.ts",
+        "apps/api/src/lib/legal-search/legislation-ingestion-types.ts",
+        "apps/api/src/lib/legal-search/legislation-expression-label.ts",
+        "packages/api-contract/src/legislation-expression.ts",
+        "apps/web/src/features/statutes/components/statute-expression-notice.tsx",
+      ],
+      rules: {
+        "legislation-window/legislation-window-hint-display-only": "off",
+      },
+    },
+    {
       // no-naive-timestamp-cast's fixture builds truncating comparisons on
       // purpose (`created_at > ${cursor}::timestamp`) to exercise that rule's
       // cast detection. They are examples, not call sites, so the comparison
@@ -1603,18 +1661,18 @@ export default defineConfig({
               "apps/web/src/components/workspaces/entity-kind-icon.tsx",
               "apps/web/src/components/workspaces/field-value.tsx",
               "apps/web/src/features/chat/components/chat-title-rename.tsx",
+              "apps/web/src/features/knowledge/views/playbooks/playbooks-page-view.tsx",
               "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx",
               "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
               "apps/web/src/routes/_protected.contacts/import.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-detail-panel.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx",
+              "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/import-skill-dialog.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-cards.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/template-studio-fields.tsx",
@@ -2477,6 +2535,15 @@ export default defineConfig({
       ],
       rules: {
         "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
+      },
+    },
+    {
+      // One modal asks a reader for an account: `SignInDialog`, opened by the
+      // account gate or the public shell's sign-in request. A module that
+      // draws a modal and also reaches account entry is building a second.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-custom-account-modal/no-custom-account-modal": "error",
       },
     },
     {

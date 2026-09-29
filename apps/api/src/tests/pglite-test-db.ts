@@ -11,19 +11,21 @@ import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-  PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
-  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteChatRunLogRls,
+  installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
@@ -119,6 +121,7 @@ export const CASE_LAW_ANALYSIS_READER_SELECT_COLUMNS = {
     "source",
   ],
   case_law_court_weights: ["country", "court_pattern", "tier"],
+  case_law_court_directory_ranks: ["country", "court_id", "tier", "weight"],
   case_law_corpus_tombstones: ["location"],
 } as const;
 
@@ -172,6 +175,9 @@ export const CORPUS_SAMPLE_READER_SELECT_COLUMNS = {
     "document_url",
     "metadata",
     "text_s3_key",
+    "expression_kind",
+    "window_disposition",
+    "window_disposition_basis",
   ],
   legislation_sources: ["id", "adapter_key"],
 } as const;
@@ -253,12 +259,6 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
   getTableName(schema.corpusIndexProjectionRevisions),
 );
 
-const PREGRANT_PROVISION_LINK_STATUS_COLUMNS = new Set(
-  publicLawColumnPairs(PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION)
-    .filter(({ grant }) => grant === "permitted")
-    .map(({ relation, column }) => `${relation}.${column}`),
-);
-
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
@@ -298,6 +298,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_statute_citation_count_state",
       "case_law_polarity_rules",
       "case_law_court_weights",
+      "case_law_court_directory_ranks",
       "case_law_fts_configs",
       "case_law_search_documents",
       "case_law_ingestion_events",
@@ -321,6 +322,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_statute_citation_count_state",
       "case_law_polarity_rules",
       "case_law_court_weights",
+      "case_law_court_directory_ranks",
       "case_law_fts_configs",
       "case_law_search_documents",
       "case_law_ingestion_events",
@@ -342,6 +344,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_statute_citation_counts",
       "case_law_polarity_rules",
       "case_law_court_weights",
+      "case_law_court_directory_ranks",
       "case_law_fts_configs",
       "case_law_search_documents",
       "case_law_ingestion_events",
@@ -432,6 +435,23 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_supplements",
       "case_law_citation_reviews"
     FROM stella
+  `,
+  // Global sanctions lists are readable by requests and writable by ingestion.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "sanctions_sources", "sanctions_editions",
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE
+      "sanctions_sources", "sanctions_editions"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    TO stella_ingestion
   `,
   // Legislation corpus — same global model as case law.
   `
@@ -555,22 +575,12 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).flatMap(
-    ([relation, columns]) => {
-      const grantedColumns = Object.keys(columns).filter(
-        (column) =>
-          !PREGRANT_PROVISION_LINK_STATUS_COLUMNS.has(`${relation}.${column}`),
-      );
-      return grantedColumns.length === 0
-        ? []
-        : [
-            `
-      GRANT SELECT (${grantedColumns.map(quoteSqlIdentifier).join(", ")})
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-          ];
-    },
   ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
@@ -650,9 +660,13 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
+  await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteChatTurnRunIdLookup(db);
+  await installPgliteOrganizationMemberCapacity(db);
+  await installPgliteChatRunLogRls(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

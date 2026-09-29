@@ -20,6 +20,31 @@ export const SQL_PERF_LINT_EXCLUDES = [
   ...EXCLUDED_PREFIXES.map((prefix) => `${prefix}**`),
 ];
 
+export const SQL_PERF_MIGRATION_FILES = "apps/api/drizzle/*/migration.sql";
+
+/**
+ * Migrations the SQL performance check does not read, by directory name, each
+ * with its reason. A merged migration cannot be edited: that would change its
+ * checksum on every database that applied it. Migrations are not ordered by
+ * timestamp, so every other migration is read, whatever its date.
+ */
+export const SQL_PERF_EXEMPT_MIGRATIONS = {
+  "20260926170000_case_law_provision_backfill":
+    "merged; superseded by 20260929180100_case_law_provision_scope_transition_keyset",
+} as const satisfies Record<string, string>;
+
+const exemptMigrations = new Set<string>(
+  Object.keys(SQL_PERF_EXEMPT_MIGRATIONS),
+);
+
+/** Repo-relative path, forward slashes. */
+export const isSqlPerfMigration = (file: string): boolean => {
+  const directory = /^apps\/api\/drizzle\/([^/]+)\/migration\.sql$/u.exec(
+    file,
+  )?.[1];
+  return directory !== undefined && !exemptMigrations.has(directory);
+};
+
 /** Repo-relative path, forward slashes. */
 export const isSqlPerfSource = (file: string): boolean => {
   if (!ROOTS.some((root) => file.startsWith(root))) {

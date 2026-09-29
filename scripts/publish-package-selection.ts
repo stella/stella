@@ -4,6 +4,7 @@ export const LIBRARY_PACKAGE_ORDER = [
   "auth-model",
   "ai-catalog",
   "anonymize-chat",
+  "ui",
   "chat",
   "country-codes",
   "business-registries",
@@ -13,12 +14,14 @@ export const LIBRARY_PACKAGE_ORDER = [
   "start-runtime",
   "ssr-kit",
   "ssr-testkit",
-  "ui",
   "money",
   "calculations",
   "workspace-model",
   "workspace-ui",
   "stable-stringify",
+  "time",
+  "text-normalize",
+  "agent-input",
 ] as const;
 
 export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;

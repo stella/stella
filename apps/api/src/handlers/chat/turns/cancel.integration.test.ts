@@ -316,17 +316,17 @@ const noAudit: AuditRecorder = async () => {
  */
 const produceUntilCut = ({
   execution,
-  heartbeatMs,
+  heartbeat,
   threadId,
 }: {
   execution: ChatTurnExecution;
-  heartbeatMs?: number;
+  heartbeat?: { intervalMs: number; renewEvery: number };
   threadId: SafeId<"chatThread">;
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
-    heartbeatMs,
+    heartbeat,
     owner: {
       execution,
       owningAssistantMessage: undefined,
@@ -516,7 +516,7 @@ describe("stopping a chat turn", () => {
     ).toBe("owned");
     const { response, run } = produceUntilCut({
       execution,
-      heartbeatMs: 5,
+      heartbeat: { intervalMs: 5, renewEvery: 4 },
       threadId,
     });
     // Recorded as another instance's endpoint records it: no local abort.
@@ -876,7 +876,7 @@ describe("a page's client call once the turn was stopped", () => {
       await harness.expectSoundWebClient({ client: stopping, threadId });
     } finally {
       stopping.dispose();
-      harness.close();
+      await harness.close();
     }
   });
 });

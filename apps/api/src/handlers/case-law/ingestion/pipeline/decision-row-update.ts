@@ -237,6 +237,7 @@ export const describeRowUpdateTx = async (
       storesUnpublishedWithoutDocument,
     },
     plan: {
+      caseNumberType,
       corpusPlan,
       incomingCitationKey,
       languageGroupKey,
@@ -271,6 +272,7 @@ export const describeRowUpdateTx = async (
     ? {}
     : {
         caseNumber: result.caseNumber,
+        caseNumberType,
         citationKey: incomingCitationKey,
         sourceDocumentId: persistedSourceDocumentId,
         ecli: result.ecli,
@@ -471,7 +473,7 @@ export const finishRefreshedRowTx = async (
   const {
     observedAt,
     shape: { incomingCarriesDocument },
-    plan: { citationRows },
+    plan: { citations },
   } = write;
   if (
     replacedState !== null &&
@@ -495,7 +497,7 @@ export const finishRefreshedRowTx = async (
   await lockCitationGraph(tx);
   await writeDecisionCitations(tx, {
     decisionId: existing.id,
-    rows: citationRows,
+    citations,
     observedAt,
     stored: true,
   });

@@ -24,6 +24,7 @@ import {
   type PublishedRun,
   type PullRequestSnapshot,
   type QueueEntry,
+  type ReviewerState,
 } from "./review-gate";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
@@ -37,7 +38,13 @@ const RAW_CONFIG = {
   reviewers: [
     {
       name: "PerPush",
-      done: { commit_status: { context: "PerPush", states: ["success"] } },
+      done: {
+        commit_status: {
+          context: "PerPush",
+          states: ["success"],
+          not_reviewed: ["Rate Limited", "paused", "skipped"],
+        },
+      },
       scope: "head",
       timeout_minutes: 20,
     },
@@ -79,7 +86,7 @@ const snapshot = (
 
 // Both reviewers reported on the current request and head.
 const REPORTED_STATUSES: PullRequestSnapshot["statuses"] = [
-  { context: "PerPush", state: "SUCCESS" },
+  { context: "PerPush", state: "SUCCESS", description: null },
 ];
 const reported = {
   statuses: REPORTED_STATUSES,
@@ -128,7 +135,9 @@ describe("reviewer wait", () => {
 
   test("a pending status is not a report", () => {
     const verdict = evaluatePullRequest(
-      snapshot({ statuses: [{ context: "PerPush", state: "PENDING" }] }),
+      snapshot({
+        statuses: [{ context: "PerPush", state: "PENDING", description: null }],
+      }),
       CONFIG,
       minutesAfter(OPENED, 5),
     );
@@ -139,7 +148,7 @@ describe("reviewer wait", () => {
     const verdict = evaluatePullRequest(
       snapshot({
         ...reported,
-        statuses: [{ context: "PerPush", state: "ERROR" }],
+        statuses: [{ context: "PerPush", state: "ERROR", description: null }],
       }),
       CONFIG,
       minutesAfter(OPENED, 5),
@@ -155,7 +164,7 @@ describe("reviewer wait", () => {
     const verdict = evaluatePullRequest(
       snapshot({
         ...reported,
-        statuses: [{ context: "PerPush", state: "FAILURE" }],
+        statuses: [{ context: "PerPush", state: "FAILURE", description: null }],
       }),
       CONFIG,
       minutesAfter(OPENED, 20),
@@ -351,6 +360,119 @@ describe("reviewer wait", () => {
     );
     expect(verdict.conclusion).toBe("pending");
     expect(verdict.title).toBe("Draft");
+  });
+});
+
+// A reviewer that sets the same success state whether or not it reviewed:
+// only its status description tells the two apart.
+describe("a success that was not a review", () => {
+  const statusSaying = (
+    description: string | null,
+  ): PullRequestSnapshot["statuses"] => [
+    { context: "PerPush", state: "SUCCESS", description },
+  ];
+  const summaryOf = (verdict: ReturnType<typeof evaluatePullRequest>) =>
+    pullRequestOutput(verdict, null).summary;
+
+  test("rate limited: waived at once, never shown as a review", () => {
+    const verdict = evaluatePullRequest(
+      snapshot({ ...reported, statuses: statusSaying("Review rate limited") }),
+      CONFIG,
+      minutesAfter(OPENED, 4),
+    );
+    expect(stateOf(verdict, "PerPush")).toBe("not-reviewed");
+    expect(verdict.conclusion).toBe("success");
+    expect(verdict.title).toBe(
+      "Passed with review waived: PerPush did not review",
+    );
+    expect(summaryOf(verdict)).toContain(
+      `- 🚫 PerPush: did not review (Review rate limited) on ${HEAD_SHA.slice(0, 10)}; review waived`,
+    );
+    expect(summaryOf(verdict)).not.toContain("✅ PerPush");
+  });
+
+  test("rate limited does not block while another reviewer is still waited for", () => {
+    const verdict = evaluatePullRequest(
+      snapshot({ statuses: statusSaying("Review rate limited") }),
+      CONFIG,
+      minutesAfter(OPENED, 4),
+    );
+    expect(verdict.conclusion).toBe("pending");
+    expect(verdict.title).toBe("Waiting for OnRequest");
+  });
+
+  test.each([
+    ["paused", "Review paused"],
+    [
+      "skipped, in any case",
+      "REVIEW SKIPPED: bot user not eligible for review",
+    ],
+  ])("%s: waived", (_, description) => {
+    const verdict = evaluatePullRequest(
+      snapshot({ ...reported, statuses: statusSaying(description) }),
+      CONFIG,
+      minutesAfter(OPENED, 4),
+    );
+    expect(stateOf(verdict, "PerPush")).toBe("not-reviewed");
+    expect(verdict.conclusion).toBe("success");
+  });
+
+  test("completed: a review, and the summary quotes the reviewer", () => {
+    const verdict = evaluatePullRequest(
+      snapshot({ ...reported, statuses: statusSaying("Review completed") }),
+      CONFIG,
+      minutesAfter(OPENED, 4),
+    );
+    expect(stateOf(verdict, "PerPush")).toBe("done");
+    expect(verdict.title).toBe("Reviews complete, no unresolved threads");
+    expect(summaryOf(verdict)).toContain(
+      `- ✅ PerPush: success on ${HEAD_SHA.slice(0, 10)} (Review completed)`,
+    );
+  });
+
+  // Unrecognised wording must not turn every report into a waiver: an
+  // unknown or missing description stays a review, as before descriptions
+  // were read.
+  test.each([
+    ["an unknown description", "Looks good to me"],
+    ["no description", null],
+  ])("%s: still a review", (_, description) => {
+    const verdict = evaluatePullRequest(
+      snapshot({ ...reported, statuses: statusSaying(description) }),
+      CONFIG,
+      minutesAfter(OPENED, 4),
+    );
+    expect(stateOf(verdict, "PerPush")).toBe("done");
+  });
+
+  test("a pending status is never read for a waiver", () => {
+    const verdict = evaluatePullRequest(
+      snapshot({
+        ...reported,
+        statuses: [
+          {
+            context: "PerPush",
+            state: "PENDING",
+            description: "Review paused",
+          },
+        ],
+      }),
+      CONFIG,
+      minutesAfter(OPENED, 4),
+    );
+    expect(stateOf(verdict, "PerPush")).toBe("waiting");
+  });
+
+  test("the title keeps not reviewing apart from timing out", () => {
+    const verdict = evaluatePullRequest(
+      snapshot({ statuses: statusSaying("Review rate limited") }),
+      CONFIG,
+      minutesAfter(OPENED, 16),
+    );
+    expect(stateOf(verdict, "OnRequest")).toBe("timed-out");
+    expect(verdict.title).toBe(
+      "Passed with review waived: PerPush did not review; OnRequest timed out",
+    );
   });
 });
 
@@ -624,10 +746,16 @@ describe("publishing", () => {
   });
 
   test("a first verdict is written; the same verdict is not written twice", () => {
-    expect(decidePublish(undefined, output, OPENED)).toBe("write");
+    expect(decidePublish([], output, OPENED)).toBe("write");
+    expect(decidePublish([published(OPENED)], output, OPENED)).toBe(
+      "unchanged",
+    );
+  });
+
+  test("a newer read of the same verdict re-stamps the run instead of writing it again", () => {
     expect(
-      decidePublish(published(OPENED), output, minutesAfter(OPENED, 1)),
-    ).toBe("unchanged");
+      decidePublish([published(OPENED)], output, minutesAfter(OPENED, 1)),
+    ).toBe("restamp");
   });
 
   test("out of order: a success read before a published failure never overwrites it", () => {
@@ -636,7 +764,7 @@ describe("publishing", () => {
       title: failing.title,
       summary: failing.summary,
     });
-    expect(decidePublish(failure, output, minutesAfter(OPENED, 1))).toBe(
+    expect(decidePublish([failure], output, minutesAfter(OPENED, 1))).toBe(
       "stale",
     );
   });
@@ -644,23 +772,37 @@ describe("publishing", () => {
   test("out of order: a failure read before a published success does not overwrite it either", () => {
     expect(
       decidePublish(
-        published(minutesAfter(OPENED, 2)),
+        [published(minutesAfter(OPENED, 2))],
         failing,
         minutesAfter(OPENED, 1),
       ),
     ).toBe("stale");
   });
 
+  test("stale against a newer observation on any run, not only the latest", () => {
+    // Mid-race: the newer observation has been overtaken by an older one.
+    const newer = published(minutesAfter(OPENED, 3), { id: 1 });
+    const overtaking = published(OPENED, { id: 2 });
+    expect(
+      decidePublish([newer, overtaking], failing, minutesAfter(OPENED, 2)),
+    ).toBe("stale");
+  });
+
   test("a newer read replaces an older verdict", () => {
     expect(
-      decidePublish(published(OPENED), failing, minutesAfter(OPENED, 1)),
+      decidePublish([published(OPENED)], failing, minutesAfter(OPENED, 1)),
     ).toBe("write");
   });
 
   test("a run without this gate's identity is overwritten, whatever it says", () => {
     expect(
       decidePublish(
-        published(minutesAfter(OPENED, 60), { identity: null, title: "other" }),
+        [
+          published(minutesAfter(OPENED, 60), {
+            identity: null,
+            title: "other",
+          }),
+        ],
         output,
         OPENED,
       ),
@@ -806,19 +948,62 @@ describe("event filter", () => {
 });
 
 describe("config", () => {
+  const checkedIn = () =>
+    parseReviewGateConfig(
+      Bun.YAML.parse(
+        readFileSync(
+          path.join(import.meta.dirname, "..", ".github", "review-gate.yml"),
+          "utf-8",
+        ),
+      ),
+    );
+
   test("the checked-in config parses and is in shadow mode", () => {
-    const file = path.join(
-      import.meta.dirname,
-      "..",
-      ".github",
-      "review-gate.yml",
-    );
-    const config = parseReviewGateConfig(
-      Bun.YAML.parse(readFileSync(file, "utf-8")),
-    );
+    const config = checkedIn();
     expect(config.reviewers.length).toBeGreaterThan(0);
     expect(config.mode).toBe("shadow");
   });
+
+  // The release bot's version pull requests: Codex never reviews them and
+  // CodeRabbit reports it skipped them, so neither wait runs its timeout.
+  // GraphQL reads a bot's login without the `[bot]` the config writes.
+  test("the checked-in config clears a release bot's pull request without waiting", () => {
+    const verdict = evaluatePullRequest(
+      snapshot({
+        author: "stella-provenance-updater",
+        statuses: [
+          {
+            context: "CodeRabbit",
+            state: "SUCCESS",
+            description: "Review skipped: bot user not eligible for review",
+          },
+        ],
+      }),
+      checkedIn(),
+      minutesAfter(OPENED, 1),
+    );
+    expect(stateOf(verdict, "Codex")).toBe("skipped");
+    expect(stateOf(verdict, "CodeRabbit")).toBe("not-reviewed");
+    expect(verdict.conclusion).toBe("success");
+  });
+
+  test.each<[string, ReviewerState]>([
+    ["Review rate limited", "not-reviewed"],
+    ["Review paused", "not-reviewed"],
+    ["Review completed", "done"],
+  ])(
+    "the checked-in config reads CodeRabbit's %s as %s",
+    (description, state) => {
+      const verdict = evaluatePullRequest(
+        snapshot({
+          statuses: [{ context: "CodeRabbit", state: "SUCCESS", description }],
+        }),
+        checkedIn(),
+        minutesAfter(OPENED, 1),
+      );
+      expect(stateOf(verdict, "CodeRabbit")).toBe(state);
+    },
+  );
 
   const reviewer = (overrides: Record<string, unknown>) => ({
     name: "x",

@@ -85,7 +85,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
   catalogue: WAIVER_REASON.preExistingGap,
-  chat: WAIVER_REASON.preExistingGap,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,
@@ -127,6 +126,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Unauthenticated reads of bundled deployment content (public template
+  // packs, starter playbooks); no database access or tenant-scoped input.
+  "public-knowledge": WAIVER_REASON.noTenantReadSurface,
   // Like mcp-connectors: the only reads are per-user+org connection state
   // (org+user RLS) and external Microsoft Graph data. Neither is a
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
@@ -138,6 +140,22 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "well-known": WAIVER_REASON.noTenantReadSurface,
 };
 
+/**
+ * Domains whose coverage is checked handler by handler rather than by a
+ * single import: every handler module their `routes.ts` mounts must be
+ * exercised by the matrix or carry a reasoned waiver here. One import would
+ * otherwise mark the whole domain covered and hide a new route beside it.
+ */
+const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
+  chat: {
+    // The model catalog for the caller's own organization: no record id in,
+    // nothing another tenant owns out.
+    "get-model-options": WAIVER_REASON.noTenantReadSurface,
+    // Rewrites the prompt text in the request body; reads no stored record.
+    "improve-prompt": WAIVER_REASON.noTenantReadSurface,
+  },
+};
+
 const handlerDomains = readdirSync(handlersDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
@@ -147,15 +165,30 @@ const handlerDomains = readdirSync(handlersDir, { withFileTypes: true })
 // import specifiers keeps this in lockstep with the real matrix: a new case
 // drags its `@/api/handlers/<domain>/...` import along, and this set updates
 // with no second list to maintain.
+const matrixSource = readFileSync(crossTenantMatrixPath, "utf-8");
+
 const coveredDomains = new Set(
-  [
-    ...readFileSync(crossTenantMatrixPath, "utf-8").matchAll(
-      /@\/api\/handlers\/([^/"]+)\//gu,
-    ),
-  ]
+  [...matrixSource.matchAll(/@\/api\/handlers\/([^/"]+)\//gu)]
     .map((match) => match[1])
     .filter((domain): domain is string => domain !== undefined),
 );
+
+/** Handler modules of `domain` imported by `source`, relative to the domain. */
+const domainHandlerImports = (source: string, domain: string): string[] =>
+  [
+    ...source.matchAll(
+      // Domain names are directory names ([a-z0-9-]), safe in a pattern.
+      new RegExp(`@/api/handlers/${domain}/([^"]+)"`, "gu"),
+    ),
+  ]
+    .map((match) => match[1])
+    .filter((modulePath): modulePath is string => modulePath !== undefined);
+
+const mountedHandlers = (domain: string): string[] =>
+  domainHandlerImports(
+    readFileSync(path.join(handlersDir, domain, "routes.ts"), "utf-8"),
+    domain,
+  ).toSorted();
 
 describe("cross-tenant matrix coverage guard", () => {
   test("every handler domain is in the cross-tenant matrix or explicitly waived", () => {
@@ -179,6 +212,27 @@ describe("cross-tenant matrix coverage guard", () => {
     );
     expect(staleWaivers).toEqual([]);
   });
+
+  test.each(Object.keys(PER_HANDLER_WAIVERS))(
+    "every handler %s mounts is in the matrix or explicitly waived",
+    (domain) => {
+      const waived = PER_HANDLER_WAIVERS[domain] ?? {};
+      const exercised = new Set(domainHandlerImports(matrixSource, domain));
+      const mounted = mountedHandlers(domain);
+      expect(mounted.length).toBeGreaterThan(0);
+      expect(
+        mounted.filter(
+          (handler) => !exercised.has(handler) && !(handler in waived),
+        ),
+      ).toEqual([]);
+      // A waiver must name a mounted handler the matrix does not exercise.
+      expect(
+        Object.keys(waived).filter(
+          (handler) => exercised.has(handler) || !mounted.includes(handler),
+        ),
+      ).toEqual([]);
+    },
+  );
 
   test("every cross-tenant matrix import names a real handler domain", () => {
     const unknownCovered = [...coveredDomains].filter(

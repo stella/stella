@@ -334,7 +334,10 @@ const extractCandidates = async (
   const settings = Result.flatten(
     await Result.tryPromise({
       try: async () =>
-        await loadOrgAISettings(db, compaction.threadOrganizationId),
+        await loadOrgAISettings(db, {
+          organizationId: compaction.threadOrganizationId,
+          userId: compaction.threadUserId,
+        }),
       catch: (error: unknown) => error,
     }),
   );

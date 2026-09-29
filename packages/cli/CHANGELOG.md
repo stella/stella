@@ -1,5 +1,49 @@
 # @stll/cli
 
+## 2.3.2
+
+### Patch Changes
+
+- [#4082](https://github.com/stella/stella/pull/4082) [`e146c1d`](https://github.com/stella/stella/commit/e146c1d08b7e5086028a668ac7393374e74fdef9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add document number series commands.
+
+## 2.3.1
+
+### Patch Changes
+
+- [#4109](https://github.com/stella/stella/pull/4109) [`8ca9142`](https://github.com/stella/stella/commit/8ca9142e42c50cd2bcdf2f32cbd67d9ba6e62a71) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe the reason returned when no version of a statute applies on the requested date.
+
+## 2.3.0
+
+### Minor Changes
+
+- [#4029](https://github.com/stella/stella/pull/4029) [`bcab39c`](https://github.com/stella/stella/commit/bcab39c2a58be121e96bf383abc8618386b190a4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add optional birth date and nationality fields for person contacts.
+
+## 2.2.5
+
+### Patch Changes
+
+- [#4030](https://github.com/stella/stella/pull/4030) [`86ad6e9`](https://github.com/stella/stella/commit/86ad6e90709141536d821970b69f649b23411834) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the personal day time-entry list in the CLI capability catalog.
+
+## 2.2.4
+
+### Patch Changes
+
+- [#4095](https://github.com/stella/stella/pull/4095) [`b71f049`](https://github.com/stella/stella/commit/b71f049c3019ecae5b72af5ecc690a7654e13c4a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search and lookup help describe a decision's citable reference, which is not always a docket.
+
+## 2.2.3
+
+### Patch Changes
+
+- [#4061](https://github.com/stella/stella/pull/4061) [`df37af8`](https://github.com/stella/stella/commit/df37af8b6dc697c9ff45e3c43ab28769c657c796) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The AI availability command's description also covers whether a local development stack answers with canned replies.
+
+## 2.2.2
+
+### Patch Changes
+
+- [#3992](https://github.com/stella/stella/pull/3992) [`525b1ee`](https://github.com/stella/stella/commit/525b1ee8fb98324a8f425301aa7adc53fd20de20) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search cursor accepts the longer continuation cursors a search now issues.
+
+- [#4075](https://github.com/stella/stella/pull/4075) [`a85e17b`](https://github.com/stella/stella/commit/a85e17b17a1a7e3f550bf6d89ae8d60f175f4b69) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ingestion status reports an estimated event total
+
 ## 2.2.1
 
 ### Patch Changes

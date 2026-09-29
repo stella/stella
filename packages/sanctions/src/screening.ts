@@ -101,7 +101,7 @@ type BirthDateComparison =
 const birthDateMatch = (
   query: QueryBirthDate,
   listed: BirthDate,
-): "exact" | "approximate" | "mismatch" => {
+): BirthDateComparison => {
   const tolerance = listed.circa ? CIRCA_YEARS : 0;
   const yearWithin = (from: number, to: number) =>
     query.year >= from - tolerance && query.year <= to + tolerance;
@@ -127,6 +127,14 @@ const birthDateMatch = (
       return yearWithin(listed.year, listed.year) && monthAgrees(listed.month)
         ? "approximate"
         : "mismatch";
+    case "month-day":
+      if (query.month === undefined || query.day === undefined) {
+        return "not-compared";
+      }
+      if (query.month === listed.month && query.day === listed.day) {
+        return "approximate";
+      }
+      return listed.circa ? "not-compared" : "mismatch";
     case "year":
       return yearWithin(listed.year, listed.year) ? "approximate" : "mismatch";
     case "year-range":
@@ -154,7 +162,10 @@ const compareBirthDates = (
   if (outcomes.has("exact")) {
     return "exact";
   }
-  return outcomes.has("approximate") ? "approximate" : "mismatch";
+  if (outcomes.has("approximate")) {
+    return "approximate";
+  }
+  return outcomes.has("not-compared") ? "not-compared" : "mismatch";
 };
 
 export type ScreeningQuery = {
@@ -162,7 +173,7 @@ export type ScreeningQuery = {
   /** Omit when the kind of party is unknown. */
   entityType?: EntityType;
   birthDate?: QueryBirthDate;
-  nationality?: CountryCode;
+  nationality?: readonly CountryCode[];
   /** Passport, national id, registration or tax numbers, in any formatting. */
   identifiers?: readonly string[];
 };
@@ -230,16 +241,18 @@ const moveToward = (score: number, share: number) =>
   score + (1 - score) * share;
 
 const nationalityComparison = (
-  query: CountryCode | undefined,
+  query: readonly CountryCode[] | undefined,
   entry: SanctionsEntry,
 ): FieldComparison => {
   const known = entry.nationalities.flatMap((country) =>
     country.code === null ? [] : [country.code],
   );
-  if (query === undefined || known.length === 0) {
+  if (query === undefined || query.length === 0 || known.length === 0) {
     return "not-compared";
   }
-  return known.includes(query) ? "match" : "mismatch";
+  return query.some((country) => known.includes(country))
+    ? "match"
+    : "mismatch";
 };
 
 const entityTypeComparison = (
@@ -415,7 +428,7 @@ export const screen = (
     if (query.birthDate !== undefined) {
       score = moveToward(score, BIRTH_DATE_EXACT_BOOST);
     }
-    if (query.nationality !== undefined) {
+    if (query.nationality !== undefined && query.nationality.length > 0) {
       score = moveToward(score, NATIONALITY_MATCH_BOOST);
     }
     return score;

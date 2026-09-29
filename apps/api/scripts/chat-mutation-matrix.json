@@ -647,6 +647,34 @@
       "oracle": "chat.run.outlives-request"
     },
     {
+      "id": "run-binds-its-id",
+      "fix": "#3975",
+      "behaviour": "A run binds the run id its request posted to its turn when it starts.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-persistence.ts",
+      "search": "...(runId === undefined ? {} : { runId }),",
+      "replace": "...(runId === undefined ? {} : {}),",
+      "scenario": {
+        "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
+        "test": "runs an approved call to completion after its request is torn down, with nobody reading"
+      },
+      "oracle": "chat.persisted.run-identity"
+    },
+    {
+      "id": "reaper-settles-dead-owner",
+      "fix": "#3975",
+      "behaviour": "The reaper ends a turn whose owner stopped renewing its lease, without waiting for a next message.",
+      "status": "active",
+      "file": "src/lib/scheduler/tasks/chat-turn-reaper.ts",
+      "search": "async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),",
+      "replace": "async () => await Promise.resolve(),",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "settles a dead owner's turn without waiting for the next message"
+      },
+      "oracle": "chat.persisted.turn-settles"
+    },
+    {
       "id": "snapshot-serves-stored-history",
       "fix": "#3957",
       "behaviour": "Every stored message a messages snapshot carries, other than the one the run continues, is the message as the thread's page serves it.",
@@ -995,6 +1023,20 @@
         "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
       },
       "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "skill-menu-follows-edit-mode",
+      "fix": "#4086",
+      "behaviour": "The composer's skill availability decides over the chat's own edit mode, as a send does, instead of assuming an open document always queues edits for review.",
+      "status": "active",
+      "file": "src/handlers/chat/skill-availability/offered-tools.ts",
+      "search": "    editApplyMode: chatContext.editApplyMode,",
+      "replace": "    editApplyMode: CHAT_EDIT_APPLY_MODE.manual,",
+      "scenario": {
+        "file": "src/handlers/chat/skill-availability/send-parity.integration.test.ts",
+        "test": "an anonymized global chat over a file, in the default edit mode"
+      },
+      "oracle": "chat.skills.menu-matches-send"
     },
     {
       "id": "stored-result-content-stable",

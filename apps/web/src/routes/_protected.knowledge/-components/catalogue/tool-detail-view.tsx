@@ -1,9 +1,8 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { XIcon } from "@stll/ui/icons";
+import { LoaderIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -13,13 +12,15 @@ import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
+import { memberKnowledgeSource } from "@/features/knowledge/member/member-knowledge";
+import { ToolDetailPanelView } from "@/features/knowledge/views/tools/tool-detail-panel-view";
+import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 
-import { CatalogueDetailPanel } from "./catalogue-detail-panel";
-import type { CatalogueEntry } from "./catalogue-types";
+import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
+import { useCatalogueRemoval } from "./use-catalogue-removal";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";
 
@@ -71,7 +72,7 @@ export const ToolDetailView = ({
   onClose,
 }: InspectorViewRenderProps<ToolDetailPayload>) => {
   const { kind, slug, organizationId } = tab.payload;
-  const { data } = useSuspenseQuery(catalogueOptions(organizationId));
+  const { data } = memberKnowledgeSource.useToolsCatalogue(organizationId);
   const entry = data.entries.find(
     (candidate: CatalogueEntry) =>
       candidate.kind === kind && candidate.slug === slug,
@@ -168,18 +169,91 @@ const ToolDetailContent = ({
     });
   };
 
+  const installed = isEffectivelyInstalled(entry);
+  const installable = !installed && entry.installState !== "unavailable";
+  const { removal, requestRemoval, confirmDialog } = useCatalogueRemoval({
+    entry,
+    onRemove: () => uninstall.mutate(),
+  });
+  const canRemove = removal !== "none";
+
   return (
-    <CatalogueDetailPanel
-      entry={entry}
-      installing={install.isPending}
+    <ToolDetailPanelView
+      footer={
+        <>
+          {installable && (
+            <Button
+              className="flex-1"
+              disabled={install.isPending}
+              onClick={onInstall}
+              type="button"
+            >
+              {install.isPending && (
+                <LoaderIcon className="size-4 animate-spin" />
+              )}
+              {t("common.add")}
+            </Button>
+          )}
+          {installed &&
+            entry.kind === "skill" &&
+            entry.installedSkillId !== null && (
+              <Button
+                className="flex-1"
+                onClick={onEditSkill}
+                type="button"
+                variant="outline"
+              >
+                <PencilIcon className="size-4" />
+                {t("knowledge.agentSkills.editSkill")}
+              </Button>
+            )}
+          {canRemove && (
+            <Button
+              className="flex-1"
+              disabled={uninstall.isPending}
+              onClick={requestRemoval}
+              type="button"
+              variant="destructive-outline"
+            >
+              {uninstall.isPending && (
+                <LoaderIcon className="size-4 animate-spin" />
+              )}
+              {t("common.remove")}
+            </Button>
+          )}
+          {installed && !canRemove && (
+            <p className="text-muted-foreground flex-1 text-center text-xs">
+              {t("catalogue.installedShort")}
+            </p>
+          )}
+          {entry.installState === "unavailable" && (
+            <p className="text-muted-foreground flex-1 text-center text-xs">
+              {t("catalogue.unavailable")}
+            </p>
+          )}
+        </>
+      }
       onClose={onClose}
-      onEditSkill={onEditSkill}
-      onInstall={onInstall}
-      onRemove={() => uninstall.mutate()}
-      removing={uninstall.isPending}
-    />
+      tool={toToolDetail(entry)}
+    >
+      {confirmDialog}
+    </ToolDetailPanelView>
   );
 };
+
+/** The detail the shared panel shows. A server's settings appear only once
+ *  it is connected for this organization. */
+const toToolDetail = (entry: CatalogueEntry): KnowledgeToolDetail => ({
+  ...entry,
+  connection:
+    entry.kind === "mcp" && isEffectivelyInstalled(entry)
+      ? {
+          url: entry.url,
+          authType: entry.authType,
+          serverVersion: entry.serverVersion,
+        }
+      : undefined,
+});
 
 export const ToolDetailRailIcon = ({
   tab,

@@ -44,7 +44,8 @@ export type FillByIdLogicProps = {
  *  route's download shaping (PDF conversion, diagnostic headers) and its
  *  use/fill/audit bookkeeping, written in one transaction.
  *
- * @yields safeDb/scopedDb errors out to the parent safe-handler. */
+ * @yields safeDb/scopedDb errors and stored-template load failures (404, a
+ * 422 scan rejection, a 503 scanner outage) out to the parent safe-handler. */
 export const fillByIdLogic = async function* ({
   safeDb,
   scopedDb,
@@ -64,16 +65,9 @@ export const fillByIdLogic = async function* ({
     );
   }
 
-  const source = await loadStoredTemplateSource({
-    templateId,
-    organizationId,
-    scopedDb,
-  });
-  if (!source) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Template not found" }),
-    );
-  }
+  const source = yield* Result.await(
+    loadStoredTemplateSource({ templateId, organizationId, scopedDb }),
+  );
 
   const result = await fillTemplateDocx({
     source,
@@ -177,7 +171,7 @@ export const fillByIdLogic = async function* ({
   // PDF conversion via Gotenberg
   if (format === "pdf") {
     const scannedOutput = await scanTemplateOutput({
-      buffer: new Uint8Array(result.buffer),
+      buffer: new Uint8Array(result.file.bytes),
       fileName: baseName,
     });
     if (scannedOutput === null) {
@@ -235,7 +229,7 @@ export const fillByIdLogic = async function* ({
   }
   return Result.ok({
     additionalHeaders,
-    body: new Uint8Array(result.buffer),
+    body: new Uint8Array(result.file.bytes),
     // Octet-stream, not the DOCX mime type: the Eden treaty client
     // text-decodes unrecognized content types, which corrupts the ZIP
     // container (Word then reports unreadable content).

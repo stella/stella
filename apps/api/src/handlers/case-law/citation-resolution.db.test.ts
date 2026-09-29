@@ -536,6 +536,8 @@ test("a Constitutional Court ruling is reached by its gazette number and by its 
   const citingId = createSafeId<"caseLawDecision">();
   const ruling = {
     caseNumber: "Pl. ÚS 18/01",
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    jurisdiction: "CZE",
     ecli: null,
     metadata: { parallelQuotation: "234/2002 Sb.\nN 53/26 SbNU 73" },
   };
@@ -639,7 +641,9 @@ test("a Constitutional Court docket beside its reporter entry still resolves by 
   await db.insert(caseLawDecisionIdentifiers).values(
     decisionIdentifiersFromStoredMetadata({
       caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: null,
+      jurisdiction: "CZE",
       metadata: {},
     }).map((identifier) => ({
       decisionId: rulingId,

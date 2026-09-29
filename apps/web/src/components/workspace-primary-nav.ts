@@ -6,6 +6,7 @@ import {
   LibraryBigIcon,
   MessageSquareIcon,
   CaseLawIcon,
+  Clock3Icon,
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
@@ -19,6 +20,7 @@ type WorkspacePrimaryRoute =
   | "/inbox"
   | "/knowledge"
   | "/law"
+  | "/time"
   | "/tools"
   | "/workspaces";
 
@@ -71,6 +73,14 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/workspaces",
   },
   {
+    icon: Clock3Icon,
+    id: "timesheets",
+    audience: "authenticated",
+    kind: "route",
+    labelKey: "billing.timesheets",
+    to: "/time",
+  },
+  {
     icon: CaseLawIcon,
     id: "caseLaw",
     audience: "public",
@@ -112,10 +122,12 @@ export const getWorkspacePrimaryNavItems = ({
   includeInbox,
   includePublicLaw,
   includePublicTools,
+  includeTimesheets,
 }: {
   includeInbox: boolean;
   includePublicLaw: boolean;
   includePublicTools: boolean;
+  includeTimesheets: boolean;
 }) =>
   WORKSPACE_PRIMARY_NAV_ITEMS.filter((item) => {
     if (item.id === "caseLaw") {
@@ -126,6 +138,9 @@ export const getWorkspacePrimaryNavItems = ({
     }
     if (item.id === "tools") {
       return includePublicTools;
+    }
+    if (item.id === "timesheets") {
+      return includeTimesheets;
     }
     return true;
   });

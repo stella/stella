@@ -203,7 +203,7 @@ query($owner: String!, $name: String!, $number: Int!) {
         statusCheckRollup { contexts(first: 100) { nodes {
           __typename
           ... on CheckRun { name status conclusion }
-          ... on StatusContext { context state }
+          ... on StatusContext { context state description }
         } } }
         ${GATE_RUNS_FIELDS}
       } } }
@@ -305,6 +305,8 @@ export type Gateway = {
   readQueue: () => readonly QueueEntry[];
   readRuns: (sha: string) => readonly PublishedRun[];
   writeRun: (sha: string, output: GateOutput, identity: RunIdentity) => void;
+  // Records a newer observation of an unchanged verdict on the run itself.
+  restampRun: (id: number, identity: RunIdentity) => void;
   // The head alone, from the cheapest read: the fallback when a full read
   // fails and no event carried the head.
   readHead: (number: number) => string;
@@ -380,6 +382,7 @@ const parsePullRequest = (
       .map((node) => ({
         context: text(node, "context"),
         state: text(node, "state"),
+        description: nullableText(node, "description"),
       })),
     checkRuns: contexts
       .filter((node) => field(node, "__typename") === "CheckRun")
@@ -525,6 +528,19 @@ const createGateway = (repo: string, baseBranch: string): Gateway => {
         JSON.stringify(body),
       );
     },
+    restampRun: (id, identity) => {
+      runGh(
+        [
+          "api",
+          "-X",
+          "PATCH",
+          `repos/${repo}/check-runs/${id}`,
+          "--input",
+          "-",
+        ],
+        JSON.stringify({ external_id: encodeIdentity(identity) }),
+      );
+    },
     readHead: (number) =>
       runGh([
         "api",
@@ -638,37 +654,50 @@ const readPullRequest = (run: Run, number: number): PullRequestRead => {
   return read;
 };
 
-const publish = (
+// Each round needs another publisher's write to land in between, so this
+// bounds only a pathological burst; past it the job fails visibly.
+const MAX_SETTLE_ROUNDS = 10;
+
+export const publish = (
   run: Run,
   sha: string,
   output: GateOutput,
   identity: RunIdentity,
 ): void => {
-  // Read the latest published verdict as late as possible: the decision is
-  // what keeps a slower, older evaluation from overwriting a newer one.
-  const decision = decidePublish(
-    latestRun(run.gateway.readRuns(sha)),
-    output,
-    identity.observedAt,
-  );
+  // Read the published runs as late as possible: the decision is what keeps
+  // a slower, older evaluation from overwriting a newer one.
+  const runs = run.gateway.readRuns(sha);
+  const decision = decidePublish(runs, output, identity.observedAt);
   console.log(
     `${sha.slice(0, 10)} ${encodeIdentity(identity)}: ${output.conclusion} (${output.title}) -> ${decision}`,
   );
-  if (decision !== "write" || run.dryRun) {
+  if (decision === "stale" || decision === "unchanged" || run.dryRun) {
     return;
   }
-  run.gateway.writeRun(sha, output, identity);
-  // Publishers for one commit can race past the decision above; settle so
-  // the newest run carries the newest observation, whoever wrote last.
-  const repost = runToRepost(run.gateway.readRuns(sha));
-  const repostIdentity = repost?.identity ?? null;
-  const repostOutput = repost === undefined ? null : outputOf(repost);
-  if (repostIdentity !== null && repostOutput !== null) {
+  const latest = latestRun(runs);
+  if (decision === "restamp" && latest !== undefined) {
+    run.gateway.restampRun(latest.id, identity);
+  } else {
+    run.gateway.writeRun(sha, output, identity);
+  }
+  // Publishers for one commit run concurrently and can race past the
+  // decision above; settle to a fixed point so the newest run carries the
+  // newest observation, whoever wrote last.
+  for (let round = 0; round < MAX_SETTLE_ROUNDS; round += 1) {
+    const repost = runToRepost(run.gateway.readRuns(sha));
+    const repostIdentity = repost?.identity ?? null;
+    const repostOutput = repost === undefined ? null : outputOf(repost);
+    if (repostIdentity === null || repostOutput === null) {
+      return;
+    }
     console.log(
       `${sha.slice(0, 10)}: a newer observation was overtaken; re-posting ${encodeIdentity(repostIdentity)}`,
     );
     run.gateway.writeRun(sha, repostOutput, repostIdentity);
   }
+  fail(
+    `${sha.slice(0, 10)}: still overtaken after ${MAX_SETTLE_ROUNDS} re-posts`,
+  );
 };
 
 const sameThreads = (a: Threads, b: Threads): boolean =>

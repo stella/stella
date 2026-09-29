@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { unionAll } from "drizzle-orm/pg-core";
 import { status } from "elysia";
 import type { Static } from "elysia";
 
@@ -20,7 +19,7 @@ import {
   SEARCH_TOTAL_TYPE,
   type SearchTotal,
 } from "@stll/api-contract/search";
-import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -34,6 +33,7 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
+import { decisionIdsNamedBy } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
   interpretDecisionQuery,
   searchAnswer,
@@ -46,10 +46,6 @@ import {
   reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
-import {
-  bareCitationKey,
-  normalizeDecisionIdentifierValue,
-} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { arrayOrEmpty } from "@/api/lib/array";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
@@ -125,9 +121,13 @@ import {
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
+import type {
+  CorpusIndexScanReport,
+  CorpusIndexScanTransport,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -157,6 +157,7 @@ import {
   RELEVANCE_ORDER,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   type ExpandedCorpusQuery,
   resolveExpandedCorpusQuery,
@@ -338,13 +339,12 @@ export const caseLawSearchPlan = ({
 
   const scoreExpr = blendedRankSql({
     authority: sql`cb.authority`,
-    courtTier: sql.raw(
-      courtTierSqlFromMap({
-        countryColumn: "d.country",
-        courtColumn: "d.court",
-        map: courtWeights,
-      }),
-    ),
+    courtTier: courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      courtIdColumn: "d.court_id",
+      map: courtWeights,
+    }),
     lexicalRank: ftsSearch.rank,
   });
   const sortKeyExpr = decisionSortKeySql(sort, scoreExpr);
@@ -376,16 +376,18 @@ export const caseLawSearchPlan = ({
   // The citing court can belong to any jurisdiction — citation graphs cross
   // borders — so this side of the statement reads the flattened registry
   // rather than the decision's own country.
-  const courtWeightExpr = courtWeightSql(
-    "citing_d.court",
-    flattenCourtWeightEntries(courtWeights),
-  );
+  const courtWeightExpr = courtWeightSql({
+    countryColumn: "citing_d.country",
+    courtColumn: "citing_d.court",
+    courtIdColumn: "citing_d.court_id",
+    entries: flattenCourtWeightEntries(courtWeights),
+  });
 
-  const citationAuthorityLateral = sql.raw(`
+  const citationAuthorityLateral = sql`
     LATERAL (
       SELECT ln(1 + coalesce(
         sum(
-          (${polarityWeightSql("c.polarity")})
+          (${sql.raw(polarityWeightSql("c.polarity"))})
           * (${courtWeightExpr})
           * (1.0 / (1 + COALESCE(extract(epoch FROM (now() - citing_d.decision_date)) / (365.25 * 86400), 1.0)))
         ),
@@ -397,11 +399,11 @@ export const caseLawSearchPlan = ({
         ON citing_d.id = c.citing_decision_id
       JOIN case_law_sources citing_src
         ON citing_src.id = citing_d.source_id
-       AND ${redistributableCaseLawSourceSqlFor("citing_src")}
+       AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
       WHERE c.cited_decision_id = d.id
-        AND ${publishedCaseLawDecisionSqlFor("citing_d")}
+        AND ${sql.raw(publishedCaseLawDecisionSqlFor("citing_d"))}
     ) cb
-  `);
+  `;
 
   // Every matched language version, scored once. The page and the total both
   // read this set, so the representative rule below sees exactly what the
@@ -446,6 +448,7 @@ export const caseLawSearchPlan = ({
     SELECT
       m.decision_id,
       d.case_number,
+      d.case_number_type,
       d.slug,
       d.ecli,
       (
@@ -460,6 +463,7 @@ export const caseLawSearchPlan = ({
         WHERE identifier.decision_id = d.id
       ) AS identifiers,
       d.court,
+      d.court_id,
       d.country,
       d.language,
       d.language_group_key,
@@ -664,6 +668,7 @@ const searchPostgresDecisions = async (
     body,
     parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(body.country),
+      reporters: decisionReporterGrammarForJurisdiction(body.country),
     }),
   );
 
@@ -747,16 +752,22 @@ const searchPostgresDecisions = async (
     const presentation = courtPresentation(courtWeights, {
       country: String(row["country"]),
       court: String(row["court"]),
+      courtId: toNullableString(row["court_id"]),
       ecli: toNullableString(row["ecli"]),
     });
 
+    const caseNumberType = primaryReferenceTypeFromStored(
+      row["case_number_type"],
+    );
     return {
       decisionId: String(row["decision_id"]),
       caseNumber: String(row["case_number"]),
+      caseNumberType,
       slug: toNullableString(row["slug"]),
       ecli: toNullableString(row["ecli"]),
       identifiers: decisionIdentifierProjection(row["identifiers"], {
         caseNumber: String(row["case_number"]),
+        caseNumberType,
         ecli: toNullableString(row["ecli"]),
       }),
       court: String(row["court"]),
@@ -1399,12 +1410,13 @@ export const rehydrateCaseLawCandidates = async ({
 type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
 
 /**
- * The decisions an entry names outright. A docket or an ECLI tokenises into
- * numbers and abbreviations the text index matches loosely (a plenary docket
- * ranks every plenary decision sharing a number with it), so an identifier
- * is answered from the identity columns instead: the canonical citation key
- * the citator resolves by, and the ECLI as published. Bounded by the page
- * size: past that the entry names a list, not a decision.
+ * The decisions an entry names outright. A docket, an ECLI or a reporter
+ * citation tokenises into numbers and abbreviations the text index matches
+ * loosely (a plenary docket ranks every plenary decision sharing a number
+ * with it), so an identifier is answered from identity instead: the typed
+ * identifier rows, plus the canonical citation key the citator resolves by
+ * and the ECLI as published, the same id set the lookup reads. Bounded by the
+ * page size: past that the entry names a list, not a decision.
  */
 type DecisionIdsByIdentityQueryOptions = {
   country: string | undefined;
@@ -1417,59 +1429,26 @@ export const decisionIdsByIdentityQuery = ({
   country,
   identity,
   tx,
-}: DecisionIdsByIdentityQueryOptions) => {
-  // An ECLI also matches the other spellings a decision declares as
-  // identifiers. The two sources are unioned into one id set, as the
-  // identity lookup does: OR-ing a column test with a subquery test leaves
-  // the planner no index for either side, and it scans the whole table.
-  const identityPredicate =
-    identity.kind === "ecli"
-      ? inArray(
-          caseLawDecisions.id,
-          unionAll(
-            tx
-              .select({ id: caseLawDecisions.id })
-              .from(caseLawDecisions)
-              .where(
-                inArray(caseLawDecisions.ecli, [
-                  identity.value,
-                  identity.value.toUpperCase(),
-                ]),
-              ),
-            tx
-              .select({ id: caseLawDecisionIdentifiers.decisionId })
-              .from(caseLawDecisionIdentifiers)
-              .where(
-                and(
-                  eq(
-                    caseLawDecisionIdentifiers.type,
-                    DECISION_IDENTIFIER_TYPES.ECLI,
-                  ),
-                  eq(
-                    caseLawDecisionIdentifiers.normalizedValue,
-                    normalizeDecisionIdentifierValue(
-                      DECISION_IDENTIFIER_TYPES.ECLI,
-                      identity.value,
-                    ),
-                  ),
-                ),
-              ),
-          ),
-        )
-      : eq(caseLawDecisions.citationKey, bareCitationKey(identity.value));
-  return tx
+}: DecisionIdsByIdentityQueryOptions) =>
+  tx
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
     .where(
       and(
-        identityPredicate,
+        inArray(
+          caseLawDecisions.id,
+          decisionIdsNamedBy({
+            country,
+            locator: { kind: identity.kind, value: identity.value },
+            tx,
+          }),
+        ),
         country === undefined
           ? undefined
           : eq(caseLawDecisions.country, country),
       ),
     )
     .limit(LIMITS.caseLawSearchPageSizeMax);
-};
 
 type FindDecisionIdsByIdentityOptions = {
   caseLawDb: CaseLawPublicReadDb;
@@ -1548,16 +1527,20 @@ const decisionHitsPage = ({
     const presentation = courtPresentation(courtWeights, {
       country: row.country,
       court: row.court,
+      courtId: row.courtId,
       ecli: row.ecli,
     });
+    const { caseNumberType } = row;
     return [
       {
         decisionId: row.id,
         caseNumber: row.caseNumber,
+        caseNumberType,
         slug: row.slug,
         ecli: row.ecli,
         identifiers: decisionIdentifierProjection(row.identifiers, {
           caseNumber: row.caseNumber,
+          caseNumberType,
           ecli: row.ecli,
         }),
         court: row.court,
@@ -1707,6 +1690,24 @@ const readCaseLawSearchFacets = async ({
   };
 };
 
+/**
+ * The engine transport a case-law scan reads through. Relevance reads ids and
+ * scores rather than whole passages; the page still ranks by position, so the
+ * order it is cut from is the same either way. A date order has no score to
+ * read and stays on the native endpoint.
+ */
+const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
+  switch (sort) {
+    case "relevance":
+      return { type: "scored", fields: ["document_id"] };
+    case "newest":
+      return NATIVE_SCAN_TRANSPORT;
+    default:
+      sort satisfies never;
+      return panic(`Unhandled search sort: ${String(sort)}`);
+  }
+};
+
 export const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
@@ -1742,7 +1743,10 @@ export const searchCorpusIndexDecisions = async (
   let facetMs = 0;
   let scanAndFacetsMs = 0;
   const grammar = decisionDocketGrammarForCountry(body.country);
-  const intent = parseDecisionQuery(body.query, { grammar });
+  const intent = parseDecisionQuery(body.query, {
+    grammar,
+    reporters: decisionReporterGrammarForJurisdiction(body.country),
+  });
   const interpretation = interpretDecisionQuery(body, intent);
   const queryClass = decisionQueryClass(intent);
   const report = (hitsReturned: number, scan: CorpusIndexScanReport): void => {
@@ -1955,6 +1959,7 @@ export const searchCorpusIndexDecisions = async (
     limit,
     order: corpusSearchOrder(sort),
     parsedCursor,
+    scanTransport: caseLawScanTransport(sort),
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];

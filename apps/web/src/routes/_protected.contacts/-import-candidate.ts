@@ -179,7 +179,15 @@ export const writeCandidateField = (
 export const withCandidateType = (
   candidate: ImportCandidate,
   type: ContactType,
-): ImportCandidate => ({ ...candidate, type });
+): ImportCandidate =>
+  type === "person"
+    ? { ...candidate, type }
+    : {
+        ...candidate,
+        type,
+        dateOfBirth: undefined,
+        nationalityCodes: undefined,
+      };
 
 const CUSTOM_FIELD_ID_MAX_LENGTH = 64;
 const CUSTOM_FIELD_ID_SUFFIX_BUDGET = 8;
@@ -224,12 +232,14 @@ export const withCustomFields = (
 /** Every field `toWireCandidate` copies onto the request body. */
 type SentCandidateField =
   | "addresses"
+  | "dateOfBirth"
   | "displayName"
   | "emails"
   | "firstName"
   | "lastName"
   | "metadata"
   | "middleName"
+  | "nationalityCodes"
   | "notes"
   | "organizationName"
   | "phones"
@@ -282,6 +292,12 @@ export const toWireCandidate = (
     }),
     ...(candidate.lastName !== undefined && { lastName: candidate.lastName }),
     ...(candidate.suffix !== undefined && { suffix: candidate.suffix }),
+    ...(candidate.dateOfBirth !== undefined && {
+      dateOfBirth: candidate.dateOfBirth,
+    }),
+    ...(candidate.nationalityCodes !== undefined && {
+      nationalityCodes: candidate.nationalityCodes,
+    }),
     ...(candidate.organizationName !== undefined && {
       organizationName: candidate.organizationName,
     }),

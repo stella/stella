@@ -3,6 +3,12 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type {
+  LegislationWindowDisposition,
+  LegislationWindowDispositionBasis,
+} from "@stll/api-contract/legislation-expression";
+import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
+
 import {
   publicStatuteOptions,
   statuteBySlugOptions,
@@ -12,10 +18,14 @@ import type {
   PublicStatute,
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
+import type { StatuteWindowGap } from "@/features/statutes/statute-expression";
 import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import { loadPublicStatuteRoute } from "@/routes/law/-statute-detail.logic";
+import {
+  loadPublicStatuteRoute,
+  statuteVersionRouteParams,
+} from "@/routes/law/-statute-detail.logic";
 
 const SLUG = "89-2012-sb-obcansky-zakonik";
 const COUNTRY_SEGMENT = "cze";
@@ -35,13 +45,20 @@ type StatuteSeed = {
   id: SafeId<"legislationDocument">;
   versionValidFrom: string | null;
   versionValidTo: string | null;
+  windowDisposition?: LegislationWindowDisposition;
+  windowDispositionBasis?: LegislationWindowDispositionBasis;
 };
 
 const statute = ({
   id,
   versionValidFrom,
   versionValidTo,
+  windowDisposition = "effective",
+  windowDispositionBasis,
 }: StatuteSeed): PublicStatute => ({
+  expressionKind: "consolidation",
+  windowDisposition,
+  windowDispositionBasis: windowDispositionBasis ?? null,
   allowsDerivedAi: true,
   citationCaseCount: null,
   country: "CZE",
@@ -316,6 +333,118 @@ describe("the address a statute consolidation is canonical at", () => {
         to: "/law/$country/statutes/$slug",
       },
     });
+  });
+});
+
+describe("a version or a day that cannot be read as in force", () => {
+  const REVERSED_ID = toSafeId<"legislationDocument">(
+    "00000000-0000-4000-8000-000000000004",
+  );
+  const REVERSED = {
+    id: REVERSED_ID,
+    versionValidFrom: "2022-01-01",
+    versionValidTo: "2021-12-31",
+    windowDisposition: "invalid-window",
+    windowDispositionBasis: "reversed",
+  } satisfies StatuteSeed;
+
+  test("a day the publisher's inconsistent dates leave unanswered shows the act and says why", async () => {
+    const queryClient = new QueryClient();
+    seedWork(queryClient);
+    const gap: StatuteWindowGap = {
+      windowGap: [
+        {
+          basis: "reversed",
+          id: REVERSED_ID,
+          language: "cs",
+          versionValidFrom: "2022-01-01",
+          versionValidTo: "2021-12-31",
+        },
+      ],
+    };
+    queryClient.setQueryData(
+      statuteBySlugOptions({
+        asOf: "2022-02-01",
+        country: COUNTRY_SEGMENT,
+        slug: SLUG,
+      }).queryKey,
+      gap,
+    );
+
+    const loaded = await load(queryClient, {
+      search: { asOf: "2022-02-01" },
+      slug: SLUG,
+    });
+
+    expect(loaded.statute).toBeNull();
+    expect(loaded.windowGap).toEqual(gap.windowGap);
+    expect(loaded.work.id).toBe(CURRENT_ID);
+  });
+
+  test("a day nothing covers carries no publisher-data reason", async () => {
+    const queryClient = new QueryClient();
+    seedWork(queryClient);
+    queryClient.setQueryData(
+      statuteBySlugOptions({
+        asOf: "1990-01-01",
+        country: COUNTRY_SEGMENT,
+        slug: SLUG,
+      }).queryKey,
+      null,
+    );
+
+    const loaded = await load(queryClient, {
+      search: { asOf: "1990-01-01" },
+      slug: SLUG,
+    });
+
+    expect(loaded.statute).toBeNull();
+    expect(loaded.windowGap).toBeNull();
+  });
+
+  test("a version that cannot apply is read at its id, never at a day that does not name it", async () => {
+    const queryClient = new QueryClient();
+    const versions = [
+      version(REVERSED, false),
+      version(CURRENT, true),
+      version(OPEN_OLDER, false),
+    ];
+    for (const seed of [REVERSED, CURRENT, OPEN_OLDER]) {
+      queryClient.setQueryData(
+        publicStatuteOptions(seed.id).queryKey,
+        statute(seed),
+      );
+      queryClient.setQueryData(
+        statuteVersionsOptions(seed.id).queryKey,
+        versions,
+      );
+    }
+    const idForm = createStatuteRouteParams({
+      country: "CZE",
+      documentId: REVERSED_ID,
+      eli: "/eli/cz/sb/2012/89",
+      slug: null,
+      version: null,
+    });
+
+    expect(
+      statuteVersionRouteParams({
+        isDefault: false,
+        version: statute(REVERSED),
+      }),
+    ).toEqual(idForm);
+    // An older version that can apply keeps its day's address.
+    expect(
+      statuteVersionRouteParams({
+        isDefault: false,
+        version: statute(OPEN_OLDER),
+      }),
+    ).toEqual({ country: COUNTRY_SEGMENT, slug: SLUG, version: "2020-01-01" });
+
+    // The id form is canonical for it, so it renders there instead of being
+    // sent to a day the version never applied on.
+    const loaded = await load(queryClient, { slug: idForm.slug });
+    expect(loaded.statute?.id).toBe(REVERSED_ID);
   });
 });
 

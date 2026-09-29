@@ -8,10 +8,15 @@ import {
   publishedLegislationCountryFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
+  eligibleExpression,
   inForceToday,
+  legislationVersionRef,
+  notWithdrawn,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
+
+const documentRef = legislationVersionRef(legislationDocuments);
 
 /**
  * What identifies a Work across its consolidations: the source, ELI and
@@ -74,6 +79,11 @@ export const workKeyConditions = (work: LegislationWorkKey): SQL[] => [
  * One query both the reader route and the version listing use, so the page a
  * bare link opens and the version the listing marks as its default cannot
  * disagree.
+ *
+ * Ranked eligible-and-in-force, then eligible, then newest: a version that
+ * cannot apply (never in force, an inconsistent window) is the default only
+ * for a Work with nothing else, so its page still opens, labelled. A
+ * withdrawn version is never the default; it stays openable by its id.
  */
 export const selectDefaultVersionId = async (
   tx: LegislationReadTransaction,
@@ -82,14 +92,10 @@ export const selectDefaultVersionId = async (
   const [version] = await tx
     .select({ id: legislationDocuments.id })
     .from(legislationDocuments)
-    .where(and(...workKeyConditions(work)))
+    .where(and(...workKeyConditions(work), notWithdrawn(documentRef)))
     .orderBy(
-      desc(
-        inForceToday(
-          legislationDocuments.versionValidFrom,
-          legislationDocuments.versionValidTo,
-        ),
-      ),
+      desc(inForceToday(documentRef)),
+      desc(eligibleExpression(documentRef)),
       desc(versionSortKey(legislationDocuments.versionValidFrom)),
       desc(legislationDocuments.id),
     )

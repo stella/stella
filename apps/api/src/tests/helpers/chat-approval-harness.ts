@@ -12,6 +12,8 @@ import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
+import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
+import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -19,6 +21,7 @@ import {
 import type { ChatMessagePage } from "@/api/handlers/chat/message-page";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import type { SendMessageDependencies } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -37,6 +40,8 @@ import {
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
+import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import {
   findLiveViewViolations,
   findUnservedSnapshotMessages,
@@ -160,6 +165,7 @@ const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
   CHAT_ORACLE.providerTranscriptSettled,
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
+  CHAT_ORACLE.persistedRunIdentity,
   CHAT_ORACLE.persistedRefsStable,
   CHAT_ORACLE.persistedTurnOutcome,
   CHAT_ORACLE.persistedTurnSettles,
@@ -294,6 +300,7 @@ export const createApprovalHarness = ({
         webSearchProvider: null,
       }),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
+    compactMessagesForContext,
     streamResponse: streamChat,
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
@@ -383,9 +390,11 @@ export const createApprovalHarness = ({
   /**
    * `chat.run.outlives-request`: reads of the request after its response,
    * and a turn cut short although its response was read to its end without a
-   * Stop, which only the request's end could have done.
+   * Stop, which only the request's end could have done; and
+   * `chat.persisted.run-identity`: the turn the response names holds the run
+   * id its request posted.
    */
-  const findRequestDependence = async ({
+  const findRunViolations = async ({
     ctx,
     ended,
     turnId,
@@ -396,25 +405,38 @@ export const createApprovalHarness = ({
   }): Promise<OracleViolation[]> => {
     const reads = requestOf(ctx).readsAfterResponse();
     const turn =
-      ended === "complete" && turnId !== null
-        ? await testDb.query.chatTurns.findFirst({
+      turnId === null
+        ? undefined
+        : await testDb.query.chatTurns.findFirst({
             columns: {
               cancellationReason: true,
               interruptionReason: true,
+              runId: true,
               status: true,
             },
             where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
-          })
+          });
+    const reason =
+      ended === "complete"
+        ? (turn?.interruptionReason ?? turn?.cancellationReason)
         : undefined;
-    const reason = turn?.interruptionReason ?? turn?.cancellationReason;
-    return violationsOf(CHAT_ORACLE.runOutlivesRequest, [
-      ...reads.map((read) => ({ readAfterResponse: read })),
-      ...(reason !== undefined &&
-      reason !== null &&
-      CUT_SHORT_REASONS.has(reason)
-        ? [{ cutShortAfterCompleteResponse: { reason, turnId } }]
-        : []),
-    ]);
+    const { runId } = bodyByContext.get(ctx) ?? panic("Unknown send context");
+    return [
+      ...violationsOf(CHAT_ORACLE.runOutlivesRequest, [
+        ...reads.map((read) => ({ readAfterResponse: read })),
+        ...(reason !== undefined &&
+        reason !== null &&
+        CUT_SHORT_REASONS.has(reason)
+          ? [{ cutShortAfterCompleteResponse: { reason, turnId } }]
+          : []),
+      ]),
+      ...violationsOf(
+        CHAT_ORACLE.persistedRunIdentity,
+        turn !== undefined && turn.runId !== runId
+          ? [{ expectedRunId: runId, storedRunId: turn.runId, turnId }]
+          : [],
+      ),
+    ];
   };
 
   /** A request built by hand rather than by a web client. */
@@ -616,7 +638,7 @@ export const createApprovalHarness = ({
       violations: [
         ...settledUnread,
         ...unsettled,
-        ...(await findRequestDependence({
+        ...(await findRunViolations({
           ctx,
           ended: "complete",
           turnId: result.headers.get(CHAT_TURN_ID_HEADER),
@@ -683,6 +705,8 @@ export const createApprovalHarness = ({
 
   /** Threads whose next web request is served by a process that then dies. */
   const crashingThreads = new Set<string>();
+  /** Reads of the responses a dying process left behind, still running. */
+  const abandonedReads = new Set<Promise<string>>();
 
   /**
    * Serves `body` until the run reaches a stalling model call, then lets the
@@ -702,8 +726,9 @@ export const createApprovalHarness = ({
     if (!(result instanceof Response && result.ok)) {
       return statusResponse(result);
     }
-    // Reading the stream is what runs the turn; it stops at the stall.
-    void drainResponse(result);
+    // Reading the stream is what runs the turn; it stops at the stall. In
+    // this process the run lives on, stalled, until `close` ends it.
+    abandonedReads.add(drainResponse(result));
     await stalled;
     prompts.loseSince(beforeCrash);
     // The earliest lease the row allows: just after the turn was created.
@@ -795,7 +820,7 @@ export const createApprovalHarness = ({
     });
     clientFindings.push(
       ...(await awaitSettledTurns(raw.threadId)),
-      ...(await findRequestDependence({ ctx, ended, turnId })),
+      ...(await findRunViolations({ ctx, ended, turnId })),
       ...findWireIdentityViolations(chunks),
       ...findUnstoredWireResults({
         chunks,
@@ -1195,10 +1220,30 @@ export const createApprovalHarness = ({
     crashDuringNextRequest: (threadId: SafeId<"chatThread">) => {
       crashingThreads.add(threadId);
     },
-    /** Restores the model seam and `fetch`; call once the test is done. */
-    close: () => {
-      globalThis.fetch = originalFetch;
-      provider.restore();
+    /** Runs the scheduler's reaper once, as its minute tick does. */
+    reapOwnerlessTurns: async () => {
+      await createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx)(
+        asTestRaw<SchedulerTaskContext>({
+          db: testDb,
+          logger: { info: () => undefined },
+          signal: new AbortController().signal,
+        }),
+      );
+    },
+    /**
+     * Ends what the test left running, then restores the model seam and
+     * `fetch`; call once the test is done, before its database closes. A run
+     * a simulated crash left stalled would otherwise keep beating on its
+     * turn after that database is gone.
+     */
+    close: async () => {
+      try {
+        await relinquishChatTurnRuns();
+        await Promise.all(abandonedReads);
+      } finally {
+        globalThis.fetch = originalFetch;
+        provider.restore();
+      }
     },
     /** Drops the connection of `threadId`'s response still streaming. */
     dropConnection: (threadId: SafeId<"chatThread">) => {

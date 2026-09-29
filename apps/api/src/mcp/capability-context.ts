@@ -104,11 +104,14 @@ export const synthesizeCapabilityContext = async ({
     panic("Capability workspace was not present in the MCP access map");
   }
 
-  const organizationId = context.organizationId;
+  const reader = {
+    organizationId: context.organizationId,
+    userId: context.userId,
+  };
   const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(organizationId) ??
+    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
       operationDatabaseScope.scopedDb(
-        async (tx) => await loadOrgSettingsForAuth(tx, organizationId),
+        async (tx) => await loadOrgSettingsForAuth(tx, reader),
       ));
 
   return {

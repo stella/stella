@@ -416,11 +416,13 @@ const CompareFrameLayout = ({
         {/* Stacked, every cell names its own version instead. */}
         <div className="hidden grid-cols-2 gap-x-8 border-b py-2 md:grid">
           <StatuteValidityIndicator
+            expression={frame.older}
             status={frame.older.status}
             validFrom={frame.older.versionValidFrom}
             validTo={frame.older.versionValidTo}
           />
           <StatuteValidityIndicator
+            expression={frame.newer}
             status={frame.newer.status}
             validFrom={frame.newer.versionValidFrom}
             validTo={frame.newer.versionValidTo}

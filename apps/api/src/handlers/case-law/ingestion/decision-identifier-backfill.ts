@@ -5,7 +5,10 @@ import {
   DECISION_IDENTIFIER_MAX_COUNT,
   DECISION_IDENTIFIER_TYPES,
 } from "@stll/legal-ast/decision-identifier";
-import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import type {
+  DecisionIdentifiers,
+  DecisionPrimaryReferenceType,
+} from "@stll/legal-ast/decision-identifier";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -23,7 +26,7 @@ import {
 import {
   decisionIdentifierTypeOfCitation,
   decisionIdentifiersFromStoredMetadata,
-  normalizeDecisionIdentifier,
+  normalizeDecisionIdentifierIn,
   normalizeDecisionIdentifierValue,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -33,6 +36,10 @@ import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  primaryDecisionIdentifier,
+  primaryReferenceTypeFromStored,
+} from "@/api/lib/legal-search/decision-primary-reference";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -217,6 +224,8 @@ const ensureCheckpoint = async (rootDb: CaseLawRootHandle): Promise<void> => {
 type DecisionRow = {
   id: string;
   caseNumber: string;
+  country: string;
+  caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
   metadata: Record<string, unknown>;
 };
@@ -258,11 +267,16 @@ const readDecisionRows = (result: unknown): DecisionRow[] =>
   executedRows(result).flatMap((row) =>
     isRecord(row) &&
     typeof row["id"] === "string" &&
-    typeof row["caseNumber"] === "string"
+    typeof row["caseNumber"] === "string" &&
+    typeof row["country"] === "string"
       ? [
           {
             id: row["id"],
             caseNumber: row["caseNumber"],
+            country: row["country"],
+            caseNumberType: primaryReferenceTypeFromStored(
+              row["caseNumberType"],
+            ),
             ecli: typeof row["ecli"] === "string" ? row["ecli"] : null,
             metadata: isRecord(row["metadata"]) ? row["metadata"] : {},
           },
@@ -331,7 +345,8 @@ const decisionRowsSql = (
   lock: boolean,
 ) => sql`
   SELECT decision.id::text AS id, decision.case_number AS "caseNumber",
-         decision.ecli, decision.metadata
+         decision.case_number_type AS "caseNumberType",
+         decision.country, decision.ecli, decision.metadata
   FROM case_law_decisions decision
   ${cursorId === null ? sql`` : sql`WHERE decision.id > ${cursorId}::uuid`}
   ORDER BY decision.id
@@ -398,14 +413,16 @@ const projectDecisionPage = async (
   }
   const projections = rows.flatMap((row) => {
     const identifiers = identifiersForStoredDecision(row);
-    return identifiers === null ? [] : [{ decisionId: row.id, identifiers }];
+    return identifiers === null
+      ? []
+      : [{ country: row.country, decisionId: row.id, identifiers }];
   });
   if (projections.length > 0) {
     const expected = sql.join(
-      projections.flatMap(({ decisionId, identifiers }) =>
+      projections.flatMap(({ country, decisionId, identifiers }) =>
         identifiers.map(
           (identifier) =>
-            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifier(identifier)}::varchar)`,
+            sql`(${decisionId}::uuid, ${identifier.type}::varchar, ${identifier.value}::varchar, ${normalizeDecisionIdentifierIn(country, identifier)}::varchar)`,
         ),
       ),
       sql`, `,
@@ -598,15 +615,13 @@ const identifierKey = ({
 
 const identifiersForStoredDecision = (
   row: DecisionRow,
-): DecisionIdentifiers | null => {
-  const caseNumberIdentifier = {
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value: row.caseNumber,
-  } as const;
-  return normalizeDecisionIdentifier(caseNumberIdentifier)
-    ? decisionIdentifiersFromStoredMetadata(row)
+): DecisionIdentifiers | null =>
+  normalizeDecisionIdentifierIn(row.country, primaryDecisionIdentifier(row))
+    ? decisionIdentifiersFromStoredMetadata({
+        ...row,
+        jurisdiction: row.country,
+      })
     : null;
-};
 
 const decisionMismatchCount = async (
   tx: Transaction,
@@ -639,14 +654,17 @@ const decisionMismatchCount = async (
         identifierKey({
           type: identifier.type,
           value: identifier.value,
-          normalizedValue: normalizeDecisionIdentifier(identifier),
+          normalizedValue: normalizeDecisionIdentifierIn(
+            row.country,
+            identifier,
+          ),
         }),
       ),
     );
     const derivedKeys = new Set(
       identifiers.map(
         (identifier) =>
-          `${identifier.type}\u0000${normalizeDecisionIdentifier(identifier)}`,
+          `${identifier.type}\u0000${normalizeDecisionIdentifierIn(row.country, identifier)}`,
       ),
     );
     const actual = new Set(

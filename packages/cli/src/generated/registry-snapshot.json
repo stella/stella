@@ -168,7 +168,7 @@
       "itemsKey": "results"
     },
     "name": "search_case_law",
-    "description": "Search case law within one country. `queries` carries several phrasings of one question and merges their results; matchedQueries names the phrasings that returned each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). `sort` defaults to 'relevance'. Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Each hit carries citationAuthority (the score the ranking blends in), matchingPassages (at least 1) and a route-independent resourceName. read_case_law_citations gives the polarity of the citing decisions.",
+    "description": "Search case law within one country. `queries` carries phrasings of one question and merges their results; matchedQueries names the phrasings behind each hit. `limit` is the merged page, split evenly across them. Filters: court, language, dates, decision type, source_id (a `facets.source` bucket's `value`). Facets and total describe ONE query's whole set: first page of a single-query call only, null otherwise. Function words are not required terms; `searches[]` gives each phrasing's `queryUsed` and warnings, and `strict` requires every word. Each hit carries citationAuthority (the score ranking blends in), matchingPassages, a route-independent resourceName and caseNumber, its citable reference: not always a docket. read_case_law_decision types it; read_case_law_citations gives citing polarity.",
     "inputSchema": {
       "type": "object",
       "required": ["queries", "country"],
@@ -291,7 +291,7 @@
       "itemsKey": "items"
     },
     "name": "lookup_case_law",
-    "description": "Resolve case references to decisions: docket numbers as the courts write them (a trailing sheet number is ignored) and ECLIs. Answered from the identity columns, never by ranking text, so a hit is the decision named, not one citing it. Every `identifiers[]` entry is answered on its own, in input order, under `status`: `found` carries that decision's id, resourceName, appUrl, docket, court, date and ECLI; `ambiguous` carries the candidates: a docket is unique to a court, not to the corpus, and picking one would cite the wrong court; `not_found` says what to call instead; `lookup_failed` means the read did not complete, so retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a `found` decisionId to read_case_law_decision for the text.",
+    "description": "Resolve case references to decisions: docket numbers as the courts write them and ECLIs. Answered from identity columns, not ranked text: a hit is the decision named, not one citing it. Each `identifiers[]` entry is answered on its own, in input order, under `status`: `found` carries that decision's id, resourceName, appUrl, caseNumber (citable reference, not always a docket), court, date and ECLI; `ambiguous` carries the candidates: a docket is unique per court, not per corpus, so none is picked; `not_found` says what to call instead; `lookup_failed`: the read did not complete; retry that entry. Use this when the user names a case; use search_case_law when they describe one. Pass a `found` decisionId to read_case_law_decision for the text and typed identifiers.",
     "inputSchema": {
       "type": "object",
       "required": ["identifiers", "country"],
@@ -943,7 +943,7 @@
       "itemsKey": "items"
     },
     "name": "read_statute_provisions",
-    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation covers that day), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. Prefer one batched call over one call per provision.",
+    "description": "Read named provisions of one or more statutes in one call: each `items[]` entry is { eli, anchor } plus an optional as_of and language. An anchor is the publisher's own (par_1729, par_1729-odst_1) and read_statute's `outline` lists them. Every entry is answered separately, in input order, under `status`: `found` carries the provision's text, while `not_found` (no such ELI), `uncovered_date` (no consolidation applies that day, including where the publisher's own dates are inconsistent), `provision_not_found` (that consolidation has no such anchor) and `text_withheld` (the source bars AI use of its wording) each carry a message. Prefer one batched call over one call per provision.",
     "inputSchema": {
       "type": "object",
       "required": ["items"],
@@ -2746,6 +2746,98 @@
             }
           ],
           "description": "Free-text notes; pass null to clear"
+        },
+        "date_of_birth": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "precision": {
+                      "enum": ["year"],
+                      "type": "string"
+                    },
+                    "year": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 9999
+                    }
+                  },
+                  "required": ["precision", "year"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "precision": {
+                      "enum": ["month"],
+                      "type": "string"
+                    },
+                    "year": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 9999
+                    },
+                    "month": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 12
+                    }
+                  },
+                  "required": ["precision", "year", "month"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "precision": {
+                      "enum": ["day"],
+                      "type": "string"
+                    },
+                    "year": {
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 9999
+                    },
+                    "month": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 12
+                    },
+                    "day": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 31
+                    }
+                  },
+                  "required": ["precision", "year", "month", "day"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Date of birth with known year, month, or day precision; pass null to clear"
+        },
+        "nationality_codes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+            "x-stella-agent-input": {
+              "kind": "country",
+              "country": {
+                "spelling": "alpha-2",
+                "tool": "save_contact"
+              }
+            }
+          },
+          "maxItems": 250,
+          "description": "Nationality countries; pass [] to clear"
         }
       }
     },

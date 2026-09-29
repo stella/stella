@@ -15,6 +15,11 @@ import {
   READER_ANNOTATION_VISIBILITIES,
 } from "@stll/api-contract/legal-reader-annotations";
 import {
+  LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_WINDOW_DISPOSITION_BASES,
+  LEGISLATION_WINDOW_DISPOSITIONS,
+} from "@stll/api-contract/legislation-expression";
+import {
   CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -30,6 +35,10 @@ import {
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
+import {
+  DECISION_IDENTIFIER_TYPES,
+  DECISION_PRIMARY_REFERENCE_TYPES,
+} from "@stll/legal-ast/decision-identifier";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -353,6 +362,29 @@ export const READ_CONTACT_PROJECTION = v.strictObject({
   organizationName: v.nullable(v.string()),
   emails: v.array(contactEmailProjection),
   phones: v.array(contactPhoneProjection),
+  dateOfBirth: v.nullable(
+    v.variant("precision", [
+      projectionBranch(
+        v.strictObject({ precision: v.literal("year"), year: v.number() }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("month"),
+          year: v.number(),
+          month: v.number(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("day"),
+          year: v.number(),
+          month: v.number(),
+          day: v.number(),
+        }),
+      ),
+    ]),
+  ),
+  nationalityCodes: v.array(v.string()),
 });
 
 /**
@@ -1353,6 +1385,23 @@ const searchTotalProjection = v.variant("type", [
   ),
 ]);
 
+// What `caseNumber` is, present only where it is not a docket: a reporter or
+// neutral citation.
+const caseNumberTypeProjection = v.optional(
+  v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
+);
+
+// Every reference a decision whose primary is not a docket answers to, its
+// docket included where it has one. Absent beside a docket primary.
+const decisionIdentifiersProjection = v.optional(
+  v.array(
+    v.strictObject({
+      type: v.picklist(Object.values(DECISION_IDENTIFIER_TYPES)),
+      value: v.string(),
+    }),
+  ),
+);
+
 /**
  * search_case_law. Source of truth: `handleSearchCaseLawTool`
  * (`stella-tools.ts`) merging one `searchDecisionsHandler` page per query.
@@ -1476,6 +1525,7 @@ const caseLawDecisionProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
   caseNumber: v.string(),
+  caseNumberType: caseNumberTypeProjection,
   citationsFrom: v.array(
     v.strictObject({
       id: passthroughId(),
@@ -1507,6 +1557,7 @@ const caseLawDecisionProjection = v.strictObject({
   // UUID — never a Stella tenant id, so it is forwarded unchanged.
   documentUrl: v.nullable(publicUrl()),
   ecli: v.nullable(v.string()),
+  identifiers: decisionIdentifiersProjection,
   language: v.string(),
   metadata: unenumeratedJson(),
   textFields: v.strictObject(decisionTextFieldProjections),
@@ -1584,6 +1635,7 @@ const caseLawDecisionIdentityProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
   caseNumber: v.string(),
+  caseNumberType: caseNumberTypeProjection,
   court: v.string(),
   decisionDate: v.nullable(v.string()),
   decisionId: passthroughId(),
@@ -1669,6 +1721,7 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
           // Nullable for the same reason as search_case_law's `appUrl`.
           appUrl: v.nullable(v.string()),
           caseNumber: v.string(),
+          caseNumberType: caseNumberTypeProjection,
           citationAuthority: v.number(),
           court: v.string(),
           decisionDate: v.nullable(v.string()),
@@ -1694,6 +1747,19 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
 });
 
 /**
+ * What a version's dates mean: its kind, and whether its window is one the
+ * text applied in. A window labelled anything but `effective` never applied,
+ * however its dates read.
+ */
+const statuteExpressionLabel = {
+  expressionKind: v.picklist(LEGISLATION_EXPRESSION_KINDS),
+  windowDisposition: v.picklist(LEGISLATION_WINDOW_DISPOSITIONS),
+  windowDispositionBasis: v.nullable(
+    v.picklist(Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES).flat()),
+  ),
+} as const;
+
+/**
  * The window of a Work's consolidated versions a statute read returns.
  * Newest validity window first, bounded by the versions page size: enough to
  * see which consolidations exist, not the whole amendment history.
@@ -1703,6 +1769,7 @@ const STATUTE_VERSION_PROJECTION = v.strictObject({
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
   versionValidTo: v.nullable(v.string()),
+  ...statuteExpressionLabel,
 });
 
 /**
@@ -1783,6 +1850,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     truncated: v.boolean(),
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
+    ...statuteExpressionLabel,
     versions: v.array(STATUTE_VERSION_PROJECTION),
   }),
 });
@@ -1846,6 +1914,7 @@ const statuteProvisionVersion = {
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
   versionValidTo: v.nullable(v.string()),
+  ...statuteExpressionLabel,
 } as const;
 
 /**

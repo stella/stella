@@ -14,6 +14,7 @@ import fc from "fast-check";
 
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
+import type { ReporterCitationIdentifier } from "./decision-identifier.js";
 import {
   omitDerivablePlainText,
   parseDocumentAst,
@@ -28,7 +29,13 @@ import type {
   TableCell,
 } from "./document-ast.js";
 import { hasInlineChildren } from "./inline.js";
-import type { Inline } from "./inline.js";
+import type {
+  Inline,
+  InlineCitation,
+  InlineCitationPin,
+  InlineCitationPinPart,
+  InlineCitationTarget,
+} from "./inline.js";
 import { projectionDigest, projectionPieces } from "./projection-digest.js";
 
 // Seeded in PR CI so a counterexample is reproducible from the log, and
@@ -62,6 +69,56 @@ const EMPHASIS_TYPES = [
   "subscript",
 ] as const;
 
+const REPORTER = {
+  type: "reporter-citation",
+  value: "347 U.S. 483",
+} as const satisfies ReporterCitationIdentifier;
+
+/**
+ * Optional fields are spread in only when present, so the round trip
+ * compares like with like.
+ */
+const pinOf = ([kind, start, end, withReporter]: [
+  InlineCitationPinPart["kind"],
+  string,
+  string | undefined,
+  boolean,
+]): InlineCitationPin => ({
+  raw: end === undefined ? start : `${start}-${end}`,
+  parts: [{ kind, start, ...(end === undefined ? {} : { end }) }],
+  ...(withReporter ? { reporter: REPORTER } : {}),
+});
+
+const annotatedCitation = ([children, annotation]: [
+  Inline[],
+  Pick<InlineCitation, "pin" | "target">,
+]): Inline => ({
+  type: "citation",
+  cite: "Rep. 2019, 412",
+  children,
+  ...annotation,
+});
+
+/** The structured fields an annotated citation may carry. */
+const citationAnnotation: fc.Arbitrary<Pick<InlineCitation, "pin" | "target">> =
+  fc.record(
+    {
+      target: fc.constantFrom<InlineCitationTarget>(
+        { status: "identified", identifiers: [REPORTER] },
+        { status: "unresolved", reason: "ambiguous-antecedent" },
+      ),
+      pin: fc
+        .tuple(
+          fc.constantFrom("page", "paragraph", "footnote"),
+          fc.stringMatching(/^\*?\d{1,5}$/u),
+          fc.option(fc.stringMatching(/^\d{1,5}$/u), { nil: undefined }),
+          fc.boolean(),
+        )
+        .map(pinOf),
+    },
+    { requiredKeys: [] },
+  );
+
 const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
   node: fc.oneof(
     { maxDepth: 3, depthSize: "small" },
@@ -79,11 +136,9 @@ const inlineTree: fc.Arbitrary<Inline> = fc.letrec<{ node: Inline }>((tie) => ({
       href: "https://court.test/d",
       children,
     })),
-    fc.array(tie("node"), { maxLength: 3 }).map((children): Inline => ({
-      type: "citation",
-      cite: "Rep. 2019, 412",
-      children,
-    })),
+    fc
+      .tuple(fc.array(tie("node"), { maxLength: 3 }), citationAnnotation)
+      .map(annotatedCitation),
   ),
 })).node;
 

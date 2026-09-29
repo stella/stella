@@ -728,7 +728,7 @@ const assertMockAiEnabled = async () => {
     ?.slice("USE_MOCK_AI=".length)
     .replaceAll('"', "")
     .trim();
-  if (value === "true") {
+  if (value === "true" || value === "force") {
     return;
   }
   throw new Error(
@@ -736,6 +736,41 @@ const assertMockAiEnabled = async () => {
       "the mock model's fixture values (apps/api/src/dev/register-mock-ai.ts), " +
       "so a live provider makes scenes nondeterministic and slow. Set " +
       'USE_MOCK_AI="true" and restart the stack before recording.',
+  );
+};
+
+// USE_MOCK_AI="true" still lets an organization's own AI key answer for real,
+// and a local database can carry one on the seeded organization. Ask the API
+// who answers the organization being filmed rather than trusting the file.
+const assertMockAnswersMarketingOrganization = async (
+  browser: Browser,
+  cookies: AuthCookie[],
+) => {
+  const context = await browser.newContext({ baseURL: WEB_URL });
+  await context.addCookies(cookies);
+  const response = await context.request.get(
+    `${API_URL}/v1/organization-settings/ai-availability`,
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Could not read marketing AI availability: ${await response.text()}`,
+    );
+  }
+  const payload: unknown = await response.json();
+  await context.close();
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "mockAnswers" in payload &&
+    payload.mockAnswers === true
+  ) {
+    return;
+  }
+  throw new Error(
+    "The marketing organization has its own AI key configured, so a live " +
+      "provider would answer the filmed turns. Remove the key or set " +
+      'USE_MOCK_AI="force" in apps/api/.env and restart the stack before ' +
+      "recording.",
   );
 };
 
@@ -790,6 +825,7 @@ const main = async () => {
     headless: true,
   });
   cookies = await selectMarketingOrganization(browser, cookies);
+  await assertMockAnswersMarketingOrganization(browser, cookies);
   const views = await resolveMarketingViewRoutes(browser, cookies);
   await warmSceneRoutes({ browser, cookies, views });
 
@@ -1748,9 +1784,12 @@ const hideCaptureNoise = async (page: Page) => {
       subtree: true,
     });
 
+    // `data-dev-chrome` marks local-only indicators (the "Mock AI" composer
+    // badge), which never belong in footage.
     const captureStyle = document.createElement("style");
     captureStyle.textContent =
-      '[data-sidebar="footer"] { visibility: hidden !important; }';
+      '[data-sidebar="footer"] { visibility: hidden !important; } ' +
+      "[data-dev-chrome] { display: none !important; }";
     document.head.append(captureStyle);
 
     for (const selector of [

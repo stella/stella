@@ -2,6 +2,9 @@ import {
   billingCodes,
   expenses,
   invoices,
+  numberSeries,
+  numberSeriesAllocations,
+  numberSeriesCounters,
   rateEntries,
   rateTables,
   sellerProfiles,
@@ -11,6 +14,7 @@ import {
 import {
   caseLawCitations,
   caseLawCourtWeights,
+  caseLawCourtDirectoryRanks,
   caseLawDecisionIdentifiers,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
@@ -180,6 +184,9 @@ export const relations = defineRelations(
     timeEntries,
     billingCodes,
     sellerProfiles,
+    numberSeries,
+    numberSeriesAllocations,
+    numberSeriesCounters,
     rateTables,
     rateEntries,
     expenses,
@@ -209,6 +216,7 @@ export const relations = defineRelations(
     caseLawCitations,
     caseLawPolarityRules,
     caseLawCourtWeights,
+    caseLawCourtDirectoryRanks,
     caseLawFtsConfigs,
     caseLawMatterLinks,
     caseLawSearchDocuments,
@@ -987,6 +995,9 @@ export const relations = defineRelations(
       }),
     },
     sellerProfiles: {},
+    numberSeries: {},
+    numberSeriesAllocations: {},
+    numberSeriesCounters: {},
     timeEntries: {
       workspace: r.one.workspaces({
         from: r.timeEntries.workspaceId,
@@ -1210,6 +1221,7 @@ export const relations = defineRelations(
     },
     caseLawPolarityRules: {},
     caseLawCourtWeights: {},
+    caseLawCourtDirectoryRanks: {},
     caseLawFtsConfigs: {},
     caseLawMatterLinks: {
       decision: r.one.caseLawDecisions({

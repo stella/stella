@@ -18,6 +18,8 @@ import {
 } from "@/lib/analytics/route-error-lifecycle";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import { isAuthFlowPathname } from "@/lib/redirect";
+import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { routeTree } from "@/routeTree.gen";
 
@@ -39,6 +41,16 @@ export function getRouter() {
   installDocxDocumentCacheInvalidation(queryClient);
   installChatRuntimeCleanup(queryClient);
   installTableStoreReconcile(queryClient);
+  installSessionCacheGuard(queryClient, {
+    isAuthFlowPage: () => isAuthFlowPathname(window.location.pathname),
+    reloadDocument: () => {
+      window.location.reload();
+    },
+    reloadDocumentAt: (href) => {
+      window.history.replaceState(window.history.state, "", href);
+      window.location.reload();
+    },
+  });
   let readCaughtRouteTemplate = () => "unknown";
 
   const router = createRouter({

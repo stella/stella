@@ -21,6 +21,11 @@ export const COURT_DIRECTORY_JURISDICTIONS = [
 export type CourtDirectoryJurisdiction =
   (typeof COURT_DIRECTORY_JURISDICTIONS)[number];
 
+export const isCourtDirectoryJurisdiction = (
+  country: string,
+): country is CourtDirectoryJurisdiction =>
+  COURT_DIRECTORY_JURISDICTIONS.some((code) => code === country);
+
 /** Storage bound of `case_law_decisions.court_id`. */
 export const DECISION_COURT_ID_MAX_LENGTH = 64;
 

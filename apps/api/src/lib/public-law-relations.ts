@@ -9,6 +9,7 @@
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitations: "case_law_citations",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
+  caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
@@ -129,6 +130,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   case_law_corpus_tombstones: {
     location: "required",
   },
+  // The keyed rank lookup in public case-law search and citation scoring.
+  case_law_court_directory_ranks: {
+    country: "required",
+    court_id: "required",
+    tier: "required",
+    weight: "required",
+  },
   // The court registry the public ranking and court chips read. The row id
   // and its creation time are bookkeeping.
   case_law_court_weights: {
@@ -159,6 +167,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     id: "required",
     source_id: "required",
     case_number: "required",
+    case_number_type: "required",
     slug: "required",
     ecli: "required",
     citation_key: "required",
@@ -339,6 +348,9 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     effective_date: "required",
     version_valid_from: "required",
     version_valid_to: "required",
+    expression_kind: "required",
+    window_disposition: "required",
+    window_disposition_basis: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",

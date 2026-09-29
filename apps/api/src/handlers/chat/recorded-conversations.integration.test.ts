@@ -675,7 +675,7 @@ const recordScenario = async (
     failure = error;
   } finally {
     recorder.client.dispose();
-    harness.close();
+    await harness.close();
   }
   return {
     failure,

@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   evaluateMergeBar,
+  evaluateQueuePlacement,
+  formatQueuePlacementFailure,
   isReleasePullRequest,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
@@ -155,6 +157,166 @@ esac
     }
   });
 
+  // The enqueue mutation reported a front position while the release pull
+  // request actually sat behind other entries. Only the queue read after the
+  // enqueue decides, and anything but first fails the run.
+  test.each([
+    { queuedAt: 3, exitCode: 1, output: "behind #4101, #4102" },
+    { queuedAt: 1, exitCode: 0, output: "verified first in the queue" },
+  ])(
+    "a release jump is verified against the queue read after enqueueing: position $queuedAt",
+    ({ queuedAt, exitCode, output }) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-jump-"));
+      const executable = path.join(directory, "gh");
+      const pullRequest = JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              id: "PR_fixture",
+              number: 123,
+              title: "chore: release v0.9.42",
+              isCrossRepository: false,
+              state: "OPEN",
+              isDraft: false,
+              mergeable: "MERGEABLE",
+              headRefOid: HEAD_SHA,
+              baseRefName: "main",
+              autoMergeRequest: null,
+              mergeQueueEntry: null,
+            },
+          },
+        },
+      });
+      const others = [4101, 4102].map((number, index) => ({
+        position: index < queuedAt - 1 ? index + 1 : index + 2,
+        pullRequest: { number },
+      }));
+      const queue = JSON.stringify({
+        data: {
+          repository: {
+            mergeQueue: {
+              entries: {
+                totalCount: 3,
+                nodes: [
+                  ...others,
+                  { position: queuedAt, pullRequest: { number: 123 } },
+                ],
+              },
+            },
+          },
+        },
+      });
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+case "$*" in
+  *enqueuePullRequest*) printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"position":1}}}}';;
+  *'mergeQueue(branch'*) printf '%s\\n' '${queue}';;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
+  *headRefOid*)
+    if [ "$1" = api ]; then printf '%s\\n' '${pullRequest}';
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
+  *) exit 99;;
+esac
+`,
+      );
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+            "--repo",
+            PRIVATE_REPO,
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(exitCode);
+        expect(
+          `${result.stdout.toString()}${result.stderr.toString()}`,
+        ).toContain(output);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  // A real run refuses to jump while checks are running; a dry run of the same
+  // state must report the same failure instead of a merge verdict.
+  test.each([[], ["--dry-run"]])(
+    "a release jump with running checks exits non-zero without writing: %j",
+    (...extraArguments) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-pending-"));
+      const executable = path.join(directory, "gh");
+      const pullRequest = JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              id: "PR_fixture",
+              number: 123,
+              title: "chore: release v0.9.42",
+              isCrossRepository: false,
+              state: "OPEN",
+              isDraft: false,
+              mergeable: "MERGEABLE",
+              headRefOid: HEAD_SHA,
+              baseRefName: "main",
+              autoMergeRequest: null,
+              mergeQueueEntry: null,
+            },
+          },
+        },
+      });
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+case "$*" in
+  *'pr merge'*|*enqueuePullRequest*) exit 98;;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
+  *headRefOid*)
+    if [ "$1" = api ]; then printf '%s\\n' '${pullRequest}';
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
+  *) exit 99;;
+esac
+`,
+      );
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+            "--repo",
+            PRIVATE_REPO,
+            ...extraArguments.flat(),
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr.toString()).toContain("NOT JUMPED");
+        expect(result.stdout.toString()).not.toContain("verdict: MERGE");
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   test.each([null, { enabledAt: "2026-09-08T07:00:00Z" }])(
     "recognizes queue membership independently of auto-merge: %j",
     (autoMergeRequest) => {
@@ -210,8 +372,8 @@ const passingSnapshot = (
   requiredCheckRuns: ["ci-result"],
   reviewThreads: [{ id: "PRRT_kwDOabcdef", isResolved: true }],
   migrations: {
-    baseDirectories: ["20260801120000_earlier", "20260812090000_latest"],
     addedDirectories: ["apps/api/drizzle/20260816200000_new_column"],
+    removedDirectories: [],
   },
   headShaBeforeMerge: HEAD_SHA,
   ...overrides,
@@ -589,41 +751,65 @@ describe("merge bar", () => {
     ).toBe("merge");
   });
 
-  // The branch's own CI could not see a migration that landed on the base
-  // branch after that run finished.
-  test("a migration below the base branch's maximum aborts", () => {
-    expect(
-      failedGate(
-        passingSnapshot({
-          migrations: {
-            baseDirectories: ["20260816200000_landed_meanwhile"],
-            addedDirectories: ["apps/api/drizzle/20260816140000_branch"],
-          },
-        }),
-      ),
-    ).toEqual({ decision: "abort", reasons: ["MIGRATION_ORDER_VIOLATION"] });
-  });
-
-  test("a migration equal to the base branch's maximum aborts", () => {
-    expect(
-      failedGate(
-        passingSnapshot({
-          migrations: {
-            baseDirectories: ["20260816200000_landed_meanwhile"],
-            addedDirectories: ["apps/api/drizzle/20260816200000_branch"],
-          },
-        }),
-      ),
-    ).toEqual({ decision: "abort", reasons: ["MIGRATION_ORDER_VIOLATION"] });
-  });
-
-  test("a pull request that adds no migrations passes the ordering gate", () => {
+  test("a migration below the base branch's maximum may merge", () => {
     expect(
       evaluateMergeBar(
         passingSnapshot({
           migrations: {
-            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: ["apps/api/drizzle/20260816140000_branch"],
+            removedDirectories: [],
+          },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("a migration sharing a timestamp with another migration may merge", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            addedDirectories: ["apps/api/drizzle/20260816200000_branch"],
+            removedDirectories: [],
+          },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("removing a base migration aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          migrations: {
             addedDirectories: [],
+            removedDirectories: ["apps/api/drizzle/20260801120000_original"],
+          },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["MIGRATION_IDENTITY_VIOLATION"] });
+  });
+
+  test("renaming a base migration aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          migrations: {
+            addedDirectories: ["apps/api/drizzle/20260801130000_renamed"],
+            removedDirectories: ["apps/api/drizzle/20260801120000_original"],
+          },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["MIGRATION_IDENTITY_VIOLATION"] });
+  });
+
+  test("a pull request that changes no migrations passes the identity gate", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            addedDirectories: [],
+            removedDirectories: [],
           },
         }),
       ).decision,
@@ -657,7 +843,7 @@ describe("merge bar", () => {
     expect(gates.toSorted()).toEqual([
       "head-stability",
       "mergeable",
-      "migration-order",
+      "migration-identity",
       "pull-request-state",
       "required-check",
       "review-threads",
@@ -707,14 +893,16 @@ describe("release pull requests jump the merge queue", () => {
     ).toEqual({ kind: "enqueue-jump" });
   });
 
-  test("a jump waits for the checks: auto-merge is armed and the jump deferred", () => {
+  // Arming auto-merge would enqueue the pull request at the back once its
+  // checks pass, the opposite of a jump, so nothing is armed.
+  test("a jump waits for the checks without arming auto-merge", () => {
     expect(
       mergeWhenReadyAction({
         handoff: { status: "pending" },
         jump: true,
         checksSucceeded: false,
       }),
-    ).toEqual({ kind: "arm", jumpDeferred: true });
+    ).toEqual({ kind: "jump-waits-for-checks", armedSince: null });
     expect(
       mergeWhenReadyAction({
         handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
@@ -722,20 +910,26 @@ describe("release pull requests jump the merge queue", () => {
         checksSucceeded: false,
       }),
     ).toEqual({
-      kind: "already-armed",
-      enabledAt: "2026-09-28T09:00:00Z",
-      jumpDeferred: true,
+      kind: "jump-waits-for-checks",
+      armedSince: "2026-09-28T09:00:00Z",
     });
   });
 
-  test("a queued pull request keeps its place", () => {
+  test("a queued pull request keeps its place, which a jump must verify", () => {
     expect(
       mergeWhenReadyAction({
         handoff: { status: "queued", entryId: "MQE_1" },
         jump: true,
         checksSucceeded: true,
       }),
-    ).toEqual({ kind: "already-queued", entryId: "MQE_1" });
+    ).toEqual({ kind: "already-queued", entryId: "MQE_1", verifyFront: true });
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "queued", entryId: "MQE_1" },
+        jump: false,
+        checksSucceeded: true,
+      }),
+    ).toEqual({ kind: "already-queued", entryId: "MQE_1", verifyFront: false });
   });
 
   test("without a jump, arming is unchanged", () => {
@@ -745,18 +939,72 @@ describe("release pull requests jump the merge queue", () => {
         jump: false,
         checksSucceeded: true,
       }),
-    ).toEqual({ kind: "arm", jumpDeferred: false });
+    ).toEqual({ kind: "arm" });
     expect(
       mergeWhenReadyAction({
         handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
         jump: false,
         checksSucceeded: false,
       }),
-    ).toEqual({
-      kind: "already-armed",
-      enabledAt: "2026-09-28T09:00:00Z",
-      jumpDeferred: false,
-    });
+    ).toEqual({ kind: "already-armed", enabledAt: "2026-09-28T09:00:00Z" });
+  });
+
+  test("a pull request first in the queue is at the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [
+          { pullNumber: 4112, position: 1 },
+          { pullNumber: 4100, position: 2 },
+        ],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "front", position: 1 });
+  });
+
+  // A jump the enqueue response reports as done can still leave the entry
+  // behind others; only the queue read decides.
+  test("a pull request behind other entries is not at the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [
+          { pullNumber: 4101, position: 1 },
+          { pullNumber: 4112, position: 3 },
+          { pullNumber: 4102, position: 2 },
+          { pullNumber: 4103, position: 4 },
+        ],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "behind", position: 3, ahead: [4101, 4102] });
+    expect(
+      formatQueuePlacementFailure({
+        status: "behind",
+        position: 3,
+        ahead: [4101, 4102],
+      }),
+    ).toBe("it is at position 3, behind #4101, #4102");
+  });
+
+  // A transitional snapshot can list the entry alone at a later position.
+  // Nothing is listed ahead of it, yet GitHub says it is not first.
+  test("a gapped snapshot is not proof of the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [{ pullNumber: 4112, position: 2 }],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "behind", position: 2, ahead: [] });
+    expect(
+      formatQueuePlacementFailure({ status: "behind", position: 2, ahead: [] }),
+    ).toBe("it is at position 2, with no entry listed ahead of it");
+  });
+
+  test("a pull request missing from the queue is not at the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [{ pullNumber: 4101, position: 1 }],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "absent", queueLength: 1 });
   });
 
   test("required checks succeed only when every one completed successfully", () => {

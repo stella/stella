@@ -23,6 +23,7 @@ import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
 import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { DECISION_TITLE_SEPARATOR } from "@/features/case-law/decision-title";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
+import { readExpressionEligibility } from "@/features/statutes/statute-expression";
 import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
@@ -125,6 +126,14 @@ function PublicLawTopBar() {
     select: (state) =>
       readStringField(state.matches.at(-1)?.loaderData, "versionValidFrom"),
   });
+  const documentExpressionKind = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "expressionKind"),
+  });
+  const documentWindowDisposition = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "windowDisposition"),
+  });
   const statuteDisplayStatus =
     documentStatus === null
       ? null
@@ -156,14 +165,7 @@ function PublicLawTopBar() {
   });
 
   return (
-    <header
-      // The case reader's docked inspector overlays the bar's inline-end for
-      // its width (it owns the top row there); keep the bar's actions beside
-      // it rather than beneath it. The dock renders from `md` up only, so
-      // the padding is scoped the same way — below `md` the plain px-4
-      // applies and the published width is ignored.
-      className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4 md:pe-[calc(1rem+var(--law-end-dock-width,0px))]"
-    >
+    <header className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
       {isMobile && (
         <>
           <SidebarTrigger className="-ms-1" />
@@ -244,6 +246,10 @@ function PublicLawTopBar() {
                     }
                   >
                     <StatuteStatusDot
+                      expression={readExpressionEligibility(
+                        documentExpressionKind,
+                        documentWindowDisposition,
+                      )}
                       status={documentStatus}
                       validFrom={documentValidFrom}
                     />

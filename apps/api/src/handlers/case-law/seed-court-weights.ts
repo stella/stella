@@ -9,9 +9,11 @@
 
 import { COURT_WEIGHT_SEED } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  upsertCourtDirectoryRankRows,
   upsertCourtWeightRows,
   upsertFtsConfigRows,
 } from "@/api/lib/case-law/case-law-config-store";
+import { usCourtDirectoryRankRows } from "@/api/lib/case-law/court-ranks";
 
 // -- FTS config seed data ------------------------------------------------
 
@@ -45,6 +47,10 @@ const seed = async () => {
   await upsertCourtWeightRows([...COURT_WEIGHT_SEED]);
 
   console.log(`  ${COURT_WEIGHT_SEED.length} court weight rows upserted.`);
+
+  const directoryRanks = usCourtDirectoryRankRows();
+  await upsertCourtDirectoryRankRows(directoryRanks);
+  console.log(`  ${directoryRanks.length} court directory rank rows upserted.`);
 
   console.log("Seeding FTS configs...");
 

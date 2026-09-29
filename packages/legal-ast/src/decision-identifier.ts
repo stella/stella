@@ -13,6 +13,19 @@ export const DECISION_IDENTIFIER_TYPES = {
 export type DecisionIdentifierType =
   (typeof DECISION_IDENTIFIER_TYPES)[keyof typeof DECISION_IDENTIFIER_TYPES];
 
+/**
+ * The kinds of reference a decision's primary one can be. An ECLI is never
+ * the primary: decisions carry it in a field of its own.
+ */
+export const DECISION_PRIMARY_REFERENCE_TYPES = [
+  DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+  DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+] as const;
+
+export type DecisionPrimaryReferenceType =
+  (typeof DECISION_PRIMARY_REFERENCE_TYPES)[number];
+
 export type CaseNumberIdentifier = {
   type: typeof DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   value: string;
@@ -73,6 +86,12 @@ const structuredIdentifierValueSchema = v.pipe(
   ),
 );
 
+/** One branch of the identifier schema, for a field that holds only this kind. */
+export const reporterCitationIdentifierSchema = v.strictObject({
+  type: v.literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
+  value: structuredIdentifierValueSchema,
+});
+
 export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
   v.variant("type", [
     v.strictObject({
@@ -87,10 +106,7 @@ export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
       type: v.literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
       value: structuredIdentifierValueSchema,
     }),
-    v.strictObject({
-      type: v.literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
-      value: structuredIdentifierValueSchema,
-    }),
+    reporterCitationIdentifierSchema,
   ]);
 
 export const isDecisionIdentifier = (

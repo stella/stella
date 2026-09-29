@@ -625,6 +625,28 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/workspaces/workflow/targets/count"),
   },
+  "number-series.archive": {
+    load: async () => await import("@/api/handlers/number-series/archive"),
+  },
+  "number-series.create": {
+    load: async () => await import("@/api/handlers/number-series/create"),
+  },
+  "number-series.default.update": {
+    load: async () =>
+      await import("@/api/handlers/number-series/default/update"),
+  },
+  "number-series.get": {
+    load: async () => await import("@/api/handlers/number-series/get"),
+  },
+  "number-series.list": {
+    load: async () => await import("@/api/handlers/number-series/list"),
+  },
+  "number-series.preview": {
+    load: async () => await import("@/api/handlers/number-series/preview"),
+  },
+  "number-series.update": {
+    load: async () => await import("@/api/handlers/number-series/update"),
+  },
   "organization-settings.ai-availability.get": {
     load: async () =>
       await import("@/api/handlers/organization-settings/ai-availability/get"),
@@ -1180,6 +1202,9 @@ export const CAPABILITY_DISPATCH = {
   },
   "time-entries.list": {
     load: async () => await import("@/api/handlers/time-entries/list"),
+  },
+  "time-entries.me.list": {
+    load: async () => await import("@/api/handlers/time-entries/me/list"),
   },
   "time-entries.pdf.export": {
     load: async () => await import("@/api/handlers/time-entries/pdf/export"),

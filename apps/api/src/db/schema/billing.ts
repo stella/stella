@@ -101,6 +101,9 @@ export const timeEntries = p.pgTable(
       .index("time_entries_ws_user_date_idx")
       .on(table.workspaceId, table.userId, table.dateWorked),
     p
+      .index("time_entries_org_user_date_id_idx")
+      .on(table.organizationId, table.userId, table.dateWorked, table.id),
+    p
       .index("time_entries_ws_work_item_status_idx")
       .on(table.workspaceId, table.workItemId, table.status),
     p.index("time_entries_ws_status_idx").on(table.workspaceId, table.status),
@@ -291,6 +294,127 @@ export const sellerProfiles = p.pgTable(
     p.check(
       "seller_profiles_archived_default_check",
       sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+export const NUMBER_SERIES_DOCUMENT_TYPES = [
+  "invoice",
+  "advance",
+  "credit_note",
+] as const;
+const NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES = NUMBER_SERIES_DOCUMENT_TYPES.map(
+  (documentType) => sql.raw(`'${documentType}'`),
+);
+
+export const numberSeries = p.pgTable(
+  "number_series",
+  {
+    id: pUuid<"numberSeries">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    sellerProfileId: safeUuid<"sellerProfile">("seller_profile_id"),
+    documentType: p
+      .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
+      .notNull(),
+    name: p.varchar({ length: 128 }).notNull(),
+    pattern: p.varchar({ length: 128 }).notNull(),
+    padding: p.integer().notNull(),
+    isDefault: p.boolean("is_default").notNull().default(false),
+    archivedAt: timestamptz("archived_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.sellerProfileId],
+        foreignColumns: [sellerProfiles.id],
+        name: "number_series_seller_profile_id_fk",
+      })
+      .onDelete("no action"),
+    p
+      .uniqueIndex("number_series_org_id_uidx")
+      .on(table.organizationId, table.id),
+    p
+      .index("number_series_org_created_idx")
+      .on(table.organizationId, table.createdAt, table.id)
+      .where(sql`${table.archivedAt} IS NULL`),
+    p
+      .uniqueIndex("number_series_org_type_default_uidx")
+      .on(table.organizationId, table.documentType)
+      .where(sql`${table.isDefault} AND ${table.archivedAt} IS NULL`),
+    p.check(
+      "number_series_document_type_check",
+      sql`${table.documentType} IN (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "number_series_padding_check",
+      sql`${table.padding} BETWEEN 1 AND 6`,
+    ),
+    p.check(
+      "number_series_archived_default_check",
+      sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+export const numberSeriesCounters = p.pgTable(
+  "number_series_counters",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    seriesId: safeUuid<"numberSeries">("series_id").notNull(),
+    periodKey: p.varchar("period_key", { length: 128 }).notNull(),
+    lastValue: p.integer("last_value").notNull(),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.seriesId, table.periodKey] }),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.seriesId],
+        foreignColumns: [numberSeries.organizationId, numberSeries.id],
+        name: "number_series_counters_series_org_fk",
+      })
+      .onDelete("cascade"),
+    p.index("number_series_counters_org_idx").on(table.organizationId),
+    p.check(
+      "number_series_counters_positive_check",
+      sql`${table.lastValue} > 0`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+export const numberSeriesAllocations = p.pgTable(
+  "number_series_allocations",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    seriesId: safeUuid<"numberSeries">("series_id").notNull(),
+    documentType: p
+      .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
+      .notNull(),
+    number: p.varchar({ length: 64 }).notNull(),
+    issuedAt: timestamptz("issued_at").notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "number_series_allocations_number_pk",
+      columns: [table.organizationId, table.documentType, table.number],
+    }),
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.seriesId],
+        foreignColumns: [numberSeries.organizationId, numberSeries.id],
+        name: "number_series_allocations_series_org_fk",
+      })
+      .onDelete("cascade"),
+    p.index("number_series_allocations_series_idx").on(table.seriesId),
+    p.check(
+      "number_series_allocations_document_type_check",
+      sql`${table.documentType} IN (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     ...orgPolicies(),
   ],

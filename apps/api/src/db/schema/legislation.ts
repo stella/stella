@@ -1,5 +1,11 @@
 import type { SQLWrapper } from "drizzle-orm";
 
+import {
+  LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_WINDOW_DISPOSITION_BASES,
+  LEGISLATION_WINDOW_DISPOSITIONS,
+} from "@stll/api-contract/legislation-expression";
+import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
@@ -43,6 +49,37 @@ import type {
  */
 const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
   LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+const sqlValues = (values: readonly string[]) =>
+  sql.join(
+    values.map((value) => sql.raw(`'${value}'`)),
+    sql.raw(","),
+  );
+
+/**
+ * Disposition and basis, paired: an effective version carries no basis, and
+ * every other disposition names why. The IS NOT NULL is not redundant: a
+ * CHECK passes on NULL, and `NULL IN (…)` is NULL.
+ */
+const WINDOW_DISPOSITION_BASIS_PAIRING = sql.join(
+  [
+    sql.raw(
+      "(window_disposition = 'effective' AND window_disposition_basis IS NULL)",
+    ),
+    ...Object.entries(LEGISLATION_WINDOW_DISPOSITION_BASES).map(
+      ([disposition, bases]) =>
+        sql`(window_disposition = ${sql.raw(`'${disposition}'`)} AND (window_disposition_basis IS NOT NULL AND window_disposition_basis IN (${sqlValues(bases)})))`,
+    ),
+  ],
+  sql.raw(" OR "),
+);
+
+/**
+ * The prefix a source's publisher expression ids carry. Lower-case and
+ * colon-free, so the first colon of a stored id always ends the namespace.
+ */
+export const LEGISLATION_EXPRESSION_NAMESPACE_PATTERN =
+  "^[a-z][a-z0-9-]{0,31}$";
 
 /** Sitemap shards a jurisdiction splits into once it outgrows one file. */
 export const STATUTE_SITEMAP_BUCKET_COUNT = 64;
@@ -97,6 +134,14 @@ export const legislationSources = p.pgTable(
     lastSyncAt: timestamptz("last_sync_at"),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     descriptor: jsonb().$type<CorpusSourceDescriptor>(),
+    /**
+     * The prefix of every publisher expression id stored under this source
+     * (`<namespace>:<publisher id>`). Set once, by whoever registers the
+     * source, and never changed: a trigger (migration
+     * `20261003120000_legislation_expression_identity`) refuses both a change
+     * and an id whose prefix does not match.
+     */
+    expressionNamespace: p.varchar("expression_namespace", { length: 32 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -105,6 +150,10 @@ export const legislationSources = p.pgTable(
   },
   (t) => [
     p.uniqueIndex("legislation_sources_adapter_key_idx").on(t.adapterKey),
+    p.check(
+      "legislation_sources_expression_namespace_shape",
+      sql`${t.expressionNamespace} IS NULL OR ${t.expressionNamespace} ~ ${sql.raw(`'${LEGISLATION_EXPRESSION_NAMESPACE_PATTERN}'`)}`,
+    ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),
     ...corpusSampleReaderPolicies(),
@@ -139,6 +188,35 @@ export const legislationDocuments = p.pgTable(
     effectiveDate: p.date("effective_date"),
     versionValidFrom: p.date("version_valid_from"),
     versionValidTo: p.date("version_valid_to"),
+    /**
+     * The publisher's own identity for this version, prefixed with the
+     * source's namespace. Set once, from null, and never changed afterwards
+     * (trigger in migration `20261003120000_legislation_expression_identity`).
+     * Null only on rows written before the writer supplied it; a scheduler
+     * task claims those from the stored version IRI.
+     */
+    publisherExpressionId: p.varchar("publisher_expression_id", {
+      length: 1024,
+    }),
+    expressionKind: p
+      .varchar("expression_kind", {
+        length: 16,
+        enum: LEGISLATION_EXPRESSION_KINDS,
+      })
+      .notNull()
+      .default("consolidation"),
+    /** Whether the stored window can answer a point-in-time read. */
+    windowDisposition: p
+      .varchar("window_disposition", {
+        length: 16,
+        enum: LEGISLATION_WINDOW_DISPOSITIONS,
+      })
+      .notNull()
+      .default("effective"),
+    /** Why the version carries its disposition; see the pairing CHECK. */
+    windowDispositionBasis: p
+      .varchar("window_disposition_basis", { length: 32 })
+      .$type<LegislationWindowDispositionBasis>(),
     fulltext: p.text(),
     sections: jsonb().$type<DecisionSection[]>(),
     documentAst: jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
@@ -194,6 +272,18 @@ export const legislationDocuments = p.pgTable(
       "legislation_documents_projection_epoch_nonnegative",
       sql`${t.projectionEpoch} >= 0`,
     ),
+    p.check(
+      "legislation_documents_expression_kind_values",
+      sql`${t.expressionKind} IN (${sqlValues(LEGISLATION_EXPRESSION_KINDS)})`,
+    ),
+    p.check(
+      "legislation_documents_window_disposition_values",
+      sql`${t.windowDisposition} IN (${sqlValues(LEGISLATION_WINDOW_DISPOSITIONS)})`,
+    ),
+    p.check(
+      "legislation_documents_window_disposition_basis_pairing",
+      WINDOW_DISPOSITION_BASIS_PAIRING,
+    ),
     p
       .uniqueIndex("legislation_documents_eli_version_lang_idx")
       .on(t.sourceId, t.eli, t.versionValidFrom, t.language)
@@ -202,6 +292,22 @@ export const legislationDocuments = p.pgTable(
       .uniqueIndex("legislation_documents_eli_current_lang_idx")
       .on(t.sourceId, t.eli, t.language)
       .where(isNull(t.versionValidFrom)),
+    // `legislation_documents_eli_version_lang_idx` plus the two fields that
+    // decide whether a version may apply, so the listing's per-Work probes of
+    // its eligible dated versions (first opening, wording count, last change)
+    // stay index-only. Trailing keys rather than INCLUDE because the Drizzle
+    // version in use cannot express INCLUDE.
+    p
+      .index("legislation_documents_eli_version_eligibility_idx")
+      .on(
+        t.sourceId,
+        t.eli,
+        t.versionValidFrom,
+        t.language,
+        t.windowDisposition,
+        t.expressionKind,
+      )
+      .where(isNotNull(t.versionValidFrom)),
     p.index("legislation_documents_eli_idx").on(t.eli),
     // The public reader addresses a Work by (country, slug). Not unique: a
     // Work's consolidations all carry the segment, and a title repaired

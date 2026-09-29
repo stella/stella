@@ -108,13 +108,32 @@ const readExcludeBlock = (bunfig: string): string => {
   return range === undefined ? "" : bunfig.slice(range.start, range.end);
 };
 
-const readExcludes = (bunfig: string): Set<string> => {
+const readInstallTable = (bunfig: string): object | undefined => {
   const parsed = Bun.TOML.parse(bunfig);
   if (!("install" in parsed)) {
-    return new Set();
+    return undefined;
   }
   const install = parsed.install;
-  if (typeof install !== "object" || install === null) {
+  return typeof install === "object" && install !== null ? install : undefined;
+};
+
+/**
+ * `[install] minimumReleaseAge` in seconds, as Bun reads it; undefined when
+ * the file sets none, which leaves installs from its directory unquarantined.
+ */
+const readMinimumReleaseAgeSeconds = (bunfig: string): number | undefined => {
+  const install = readInstallTable(bunfig);
+  if (install === undefined || !("minimumReleaseAge" in install)) {
+    return undefined;
+  }
+  const seconds = install.minimumReleaseAge;
+  return typeof seconds === "number" && seconds > 0 ? seconds : undefined;
+};
+
+/** The names Bun exempts from the release-age gate: exact matches only. */
+const readExcludes = (bunfig: string): Set<string> => {
+  const install = readInstallTable(bunfig);
+  if (install === undefined) {
     return new Set();
   }
   if (!("minimumReleaseAgeExcludes" in install)) {
@@ -126,6 +145,22 @@ const readExcludes = (bunfig: string): Set<string> => {
   }
   return new Set(excludes.filter((name) => typeof name === "string"));
 };
+
+export type InstallPolicy = {
+  readonly excludes: ReadonlySet<string>;
+  /** Seconds; undefined when the file leaves its directory unquarantined. */
+  readonly minimumReleaseAge: number | undefined;
+};
+
+/**
+ * What a bunfig.toml sets for the release-age gate. Every guard that asks
+ * whether a directory is quarantined, or which names it exempts, reads it
+ * through here, so no two of them can disagree about it.
+ */
+export const readInstallPolicy = (bunfig: string): InstallPolicy => ({
+  excludes: readExcludes(bunfig),
+  minimumReleaseAge: readMinimumReleaseAgeSeconds(bunfig),
+});
 
 const excludeDeclaration = (line: string): string | undefined =>
   /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line)?.groups?.["name"];
@@ -248,7 +283,7 @@ const readReleaseAgeExceptionErrors = (
     }),
   );
 
-type TemporaryExclude = {
+export type TemporaryExclude = {
   name: string;
   expiresAt: string;
 };
@@ -302,7 +337,9 @@ const parseTemporaryExcludeLine = (line: string): ParsedTemporaryExclude => {
   return { expiresAt, kind: "entry", name };
 };
 
-const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
+export const readTemporaryExcludes = (
+  bunfig: string,
+): TemporaryExcludesResult => {
   const entries: TemporaryExclude[] = [];
   const errors: string[] = [];
 
