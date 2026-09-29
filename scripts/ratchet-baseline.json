@@ -1117,7 +1117,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 293,
+    "count": 294,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1149,6 +1149,7 @@
       "apps/api/src/handlers/chat/tools/boe-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 4,
       "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 2,
+      "apps/api/src/handlers/chat/tools/execute/script-call-guide.ts": 1,
       "apps/api/src/handlers/chat/tools/registry-adapter/mcp-chat-context.ts": 1,
       "apps/api/src/handlers/clauses/search-vector.ts": 1,
       "apps/api/src/handlers/contacts/import-validate.ts": 1,
@@ -1185,6 +1186,8 @@
       "apps/api/src/lib/file-scan/scanner.ts": 1,
       "apps/api/src/lib/files/document-properties.ts": 1,
       "apps/api/src/lib/files/email-to-html.ts": 1,
+      "apps/api/src/lib/files/pdf-signing/finalize-attempts.ts": 1,
+      "apps/api/src/lib/files/pdf-signing/sessions.ts": 1,
       "apps/api/src/lib/flows/automated-run-cap.ts": 1,
       "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 2,
@@ -1232,6 +1235,8 @@
       "apps/web/src/components/docx/docx-browser-editor.tsx": 5,
       "apps/web/src/components/docx/docx-edit-mode.logic.ts": 2,
       "apps/web/src/components/docx/use-docx-block-scroll.ts": 1,
+      "apps/web/src/components/docx/use-docx-preview-file.ts": 1,
+      "apps/web/src/components/docx/use-retained-style-picker-label.ts": 1,
       "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
       "apps/web/src/components/inspector/inspector-broadcast.ts": 1,
       "apps/web/src/components/inspector/inspector-find.tsx": 8,
@@ -1248,7 +1253,7 @@
       "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
-      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
+      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 2,
       "apps/web/src/features/chat/hooks/use-chat-session.ts": 4,
       "apps/web/src/features/chat/queries.ts": 1,
       "apps/web/src/hooks/use-effect.ts": 2,
@@ -1313,6 +1318,7 @@
       "packages/ui/src/components/select.tsx": 1,
       "packages/ui/src/lib/slot.tsx": 1,
       "packages/workspace-ui/src/conditions/builder.tsx": 2,
+      "scripts/sql-perf-detector.ts": 1,
       "scripts/sync-railway-template-source.ts": 1
     }
   },
