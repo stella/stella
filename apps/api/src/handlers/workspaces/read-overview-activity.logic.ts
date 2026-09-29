@@ -195,6 +195,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   saved_search: null,
   seller_profile: null,
   saved_time_narrative: null,
+  number_series: null,
   signal: null,
   style_set: null,
   template: null,

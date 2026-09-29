@@ -140,6 +140,7 @@ export type SafeIdType =
   | "sanctionsEdition"
   | "savedSearch"
   | "sellerProfile"
+  | "numberSeries"
   | "reportExport"
   | "schedulerJobRun"
   | "sharepointConnection"
