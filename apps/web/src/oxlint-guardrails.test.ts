@@ -75,8 +75,13 @@ describe("custom oxlint guardrails", () => {
     const organizationConstsSource = readRootFixture(
       "apps/web/src/lib/organization/consts.ts",
     );
-    const protectedRouteSource = readRootFixture(
+    // The signed-in guard and frame live beside the `_protected` route, which
+    // only wires them up.
+    const protectedGuardSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
+    );
+    const protectedRouteSource = readRootFixture(
+      "apps/web/src/routes/-protected-app.tsx",
     );
     const sidebarUserMenuSource = readRootFixture(
       "apps/web/src/components/sidebar-user-menu.tsx",
@@ -101,11 +106,13 @@ describe("custom oxlint guardrails", () => {
     // list: route commit cannot wait on it. The rendered shell may subscribe
     // to it, but only as deferred chrome, which dedupes with the sidebar's
     // identical subscription instead of adding a request.
+    expect(protectedGuardSource).toContain("beforeLoad: loadProtectedContext,");
+    expect(protectedGuardSource).toContain("loader: prefetchProtectedShell,");
     const routeDefinitionStart = protectedRouteSource.indexOf(
-      'export const Route = createFileRoute("/_protected")({',
+      "export const loadProtectedContext = async",
     );
     const routeDefinitionEnd = protectedRouteSource.indexOf(
-      "component: ProtectedComponent,",
+      "export const ProtectedAppFrame = (",
       routeDefinitionStart,
     );
     expect(routeDefinitionStart).toBeGreaterThan(-1);
