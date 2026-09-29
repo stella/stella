@@ -23,6 +23,7 @@ import {
   loadNativeAnonymizeBinding,
 } from "@stll/anonymize";
 import { validateIco } from "@stll/business-registries/ares";
+import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "@stll/sanctions";
 import { createBundledTemplatePackCatalogue } from "@stll/template-packs";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
@@ -190,6 +191,43 @@ await probe("anonymize native engine", () => {
 await probe("stdnum native binding", () => {
   if (!validateIco("27082440")) {
     panic("stdnum rejected a well-formed identifier");
+  }
+});
+
+// Sanctions screening scores near names through the fuzzy-search native
+// binding; a one-letter spelling variant only matches through an edit
+// distance, which proves the addon is embedded and callable.
+await probe("sanctions fuzzy-search binding", () => {
+  const index = buildScreeningIndex([
+    {
+      version: { source: "eu", publishedAt: "2026-09-29", fileId: null },
+      entries: [
+        {
+          source: "eu",
+          issuer: "EU",
+          sourceId: "image-smoke",
+          referenceNumber: null,
+          entityType: "person",
+          names: [{ name: "Jan Novak", quality: "strong" }],
+          birthDates: [],
+          nationalities: [],
+          identifiers: [],
+          addresses: [],
+          programme: null,
+          legalBasis: null,
+          listedOn: null,
+          sourceUrl: "https://eur-lex.europa.eu/",
+        },
+      ],
+    },
+  ]);
+  const result = screen(
+    index,
+    { name: "Jan Novek" },
+    { cutoff: DEFAULT_CUTOFF },
+  );
+  if (result.isErr() || result.value.possibleMatches.length !== 1) {
+    panic("sanctions screening did not match a one-letter name variant");
   }
 });
 
