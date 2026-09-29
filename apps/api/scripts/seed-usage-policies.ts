@@ -54,6 +54,12 @@ const usagePolicySeedSchema = v.pipe(
       null,
     ),
     priceBasis: v.optional(v.picklist(USAGE_POLICY_PRICE_BASES), "flat"),
+    maxMembers: v.optional(
+      v.nullable(
+        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(PG_INT4_MAX)),
+      ),
+      null,
+    ),
     visibility: v.optional(v.picklist(USAGE_POLICY_VISIBILITIES), "hidden"),
     sortOrder: v.optional(
       v.pipe(
@@ -117,6 +123,7 @@ const seed = async (): Promise<void> => {
           priceCurrency: seedPolicy.priceCurrency,
           billingInterval: seedPolicy.billingInterval,
           priceBasis: seedPolicy.priceBasis,
+          maxMembers: seedPolicy.maxMembers,
           visibility: seedPolicy.visibility,
           sortOrder: seedPolicy.sortOrder,
         })
@@ -132,6 +139,7 @@ const seed = async (): Promise<void> => {
             priceCurrency: seedPolicy.priceCurrency,
             billingInterval: seedPolicy.billingInterval,
             priceBasis: seedPolicy.priceBasis,
+            maxMembers: seedPolicy.maxMembers,
             visibility: seedPolicy.visibility,
             sortOrder: seedPolicy.sortOrder,
           },

@@ -40,6 +40,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { resolveAgentAuditExecution } from "@/api/lib/agent-audit-principal";
 import type {
   loadOrgAIConfig,
+  OrgAIConfigReader,
   OrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
@@ -118,11 +119,11 @@ export type McpRequestContext = {
   testDependencies?: {
     /** Replaces the scoped `organization_settings` read, transaction included. */
     loadOrgSettingsForAuth?: (
-      organizationId: SafeId<"organization">,
+      reader: OrgAIConfigReader,
     ) => Promise<OrgSettingsForAuth>;
     /** Replaces the scoped AI-config read, transaction included. */
     loadOrgAIConfig?: (
-      organizationId: SafeId<"organization">,
+      reader: OrgAIConfigReader,
     ) => ReturnType<typeof loadOrgAIConfig>;
     configureTemplateFields?: typeof configureTemplateFields;
     consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;

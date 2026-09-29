@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { justifications } from "@/api/db/schema";
 import type { BoundingBox } from "@/api/db/schema-validators";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -31,8 +32,13 @@ const generateBoundingBoxes = createSafeHandler(
     workspaceId,
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
   }) {
+    const accessError = memberAIAccessError(orgAIConfigStatus);
+    if (accessError) {
+      return Result.err(accessError);
+    }
     const organizationId = session.activeOrganizationId;
     const { justificationId } = body;
 
