@@ -68,3 +68,50 @@ export const selectAppFrame = ({
     }
   }
 };
+
+/**
+ * Who the frame is shown to: a member's user and organization, or an
+ * anonymous visitor. `null` while that is unknown, or where the frame does
+ * not depend on it.
+ */
+export const frameVisitor = (
+  frame: AppFrame,
+  member: { userId: string; organizationId: string } | undefined,
+): string | null => {
+  switch (frame) {
+    case "member":
+      return member === undefined
+        ? null
+        : `member:${member.userId}:${member.organizationId}`;
+    case "public":
+      return "anonymous";
+    case "checking":
+    case "unresolved":
+    case "none":
+      return null;
+    default: {
+      frame satisfies never;
+      return panic(`Unhandled frame: ${String(frame)}`);
+    }
+  }
+};
+
+/**
+ * Whether the page has moved on to another visitor than the one its frame was
+ * last shown to, so what the previous one read must go before the next frame
+ * mounts. Only where Knowledge is open to visitors without an account: there
+ * one page can outlive a session.
+ */
+export const visitorChanged = ({
+  publicKnowledge,
+  shownVisitor,
+  visitor,
+}: {
+  publicKnowledge: boolean;
+  shownVisitor: string | null;
+  visitor: string | null;
+}): boolean =>
+  publicKnowledge &&
+  visitor !== null &&
+  shownVisitor !== null &&
+  visitor !== shownVisitor;

@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { selectAppFrame } from "@/lib/app-frame.logic";
+import {
+  frameVisitor,
+  selectAppFrame,
+  visitorChanged,
+} from "@/lib/app-frame.logic";
 
 const PROTECTED = ["__root__", "/_protected", "/_protected/chat/"];
 const KNOWLEDGE = ["__root__", "/knowledge", "/knowledge/templates"];
@@ -90,5 +94,76 @@ describe("selectAppFrame", () => {
         }),
       ).toBe("none");
     }
+  });
+});
+
+const MEMBER_A = { userId: "user-1", organizationId: "org-a" };
+const MEMBER_B = { userId: "user-1", organizationId: "org-b" };
+
+describe("frameVisitor", () => {
+  test("names a member by user and organization, and anyone else as anonymous", () => {
+    expect(frameVisitor("member", MEMBER_A)).toBe("member:user-1:org-a");
+    expect(frameVisitor("member", MEMBER_B)).not.toBe(
+      frameVisitor("member", MEMBER_A),
+    );
+    expect(frameVisitor("public", undefined)).toBe("anonymous");
+  });
+
+  test("names nobody while the visitor is unknown or does not matter", () => {
+    expect(frameVisitor("member", undefined)).toBeNull();
+    for (const frame of ["checking", "unresolved", "none"] as const) {
+      expect(frameVisitor(frame, MEMBER_A)).toBeNull();
+    }
+  });
+});
+
+describe("visitorChanged", () => {
+  const member = frameVisitor("member", MEMBER_A);
+  const otherOrganization = frameVisitor("member", MEMBER_B);
+
+  test("a member signing out, or switching organization, is a change", () => {
+    for (const visitor of ["anonymous", otherOrganization]) {
+      expect(
+        visitorChanged({
+          publicKnowledge: true,
+          shownVisitor: member,
+          visitor,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test("the same visitor, the first one, or an unknown one is not", () => {
+    expect(
+      visitorChanged({
+        publicKnowledge: true,
+        shownVisitor: member,
+        visitor: member,
+      }),
+    ).toBe(false);
+    expect(
+      visitorChanged({
+        publicKnowledge: true,
+        shownVisitor: null,
+        visitor: member,
+      }),
+    ).toBe(false);
+    expect(
+      visitorChanged({
+        publicKnowledge: true,
+        shownVisitor: member,
+        visitor: null,
+      }),
+    ).toBe(false);
+  });
+
+  test("without Knowledge for everyone nothing changes today's behaviour", () => {
+    expect(
+      visitorChanged({
+        publicKnowledge: false,
+        shownVisitor: member,
+        visitor: otherOrganization,
+      }),
+    ).toBe(false);
   });
 });

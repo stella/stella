@@ -1,14 +1,22 @@
-import { lazy, Suspense, useLayoutEffect } from "react";
+import { lazy, Suspense, useLayoutEffect, useState } from "react";
 import type { ReactElement } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { selectAppFrame } from "@/lib/app-frame.logic";
+import {
+  frameVisitor,
+  selectAppFrame,
+  visitorChanged,
+} from "@/lib/app-frame.logic";
 import type { AppFrameAudience } from "@/lib/app-frame.logic";
+import { rootKeys } from "@/lib/auth-queries";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
+import { resetVisitorCache } from "@/lib/knowledge/knowledge-cache";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
 import {
@@ -24,6 +32,9 @@ const LazyKnowledgePublicFrame = lazy(async () => {
 });
 
 const ROUTE_ID_SEPARATOR = "\n";
+
+// What says who is visiting; everything else belongs to one visitor.
+const VISITOR_INDEPENDENT_KEYS = [rootKeys.session, rootKeys.role];
 
 const isAuthenticatedUser = (value: unknown): value is AuthenticatedUser =>
   typeof value === "object" &&
@@ -101,6 +112,49 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
       usePinnedStore.getState().init(sessionMemberId);
     }
   }, [sessionMemberId]);
+
+  // When the page moves on to another visitor (sign-out, another
+  // organization, an expired session), nothing read for the previous one may
+  // render again: neither frame shows until the cache holds only what says who
+  // is visiting, reads in flight included. The next frame then mounts clean.
+  const queryClient = useQueryClient();
+  const visitor = frameVisitor(
+    frame,
+    memberUser === undefined
+      ? undefined
+      : {
+          userId: memberUser.id,
+          organizationId: memberUser.activeOrganizationId,
+        },
+  );
+  const [shownVisitor, setShownVisitor] = useState<string | null>(null);
+  const resetting = visitorChanged({ publicKnowledge, shownVisitor, visitor });
+  // The first visitor the frame is shown to is recorded as it renders.
+  if (publicKnowledge && shownVisitor === null && visitor !== null) {
+    setShownVisitor(visitor);
+  }
+  useLayoutEffect(() => {
+    if (!resetting || visitor === null) {
+      return undefined;
+    }
+    let current = true;
+    detached(
+      (async () => {
+        await resetVisitorCache(queryClient, VISITOR_INDEPENDENT_KEYS);
+        if (current) {
+          setShownVisitor(visitor);
+        }
+      })(),
+      "app-frame.reset-visitor",
+    );
+    return () => {
+      current = false;
+    };
+  }, [queryClient, resetting, visitor]);
+
+  if (resetting) {
+    return <ProtectedPendingSkeleton />;
+  }
 
   switch (frame) {
     case "member":
