@@ -112,24 +112,33 @@ export const CitationTimelinePanel = ({
         </PopoverTitle>
         <span className="text-muted-foreground text-xs tabular-nums">
           {format.number(total)}
+          {summary.capped.incoming ? "+" : null}
         </span>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <CitationTreatmentBar
-          className="h-2"
-          counts={summary.incoming}
-          total={total}
-        />
-        <TreatmentCounts counts={summary.incoming} />
-        {lastNegative !== null && (
-          <p className="text-destructive text-xs">
-            {t("caseLaw.citation.lastNegative", {
-              year: formatYear(format, lastNegative),
-            })}
-          </p>
-        )}
-      </div>
+      {summary.capped.incoming && (
+        <p className="text-muted-foreground text-xs">
+          {t("caseLaw.citation.partialSummary")}
+        </p>
+      )}
+
+      {!summary.capped.incoming && (
+        <div className="flex flex-col gap-2">
+          <CitationTreatmentBar
+            className="h-2"
+            counts={summary.incoming}
+            total={total}
+          />
+          <TreatmentCounts counts={summary.incoming} />
+          {lastNegative !== null && (
+            <p className="text-destructive text-xs">
+              {t("caseLaw.citation.lastNegative", {
+                year: formatYear(format, lastNegative),
+              })}
+            </p>
+          )}
+        </div>
+      )}
 
       <CitationTimelineChart
         byYear={summary.incomingByYear}
@@ -153,7 +162,9 @@ export const CitationTimelinePanel = ({
           />
         }
       >
-        {t("caseLaw.citation.showAll", { count: total })}
+        {summary.capped.incoming
+          ? t("common.showAll")
+          : t("caseLaw.citation.showAll", { count: total })}
       </PopoverClose>
     </>
   );
