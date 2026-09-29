@@ -271,10 +271,11 @@ export const deleteQueuedStyleSetPackages = async (
   await Promise.all(
     s3Keys.map(async (s3Key) => {
       if (env.FEATURE_FILE_USAGE_LIMITS) {
-        await deleteOrganizationFileWithSignal(
+        const deleted = await deleteOrganizationFileWithSignal(
           s3Key,
           AbortSignal.timeout(10_000),
         );
+        deleted.unwrap();
         return;
       }
       await getS3().delete(s3Key);
@@ -310,7 +311,11 @@ export const deleteUnreferencedStyleSetPackage = async (
     return;
   }
   if (env.FEATURE_FILE_USAGE_LIMITS) {
-    await deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000));
+    const deleted = await deleteOrganizationFileWithSignal(
+      s3Key,
+      AbortSignal.timeout(10_000),
+    );
+    deleted.unwrap();
   } else {
     await getS3().delete(s3Key);
   }

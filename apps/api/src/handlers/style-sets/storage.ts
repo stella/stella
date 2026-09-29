@@ -170,21 +170,26 @@ export const createStoredStyleSet = async ({
         // Fast path only: the claimed cleanup job is the durable one, so a
         // failure here costs a delay, not the object. Throwing from a
         // `finally` would also replace the rejection the caller must see.
-        const cleanup = await Result.tryPromise({
-          try: async () =>
-            env.FEATURE_FILE_USAGE_LIMITS
-              ? await deleteOrganizationFileWithSignal(
+        const cleanup = Result.flatten(
+          await Result.tryPromise({
+            try: async () => {
+              if (env.FEATURE_FILE_USAGE_LIMITS) {
+                return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
-                )
-              : await getS3().delete(s3Key),
-          catch: (cause) =>
-            new HandlerError({
-              status: 500,
-              message: "Could not clean up the rejected style set package.",
-              cause,
-            }),
-        });
+                );
+              }
+              await getS3().delete(s3Key);
+              return Result.ok(undefined);
+            },
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Could not clean up the rejected style set package.",
+                cause,
+              }),
+          }),
+        );
         if (Result.isError(cleanup)) {
           captureError(cleanup.error);
         }
@@ -451,21 +456,26 @@ export const replaceStoredStyleSet = async ({
     } finally {
       if (!persisted) {
         // Fast path only; see `createStoredStyleSet`.
-        const cleanup = await Result.tryPromise({
-          try: async () =>
-            env.FEATURE_FILE_USAGE_LIMITS
-              ? await deleteOrganizationFileWithSignal(
+        const cleanup = Result.flatten(
+          await Result.tryPromise({
+            try: async () => {
+              if (env.FEATURE_FILE_USAGE_LIMITS) {
+                return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
-                )
-              : await getS3().delete(s3Key),
-          catch: (cause) =>
-            new HandlerError({
-              status: 500,
-              message: "Could not clean up the replacement style package.",
-              cause,
-            }),
-        });
+                );
+              }
+              await getS3().delete(s3Key);
+              return Result.ok(undefined);
+            },
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Could not clean up the replacement style package.",
+                cause,
+              }),
+          }),
+        );
         if (Result.isError(cleanup)) {
           captureError(cleanup.error);
         }

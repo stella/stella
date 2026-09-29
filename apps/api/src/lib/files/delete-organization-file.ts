@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 
 type DeleteOrganizationFileOptions = {
@@ -13,15 +14,12 @@ export const deleteOrganizationFileWithSignal = async (
   key: string,
   signal: AbortSignal,
   { fileUsageDb }: DeleteOrganizationFileOptions = {},
-): Promise<void> => {
+): Promise<Result<void, OrganizationFileUsageError>> => {
   await deleteS3ObjectWithSignal(key, signal);
   if (!envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS) {
-    return;
+    return Result.ok(undefined);
   }
   const { removeOrganizationFileBytes } =
     await import("@/api/lib/files/organization-file-usage");
-  const removed = await removeOrganizationFileBytes(key, fileUsageDb);
-  if (Result.isError(removed)) {
-    throw removed.error;
-  }
+  return await removeOrganizationFileBytes(key, fileUsageDb);
 };

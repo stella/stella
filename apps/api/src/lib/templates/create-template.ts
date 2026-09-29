@@ -234,7 +234,14 @@ export const createStoredTemplate = async function* ({
     const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
       ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
       : getS3().delete(s3Key);
-    deleteCandidate.catch(captureError);
+    deleteCandidate
+      .then((deleted) => {
+        if (deleted && Result.isError(deleted)) {
+          captureError(deleted.error);
+        }
+        return undefined;
+      })
+      .catch(captureError);
     return Result.err(
       txResult.reason === "duplicate_origin"
         ? new HandlerError({
@@ -251,7 +258,14 @@ export const createStoredTemplate = async function* ({
     const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
       ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
       : getS3().delete(s3Key);
-    deleteCandidate.catch(captureError);
+    deleteCandidate
+      .then((deleted) => {
+        if (deleted && Result.isError(deleted)) {
+          captureError(deleted.error);
+        }
+        return undefined;
+      })
+      .catch(captureError);
     return Result.err(
       new HandlerError({
         status: 500,

@@ -342,11 +342,12 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
       }
       const { deleteOrganizationFileWithSignal } =
         await import("@/api/lib/files/delete-organization-file");
-      await deleteOrganizationFileWithSignal(
+      const deletedObject = await deleteOrganizationFileWithSignal(
         candidate.objectKey,
         signal ?? AbortSignal.timeout(30_000),
         { fileUsageDb: db },
       );
+      yield* deletedObject;
       const settled = await releaseOrganizationFileBytes(reservation, db);
       yield* settled;
       deleted += 1;

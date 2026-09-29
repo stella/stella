@@ -144,6 +144,16 @@ export const deleteS3Keys = async (
         }),
       );
     }
+    const failedDeletion = result.value.find(Result.isError);
+    if (failedDeletion) {
+      return Result.err(
+        new S3Error({
+          message: `Failed to delete S3 objects (${chunk.length} keys in chunk)`,
+          key: chunk.at(0),
+          cause: failedDeletion.error,
+        }),
+      );
+    }
   }
 
   return Result.ok();

@@ -140,8 +140,15 @@ export const finalizeEntityVersion = async function* ({
 
   const cleanupFinalObject = async (stage: string) => {
     await withTimeout(
-      async (signal) =>
-        await deleteOrganizationFileWithSignal(finalKey, signal),
+      async (signal) => {
+        const deleted = await deleteOrganizationFileWithSignal(
+          finalKey,
+          signal,
+        );
+        if (Result.isError(deleted)) {
+          captureError(deleted.error, { entityId, fieldId, stage });
+        }
+      },
       {
         label: "entity-version-final-cleanup.delete",
         timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,

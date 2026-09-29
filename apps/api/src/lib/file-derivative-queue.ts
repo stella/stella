@@ -131,18 +131,20 @@ const cleanupUnpublishedDerivative = async ({
   telemetry: Record<string, string>;
   writeState: "confirmed" | "uncertain";
 }): Promise<void> => {
-  const cleanup = await Result.tryPromise({
-    try: async () =>
-      await withTimeout(
-        async (signal) =>
-          await deleteOrganizationFileWithSignal(objectKey, signal),
-        {
-          label: "file-derivative-compensating-delete",
-          timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-        },
-      ),
-    catch: (cause) => cause,
-  });
+  const cleanup = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await withTimeout(
+          async (signal) =>
+            await deleteOrganizationFileWithSignal(objectKey, signal),
+          {
+            label: "file-derivative-compensating-delete",
+            timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+          },
+        ),
+      catch: (cause) => cause,
+    }),
+  );
   if (Result.isError(cleanup)) {
     captureError(cleanup.error, telemetry);
   }

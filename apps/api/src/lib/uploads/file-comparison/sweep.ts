@@ -14,8 +14,12 @@ export const FILE_COMPARISON_SWEEP_LIMIT = 50;
 
 const FILE_COMPARISON_DELETE_TIMEOUT_MS = 30 * 1000;
 
+type DeleteObject =
+  | typeof deleteOrganizationFileWithSignal
+  | ((key: string, signal: AbortSignal) => Promise<void>);
+
 type SweepOptions = {
-  deleteObject?: typeof deleteOrganizationFileWithSignal;
+  deleteObject?: DeleteObject;
   limit?: number;
   safeDb: SafeDb;
   signal?: AbortSignal | undefined;
@@ -79,9 +83,10 @@ export const sweepExpiredFileComparisonUploads = async ({
           ),
         catch: (cause) => cause,
       });
-      if (Result.isError(deleted)) {
+      const deletion = Result.isError(deleted) ? deleted : deleted.value;
+      if (deletion && Result.isError(deletion)) {
         // The row stays, so the next tick retries this key.
-        captureError(deleted.error, {
+        captureError(deletion.error, {
           fileComparisonUploadId: row.id,
           objectKey: key,
           stage: "file-comparison-sweep",

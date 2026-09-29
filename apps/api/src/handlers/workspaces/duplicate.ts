@@ -437,18 +437,23 @@ const cleanupCopiedS3Keys = async ({
     return;
   }
 
-  const cleanupResult = await Result.tryPromise(async () => {
-    await Promise.all(
-      copiedS3Keys.map(async (key) =>
-        env.FEATURE_FILE_USAGE_LIMITS
-          ? await deleteOrganizationFileWithSignal(
+  const cleanupResult = Result.flatten(
+    await Result.tryPromise(async () => {
+      const results = await Promise.all(
+        copiedS3Keys.map(async (key) => {
+          if (env.FEATURE_FILE_USAGE_LIMITS) {
+            return await deleteOrganizationFileWithSignal(
               key,
               AbortSignal.timeout(10_000),
-            )
-          : await getS3().delete(key),
-      ),
-    );
-  });
+            );
+          }
+          await getS3().delete(key);
+          return Result.ok(undefined);
+        }),
+      );
+      return Result.all(results);
+    }),
+  );
 
   if (Result.isError(cleanupResult)) {
     captureError(cleanupResult.error, { targetWorkspaceId });

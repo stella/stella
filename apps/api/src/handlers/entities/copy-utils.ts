@@ -524,12 +524,19 @@ const remapFieldFileId = ({
 export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   await Promise.all(
     keys.map(async (key) => {
-      await deleteOrganizationFileWithSignal(
-        key,
-        AbortSignal.timeout(10_000),
-      ).catch((error: unknown) => {
-        captureError(error, { source: "entity-copy-rollback" });
-      });
+      const result = Result.flatten(
+        await Result.tryPromise({
+          try: async () =>
+            await deleteOrganizationFileWithSignal(
+              key,
+              AbortSignal.timeout(10_000),
+            ),
+          catch: (error: unknown) => error,
+        }),
+      );
+      if (Result.isError(result)) {
+        captureError(result.error, { source: "entity-copy-rollback" });
+      }
     }),
   );
 };

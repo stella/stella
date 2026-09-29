@@ -269,7 +269,7 @@ type CleanupUploadedS3KeysOptions = {
  * Best-effort delete of S3 objects written before an authoritative
  * cap check (or an unexpected error) aborts the upload. Every key's
  * delete is attempted independently (`allSettled`, not `all`) so one
- * rejection doesn't stop cleanup of the rest; any rejection is
+ * rejection doesn't stop cleanup of the rest; any failure is
  * captured instead of silently dropped, since a swallowed failure
  * here leaves an orphaned S3 object with no telemetry trail.
  */
@@ -279,19 +279,29 @@ const cleanupUploadedS3Keys = async ({
   workspaceId,
 }: CleanupUploadedS3KeysOptions): Promise<void> => {
   const results = await Promise.allSettled(
-    keys.map(async (key) =>
-      env.FEATURE_FILE_USAGE_LIMITS
-        ? await deleteOrganizationFileWithSignal(
-            key,
-            AbortSignal.timeout(10_000),
-          )
-        : await getS3().delete(key),
-    ),
+    keys.map(async (key) => {
+      if (env.FEATURE_FILE_USAGE_LIMITS) {
+        return await deleteOrganizationFileWithSignal(
+          key,
+          AbortSignal.timeout(10_000),
+        );
+      }
+      await getS3().delete(key);
+      return Result.ok(undefined);
+    }),
   );
 
   for (const result of results) {
     if (result.status === "rejected") {
       captureError(result.reason, {
+        operation: "upload-s3-cleanup",
+        fileId,
+        workspaceId,
+      });
+      continue;
+    }
+    if (Result.isError(result.value)) {
+      captureError(result.value.error, {
         operation: "upload-s3-cleanup",
         fileId,
         workspaceId,

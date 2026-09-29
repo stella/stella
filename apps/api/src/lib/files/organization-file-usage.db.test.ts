@@ -213,12 +213,48 @@ describe("organization file usage", () => {
       ).toBe(true);
       expect((await counter())?.committedBytes).toBe(6n);
 
-      await deleteOrganizationFileWithSignal(key, AbortSignal.timeout(10_000), {
-        fileUsageDb: db(),
-      });
+      const deleted = await deleteOrganizationFileWithSignal(
+        key,
+        AbortSignal.timeout(10_000),
+        { fileUsageDb: db() },
+      );
+      expect(Result.isOk(deleted)).toBe(true);
 
       expect(fake.objects.has(`${envBase.S3_BUCKET}/${key}`)).toBe(false);
       expect((await counter())?.committedBytes).toBe(0n);
+    } finally {
+      fake.stop();
+    }
+  });
+
+  test("a failed ledger decrement returns an error after storage deletion", async () => {
+    const key = "fixture/tracked-delete-ledger-failure";
+    const fake = startFakeS3();
+    try {
+      fake.put(envBase.S3_BUCKET, key, "stored");
+      expect(
+        Result.isOk(await reconcileOrganizationFileObject(input(key, 6), db())),
+      ).toBe(true);
+
+      const unavailableDb = asTestRaw<
+        NonNullable<Parameters<typeof reserveOrganizationFileBytes>[1]>
+      >({
+        transaction: async () => {
+          throw new Error("ledger unavailable");
+        },
+      });
+      const deleted = await deleteOrganizationFileWithSignal(
+        key,
+        AbortSignal.timeout(10_000),
+        { fileUsageDb: unavailableDb },
+      );
+
+      expect(Result.isError(deleted)).toBe(true);
+      expect(fake.objects.has(`${envBase.S3_BUCKET}/${key}`)).toBe(false);
+      expect((await counter())?.committedBytes).toBe(6n);
+      expect(Result.isOk(await removeOrganizationFileBytes(key, db()))).toBe(
+        true,
+      );
     } finally {
       fake.stop();
     }

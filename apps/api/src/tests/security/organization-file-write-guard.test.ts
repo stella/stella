@@ -64,12 +64,7 @@ const exemptions = {
   "src/handlers/uploads/update.ts:writeS3ObjectWithRetry:0": "reservation_flow",
 } as const satisfies Record<
   string,
-  | "export"
-  | "public_corpus"
-  | "temporary"
-  | "fixture"
-  | "reservation_flow"
-  | "flag_off"
+  "export" | "public_corpus" | "temporary" | "fixture" | "reservation_flow"
 >;
 
 // Exact per-file counts close the gap where a new direct write lands in a
@@ -441,13 +436,6 @@ describe("durable organization file writes", () => {
           ).text();
           expect(source).toContain("reserveOrganizationFileBytes(");
           expect(source).toContain("commitOrganizationFileBytes(");
-          break;
-        }
-        case "flag_off": {
-          const source = await Bun.file(
-            path.join(root, "apps/api", site.file),
-          ).text();
-          expect(source).toContain("if (env.FEATURE_FILE_USAGE_LIMITS)");
           break;
         }
       }

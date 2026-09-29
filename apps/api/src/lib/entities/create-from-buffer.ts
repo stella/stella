@@ -265,18 +265,20 @@ export const createEntityFromBuffer = async ({
 
   try {
     const cleanupObject = async (): Promise<boolean> => {
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (signal) =>
-              await deleteOrganizationFileWithSignal(s3Key, signal),
-            {
-              label: "buffer-entity-writer-cleanup.delete",
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
+      const cleanup = Result.flatten(
+        await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (signal) =>
+                await deleteOrganizationFileWithSignal(s3Key, signal),
+              {
+                label: "buffer-entity-writer-cleanup.delete",
+                timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
+        }),
+      );
       if (Result.isError(cleanup)) {
         captureError(cleanup.error, { entityId, objectKey: s3Key });
         return false;

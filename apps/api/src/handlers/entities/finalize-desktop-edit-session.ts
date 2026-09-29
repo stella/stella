@@ -123,19 +123,27 @@ export const finalizeDesktopEditSessionHandler = async ({
   let shouldRollbackUploadedKeys = true;
 
   const deleteCheckpointKey = async (checkpointKey: string) => {
-    await (
-      env.FEATURE_FILE_USAGE_LIMITS
-        ? deleteOrganizationFileWithSignal(
-            checkpointKey,
-            AbortSignal.timeout(10_000),
-          )
-        : getS3().delete(checkpointKey)
-    ).catch((error: unknown) => {
-      captureError(error, {
+    const result = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          if (env.FEATURE_FILE_USAGE_LIMITS) {
+            return await deleteOrganizationFileWithSignal(
+              checkpointKey,
+              AbortSignal.timeout(10_000),
+            );
+          }
+          await getS3().delete(checkpointKey);
+          return Result.ok(undefined);
+        },
+        catch: (error: unknown) => error,
+      }),
+    );
+    if (Result.isError(result)) {
+      captureError(result.error, {
         checkpointKey,
         sessionId,
       });
-    });
+    }
   };
 
   const deleteCheckpointKeyIfPresent = async (checkpointKey: string | null) => {
@@ -146,19 +154,27 @@ export const finalizeDesktopEditSessionHandler = async ({
   };
 
   const deleteUploadedKey = async (uploadedKey: string) => {
-    await (
-      env.FEATURE_FILE_USAGE_LIMITS
-        ? deleteOrganizationFileWithSignal(
-            uploadedKey,
-            AbortSignal.timeout(10_000),
-          )
-        : getS3().delete(uploadedKey)
-    ).catch((error: unknown) => {
-      captureError(error, {
+    const result = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          if (env.FEATURE_FILE_USAGE_LIMITS) {
+            return await deleteOrganizationFileWithSignal(
+              uploadedKey,
+              AbortSignal.timeout(10_000),
+            );
+          }
+          await getS3().delete(uploadedKey);
+          return Result.ok(undefined);
+        },
+        catch: (error: unknown) => error,
+      }),
+    );
+    if (Result.isError(result)) {
+      captureError(result.error, {
         rollbackKey: uploadedKey,
         sessionId,
       });
-    });
+    }
   };
 
   const recordAuditEvent = createAuditRecorder({

@@ -109,22 +109,33 @@ export default createSafeRootHandler(
       }),
     );
 
-    yield* Result.await(
-      Result.tryPromise({
-        try: async () =>
-          await Promise.all([
-            deleteQueuedStyleSetPackages(params.styleSetId),
+    const deletionResult = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          const cleanupResults = await Promise.all([
+            deleteQueuedStyleSetPackages(params.styleSetId).then(() =>
+              Result.ok(undefined),
+            ),
             ...deleted.s3Keys.map(async (s3Key) => {
               if (env.FEATURE_FILE_USAGE_LIMITS) {
-                await deleteOrganizationFileWithSignal(
+                return await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
                 );
-                return;
               }
               await getS3().delete(s3Key);
+              return Result.ok(undefined);
             }),
-          ]),
+          ]);
+          return Result.all(cleanupResults).mapError(
+            (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Could not delete the style set package.",
+                cause,
+              }),
+          );
+        },
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -133,6 +144,7 @@ export default createSafeRootHandler(
           }),
       }),
     );
+    yield* Result.await(Promise.resolve(deletionResult));
     yield* Result.await(
       safeDb(async (tx) => {
         // audit: skip — storage cleanup for the already-audited style set deletion

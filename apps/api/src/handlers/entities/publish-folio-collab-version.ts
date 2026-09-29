@@ -361,14 +361,16 @@ const cleanupPublicationSource = async ({
   source,
   writeCertainty,
 }: CleanupPublicationSourceOptions): Promise<void> => {
-  const cleanup = await Result.tryPromise({
-    try: async () =>
-      await deleteOrganizationFileWithSignal(
-        source.key,
-        AbortSignal.timeout(10_000),
-      ),
-    catch: (cause) => cause,
-  });
+  const cleanup = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await deleteOrganizationFileWithSignal(
+          source.key,
+          AbortSignal.timeout(10_000),
+        ),
+      catch: (cause) => cause,
+    }),
+  );
   if (Result.isError(cleanup)) {
     captureError(cleanup.error, { roomId, storageKey: source.key });
   }

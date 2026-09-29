@@ -873,15 +873,17 @@ export const uploadUserFile = async ({
         })
       : await Result.tryPromise({ try: writeSource, catch: (cause) => cause });
     if (Result.isError(writeSourceResult)) {
-      const cleanupResult = await Result.tryPromise({
-        try: async () =>
-          await deleteOrganizationFileWithSignal(
-            s3Key,
-            AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-            ledgerDeleteOptions,
-          ),
-        catch: (cause) => cause,
-      });
+      const cleanupResult = Result.flatten(
+        await Result.tryPromise({
+          try: async () =>
+            await deleteOrganizationFileWithSignal(
+              s3Key,
+              AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+              ledgerDeleteOptions,
+            ),
+          catch: (cause) => cause,
+        }),
+      );
       if (Result.isError(cleanupResult)) {
         captureError(cleanupResult.error, {
           s3Key,
@@ -948,15 +950,17 @@ export const uploadUserFile = async ({
           stage: "chat-thumbnail-write",
           userFileId: id,
         });
-        const cleanupResult = await Result.tryPromise({
-          try: async () =>
-            await deleteOrganizationFileWithSignal(
-              preparedThumbnail.key,
-              AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-              ledgerDeleteOptions,
-            ),
-          catch: (cause) => cause,
-        });
+        const cleanupResult = Result.flatten(
+          await Result.tryPromise({
+            try: async () =>
+              await deleteOrganizationFileWithSignal(
+                preparedThumbnail.key,
+                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                ledgerDeleteOptions,
+              ),
+            catch: (cause) => cause,
+          }),
+        );
         if (Result.isError(cleanupResult)) {
           captureError(cleanupResult.error, {
             stage: "chat-thumbnail-write-cleanup",
@@ -969,15 +973,17 @@ export const uploadUserFile = async ({
           safeDb,
         });
         if (Result.isError(settlement)) {
-          const sourceCleanup = await Result.tryPromise({
-            try: async () =>
-              await deleteOrganizationFileWithSignal(
-                s3Key,
-                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-                ledgerDeleteOptions,
-              ),
-            catch: (cause) => cause,
-          });
+          const sourceCleanup = Result.flatten(
+            await Result.tryPromise({
+              try: async () =>
+                await deleteOrganizationFileWithSignal(
+                  s3Key,
+                  AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                  ledgerDeleteOptions,
+                ),
+              catch: (cause) => cause,
+            }),
+          );
           const sourceSettlement = await settleCleanupIntents({
             intentIds: sourceCleanupIntentIds,
             objectState: Result.isOk(sourceCleanup)
@@ -1075,15 +1081,17 @@ export const uploadUserFile = async ({
       });
     }
 
-    const sourceCleanupResult = await Result.tryPromise({
-      try: async () =>
-        await deleteOrganizationFileWithSignal(
-          s3Key,
-          AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-          ledgerDeleteOptions,
-        ),
-      catch: (cause) => cause,
-    });
+    const sourceCleanupResult = Result.flatten(
+      await Result.tryPromise({
+        try: async () =>
+          await deleteOrganizationFileWithSignal(
+            s3Key,
+            AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+            ledgerDeleteOptions,
+          ),
+        catch: (cause) => cause,
+      }),
+    );
     const sourceSettlement = await settleCleanupIntents({
       intentIds: sourceCleanupIntentIds,
       objectState: Result.isOk(sourceCleanupResult)
@@ -1094,15 +1102,17 @@ export const uploadUserFile = async ({
     const thumbnailCleanupResult =
       thumbnailKey === null
         ? Result.ok(undefined)
-        : await Result.tryPromise({
-            try: async () =>
-              await deleteOrganizationFileWithSignal(
-                thumbnailKey,
-                AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
-                ledgerDeleteOptions,
-              ),
-            catch: (cause) => cause,
-          });
+        : Result.flatten(
+            await Result.tryPromise({
+              try: async () =>
+                await deleteOrganizationFileWithSignal(
+                  thumbnailKey,
+                  AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                  ledgerDeleteOptions,
+                ),
+              catch: (cause) => cause,
+            }),
+          );
     const thumbnailSettlement = await settleCleanupIntents({
       intentIds: thumbnailCleanupIntentIds,
       objectState: Result.isOk(thumbnailCleanupResult)

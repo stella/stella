@@ -592,20 +592,24 @@ export const finalizeEntityCreate = async function* ({
     | { status: EntityCreateWriteFailureStatus };
 
   const cleanupFinalObject = async (stage: string) => {
-    await (
+    const deleted = await (
       env.FEATURE_FILE_USAGE_LIMITS
         ? deleteOrganizationFileWithSignal(
             finalKey,
             AbortSignal.timeout(10_000),
           )
         : getS3().delete(finalKey)
-    ).catch((deleteError: unknown) =>
+    ).catch((deleteError: unknown) => {
       captureError(deleteError, {
         entityId,
         fieldId,
         stage,
-      }),
-    );
+      });
+      return;
+    });
+    if (deleted && Result.isError(deleted)) {
+      captureError(deleted.error, { entityId, fieldId, stage });
+    }
   };
 
   const parentId = purposeData.parentId ?? null;

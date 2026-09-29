@@ -335,14 +335,16 @@ const checkpointFolioCollabRoom = createSafeHandler(
     const discardCheckpoint = async (
       writeCertainty: S3ObjectWriteCertainty,
     ): Promise<void> => {
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await deleteOrganizationFileWithSignal(
-            checkpointKey,
-            AbortSignal.timeout(10_000),
-          ),
-        catch: (cause) => cause,
-      });
+      const cleanup = Result.flatten(
+        await Result.tryPromise({
+          try: async () =>
+            await deleteOrganizationFileWithSignal(
+              checkpointKey,
+              AbortSignal.timeout(10_000),
+            ),
+          catch: (cause) => cause,
+        }),
+      );
       if (Result.isError(cleanup)) {
         captureError(cleanup.error, { roomId, storageKey: checkpointKey });
       }

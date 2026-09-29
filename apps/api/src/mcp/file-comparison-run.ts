@@ -67,9 +67,13 @@ export const UPLOADS_OUTPUT_MODES = ["preview", "download"] as const;
 
 type UploadsOutputMode = (typeof UPLOADS_OUTPUT_MODES)[number];
 
+type DeleteObject =
+  | typeof deleteOrganizationFileWithSignal
+  | ((key: string, signal: AbortSignal) => Promise<void>);
+
 export type FileComparisonRunDependencies = {
   compareDocxBuffers: typeof compareDocxBuffers;
-  deleteObject: typeof deleteOrganizationFileWithSignal;
+  deleteObject: DeleteObject;
   headObject: typeof headObject;
   readObject: typeof readS3ArrayBuffer;
   resolveDocxEditAuthorName: typeof resolveDocxEditAuthorName;
@@ -180,7 +184,10 @@ const discardInput = async ({
   const deleted = await Result.tryPromise(
     async () => await deleteObject(key, signal),
   );
-  if (Result.isError(deleted)) {
+  if (
+    Result.isError(deleted) ||
+    (deleted.value && Result.isError(deleted.value))
+  ) {
     // The row stays behind on purpose, so the sweep retries the key.
     return;
   }
