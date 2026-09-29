@@ -125,7 +125,6 @@ const insertDecisionRowTx = async (
     if (attempt === finalAttempt) {
       break;
     }
-    // db-await-in-loop: slug allocation: the next candidate depends on whether the slug index held this one; attempts are capped
     const [decisionRow] = await tx
       .insert(caseLawDecisions)
       .values(insertedRowValues(write, slugLadder(attempt)))

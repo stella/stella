@@ -39,7 +39,6 @@ export const deleteOrganizationFilesWithSignal = async (
         deletedKeys.push(key);
       }),
     );
-    // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
     const removed = await removeOrganizationFilesBytes(
       deletedKeys,
       fileUsageDb,
