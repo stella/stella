@@ -7,7 +7,6 @@
  * in tests, the result can be asserted.
  */
 
-import { panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import type { Block, Inline } from "@/api/lib/case-law/document-ast";
@@ -345,16 +344,13 @@ export const validateAst = (
       const peeled = peelDecorativeMarkers(w);
       return isMeaningfulWord(peeled) && !astWords.has(peeled);
     });
+  // A comparison view that changes anything but whitespace is ignored, so the
+  // check falls back to the source words and a real loss stays visible.
   const wordComparisonText = options?.wordComparisonText;
-  if (
-    wordComparisonText !== undefined &&
+  const comparisonWords =
+    wordComparisonText === undefined ||
     normalize(wordComparisonText).replace(/\s+/gu, "") !==
       originalText.replace(/\s+/gu, "")
-  ) {
-    panic("Word comparison may change whitespace only");
-  }
-  const comparisonWords =
-    wordComparisonText === undefined
       ? originalWords
       : extractWords(normalize(wordComparisonText));
   const missingWords = missingFrom(comparisonWords);

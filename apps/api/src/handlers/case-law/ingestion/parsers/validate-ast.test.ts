@@ -71,16 +71,16 @@ const MARKER_ONLY_SOURCE =
 // ── Content completeness ────────────────────────────────────
 
 describe("validateAst", () => {
-  test("a comparison override may change whitespace only", () => {
-    expect(() =>
-      validateAst(
-        wrapInHtml("Alpha bravo charlie"),
-        [makeBlock({ plainText: "Alpha bravo charlie" })],
-        {
-          wordComparisonText: "Alpha delta charlie",
-        },
-      ),
-    ).toThrow("Word comparison may change whitespace only");
+  // A view that changes more than whitespace could hide a real loss, so it is
+  // ignored and the source words decide.
+  test("a comparison override that changes words is ignored", () => {
+    const result = validateAst(
+      wrapInHtml("Alpha bravo charlie"),
+      [makeBlock({ plainText: "Alpha charlie" })],
+      { wordComparisonText: "Alpha charlie" },
+    );
+    expect(result.stats.missingWords).toContain("bravo");
+    expect(result.stats.boundaryWhitespaceWords).toEqual([]);
   });
   describe("content retention", () => {
     test("passes when AST retains all source text", () => {
