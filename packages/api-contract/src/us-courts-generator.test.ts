@@ -3,26 +3,26 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import {
+  ABBREVIATED_COURTS_PATH,
   buildUsCourtDirectory,
   CODE_DISPOSITIONS,
   DIRECTORY_PATH,
   inputsFromFiles,
   readInputFiles,
   regionsNamedIn,
+  renderAbbreviatedCourts,
   renderDirectory,
-  renderWritableCourts,
-  WRITABLE_COURTS_PATH,
 } from "../../../scripts/generate-us-courts";
 import type {
   SourceCourt,
   UsCourtInputs,
   UsCourtOverrides,
 } from "../../../scripts/generate-us-courts";
-import { US_WRITABLE_COURTS } from "./us-court-enrollment";
+import { US_ABBREVIATED_COURTS } from "./us-court-abbreviations";
 import {
+  US_ABBREVIATED_COURT_ID_LIST,
   US_COURT_BY_CANONICAL_NAME,
   US_COURT_DIRECTORY_SOURCES,
-  US_WRITABLE_COURT_ID_LIST,
 } from "./us-courts";
 
 const sha256 = (text: string): string =>
@@ -48,15 +48,15 @@ describe("the committed court directory", () => {
     });
   });
 
-  test("names every writable court as the directory does", async () => {
+  test("names every abbreviated court as the directory does", async () => {
     const files = await readInputFiles();
-    expect(await readFile(WRITABLE_COURTS_PATH, "utf-8")).toBe(
-      renderWritableCourts(buildUsCourtDirectory(inputsFromFiles(files))),
+    expect(await readFile(ABBREVIATED_COURTS_PATH, "utf-8")).toBe(
+      renderAbbreviatedCourts(buildUsCourtDirectory(inputsFromFiles(files))),
     );
-    expect(US_WRITABLE_COURTS.map(({ id }) => id)).toEqual([
-      ...US_WRITABLE_COURT_ID_LIST,
+    expect(US_ABBREVIATED_COURTS.map(({ id }) => id)).toEqual([
+      ...US_ABBREVIATED_COURT_ID_LIST,
     ]);
-    for (const { canonicalName, id } of US_WRITABLE_COURTS) {
+    for (const { canonicalName, id } of US_ABBREVIATED_COURTS) {
       expect(US_COURT_BY_CANONICAL_NAME.get(canonicalName)?.id).toBe(id);
     }
   });

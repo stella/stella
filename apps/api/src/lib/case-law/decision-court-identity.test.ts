@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
-import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
+import {
+  resolveUsCourt,
+  US_COURTS,
+  US_REJECTED_COURT_IDS,
+} from "@stll/api-contract/us-courts";
 
 import { COURT_DIRECTORY_JURISDICTIONS } from "@/api/lib/case-law/decision-court-id-sql";
 import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
@@ -47,7 +51,7 @@ test("a directory jurisdiction stores the court id it names, and every other sto
   ).toEqual(Result.ok(null));
 });
 
-test("a directory court id is exact, writable, and agrees with the stored name", () => {
+test("a directory court id is exact, accepted, and agrees with the stored name", () => {
   expect(
     rejectionOf({ country: "USA", court: SCOTUS_NAME, courtId: undefined }),
   ).toBe("missing");
@@ -57,18 +61,30 @@ test("a directory court id is exact, writable, and agrees with the stored name",
   expect(
     rejectionOf({ country: "USA", court: "Supreme Court", courtId: "scotus" }),
   ).toBe("name-mismatch");
-  // Accepted by the directory but not enrolled for writing.
-  const notWritable = US_COURTS.find(
-    ({ id }) => !US_WRITABLE_COURT_IDS.has(id),
+  // Every accepted court is written under its own canonical name, and under
+  // no other court's, not even one sharing its source name.
+  const refused = US_COURTS.filter(
+    ({ canonicalName, id }) =>
+      rejectionOf({ country: "USA", court: canonicalName, courtId: id }) !==
+      null,
   );
-  if (notWritable === undefined) {
-    throw new Error("every accepted court is writable");
-  }
+  expect(refused).toEqual([]);
   expect(
     rejectionOf({
       country: "USA",
-      court: notWritable.canonicalName,
-      courtId: notWritable.id,
+      court: "Massachusetts Land Court",
+      courtId: "massland",
     }),
-  ).toBe("not-writable");
+  ).toBe("name-mismatch");
+  // A court the directory rejects stays outside the jurisdiction.
+  for (const courtId of US_REJECTED_COURT_IDS) {
+    const entry = resolveUsCourt(courtId);
+    if (entry.type !== "rejected") {
+      throw new Error(`Expected rejected court: ${courtId}`);
+    }
+    expect(rejectionOf({ country: "USA", court: SCOTUS_NAME, courtId })).toBe(
+      entry.reason,
+    );
+  }
+  expect(US_REJECTED_COURT_IDS.length).toBeGreaterThan(0);
 });

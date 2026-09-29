@@ -495,7 +495,7 @@ export const GENERATORS = [
     id: "us-courts",
     outputs: [
       "packages/api-contract/src/us-courts.generated.ts",
-      "packages/api-contract/src/us-writable-courts.generated.ts",
+      "packages/api-contract/src/us-abbreviated-courts.generated.ts",
     ],
     inputs: [
       "packages/api-contract/data/us-courts/**",

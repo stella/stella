@@ -10,7 +10,6 @@ import {
   US_COURT_SYSTEMS,
   US_COURT_TIERS,
   US_REJECTED_COURT_FIELDS,
-  US_WRITABLE_COURT_ID_LIST,
 } from "./us-court-vocabulary";
 import type {
   UsAcceptedCourtRow,
@@ -29,30 +28,14 @@ import { US_COURT_DIRECTORY_TEXT } from "./us-courts.generated";
  * (`us-court-vocabulary.ts`). This module derives every id list and lookup
  * from them, so no list of courts is written by hand anywhere else.
  *
- * Acceptance and write enrollment are separate. An accepted court is one the
- * directory can name: it has a canonical name, a system, a region, a tier and
- * a partition. Only the courts in `US_WRITABLE_COURT_IDS` may have decisions
- * written, because the jurisdiction's index still tags every court value it
- * holds, and that set is what the tag's value count is bounded by.
+ * An accepted court is one the directory can name: it has a canonical name, a
+ * system, a region, a tier and a partition. Its decisions may be written: the
+ * jurisdiction's index files each under the court's partition, whose count is
+ * fixed however many courts write, and every rank reads the court's tier by
+ * its id. A rejected or unknown id is never written.
  */
 export * from "./us-court-vocabulary";
 export { US_COURT_DIRECTORY_SOURCES } from "./us-courts.generated";
-
-declare const usCourtIdBrand: unique symbol;
-declare const usCourtDirectoryIdBrand: unique symbol;
-
-/**
- * The id of an accepted court, as `isUsCourtId` has checked it at runtime.
- * Branded rather than a union of every id: a union of the directory's
- * thousands of ids is more than the type checker can compare cheaply, and it
- * would reach every program that imports this module.
- */
-export type UsCourtId = string & { readonly [usCourtIdBrand]: true };
-
-/** Every id the source registry holds, accepted or rejected. */
-export type UsCourtDirectoryId =
-  | UsCourtId
-  | (string & { readonly [usCourtDirectoryIdBrand]: true });
 
 export type UsCourt = UsAcceptedCourtRow;
 
@@ -196,23 +179,9 @@ const ENTRY_BY_ID: ReadonlyMap<string, UsCourtDirectoryEntry> = new Map(
   US_COURT_DIRECTORY.map((entry) => [entry.id, entry]),
 );
 
-const ACCEPTED_IDS: ReadonlySet<string> = new Set<string>(US_COURT_IDS);
-
-/** Whether `courtId` is exactly the id of an accepted court. */
-const isUsCourtId = (courtId: string): courtId is UsCourtId =>
-  ACCEPTED_IDS.has(courtId);
-
 /** The accepted court stored under a canonical name, exactly as spelled. */
 export const US_COURT_BY_CANONICAL_NAME: ReadonlyMap<string, UsCourt> = new Map(
   US_COURTS.map((court) => [court.canonicalName, court]),
-);
-
-/**
- * The writable court ids as a set, keyed by plain strings so a directory
- * row's id can be looked up without narrowing it first.
- */
-export const US_WRITABLE_COURT_IDS: ReadonlySet<string> = new Set<string>(
-  US_WRITABLE_COURT_ID_LIST,
 );
 
 export type UsCourtResolution =
@@ -228,8 +197,8 @@ export type UsCourtResolution =
  *
  * Exact on purpose: no case folding, trimming or alias. A spelling the
  * directory does not carry is a court it cannot name, and a rejected court is
- * outside the jurisdiction. Acceptance is not write enrollment; see
- * `US_WRITABLE_COURT_IDS`.
+ * outside the jurisdiction. The write boundary admits exactly the accepted
+ * courts, each under its canonical name.
  */
 export const resolveUsCourt = (courtId: string): UsCourtResolution => {
   const entry = ENTRY_BY_ID.get(courtId);
@@ -239,30 +208,4 @@ export const resolveUsCourt = (courtId: string): UsCourtResolution => {
   return isAccepted(entry)
     ? { type: "accepted", court: entry }
     : { type: "rejected", courtId, reason: entry.reason };
-};
-
-export type UsWritableCourtResolution =
-  | { readonly type: "writable"; readonly court: UsCourt }
-  | {
-      readonly type: "rejected";
-      readonly courtId: string;
-      readonly reason: UsCourtRejectionReason | "unknown" | "not-writable";
-    };
-
-/**
- * The court a decision may be written under, or a rejection: the write
- * boundary. An accepted court outside `US_WRITABLE_COURT_IDS` is rejected
- * here as `not-writable`, so a writer that resolves through this function
- * cannot put a name into the index that its court-tag bound does not count.
- */
-export const resolveWritableUsCourt = (
-  courtId: string,
-): UsWritableCourtResolution => {
-  const resolution = resolveUsCourt(courtId);
-  if (resolution.type === "rejected") {
-    return resolution;
-  }
-  return isUsCourtId(courtId) && US_WRITABLE_COURT_IDS.has(courtId)
-    ? { type: "writable", court: resolution.court }
-    : { type: "rejected", courtId, reason: "not-writable" };
 };
