@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { fetchDevOtp } from "@/lib/dev-otp";
-import { redirectToSchema } from "@/lib/redirect";
+import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
 
 const searchSchema = v.strictObject({
@@ -34,14 +34,8 @@ function OTP() {
   });
   const devOtp = Route.useLoaderData({ select: (d) => d.devOtp });
 
-  // The organization step takes a new account through onboarding first and
-  // sends everyone else on to the destination.
   const handleVerified = async () => {
-    await navigate({
-      to: "/auth/organization",
-      search: { redirectTo },
-      replace: true,
-    });
+    await navigate(afterSignInNavigation(redirectTo));
   };
 
   return (

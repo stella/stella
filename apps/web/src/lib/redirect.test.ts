@@ -106,6 +106,18 @@ describe("normalizeRedirectTo", () => {
       expect(normalizeRedirectTo(evil)).toBe("/");
     }
   });
+
+  test("returns the path the browser resolves", () => {
+    expect(normalizeRedirectTo("/x/../chat?a=1")).toBe("/chat?a=1");
+    expect(normalizeRedirectTo("/x/%2e%2e/chat")).toBe("/chat");
+    expect(normalizeRedirectTo("/x\\..\\chat")).toBe("/chat");
+  });
+
+  test("a target that resolves to another origin falls back to '/'", () => {
+    for (const evil of ["/x/..//evil.com", "/x/%2e%2e//evil.com"]) {
+      expect(normalizeRedirectTo(evil)).toBe("/");
+    }
+  });
 });
 
 describe("returnPathOf", () => {
@@ -158,6 +170,33 @@ describe("toAppRedirectTo", () => {
     ]) {
       expect(toAppRedirectTo(loop)).toBeUndefined();
     }
+  });
+
+  // Route matching resolves dot segments, reads "\" as "/", decodes the path
+  // and ignores case, so each of these opens a sign-in or onboarding page.
+  test("never ends the trip on a path that resolves to sign-in or onboarding", () => {
+    for (const loop of [
+      "/x/../auth",
+      "/x/%2e%2e/onboarding",
+      "/x/%2E%2E/auth/otp",
+      "/x\\..\\auth",
+      "/AUTH",
+      "/Onboarding?preview=true",
+      "/%61uth",
+      "/auth%2Forganization",
+    ]) {
+      expect(toAppRedirectTo(loop)).toBeUndefined();
+    }
+  });
+
+  test("returns the resolved path it lets through", () => {
+    expect(toAppRedirectTo("/x/../knowledge?intent=use")).toBe(
+      "/knowledge?intent=use",
+    );
+  });
+
+  test("a malformed escape is no destination", () => {
+    expect(toAppRedirectTo("/%E0%A4%A")).toBeUndefined();
   });
 
   test("refuses every hostile target", () => {

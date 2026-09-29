@@ -15,7 +15,7 @@ import { OTPPanel } from "@/components/auth/otp-panel";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
-import { normalizeRedirectTo } from "@/lib/redirect";
+import { afterSignInNavigation, normalizeRedirectTo } from "@/lib/redirect";
 
 type SignInDialogProps = {
   onOpenChange: (open: boolean) => void;
@@ -60,11 +60,7 @@ export const SignInDialog = ({
   };
 
   const handleVerified = async () => {
-    await navigate({
-      to: "/auth/organization",
-      search: { redirectTo },
-      replace: true,
-    });
+    await navigate(afterSignInNavigation(redirectTo));
   };
 
   return (

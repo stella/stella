@@ -1,197 +1,279 @@
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  redirect,
-} from "@tanstack/react-router";
+import { QueryClient } from "@tanstack/react-query";
+import type { DataTag } from "@tanstack/react-query";
+import { isRedirect } from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { sessionOptions } from "@/lib/auth-queries";
 import {
-  normalizeRedirectTo,
-  returnPathOf,
-  toAppRedirectTo,
+  afterOnboardingNavigation,
+  afterSignInNavigation,
+  onboardingNavigation,
 } from "@/lib/redirect";
-import { onboardingSearchSchema } from "@/routes/onboarding/-search";
+import { Route as ProtectedRoute } from "@/routes/_protected";
+import { Route as AuthRoute } from "@/routes/auth/index";
+import { Route as OrganizationRoute } from "@/routes/auth/organization";
+import { Route as OnboardingRoute } from "@/routes/onboarding/route";
 
-type Account = { signedIn: boolean; hasOrganization: boolean };
+/**
+ * The trip through sign-in, driven through the app's own route definitions:
+ * each step runs the real `validateSearch` and `beforeLoad` with a stubbed
+ * session, and the component steps use the navigation the components use.
+ */
 
 const DESTINATION = "/knowledge/templates?intent=use&slug=nda";
 
-const redirectSearchSchema = v.object({
-  redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
-});
+type Account = { signedIn: boolean; organizationId: string | null };
 
-/**
- * The trip through sign-in on a real router: each stand-in route makes the
- * same decision as its app route, with the same helpers and search schemas.
- * `/auth/organization` redirects where the app renders `<Navigate>`.
- */
-const buildRouter = (account: Account, initialEntry: string) => {
-  const rootRoute = createRootRoute();
-  const protectedRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    id: "_protected",
-    beforeLoad: ({ location }) => {
-      const redirectTo = returnPathOf(location);
-      if (!account.signedIn) {
-        throw redirect({ to: "/auth", search: { redirectTo } });
+type SessionData =
+  typeof sessionOptions.queryKey extends DataTag<unknown, infer TData>
+    ? TData
+    : never;
+
+const sessionFor = (account: Account) =>
+  account.signedIn
+    ? {
+        session: {
+          userId: "user_1",
+          activeOrganizationId: account.organizationId,
+        },
+        user: { id: "user_1", email: "a@example.com", name: "A" },
       }
-      if (!account.hasOrganization) {
-        throw redirect({
-          to: "/auth/organization",
-          search: { redirectTo },
-          replace: true,
-        });
-      }
-    },
+    : null;
+
+/** A query client holding a fresh session read, so no request is made. */
+const queryClientFor = (account: Account) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
-  const organizationRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/auth/organization",
-    validateSearch: redirectSearchSchema,
-    beforeLoad: ({ search }) => {
-      if (account.hasOrganization) {
-        throw redirect({ href: search.redirectTo ?? "/", replace: true });
-      }
-      throw redirect({
-        to: "/onboarding",
-        search: { redirectTo: toAppRedirectTo(search.redirectTo) },
-        replace: true,
-      });
-    },
-  });
-
-  return createRouter({
-    history: createMemoryHistory({ initialEntries: [initialEntry] }),
-    // A client router, so redirects navigate; tests have no window origin.
-    isServer: false,
-    origin: "https://app.test",
-    routeTree: rootRoute.addChildren([
-      createRoute({ getParentRoute: () => rootRoute, path: "/" }),
-      createRoute({
-        getParentRoute: () => rootRoute,
-        path: "/auth",
-        validateSearch: redirectSearchSchema,
-      }),
-      organizationRoute,
-      createRoute({
-        getParentRoute: () => rootRoute,
-        path: "/onboarding",
-        validateSearch: onboardingSearchSchema,
-      }),
-      protectedRoute.addChildren([
-        createRoute({
-          getParentRoute: () => protectedRoute,
-          path: "/chat",
-        }),
-        createRoute({
-          getParentRoute: () => protectedRoute,
-          path: "/knowledge/templates",
-        }),
-      ]),
-    ]),
-  });
-};
-
-type TestRouter = ReturnType<typeof buildRouter>;
-
-const at = (router: TestRouter) => ({
-  pathname: router.state.location.pathname,
-  search: router.state.location.search,
-});
-
-const redirectToIn = (router: TestRouter): string => {
-  const value: unknown = Reflect.get(
-    router.state.location.search,
-    "redirectTo",
+  // The stub carries only the fields the route guards read.
+  queryClient.setQueryData(
+    sessionOptions.queryKey,
+    sessionFor(account) as unknown as SessionData,
   );
-  if (typeof value !== "string") {
-    throw new TypeError("expected a redirectTo search param");
+  return queryClient;
+};
+
+type RouteOptions = { beforeLoad?: unknown; validateSearch?: unknown };
+
+/** Runs a route's real `beforeLoad` and returns the redirect it throws, if any. */
+const runBeforeLoad = async (
+  route: { options: RouteOptions },
+  args: Record<string, unknown>,
+) => {
+  const beforeLoad = route.options.beforeLoad;
+  if (typeof beforeLoad !== "function") {
+    throw new TypeError("route has no beforeLoad");
   }
-  return value;
+  const outcome = await Promise.resolve()
+    .then(() => beforeLoad(args))
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  if (outcome === null) {
+    return null;
+  }
+  if (!isRedirect(outcome)) {
+    throw outcome;
+  }
+  return outcome.options;
 };
 
-// What the OTP step and the sign-in dialog do once the code is accepted.
-const verifyCode = async (router: TestRouter, account: Account) => {
-  account.signedIn = true;
-  await router.navigate({
-    to: "/auth/organization",
-    search: { redirectTo: redirectToIn(router) },
-    replace: true,
+/** Parses a search object with a route's real search schema. */
+const validateSearch = (
+  route: { options: RouteOptions },
+  search: Record<string, unknown>,
+): Record<string, unknown> => {
+  const schema = route.options.validateSearch;
+  const parsed: unknown = v.parse(schema as unknown as v.GenericSchema, search);
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new TypeError("search schema returned a non-object");
+  }
+  return Object.fromEntries(Object.entries(parsed));
+};
+
+const location = (pathname: string, searchStr = "") => ({
+  pathname,
+  searchStr,
+  hash: "",
+});
+
+const protectedRedirect = async (account: Account) =>
+  await runBeforeLoad(ProtectedRoute, {
+    context: { queryClient: queryClientFor(account) },
+    location: location("/knowledge/templates", "?intent=use&slug=nda"),
   });
+
+const organizationStep = async (
+  account: Account,
+  search: Record<string, unknown>,
+) => {
+  const parsed = validateSearch(OrganizationRoute, search);
+  return {
+    search: parsed,
+    redirect: await runBeforeLoad(OrganizationRoute, {
+      context: { session: sessionFor(account)?.session ?? null },
+      location: location("/auth/organization"),
+      search: parsed,
+    }),
+  };
 };
 
-describe("return path through sign-in", () => {
+const onboardingStep = async (
+  account: Account,
+  search: Record<string, unknown>,
+) => {
+  const parsed = validateSearch(OnboardingRoute, search);
+  return {
+    search: parsed,
+    redirect: await runBeforeLoad(OnboardingRoute, {
+      context: { queryClient: queryClientFor(account) },
+      search: parsed,
+    }),
+  };
+};
+
+const redirectToOf = (search: unknown): string | undefined => {
+  const value: unknown =
+    typeof search === "object" && search !== null
+      ? Reflect.get(search, "redirectTo")
+      : undefined;
+  return typeof value === "string" ? value : undefined;
+};
+
+describe("return path through sign-in, on the app's routes", () => {
   test("a new account comes back to the page it asked for, query included", async () => {
-    const account = { signedIn: false, hasOrganization: false };
-    const router = buildRouter(account, DESTINATION);
-    await router.load();
+    const account: Account = { signedIn: false, organizationId: null };
 
-    expect(at(router)).toEqual({
-      pathname: "/auth",
+    // The protected page sends the visitor to sign in with its path + query.
+    const toAuth = await protectedRedirect(account);
+    expect(toAuth).toMatchObject({
+      to: "/auth",
+      search: { redirectTo: DESTINATION },
+    });
+    const authSearch = validateSearch(AuthRoute, { redirectTo: DESTINATION });
+    expect(authSearch).toEqual({ redirectTo: DESTINATION });
+
+    // The code is accepted: on to the organization step, destination kept.
+    account.signedIn = true;
+    const afterSignIn = afterSignInNavigation(DESTINATION);
+    expect(afterSignIn).toMatchObject({
+      to: "/auth/organization",
       search: { redirectTo: DESTINATION },
     });
 
-    await verifyCode(router, account);
-    expect(at(router)).toEqual({
-      pathname: "/onboarding",
+    // No organization yet: the step stays, then hands over to onboarding.
+    const organization = await organizationStep(account, {
+      redirectTo: DESTINATION,
+    });
+    expect(organization.redirect).toBeNull();
+    const toOnboarding = onboardingNavigation(
+      redirectToOf(organization.search),
+    );
+    expect(toOnboarding).toMatchObject({
+      to: "/onboarding",
       search: { redirectTo: DESTINATION },
     });
 
-    // The wizard creates the organization and ends at its destination.
-    account.hasOrganization = true;
-    await router.navigate({ href: redirectToIn(router), replace: true });
-    expect(at(router)).toEqual({
-      pathname: "/knowledge/templates",
-      search: { intent: "use", slug: "nda" },
+    // Onboarding keeps it while the wizard runs and ends on it.
+    const onboarding = await onboardingStep(account, {
+      redirectTo: redirectToOf(toOnboarding.search),
     });
+    expect(onboarding.redirect).toBeNull();
+    expect(onboarding.search).toEqual({ redirectTo: DESTINATION });
+    expect(
+      afterOnboardingNavigation(redirectToOf(onboarding.search)),
+    ).toMatchObject({ href: DESTINATION });
+
+    // Reloading onboarding once the organization exists goes there as well.
+    account.organizationId = "org_1";
+    const reloaded = await onboardingStep(account, {
+      redirectTo: DESTINATION,
+    });
+    expect(reloaded.redirect).toMatchObject({ href: DESTINATION });
   });
 
-  test("a signed-in account without an organization keeps the page through onboarding", async () => {
-    const account = { signedIn: true, hasOrganization: false };
-    const router = buildRouter(account, DESTINATION);
-    await router.load();
-
-    expect(at(router)).toEqual({
-      pathname: "/onboarding",
+  test("a signed-in account without an organization keeps the page", async () => {
+    const toOrganization = await protectedRedirect({
+      signedIn: true,
+      organizationId: null,
+    });
+    expect(toOrganization).toMatchObject({
+      to: "/auth/organization",
       search: { redirectTo: DESTINATION },
     });
   });
 
   test("an existing account goes straight back to the page it asked for", async () => {
-    const account = { signedIn: false, hasOrganization: true };
-    const router = buildRouter(account, DESTINATION);
-    await router.load();
+    const account: Account = { signedIn: true, organizationId: "org_1" };
+    const organization = await organizationStep(account, {
+      redirectTo: DESTINATION,
+    });
+    expect(organization.redirect).toMatchObject({ to: DESTINATION });
+  });
 
-    await verifyCode(router, account);
-    expect(at(router)).toEqual({
-      pathname: "/knowledge/templates",
-      search: { intent: "use", slug: "nda" },
+  test("a signed-in visit to sign-in forwards the destination", async () => {
+    const forwarded = await runBeforeLoad(AuthRoute, {
+      context: {
+        session: sessionFor({ signedIn: true, organizationId: null }),
+      },
+      location: location("/auth"),
+      search: { redirectTo: DESTINATION },
+    });
+    expect(forwarded).toMatchObject({
+      to: "/auth/organization",
+      search: { redirectTo: DESTINATION },
+    });
+  });
+
+  test("a signed-out visit to onboarding keeps the destination through sign-in", async () => {
+    const onboarding = await onboardingStep(
+      { signedIn: false, organizationId: null },
+      { redirectTo: DESTINATION },
+    );
+    expect(onboarding.redirect).toMatchObject({
+      to: "/auth",
+      search: { redirectTo: DESTINATION },
+    });
+  });
+
+  test("onboarding without a destination lands in chat", async () => {
+    const onboarding = await onboardingStep(
+      { signedIn: true, organizationId: null },
+      {},
+    );
+    expect(onboarding.search).toEqual({});
+    expect(afterOnboardingNavigation(undefined)).toMatchObject({
+      href: "/chat",
     });
   });
 
   test("a hostile destination lands on the home page", async () => {
-    const account = { signedIn: true, hasOrganization: true };
-    for (const evil of ["//evil.com", "/\\evil.com", "https://evil.com"]) {
-      const router = buildRouter(
-        account,
-        `/auth/organization?redirectTo=${encodeURIComponent(evil)}`,
-      );
-      await router.load();
-      expect(router.state.location.pathname).toBe("/");
+    const account: Account = { signedIn: true, organizationId: "org_1" };
+    for (const evil of [
+      "//evil.com",
+      "/\\evil.com",
+      "https://evil.com",
+      "/x/..//evil.com",
+    ]) {
+      const organization = await organizationStep(account, {
+        redirectTo: evil,
+      });
+      expect(organization.redirect).toMatchObject({ to: "/" });
     }
   });
 
-  test("onboarding drops a destination that points back into sign-in", async () => {
-    const account = { signedIn: true, hasOrganization: false };
-    const router = buildRouter(
-      account,
-      `/auth/organization?redirectTo=${encodeURIComponent("/auth/otp")}`,
-    );
-    await router.load();
-
-    expect(at(router)).toEqual({ pathname: "/onboarding", search: {} });
+  test("onboarding drops a destination that resolves into sign-in", async () => {
+    for (const loop of ["/auth/otp", "/x/../auth", "/x/%2e%2e/onboarding"]) {
+      const onboarding = await onboardingStep(
+        { signedIn: true, organizationId: null },
+        { redirectTo: loop },
+      );
+      expect(onboarding.search).toEqual({ redirectTo: undefined });
+      expect(onboardingNavigation(loop)).toMatchObject({
+        search: { redirectTo: undefined },
+      });
+    }
   });
 });

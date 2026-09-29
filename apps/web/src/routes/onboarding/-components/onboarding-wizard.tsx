@@ -45,6 +45,7 @@ import {
   aiConfigKeys,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
+import { afterOnboardingNavigation } from "@/lib/redirect";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
@@ -562,9 +563,7 @@ export const OnboardingWizard = () => {
   // Land where the visitor was headed before signing up, or in chat.
   const enterApp = () => {
     detached(
-      redirectTo === undefined
-        ? navigate({ to: "/chat", replace: true })
-        : navigate({ href: redirectTo, replace: true }),
+      navigate(afterOnboardingNavigation(redirectTo)),
       "onboarding-wizard.navigate",
     );
   };
