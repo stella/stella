@@ -204,6 +204,7 @@ const withdrawalState = async (documentId: SafeId<"legislationDocument">) =>
   (
     await db
       .select({
+        kind: legislationDocuments.expressionKind,
         disposition: legislationDocuments.windowDisposition,
         basis: legislationDocuments.windowDispositionBasis,
         sourceHash: legislationDocuments.sourceHash,
@@ -220,6 +221,44 @@ const withdrawalState = async (documentId: SafeId<"legislationDocument">) =>
       )
       .where(eq(legislationDocuments.id, documentId))
   ).at(0);
+
+test("a replay keeps a withdrawn version's stored kind, so its payload revision stays put", async () => {
+  const live = { ...input("current"), eli: "eli/cz/sb/2012/92" };
+  const replay = { ...live, origin: "stored-raw-replay" } as const;
+
+  const first = await processLegislationDocument(live, scopedDb, { corpus });
+  if (first.type !== "stored") {
+    throw new Error(`expected stored legislation, got ${first.type}`);
+  }
+  // A promulgated text withdrawn next to its consolidation. The replayed
+  // input's shape says nothing about the kind, so the kind must come from
+  // the row.
+  await db
+    .update(legislationDocuments)
+    .set({
+      expressionKind: "promulgated",
+      windowDisposition: "withdrawn",
+      windowDispositionBasis: "deferred-promulgated",
+    })
+    .where(eq(legislationDocuments.id, first.id));
+  const withdrawn = await withdrawalState(first.id);
+
+  await processLegislationDocument(replay, scopedDb, { corpus });
+  const afterReplay = await withdrawalState(first.id);
+  const replayedAgain = await processLegislationDocument(replay, scopedDb, {
+    corpus,
+  });
+  const afterSecondReplay = await withdrawalState(first.id);
+
+  expect(afterReplay).toMatchObject({
+    kind: "promulgated",
+    disposition: "withdrawn",
+    basis: "deferred-promulgated",
+    payloadRevision: withdrawn?.payloadRevision,
+  });
+  expect(replayedAgain).toMatchObject({ type: "stored", skipped: true });
+  expect(afterSecondReplay).toEqual(afterReplay);
+});
 
 test("a withdrawn version erases, a replay of its stored payload keeps it withdrawn, and a live listing restores it", async () => {
   const live = { ...input("current"), eli: "eli/cz/sb/2012/91" };

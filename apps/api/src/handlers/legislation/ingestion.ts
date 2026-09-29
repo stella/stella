@@ -474,26 +474,28 @@ const storeSourceRaw = async ({
  *
  * Except a withdrawal a replay cannot lift: a payload stored earlier proves
  * what the publisher served then, not that it lists the version now, so a
- * reparse of it keeps a withdrawn version withdrawn, with its basis. Only a
- * live observation restores one.
+ * reparse of it keeps a withdrawn version exactly as stored: its kind, its
+ * disposition and its basis. Only a live observation restores one.
  */
 const storedClassification = (
   input: LegislationDocumentInput,
   existing: StoredVersion | undefined,
 ): LegislationExpressionClassification => {
-  const expressionKind =
-    input.version.type === "unversioned" ? "unversioned" : "consolidation";
   if (
     input.origin === "stored-raw-replay" &&
     existing?.windowDisposition === "withdrawn"
   ) {
     return {
-      expressionKind,
+      expressionKind: existing.expressionKind,
       windowDisposition: existing.windowDisposition,
       windowDispositionBasis: existing.windowDispositionBasis,
     };
   }
-  return { ...EFFECTIVE_CONSOLIDATION, expressionKind };
+  return {
+    ...EFFECTIVE_CONSOLIDATION,
+    expressionKind:
+      input.version.type === "unversioned" ? "unversioned" : "consolidation",
+  };
 };
 
 const hasStoredClassification = (
