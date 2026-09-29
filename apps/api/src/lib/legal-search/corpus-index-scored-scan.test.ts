@@ -525,11 +525,17 @@ describe("the scored transport", () => {
   });
 
   test("a date order cannot be read through it", async () => {
-    await expect(
-      readFixturePage(fixture(), null, SCORED, {
-        type: "newest",
-        timestampField: "decision_date_ts",
-      }),
-    ).rejects.toThrow("A scored scan reads relevance order only");
+    const refused: unknown = await readFixturePage(fixture(), null, SCORED, {
+      type: "newest",
+      timestampField: "decision_date_ts",
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    expect(refused).toMatchObject({
+      message: expect.stringContaining(
+        "A scored scan reads relevance order only",
+      ),
+    });
   });
 });
