@@ -25,9 +25,9 @@ import {
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import {
   inForceToday,
-  isCurrentVersionOfWork,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import { legislationWorkToken } from "@/api/lib/legal-search/legislation-work-collapse";

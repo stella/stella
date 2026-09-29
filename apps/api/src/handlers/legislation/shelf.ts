@@ -10,11 +10,11 @@ import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legis
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
+import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceToday,
-  isCurrentVersionOfWork,
   legislationVersionRef,
   legislationVersionRefAt,
   versionSortKey,

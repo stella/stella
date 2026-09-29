@@ -54,6 +54,7 @@ import {
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 import { currentLegislationCorpusProjection } from "@/api/lib/legal-search/legislation-corpus-projection";
+import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import {
   redistributableLegislationSource,
   publishedLegislationDocument,
@@ -62,7 +63,6 @@ import {
 import {
   eligibleExpression,
   inForceToday,
-  isCurrentVersionOfWork,
   legislationVersionRef,
   legislationVersionRefAt,
   notWithdrawn,

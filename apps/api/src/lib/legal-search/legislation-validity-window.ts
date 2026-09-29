@@ -7,8 +7,6 @@ import {
   LEGISLATION_APPLICABLE_WINDOW_DISPOSITION,
 } from "@stll/api-contract/legislation-expression";
 
-import { legislationDocuments } from "@/api/db/schema";
-
 /** Works with no version window sort below every dated consolidation. */
 export const UNVERSIONED_SORT_DATE = "0001-01-01";
 
@@ -207,17 +205,6 @@ export const isVersionOfWorkAt = (
         ${row.id}
       )
   )`;
-
-/**
- * The version each Work's present-day reads show, over `legislation_documents`
- * itself. The listing, the shelf and search's one-hit-per-act collapse all
- * read this one definition, so they cannot disagree about which version of an
- * act is the current one.
- */
-export const isCurrentVersionOfWork = isVersionOfWorkAt(
-  legislationVersionRow(legislationDocuments),
-  sql`CURRENT_DATE`,
-);
 
 const INVALID_WINDOW_SQL = sql.raw(`'invalid-window'`);
 

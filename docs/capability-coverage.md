@@ -650,5 +650,3 @@ mechanics, and similar), not gaps in coverage.
 | ui_navigation_state    | 9     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
-
-Total: 184
