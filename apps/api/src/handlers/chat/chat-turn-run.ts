@@ -123,13 +123,15 @@ type ChatTurnClaim = { execution: ChatTurnExecution; safeDb: SafeDb };
 
 /**
  * What a process owns of chat turns: the runs handed a turn and not yet over,
- * by execution id, and the turns a send has claimed but not yet handed to a
- * run. The process has one (`processChatTurnOwnership`); a test gives its runs
- * their own.
+ * by execution id, the turns a send has claimed but not yet handed to a run,
+ * and the work a turn left running once it ended (its follow-ups). The
+ * process has one (`processChatTurnOwnership`); a test gives its runs their
+ * own.
  */
 export class ChatTurnOwnership {
   private readonly liveRuns = new Map<string, ChatTurnRun>();
   private readonly claims = new Set<ChatTurnClaim>();
+  private readonly followUps = new Set<Promise<unknown>>();
   private relinquishing = false;
   private changed = Promise.withResolvers<undefined>();
 
@@ -155,6 +157,19 @@ export class ChatTurnOwnership {
   }
 
   /**
+   * Track `work`, which runs past the end of the turn that started it: a
+   * process giving up its turns waits for it before its database goes away.
+   * Returns `work` for the caller to detach under its own label.
+   */
+  followUp<T>(work: Promise<T>): Promise<T> {
+    const tracked: Promise<unknown> = Promise.allSettled([work]).finally(() => {
+      this.followUps.delete(tracked);
+    });
+    this.followUps.add(tracked);
+    return work;
+  }
+
+  /**
    * Record a turn a send has claimed and still prepares, so relinquishing
    * finds it. Call the returned function once the send no longer holds it.
    */
@@ -173,8 +188,8 @@ export class ChatTurnOwnership {
    * its lease; a run handed a turn from now on is cut short at once. A turn a
    * send still prepares gets the short run lease, so if the process ends
    * before the send hands it over, the reaper finds it within that lease.
-   * Resolves once nothing is owned any more, saying whether every run stored
-   * its outcome; the caller bounds the wait.
+   * Resolves once nothing is owned any more, the turns' follow-ups included,
+   * saying whether every run stored its outcome; the caller bounds the wait.
    */
   async relinquish(): Promise<ChatTurnRunEnd> {
     this.relinquishing = true;
@@ -193,7 +208,10 @@ export class ChatTurnOwnership {
       for (const claim of this.claims) {
         if (!shortened.has(claim)) {
           shortened.add(claim);
-          detached(shortenClaimLease(claim), "chat-turn-run.relinquish-claim");
+          detached(
+            this.followUp(shortenClaimLease(claim)),
+            "chat-turn-run.relinquish-claim",
+          );
         }
       }
       const current: Promise<ChatTurnRunEnd>[] = [];
@@ -207,6 +225,10 @@ export class ChatTurnOwnership {
       await Promise.race([...current, changed]);
     }
     const settled = await Promise.all(ends.values());
+    // A run's follow-ups start before it ends; a follow-up may start another.
+    while (this.followUps.size > 0) {
+      await Promise.all(this.followUps);
+    }
     return settled.includes("unstored") ? "unstored" : "stored";
   }
 
@@ -295,6 +317,15 @@ export class ChatTurnRun {
     } finally {
       this.release();
     }
+  }
+
+  /**
+   * Track `work`, which runs past the end of this turn (a title, say): its
+   * owner waits for it before the process gives up its database. Returns
+   * `work` for the caller to detach under its own label.
+   */
+  followUp<T>(work: Promise<T>): Promise<T> {
+    return this.ownership.followUp(work);
   }
 
   /**

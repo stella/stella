@@ -2554,21 +2554,23 @@ export const createSendMessage = (
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
                       detached(
-                        generateThreadTitle({
-                          initialTitle: initialThreadTitle,
-                          messages: [
-                            parsedMessage.message,
-                            resolvedResponseMessage,
-                          ],
-                          organizationId: session.activeOrganizationId,
-                          orgAIConfig,
-                          promptCachingEnabled,
-                          recordAuditEvent,
-                          safeDb,
-                          threadId: body.threadId,
-                          threadWorkspaceId: workspaceId,
-                          userId: user.id,
-                        }),
+                        run.followUp(
+                          generateThreadTitle({
+                            initialTitle: initialThreadTitle,
+                            messages: [
+                              parsedMessage.message,
+                              resolvedResponseMessage,
+                            ],
+                            organizationId: session.activeOrganizationId,
+                            orgAIConfig,
+                            promptCachingEnabled,
+                            recordAuditEvent,
+                            safeDb,
+                            threadId: body.threadId,
+                            threadWorkspaceId: workspaceId,
+                            userId: user.id,
+                          }),
+                        ),
                         "send-message.generate-thread-title",
                       );
                     }

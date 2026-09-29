@@ -423,6 +423,42 @@ describe("a producing run", () => {
     await response.body?.cancel();
   });
 
+  test("gives up its turns only once the work they left running is done", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
+    const { response, run } = produceUntilCut({
+      execution,
+      heartbeat: { intervalMs: 60_000, renewEvery: 4 },
+      ownership,
+      threadId,
+    });
+    const followUpMayFinish = Promise.withResolvers<undefined>();
+    let followUpDone = false;
+    const followUp = run.followUp(
+      followUpMayFinish.promise.finally(() => {
+        followUpDone = true;
+      }),
+    );
+
+    let relinquishedWith: string | undefined;
+    const relinquished = ownership.relinquish().then((end) => {
+      relinquishedWith = end;
+      return end;
+    });
+    expect(await run.settled).toBe("stored");
+    for (let poll = 0; poll < 40; poll += 1) {
+      await Bun.sleep(1);
+    }
+    expect(relinquishedWith).toBeUndefined();
+
+    followUpMayFinish.resolve(undefined);
+    await relinquished;
+    expect(followUpDone).toBe(true);
+    await followUp;
+    expect(relinquishedWith).toBe("stored");
+    await response.body?.cancel();
+  });
+
   test("reports a run that could not store its outcome", async () => {
     const { execution, threadId } = await seedRunningTurn();
     const ownership = new ChatTurnOwnership();
