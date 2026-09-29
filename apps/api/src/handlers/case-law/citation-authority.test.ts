@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import {
   caseLawCitations,
+  caseLawCourtDirectoryRanks,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -23,6 +24,7 @@ import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-see
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { usCourtDirectoryRankRows } from "@/api/lib/case-law/court-ranks";
 import { flattenCourtWeightEntries } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -164,6 +166,10 @@ beforeAll(
     // reference implementation. A non-UTC database session must produce the
     // same score instead of applying its local offset during the implicit cast.
     await db.execute(sql.raw("SET TIME ZONE 'Europe/Prague'"));
+    // The directory ranks the seed migrations give production.
+    await db
+      .insert(caseLawCourtDirectoryRanks)
+      .values(usCourtDirectoryRankRows());
 
     await db.insert(caseLawSources).values({
       id: sourceId,
