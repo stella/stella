@@ -1049,6 +1049,7 @@
       "apps/api/src/scripts/backfill-citation-authority.ts": 1,
       "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
+      "apps/api/src/scripts/backfill-legislation-work-names.ts": 1,
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
       "apps/api/src/scripts/backfill-statute-citation-counts.ts": 1,
       "apps/api/src/scripts/corpus-column-trim.ts": 1,

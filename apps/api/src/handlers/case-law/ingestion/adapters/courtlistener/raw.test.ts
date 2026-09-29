@@ -187,10 +187,10 @@ describe("the stored CourtListener raw", () => {
     ],
     [
       "an envelope with a foreign part",
-      { raw: encodeSourceRawEnvelope({ "cl-api": "{}" }) },
+      { raw: encodeSourceRawEnvelope({ "PRIVILEGED-PART": "{}" }) },
       "unexpected-part",
     ],
-  ])("rejects %s with a typed reason", (_name, override, reason) => {
+  ] as const)("rejects %s with a typed reason", (_name, override, reason) => {
     const decoded = decodeCourtListenerRaw({
       raw: encodeCourtListenerRaw(admitted(courtListenerRecord())),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -200,6 +200,7 @@ describe("the stored CourtListener raw", () => {
       Result.isError(decoded) && decoded.error.reason;
 
     expect(rejected).toBe(reason);
+    expect(JSON.stringify(decoded)).not.toContain("PRIVILEGED");
   });
 
   test("rejects a contract part of another version", () => {

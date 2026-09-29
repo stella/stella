@@ -61,6 +61,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
@@ -888,6 +889,9 @@ export const processLegislationDocument = async (
         .update(legislationDocuments)
         .set({ ...values, updatedAt: new Date() })
         .where(eq(legislationDocuments.id, row.id));
+      await syncLegislationWorkNamesTx(tx, [
+        { id: row.id, country: values.country, title: values.title },
+      ]);
       return { id: row.id, row };
     }
     const [insertedRow] = await tx
@@ -897,6 +901,11 @@ export const processLegislationDocument = async (
     if (!insertedRow) {
       panic("Failed to insert legislation document");
     }
+    // The names the version's title states are written with the row, so a
+    // search never sees the version without them.
+    await syncLegislationWorkNamesTx(tx, [
+      { id: insertedRow.id, country: values.country, title: values.title },
+    ]);
     return { id: insertedRow.id, row: undefined };
   });
   const { id } = written;

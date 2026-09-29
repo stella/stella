@@ -4,7 +4,9 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  CORPUS_CURSOR_GROUP_TOKEN_CHARS,
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
+  CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
@@ -14,6 +16,7 @@ import {
   type ExpansionDictionaryIdentity,
   NO_EXPANSION_DICTIONARY_IDENTITY,
 } from "@/api/lib/legal-search/morphology/dictionary";
+import { LIMITS } from "@/api/lib/limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
 
 const HASH_A = "a".repeat(64);
@@ -369,4 +372,80 @@ test("encode → decode round-trips every window, identity and order", () => {
     ),
     propertyConfig(),
   );
+});
+
+test("a continuation carries the groups earlier windows showed, with or without a target", () => {
+  const groups = ["AbC_1-", "zz9900"];
+  for (const target of [null, TARGET_A]) {
+    const cursor = {
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      excludedGroups: groups,
+      id: DECISION_ID,
+      score: 1.25,
+      sort: "relevance" as const,
+      target,
+      windowStart: 900,
+    };
+
+    const encoded = encodeCorpusSearchCursor(cursor);
+
+    expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+    expect(encoded.length).toBeLessThanOrEqual(
+      CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    );
+  }
+});
+
+test("a cursor without groups keeps the form it had", () => {
+  const cursor = {
+    dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+    id: DECISION_ID,
+    score: 0.5,
+    sort: "relevance" as const,
+    target: null,
+    windowStart: 0,
+  };
+
+  expect(encodeCorpusSearchCursor({ ...cursor, excludedGroups: [] })).toBe(
+    encodeCorpusSearchCursor(cursor),
+  );
+  expect(decodeCorpusSearchCursor(encodeCorpusSearchCursor(cursor))).toEqual(
+    cursor,
+  );
+});
+
+test("the longest groups segment still fits the declared cap", () => {
+  const cursor = {
+    dictionary: DICTIONARY_A,
+    excludedGroups: Array.from(
+      { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
+      (_, index) =>
+        String(index).padStart(CORPUS_CURSOR_GROUP_TOKEN_CHARS, "0"),
+    ),
+    id: DECISION_ID,
+    score: -2.2250738585072014e-308,
+    sort: "relevance" as const,
+    target: TARGET_A,
+    windowStart: 9_999_999_999,
+  };
+
+  expect(encodeCorpusSearchCursor(cursor).length).toBeLessThanOrEqual(
+    CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+  );
+});
+
+test.each([
+  ["a groups segment of a partial token", "xabc"],
+  ["an empty groups segment", "x"],
+  ["a token outside the alphabet", "xab.def"],
+  [
+    "more groups than the bound",
+    `x${"a".repeat(CORPUS_CURSOR_GROUP_TOKEN_CHARS * (LIMITS.corpusIndexSearchMaxExcludedGroups + 1))}`,
+  ],
+])("refuses %s", (_label, segment) => {
+  expect(
+    decodeCorpusSearchCursor(
+      encodeCursor(0.5, `900:none:relevance:${segment}:${DECISION_ID}`),
+    ),
+  ).toBeNull();
 });
