@@ -679,13 +679,11 @@ const SourceChip = ({
   active: boolean;
   label: string;
   onSelect: () => void;
-}) => 
-  (
-    <ToggleChip active={active} className="px-2.5 py-1" onClick={onSelect}>
-      {label}
-    </ToggleChip>
-  )
-;
+}) => (
+  <ToggleChip active={active} className="px-2.5 py-1" onClick={onSelect}>
+    {label}
+  </ToggleChip>
+);
 
 const FormRow = ({
   children,
@@ -733,13 +731,11 @@ const Section = ({
 }: {
   title: string;
   children: ReactNode;
-}) => 
-  (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-base font-semibold">{title}</h2>
-      <div className="text-muted-foreground flex flex-col gap-2 text-sm leading-relaxed">
-        {children}
-      </div>
-    </section>
-  )
-;
+}) => (
+  <section className="flex flex-col gap-2">
+    <h2 className="text-base font-semibold">{title}</h2>
+    <div className="text-muted-foreground flex flex-col gap-2 text-sm leading-relaxed">
+      {children}
+    </div>
+  </section>
+);

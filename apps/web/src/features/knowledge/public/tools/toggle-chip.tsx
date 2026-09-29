@@ -38,21 +38,19 @@ export const ToggleChip = ({
   // on AssignmentPattern property values (BuildHIR::lowerAssignment Todo),
   // so the default is applied at the use site instead.
   variant,
-}: ToggleChipProps) => 
-  (
-    <Button
-      aria-pressed={active}
-      className={cn(
-        "h-auto rounded-md px-2 py-0.5",
-        active ? SELECTED_TOGGLE_CHIP_CLASS : "text-muted-foreground",
-        className,
-      )}
-      onClick={onClick}
-      size="sm"
-      type="button"
-      variant={variant ?? "outline"}
-    >
-      {children}
-    </Button>
-  )
-;
+}: ToggleChipProps) => (
+  <Button
+    aria-pressed={active}
+    className={cn(
+      "h-auto rounded-md px-2 py-0.5",
+      active ? SELECTED_TOGGLE_CHIP_CLASS : "text-muted-foreground",
+      className,
+    )}
+    onClick={onClick}
+    size="sm"
+    type="button"
+    variant={variant ?? "outline"}
+  >
+    {children}
+  </Button>
+);
