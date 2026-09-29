@@ -336,7 +336,7 @@ export const normalizeRateLimitClientAddress = (identity: string): string => {
     .correctForm();
 };
 
-type RateLimitClientAddressOptions = {
+export type RateLimitClientAddressOptions = {
   request: Request;
   server: ServerLike | null;
   clientAddressOptions?: ClientAddressOptions;

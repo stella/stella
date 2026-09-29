@@ -3,7 +3,10 @@ import { Elysia, type Context } from "elysia";
 
 import { Temporal } from "@stll/time";
 
-import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
+import {
+  type RateLimitClientAddressOptions,
+  resolveRateLimitClientAddress,
+} from "@/api/lib/client-ip";
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
@@ -73,26 +76,15 @@ export const scopedGenerator =
   (request, server) =>
     scopedRateLimitKey({ scope, request, server });
 
-type ScopedRateLimitKeyOptions = {
+type ScopedRateLimitKeyOptions = RateLimitClientAddressOptions & {
   scope: string;
-  request: Request;
-  server: RequestIpServer | null;
-  clientAddressOptions?: Parameters<
-    typeof resolveRateLimitClientAddress
-  >[0]["clientAddressOptions"];
 };
 
 export const scopedRateLimitKey = ({
   scope,
-  request,
-  server,
-  clientAddressOptions,
+  ...clientAddress
 }: ScopedRateLimitKeyOptions): string => {
-  const address = resolveRateLimitClientAddress({
-    request,
-    server,
-    clientAddressOptions,
-  });
+  const address = resolveRateLimitClientAddress(clientAddress);
   return address === null ? scope : `${scope}:${address}`;
 };
 
