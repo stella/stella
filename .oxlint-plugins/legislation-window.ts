@@ -158,6 +158,77 @@ const destructuredKeyOf = (binding: unknown): string | null => {
   return getPropertyName(property.key);
 };
 
+const isUnrelatedTableCallback = (callback: unknown): boolean => {
+  if (!isAstNode(callback)) {
+    return false;
+  }
+  const call = isAstNode(callback.parent) ? callback.parent : null;
+  const name =
+    call?.type === "CallExpression" ? getCalleeName(call.callee) : null;
+  const args = call && Array.isArray(call.arguments) ? call.arguments : [];
+  const tableName = args.at(0);
+  return (
+    name?.split(".").at(-1) === "pgTable" &&
+    args.at(2) === callback &&
+    isStringLiteral(tableName) &&
+    !tableName.value.startsWith("legislation")
+  );
+};
+
+// Generic validity fields also belong to unrelated schema tables. Keep
+// ambiguous helper references guarded; exempt only a proven table origin.
+const isUnrelatedSchemaTable = (
+  context: ScopeContext,
+  node: unknown,
+  seen = new Set<unknown>(),
+): boolean => {
+  const expression = unwrapExpression(node);
+  if (!isIdentifierReference(expression) || seen.has(expression)) {
+    return false;
+  }
+  seen.add(expression);
+  const variable = resolveVariable(context, expression);
+  const definition = variable?.defs.at(0);
+  if (
+    variable === null ||
+    definition === undefined ||
+    variable.defs.length !== 1
+  ) {
+    return false;
+  }
+  if (
+    definition.type === "ImportBinding" &&
+    isAstNode(definition.node) &&
+    definition.node.type === "ImportSpecifier" &&
+    isAstNode(definition.parent) &&
+    definition.parent.type === "ImportDeclaration" &&
+    isStringLiteral(definition.parent.source)
+  ) {
+    const source = definition.parent.source.value;
+    return (
+      source === "@/api/db/schema/billing" ||
+      (source === "@/api/db/schema" &&
+        getPropertyName(definition.node.imported) === "vatRates")
+    );
+  }
+  if (definition.type === "Parameter" && isAstNode(definition.node)) {
+    return (
+      Array.isArray(definition.node.params) &&
+      definition.node.params.at(0) === definition.name &&
+      isUnrelatedTableCallback(definition.node)
+    );
+  }
+  const declarator = definition.node;
+  return (
+    definition.type === "Variable" &&
+    isSingleAssignment(variable) &&
+    isAstNode(declarator) &&
+    declarator.type === "VariableDeclarator" &&
+    isIdentifier(declarator.id) &&
+    isUnrelatedSchemaTable(context, declarator.init, seen)
+  );
+};
+
 // Whether an expression reads one of the given window properties, through
 // the spellings a reader can use: `x.versionValidFrom`, `x?.validTo`,
 // `x["validFrom"]`, `(x.validFrom as SQL)`, a const bound to one
@@ -176,7 +247,12 @@ const readsWindowProperty = (
   seen.add(expression);
   if (expression.type === "MemberExpression") {
     const name = memberPropertyName(expression);
-    return name !== null && names.has(name);
+    return (
+      name !== null &&
+      names.has(name) &&
+      (COLUMN_PROPERTIES.has(name) ||
+        !isUnrelatedSchemaTable(context, expression.object))
+    );
   }
   if (!isIdentifierReference(expression)) {
     return false;
@@ -193,7 +269,14 @@ const readsWindowProperty = (
   }
   const key = destructuredKeyOf(definition.name);
   if (key !== null) {
-    return names.has(key);
+    const declaration = definition.node;
+    return (
+      names.has(key) &&
+      (COLUMN_PROPERTIES.has(key) ||
+        !isAstNode(declaration) ||
+        declaration.type !== "VariableDeclarator" ||
+        !isUnrelatedSchemaTable(context, declaration.init))
+    );
   }
   const declarator: unknown = definition.node;
   return (

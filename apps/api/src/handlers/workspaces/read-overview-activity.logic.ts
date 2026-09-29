@@ -196,6 +196,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   seller_profile: null,
   saved_time_narrative: null,
   number_series: null,
+  vat_rate: null,
   signal: null,
   style_set: null,
   template: null,
