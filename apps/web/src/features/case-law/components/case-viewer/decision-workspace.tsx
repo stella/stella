@@ -365,7 +365,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const exampleMarginItems: AnalysisMarginItem[] =
     visitorOffer !== undefined
       ? exampleNoteAnchors({
-          anchorIds: visibleDecisionBlocks(ast).map((block) => block.anchorId),
+          anchorIds: visibleDecisionBlocks(ast, decision.caseNumberType).map(
+            (block) => block.anchorId,
+          ),
           seed: decisionId,
         }).flatMap((startAnchorId, index) => {
           const note = EXAMPLE_NOTES.at(index);
