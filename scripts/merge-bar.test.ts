@@ -13,6 +13,7 @@ import {
   mergeWhenReadyAction,
   readMergeHandoff,
   requiredChecksSucceeded,
+  verifyFrontOfQueue,
   type MergeBarSnapshot,
 } from "./merge-bar";
 
@@ -247,6 +248,7 @@ esac
         rmSync(directory, { recursive: true, force: true });
       }
     },
+    15_000,
   );
 
   // A real run refuses to jump while checks are running; a dry run of the same
@@ -947,6 +949,73 @@ describe("release pull requests jump the merge queue", () => {
         checksSucceeded: false,
       }),
     ).toEqual({ kind: "already-armed", enabledAt: "2026-09-28T09:00:00Z" });
+  });
+
+  test.each([
+    { positions: [6, 1], exitCode: 0, sleeps: 1, seen: "6, 1" },
+    {
+      positions: [6, 6, 6, 6, 6],
+      exitCode: 1,
+      sleeps: 4,
+      seen: "6, 6, 6, 6, 6",
+    },
+    { positions: [1], exitCode: 0, sleeps: 0, seen: "1" },
+  ])(
+    "queue placement settles with reads $positions",
+    ({ positions, exitCode, sleeps, seen }) => {
+      const delays: number[] = [];
+      let reads = 0;
+      const verdict = verifyFrontOfQueue({
+        gateway: {
+          readMergeQueue: (branch) => {
+            expect(branch).toBe("main");
+            const position = positions.at(reads);
+            expect(position).toBeDefined();
+            reads += 1;
+            return position === undefined
+              ? []
+              : [{ pullNumber: 4112, position }];
+          },
+          sleep: (milliseconds) => {
+            delays.push(milliseconds);
+          },
+        },
+        pullNumber: 4112,
+        branch: "main",
+        context: "jump accepted",
+        release: false,
+      });
+      expect(verdict.exitCode).toBe(exitCode);
+      expect(verdict.message).toContain(
+        exitCode === 0 ? "QUEUED AT THE FRONT" : "NOT AT THE FRONT",
+      );
+      expect(verdict.message).toContain(`positions seen: ${seen}`);
+      expect(reads).toBe(positions.length);
+      expect(delays).toHaveLength(sleeps);
+      expect(
+        delays.reduce((total, delay) => total + delay, 0),
+      ).toBeLessThanOrEqual(20_000);
+    },
+  );
+
+  test.each([
+    { entries: [] },
+    {
+      entries: [
+        { pullNumber: 4112, position: 1 },
+        { pullNumber: 4101, position: 0 },
+      ],
+    },
+  ])("incomplete or conflicting queue reads fail closed: %j", ({ entries }) => {
+    const verdict = verifyFrontOfQueue({
+      gateway: { readMergeQueue: () => entries, sleep: () => {} },
+      pullNumber: 4112,
+      branch: "main",
+      context: "jump accepted",
+      release: false,
+    });
+    expect(verdict.exitCode).toBe(1);
+    expect(verdict.message).toContain("NOT AT THE FRONT");
   });
 
   test("a pull request first in the queue is at the front", () => {

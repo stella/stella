@@ -519,6 +519,7 @@ type GitHubGateway = {
     expectedHeadSha: string;
   }) => number;
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
+  sleep: (milliseconds: number) => void;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -680,6 +681,57 @@ export const formatQueuePlacementFailure = (
     .join(", ")}`;
 };
 
+const QUEUE_SETTLE_ATTEMPTS = 5;
+const QUEUE_SETTLE_INTERVAL_MS = 2000;
+
+type VerifyFrontOfQueueOptions = {
+  gateway: Pick<GitHubGateway, "readMergeQueue" | "sleep">;
+  pullNumber: number;
+  branch: string;
+  context: string;
+  release: boolean;
+};
+
+// The enqueue mutation can precede the updated queue snapshot. Only a read
+// proving first place succeeds; exhausted or incomplete snapshots fail closed.
+export const verifyFrontOfQueue = ({
+  gateway,
+  pullNumber,
+  branch,
+  context,
+  release,
+}: VerifyFrontOfQueueOptions): { exitCode: 0 | 1; message: string } => {
+  const positionsSeen: (number | "absent")[] = [];
+  for (let attempt = 0; attempt < QUEUE_SETTLE_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      gateway.sleep(QUEUE_SETTLE_INTERVAL_MS);
+    }
+    const placement = evaluateQueuePlacement({
+      entries: gateway.readMergeQueue(branch),
+      pullNumber,
+    });
+    positionsSeen.push(
+      placement.status === "absent" ? "absent" : placement.position,
+    );
+    const positions = `positions seen: ${positionsSeen.join(", ")}`;
+    if (placement.status === "front") {
+      return {
+        exitCode: 0,
+        message: `\nverdict: QUEUED AT THE FRONT — ${context}; verified first in the queue (position ${placement.position}); ${positions}${release ? " (release pull request)" : ""}`,
+      };
+    }
+    if (attempt === QUEUE_SETTLE_ATTEMPTS - 1) {
+      return {
+        exitCode: 1,
+        message:
+          `\nverdict: NOT AT THE FRONT — ${context}, but ${formatQueuePlacementFailure(placement)}; ${positions}. ` +
+          "The entries ahead of it merge first. Dequeue it, then run the bar again to jump.",
+      };
+    }
+  }
+  return panic("Queue settle schedule must contain at least one attempt");
+};
+
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
   const value = record[key];
   if (typeof value !== "boolean") {
@@ -783,6 +835,7 @@ const createGhGateway = ({
   const prArgs = [String(pullNumber), "--repo", repo];
 
   return {
+    sleep: (milliseconds) => Bun.sleepSync(milliseconds),
     readHeadSha: () =>
       readString(
         readRecord(
@@ -1231,28 +1284,20 @@ if (import.meta.main) {
     pullRequest.baseRefName,
   );
   const jump = options.jump || isReleasePullRequest(pullRequest);
-  // A jump is only done once a fresh queue read shows the pull request first;
-  // anything else exits non-zero, because the entries ahead of it merge
-  // before it does.
   const requireFrontOfQueue = (context: string): void => {
-    const placement = evaluateQueuePlacement({
-      entries: gateway.readMergeQueue(pullRequest.baseRefName),
+    const verdict = verifyFrontOfQueue({
+      gateway,
       pullNumber: pullRequest.number,
+      branch: pullRequest.baseRefName,
+      context,
+      release: !options.jump,
     });
-    if (placement.status === "front") {
-      console.log(
-        `\nverdict: QUEUED AT THE FRONT — ${context}; verified first in the queue (position ${placement.position})${
-          options.jump ? "" : " (release pull request)"
-        }`,
-      );
+    if (verdict.exitCode === 0) {
+      console.log(verdict.message);
       return;
     }
-    console.error(
-      `\nverdict: NOT AT THE FRONT — ${context}, but ${formatQueuePlacementFailure(placement)}. ` +
-        "The entries ahead of it merge first. Dequeue it, then run the bar " +
-        "again to jump.",
-    );
-    process.exit(1);
+    console.error(verdict.message);
+    process.exit(verdict.exitCode);
   };
   if (
     policy.landing === "merge-when-ready" &&
