@@ -8214,7 +8214,7 @@ export type WebRoutes = {
                         status: "cancelled";
                       } | {
                         id: T348bff1a92;
-                        reason: T91be5f6aad;
+                        reason: T4c74477486;
                         status: "interrupted";
                       };
                     };
@@ -32583,7 +32583,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 }>, unknown, undefined> & {
-  metadata?: T417792d11a;
+  metadata?: T0afdf1a25a;
 });
 
 export type ChatPart = (tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_SubagentPart | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | tanstack_ai_client_ToolResultPart | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | Te0862af907 | Te2f4644948 | T7177f7c683 | Ta85ccee7af | T7e246539c7 | T5fcbd957c4 | T3f7112bc47 | Tdd40b6002f | T63213f6a66 | T37645f97e3 | Tb675330ce6 | Teff0fd014f | T291799859b | Tfd761de317 | Ta9703ec17d | Td43d5a192e | T7f8a36b7e8 | T1906714431 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T87debc7a12 | Tda26afd3a5 | Ta70c642bca | Tebb9fbb4f8 | Ta5b5eca36c | Tbcccb22aed | Tb33e966012 | T580bd0de31 | Td55da643d6 | Td15a61239d | T4b08c72cf3 | Td8667c9636 | T9f7b063dac | Tb23918f1b2 | T3dd22338ec);
@@ -33333,6 +33333,102 @@ type T0a1c0a6ee4 = {
 
 type T0a54ae7a2b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListSection";
+};
+
+type T0afdf1a25a = {
+  activeDraftContext?: {
+    type: "generated-document";
+    originChatMessageId: T66e92cdab1;
+    originChatThreadId: Taf779979ed;
+    toolCallId: string;
+    version: 1;
+  } | undefined;
+  anonRestorations?: {
+    pairs: Array<Tc7eaf8104c>;
+  } | undefined;
+  docxEditPreferences?: {
+    docxEditRepresentation?: "direct" | "tracked-changes" | undefined;
+    editApplyMode?: "auto" | "manual" | undefined;
+  } | undefined;
+  mentions?: {
+    mentions: Array<((Ta3fb0e1ff6 & {
+      category: "entity";
+      resource: T2a53b33d09;
+      workspaceId: Tbe0400fa4c;
+    }) | (Ta3fb0e1ff6 & {
+      category: "workspace";
+      resource: T4c3eeb6df3;
+    }))>;
+  } | undefined;
+  refEncoding?: "persisted-resource-ids-v1" | "persisted-resource-refs-v2" | undefined;
+  refContext?: (T41b8bd81bd & {
+    version: 1;
+  }) | (T41b8bd81bd & {
+    version: 2;
+    refs: Array<{
+      kind: "contact";
+      ref: string;
+      contact: T346ea860b1;
+    } | {
+      kind: "entity";
+      ref: string;
+      entity: T2a53b33d09;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "matter";
+      ref: string;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "property";
+      ref: string;
+      property: {
+        readonly type: "property";
+        readonly id: stll_api_contract_SafeId<"property">;
+      };
+    } | {
+      kind: "source";
+      ref: string;
+      href: `#stella-source=${string}`;
+    }>;
+  }) | undefined;
+  serverProvenance?: {
+    type: "search-summary";
+    version: 1;
+  } | undefined;
+  sourceDocuments?: Array<Tcde02c03e1> | undefined;
+  turnOutcome?: {
+    type: "awaiting-user";
+    interaction: {
+      type: "approval";
+      toolCallId: string;
+    } | {
+      type: "ask-user";
+      toolCallId: string;
+    } | {
+      type: "client-tool";
+      toolCallId: string;
+    };
+  } | {
+    type: "completed";
+  } | {
+    type: "cancelled";
+    reason: T5e702ac6d9;
+  } | {
+    type: "failed";
+    error: ("empty_completion" | "loop_detected" | "model_unavailable" | "provider_billing" | "provider_credentials_rejected" | "provider_stream_incomplete" | "provider_unavailable" | "quota_exhausted" | "unknown");
+  } | {
+    type: "interrupted";
+    reason: T4c74477486;
+  } | undefined;
+  usage?: {
+    totalTokens: number;
+    completionTokens: number;
+    promptTokens: number;
+  } & {
+    completionTokensDetails?: {
+      reasoningTokens?: number;
+    } | undefined;
+  } | undefined;
 };
 
 type T0aff3edf22 = {
@@ -35185,102 +35281,6 @@ type T406326c84f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawDecision";
 };
 
-type T417792d11a = {
-  activeDraftContext?: {
-    type: "generated-document";
-    originChatMessageId: T66e92cdab1;
-    originChatThreadId: Taf779979ed;
-    toolCallId: string;
-    version: 1;
-  } | undefined;
-  anonRestorations?: {
-    pairs: Array<Tc7eaf8104c>;
-  } | undefined;
-  docxEditPreferences?: {
-    docxEditRepresentation?: "direct" | "tracked-changes" | undefined;
-    editApplyMode?: "auto" | "manual" | undefined;
-  } | undefined;
-  mentions?: {
-    mentions: Array<((Ta3fb0e1ff6 & {
-      category: "entity";
-      resource: T2a53b33d09;
-      workspaceId: Tbe0400fa4c;
-    }) | (Ta3fb0e1ff6 & {
-      category: "workspace";
-      resource: T4c3eeb6df3;
-    }))>;
-  } | undefined;
-  refEncoding?: "persisted-resource-ids-v1" | "persisted-resource-refs-v2" | undefined;
-  refContext?: (T41b8bd81bd & {
-    version: 1;
-  }) | (T41b8bd81bd & {
-    version: 2;
-    refs: Array<{
-      kind: "contact";
-      ref: string;
-      contact: T346ea860b1;
-    } | {
-      kind: "entity";
-      ref: string;
-      entity: T2a53b33d09;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "matter";
-      ref: string;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "property";
-      ref: string;
-      property: {
-        readonly type: "property";
-        readonly id: stll_api_contract_SafeId<"property">;
-      };
-    } | {
-      kind: "source";
-      ref: string;
-      href: `#stella-source=${string}`;
-    }>;
-  }) | undefined;
-  serverProvenance?: {
-    type: "search-summary";
-    version: 1;
-  } | undefined;
-  sourceDocuments?: Array<Tcde02c03e1> | undefined;
-  turnOutcome?: {
-    type: "awaiting-user";
-    interaction: {
-      type: "approval";
-      toolCallId: string;
-    } | {
-      type: "ask-user";
-      toolCallId: string;
-    } | {
-      type: "client-tool";
-      toolCallId: string;
-    };
-  } | {
-    type: "completed";
-  } | {
-    type: "cancelled";
-    reason: T5e702ac6d9;
-  } | {
-    type: "failed";
-    error: ("empty_completion" | "loop_detected" | "model_unavailable" | "provider_billing" | "provider_credentials_rejected" | "provider_stream_incomplete" | "provider_unavailable" | "quota_exhausted" | "unknown");
-  } | {
-    type: "interrupted";
-    reason: T91be5f6aad;
-  } | undefined;
-  usage?: {
-    totalTokens: number;
-    completionTokens: number;
-    promptTokens: number;
-  } & {
-    completionTokensDetails?: {
-      reasoningTokens?: number;
-    } | undefined;
-  } | undefined;
-};
-
 type T41b8bd81bd = {
   entities: Array<{
     entity: T2a53b33d09;
@@ -35567,6 +35567,8 @@ type T4c703c7179 = {
   propertyId: string;
   desc: Tfddd645dc8;
 };
+
+type T4c74477486 = "client-disconnected" | "owner-lost" | "timeout";
 
 type T4c7ffc5c98 = {
   readonly input: T09610a4d6a;
@@ -36286,7 +36288,7 @@ type T6b4b00e15b = {
 type T6b718d91dc = {
   createdAt: string;
   id: T66e92cdab1;
-  metadata?: T417792d11a;
+  metadata?: T0afdf1a25a;
   role: Tbc3d04c5ab;
   parts: Array<(tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | {
     type: "tool-result";
@@ -37140,8 +37142,6 @@ type T8ff9f6d126 = string & valibot_Brand<"SafeId"> & {
 type T9021211256 = Tb86085a330 | null;
 
 type T90864899a0 = "all" | "columns";
-
-type T91be5f6aad = "client-disconnected" | "timeout";
 
 type T921fd22a21 = {
   readonly input: Tddb0458281;
