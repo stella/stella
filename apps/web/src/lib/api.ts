@@ -3,4 +3,5 @@ export {
   correspondenceApi,
   memoriesApi,
   myTimeEntriesApi,
+  publicFeedbackApi,
 } from "@/lib/eden-client";

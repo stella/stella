@@ -5,6 +5,7 @@ import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useRouter, useRouterState } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { IntlProvider } from "use-intl";
 
 import { ToastProvider } from "@stll/ui/toast";
@@ -124,19 +125,24 @@ const AnalyticsAuthIdentity = () => {
   const authStatus = useClientAuthStatus();
 
   useExternalSyncEffect(() => {
-    if (authStatus.status === "checking") {
-      return;
+    switch (authStatus.status) {
+      // An unknown session keeps whatever identity analytics already holds.
+      case "checking":
+      case "unavailable":
+        return;
+      case "anonymous":
+        analytics.reset({ onlyIfIdentified: true });
+        return;
+      case "authenticated":
+        analytics.identifyUser({
+          id: authStatus.user.id,
+          activeOrganizationId: authStatus.user.activeOrganizationId,
+        });
+        return;
+      default:
+        authStatus satisfies never;
+        panic(`Unhandled session status: ${String(authStatus)}`);
     }
-
-    if (authStatus.status === "anonymous") {
-      analytics.reset({ onlyIfIdentified: true });
-      return;
-    }
-
-    analytics.identifyUser({
-      id: authStatus.user.id,
-      activeOrganizationId: authStatus.user.activeOrganizationId,
-    });
   }, [analytics, authStatus]);
 
   return null;

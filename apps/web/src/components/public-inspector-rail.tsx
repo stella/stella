@@ -9,12 +9,14 @@ import {
   resolveInspectorDockWidth,
   useInspectorPaneWidth,
 } from "@stll/ui/inspector";
+import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/toast";
 import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
 import { useSidebarInlineSize } from "@/components/sidebar";
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 /**
  * Public twin of the inspector side rail: same geometry and chrome as the
@@ -82,15 +84,34 @@ export const PublicInspectorDock = ({
     viewportWidth,
   });
 
+  const dockWidth = resolveInspectorDockWidth({
+    paneWidth: width,
+    showPaneContent: expanded,
+  });
+  const widthPx = `${dockWidth}px`;
+
+  // Toasts and a document's find bar sit beside the dock, not beneath it.
+  useExternalSyncEffect(() => {
+    document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
+    document.documentElement.style.setProperty(
+      "--folio-find-replace-right",
+      widthPx,
+    );
+
+    return () => {
+      document.documentElement.style.removeProperty(TOAST_RIGHT_OFFSET_VAR);
+      document.documentElement.style.removeProperty(
+        "--folio-find-replace-right",
+      );
+    };
+  }, [widthPx]);
+
   return (
     <InspectorDock
       resizeHandleLabel={t("inspector.resizePane")}
       resizeHandleProps={resizeHandleProps}
       showPaneContent={expanded}
-      width={resolveInspectorDockWidth({
-        paneWidth: width,
-        showPaneContent: expanded,
-      })}
+      width={dockWidth}
       onResetWidth={resetWidth}
     >
       {children}
