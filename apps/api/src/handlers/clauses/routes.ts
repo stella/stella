@@ -23,6 +23,8 @@ import restoreClauseVersion from "@/api/handlers/clauses/versions/restore";
 import clauseVersionSummarize from "@/api/handlers/clauses/versions/summarize";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
+const TENANT_CACHE_CONTROL = "private, no-store";
+
 // ── Categories ──────────────────────────────────────
 
 export const clauseCategoriesRoute = new Elysia({
@@ -53,6 +55,9 @@ export const clauseCategoriesRoute = new Elysia({
 export const clausesRoute = new Elysia({
   prefix: "/clauses",
 })
+  .onRequest(({ set }) => {
+    set.headers["Cache-Control"] = TENANT_CACHE_CONTROL;
+  })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
