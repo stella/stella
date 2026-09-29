@@ -8963,7 +8963,7 @@ export type WebRoutes = {
                 firstVersionValidFrom: Tbe0400fa4c;
                 amendmentCount: number;
                 lastAmendedOn: Tbe0400fa4c;
-                validity: ("ended" | "in-force");
+                validity: ("unknown" | "never-in-force" | "ended" | "in-force");
               }>;
               nextCursor: Tbe0400fa4c;
               limit: number;
@@ -9175,6 +9175,10 @@ export type WebRoutes = {
                 readonly message: "Legislation document not found";
               } | {
                 readonly message: "No version of this legislation was in force on the given date";
+              } | {
+                code: "publisher_window_inconsistent";
+                message: string;
+                versions: ReadonlyArray<T7b73f082e3>;
               };
               409: T9a51b7d2bc;
               413: T9a51b7d2bc;
@@ -9225,7 +9229,10 @@ export type WebRoutes = {
                     language: string;
                     versionValidFrom: Tbe0400fa4c;
                     versionValidTo: Tbe0400fa4c;
+                    expressionKind: Tbf853c76ba;
+                    windowDisposition: T152fa670a3;
                   });
+                  unresolvedReason: (null | "publisher-data-inconsistent");
                 }>;
               });
               400: T9a51b7d2bc;
@@ -9314,6 +9321,10 @@ export type WebRoutes = {
                 } | {
                   readonly message: "Legislation document not found";
                 } | {
+                  code: "publisher_window_inconsistent";
+                  message: string;
+                  versions: ReadonlyArray<T7b73f082e3>;
+                } | {
                   readonly message: "No version of this legislation was in force on the given date";
                 };
                 409: T9a51b7d2bc;
@@ -9391,6 +9402,11 @@ export type WebRoutes = {
               response: {
                 200: (T279717e2be | {
                   items: Array<{
+                    sourceUrl: Tbe0400fa4c;
+                    documentUrl: Tbe0400fa4c;
+                    expressionKind: Tbf853c76ba;
+                    windowDisposition: T152fa670a3;
+                    windowDispositionBasis: Tc750daff47;
                     id: Tfc8a750351;
                     eli: string;
                     slug: Tbe0400fa4c;
@@ -9402,8 +9418,6 @@ export type WebRoutes = {
                     effectiveDate: Tbe0400fa4c;
                     versionValidFrom: Tbe0400fa4c;
                     versionValidTo: Tbe0400fa4c;
-                    sourceUrl: Tbe0400fa4c;
-                    documentUrl: Tbe0400fa4c;
                   } & {
                     isDefault: Tfddd645dc8;
                   }>;
@@ -9569,6 +9583,9 @@ export type WebRoutes = {
                         documentId: Tfc8a750351;
                         versionValidFrom: Tbe0400fa4c;
                         versionValidTo: Tbe0400fa4c;
+                        expressionKind: Tbf853c76ba;
+                        windowDisposition: T152fa670a3;
+                        windowDispositionBasis: Tc750daff47;
                       }>;
                       nextCursor: Tbe0400fa4c;
                       limit: number;
@@ -10136,7 +10153,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: T346b54ceed;
+              200: T5f2f7cb1d6;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -24168,7 +24185,7 @@ export type WebRoutes = {
                         name: string;
                         description: Tbe0400fa4c;
                         itemType: ("issue" | "task" | "fact" | "requirement" | "event");
-                        itemStatus: (null | "open" | "in_progress" | "in_review" | "done" | "cancelled");
+                        itemStatus: (null | "done" | "open" | "in_progress" | "in_review" | "cancelled");
                         priority: (null | "none" | "medium" | "urgent" | "high" | "low");
                         dueDate: Tbe0400fa4c;
                         suggestedAssigneeUserIds: Array<T56ed95d57c>;
@@ -33452,6 +33469,8 @@ type T13c40e7e09 = {
   domain: string;
 };
 
+type T152fa670a3 = "effective" | "never-in-force" | "invalid-window" | "withdrawn";
+
 type T15dbebb935 = "nda" | "dpa" | "msa" | "saas";
 
 type T15e45ddbb1 = {
@@ -34396,74 +34415,6 @@ type T32fdeee18e = {
 
 type T34252d475f = {
   viewId: T7e10a0d884;
-};
-
-type T346b54ceed = {
-  documentAst: (null | {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: undefined | "decision-title" | "section-heading";
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
-      note?: undefined | T1d6100d20a;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
-      number?: undefined | number;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: undefined | "related-proceedings" | "metadata-table";
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
-        header?: undefined | true;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: undefined | string;
-      width?: undefined | number;
-      height?: undefined | number;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4);
-  fulltext: Tbe0400fa4c;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  id: Tfc8a750351;
 };
 
 type T346ea860b1 = {
@@ -35584,6 +35535,77 @@ type T5eefd06bf2 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "contactExtractionUpload";
 };
 
+type T5f2f7cb1d6 = {
+  documentAst: (null | {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: undefined | "decision-title" | "section-heading";
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      note?: undefined | T1d6100d20a;
+      listDepth?: undefined | 1 | 2 | 3 | 4;
+      number?: undefined | number;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: undefined | "related-proceedings" | "metadata-table";
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: undefined | number;
+        rowSpan?: undefined | number;
+        header?: undefined | true;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: undefined | string;
+      width?: undefined | number;
+      height?: undefined | number;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4);
+  fulltext: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  expressionKind: Tbf853c76ba;
+  windowDisposition: T152fa670a3;
+  windowDispositionBasis: Tc750daff47;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  id: Tfc8a750351;
+};
+
 type T60db7b1f8f = "new" | "handled";
 
 type T60e51917c9 = null | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
@@ -36696,6 +36718,14 @@ type T7aebf701ec = "person" | "company-id" | "tax-id";
 type T7afaf18a37 = {
   url: string;
   maxChars: number;
+};
+
+type T7b73f082e3 = {
+  id: string;
+  language: string;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  basis: Tc750daff47;
 };
 
 type T7c5bb3a7e5 = {
@@ -38008,7 +38038,7 @@ type Tad027ba68a = {
 
 type Tad12f531bb = "included" | "held";
 
-type Tada6067f00 = T346b54ceed | T279717e2be;
+type Tada6067f00 = T5f2f7cb1d6 | T279717e2be;
 
 type Tae4c134ba8 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
 
@@ -38406,6 +38436,8 @@ type Tbedd195a15 = {
 
 type Tbf83a7d346 = string & valibot_Brand<"SafeId"> & T1c99d77bbc;
 
+type Tbf853c76ba = "consolidation" | "promulgated" | "unversioned";
+
 type Tbff0077d7c = {
   type: "tool-call";
   id: string;
@@ -38683,6 +38715,8 @@ type Tc73807a034 = {
   authority: string;
   url: string;
 };
+
+type Tc750daff47 = null | "publisher-flag" | "replaced-same-day" | "zero-length-window" | "reversed" | "missing-start" | "publisher-unlisted" | "listed-not-stored" | "deferred-promulgated";
 
 type Tc79049686d = "constitutional" | "supreme" | "regional" | "other";
 
