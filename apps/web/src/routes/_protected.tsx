@@ -1,17 +1,17 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
 import {
   loadProtectedContext,
   prefetchProtectedShell,
-  ProtectedAppFrame,
   ProtectedPendingSkeleton,
 } from "@/routes/-protected-app";
 
+// The signed-in frame itself renders from the root (`AppFrameHost`), above
+// this guard, so it stays mounted across every signed-in route.
 export const Route = createFileRoute("/_protected")({
   ssr: false,
   beforeLoad: loadProtectedContext,
   loader: prefetchProtectedShell,
-  component: ProtectedComponent,
   // This subtree is private and client-only. Rendering a loading
   // shell in SSR gives no SEO value and previously tripped React's
   // streamed Suspense boundary path under Bun in CI, so the fallback
@@ -21,12 +21,3 @@ export const Route = createFileRoute("/_protected")({
   // of flashing a blank white screen.
   pendingComponent: ProtectedPendingSkeleton,
 });
-
-function ProtectedComponent() {
-  const user = Route.useRouteContext({ select: (ctx) => ctx.user });
-  return (
-    <ProtectedAppFrame user={user}>
-      <Outlet />
-    </ProtectedAppFrame>
-  );
-}

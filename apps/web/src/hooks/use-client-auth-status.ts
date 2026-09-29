@@ -19,8 +19,19 @@ export type ClientAuthStatus =
       user: AuthenticatedUser;
     };
 
-export const useClientAuthStatus = (): ClientAuthStatus => {
-  const { data: sessionData, isError, isPending } = useQuery(sessionOptions);
+/**
+ * The visitor's session state. With `enabled: false` it reads only what the
+ * cache already holds and never asks the server; a caller that needs the
+ * state only on some pages passes it so the others stay request-free.
+ */
+export const useClientAuthStatus = ({
+  enabled = true,
+}: { enabled?: boolean } = {}): ClientAuthStatus => {
+  const {
+    data: sessionData,
+    isError,
+    isPending,
+  } = useQuery({ ...sessionOptions, enabled });
 
   if (isPending) {
     return {
