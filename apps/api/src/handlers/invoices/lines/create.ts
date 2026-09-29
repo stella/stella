@@ -6,7 +6,6 @@ import { abortableTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
-  INVOICE_STATUS,
   invoiceLines,
   timeEntries,
 } from "@/api/db/schema";
@@ -14,6 +13,7 @@ import {
   expenseLineDraft,
   type InvoiceLineDraft,
   insertInvoiceLines,
+  lockDraftInvoiceForLines,
   manualLineDraft,
   recalculateInvoiceTotals,
   tInvoiceLineQuantity,
@@ -23,7 +23,6 @@ import {
   tVatRateBps,
   tVatTreatment,
 } from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -107,10 +106,10 @@ const createInvoiceLine = createSafeHandler(
     const now = new Date();
 
     const txResult = await abortableTx(safeDb, async (tx) => {
-      const invoice = await lockInvoiceInStatus(tx, {
+      const invoice = await lockDraftInvoiceForLines(tx, {
         invoiceId: params.invoiceId,
+        organizationId: session.activeOrganizationId,
         workspaceId,
-        status: INVOICE_STATUS.DRAFT,
       });
       if (!invoice) {
         throw new HandlerError({

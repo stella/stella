@@ -40,6 +40,9 @@ const readInvoiceById = createSafeHandler(
       );
     }
 
+    // Totals over stored lines only; a read never writes. A draft from before
+    // invoice lines has none until its first line edit materialises them
+    // (`lockDraftInvoiceForLines`); its stored totalAmount still holds the sum.
     const totals = invoiceTotals(invoice.lines);
     if (totals.isErr()) {
       return Result.err(totals.error);

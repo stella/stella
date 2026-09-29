@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, max } from "drizzle-orm";
+import { and, asc, eq, isNull, max, notExists } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -19,7 +19,14 @@ import type {
 import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
-import { invoiceLines, invoices } from "@/api/db/schema";
+import {
+  expenses,
+  INVOICE_STATUS,
+  invoiceLines,
+  invoices,
+  timeEntries,
+} from "@/api/db/schema";
+import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CentsAmount } from "@/api/lib/money";
@@ -296,6 +303,142 @@ export const insertInvoiceLines = async (
       })),
     )
     .returning({ id: invoiceLines.id, source: invoiceLines.source });
+};
+
+/**
+ * Entries read and lines written per round: 16 bound columns per line stays
+ * far below the 65,535-parameter cap.
+ */
+const MATERIALISE_BATCH_SIZE = 500;
+
+/**
+ * Drafts created before invoice lines existed carry attached time entries and
+ * expenses but no lines, and their stored total is the sum of those entries.
+ * Totals now come from lines alone, so a line edit on such a draft would
+ * silently drop the entries from the total. This gives every attached entry
+ * without an unreleased line the line create-from-entries would have written
+ * (same builders, same 0 % VAT), appended after existing lines: time entries
+ * by date then id, then expenses the same way. An entry that already holds an
+ * unreleased line (here, or anywhere the partial unique indexes would refuse
+ * a second one) is skipped, so a second call writes nothing; the same filter
+ * pages through large invoices, since each written round drops out of it.
+ * Runs in the caller's transaction under the invoice row lock.
+ */
+const materialiseAttachedEntryLines = async (
+  tx: Transaction,
+  scope: InvoiceScope,
+): Promise<void> => {
+  const unlinedTimeEntries = () =>
+    tx
+      .select({
+        id: timeEntries.id,
+        billedMinutes: timeEntries.billedMinutes,
+        rateAtEntry: timeEntries.rateAtEntry,
+        narrative: timeEntries.narrative,
+        invoiceNarrative: timeEntries.invoiceNarrative,
+      })
+      .from(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.invoiceId, scope.invoiceId),
+          eq(timeEntries.workspaceId, scope.workspaceId),
+          notExists(
+            tx
+              .select({ id: invoiceLines.id })
+              .from(invoiceLines)
+              .where(
+                and(
+                  eq(invoiceLines.timeEntryId, timeEntries.id),
+                  isNull(invoiceLines.releasedAt),
+                ),
+              ),
+          ),
+        ),
+      )
+      .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
+      .limit(MATERIALISE_BATCH_SIZE);
+  const unlinedExpenses = () =>
+    tx
+      .select({
+        id: expenses.id,
+        amount: expenses.amount,
+        markup: expenses.markup,
+        description: expenses.description,
+        invoiceDescription: expenses.invoiceDescription,
+      })
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.invoiceId, scope.invoiceId),
+          eq(expenses.workspaceId, scope.workspaceId),
+          notExists(
+            tx
+              .select({ id: invoiceLines.id })
+              .from(invoiceLines)
+              .where(
+                and(
+                  eq(invoiceLines.expenseId, expenses.id),
+                  isNull(invoiceLines.releasedAt),
+                ),
+              ),
+          ),
+        ),
+      )
+      .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
+      .limit(MATERIALISE_BATCH_SIZE);
+
+  // audit: skip - the entries were attached (and audited) before; their
+  // lines restate the amount the invoice already bills.
+  for (;;) {
+    const batch = await unlinedTimeEntries();
+    await insertInvoiceLines(
+      tx,
+      scope,
+      batch.map((entry) => timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT)),
+    );
+    if (batch.length < MATERIALISE_BATCH_SIZE) {
+      break;
+    }
+  }
+  for (;;) {
+    const batch = await unlinedExpenses();
+    await insertInvoiceLines(
+      tx,
+      scope,
+      batch.map((expense) =>
+        expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT),
+      ),
+    );
+    if (batch.length < MATERIALISE_BATCH_SIZE) {
+      break;
+    }
+  }
+};
+
+/**
+ * Locks a draft invoice before its lines change and backfills lines for
+ * entries attached before lines existed (`materialiseAttachedEntryLines`), so
+ * the edit and the `recalculateInvoiceTotals` after it see every billed
+ * entry. Every handler that changes a draft's lines locks through here;
+ * returns `undefined` when the invoice is missing or not a draft.
+ *
+ * Reads do not call this: a read never writes, so a legacy draft reads with
+ * no lines and line totals of zero while its stored `totalAmount` keeps the
+ * entries' sum, until its first line edit materialises the lines.
+ */
+export const lockDraftInvoiceForLines = async (
+  tx: Transaction,
+  scope: InvoiceScope,
+) => {
+  const invoice = await lockInvoiceInStatus(tx, {
+    invoiceId: scope.invoiceId,
+    workspaceId: scope.workspaceId,
+    status: INVOICE_STATUS.DRAFT,
+  });
+  if (invoice) {
+    await materialiseAttachedEntryLines(tx, scope);
+  }
+  return invoice;
 };
 
 /** Invoice totals and VAT breakdown over stored lines. */

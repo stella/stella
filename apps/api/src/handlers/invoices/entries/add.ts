@@ -12,10 +12,10 @@ import {
   ATTACHED_ENTRY_LINE_VAT,
   expenseLineDraft,
   insertInvoiceLines,
+  lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -288,10 +288,10 @@ const addEntries = createSafeHandler(
       // mutate `time_entries`/`expenses`, so this handler must follow the
       // same order or a concurrent transaction can deadlock (see
       // `lockInvoiceInStatus`'s doc comment).
-      const invoiceCheck = await lockInvoiceInStatus(tx, {
+      const invoiceCheck = await lockDraftInvoiceForLines(tx, {
         invoiceId: params.invoiceId,
+        organizationId: session.activeOrganizationId,
         workspaceId,
-        status: INVOICE_STATUS.DRAFT,
       });
       if (!invoiceCheck) {
         return { ok: false as const };

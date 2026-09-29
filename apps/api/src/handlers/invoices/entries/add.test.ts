@@ -110,16 +110,22 @@ describe("addEntries currency enforcement", () => {
             };
           }
 
+          // The preflight read awaits the filter; the legacy-line backfill
+          // orders it and finds no attached entry without a line.
           return {
-            where: async () => [
-              {
-                id: toSafeId<"timeEntry">("te_1"),
-                status: BILLING_STATUS.APPROVED,
-                billable: true,
-                invoiceId: null,
-                currency: "USD",
-              },
-            ],
+            where: () =>
+              Object.assign(
+                Promise.resolve([
+                  {
+                    id: toSafeId<"timeEntry">("te_1"),
+                    status: BILLING_STATUS.APPROVED,
+                    billable: true,
+                    invoiceId: null,
+                    currency: "USD",
+                  },
+                ]),
+                { orderBy: () => ({ limit: async () => [] }) },
+              ),
           };
         },
       }),

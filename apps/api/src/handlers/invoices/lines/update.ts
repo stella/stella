@@ -5,9 +5,10 @@ import { t } from "elysia";
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import { abortableTx } from "@/api/db/safe-db";
-import { INVOICE_STATUS, invoiceLines } from "@/api/db/schema";
+import { invoiceLines } from "@/api/db/schema";
 import {
   type InvoiceLineDraft,
+  lockDraftInvoiceForLines,
   manualLineDraft,
   priceLines,
   recalculateInvoiceTotals,
@@ -17,7 +18,6 @@ import {
   tVatRateBps,
   tVatTreatment,
 } from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import {
@@ -65,7 +65,14 @@ const updateInvoiceLine = createSafeHandler(
     params: lineParamsSchema,
     body: updateLineBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     const changed = pickDefined(body, UPDATED_FIELDS);
     const changedFields = Object.keys(changed);
     if (changedFields.length === 0) {
@@ -77,10 +84,10 @@ const updateInvoiceLine = createSafeHandler(
 
     const result = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        const invoice = await lockInvoiceInStatus(tx, {
+        const invoice = await lockDraftInvoiceForLines(tx, {
           invoiceId: params.invoiceId,
+          organizationId: session.activeOrganizationId,
           workspaceId,
-          status: INVOICE_STATUS.DRAFT,
         });
         if (!invoice) {
           throw new HandlerError({

@@ -9,8 +9,10 @@ import {
   invoiceLines,
   timeEntries,
 } from "@/api/db/schema";
-import { recalculateInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import {
+  lockDraftInvoiceForLines,
+  recalculateInvoiceTotals,
+} from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -101,7 +103,14 @@ const removeEntries = createSafeHandler(
     params: invoiceParamsSchema,
     body: removeEntriesBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     if (
       (body.timeEntryIds?.length ?? 0) === 0 &&
       (body.expenseIds?.length ?? 0) === 0
@@ -150,10 +159,10 @@ const removeEntries = createSafeHandler(
         // mutate `time_entries`/`expenses`, so this handler must follow the
         // same order or a concurrent transaction can deadlock (see
         // `lockInvoiceInStatus`'s doc comment).
-        const invoiceCheck = await lockInvoiceInStatus(tx, {
+        const invoiceCheck = await lockDraftInvoiceForLines(tx, {
           invoiceId: params.invoiceId,
+          organizationId: session.activeOrganizationId,
           workspaceId,
-          status: INVOICE_STATUS.DRAFT,
         });
         if (!invoiceCheck) {
           return { ok: false as const };

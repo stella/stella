@@ -5,12 +5,13 @@ import { abortableTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
-  INVOICE_STATUS,
   invoiceLines,
   timeEntries,
 } from "@/api/db/schema";
-import { recalculateInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import {
+  lockDraftInvoiceForLines,
+  recalculateInvoiceTotals,
+} from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -32,15 +33,15 @@ const deleteInvoiceLine = createSafeHandler(
     mcp: { type: "capability", reason: "billing_admin" },
     params: lineParamsSchema,
   },
-  async function* ({ safeDb, workspaceId, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, workspaceId, params, recordAuditEvent }) {
     const now = new Date();
 
     const result = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        const invoice = await lockInvoiceInStatus(tx, {
+        const invoice = await lockDraftInvoiceForLines(tx, {
           invoiceId: params.invoiceId,
+          organizationId: session.activeOrganizationId,
           workspaceId,
-          status: INVOICE_STATUS.DRAFT,
         });
         if (!invoice) {
           throw new HandlerError({

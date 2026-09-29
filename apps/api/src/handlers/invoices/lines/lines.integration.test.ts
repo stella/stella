@@ -330,6 +330,90 @@ describe("invoice lines", () => {
     ]);
   });
 
+  test("editing a draft from before invoice lines keeps its attached entries in the total", async () => {
+    const legacy = await seedLegacyDraft();
+    // A read never writes: the legacy draft shows no lines until an edit.
+    expect(await runGet(legacy.invoiceId)).toMatchObject({
+      lines: [],
+      totalAmount: legacy.totalAmount,
+    });
+
+    // 1000 net at 21 % is 1210 gross.
+    const created = await runCreate(
+      legacy.invoiceId,
+      manual({ quantity: "1", unitPriceMinor: 1000 }, STANDARD_RATE),
+    );
+    expect(created).toMatchObject({
+      totals: { grossAmountMinor: legacy.totalAmount + 1210 },
+    });
+
+    const detail = await runGet(legacy.invoiceId);
+    expect(detail).toMatchObject({ totalAmount: legacy.totalAmount + 1210 });
+    expect(
+      readLines(detail).map((line) => [
+        line.position,
+        line.source,
+        line.timeEntryId ?? line.expenseId,
+        line.netAmount,
+        line.vatRateBps,
+      ]),
+    ).toEqual([
+      ...legacy.timeEntries.map((entry, index) => [
+        index,
+        "time_entry",
+        entry.id,
+        entry.netAmount,
+        0,
+      ]),
+      [2, "expense", legacy.expenseId, 11_000, 0],
+      [3, "manual", null, 1000, STANDARD_RATE],
+    ]);
+  });
+
+  test("materialising a legacy draft's entry lines happens once", async () => {
+    const legacy = await seedLegacyDraft();
+    const lineId = await expectCreated(
+      legacy.invoiceId,
+      manual({ quantity: "1", unitPriceMinor: 1000 }, STANDARD_RATE),
+    );
+
+    expect(
+      await runUpdate(legacy.invoiceId, lineId, { vatRateBps: 0 }),
+    ).toMatchObject({
+      totals: { grossAmountMinor: legacy.totalAmount + 1000 },
+    });
+    await expectCreated(
+      legacy.invoiceId,
+      manual({ quantity: "2", unitPriceMinor: 50 }, 0),
+    );
+
+    const lines = await testDb
+      .select({
+        source: invoiceLines.source,
+        timeEntryId: invoiceLines.timeEntryId,
+        expenseId: invoiceLines.expenseId,
+      })
+      .from(invoiceLines)
+      .where(eq(invoiceLines.invoiceId, legacy.invoiceId));
+    expect(lines).toHaveLength(5);
+    expect(
+      lines
+        .map((line) => line.timeEntryId ?? line.expenseId)
+        .filter((id) => id !== null)
+        .toSorted(),
+    ).toEqual(
+      [
+        ...legacy.timeEntries.map((entry) => entry.id),
+        legacy.expenseId,
+      ].toSorted(),
+    );
+    const [invoice] = await testDb
+      .select({ totalAmount: invoices.totalAmount })
+      .from(invoices)
+      .where(eq(invoices.id, legacy.invoiceId));
+    expect(invoice?.totalAmount).toBe(cents(legacy.totalAmount + 1100));
+  });
+
   test("row-level security keeps another organization's lines out of reach", async () => {
     const invoiceId = await seedInvoice();
     await expectCreated(
@@ -471,6 +555,7 @@ type ReadLine = {
   netAmount: number;
   vatRateBps: number;
   timeEntryId: string | null;
+  expenseId: string | null;
   releasedAt: string | null;
 };
 
@@ -556,6 +641,39 @@ const seedExpense = async ({
     status: BILLING_STATUS.APPROVED,
   });
   return id;
+};
+
+/**
+ * A draft as the code before invoice lines left it: entries attached and
+ * billed, no lines, and the total their billed amounts summed to, which the
+ * lines migration copied into `net_amount`.
+ */
+const seedLegacyDraft = async () => {
+  const invoiceId = await seedInvoice();
+  const first = await seedTimeEntry({ billedMinutes: 60 });
+  const second = await seedTimeEntry({ billedMinutes: 10 });
+  const expenseId = await seedExpense({ amount: 10_000, markup: 10 });
+  await testDb
+    .update(timeEntries)
+    .set({ invoiceId, status: BILLING_STATUS.BILLED })
+    .where(inArray(timeEntries.id, [first, second]));
+  await testDb
+    .update(expenses)
+    .set({ invoiceId, status: BILLING_STATUS.BILLED })
+    .where(eq(expenses.id, expenseId));
+  // 60 minutes at 20_000 per hour, 10 minutes billed as 3333, and the
+  // expense with its 10 % markup.
+  const totalAmount = 20_000 + 3333 + 11_000;
+  await testDb
+    .update(invoices)
+    .set({ totalAmount: cents(totalAmount), netAmount: cents(totalAmount) })
+    .where(eq(invoices.id, invoiceId));
+  // Lines materialise in a stable order: entries by date, then id.
+  const timeEntryLines = [
+    { id: first, netAmount: 20_000 },
+    { id: second, netAmount: 3333 },
+  ].toSorted((a, b) => (a.id < b.id ? -1 : 1));
+  return { invoiceId, timeEntries: timeEntryLines, expenseId, totalAmount };
 };
 
 const lineRowValues = (
