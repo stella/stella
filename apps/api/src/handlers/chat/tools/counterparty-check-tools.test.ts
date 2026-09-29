@@ -151,4 +151,102 @@ describe("counterparty_check chat tool", () => {
       nationalityCodes: ["RU"],
     });
   });
+
+  // Mirrors the check_counterparty MCP test of the same name: both surfaces
+  // read the call through the same boundary.
+  test("reads country and nationality spellings and a partial birth date", async () => {
+    const subjects: unknown[] = [];
+    const execute = executeWith(
+      async () => panic("The register must not be asked"),
+      async (options) => {
+        subjects.push(options.subject);
+        return panic("Stop after reading the subject");
+      },
+    );
+    const call = async (subject: Record<string, unknown>) =>
+      await execute({ check: "sanctions", subject }).catch(
+        (error: unknown) => error,
+      );
+    await call({
+      type: "person",
+      first_name: "Ivan",
+      last_name: "Sidorov",
+      date_of_birth: { precision: "year", year: 1960 },
+      nationality_codes: ["ru", "Slovakia"],
+    });
+    await call({
+      type: "company-id",
+      company_id: "35757442",
+      country: "Slovakia",
+    });
+    await call({ type: "company-id", company_id: "35757442", country: "sk" });
+    await call({ type: "company-id", company_id: "26863154" });
+    expect(subjects).toEqual([
+      {
+        type: "person",
+        firstName: "Ivan",
+        lastName: "Sidorov",
+        dateOfBirth: { precision: "year", year: 1960 },
+        nationalityCodes: ["RU", "SK"],
+      },
+      { type: "company-id", value: "35757442", country: "SK" },
+      { type: "company-id", value: "35757442", country: "SK" },
+      { type: "company-id", value: "26863154", country: "CZ" },
+    ]);
+  });
+
+  test("reads a null optional field as absent, as the MCP tool does", async () => {
+    let received: Parameters<typeof runSanctionsCheck>[0] | undefined;
+    const execute = executeWith(
+      async () => panic("The register must not be asked"),
+      async (options) => {
+        received = options;
+        return panic("Stop after reading the subject");
+      },
+    );
+    await execute({
+      check: "sanctions",
+      subject: {
+        type: "person",
+        first_name: "Ivan",
+        last_name: "Sidorov",
+        birth_date: null,
+        date_of_birth: null,
+        nationality_codes: null,
+      },
+    }).catch(() => undefined);
+    expect(received?.subject).toEqual({
+      type: "person",
+      firstName: "Ivan",
+      lastName: "Sidorov",
+      dateOfBirth: null,
+      nationalityCodes: [],
+    });
+  });
+
+  test("names a country it cannot read and asks for a fix", async () => {
+    const execute = executeWith(async () => panic("Nothing may be checked"));
+    const failure = await execute({
+      check: "sanctions",
+      subject: { type: "company-id", company_id: "26863154", country: "PL" },
+    }).then(
+      () => panic("Expected the tool to fail"),
+      (error: unknown) => error,
+    );
+    expect(ChatToolError.is(failure) && failure.kind).toBe("invalid-input");
+  });
+
+  test("passes the check's own next step to the model with a refusal", async () => {
+    const execute = executeWith(async () => panic("Nothing may be checked"));
+    const failure = await execute({
+      check: "sanctions",
+      subject: { type: "tax-id", tax_id: "CZ45274649" },
+    }).then(
+      () => panic("Expected the tool to fail"),
+      (error: unknown) => error,
+    );
+    expect(ChatToolError.is(failure) && failure.message).toContain(
+      "company-id",
+    );
+  });
 });
