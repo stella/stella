@@ -100,6 +100,7 @@ import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
+import { returnPathOf } from "@/lib/redirect";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import {
   workspaceOptions,
@@ -174,15 +175,18 @@ export const Route = createFileRoute("/_protected")({
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
 
+    const redirectTo = returnPathOf(location);
+
     if (!authContext.session || !authContext.user) {
-      throw redirect({
-        to: "/auth",
-        search: { redirectTo: location.pathname },
-      });
+      throw redirect({ to: "/auth", search: { redirectTo } });
     }
 
     if (!authContext.session.activeOrganizationId) {
-      throw redirect({ to: "/auth/organization", replace: true });
+      throw redirect({
+        to: "/auth/organization",
+        search: { redirectTo },
+        replace: true,
+      });
     }
 
     const activeOrganizationId = authContext.session.activeOrganizationId;

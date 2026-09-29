@@ -121,9 +121,13 @@ import {
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
+import type {
+  CorpusIndexScanReport,
+  CorpusIndexScanTransport,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -1672,6 +1676,24 @@ const readCaseLawSearchFacets = async ({
   };
 };
 
+/**
+ * The engine transport a case-law scan reads through. Relevance reads ids and
+ * scores rather than whole passages; the page still ranks by position, so the
+ * order it is cut from is the same either way. A date order has no score to
+ * read and stays on the native endpoint.
+ */
+const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
+  switch (sort) {
+    case "relevance":
+      return { type: "scored", fields: ["document_id"] };
+    case "newest":
+      return NATIVE_SCAN_TRANSPORT;
+    default:
+      sort satisfies never;
+      return panic(`Unhandled search sort: ${String(sort)}`);
+  }
+};
+
 export const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
@@ -1923,6 +1945,7 @@ export const searchCorpusIndexDecisions = async (
     limit,
     order: corpusSearchOrder(sort),
     parsedCursor,
+    scanTransport: caseLawScanTransport(sort),
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];
