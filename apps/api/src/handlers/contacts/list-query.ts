@@ -35,6 +35,10 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   "prefix",
   "middleName",
   "suffix",
+  "dateOfBirthYear",
+  "dateOfBirthMonth",
+  "dateOfBirthDay",
+  "nationalityCodes",
   // Free-text notes are a detail-view field, not a directory summary field.
   "notes",
   "addresses",

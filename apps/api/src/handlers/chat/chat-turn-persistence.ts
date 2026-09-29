@@ -1,5 +1,4 @@
-import type { Result } from "better-result";
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   desc,
@@ -45,6 +44,9 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import { isRecord } from "@/api/lib/type-guards";
 
 /** Maximum time a metered provider call may run before the server aborts it. */
 export const CHAT_METERED_PROVIDER_TIMEOUT_MS = 10 * 60 * 1000;
@@ -55,6 +57,19 @@ export const CHAT_METERED_PROVIDER_TIMEOUT_MS = 10 * 60 * 1000;
 const CHAT_TURN_PROVIDER_LEASE_GRACE_MS = 2 * 60 * 1000;
 const CHAT_TURN_LEASE_MS =
   CHAT_METERED_PROVIDER_TIMEOUT_MS + CHAT_TURN_PROVIDER_LEASE_GRACE_MS;
+
+/**
+ * A producing run's lease. Its owner renews it well within this bound
+ * (`chat-turn-run.ts`), so a turn whose owner stopped producing is found
+ * within this long of its last renewal and ends as `owner-lost`.
+ */
+export const CHAT_TURN_RUN_LEASE_MS = 60 * 1000;
+
+/** How a turn ends when its owner stopped producing. */
+export const OWNER_LOST_OUTCOME = {
+  reason: "owner-lost",
+  type: "interrupted",
+} as const satisfies ChatTurnOutcome;
 
 const AI_ERROR_RETRYABLE = {
   empty_completion: true,
@@ -108,6 +123,9 @@ const databaseNow = () => sql<Date>`now()`;
 
 const nextChatTurnLeaseExpiry = () =>
   sql<Date>`now() + ${CHAT_TURN_LEASE_MS} * interval '1 millisecond'`;
+
+const nextChatTurnRunLeaseExpiry = () =>
+  sql<Date>`now() + ${CHAT_TURN_RUN_LEASE_MS} * interval '1 millisecond'`;
 
 export const createChatTurnAcceptance = ({
   organizationId,
@@ -215,9 +233,11 @@ const settleInterruptedContinuationOnTx = async ({
 
 /**
  * Under the thread lock, turn an abandoned provider owner into its durable
- * terminal outcome. A live owner renews its lease conditionally, so it either
- * wins that renewal before this write (and remains running), or loses it after
- * this write (and can no longer settle effects it no longer owns).
+ * terminal outcome, `owner-lost`. A live owner renews its lease conditionally,
+ * so it either wins that renewal before this write (and remains running), or
+ * loses it after this write (and can no longer settle effects it no longer
+ * owns). Clearing the execution id is the fence: every later write of the
+ * former owner is conditional on it.
  */
 const interruptExpiredRunningChatTurnOnTx = async ({
   threadId,
@@ -264,24 +284,42 @@ const interruptExpiredRunningChatTurnOnTx = async ({
     });
     return;
   }
-  // audit: skip — timeout terminalization records that an execution lease ended; no user-authored content changes
+  // audit: skip — owner-lost terminalization records that an execution lease ended; no user-authored content changes
   const interrupted = await tx
     .update(chatTurns)
     .set({
       ...ended,
       cancellationReason: null,
-      interruptionReason: "timeout",
+      interruptionReason: OWNER_LOST_OUTCOME.reason,
       status: "interrupted",
     })
     .where(and(expired, isNull(chatTurns.cancelRequestedAt)))
     .returning({ id: chatTurns.id });
   if (interrupted.length > 0) {
     await settleInterruptedContinuationOnTx({
-      outcome: { reason: "timeout", type: "interrupted" },
+      outcome: OWNER_LOST_OUTCOME,
       threadId,
       tx,
     });
   }
+};
+
+/**
+ * End the turn of `threadId` whose owner stopped producing, under the thread
+ * lock the owner's own settlement takes too. Idempotent: a thread whose turn
+ * is live, already settled, or gone is left as it is.
+ */
+export const reapOwnerlessChatTurnOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  if (!(await lockChatThreadForTurnOnTx({ threadId, tx }))) {
+    return;
+  }
+  await interruptExpiredRunningChatTurnOnTx({ threadId, tx });
 };
 
 /**
@@ -1049,26 +1087,97 @@ export const withClaimedChatTurnExecution = async <T>({
   });
 
 /**
- * Extend a claimed execution immediately before dispatching provider work.
- * This conditional write makes the renewed lease a proof that the caller still
- * owns the turn, rather than trusting a lease calculated before connector
- * discovery and other preflight work.
+ * Extend a producing run's lease by `CHAT_TURN_RUN_LEASE_MS`. This conditional
+ * write makes the renewed lease a proof that the caller still owns the turn:
+ * an owner that finds it lost no longer owns any effect of the turn.
  */
 export const renewChatTurnExecutionLease = async ({
   execution,
+  runId,
   safeDb,
 }: {
   execution: ChatTurnExecution;
+  runId?: string;
   safeDb: SafeDb;
 }): Promise<Result<ChatTurnExecutionStanding, SafeDbError>> =>
   await safeDb(async (tx) => {
     // audit: skip — ephemeral execution ownership; terminal state is audited at settlement
     const renewed = await tx
       .update(chatTurns)
-      .set({ leaseExpiresAt: nextChatTurnLeaseExpiry() })
+      .set({
+        leaseExpiresAt: nextChatTurnRunLeaseExpiry(),
+        ...(runId === undefined ? {} : { runId }),
+      })
       .where(ownedByExecution(execution))
       .returning({ cancelRequestedAt: chatTurns.cancelRequestedAt });
     return standingOf(renewed.at(0));
+  });
+
+/** How starting a run went: its standing, or its id already names a turn. */
+type ChatTurnRunStart = ChatTurnExecutionStanding | "run-taken";
+
+/** The index that makes a run id name one turn in its organization. */
+const CHAT_TURN_RUN_ID_INDEX = "chat_turns_org_run_id_uidx";
+
+/**
+ * Start the run `runId` for a claimed execution, immediately before provider
+ * dispatch: bind the client-minted run id to the turn and start the run's
+ * lease, in one conditional write. The renewal, not the earlier claim, makes
+ * the owner's lease start when its run does, whatever preflight took. A run id
+ * that already names another turn of the organization is refused by the
+ * unique index, which sees turns this caller cannot read and settles a race.
+ */
+export const startChatTurnRun = async ({
+  execution,
+  runId,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  runId: string;
+  safeDb: SafeDb;
+}): Promise<Result<ChatTurnRunStart, SafeDbError>> => {
+  const started = await renewChatTurnExecutionLease({
+    execution,
+    runId,
+    safeDb,
+  });
+  if (
+    Result.isError(started) &&
+    isPgConstraintError(
+      started.error,
+      PG_ERROR.UNIQUE_VIOLATION,
+      CHAT_TURN_RUN_ID_INDEX,
+    )
+  ) {
+    return Result.ok("run-taken");
+  }
+  return started;
+};
+
+/** Advisory preflight check; startChatTurnRun remains the atomic run-id fence. */
+export const isChatTurnRunIdTaken = async ({
+  execution,
+  runId,
+  safeDb,
+}: {
+  execution: ChatTurnExecution;
+  runId: string;
+  safeDb: SafeDb;
+}): Promise<Result<boolean, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    const result = await tx.execute(sql`
+      SELECT public.chat_turn_run_id_taken(
+        ${execution.id}::uuid,
+        ${execution.executionId}::uuid,
+        ${runId}::text
+      ) AS taken
+    `);
+    const row = executedRows(result).at(0);
+    const taken = isRecord(row) ? row["taken"] : undefined;
+    if (typeof taken !== "boolean") {
+      panic("Chat turn run-id lookup returned an invalid value");
+    }
+    return taken;
   });
 
 /**

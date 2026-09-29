@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 2.2.5
+
+### Patch Changes
+
+- [#4030](https://github.com/stella/stella/pull/4030) [`86ad6e9`](https://github.com/stella/stella/commit/86ad6e90709141536d821970b69f649b23411834) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the personal day time-entry list in the CLI capability catalog.
+
+## 2.2.4
+
+### Patch Changes
+
+- [#4095](https://github.com/stella/stella/pull/4095) [`b71f049`](https://github.com/stella/stella/commit/b71f049c3019ecae5b72af5ecc690a7654e13c4a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search and lookup help describe a decision's citable reference, which is not always a docket.
+
 ## 2.2.3
 
 ### Patch Changes

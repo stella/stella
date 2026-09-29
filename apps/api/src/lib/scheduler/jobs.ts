@@ -25,6 +25,7 @@ import {
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
+import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
@@ -41,6 +42,7 @@ import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extracto
 import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import { RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK } from "@/api/lib/scheduler/tasks/organization-file-reservation-reconcile";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -358,6 +360,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REPAIR_FILE_DERIVATIVES_TASK,
   },
   {
+    description: "End chat turns whose owner stopped renewing its lease",
+    id: "chat.reapOwnerlessTurns.minute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: REAP_OWNERLESS_CHAT_TURNS_TASK,
+  },
+  {
     description: "Re-drive document review runs no queued job owns anymore",
     id: "documentReviews.reconcileQueuedRuns.fiveMinute",
     mode: "recurring",
@@ -420,6 +429,13 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
+  },
+  {
+    description: "Refresh global reference lists",
+    id: "sanctions.refreshSources.twoHourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 2 * 60 * 60 * 1000 },
+    task: REFRESH_SANCTIONS_SOURCES_TASK,
   },
   {
     description: "Expire abandoned desktop edit sessions past their token TTL",

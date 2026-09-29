@@ -1118,7 +1118,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 293,
+    "count": 294,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1249,7 +1249,7 @@
       "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
-      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
+      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 2,
       "apps/web/src/features/chat/hooks/use-chat-session.ts": 4,
       "apps/web/src/features/chat/queries.ts": 1,
       "apps/web/src/hooks/use-effect.ts": 2,

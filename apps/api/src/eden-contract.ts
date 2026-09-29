@@ -78,6 +78,12 @@ type CorrespondenceRoutes = {
   };
 };
 
+type MyTimeEntriesRoutes = {
+  v1: {
+    "time-entries": Pick<ApiV1Routes["time-entries"], "me">;
+  };
+};
+
 /**
  * Every API type apps/web consumes. apps/web never compiles the API: each
  * property is printed into apps/web/src/generated/api-routes.gen.ts by
@@ -87,6 +93,7 @@ type CorrespondenceRoutes = {
 export type WebApiContract = {
   WebRoutes: WebRoutes;
   CorrespondenceRoutes: CorrespondenceRoutes;
+  MyTimeEntriesRoutes: MyTimeEntriesRoutes;
   MemoriesRoutes: (typeof memoriesRoute)["~Routes"];
   ChatAnonRestoration: ChatAnonRestoration;
   ChatMessage: ChatMessage;

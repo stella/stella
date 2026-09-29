@@ -4,6 +4,7 @@ import type { EdenRoutesApp } from "@stll/api-client";
 import type {
   CorrespondenceRoutes,
   MemoriesRoutes,
+  MyTimeEntriesRoutes,
   WebRoutes,
 } from "@/generated/api-routes.gen";
 import {
@@ -57,7 +58,12 @@ const memoriesEden = createStellaEdenClient<EdenRoutesApp<MemoriesRoutes>>(
 const correspondenceEden = createStellaEdenClient<
   EdenRoutesApp<CorrespondenceRoutes>
 >(browserApiBaseUrl(), clientOptions);
+const myTimeEntriesEden = createStellaEdenClient<
+  EdenRoutesApp<MyTimeEntriesRoutes>
+>(browserApiBaseUrl(), clientOptions);
 
 export const api = eden.v1;
+export const publicFeedbackApi = eden.public.feedback;
 export const memoriesApi = memoriesEden.v1.memories;
 export const correspondenceApi = correspondenceEden.v1;
+export const myTimeEntriesApi = myTimeEntriesEden.v1["time-entries"].me;

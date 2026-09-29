@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
-    "requireAccount": {
-      "askAboutDocument": "Loo tasuta konto, et selle dokumendi kohta küsida",
-      "askInChat": "Loo tasuta konto, et seda vestluses küsida",
-      "description": "Kui konto on valmis, naasete sellele lehele.",
-      "generateHeadnotes": "Loo tasuta konto, et AI koostaks lühikokkuvõtted",
-      "refineSearch": "Loo tasuta konto, et otsingut AI-ga täpsustada",
-      "writeResearchQuestion": "Loo tasuta konto, et nende tulemuste kohta küsimus esitada"
-    },
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
@@ -604,6 +596,7 @@
       },
       "generate": "Koosta AI lühikokkuvõtted",
       "holdingAnchor": "Mine lõigu juurde",
+      "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
       "topics": "Teemad",
       "treatment": "Hilisem käsitlus"
     },
@@ -1809,6 +1802,7 @@
       "title": "Kohandatud väljad",
       "value": "Välja väärtus"
     },
+    "datePrecision": "Kuupäeva täpsus",
     "deleteContact": "Kustuta klient",
     "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
@@ -1845,15 +1839,19 @@
       "billingAddressPostalCode": "Sihtnumber",
       "billingAddressState": "Maakond",
       "color": "Värv",
+      "day": "Päev",
       "defaultHourlyRate": "Vaikimisi tunnitasu",
       "firstName": "Eesnimi",
       "lastName": "Perekonnanimi",
       "middleName": "Keskmine nimi",
+      "month": "Kuu",
+      "nationalities": "Kodakondsused",
       "paymentTermDays": "Maksetähtaeg (päevad)",
       "prefix": "Eesliide",
       "registrationNumber": "Registrikood",
       "suffix": "Järelliide",
-      "taxId": "KMKR number"
+      "taxId": "KMKR number",
+      "year": "Aasta"
     },
     "filterOrganizations": "Organisatsioonid",
     "filterPersons": "Isikud",
@@ -1936,11 +1934,14 @@
       "title": "Kontaktide importimine",
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida."
     },
+    "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",
+    "invalidNationalityCodes": "Sisestage kehtivad kodakondsuskoodid.",
     "mattersAsClient": "Toimikud kliendina",
     "newContact": "Uus klient",
     "noContactsDescription": "Looge oma esimene klient, et hakata neid toimikutega siduma.",
     "noContactsFound": "Kliente ei leitud",
     "noMattersAsClient": "See kontakt ei ole ühegi toimiku klient.",
+    "personalDetails": "Isikuandmed",
     "phoneTypes": {
       "fax": "Faks",
       "home": "Kodu",
@@ -1948,7 +1949,14 @@
       "office": "Kontor",
       "other": "Muu"
     },
+    "precision": {
+      "day": "Täielik kuupäev",
+      "month": "Kuu ja aasta",
+      "year": "Ainult aasta"
+    },
+    "saved": "Kontakti andmed on salvestatud.",
     "search": "Otsi kontakte...",
+    "searchCountries": "Otsi riike",
     "title": "Kliendid",
     "type": {
       "organization": "Organisatsioon",

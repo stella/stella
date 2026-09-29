@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
@@ -430,6 +431,23 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_citation_reviews"
     FROM stella
   `,
+  // Global sanctions lists are readable by requests and writable by ingestion.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "sanctions_sources", "sanctions_editions",
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE
+      "sanctions_sources", "sanctions_editions"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    TO stella_ingestion
+  `,
   // Legislation corpus — same global model as case law.
   `
     REVOKE INSERT, UPDATE, DELETE ON TABLE
@@ -641,6 +659,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
