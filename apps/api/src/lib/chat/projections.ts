@@ -41,6 +41,7 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
@@ -61,6 +62,14 @@ import {
   PROVISION_ABSENCE_STATUSES,
   PROVISION_STATUS,
 } from "@/api/lib/legal-search/legislation-provision-vocabulary";
+import {
+  SANCTIONS_CLASSIFICATIONS,
+  SANCTIONS_ENTITY_TYPES,
+  SANCTIONS_FIELD_COMPARISONS,
+  SANCTIONS_IDENTITY_FIELDS,
+  SANCTIONS_SCREENING_STATUSES,
+  SANCTIONS_UNAVAILABLE_REASONS,
+} from "@/api/lib/lists/sanctions/screening-vocabulary";
 
 import {
   chatEntityRef,
@@ -2164,10 +2173,105 @@ const entityCheckOutcomeEntries = {
   subject: entityCheckSubjectProjection,
 };
 
+const sanctionsDateOfBirthProjection = v.variant("precision", [
+  v.strictObject({ precision: v.literal("year"), year: v.number() }),
+  v.strictObject({
+    precision: v.literal("month"),
+    year: v.number(),
+    month: v.number(),
+  }),
+  v.strictObject({
+    precision: v.literal("day"),
+    year: v.number(),
+    month: v.number(),
+    day: v.number(),
+  }),
+]);
+
+// The subject as screened: the name used, and where it came from.
+const sanctionsCheckedSubjectProjection = v.variant("type", [
+  v.strictObject({
+    type: v.literal("organization"),
+    name: v.string(),
+    identifiers: v.array(v.string()),
+    resolvedFrom: v.nullable(
+      v.strictObject({
+        type: v.literal("company-id"),
+        value: v.string(),
+        country: v.picklist(SANCTIONS_COMPANY_ID_COUNTRIES),
+        registry: v.string(),
+      }),
+    ),
+  }),
+  v.strictObject({
+    type: v.literal("person"),
+    name: v.string(),
+    dateOfBirth: v.nullable(sanctionsDateOfBirthProjection),
+    nationalityCodes: v.array(v.string()),
+  }),
+  // A company ID whose name the register could not give; nothing screened.
+  v.strictObject({
+    type: v.literal("company-id"),
+    value: v.string(),
+    country: v.picklist(SANCTIONS_COMPANY_ID_COUNTRIES),
+  }),
+]);
+
+const sanctionsPossibleMatchProjection = v.strictObject({
+  sourceEntryId: passthroughId(),
+  editionId: passthroughId(),
+  score: v.number(),
+  sourceUrl: publicUrl(),
+  name: v.nullable(v.string()),
+  referenceNumber: v.nullable(v.string()),
+  entityType: v.picklist(SANCTIONS_ENTITY_TYPES),
+  programme: v.nullable(v.string()),
+  listedOn: v.nullable(v.string()),
+  evidence: v.strictObject({
+    nameScore: v.number(),
+    matchedName: v.nullable(v.string()),
+    birthDate: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    nationality: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    entityType: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    identifier: v.picklist(SANCTIONS_FIELD_COMPARISONS),
+    conflicts: v.array(v.picklist(SANCTIONS_IDENTITY_FIELDS)),
+  }),
+});
+
+// One list's answer. Flattened over its status: a clear or possible-match
+// list names the edition it screened; an unavailable one names its reason
+// and, when one is on file, the edition it did not use.
+const sanctionsListOutcomeProjection = v.strictObject({
+  source: v.string(),
+  issuer: v.string(),
+  issuerName: v.string(),
+  classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
+  status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+  reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
+  checkedAt: v.string(),
+  editionId: v.nullable(passthroughId()),
+  publishedAt: v.nullable(v.string()),
+  verifiedAt: v.nullable(v.string()),
+  totalMatches: v.number(),
+  truncated: v.boolean(),
+  possibleMatches: v.array(sanctionsPossibleMatchProjection),
+});
+
+const sanctionsCheckProjection = v.strictObject({
+  kind: v.literal("sanctions"),
+  status: v.picklist(SANCTIONS_SCREENING_STATUSES),
+  subject: sanctionsCheckedSubjectProjection,
+  checkedAt: v.string(),
+  cutoff: v.number(),
+  lists: v.array(sanctionsListOutcomeProjection),
+});
+
 /**
- * check_counterparty. Source of truth: `runEntityCheck`'s `EntityCheckResult`
- * union, forwarded verbatim by `handleCheckCounterpartyTool`
- * (`matter-tools.ts`). Public-register data about the screened subject.
+ * check_counterparty. Source of truth: `runEntityCheckShared`'s
+ * `CounterpartyCheckResult` union, forwarded verbatim by
+ * `handleCheckCounterpartyTool` (`matter-tools.ts`): one register outcome, or
+ * the sanctions check's per-list outcomes. Public-register and public-list
+ * data about the screened subject.
  */
 export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
   projectionBranch(
@@ -2217,6 +2321,9 @@ export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
       supportedSubjectTypes: v.array(v.picklist(ENTITY_CHECK_SUBJECT_TYPES)),
     }),
   ),
+  // Shares status values with the register outcomes above; `kind` tells the
+  // two apart, and each strict branch refuses the other's fields.
+  projectionBranch(sanctionsCheckProjection),
 ]);
 
 const TEMPLATE_WARNINGS_PROJECTION = v.array(

@@ -1,38 +1,200 @@
 import { panic, Result } from "better-result";
 
-import { runEntityCheck } from "@stll/business-registries/entity-checks";
+import {
+  ENTITY_CHECK_KINDS,
+  runEntityCheck,
+} from "@stll/business-registries/entity-checks";
 import type {
   EntityCheckKind,
   EntityCheckResult,
   EntityCheckSubject,
 } from "@stll/business-registries/entity-checks";
+import type { CountryCode } from "@stll/country-codes";
 
+import type { DateOfBirth } from "@/api/handlers/contacts/person-details";
+import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
+import type {
+  SanctionsCheckDependencies,
+  SanctionsCheckResult,
+} from "@/api/lib/business-registries/sanctions-check";
+import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // Shared by the HTTP route, the check_counterparty MCP tool and the
 // counterparty_check chat tool.
 
+/** The register checks, plus screening against every sanctions list. */
+export const COUNTERPARTY_CHECK_KINDS = [
+  ...ENTITY_CHECK_KINDS,
+  "sanctions",
+] as const;
+
+export type CounterpartyCheckKind = (typeof COUNTERPARTY_CHECK_KINDS)[number];
+
+export const COUNTERPARTY_CHECK_SUBJECT_TYPES = [
+  "company-id",
+  "tax-id",
+  "person",
+  "organization",
+] as const satisfies readonly CounterpartyCheckSubject["type"][];
+
+/** Who to check, as every surface reads it before the check runs. */
+export type CounterpartyCheckSubject =
+  | {
+      type: "company-id";
+      value: string;
+      country: SanctionsCompanyIdCountry;
+    }
+  | { type: "tax-id"; value: string }
+  | {
+      type: "person";
+      firstName: string;
+      lastName: string;
+      dateOfBirth: DateOfBirth | null;
+      nationalityCodes: readonly CountryCode[];
+    }
+  | {
+      type: "organization";
+      name: string;
+      companyId: string | null;
+    };
+
+export type CounterpartyCheckResult = EntityCheckResult | SanctionsCheckResult;
+
 export type RunEntityCheckSharedProps = {
-  check: EntityCheckKind;
-  subject: EntityCheckSubject;
+  check: CounterpartyCheckKind;
+  subject: CounterpartyCheckSubject;
   signal?: AbortSignal | undefined;
   runCheck?: typeof runEntityCheck | undefined;
+  /** What the sanctions check reads: the lists, the register, the firm's jurisdictions. */
+  sanctions: SanctionsCheckDependencies & {
+    runSanctionsCheck?: typeof runSanctionsCheck | undefined;
+  };
 };
 
+const invalidSubject = (message: string, hint: string) =>
+  Result.err(
+    new HandlerError({
+      status: 400,
+      code: "validation_error",
+      message,
+      hint,
+    }),
+  );
+
+const ISO_BIRTH_DATE = /^(\d{4})-(\d{2})-(\d{2})$/u;
+
 /**
- * Screen a subject against one official source. A source that could not
- * answer is an `unavailable` outcome, not an error: the caller must see that
- * the check did not run rather than a missing result.
+ * A person's birth date from the two ways a caller may give it: a full ISO
+ * date, or a date at the precision known. Both at once must agree.
  */
-export const runEntityCheckShared = async ({
+export const personDateOfBirth = ({
+  birthDate,
+  dateOfBirth,
+}: {
+  birthDate: string | undefined;
+  dateOfBirth: DateOfBirth | undefined;
+}): Result<DateOfBirth | null, HandlerError> => {
+  const parts = birthDate === undefined ? null : ISO_BIRTH_DATE.exec(birthDate);
+  if (birthDate !== undefined && parts === null) {
+    return invalidSubject(
+      "The birth date must be an ISO date (YYYY-MM-DD)",
+      "Send the full date as YYYY-MM-DD, or the date of birth at the precision known.",
+    );
+  }
+  const fromBirthDate: DateOfBirth | null =
+    parts === null
+      ? null
+      : {
+          precision: "day",
+          year: Number(parts[1]),
+          month: Number(parts[2]),
+          day: Number(parts[3]),
+        };
+  if (
+    fromBirthDate !== null &&
+    dateOfBirth !== undefined &&
+    (dateOfBirth.precision !== "day" ||
+      dateOfBirth.year !== fromBirthDate.year ||
+      dateOfBirth.month !== fromBirthDate.month ||
+      dateOfBirth.day !== fromBirthDate.day)
+  ) {
+    return invalidSubject(
+      "The full birth date and the date of birth name different dates",
+      "Send one of them: the full birth date, or the date of birth when only the year or month is known.",
+    );
+  }
+  return Result.ok(dateOfBirth ?? fromBirthDate);
+};
+
+const pad = (value: number) => String(value).padStart(2, "0");
+
+// The register checks cover Czech subjects and a person by full birth date.
+const toEntityCheckSubject = (
+  check: EntityCheckKind,
+  subject: CounterpartyCheckSubject,
+): Result<EntityCheckSubject, HandlerError> => {
+  switch (subject.type) {
+    case "company-id": {
+      return subject.country === "CZ"
+        ? Result.ok({ type: "company-id", value: subject.value })
+        : invalidSubject(
+            `The ${check} check covers Czech companies only`,
+            `Use check "sanctions" for a company registered in ${subject.country}.`,
+          );
+    }
+    case "tax-id": {
+      return Result.ok(subject);
+    }
+    case "person": {
+      const { dateOfBirth } = subject;
+      return dateOfBirth?.precision === "day"
+        ? Result.ok({
+            type: "person",
+            firstName: subject.firstName,
+            lastName: subject.lastName,
+            birthDate: `${dateOfBirth.year}-${pad(dateOfBirth.month)}-${pad(dateOfBirth.day)}`,
+          })
+        : invalidSubject(
+            `The ${check} check needs the person's full birth date`,
+            "Pass the birth date with year, month and day, or ask the user for it.",
+          );
+    }
+    case "organization": {
+      return subject.companyId === null
+        ? invalidSubject(
+            `The ${check} check finds a company by its company ID, not its name`,
+            "Pass subject type company-id with the IČO, or look the company up in its business register first.",
+          )
+        : Result.ok({ type: "company-id", value: subject.companyId });
+    }
+    default: {
+      subject satisfies never;
+      return panic("Unhandled subject");
+    }
+  }
+};
+
+const runRegisterCheck = async ({
   check,
   subject,
   signal,
-  runCheck = runEntityCheck,
-}: RunEntityCheckSharedProps): Promise<
-  Result<EntityCheckResult, HandlerError>
-> => {
-  const result = await runCheck({ kind: check, subject, signal });
+  runCheck,
+}: {
+  check: EntityCheckKind;
+  subject: CounterpartyCheckSubject;
+  signal: AbortSignal | undefined;
+  runCheck: typeof runEntityCheck;
+}): Promise<Result<EntityCheckResult, HandlerError>> => {
+  const entitySubject = toEntityCheckSubject(check, subject);
+  if (entitySubject.isErr()) {
+    return Result.err(entitySubject.error);
+  }
+  const result = await runCheck({
+    kind: check,
+    subject: entitySubject.value,
+    signal,
+  });
   if (result.isOk()) {
     return Result.ok(result.value);
   }
@@ -61,4 +223,33 @@ export const runEntityCheckShared = async ({
       return panic("Unhandled error");
     }
   }
+};
+
+/**
+ * Screen a subject against one official source, or against every sanctions
+ * list. A source that could not answer is an `unavailable` outcome, not an
+ * error: the caller must see that the check did not run rather than a
+ * missing result.
+ */
+export const runEntityCheckShared = async ({
+  check,
+  subject,
+  signal,
+  runCheck = runEntityCheck,
+  sanctions,
+}: RunEntityCheckSharedProps): Promise<
+  Result<CounterpartyCheckResult, HandlerError>
+> => {
+  if (check !== "sanctions") {
+    return await runRegisterCheck({ check, subject, signal, runCheck });
+  }
+  if (subject.type === "tax-id") {
+    return invalidSubject(
+      "The sanctions check screens a name, and a tax ID alone has none",
+      "Pass subject type company-id (resolved to the company's name through its register), organization with the name, or person.",
+    );
+  }
+  const { runSanctionsCheck: run = runSanctionsCheck, ...dependencies } =
+    sanctions;
+  return await run({ subject, dependencies });
 };

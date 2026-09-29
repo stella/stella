@@ -725,7 +725,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // Findings name natural persons with birth dates and identifiers, which the
   // anonymization boundary cannot redact, so anonymized chat never sees them.
   const counterpartyCheckTools =
-    thirdPartyBoundary.type === "raw" ? createCounterpartyCheckTools() : {};
+    thirdPartyBoundary.type === "raw"
+      ? createCounterpartyCheckTools({ scopedDb, organizationId })
+      : {};
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
   const browserControlTools = browserClient ? createBrowserControlTool() : {};

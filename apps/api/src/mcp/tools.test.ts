@@ -48,6 +48,10 @@ import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/g
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
+import type {
+  runSanctionsCheck as runSanctionsCheckForTest,
+  SanctionsCheckResult,
+} from "@/api/lib/business-registries/sanctions-check";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
@@ -1681,6 +1685,155 @@ describe("OpenAI-compatible MCP tools", () => {
         result,
         "Company ID must be a valid Czech IČO (8 digits)",
       );
+    });
+
+    describe("sanctions", () => {
+      const sanctionsResult = {
+        kind: "sanctions",
+        status: "possible-match",
+        subject: {
+          type: "person",
+          name: "Ivan Sidorov",
+          dateOfBirth: { precision: "year", year: 1960 },
+          nationalityCodes: ["RU"],
+        },
+        checkedAt: "2026-09-29T08:00:00.000Z",
+        cutoff: 0.8,
+        lists: [
+          {
+            source: "eu",
+            issuer: "EU",
+            issuerName: "European Union",
+            classification: "binding",
+            status: "possible-match",
+            reason: null,
+            checkedAt: "2026-09-29T08:00:00.000Z",
+            editionId: "0b8f7c1e-3a52-4c1b-9d0e-4f6a2b7c8d90",
+            publishedAt: "2026-09-28",
+            verifiedAt: "2026-09-29T06:00:00.000Z",
+            totalMatches: 1,
+            truncated: false,
+            possibleMatches: [
+              {
+                sourceEntryId: "EU.123.45",
+                editionId: "0b8f7c1e-3a52-4c1b-9d0e-4f6a2b7c8d90",
+                score: 0.8,
+                sourceUrl: "https://lists.example/eu/123",
+                name: "Ivan Petrovich Sidorov",
+                referenceNumber: "EU.123.45",
+                entityType: "person",
+                programme: null,
+                listedOn: "2022-02-28",
+                evidence: {
+                  nameScore: 0.96,
+                  matchedName: "Ivan Sidorov",
+                  birthDate: "mismatch",
+                  nationality: "match",
+                  entityType: "match",
+                  identifier: "not-compared",
+                  conflicts: ["birth-date"],
+                },
+              },
+            ],
+          },
+          {
+            source: "uk",
+            issuer: "GB",
+            issuerName: "United Kingdom",
+            classification: "informational",
+            status: "unavailable",
+            reason: "stale",
+            checkedAt: "2026-09-29T08:00:00.000Z",
+            editionId: "5c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+            publishedAt: "2026-09-20",
+            verifiedAt: "2026-09-25T06:00:00.000Z",
+            totalMatches: 0,
+            truncated: false,
+            possibleMatches: [],
+          },
+        ],
+      } satisfies SanctionsCheckResult;
+
+      const callSanctions = async (
+        runSanctionsCheck: typeof runSanctionsCheckForTest,
+        subject: Record<string, unknown>,
+      ) => {
+        const baseContext = createContext();
+        return await handleMcpToolCall({
+          args: { check: "sanctions", subject },
+          context: {
+            ...baseContext,
+            testDependencies: {
+              ...baseContext.testDependencies,
+              runEntityCheck: async () =>
+                panic("The register must not be asked"),
+              runSanctionsCheck,
+            },
+          },
+          toolName: "check_counterparty",
+        });
+      };
+
+      test("returns every list's outcome, with its edition, as data", async () => {
+        const result = await callSanctions(
+          async () => Result.ok(structuredClone(sanctionsResult)),
+          { type: "person", first_name: "Ivan", last_name: "Sidorov" },
+        );
+        expect(result.isError).toBeUndefined();
+        expect(parseToolPayload(result)).toEqual(sanctionsResult);
+      });
+
+      test("reads country and nationality spellings and a partial birth date", async () => {
+        const runSanctionsCheck = mock<typeof runSanctionsCheckForTest>(
+          async () => Result.ok(structuredClone(sanctionsResult)),
+        );
+        await callSanctions(runSanctionsCheck, {
+          type: "person",
+          first_name: "Ivan",
+          last_name: "Sidorov",
+          date_of_birth: { precision: "year", year: 1960 },
+          nationality_codes: ["ru", "Slovakia"],
+        });
+        await callSanctions(runSanctionsCheck, {
+          type: "company-id",
+          company_id: "35757442",
+          country: "Slovakia",
+        });
+        await callSanctions(runSanctionsCheck, {
+          type: "company-id",
+          company_id: "26863154",
+        });
+        expect(
+          runSanctionsCheck.mock.calls.map((call) => call.at(0)?.subject),
+        ).toEqual([
+          {
+            type: "person",
+            firstName: "Ivan",
+            lastName: "Sidorov",
+            dateOfBirth: { precision: "year", year: 1960 },
+            nationalityCodes: ["RU", "SK"],
+          },
+          { type: "company-id", value: "35757442", country: "SK" },
+          { type: "company-id", value: "26863154", country: "CZ" },
+        ]);
+      });
+
+      test("asks for one birth date when the two given disagree", async () => {
+        const result = await callSanctions(
+          async () => panic("The lists must not be screened"),
+          {
+            type: "person",
+            first_name: "Ivan",
+            last_name: "Sidorov",
+            birth_date: "1960-05-12",
+            date_of_birth: { precision: "year", year: 1961 },
+          },
+        );
+        expectValidationMessage(
+          result,
+          "The full birth date and the date of birth name different dates",
+        );
+      });
     });
   });
 

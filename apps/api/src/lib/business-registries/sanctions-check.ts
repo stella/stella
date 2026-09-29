@@ -1,0 +1,319 @@
+import { panic, Result } from "better-result";
+
+import type { CountryCode } from "@stll/country-codes";
+
+import type { ScopedDb } from "@/api/db/safe-db";
+import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries/lookup";
+import type { DateOfBirth } from "@/api/handlers/contacts/person-details";
+import type { SafeId } from "@/api/lib/branded-types";
+import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import type {
+  BusinessRegistrySlug,
+  executeRegistryLookup,
+} from "@/api/lib/business-registries/dispatch";
+import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  screenSanctionsSubject,
+  unavailableSanctionsScreening,
+} from "@/api/lib/lists/sanctions/screening-service";
+import type {
+  SanctionsScreening,
+  SanctionsScreeningSubject,
+} from "@/api/lib/lists/sanctions/screening-service";
+import type { SanctionsUnavailableReason } from "@/api/lib/lists/sanctions/screening-vocabulary";
+
+// The sanctions check of the counterparty check: resolves the subject the
+// caller named into a name to screen, reads the firm's practice
+// jurisdictions (which only label each list binding or informational), and
+// hands both to the shared screening service. Nothing here logs the subject.
+
+const COMPANY_REGISTERS = {
+  CZ: { registry: "ares", label: "Czech" },
+  SK: { registry: "rpo", label: "Slovak" },
+} as const satisfies Record<
+  SanctionsCompanyIdCountry,
+  { registry: BusinessRegistrySlug; label: string }
+>;
+
+/** Who the caller asked to screen, as the counterparty check reads it. */
+export type SanctionsCheckSubject =
+  | {
+      type: "company-id";
+      value: string;
+      country: SanctionsCompanyIdCountry;
+    }
+  | {
+      type: "organization";
+      name: string;
+      /** Screened as an identifier beside the name; no register is read. */
+      companyId: string | null;
+    }
+  | {
+      type: "person";
+      firstName: string;
+      lastName: string;
+      dateOfBirth: DateOfBirth | null;
+      nationalityCodes: readonly CountryCode[];
+    };
+
+/** The subject as screened, so a reader sees which name was used. */
+export type SanctionsCheckedSubject =
+  | {
+      type: "organization";
+      name: string;
+      identifiers: string[];
+      /** Set when the name came from a register rather than the caller. */
+      resolvedFrom: {
+        type: "company-id";
+        value: string;
+        country: SanctionsCompanyIdCountry;
+        registry: BusinessRegistrySlug;
+      } | null;
+    }
+  | {
+      type: "person";
+      name: string;
+      dateOfBirth: DateOfBirth | null;
+      nationalityCodes: CountryCode[];
+    }
+  | {
+      /** A company ID whose name could not be resolved; nothing was screened. */
+      type: "company-id";
+      value: string;
+      country: SanctionsCompanyIdCountry;
+    };
+
+export type SanctionsCheckResult = SanctionsScreening & {
+  kind: "sanctions";
+  subject: SanctionsCheckedSubject;
+};
+
+export type SanctionsCheckDependencies = {
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  executeLookup?: typeof executeRegistryLookup | undefined;
+  screen?: typeof screenSanctionsSubject | undefined;
+  loadPracticeJurisdictions?: typeof loadPracticeJurisdictions | undefined;
+};
+
+const invalidSubject = (message: string, hint?: string) =>
+  Result.err(
+    new HandlerError({
+      status: 400,
+      code: "validation_error",
+      message,
+      ...(hint !== undefined && { hint }),
+    }),
+  );
+
+/** The countries the firm practises in, as stored codes. */
+export const loadPracticeJurisdictions = async ({
+  scopedDb,
+  organizationId,
+}: {
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+}): Promise<string[]> => {
+  const row = await scopedDb(
+    async (tx) =>
+      await tx.query.organizationSettings.findFirst({
+        where: { organizationId: { eq: organizationId } },
+        columns: { practiceJurisdictions: true },
+      }),
+  );
+  return (row?.practiceJurisdictions ?? []).map(
+    (jurisdiction) => jurisdiction.countryCode,
+  );
+};
+
+type ResolvedName =
+  | {
+      type: "resolved";
+      subject: SanctionsScreeningSubject;
+      checked: SanctionsCheckedSubject;
+    }
+  | { type: "unresolved"; reason: SanctionsUnavailableReason };
+
+const resolveCompanyName = async ({
+  value,
+  country,
+  dependencies,
+}: {
+  value: string;
+  country: SanctionsCompanyIdCountry;
+  dependencies: SanctionsCheckDependencies;
+}): Promise<Result<ResolvedName, HandlerError>> => {
+  const { registry, label } = COMPANY_REGISTERS[country];
+  const companyId = value.trim();
+  if (!BUSINESS_REGISTRY_DISPATCH[registry].isCanonicalId(companyId)) {
+    return invalidSubject(
+      `Company ID must be a valid ${label} IČO (8 digits)`,
+      "Pass the company's name as an organization subject if its ID is not known.",
+    );
+  }
+  const lookup = await lookupBusinessRegistryShared({
+    scopedDb: dependencies.scopedDb,
+    organizationId: dependencies.organizationId,
+    registry,
+    q: companyId,
+    executeLookup: dependencies.executeLookup,
+  });
+  if (lookup.isErr()) {
+    return Result.ok({ type: "unresolved", reason: "registry-unavailable" });
+  }
+  const response = lookup.value;
+  if (response.type !== "lookup") {
+    return Result.ok({ type: "unresolved", reason: "registry-unavailable" });
+  }
+  if (response.hit === null) {
+    return Result.ok({ type: "unresolved", reason: "company-not-found" });
+  }
+  const identifiers = [companyId];
+  return Result.ok({
+    type: "resolved",
+    subject: { type: "organization", name: response.hit.name, identifiers },
+    checked: {
+      type: "organization",
+      name: response.hit.name,
+      identifiers,
+      resolvedFrom: { type: "company-id", value: companyId, country, registry },
+    },
+  });
+};
+
+const resolveSubject = async (
+  subject: SanctionsCheckSubject,
+  dependencies: SanctionsCheckDependencies,
+): Promise<Result<ResolvedName, HandlerError>> => {
+  switch (subject.type) {
+    case "company-id": {
+      return await resolveCompanyName({
+        value: subject.value,
+        country: subject.country,
+        dependencies,
+      });
+    }
+    case "organization": {
+      const name = subject.name.trim();
+      const identifiers =
+        subject.companyId === null || subject.companyId.trim() === ""
+          ? []
+          : [subject.companyId.trim()];
+      return Result.ok({
+        type: "resolved",
+        subject: { type: "organization", name, identifiers },
+        checked: {
+          type: "organization",
+          name,
+          identifiers,
+          resolvedFrom: null,
+        },
+      });
+    }
+    case "person": {
+      const name = `${subject.firstName.trim()} ${subject.lastName.trim()}`;
+      const { dateOfBirth } = subject;
+      const nationalityCodes = [...new Set(subject.nationalityCodes)];
+      return Result.ok({
+        type: "resolved",
+        subject: {
+          type: "person",
+          name,
+          birthDate:
+            dateOfBirth === null
+              ? null
+              : {
+                  year: dateOfBirth.year,
+                  ...(dateOfBirth.precision !== "year" && {
+                    month: dateOfBirth.month,
+                  }),
+                  ...(dateOfBirth.precision === "day" && {
+                    day: dateOfBirth.day,
+                  }),
+                },
+          nationalityCodes,
+        },
+        checked: { type: "person", name, dateOfBirth, nationalityCodes },
+      });
+    }
+    default: {
+      subject satisfies never;
+      return panic("Unhandled sanctions subject");
+    }
+  }
+};
+
+/**
+ * Screen a counterparty against every sanctions list. A company named only by
+ * its ID is resolved through its register first; when that fails, every list
+ * is `unavailable` with the reason, never `clear`.
+ */
+export const runSanctionsCheck = async ({
+  subject,
+  dependencies,
+}: {
+  subject: SanctionsCheckSubject;
+  dependencies: SanctionsCheckDependencies;
+}): Promise<Result<SanctionsCheckResult, HandlerError>> => {
+  const {
+    screen = screenSanctionsSubject,
+    loadPracticeJurisdictions: loadJurisdictions = loadPracticeJurisdictions,
+  } = dependencies;
+  const resolved = await resolveSubject(subject, dependencies);
+  if (resolved.isErr()) {
+    return Result.err(resolved.error);
+  }
+  const jurisdictions = await Result.tryPromise({
+    try: async () =>
+      await loadJurisdictions({
+        scopedDb: dependencies.scopedDb,
+        organizationId: dependencies.organizationId,
+      }),
+    catch: (cause) =>
+      new HandlerError({
+        status: 500,
+        message: "Could not read the practice jurisdictions",
+        cause,
+      }),
+  });
+  if (jurisdictions.isErr()) {
+    return Result.err(jurisdictions.error);
+  }
+  const practiceJurisdictions = jurisdictions.value;
+  const outcome = resolved.value;
+  if (outcome.type === "unresolved") {
+    if (subject.type !== "company-id") {
+      return panic("Only a company ID resolves through a register");
+    }
+    return Result.ok({
+      kind: "sanctions",
+      subject: {
+        type: "company-id",
+        value: subject.value.trim(),
+        country: subject.country,
+      },
+      ...unavailableSanctionsScreening({
+        reason: outcome.reason,
+        practiceJurisdictions,
+      }),
+    });
+  }
+  const screened = await screen({
+    db: dependencies.scopedDb,
+    subject: outcome.subject,
+    practiceJurisdictions,
+  });
+  if (screened.isErr()) {
+    return invalidSubject(
+      screened.error.code === "empty-query"
+        ? "The name to screen has no letters"
+        : "The date of birth is not a valid calendar date",
+    );
+  }
+  return Result.ok({
+    kind: "sanctions",
+    subject: outcome.checked,
+    ...screened.value,
+  });
+};

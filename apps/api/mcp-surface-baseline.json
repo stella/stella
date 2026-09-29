@@ -5,13 +5,13 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28664,
-        "inputSchema": 82351,
-        "outputSchema": 55266,
+        "description": 28750,
+        "inputSchema": 85042,
+        "outputSchema": 56795,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 181988,
+      "payloadUtf8Bytes": 186294,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -21,8 +21,8 @@
         "chars": 5559
       },
       "largestOutputSchema": {
-        "tool": "read_document",
-        "chars": 2976
+        "tool": "check_counterparty",
+        "chars": 3880
       }
     },
     "documents": {

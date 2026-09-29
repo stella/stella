@@ -47,6 +47,22 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     check_counterparty: {
       command: ["contact", "check-counterparty"],
       scope: "read",
+      // The sanctions check answers per list: a table shows one row per list
+      // with its edition and state. A register check has no `lists` and
+      // renders as one record.
+      itemsKey: "lists",
+      paginationless: true,
+      columns: [
+        "source",
+        "status",
+        "classification",
+        "reason",
+        "editionId",
+        "publishedAt",
+        "verifiedAt",
+        "totalMatches",
+        "truncated",
+      ],
     },
 
     list_tasks: {

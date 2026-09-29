@@ -9,8 +9,7 @@ import {
   RESOURCE_TYPE,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
-import { ENTITY_CHECK_KINDS } from "@stll/business-registries/entity-checks";
-import type { EntityCheckSubject } from "@stll/business-registries/entity-checks";
+import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries/lookup";
@@ -44,7 +43,13 @@ import {
   BUSINESS_REGISTRY_SLUGS,
   LOOKUP_DETAIL_DESCRIPTION,
 } from "@/api/lib/business-registries/dispatch";
-import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
+import {
+  COUNTERPARTY_CHECK_KINDS,
+  personDateOfBirth,
+  runEntityCheckShared,
+} from "@/api/lib/business-registries/entity-checks";
+import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
   type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
@@ -62,6 +67,7 @@ import {
   SAVE_TASK_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedContactId,
@@ -623,6 +629,31 @@ const handleListContactsTool: TypedMcpToolHandler<
 
 // --- save_contact -------------------------------------------------------
 
+const birthYearSchema = () =>
+  v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999));
+const birthMonthSchema = () =>
+  v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12));
+
+/**
+ * A date of birth at the precision known, as contacts store it: a year, a
+ * year and month, or a full date. Shared by save_contact and
+ * check_counterparty, so a date read back from a contact is accepted as is.
+ */
+const dateOfBirthInputSchema = v.variant("precision", [
+  v.strictObject({ precision: v.literal("year"), year: birthYearSchema() }),
+  v.strictObject({
+    precision: v.literal("month"),
+    year: birthYearSchema(),
+    month: birthMonthSchema(),
+  }),
+  v.strictObject({
+    precision: v.literal("day"),
+    year: birthYearSchema(),
+    month: birthMonthSchema(),
+    day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(31)),
+  }),
+]);
+
 type ContactNameParts = {
   display_name?: string | undefined;
   first_name?: string | null | undefined;
@@ -710,55 +741,7 @@ const saveContactArgsSchema = nullAsAbsent(
       ),
       date_of_birth: v.optional(
         v.pipe(
-          v.nullable(
-            v.variant("precision", [
-              v.strictObject({
-                precision: v.literal("year"),
-                year: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1000),
-                  v.maxValue(9999),
-                ),
-              }),
-              v.strictObject({
-                precision: v.literal("month"),
-                year: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1000),
-                  v.maxValue(9999),
-                ),
-                month: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1),
-                  v.maxValue(12),
-                ),
-              }),
-              v.strictObject({
-                precision: v.literal("day"),
-                year: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1000),
-                  v.maxValue(9999),
-                ),
-                month: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1),
-                  v.maxValue(12),
-                ),
-                day: v.pipe(
-                  v.number(),
-                  v.integer(),
-                  v.minValue(1),
-                  v.maxValue(31),
-                ),
-              }),
-            ]),
-          ),
+          v.nullable(dateOfBirthInputSchema),
           v.description(
             "Date of birth with known year, month, or day precision; pass null to clear",
           ),
@@ -1051,7 +1034,16 @@ const checkCounterpartySubjectSchema = v.variant("type", [
       v.minLength(1),
       v.maxLength(32),
       v.description(
-        "National business ID in the check's country, e.g. the Czech IČO 26863154",
+        "National business ID, e.g. the Czech IČO 26863154. The sanctions " +
+          "check reads the company's name from its register (ARES for CZ, " +
+          "RPO for SK) and screens that name.",
+      ),
+    ),
+    country: v.optional(
+      countryInputSchema(
+        "Country that issued the ID, as an ISO 3166-1 alpha-2 code or the " +
+          "country's name: CZ (the default) or SK. The register checks " +
+          "cover CZ only.",
       ),
     ),
   }),
@@ -1072,7 +1064,10 @@ const checkCounterpartySubjectSchema = v.variant("type", [
   v.strictObject({
     type: v.pipe(
       v.literal("person"),
-      v.description("A natural person, by name and birth date."),
+      v.description(
+        "A natural person, by name. cz-insolvency also needs the full birth " +
+          "date; the sanctions check uses whatever date and nationalities are known.",
+      ),
     ),
     first_name: v.pipe(
       v.string(),
@@ -1086,10 +1081,57 @@ const checkCounterpartySubjectSchema = v.variant("type", [
       v.maxLength(100),
       v.description("Last name (surname)"),
     ),
-    birth_date: v.pipe(
-      ISO_DATE_SCHEMA,
-      v.maxLength(10),
-      v.description("Birth date"),
+    birth_date: v.optional(
+      v.pipe(
+        ISO_DATE_SCHEMA,
+        v.maxLength(10),
+        v.description(
+          "Full birth date. When only the year or the month is known, send " +
+            "date_of_birth instead; never invent a day.",
+        ),
+      ),
+    ),
+    date_of_birth: v.optional(
+      v.pipe(
+        dateOfBirthInputSchema,
+        v.description(
+          "Birth date at the precision known, in the shape read_contact " +
+            "returns: year only, year and month, or a full date.",
+        ),
+      ),
+    ),
+    nationality_codes: v.optional(
+      v.pipe(
+        v.array(countryInputSchema("Nationality country")),
+        v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
+        v.description(
+          "Nationalities, as ISO 3166-1 alpha-2 codes; used by the sanctions check",
+        ),
+      ),
+    ),
+  }),
+  v.strictObject({
+    type: v.pipe(
+      v.literal("organization"),
+      v.description(
+        "A company or other organization, by name. For the sanctions check.",
+      ),
+    ),
+    name: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(512),
+      v.description("The organization's name as registered"),
+    ),
+    company_id: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(32),
+        v.description(
+          "Its registration number, if known; screened beside the name",
+        ),
+      ),
     ),
   }),
 ]);
@@ -1097,13 +1139,17 @@ const checkCounterpartySubjectSchema = v.variant("type", [
 /** Shared with the chat tool, so both surfaces accept the same call. */
 export const CHECK_COUNTERPARTY_INPUT_SCHEMA = v.strictObject({
   check: v.pipe(
-    v.picklist(ENTITY_CHECK_KINDS),
+    v.picklist(COUNTERPARTY_CHECK_KINDS),
     v.description(
       "Source to screen against. cz-insolvency: the Czech insolvency " +
         "register (ISIR), pending and ended proceedings; takes a company " +
-        "or a person. cz-vat-reliability: the Czech VAT register, " +
-        "unreliable-payer status and published bank accounts; takes a " +
-        "tax ID, or a company ID sent as CZ + IČO and marked derived.",
+        "or a person with a full birth date. cz-vat-reliability: the Czech " +
+        "VAT register, unreliable-payer status and published bank " +
+        "accounts; takes a tax ID, or a company ID sent as CZ + IČO and " +
+        "marked derived. sanctions: every sanctions list stella keeps (the " +
+        "EU, UN and national lists), one outcome per list; takes a company " +
+        "ID, an organization by name, or a person by name with any known " +
+        "birth date and nationalities.",
     ),
   ),
   subject: v.pipe(
@@ -1116,23 +1162,58 @@ const checkCounterpartyArgsSchema = nullAsAbsent(
   CHECK_COUNTERPARTY_INPUT_SCHEMA,
 );
 
-export const toEntityCheckSubject = (
+const invalidCounterpartySubject = (message: string, hint: string) =>
+  Result.err(
+    new HandlerError({ status: 400, code: "validation_error", message, hint }),
+  );
+
+/** The subject as the shared check reads it, from the tool's snake_case input. */
+export const toCounterpartyCheckSubject = (
   subject: v.InferOutput<typeof checkCounterpartySubjectSchema>,
-): EntityCheckSubject => {
+): Result<CounterpartyCheckSubject, HandlerError> => {
   switch (subject.type) {
     case "company-id": {
-      return { type: "company-id", value: subject.company_id };
+      const country = subject.country ?? "CZ";
+      return includes(SANCTIONS_COMPANY_ID_COUNTRIES, country)
+        ? Result.ok({
+            type: "company-id",
+            value: subject.company_id,
+            country,
+          })
+        : invalidCounterpartySubject(
+            `Company IDs from ${country} are not read`,
+            "Send a CZ or SK company ID, or the company's name as an organization subject.",
+          );
     }
     case "tax-id": {
-      return { type: "tax-id", value: subject.tax_id };
+      return Result.ok({ type: "tax-id", value: subject.tax_id });
     }
     case "person": {
-      return {
+      const codes = subject.nationality_codes ?? [];
+      const nationalityCodes = codes.filter(isCountryCode);
+      if (nationalityCodes.length !== codes.length) {
+        return invalidCounterpartySubject(
+          "Nationalities must be ISO 3166-1 alpha-2 country codes",
+          'Send each nationality as a two-letter code, e.g. "CZ".',
+        );
+      }
+      return personDateOfBirth({
+        birthDate: subject.birth_date,
+        dateOfBirth: subject.date_of_birth,
+      }).map((dateOfBirth): CounterpartyCheckSubject => ({
         type: "person",
         firstName: subject.first_name,
         lastName: subject.last_name,
-        birthDate: subject.birth_date,
-      };
+        dateOfBirth,
+        nationalityCodes,
+      }));
+    }
+    case "organization": {
+      return Result.ok({
+        type: "organization",
+        name: subject.name,
+        companyId: subject.company_id ?? null,
+      });
     }
     default: {
       subject satisfies never;
@@ -1153,15 +1234,26 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
+  const subject = toCounterpartyCheckSubject(parsed.output.subject);
+  if (Result.isError(subject)) {
+    return internalFailureResult(subject.error);
+  }
   const result = await runEntityCheckShared({
     check: parsed.output.check,
-    subject: toEntityCheckSubject(parsed.output.subject),
+    subject: subject.value,
     runCheck: context.testDependencies?.runEntityCheck,
+    sanctions: {
+      scopedDb: context.scopedDb,
+      organizationId: context.organizationId,
+      executeLookup: context.testDependencies?.executeRegistryLookup,
+      runSanctionsCheck: context.testDependencies?.runSanctionsCheck,
+    },
   });
   if (Result.isError(result)) {
     return internalFailureResult(result.error);
   }
-  // Passthrough: public-register data about a subject the caller named.
+  // Passthrough: public-register and public-list data about a subject the
+  // caller named.
   type CheckCounterpartyPayload = AssertNoExtraFields<
     typeof result.value,
     v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
@@ -2411,22 +2503,31 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Screen a company or a person against an official register for due " +
-      "diligence. `check` picks the source; `subject` is a company ID, a " +
-      "tax ID or a person by name and birth date. Returns one outcome: clear " +
-      "(the source answered and lists nothing adverse), found (the adverse " +
-      "records), not-registered (the source holds no record, e.g. not a VAT " +
-      "payer; not a clearance), unavailable (the source did not answer: the " +
-      "subject is NOT cleared; retry later or say the check could not run), " +
-      "or not-covered (the source cannot screen this subject type, or needs " +
-      "the tax ID because one derived from the company ID was not on file). " +
-      "Person " +
-      "matches rely on name and birth date: compare the record before " +
-      "relying on one.",
+      "Screen a company or person for due diligence. `check` picks the " +
+      "source. A register check returns one outcome: clear, found (adverse " +
+      "records), not-registered (no record; not a clearance), unavailable " +
+      "(no answer: NOT cleared) or not-covered (cannot screen this " +
+      "subject, or needs the tax ID). The sanctions check returns one " +
+      "outcome per list in `lists`, naming the edition screened and " +
+      "whether the list binds the firm: clear, possible-match (resembling " +
+      "entries with score and conflicting fields; each needs human review, " +
+      "none is a confirmed hit) or unavailable (stale or not loaded, or " +
+      "the company's name unreadable from its register: NOT cleared). Its " +
+      "top-level status is clear only when every list is. Person matches " +
+      "rely on name and birth date: compare the record before relying on one.",
     inputSchema: checkCounterpartyArgsSchema,
     inputNormalization: {
       check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
       "subject.birth_date": { kind: AGENT_INPUT_NORMALIZATION_KIND.date },
+      "subject.country": countryNormalization({
+        spelling: "alpha-2",
+        admitted: SANCTIONS_COMPANY_ID_COUNTRIES,
+        tool: "check_counterparty",
+      }),
+      "subject.nationality_codes[]": countryNormalization({
+        spelling: "alpha-2",
+        tool: "check_counterparty",
+      }),
     },
     access: "read",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
