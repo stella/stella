@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -22,37 +24,42 @@ const localMigrations = fc.uniqueArray(
     hash: migrationHash,
     name: fc.uuid(),
   }),
-  { minLength: 1, selector: ({ hash }) => hash },
+  { minLength: 1, selector: ({ name }) => name },
 );
 
 const migrationHistory = localMigrations.chain((local) =>
   fc
-    .tuple(
-      fc.array(fc.boolean(), {
-        minLength: local.length,
-        maxLength: local.length,
-      }),
-      fc.array(fc.uuid(), { maxLength: 10 }),
-    )
-    .map(([isApplied, unrelatedHashes]) => ({
-      appliedHashes: new Set([
-        ...local.filter((_, index) => isApplied[index]).map(({ hash }) => hash),
-        ...unrelatedHashes.map((hash) => `unrelated-${hash}`),
-      ]),
-      expectedUnapplied: local.filter((_, index) => !isApplied[index]),
+    .array(fc.constantFrom("named", "unnamed", "missing"), {
+      minLength: local.length,
+      maxLength: local.length,
+    })
+    .map((status) => ({
+      appliedRows: [
+        ...local.flatMap(({ name, hash }, index) => {
+          if (status[index] === "missing") {
+            return [];
+          }
+          return [{ name: status[index] === "named" ? name : null, hash }];
+        }),
+        // These rows share bundled hashes but belong to newer migrations.
+        ...local.map(({ hash }, index) => ({ name: `newer-${index}`, hash })),
+      ],
+      expectedUnapplied: local.filter(
+        (_, index) => status[index] === "missing",
+      ),
       local,
     })),
 );
 
 describe("migration history invariant", () => {
-  test("reports exactly the bundled hashes absent from any applied history", () => {
+  test("requires a named receipt or an unnamed legacy hash for each bundled migration", () => {
     fc.assert(
       fc.property(
         migrationHistory,
-        ({ appliedHashes, expectedUnapplied, local }) => {
+        ({ appliedRows, expectedUnapplied, local }) => {
           expect(
             findUnappliedMigrations({
-              appliedHashes,
+              appliedRows,
               localMigrations: local,
             }),
           ).toEqual(expectedUnapplied);
@@ -82,25 +89,92 @@ describe("migration history invariant", () => {
         expect(actualHash).toBe(currentHash);
         expect(
           findUnappliedMigrations({
-            appliedHashes: new Set([priorHash]),
+            appliedRows: [{ name, hash: priorHash }],
             localMigrations: [{ hash: currentHash, name }],
           }),
         ).toEqual([]);
         expect(
           findUnappliedMigrations({
-            appliedHashes: new Set([priorHash]),
+            appliedRows: [{ name, hash: priorHash }],
             localMigrations: [{ hash: `modified-${currentHash}`, name }],
           }),
         ).toEqual([{ hash: `modified-${currentHash}`, name }]);
+        expect(
+          findUnappliedMigrations({
+            appliedRows: [{ name: null, hash: priorHash }],
+            localMigrations: [{ hash: currentHash, name }],
+          }),
+        ).toEqual([]);
       }),
     );
+  });
+
+  test("does not let a NULL-name hash hide a mismatched named receipt", () => {
+    const migration = { name: "20260929000000_example", hash: "current-hash" };
+    expect(
+      findUnappliedMigrations({
+        appliedRows: [
+          { name: migration.name, hash: "wrong-hash" },
+          { name: null, hash: migration.hash },
+        ],
+        localMigrations: [migration],
+      }),
+    ).toEqual([migration]);
+  });
+
+  // Two byte-identical migrations share a hash; one unnamed receipt is proof
+  // that only one of them ran.
+  test("one NULL-name receipt satisfies only one of two identical migrations", () => {
+    const first = { name: "20260707100000_drop_shortcuts", hash: "same-hash" };
+    const second = { name: "20260707130000_drop_shortcuts", hash: "same-hash" };
+    expect(
+      findUnappliedMigrations({
+        appliedRows: [{ name: null, hash: "same-hash" }],
+        localMigrations: [first, second],
+      }),
+    ).toEqual([second]);
+    expect(
+      findUnappliedMigrations({
+        appliedRows: [
+          { name: null, hash: "same-hash" },
+          { name: null, hash: "same-hash" },
+        ],
+        localMigrations: [first, second],
+      }),
+    ).toEqual([]);
+  });
+
+  test("allows an older bundle to start with extra newer ledger rows", async () => {
+    const migrationsDir = mkdtempSync(
+      nodePath.join(tmpdir(), "stella-startup-migrations-"),
+    );
+    try {
+      const name = "20260929000000_bundled";
+      const sqlText = "SELECT 1;";
+      const hash = new Bun.CryptoHasher("sha256").update(sqlText).digest("hex");
+      const folder = nodePath.join(migrationsDir, name);
+      mkdirSync(folder);
+      writeFileSync(nodePath.join(folder, "migration.sql"), sqlText);
+
+      await assertMigrationHistory({
+        context: "startup",
+        migrationsDir,
+        queryAppliedRows: async () => [
+          { name, hash },
+          { name: "20260930000000_newer", hash: "newer-hash" },
+        ],
+        remedy: "No remedy.",
+      });
+    } finally {
+      rmSync(migrationsDir, { recursive: true, force: true });
+    }
   });
 
   test("reports the intended error when the migrations directory is absent", async () => {
     const rejection: unknown = await assertMigrationHistory({
       context: "migrate",
       migrationsDir: nodePath.join(import.meta.dir, "missing-migrations"),
-      queryAppliedHashes: async () => new Set(),
+      queryAppliedRows: async () => [],
       remedy: "No remedy.",
     }).then(
       () => null,

@@ -168,7 +168,8 @@ jobs:
           fi
 
           migration_exit=0
-          (cd apps/api && bun run src/db/migrate.ts) || migration_exit=$?
+          migration_output=$(cd apps/api && bun run src/db/migrate.ts 2>&1) || migration_exit=$?
+          echo "$migration_output"
 
           restored=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
             "WITH restored AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id AND migration.hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")
@@ -181,6 +182,10 @@ jobs:
             >/dev/null
           if [[ "$migration_exit" == "0" ]]; then
             echo "::error::Migration command accepted inconsistent applied history."
+            exit 1
+          fi
+          if [[ "$migration_output" != *"Migration preflight"* || "$migration_output" != *"hash-mismatch"* ]]; then
+            echo "::error::Migration command failed outside the history preflight."
             exit 1
           fi
 

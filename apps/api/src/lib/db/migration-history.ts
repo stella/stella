@@ -91,28 +91,58 @@ export const REWRITTEN_MIGRATION_INDEXES: readonly RequiredMigrationIndex[] = [
 ];
 
 export type LocalMigration = { name: string; hash: string };
+export type AppliedMigration = { name: string | null; hash: string };
 
 type FindUnappliedMigrationsOptions = {
-  appliedHashes: ReadonlySet<string>;
+  appliedRows: readonly AppliedMigration[];
   localMigrations: LocalMigration[];
 };
 
 export const findUnappliedMigrations = ({
-  appliedHashes,
+  appliedRows,
   localMigrations,
-}: FindUnappliedMigrationsOptions): LocalMigration[] =>
-  localMigrations.filter(({ hash, name }) => {
-    if (appliedHashes.has(hash)) {
+}: FindUnappliedMigrationsOptions): LocalMigration[] => {
+  const hashesByName = new Map<string, Set<string>>();
+  // Counted, not a set: byte-identical migrations share a hash, and one
+  // unnamed receipt must not prove that both of them ran.
+  const unnamedHashCounts = new Map<string, number>();
+  for (const { name, hash } of appliedRows) {
+    if (name === null) {
+      unnamedHashCounts.set(hash, (unnamedHashCounts.get(hash) ?? 0) + 1);
+      continue;
+    }
+    const hashes = hashesByName.get(name);
+    if (hashes === undefined) {
+      hashesByName.set(name, new Set([hash]));
+    } else {
+      hashes.add(hash);
+    }
+  }
+
+  const takeUnnamedReceipt = (acceptedHashes: readonly string[]): boolean => {
+    const hash = acceptedHashes.find(
+      (candidate) => (unnamedHashCounts.get(candidate) ?? 0) > 0,
+    );
+    if (hash === undefined) {
       return false;
     }
+    unnamedHashCounts.set(hash, (unnamedHashCounts.get(hash) ?? 0) - 1);
+    return true;
+  };
+
+  return localMigrations.filter(({ hash, name }) => {
     const supportedHistory = REWRITTEN_MIGRATION_HISTORIES[name];
-    if (supportedHistory?.currentHash !== hash) {
-      return true;
+    const acceptedHashes =
+      supportedHistory?.currentHash === hash
+        ? [hash, ...supportedHistory.priorHashes]
+        : [hash];
+    const namedHashes = hashesByName.get(name);
+    if (namedHashes !== undefined) {
+      return !acceptedHashes.some((candidate) => namedHashes.has(candidate));
     }
-    return !supportedHistory.priorHashes.some((priorHash) =>
-      appliedHashes.has(priorHash),
-    );
+    return !takeUnnamedReceipt(acceptedHashes);
   });
+};
 
 const hashMigrationFile = async (path: string): Promise<string> =>
   new Bun.CryptoHasher("sha256")
@@ -143,14 +173,14 @@ const listLocalMigrations = async (
 type AssertMigrationHistoryOptions = {
   context: "migrate" | "startup";
   migrationsDir: string;
-  queryAppliedHashes: () => Promise<ReadonlySet<string>>;
+  queryAppliedRows: () => Promise<readonly AppliedMigration[]>;
   remedy: string;
 };
 
 export const assertMigrationHistory = async ({
   context,
   migrationsDir,
-  queryAppliedHashes,
+  queryAppliedRows,
   remedy,
 }: AssertMigrationHistoryOptions): Promise<void> => {
   const localMigrations = await listLocalMigrations(migrationsDir);
@@ -161,9 +191,9 @@ export const assertMigrationHistory = async ({
     );
   }
 
-  const appliedHashes = await queryAppliedHashes();
+  const appliedRows = await queryAppliedRows();
   const unapplied = findUnappliedMigrations({
-    appliedHashes,
+    appliedRows,
     localMigrations,
   });
   if (unapplied.length === 0) {
@@ -173,7 +203,7 @@ export const assertMigrationHistory = async ({
   const unappliedNames = unapplied.map(({ name }) => name).join(", ");
   panic(
     `[${context}] Schema drift: ${unapplied.length} migration(s) in code are not applied to the database. ` +
-      `Code has ${localMigrations.length}; DB has ${appliedHashes.size}. ` +
+      `Code has ${localMigrations.length}; DB has ${appliedRows.length}. ` +
       `Missing or modified after apply: ${unappliedNames}. ${remedy}`,
   );
 };
