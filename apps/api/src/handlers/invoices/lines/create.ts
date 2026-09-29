@@ -1,15 +1,13 @@
-import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { InvoiceTotals } from "@stll/invoicing";
+
 import { abortableTx } from "@/api/db/safe-db";
+import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
 import {
-  BILLING_STATUS,
-  expenses,
-  invoiceLines,
-  timeEntries,
-} from "@/api/db/schema";
-import {
+  checkInvoiceLineCapacity,
   expenseLineDraft,
   type InvoiceLineDraft,
   insertInvoiceLines,
@@ -27,13 +25,13 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   tMinorUnitAmount,
   tSafeId,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
@@ -62,6 +60,8 @@ const createLineBodySchema = t.Object({
 });
 
 const lineParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+
+type CreatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
 const NOT_BILLABLE_MESSAGE =
   "The entry must be approved, billable, priced in the invoice currency, and not already on an invoice";
@@ -93,178 +93,192 @@ const createInvoiceLine = createSafeHandler(
       vatTreatment: body.vatTreatment,
     };
     const { source } = body;
-    let manualDraft: InvoiceLineDraft | null = null;
-    if (source.type === "manual") {
-      manualDraft = yield* manualLineDraft({
-        description: source.description,
-        quantity: source.quantity,
-        unit: source.unit ?? null,
-        unitPrice: cents(source.unitPriceMinor),
-        ...vat,
-      });
-    }
+    const manualDraft: InvoiceLineDraft | null =
+      source.type === "manual"
+        ? yield* manualLineDraft({
+            description: source.description,
+            quantity: source.quantity,
+            unit: source.unit ?? null,
+            unitPrice: cents(source.unitPriceMinor),
+            ...vat,
+          })
+        : null;
     const now = new Date();
 
-    const txResult = await abortableTx(safeDb, async (tx) => {
-      const invoice = await lockDraftInvoiceForLines(tx, {
-        invoiceId: params.invoiceId,
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-      });
-      if (!invoice) {
-        throw new HandlerError({
-          status: 409,
-          message: "Invoice not found or not in draft status",
+    const txResult = await abortableTx(
+      safeDb,
+      async (tx): Promise<Result<CreatedLine, HandlerError>> => {
+        const invoice = await lockDraftInvoiceForLines(tx, {
+          invoiceId: params.invoiceId,
+          organizationId: session.activeOrganizationId,
+          workspaceId,
         });
-      }
+        if (!invoice) {
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Invoice not found or not in draft status",
+            }),
+          );
+        }
 
-      const lineCount = await tx.$count(
-        invoiceLines,
-        and(
-          eq(invoiceLines.invoiceId, params.invoiceId),
-          eq(invoiceLines.workspaceId, workspaceId),
-        ),
-      );
-      if (lineCount >= LIMITS.invoiceLinesPerInvoice) {
-        throw new HandlerError({
-          status: 400,
-          message: `An invoice holds at most ${LIMITS.invoiceLinesPerInvoice} lines`,
-        });
-      }
+        const capacity = await checkInvoiceLineCapacity(
+          tx,
+          { invoiceId: params.invoiceId, workspaceId },
+          1,
+        );
+        if (capacity.isErr()) {
+          return Result.err(capacity.error);
+        }
 
-      const events: AuditEvent[] = [];
-      let draft = manualDraft;
-      if (source.type === "time_entry") {
-        const [entry] = await tx
-          .update(timeEntries)
-          .set({
-            invoiceId: params.invoiceId,
-            status: BILLING_STATUS.BILLED,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(timeEntries.id, source.timeEntryId),
-              eq(timeEntries.workspaceId, workspaceId),
-              eq(timeEntries.status, BILLING_STATUS.APPROVED),
-              eq(timeEntries.billable, true),
-              isNull(timeEntries.invoiceId),
-              eq(timeEntries.currency, invoice.currency),
-            ),
-          )
-          .returning({
-            id: timeEntries.id,
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
-            narrative: timeEntries.narrative,
-            invoiceNarrative: timeEntries.invoiceNarrative,
-            currency: timeEntries.currency,
-          });
-        if (!entry || entry.currency === UNPRICED_TIME_ENTRY_CURRENCY) {
-          throw new HandlerError({
-            status: 400,
-            message: NOT_BILLABLE_MESSAGE,
+        // Read and lock the entry the line bills before writing anything, so
+        // a refusal commits nothing.
+        let draft: InvoiceLineDraft;
+        if (source.type === "time_entry") {
+          const [entry] = await tx
+            .select({
+              id: timeEntries.id,
+              billedMinutes: timeEntries.billedMinutes,
+              rateAtEntry: timeEntries.rateAtEntry,
+              narrative: timeEntries.narrative,
+              invoiceNarrative: timeEntries.invoiceNarrative,
+            })
+            .from(timeEntries)
+            .where(
+              and(
+                eq(timeEntries.id, source.timeEntryId),
+                eq(timeEntries.workspaceId, workspaceId),
+                eq(timeEntries.status, BILLING_STATUS.APPROVED),
+                eq(timeEntries.billable, true),
+                isNull(timeEntries.invoiceId),
+                eq(timeEntries.currency, invoice.currency),
+                ne(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          if (!entry) {
+            return Result.err(
+              new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
+            );
+          }
+          draft = timeEntryLineDraft(entry, vat, source.description);
+        } else if (source.type === "expense") {
+          const [expense] = await tx
+            .select({
+              id: expenses.id,
+              amount: expenses.amount,
+              markup: expenses.markup,
+              description: expenses.description,
+              invoiceDescription: expenses.invoiceDescription,
+            })
+            .from(expenses)
+            .where(
+              and(
+                eq(expenses.id, source.expenseId),
+                eq(expenses.workspaceId, workspaceId),
+                eq(expenses.status, BILLING_STATUS.APPROVED),
+                eq(expenses.billable, true),
+                isNull(expenses.invoiceId),
+                eq(expenses.currency, invoice.currency),
+              ),
+            )
+            .limit(1)
+            .for("update");
+          if (!expense) {
+            return Result.err(
+              new HandlerError({ status: 400, message: NOT_BILLABLE_MESSAGE }),
+            );
+          }
+          draft = expenseLineDraft(expense, vat, source.description);
+        } else {
+          draft = manualDraft ?? panic("A manual line has no draft");
+        }
+
+        // The locked entry is still eligible, so its claim cannot miss.
+        const events: AuditEvent[] = [];
+        const billed = {
+          invoiceId: params.invoiceId,
+          status: BILLING_STATUS.BILLED,
+          updatedAt: now,
+        };
+        const billedChanges = {
+          status: { old: BILLING_STATUS.APPROVED, new: BILLING_STATUS.BILLED },
+          invoiceId: { old: null, new: params.invoiceId },
+        };
+        if (draft.timeEntryId !== null) {
+          await tx
+            .update(timeEntries)
+            .set(billed)
+            .where(
+              and(
+                eq(timeEntries.id, draft.timeEntryId),
+                eq(timeEntries.workspaceId, workspaceId),
+              ),
+            );
+          events.push({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+            resourceId: draft.timeEntryId,
+            changes: billedChanges,
           });
         }
-        draft = timeEntryLineDraft(entry, vat, source.description);
-        events.push({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-          resourceId: entry.id,
-          changes: {
-            status: {
-              old: BILLING_STATUS.APPROVED,
-              new: BILLING_STATUS.BILLED,
-            },
-            invoiceId: { old: null, new: params.invoiceId },
-          },
-        });
-      } else if (source.type === "expense") {
-        const [expense] = await tx
-          .update(expenses)
-          .set({
-            invoiceId: params.invoiceId,
-            status: BILLING_STATUS.BILLED,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(expenses.id, source.expenseId),
-              eq(expenses.workspaceId, workspaceId),
-              eq(expenses.status, BILLING_STATUS.APPROVED),
-              eq(expenses.billable, true),
-              isNull(expenses.invoiceId),
-              eq(expenses.currency, invoice.currency),
-            ),
-          )
-          .returning({
-            id: expenses.id,
-            amount: expenses.amount,
-            markup: expenses.markup,
-            description: expenses.description,
-            invoiceDescription: expenses.invoiceDescription,
-          });
-        if (!expense) {
-          throw new HandlerError({
-            status: 400,
-            message: NOT_BILLABLE_MESSAGE,
+        if (draft.expenseId !== null) {
+          await tx
+            .update(expenses)
+            .set(billed)
+            .where(
+              and(
+                eq(expenses.id, draft.expenseId),
+                eq(expenses.workspaceId, workspaceId),
+              ),
+            );
+          events.push({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+            resourceId: draft.expenseId,
+            changes: billedChanges,
           });
         }
-        draft = expenseLineDraft(expense, vat, source.description);
-        events.push({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
-          resourceId: expense.id,
-          changes: {
-            status: {
-              old: BILLING_STATUS.APPROVED,
-              new: BILLING_STATUS.BILLED,
-            },
-            invoiceId: { old: null, new: params.invoiceId },
-          },
-        });
-      }
-      if (!draft) {
-        throw new HandlerError({ status: 400, message: "Unknown line source" });
-      }
 
-      const scope = { invoiceId: params.invoiceId, workspaceId };
-      const [line] = await insertInvoiceLines(
-        tx,
-        { ...scope, organizationId: session.activeOrganizationId },
-        [draft],
-      );
-      if (!line) {
-        throw new HandlerError({ status: 500, message: "Line was not saved" });
-      }
-      const totals = await recalculateInvoiceTotals(tx, scope, now);
+        const scope = { invoiceId: params.invoiceId, workspaceId };
+        const [line] = await insertInvoiceLines(
+          tx,
+          { ...scope, organizationId: session.activeOrganizationId },
+          [draft],
+        );
+        if (!line) {
+          return panic("Invoice line insert returned no row");
+        }
+        const totals = await recalculateInvoiceTotals(tx, scope, now);
 
-      await recordAuditEvent(tx, [
-        {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-          resourceId: params.invoiceId,
-          changes: {
-            lineAdded: {
-              old: null,
-              new: {
-                id: line.id,
-                source: line.source,
-                netAmount: draft.netAmount,
-                vatRateBps: draft.vatRateBps,
+        await recordAuditEvent(tx, [
+          {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: params.invoiceId,
+            changes: {
+              lineAdded: {
+                old: null,
+                new: {
+                  id: line.id,
+                  source: line.source,
+                  netAmount: draft.netAmount,
+                  vatRateBps: draft.vatRateBps,
+                },
+              },
+              totalAmount: {
+                old: invoice.totalAmount,
+                new: totals.grossAmountMinor,
               },
             },
-            totalAmount: {
-              old: invoice.totalAmount,
-              new: totals.grossAmountMinor,
-            },
           },
-        },
-        ...events,
-      ]);
+          ...events,
+        ]);
 
-      return { id: line.id, totals };
-    });
+        return Result.ok({ id: line.id, totals });
+      },
+    );
 
     if (Result.isError(txResult)) {
       const error = txResult.error;
@@ -278,7 +292,7 @@ const createInvoiceLine = createSafeHandler(
       return Result.err(error);
     }
 
-    return Result.ok(txResult.value);
+    return txResult.value;
   },
 );
 

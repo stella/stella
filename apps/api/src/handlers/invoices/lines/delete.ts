@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import type { InvoiceTotals } from "@stll/invoicing";
+
 import { abortableTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -15,6 +17,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -22,6 +25,8 @@ const lineParamsSchema = workspaceParams({
   invoiceId: tSafeId("invoice"),
   lineId: tSafeId("invoiceLine"),
 });
+
+type DeletedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
 
 const deleteInvoiceLine = createSafeHandler(
   {
@@ -37,139 +42,149 @@ const deleteInvoiceLine = createSafeHandler(
     const now = new Date();
 
     const result = yield* Result.await(
-      abortableTx(safeDb, async (tx) => {
-        const invoice = await lockDraftInvoiceForLines(tx, {
-          invoiceId: params.invoiceId,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-        });
-        if (!invoice) {
-          throw new HandlerError({
-            status: 409,
-            message: "Invoice not found or not in draft status",
+      abortableTx(
+        safeDb,
+        async (tx): Promise<Result<DeletedLine, HandlerError>> => {
+          const invoice = await lockDraftInvoiceForLines(tx, {
+            invoiceId: params.invoiceId,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
           });
-        }
-        const [line] = await tx
-          .delete(invoiceLines)
-          .where(
-            and(
-              eq(invoiceLines.id, params.lineId),
-              eq(invoiceLines.invoiceId, params.invoiceId),
-              eq(invoiceLines.workspaceId, workspaceId),
-            ),
-          )
-          .returning({
-            id: invoiceLines.id,
-            source: invoiceLines.source,
-            netAmount: invoiceLines.netAmount,
-            timeEntryId: invoiceLines.timeEntryId,
-            expenseId: invoiceLines.expenseId,
-          });
-        if (!line) {
-          throw new HandlerError({
-            status: 404,
-            message: "Invoice line not found",
-          });
-        }
-
-        const events: AuditEvent[] = [];
-        if (line.timeEntryId) {
-          const released = await tx
-            .update(timeEntries)
-            .set({
-              invoiceId: null,
-              status: BILLING_STATUS.APPROVED,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(timeEntries.id, line.timeEntryId),
-                eq(timeEntries.invoiceId, params.invoiceId),
-                eq(timeEntries.workspaceId, workspaceId),
-              ),
-            )
-            .returning({ id: timeEntries.id });
-          events.push(
-            ...released.map((row) => ({
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-              resourceId: row.id,
-              changes: {
-                status: {
-                  old: BILLING_STATUS.BILLED,
-                  new: BILLING_STATUS.APPROVED,
-                },
-                invoiceId: { old: params.invoiceId, new: null },
-              },
-            })),
+          if (!invoice) {
+            return Result.err(
+              new HandlerError({
+                status: 409,
+                message: "Invoice not found or not in draft status",
+              }),
+            );
+          }
+          const lineScope = and(
+            eq(invoiceLines.id, params.lineId),
+            eq(invoiceLines.invoiceId, params.invoiceId),
+            eq(invoiceLines.workspaceId, workspaceId),
           );
-        }
-        if (line.expenseId) {
-          const released = await tx
-            .update(expenses)
-            .set({
-              invoiceId: null,
-              status: BILLING_STATUS.APPROVED,
-              updatedAt: now,
+          // Found before anything is written, so a refusal commits nothing;
+          // the invoice row lock keeps the line in place until the delete.
+          const [line] = await tx
+            .select({
+              id: invoiceLines.id,
+              source: invoiceLines.source,
+              netAmount: invoiceLines.netAmount,
+              timeEntryId: invoiceLines.timeEntryId,
+              expenseId: invoiceLines.expenseId,
             })
-            .where(
-              and(
-                eq(expenses.id, line.expenseId),
-                eq(expenses.invoiceId, params.invoiceId),
-                eq(expenses.workspaceId, workspaceId),
-              ),
-            )
-            .returning({ id: expenses.id });
-          events.push(
-            ...released.map((row) => ({
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
-              resourceId: row.id,
-              changes: {
-                status: {
-                  old: BILLING_STATUS.BILLED,
-                  new: BILLING_STATUS.APPROVED,
+            .from(invoiceLines)
+            .where(lineScope)
+            .limit(1);
+          if (!line) {
+            return Result.err(
+              new HandlerError({
+                status: 404,
+                message: "Invoice line not found",
+              }),
+            );
+          }
+          await tx.delete(invoiceLines).where(lineScope);
+
+          const events: AuditEvent[] = [];
+          if (line.timeEntryId) {
+            const released = await tx
+              .update(timeEntries)
+              .set({
+                invoiceId: null,
+                status: BILLING_STATUS.APPROVED,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(timeEntries.id, line.timeEntryId),
+                  eq(timeEntries.invoiceId, params.invoiceId),
+                  eq(timeEntries.workspaceId, workspaceId),
+                ),
+              )
+              .returning({ id: timeEntries.id });
+            events.push(
+              ...released.map((row) => ({
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+                resourceId: row.id,
+                changes: {
+                  status: {
+                    old: BILLING_STATUS.BILLED,
+                    new: BILLING_STATUS.APPROVED,
+                  },
+                  invoiceId: { old: params.invoiceId, new: null },
                 },
-                invoiceId: { old: params.invoiceId, new: null },
-              },
-            })),
+              })),
+            );
+          }
+          if (line.expenseId) {
+            const released = await tx
+              .update(expenses)
+              .set({
+                invoiceId: null,
+                status: BILLING_STATUS.APPROVED,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(expenses.id, line.expenseId),
+                  eq(expenses.invoiceId, params.invoiceId),
+                  eq(expenses.workspaceId, workspaceId),
+                ),
+              )
+              .returning({ id: expenses.id });
+            events.push(
+              ...released.map((row) => ({
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.EXPENSE,
+                resourceId: row.id,
+                changes: {
+                  status: {
+                    old: BILLING_STATUS.BILLED,
+                    new: BILLING_STATUS.APPROVED,
+                  },
+                  invoiceId: { old: params.invoiceId, new: null },
+                },
+              })),
+            );
+          }
+
+          const totals = await recalculateInvoiceTotals(
+            tx,
+            { invoiceId: params.invoiceId, workspaceId },
+            now,
           );
-        }
 
-        const totals = await recalculateInvoiceTotals(
-          tx,
-          { invoiceId: params.invoiceId, workspaceId },
-          now,
-        );
-
-        await recordAuditEvent(tx, [
-          {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-            resourceId: params.invoiceId,
-            changes: {
-              lineRemoved: {
-                old: {
-                  id: line.id,
-                  source: line.source,
-                  netAmount: line.netAmount,
+          await recordAuditEvent(tx, [
+            {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+              resourceId: params.invoiceId,
+              changes: {
+                lineRemoved: {
+                  old: {
+                    id: line.id,
+                    source: line.source,
+                    netAmount: line.netAmount,
+                  },
+                  new: null,
                 },
-                new: null,
-              },
-              totalAmount: {
-                old: invoice.totalAmount,
-                new: totals.grossAmountMinor,
+                totalAmount: {
+                  old: invoice.totalAmount,
+                  new: totals.grossAmountMinor,
+                },
               },
             },
-          },
-          ...events,
-        ]);
+            ...events,
+          ]);
 
-        return { id: line.id, totals };
-      }),
+          return Result.ok({ id: line.id, totals });
+        },
+      ),
     );
 
-    return Result.ok(result);
+    return result;
   },
 );
 

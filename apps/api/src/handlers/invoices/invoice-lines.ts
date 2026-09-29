@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, isNull, max, notExists } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -29,6 +29,7 @@ import {
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import type { CentsAmount } from "@/api/lib/money";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
@@ -260,7 +261,8 @@ type InvoiceScope = {
 /**
  * Appends priced lines after the invoice's last position. The caller holds
  * the invoice row lock (`lockInvoiceInStatus`), which serializes positions.
- * Throws a `HandlerError` to abort the transaction when pricing fails.
+ * Drafts come from the builders above, whose amounts are already validated,
+ * so pricing them cannot fail.
  */
 export const insertInvoiceLines = async (
   tx: Transaction,
@@ -272,7 +274,9 @@ export const insertInvoiceLines = async (
   }
   const priced = priceLines(drafts);
   if (priced.isErr()) {
-    throw priced.error;
+    return panic(
+      `Validated invoice lines failed pricing: ${priced.error.message}`,
+    );
   }
   const [last] = await tx
     .select({ position: max(invoiceLines.position) })
@@ -311,6 +315,36 @@ export const insertInvoiceLines = async (
 };
 
 /**
+ * Refuses a change that would take an invoice past
+ * `LIMITS.invoiceLinesPerInvoice` lines: a detail read returns every line.
+ * Call under the invoice row lock and after `lockDraftInvoiceForLines`, so
+ * the count includes lines it materialised and matches what the insert sees,
+ * and before writing anything else, so a refusal leaves no partial change.
+ */
+export const checkInvoiceLineCapacity = async (
+  tx: Transaction,
+  scope: Omit<InvoiceScope, "organizationId">,
+  adding: number,
+): Promise<Result<void, HandlerError>> => {
+  const lineCount = await tx.$count(
+    invoiceLines,
+    and(
+      eq(invoiceLines.invoiceId, scope.invoiceId),
+      eq(invoiceLines.workspaceId, scope.workspaceId),
+    ),
+  );
+  if (lineCount + adding > LIMITS.invoiceLinesPerInvoice) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `An invoice holds at most ${LIMITS.invoiceLinesPerInvoice} lines`,
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+/**
  * Entries read and lines written per round: 16 bound columns per line stays
  * far below the 65,535-parameter cap.
  */
@@ -327,12 +361,13 @@ const MATERIALISE_BATCH_SIZE = 500;
  * unreleased line (here, or anywhere the partial unique indexes would refuse
  * a second one) is skipped, so a second call writes nothing; the same filter
  * pages through large invoices, since each written round drops out of it.
- * Runs in the caller's transaction under the invoice row lock.
+ * Runs in the caller's transaction under the invoice row lock; returns how
+ * many lines it wrote.
  */
 const materialiseAttachedEntryLines = async (
   tx: Transaction,
   scope: InvoiceScope,
-): Promise<void> => {
+): Promise<number> => {
   const unlinedTimeEntries = () =>
     tx
       .select({
@@ -394,8 +429,10 @@ const materialiseAttachedEntryLines = async (
 
   // audit: skip - the entries were attached (and audited) before; their
   // lines restate the amount the invoice already bills.
+  let written = 0;
   for (;;) {
     const batch = await unlinedTimeEntries();
+    written += batch.length;
     await insertInvoiceLines(
       tx,
       scope,
@@ -407,6 +444,7 @@ const materialiseAttachedEntryLines = async (
   }
   for (;;) {
     const batch = await unlinedExpenses();
+    written += batch.length;
     await insertInvoiceLines(
       tx,
       scope,
@@ -418,14 +456,17 @@ const materialiseAttachedEntryLines = async (
       break;
     }
   }
+  return written;
 };
 
 /**
  * Locks a draft invoice before its lines change and backfills lines for
  * entries attached before lines existed (`materialiseAttachedEntryLines`), so
  * the edit and the `recalculateInvoiceTotals` after it see every billed
- * entry. Every handler that changes a draft's lines locks through here;
- * returns `undefined` when the invoice is missing or not a draft.
+ * entry. Backfilled lines are totalled at once, so the invoice stays
+ * consistent even when the caller then refuses its change. Every handler
+ * that changes a draft's lines locks through here; returns `undefined` when
+ * the invoice is missing or not a draft.
  *
  * Reads do not call this: a read never writes, so a legacy draft reads with
  * no lines and line totals of zero while its stored `totalAmount` keeps the
@@ -440,8 +481,8 @@ export const lockDraftInvoiceForLines = async (
     workspaceId: scope.workspaceId,
     status: INVOICE_STATUS.DRAFT,
   });
-  if (invoice) {
-    await materialiseAttachedEntryLines(tx, scope);
+  if (invoice && (await materialiseAttachedEntryLines(tx, scope)) > 0) {
+    await recalculateInvoiceTotals(tx, scope, new Date());
   }
   return invoice;
 };
@@ -466,7 +507,8 @@ export const invoiceTotals = (
  * Recomputes the invoice's stored totals from all of its lines (a voided
  * invoice keeps its released lines, and its document keeps their totals).
  * Call inside the transaction that changed the lines, after locking the
- * invoice.
+ * invoice. Stored lines were priced when written, so totalling them cannot
+ * fail.
  */
 export const recalculateInvoiceTotals = async (
   tx: Transaction,
@@ -489,7 +531,9 @@ export const recalculateInvoiceTotals = async (
     );
   const totals = invoiceTotals(lines);
   if (totals.isErr()) {
-    throw totals.error;
+    return panic(
+      `Stored invoice lines failed totalling: ${totals.error.message}`,
+    );
   }
   // audit: skip - callers record the invoice event with the new total.
   await tx
