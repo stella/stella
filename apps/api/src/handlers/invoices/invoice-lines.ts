@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, isNull, max, notExists } from "drizzle-orm";
-import { t } from "elysia";
+import { type Static, t } from "elysia";
 
 import {
   INVOICE_LINE_SOURCE,
@@ -9,7 +9,6 @@ import {
 import {
   calculateDocumentTotals,
   calculateLineNetAmount,
-  VAT_TREATMENTS,
 } from "@stll/invoicing";
 import type {
   InvoiceLineInput,
@@ -51,10 +50,20 @@ export const tVatRateBps = t.Integer({
 
 // A literal union, not `t.UnionEnum`: Elysia coerces an absent optional
 // UnionEnum field to its first member, so a line patch that omits the
-// treatment would reset it to `domestic_vat`.
-export const tVatTreatment = t.Union(
-  VAT_TREATMENTS.map((treatment) => t.Literal(treatment)),
-);
+// treatment would reset it to `domestic_vat`. The members are a tuple, not a
+// `.map()` result: a union over a plain array has the static type `never`.
+export const tVatTreatment = t.Union([
+  t.Literal("domestic_vat"),
+  t.Literal("not_vat_payer"),
+  t.Literal("reverse_charge"),
+  t.Literal("exempt"),
+]);
+
+true satisfies [VatTreatment] extends [Static<typeof tVatTreatment>]
+  ? [Static<typeof tVatTreatment>] extends [VatTreatment]
+    ? true
+    : never
+  : never;
 
 export const tLineDescription = t.String({
   minLength: 1,
