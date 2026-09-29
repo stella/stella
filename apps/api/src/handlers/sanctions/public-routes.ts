@@ -4,8 +4,10 @@ import publicSanctionsSearch, {
   createPublicSanctionsSearchHandler,
 } from "@/api/handlers/sanctions/search";
 import type { PublicSanctionsSearchOptions } from "@/api/handlers/sanctions/search";
-import { createPublicSanctionsRateLimitOptions } from "@/api/lib/rate-limit/public-sanctions";
-import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
+import {
+  createPublicSanctionsRateLimit,
+  createPublicSanctionsRateLimitOptions,
+} from "@/api/lib/rate-limit/public-sanctions";
 import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
 
 type PublicSanctionsRouteOptions = PublicSanctionsSearchOptions & {
@@ -21,7 +23,7 @@ export const createPublicSanctionsRoute = (
       : createPublicSanctionsSearchHandler(options);
   return new Elysia({ prefix: "/sanctions" })
     .use(
-      rateLimit(
+      createPublicSanctionsRateLimit(
         options?.rateLimitOptions ?? createPublicSanctionsRateLimitOptions(),
       ),
     )
