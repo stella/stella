@@ -18,6 +18,7 @@ import type {
   PublicStatute,
   PublicStatuteVersion,
 } from "@/features/statutes/queries/statutes";
+import type { StatuteWindowGap } from "@/features/statutes/statute-expression";
 import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -350,22 +351,24 @@ describe("a version or a day that cannot be read as in force", () => {
   test("a day the publisher's inconsistent dates leave unanswered shows the act and says why", async () => {
     const queryClient = new QueryClient();
     seedWork(queryClient);
-    const windowGap = [
-      {
-        basis: "reversed",
-        id: REVERSED_ID,
-        language: "cs",
-        versionValidFrom: "2022-01-01",
-        versionValidTo: "2021-12-31",
-      },
-    ] as const;
+    const gap: StatuteWindowGap = {
+      windowGap: [
+        {
+          basis: "reversed",
+          id: REVERSED_ID,
+          language: "cs",
+          versionValidFrom: "2022-01-01",
+          versionValidTo: "2021-12-31",
+        },
+      ],
+    };
     queryClient.setQueryData(
       statuteBySlugOptions({
         asOf: "2022-02-01",
         country: COUNTRY_SEGMENT,
         slug: SLUG,
       }).queryKey,
-      { windowGap },
+      gap,
     );
 
     const loaded = await load(queryClient, {
@@ -374,7 +377,7 @@ describe("a version or a day that cannot be read as in force", () => {
     });
 
     expect(loaded.statute).toBeNull();
-    expect(loaded.windowGap).toEqual(windowGap);
+    expect(loaded.windowGap).toEqual(gap.windowGap);
     expect(loaded.work.id).toBe(CURRENT_ID);
   });
 
