@@ -316,8 +316,18 @@ test("a withdrawal names its version by id only, in bounded batches", async () =
 
   expect(outcomes).toEqual([{ type: "missing" }, { type: "missing" }]);
   expect(await stateOf(stored.id)).toEqual(listed);
-  await expect(
-    withdrawLegislationVersions(oversized, scopedDb),
-  ).rejects.toThrow("too many legislation withdrawals");
+  // Bun's matcher type declares `.rejects.toThrow` as void; capture the
+  // rejection explicitly so type-aware lint and the runtime agree.
+  const rejection: unknown = await withdrawLegislationVersions(
+    oversized,
+    scopedDb,
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(Error);
+  expect(rejection).toMatchObject({
+    message: expect.stringContaining("too many legislation withdrawals"),
+  });
   expect(await stateOf(stored.id)).toEqual(listed);
 });
