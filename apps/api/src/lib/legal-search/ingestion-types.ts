@@ -57,6 +57,17 @@ export const DOCUMENT_DELIVERY = {
 type DocumentDelivery =
   (typeof DOCUMENT_DELIVERY)[keyof typeof DOCUMENT_DELIVERY];
 
+/**
+ * One opinion a decision prints (the majority, a concurrence, a dissent) and
+ * the AST blocks it consists of, footnotes included. A short-form citation
+ * never reaches back across an opinion, so its boundaries are structure the
+ * parser states, not wording the extractor guesses from.
+ */
+export type CitationOpinionScope = {
+  opinionId: string;
+  blockIds: readonly string[];
+};
+
 /** Result of parsing a single court decision from a source. */
 export type IngestionResult = {
   /**
@@ -177,6 +188,12 @@ export type IngestionResult = {
    * wording-based `segmentDecision` fallback in the pipeline.
    */
   sections?: DecisionSection[] | undefined;
+  /**
+   * The opinions `documentAst` prints, for a source whose decisions carry
+   * more than one. Absent, citation short forms resolve only within the
+   * block they appear in.
+   */
+  citationScopes?: readonly CitationOpinionScope[] | undefined;
   /** Parser version that produced the AST. Enables lazy re-parsing. */
   parserVersion?: number | undefined;
   /**
