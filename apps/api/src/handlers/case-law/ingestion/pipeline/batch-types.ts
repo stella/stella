@@ -343,7 +343,10 @@ export const prepareCaseLawIngestionBatch = ({
   const batchRecords: CaseLawIngestionBatchRecord[] = [];
   for (const [index, record] of inputBatchRecords.entries()) {
     if (record.type === "decision") {
-      if (!isValidRecordIdentity(record.recordIdentity)) {
+      if (
+        "recordIdentity" in record &&
+        !isValidRecordIdentity(record.recordIdentity)
+      ) {
         return boundsError(
           CASE_LAW_BATCH_BOUNDS_REASON.INVALID_RECORD,
           `Record ${index} has an invalid record identity`,
