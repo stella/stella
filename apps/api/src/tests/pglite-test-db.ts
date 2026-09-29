@@ -120,6 +120,7 @@ export const CASE_LAW_ANALYSIS_READER_SELECT_COLUMNS = {
     "source",
   ],
   case_law_court_weights: ["country", "court_pattern", "tier"],
+  case_law_court_directory_ranks: ["country", "court_id", "tier", "weight"],
   case_law_corpus_tombstones: ["location"],
 } as const;
 
@@ -296,6 +297,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_statute_citation_count_state",
       "case_law_polarity_rules",
       "case_law_court_weights",
+      "case_law_court_directory_ranks",
       "case_law_fts_configs",
       "case_law_search_documents",
       "case_law_ingestion_events",
@@ -319,6 +321,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_statute_citation_count_state",
       "case_law_polarity_rules",
       "case_law_court_weights",
+      "case_law_court_directory_ranks",
       "case_law_fts_configs",
       "case_law_search_documents",
       "case_law_ingestion_events",
@@ -340,6 +343,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_statute_citation_counts",
       "case_law_polarity_rules",
       "case_law_court_weights",
+      "case_law_court_directory_ranks",
       "case_law_fts_configs",
       "case_law_search_documents",
       "case_law_ingestion_events",

@@ -12,6 +12,7 @@ import {
 import { authRelationsPart } from "@/api/db/auth-schema";
 import {
   caseLawCitations,
+  caseLawCourtDirectoryRanks,
   caseLawCourtWeights,
   caseLawDecisions,
   caseLawSources,
@@ -32,6 +33,7 @@ import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import {
   UNRANKED_COURT_RANK,
   US_TIER_RANK,
+  usCourtDirectoryRankRows,
 } from "@/api/lib/case-law/court-ranks";
 import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
@@ -244,6 +246,9 @@ test("every accepted United States court ranks by its id alike in every path", a
   const db = drizzle({ client });
   await applyMigration(db, FULL_SEED);
   await applyMigration(db, USA_SEED);
+  await db
+    .insert(caseLawCourtDirectoryRanks)
+    .values(usCourtDirectoryRankRows());
   const map = courtWeightMapFromSeed();
 
   // Not vacuous: courts that share a source name hold different ids and

@@ -2,11 +2,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { caseLawCourtDirectoryRanks } from "@/api/db/schema";
 import {
   courtWeight,
   courtWeightSql,
 } from "@/api/handlers/case-law/citation-score";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import { usCourtDirectoryRankRows } from "@/api/lib/case-law/court-ranks";
 import {
   courtTierSqlFromMap,
   courtWeightFromMap,
@@ -45,6 +47,9 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+    await db
+      .insert(caseLawCourtDirectoryRanks)
+      .values(usCourtDirectoryRankRows());
   },
   { timeout: 30_000 },
 );

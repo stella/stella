@@ -6,6 +6,7 @@ import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
 import { resolveUsCourt } from "@stll/api-contract/us-courts";
 
 import {
+  caseLawCourtDirectoryRanks,
   caseLawDecisions,
   caseLawSearchDocuments,
   caseLawSources,
@@ -18,7 +19,10 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { courtPresentation } from "@/api/lib/case-law/court-presentation";
-import { UNRANKED_COURT_RANK } from "@/api/lib/case-law/court-ranks";
+import {
+  UNRANKED_COURT_RANK,
+  usCourtDirectoryRankRows,
+} from "@/api/lib/case-law/court-ranks";
 import { decisionCourtWeight } from "@/api/lib/case-law/court-weights";
 import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
 import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
@@ -50,6 +54,9 @@ const rowsOf = (result: unknown): Record<string, unknown>[] => {
 test("both Postgres searches rank a United States decision by its court id's tier", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
+  await db
+    .insert(caseLawCourtDirectoryRanks)
+    .values(usCourtDirectoryRankRows());
   // The headline configuration: migrations create it, the schema push does not.
   await db.execute(
     sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
@@ -157,6 +164,9 @@ test("both Postgres searches rank a United States decision by its court id's tie
 test("a search page holding a corrupt directory row serves its valid peers", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
+  await db
+    .insert(caseLawCourtDirectoryRanks)
+    .values(usCourtDirectoryRankRows());
   await db.execute(
     sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
   );

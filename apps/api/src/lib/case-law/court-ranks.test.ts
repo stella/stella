@@ -1,7 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import { resolveUsCourt, US_COURTS } from "@stll/api-contract/us-courts";
+import { resolveUsCourt } from "@stll/api-contract/us-courts";
 
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
@@ -91,38 +91,22 @@ test("a directory decision without an accepted court id is unranked and reported
   }
 });
 
-test("the directory rank SQL binds each ranked id once, grouped by value", () => {
+test("the directory rank SQL uses a keyed lookup without directory-size parameters", () => {
   const dialect = new PgDialect();
   const weight = dialect.sqlToQuery(usCourtRankSql("d.court_id", "weight"));
   const tier = dialect.sqlToQuery(usCourtRankSql("d.court_id", "tier"));
-  const bound = (params: readonly unknown[]): string[] =>
-    params.flatMap((param) =>
-      [...String(param).matchAll(/"([^"]+)"/gu)].map(([, id]) => id ?? ""),
-    );
-
-  // Every accepted court holds a weight above the unranked one, so every id
-  // is bound; the tier binds only the courts above the lowest tier, since
-  // the ELSE already answers the rest.
-  expect(bound(weight.params).toSorted()).toEqual(
-    US_COURTS.map(({ id }) => id).toSorted(),
-  );
-  expect(bound(tier.params).toSorted()).toEqual(
-    US_COURTS.filter(
-      ({ id }) => (usCourtRank(id)?.tier ?? 0) > UNRANKED_COURT_RANK.tier,
-    )
-      .map(({ id }) => id)
-      .toSorted(),
-  );
-  // One parameter per rank value, and no id in the statement text: the text
-  // is the same few hundred characters whatever the directory holds.
-  expect(weight.params).toHaveLength(4);
-  expect(tier.params).toHaveLength(2);
-  for (const { sql: text } of [weight, tier]) {
-    expect(text).not.toContain("scotus");
-    expect(text.length).toBeLessThan(400);
+  for (const [field, rendered] of [
+    ["weight", weight],
+    ["tier", tier],
+  ] as const) {
+    expect(rendered.params).toEqual([]);
+    expect(rendered.sql).toContain("case_law_court_directory_ranks");
+    expect(rendered.sql).toContain("r.country = 'USA'");
+    expect(rendered.sql).toContain("r.court_id = d.court_id");
+    expect(rendered.sql).toContain(`r.${field}`);
+    expect(rendered.sql).not.toContain("scotus");
+    expect(rendered.sql.length).toBeLessThan(400);
   }
-  expect(weight.sql).toEndWith(
-    `ELSE ${String(UNRANKED_COURT_RANK.weight)} END`,
-  );
-  expect(tier.sql).toEndWith(`ELSE ${String(UNRANKED_COURT_RANK.tier)} END`);
+  expect(weight.sql).toEndWith(`, ${UNRANKED_COURT_RANK.weight})`);
+  expect(tier.sql).toEndWith(`, ${UNRANKED_COURT_RANK.tier})`);
 });
