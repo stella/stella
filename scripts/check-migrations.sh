@@ -104,11 +104,12 @@ schema_file_has_migration_relevant_diff() {
   bun -e '
     const { spawnSync } = require("node:child_process");
     const fs = require("node:fs");
+    const ts = require("typescript");
 
     const baseRef = process.argv.at(1);
     const changedFile = process.argv.at(2);
 
-    const stripTypeOnlyImports = (source) => {
+    const normalizeSchemaSource = (source) => {
       const keptLines = [];
       let inTypeImport = false;
 
@@ -127,10 +128,17 @@ schema_file_has_migration_relevant_diff() {
         keptLines.push(line);
       }
 
-      // `$type<...>` is a TypeScript-only column annotation with no effect on
-      // the generated DDL (the column stays the same SQL type), so normalize
-      // its generic argument away — like type-only imports above.
-      return keptLines.join("\n").replace(/\.\$type<.*>/gu, ".$type<>");
+      // `$type<...>` and type-only imports cannot change generated DDL.
+      // Printing without comments also ignores allowance-only edits to a
+      // schema input while preserving SQL template text and code tokens.
+      const code = keptLines.join("\n").replace(/\.\$type<.*>/gu, ".$type<>");
+      const parsed = ts.createSourceFile(
+        changedFile,
+        code,
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      return ts.createPrinter({ removeComments: true }).printFile(parsed);
     };
 
     const currentSource = fs.readFileSync(changedFile, "utf8");
@@ -143,7 +151,7 @@ schema_file_has_migration_relevant_diff() {
     }
 
     process.exit(
-      stripTypeOnlyImports(currentSource) === stripTypeOnlyImports(baseSource.stdout)
+      normalizeSchemaSource(currentSource) === normalizeSchemaSource(baseSource.stdout)
         ? 1
         : 0,
     );

@@ -1,6 +1,8 @@
 import { createContext, use } from "react";
 import type { ReactNode } from "react";
 
+import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
+
 import { splitByMatch } from "@/components/workspaces/table/find-highlight.logic";
 
 /**
@@ -45,12 +47,9 @@ export const HighlightedText = ({
 
   return splitByMatch(text, highlight.term).map((segment) =>
     segment.matched ? (
-      <mark
-        className="bg-highlight text-highlight-foreground rounded-xs"
-        key={segment.start}
-      >
+      <TextMark {...SEARCH_HIT_MARK} key={segment.start}>
         {segment.text}
-      </mark>
+      </TextMark>
     ) : (
       segment.text
     ),

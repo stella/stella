@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "por exemplo Padrão 2025"
     },
     "revertToDraft": "Reverter para rascunho",
+    "savedNarratives": {
+      "empty": "Salve uma descrição para usá-la novamente.",
+      "save": "Salvar descrição",
+      "title": "Descrições salvas"
+    },
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
@@ -884,6 +889,7 @@
       "apiKey": "Chave de API",
       "none": "Sem configuração"
     },
+    "skillNeedsUnavailableTools": "Não é oferecida no chat. Precisa de uma ferramenta que não está disponível lá: {tools}",
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Criar DOCX",
@@ -977,7 +983,15 @@
       "searchFiles": "Pesquisar arquivos",
       "searchMatters": "Pesquisar casos",
       "searchMcpServers": "Pesquisar servidores MCP...",
-      "searchSkills": "Pesquisar habilidades"
+      "searchSkills": "Pesquisar habilidades",
+      "skillNeeds": {
+        "browserExtension": "Conecte a extensão do navegador para usar esta habilidade",
+        "document": "Abra um documento para usar esta habilidade",
+        "matter": "Inicie um chat em um caso para usar esta habilidade",
+        "rawSendMode": "Indisponível em chats anonimizados",
+        "reviewEdits": "Mude as edições para revisão manual para usar esta habilidade",
+        "webSearch": "Ative a busca na web para usar esta habilidade"
+      }
     },
     "contextMeter": {
       "attachments": "Documentos anexados",
@@ -1062,6 +1076,10 @@
       "loadError": "Falha ao carregar itens"
     },
     "messageTimestampToday": "Hoje, {time}",
+    "mockModel": {
+      "description": "Respostas prontas do modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
@@ -1624,6 +1642,7 @@
     "profile": "Perfil",
     "properties": "Propriedades",
     "queued": "Na fila",
+    "reason": "Motivo",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
     "refresh": "Atualizar",
@@ -1964,6 +1983,19 @@
     "deliveredBy": "Entregue por <address>{sender}</address>",
     "deliveredByAuthenticated": "Entregue por <address>{sender}</address> · autenticado",
     "deliveryAuthentication": "Autenticação da entrega",
+    "drops": {
+      "authenticationHint": "Peça ao administrador de e-mail do remetente para configurar <protocol>SPF</protocol>, <protocol>DKIM</protocol> e <protocol>DMARC</protocol> para o domínio de envio.",
+      "reasons": {
+        "attachmentRejected": "Anexo rejeitado",
+        "authenticationFailed": "Falha na autenticação da entrega",
+        "malformedMessage": "Não foi possível ler a mensagem",
+        "messageTooLarge": "Mensagem muito grande",
+        "revokedAddress": "Endereço de e-mail revogado",
+        "unauthorizedSender": "Remetente não autorizado",
+        "unknownRecipient": "Destinatário desconhecido"
+      },
+      "title": "Entregas rejeitadas"
+    },
     "empty": "Ainda não há correspondência.",
     "filers": "Remetentes",
     "forwardedBy": "Encaminhado por <address>{sender}</address>",
@@ -5197,7 +5229,6 @@
         "signedDescriptionNoVersion": "A assinatura foi salva como uma nova versão.",
         "signedTitle": "PDF assinado",
         "stampLocation": "Local",
-        "stampReason": "Motivo",
         "stampRejectedDescription": "Não é possível colocar o carimbo nesse local. Posicione-o novamente e tente outra vez.",
         "stampSignedBy": "Assinado digitalmente por",
         "stampTextUnrenderableDescription": "O motivo ou o local não pode ser exibido em um carimbo visível. Altere o texto ou use uma assinatura invisível.",

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
@@ -118,4 +119,25 @@ test("a clean pack is installed", async () => {
 
   expect("code" in result).toBe(false);
   expect(await installedCount(name)).toBe(1);
+});
+
+test("a skill that names a tool stella does not have is refused", async () => {
+  const name = `unknown-tool-${Bun.randomUUIDv7().slice(-8)}`;
+
+  const result = await upload(
+    new File(
+      [
+        `---\nname: ${name}\ndescription: Needs a missing tool.\nmetadata:\n  ${SKILL_REQUIRED_TOOLS_METADATA_KEY}: save_playbook save_playbok\n---\n\nBuild a playbook.\n`,
+      ],
+      "SKILL.md",
+      { type: "text/markdown" },
+    ),
+  );
+
+  if (!("code" in result)) {
+    throw new TypeError("expected the upload to be refused");
+  }
+  expect(result.code).toBe(400);
+  expect(JSON.stringify(result.response)).toContain("save_playbok");
+  expect(await installedCount(name)).toBe(0);
 });

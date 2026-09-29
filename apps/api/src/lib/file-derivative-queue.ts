@@ -61,7 +61,7 @@ import {
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
-  brandPersistedUserId,
+  brandNullablePersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -148,7 +148,7 @@ type FileDerivativeJobData = {
   entityId: string;
   fieldId: string;
   organizationId: string;
-  userId: string;
+  userId: string | null;
   workspaceId: string;
 };
 
@@ -158,7 +158,7 @@ type EnqueueFileDerivativeArgs = {
   fieldId: SafeId<"field">;
   mimeType: string;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -386,12 +386,12 @@ const processPdfDerivativeJob = async ({
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const safeDb = createRootSafeDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const brandedEntityId = brandPersistedEntityId(entityId);
@@ -575,7 +575,7 @@ const markPdfDerivativeFailed = async (
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
 
@@ -610,12 +610,12 @@ const processImageThumbnailJob = async ({
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const safeDb = createRootSafeDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const brandedFieldId = brandPersistedFieldId(fieldId);
@@ -803,7 +803,7 @@ const markImageThumbnailFailed = async (
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
 
@@ -916,7 +916,7 @@ type RequeueFileDerivativeArgs = {
   fieldId: SafeId<"field">;
   kind: FileDerivativeKind;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -963,7 +963,7 @@ export const requeueFileDerivative = async (
   });
   const scopedDb = createScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId,
     workspaceIds: [branded.workspaceId],
   });
 

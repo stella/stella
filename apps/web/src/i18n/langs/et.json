@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "nt Standard 2025"
     },
     "revertToDraft": "Tagasta mustandiks",
+    "savedNarratives": {
+      "empty": "Salvesta kirjeldus, et seda uuesti kasutada.",
+      "save": "Salvesta kirjeldus",
+      "title": "Salvestatud kirjeldused"
+    },
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
@@ -884,6 +889,7 @@
       "apiKey": "API-võti",
       "none": "Seadistus puudub"
     },
+    "skillNeedsUnavailableTools": "Vestluses seda ei pakuta. See vajab tööriista, mis seal pole saadaval: {tools}",
     "toolNames": {
       "anonymize": "Anonüümimine",
       "createDocx": "Loo DOCX",
@@ -977,7 +983,15 @@
       "searchFiles": "Otsi faile",
       "searchMatters": "Otsi toimikuid",
       "searchMcpServers": "Otsi MCP-servereid...",
-      "searchSkills": "Otsi oskusi"
+      "searchSkills": "Otsi oskusi",
+      "skillNeeds": {
+        "browserExtension": "Selle oskuse kasutamiseks ühendage brauserilaiendus",
+        "document": "Selle oskuse kasutamiseks avage dokument",
+        "matter": "Selle oskuse kasutamiseks alustage vestlust toimikus",
+        "rawSendMode": "Pole anonüümitud vestlustes saadaval",
+        "reviewEdits": "Selle oskuse kasutamiseks lülitage muudatused käsitsi ülevaatamisele",
+        "webSearch": "Selle oskuse kasutamiseks lülitage veebiotsing sisse"
+      }
     },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",
@@ -1062,6 +1076,10 @@
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
     "messageTimestampToday": "Täna, {time}",
+    "mockModel": {
+      "description": "Valmisvastused kohalikult simuleeritud mudelilt",
+      "label": "Simuleeritud AI"
+    },
     "modelSelector": {
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
@@ -1624,6 +1642,7 @@
     "profile": "Profiil",
     "properties": "Omadused",
     "queued": "Ootel",
+    "reason": "Põhjus",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
     "refresh": "Värskenda",
@@ -1964,6 +1983,19 @@
     "deliveredBy": "Edastas <address>{sender}</address>",
     "deliveredByAuthenticated": "Edastas <address>{sender}</address> · autenditud",
     "deliveryAuthentication": "Edastuse autentimine",
+    "drops": {
+      "authenticationHint": "Paluge saatja e-posti administraatoril seadistada saatva domeeni <protocol>SPF</protocol>, <protocol>DKIM</protocol> ja <protocol>DMARC</protocol>.",
+      "reasons": {
+        "attachmentRejected": "Manus lükati tagasi",
+        "authenticationFailed": "Edastuse autentimine ebaõnnestus",
+        "malformedMessage": "Sõnumit ei saanud lugeda",
+        "messageTooLarge": "Sõnum on liiga suur",
+        "revokedAddress": "E-posti aadress tühistatud",
+        "unauthorizedSender": "Saatjal puudub luba",
+        "unknownRecipient": "Tundmatu saaja"
+      },
+      "title": "Tagasi lükatud sõnumid"
+    },
     "empty": "Kirjavahetust veel pole.",
     "filers": "Esitajad",
     "forwardedBy": "Edasi saatis <address>{sender}</address>",
@@ -5197,7 +5229,6 @@
         "signedDescriptionNoVersion": "Allkiri salvestati uue versioonina.",
         "signedTitle": "PDF allkirjastatud",
         "stampLocation": "Asukoht",
-        "stampReason": "Põhjus",
         "stampRejectedDescription": "Templit ei saa sinna paigutada. Paiguta see uuesti ja proovi uuesti.",
         "stampSignedBy": "Digitaalselt allkirjastanud",
         "stampTextUnrenderableDescription": "Põhjust või asukohta ei saa nähtavas templis näidata. Muuda teksti või kasuta nähtamatut allkirja.",

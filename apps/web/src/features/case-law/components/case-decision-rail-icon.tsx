@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { FileTextIcon, InfoIcon } from "lucide-react";
 
+import { FileTextIcon, InfoIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";

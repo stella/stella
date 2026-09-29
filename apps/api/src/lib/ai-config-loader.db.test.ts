@@ -195,11 +195,27 @@ describe("organization settings under the request scope", () => {
 
     expect(
       providerKeys(
-        await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgA)),
+        (
+          await scope(
+            async (tx) =>
+              await loadOrgAIConfig(tx, {
+                organizationId: ids.orgA,
+                userId: ids.userA1,
+              }),
+          )
+        ).unwrap(),
       ),
     ).toEqual(["model-a-key"]);
     expect(
-      await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgB)),
+      (
+        await scope(
+          async (tx) =>
+            await loadOrgAIConfig(tx, {
+              organizationId: ids.orgB,
+              userId: ids.userA1,
+            }),
+        )
+      ).unwrap(),
     ).toBeNull();
   });
 
@@ -208,26 +224,54 @@ describe("organization settings under the request scope", () => {
 
     // orgB stores `true`; orgA stores `false`. Under orgB's scope the orgA row
     // is invisible, so the read falls back to the default rather than false.
-    const own = await scope(
-      async (tx) => await loadOrgAISettings(tx, ids.orgB),
-    );
+    const own = (
+      await scope(
+        async (tx) =>
+          await loadOrgAISettings(tx, {
+            organizationId: ids.orgB,
+            userId: ids.userA1,
+          }),
+      )
+    ).unwrap();
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-b-key"]);
     expect(own.promptCachingEnabled).toBe(true);
     expect(
-      await scope(async (tx) => await loadOrgAISettings(tx, ids.orgA)),
+      (
+        await scope(
+          async (tx) =>
+            await loadOrgAISettings(tx, {
+              organizationId: ids.orgA,
+              userId: ids.userA1,
+            }),
+        )
+      ).unwrap(),
     ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
   });
 
   test("loadOrgAISettings reads both values in one select", async () => {
     const scope = requestScope(ids.orgA, ids.userA1);
 
-    const own = await scope(
-      async (tx) => await loadOrgAISettings(tx, ids.orgA),
-    );
+    const own = (
+      await scope(
+        async (tx) =>
+          await loadOrgAISettings(tx, {
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+      )
+    ).unwrap();
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-a-key"]);
     expect(own.promptCachingEnabled).toBe(false);
     expect(
-      await scope(async (tx) => await loadOrgAISettings(tx, ids.orgB)),
+      (
+        await scope(
+          async (tx) =>
+            await loadOrgAISettings(tx, {
+              organizationId: ids.orgB,
+              userId: ids.userA1,
+            }),
+        )
+      ).unwrap(),
     ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
   });
 
@@ -235,13 +279,23 @@ describe("organization settings under the request scope", () => {
     const scope = requestScope(ids.orgA, ids.userA1);
 
     const own = await scope(
-      async (tx) => await loadOrgSettingsForAuth(tx, ids.orgA),
+      async (tx) =>
+        await loadOrgSettingsForAuth(tx, {
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
     );
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-a-key"]);
     expect(own.orgAIConfigStatus).toBe(ORG_AI_CONFIG_STATUS.ok);
     expect(own.promptCachingEnabled).toBe(false);
     expect(
-      await scope(async (tx) => await loadOrgSettingsForAuth(tx, ids.orgB)),
+      await scope(
+        async (tx) =>
+          await loadOrgSettingsForAuth(tx, {
+            organizationId: ids.orgB,
+            userId: ids.userA1,
+          }),
+      ),
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -291,14 +345,28 @@ describe("absent and unreadable settings", () => {
     const scope = requestScope(unsetOrgId, ids.userA1);
 
     expect(
-      await scope(async (tx) => await loadOrgSettingsForAuth(tx, unsetOrgId)),
+      await scope(
+        async (tx) =>
+          await loadOrgSettingsForAuth(tx, {
+            organizationId: unsetOrgId,
+            userId: ids.userA1,
+          }),
+      ),
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       promptCachingEnabled: true,
     });
     expect(
-      await scope(async (tx) => await loadOrgAISettings(tx, unsetOrgId)),
+      (
+        await scope(
+          async (tx) =>
+            await loadOrgAISettings(tx, {
+              organizationId: unsetOrgId,
+              userId: ids.userA1,
+            }),
+        )
+      ).unwrap(),
     ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
     expect(
       await scope(async (tx) => await loadWebSearchKeys(tx, unsetOrgId)),
@@ -309,7 +377,13 @@ describe("absent and unreadable settings", () => {
     const scope = requestScope(corruptOrgId, ids.userA1);
 
     expect(
-      await scope(async (tx) => await loadOrgSettingsForAuth(tx, corruptOrgId)),
+      await scope(
+        async (tx) =>
+          await loadOrgSettingsForAuth(tx, {
+            organizationId: corruptOrgId,
+            userId: ids.userA1,
+          }),
+      ),
     ).toEqual({
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
@@ -322,11 +396,23 @@ describe("absent and unreadable settings", () => {
 
     const config = await Result.tryPromise(
       async () =>
-        await scope(async (tx) => await loadOrgAIConfig(tx, corruptOrgId)),
+        await scope(
+          async (tx) =>
+            await loadOrgAIConfig(tx, {
+              organizationId: corruptOrgId,
+              userId: ids.userA1,
+            }),
+        ),
     );
     const settings = await Result.tryPromise(
       async () =>
-        await scope(async (tx) => await loadOrgAISettings(tx, corruptOrgId)),
+        await scope(
+          async (tx) =>
+            await loadOrgAISettings(tx, {
+              organizationId: corruptOrgId,
+              userId: ids.userA1,
+            }),
+        ),
     );
 
     expect(Result.isError(config)).toBe(true);

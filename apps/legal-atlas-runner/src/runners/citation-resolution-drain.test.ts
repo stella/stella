@@ -214,6 +214,7 @@ test("a wedged walk reports which database error wedged it", async () => {
   });
   expect(summaries.at(-1)?.lastErrorPgFields).toEqual({
     "error.cause.pg_code": "42501",
+    "error.cause.pg_driver_code": "ERR_POSTGRES_SERVER_ERROR",
     "error.cause.pg_table": "case_law_citations",
     "error.cause.pg_column": "cited_court_hint",
     "failure.shadow_grade": "defect",

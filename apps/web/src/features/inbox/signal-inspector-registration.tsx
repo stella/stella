@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react";
 
-import { InboxIcon } from "lucide-react";
-
+import { InboxIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";

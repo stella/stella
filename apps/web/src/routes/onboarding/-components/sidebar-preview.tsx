@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
+import { useTranslations } from "use-intl";
+
 import {
   LibraryBigIcon,
   MessageSquareIcon,
   SearchIcon,
   UsersIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";

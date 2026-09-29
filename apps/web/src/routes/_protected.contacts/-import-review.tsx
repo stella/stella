@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { AlertTriangleIcon, CheckIcon, PlusIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -16,6 +15,7 @@ import {
 } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { AlertTriangleIcon, CheckIcon, PlusIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,

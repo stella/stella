@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -164,6 +165,7 @@ const createContext = ({
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     request: recorderBindings.request,
     route: "/v1/workspaces/:workspaceId/duplicate",
     session: {

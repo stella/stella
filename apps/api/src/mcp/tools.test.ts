@@ -34,6 +34,7 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
   entities,
@@ -70,6 +71,7 @@ import {
   listMcpTools,
 } from "@/api/mcp/tools";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -1104,7 +1106,7 @@ describe("OpenAI-compatible MCP tools", () => {
             "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
           // Derived from the engine cursor codec's own maximum times the query
           // cap, so the tool takes back the longest cursor it can emit.
-          maxLength: 1330,
+          maxLength: 1623,
           // An empty string is not a page boundary this tool ever issued, and
           // rejecting it is what makes the factory read it as absent.
           minLength: 1,
@@ -2610,131 +2612,150 @@ describe("OpenAI-compatible MCP tools", () => {
   // in place (same approach the rest of this suite uses) and restored in a
   // finally so the flip cannot leak into a neighbouring test.
   const withPublicLaw = async (
-    { featurePublicLaw, isDev }: { featurePublicLaw: boolean; isDev: boolean },
+    {
+      featurePublicLaw,
+      localDevOpen,
+    }: { featurePublicLaw: boolean; localDevOpen: boolean },
     run: () => Promise<void>,
   ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    const previousIsDev = env.isDev;
     env.FEATURE_PUBLIC_LAW = featurePublicLaw;
-    env.isDev = isDev;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
+    });
     try {
       await run();
     } finally {
       env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
-      env.isDev = previousIsDev;
+      restoreRuntimeMode();
     }
   };
 
   test("hides feature-gated tools from the list when the flag is off outside dev", async () => {
-    await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
-      const toolNames = (await listMcpTools(createContext())).map(
-        (tool) => tool.name,
-      );
+    await withPublicLaw(
+      { featurePublicLaw: false, localDevOpen: false },
+      async () => {
+        const toolNames = (await listMcpTools(createContext())).map(
+          (tool) => tool.name,
+        );
 
-      expect(toolNames).not.toContain("search_case_law");
-      expect(toolNames).not.toContain("read_case_law_decision");
-      // Untagged tools stay listed: the gate only drops flagged tools.
-      expect(toolNames).toContain("list_matters");
-    });
+        expect(toolNames).not.toContain("search_case_law");
+        expect(toolNames).not.toContain("read_case_law_decision");
+        // Untagged tools stay listed: the gate only drops flagged tools.
+        expect(toolNames).toContain("list_matters");
+      },
+    );
   });
 
   test("lists feature-gated tools once the flag is on", async () => {
-    await withPublicLaw({ featurePublicLaw: true, isDev: false }, async () => {
-      const toolNames = (await listMcpTools(createContext())).map(
-        (tool) => tool.name,
-      );
+    await withPublicLaw(
+      { featurePublicLaw: true, localDevOpen: false },
+      async () => {
+        const toolNames = (await listMcpTools(createContext())).map(
+          (tool) => tool.name,
+        );
 
-      expect(toolNames).toContain("search_case_law");
-      expect(toolNames).toContain("read_case_law_decision");
-    });
+        expect(toolNames).toContain("search_case_law");
+        expect(toolNames).toContain("read_case_law_decision");
+      },
+    );
   });
 
   test("lists feature-gated tools in dev even when the flag is off", async () => {
-    await withPublicLaw({ featurePublicLaw: false, isDev: true }, async () => {
-      const toolNames = (await listMcpTools(createContext())).map(
-        (tool) => tool.name,
-      );
+    await withPublicLaw(
+      { featurePublicLaw: false, localDevOpen: true },
+      async () => {
+        const toolNames = (await listMcpTools(createContext())).map(
+          (tool) => tool.name,
+        );
 
-      expect(toolNames).toContain("search_case_law");
-      expect(toolNames).toContain("read_case_law_decision");
-    });
+        expect(toolNames).toContain("search_case_law");
+        expect(toolNames).toContain("read_case_law_decision");
+      },
+    );
   });
 
   test("rejects dispatch of a feature-gated tool when the flag is off outside dev", async () => {
-    await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
-      const result = await handleMcpToolCall({
-        args: { country: "CZE", queries: ["shareholder dispute"] },
-        context: createContext(),
-        toolName: "search_case_law",
-      });
+    await withPublicLaw(
+      { featurePublicLaw: false, localDevOpen: false },
+      async () => {
+        const result = await handleMcpToolCall({
+          args: { country: "CZE", queries: ["shareholder dispute"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
 
-      expectErrorEnvelope(result, {
-        code: "feature_disabled",
-        message: "This feature is not enabled on this deployment",
-        hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
-      });
-      // The gate short-circuits before the backing handler runs, so guessing
-      // the tool name cannot reach the corpus.
-      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
-    });
+        expectErrorEnvelope(result, {
+          code: "feature_disabled",
+          message: "This feature is not enabled on this deployment",
+          hint: featureDisabledHint("FEATURE_PUBLIC_LAW"),
+        });
+        // The gate short-circuits before the backing handler runs, so guessing
+        // the tool name cannot reach the corpus.
+        expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+      },
+    );
   });
 
   test("dispatches a feature-gated tool once the flag is on", async () => {
-    await withPublicLaw({ featurePublicLaw: true, isDev: false }, async () => {
-      searchDecisionsHandlerMock.mockResolvedValue({
-        facets: {
-          court: [],
-          year: [],
-          decisionType: [],
-          source: [],
-          language: [],
-        },
-        hits: [
-          {
-            caseNumber: "29 Cdo 123/2024",
-            citationAuthority: 0,
-            citationCount: 7,
-            country: "CZE",
-            court: "Nejvyšší soud",
-            courtAbbreviation: "NS",
-            decisionDate: "2024-02-01",
-            decisionId: DECISION_ID,
-            decisionType: "judgment",
-            ecli: null,
-            headline: null,
-            language: "cs",
-            matchingPassages: 1,
-            slug: "stable-official-slug",
-            sourceUrl: "https://example.test/decision",
+    await withPublicLaw(
+      { featurePublicLaw: true, localDevOpen: false },
+      async () => {
+        searchDecisionsHandlerMock.mockResolvedValue({
+          facets: {
+            court: [],
+            year: [],
+            decisionType: [],
+            source: [],
+            language: [],
           },
-        ],
-        nextCursor: null,
-        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-        queryUsed: "shareholder dispute",
-        warnings: [],
-      });
+          hits: [
+            {
+              caseNumber: "29 Cdo 123/2024",
+              citationAuthority: 0,
+              citationCount: 7,
+              country: "CZE",
+              court: "Nejvyšší soud",
+              courtAbbreviation: "NS",
+              decisionDate: "2024-02-01",
+              decisionId: DECISION_ID,
+              decisionType: "judgment",
+              ecli: null,
+              headline: null,
+              language: "cs",
+              matchingPassages: 1,
+              slug: "stable-official-slug",
+              sourceUrl: "https://example.test/decision",
+            },
+          ],
+          nextCursor: null,
+          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+          queryUsed: "shareholder dispute",
+          warnings: [],
+        });
 
-      const result = await handleMcpToolCall({
-        args: { country: "CZE", queries: ["shareholder dispute"] },
-        context: createContext(),
-        toolName: "search_case_law",
-      });
+        const result = await handleMcpToolCall({
+          args: { country: "CZE", queries: ["shareholder dispute"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
 
-      // The gate opened: the backing handler ran instead of the not-enabled
-      // rejection, which would short-circuit before any handler call. With the
-      // flag on, app URLs resolve just as in dev.
-      expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
-      expect(parseToolPayload(result)).toMatchObject({
-        results: [
-          {
-            appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
-            decisionId: DECISION_ID,
-            resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
-          },
-        ],
-        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
-      });
-    });
+        // The gate opened: the backing handler ran instead of the not-enabled
+        // rejection, which would short-circuit before any handler call. With the
+        // flag on, app URLs resolve just as in dev.
+        expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+        expect(parseToolPayload(result)).toMatchObject({
+          results: [
+            {
+              appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
+              decisionId: DECISION_ID,
+              resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
+            },
+          ],
+          total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+        });
+      },
+    );
   });
 
   test("read_case_law_citations maps the direction and returns treatment, decision and passage", async () => {
@@ -7301,6 +7322,7 @@ describe("OpenAI-compatible MCP tools", () => {
             rateAtEntry: 25_000,
             currency: "EUR",
             narrative: "Call with John Smith",
+            narrativeLanguage: null,
             invoiceNarrative: null,
             billable: true,
             noCharge: false,
@@ -7332,6 +7354,7 @@ describe("OpenAI-compatible MCP tools", () => {
           rateAtEntry: 25_000,
           currency: "EUR",
           narrative: "Call with [PERSON_1]",
+          narrativeLanguage: null,
           invoiceNarrative: null,
           billable: true,
           noCharge: false,
@@ -7366,28 +7389,33 @@ describe("OpenAI-compatible MCP tools", () => {
     {
       featureTimeBilling,
       featureUsage,
-      isDev,
-    }: { featureTimeBilling: boolean; featureUsage: boolean; isDev: boolean },
+      localDevOpen,
+    }: {
+      featureTimeBilling: boolean;
+      featureUsage: boolean;
+      localDevOpen: boolean;
+    },
     run: () => Promise<void>,
   ) => {
     const previousTimeBilling = env.FEATURE_TIME_BILLING;
     const previousUsage = env.FEATURE_USAGE;
-    const previousIsDev = env.isDev;
     env.FEATURE_TIME_BILLING = featureTimeBilling;
     env.FEATURE_USAGE = featureUsage;
-    env.isDev = isDev;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
+    });
     try {
       await run();
     } finally {
       env.FEATURE_TIME_BILLING = previousTimeBilling;
       env.FEATURE_USAGE = previousUsage;
-      env.isDev = previousIsDev;
+      restoreRuntimeMode();
     }
   };
 
   test("hides time-and-billing tools when FEATURE_TIME_BILLING is off outside dev", async () => {
     await withBillingFlags(
-      { featureTimeBilling: false, featureUsage: true, isDev: false },
+      { featureTimeBilling: false, featureUsage: true, localDevOpen: false },
       async () => {
         const toolNames = (await listMcpTools(createContext())).map(
           (tool) => tool.name,
@@ -7403,7 +7431,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("lists time-and-billing tools once FEATURE_TIME_BILLING is on", async () => {
     await withBillingFlags(
-      { featureTimeBilling: true, featureUsage: true, isDev: false },
+      { featureTimeBilling: true, featureUsage: true, localDevOpen: false },
       async () => {
         const toolNames = (await listMcpTools(createContext())).map(
           (tool) => tool.name,
@@ -7418,7 +7446,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("rejects dispatch of save_time_entry when FEATURE_TIME_BILLING is off outside dev", async () => {
     await withBillingFlags(
-      { featureTimeBilling: false, featureUsage: true, isDev: false },
+      { featureTimeBilling: false, featureUsage: true, localDevOpen: false },
       async () => {
         const recordAuditEvent = createRecordAuditEventMock();
         const result = await handleMcpToolCall({
@@ -7453,7 +7481,7 @@ describe("OpenAI-compatible MCP tools", () => {
   // does not, and its dispatch is rejected.
   test("gates get_usage on FEATURE_USAGE independently of FEATURE_TIME_BILLING", async () => {
     await withBillingFlags(
-      { featureTimeBilling: true, featureUsage: false, isDev: false },
+      { featureTimeBilling: true, featureUsage: false, localDevOpen: false },
       async () => {
         const toolNames = (await listMcpTools(createContext())).map(
           (tool) => tool.name,
@@ -7475,7 +7503,7 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
     await withBillingFlags(
-      { featureTimeBilling: true, featureUsage: true, isDev: false },
+      { featureTimeBilling: true, featureUsage: true, localDevOpen: false },
       async () => {
         const toolNames = (await listMcpTools(createContext())).map(
           (tool) => tool.name,

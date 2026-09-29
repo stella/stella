@@ -18,7 +18,7 @@ export const createRootScopedDb = ({
   workspaceIds,
 }: {
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceIds: SafeId<"workspace">[];
 }) =>
   // This helper exists only because some modules are not allowed
@@ -31,7 +31,7 @@ export const createRootSafeDb = ({
   workspaceIds,
 }: {
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceIds: SafeId<"workspace">[];
 }) =>
   // This helper exists only because some modules are not allowed

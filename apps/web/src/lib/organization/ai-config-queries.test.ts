@@ -42,6 +42,7 @@ describe("cached AI availability after config mutations", () => {
         available: !(currentInstanceProvisioned || orgConfigured),
         deferredServiceTierAvailable,
         instanceProvisioned: currentInstanceProvisioned,
+        mockAnswers: false,
         orgConfigured: !orgConfigured,
       };
 
@@ -55,6 +56,7 @@ describe("cached AI availability after config mutations", () => {
         available: instanceProvisioned || orgConfigured,
         deferredServiceTierAvailable,
         instanceProvisioned,
+        mockAnswers: false,
         orgConfigured,
       });
     },

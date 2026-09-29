@@ -21,6 +21,7 @@ import {
 import { SIGNAL_EVENT_TYPE, signalEvents, signals } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import listSignals from "@/api/handlers/signals/list";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encodePaginationCursor } from "@/api/lib/pagination";
@@ -142,6 +143,7 @@ const runListAs = async ({
       createAuditRecorder: () => recordAuditEvent,
       memberRole: { role },
       orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       promptCachingEnabled: false,
       recordAuditEvent,
       request: new Request("https://example.test/signals"),

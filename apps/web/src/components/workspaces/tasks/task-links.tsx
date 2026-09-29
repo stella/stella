@@ -1,5 +1,6 @@
-import { LinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { LinkIcon } from "@stll/ui/icons";
 
 import { getEntityLinkResource } from "@/components/workspaces/tasks/task-links.logic";
 import type { EntityLinkResourceInput } from "@/components/workspaces/tasks/task-links.logic";

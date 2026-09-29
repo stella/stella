@@ -2,6 +2,12 @@ import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
+import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
+import { compareByLocale } from "@stll/collation";
+import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import {
   FileCodeIcon,
   FileIcon,
@@ -14,13 +20,7 @@ import {
   PowerIcon,
   Trash2Icon,
   UploadIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
-import { compareByLocale } from "@stll/collation";
-import { Button } from "@stll/ui/button";
-import { openFilePicker } from "@stll/ui/file-picker";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Menu,

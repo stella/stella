@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
-import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -12,6 +11,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { stellaToast } from "@stll/ui/toast";
@@ -27,7 +27,7 @@ import {
   requiredTrimmedStringSchema,
   toFormErrors,
 } from "@/lib/schema";
-import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
+import { billingCodesManagementOptions } from "@/lib/workspaces/queries/billing-codes";
 
 type BillingCodesDialogProps = {
   open: boolean;
@@ -46,7 +46,7 @@ export const BillingCodesDialog = ({
   const [showForm, setShowForm] = useState(false);
 
   const { data: codes } = useSuspenseQuery(
-    billingCodesOptions(workspaceId, activeTab),
+    billingCodesManagementOptions(workspaceId, activeTab),
   );
   const analytics = useAnalytics();
 

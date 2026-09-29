@@ -328,20 +328,30 @@ const extractCandidates = async (
     ? ""
     : transcriptResult.value;
 
+  // Configuration loading is part of the per-compaction failure boundary:
+  // a bad tenant config must rotate behind untouched work instead of
+  // aborting the global scheduler batch.
+  const settings = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await loadOrgAISettings(db, {
+          organizationId: compaction.threadOrganizationId,
+          userId: compaction.threadUserId,
+        }),
+      catch: (error: unknown) => error,
+    }),
+  );
+  if (Result.isError(settings)) {
+    return Result.err(settings.error);
+  }
+  const { orgAIConfig, promptCachingEnabled } = settings.value;
+
   let analytics:
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
     | undefined;
 
   const result = await Result.tryPromise({
     try: async () => {
-      // Configuration loading is part of the per-compaction failure boundary:
-      // a bad tenant config must rotate behind untouched work instead of
-      // aborting the global scheduler batch.
-      const { orgAIConfig, promptCachingEnabled } = await loadOrgAISettings(
-        db,
-        compaction.threadOrganizationId,
-      );
-
       analytics = createTanStackAIAnalyticsCallbacks({
         feature: "memory.extractor",
         modelRole: "fast",

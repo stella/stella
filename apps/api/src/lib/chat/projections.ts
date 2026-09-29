@@ -1144,6 +1144,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     rateAtEntry: v.number(),
     currency: v.string(),
     narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
     invoiceNarrative: v.nullable(v.string()),
     billable: v.boolean(),
     noCharge: v.boolean(),
@@ -2514,6 +2515,10 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),
+  timeMinimumUnitMinutes: v.optional(v.number()),
+  timeEditWindowDays: v.optional(v.number()),
+  timeLockedThroughMonth: v.optional(v.nullable(v.string())),
+  timeNarrativeRequired: v.optional(v.boolean()),
 });
 
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([

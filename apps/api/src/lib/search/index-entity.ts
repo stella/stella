@@ -383,6 +383,7 @@ export const upsertSearchDocument = async (
       return;
     }
 
+    // sql-perf-allow: bounded by one entities primary-key row and one extracted_content primary-key probe
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
       INSERT INTO search_documents (
         entity_id, organization_id, workspace_id,

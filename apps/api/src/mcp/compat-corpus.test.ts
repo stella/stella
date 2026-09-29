@@ -6,6 +6,7 @@ import { normalizeCountry } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { propertyConfig } from "@stll/property-testing";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -24,6 +25,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { finalizeToolEgress } from "@/api/mcp/egress";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -203,18 +205,22 @@ const run = async ({
 };
 
 const withPublicLaw = async (
-  { featurePublicLaw, isDev }: { featurePublicLaw: boolean; isDev: boolean },
+  {
+    featurePublicLaw,
+    localDevOpen,
+  }: { featurePublicLaw: boolean; localDevOpen: boolean },
   body: () => Promise<void>,
 ) => {
   const previousFeature = env.FEATURE_PUBLIC_LAW;
-  const previousIsDev = env.isDev;
   env.FEATURE_PUBLIC_LAW = featurePublicLaw;
-  env.isDev = isDev;
+  const restoreRuntimeMode = setRuntimeModeForTesting({
+    mode: localDevOpen ? RUNTIME_MODE.open : RUNTIME_MODE.strict,
+  });
   try {
     await body();
   } finally {
     env.FEATURE_PUBLIC_LAW = previousFeature;
-    env.isDev = previousIsDev;
+    restoreRuntimeMode();
   }
 };
 
@@ -276,7 +282,7 @@ beforeEach(() => {
 });
 
 const withCorpus = async (body: () => Promise<void>) =>
-  await withPublicLaw({ featurePublicLaw: true, isDev: false }, body);
+  await withPublicLaw({ featurePublicLaw: true, localDevOpen: false }, body);
 
 /** The alpha-2 code the practice-jurisdiction column stores for a country. */
 const alpha2Of = (alpha3: string): string | undefined => {
@@ -481,33 +487,36 @@ describe("compat search reaching the public corpus", () => {
   });
 
   test("with the corpus gate closed, search is matter knowledge alone", async () => {
-    await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
-      searchProviderSearchMock.mockResolvedValue({
-        hits: [
-          { entityId: ENTITY_ID, workspaceId: WORKSPACE_ID, title: "SPA" },
-        ],
-        nextCursor: "provider-cursor",
-      });
+    await withPublicLaw(
+      { featurePublicLaw: false, localDevOpen: false },
+      async () => {
+        searchProviderSearchMock.mockResolvedValue({
+          hits: [
+            { entityId: ENTITY_ID, workspaceId: WORKSPACE_ID, title: "SPA" },
+          ],
+          nextCursor: "provider-cursor",
+        });
 
-      const payload = await run({
-        args: { query: "promlčení" },
-        context: createContext(),
-        handler: COMPAT_TOOL_HANDLERS.search,
-      });
+        const payload = await run({
+          args: { query: "promlčení" },
+          context: createContext(),
+          handler: COMPAT_TOOL_HANDLERS.search,
+        });
 
-      expect(payload.results).toEqual([
-        {
-          id: ENTITY_ID,
-          title: "SPA",
-          url: `${APP_BASE_URL}/workspaces/${WORKSPACE_ID}/all/pdf?entity=${ENTITY_ID}&field=field_1`,
-        },
-      ]);
-      // The provider's own cursor, verbatim: with no corpus to merge, nothing
-      // wraps it.
-      expect(payload.nextCursor).toBe("provider-cursor");
-      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
-      expect(searchLegislationHandlerMock).not.toHaveBeenCalled();
-    });
+        expect(payload.results).toEqual([
+          {
+            id: ENTITY_ID,
+            title: "SPA",
+            url: `${APP_BASE_URL}/workspaces/${WORKSPACE_ID}/all/pdf?entity=${ENTITY_ID}&field=field_1`,
+          },
+        ]);
+        // The provider's own cursor, verbatim: with no corpus to merge, nothing
+        // wraps it.
+        expect(payload.nextCursor).toBe("provider-cursor");
+        expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+        expect(searchLegislationHandlerMock).not.toHaveBeenCalled();
+      },
+    );
   });
 
   test("the organization's practice jurisdictions rank the corpus countries", async () => {
@@ -742,16 +751,19 @@ describe("compat fetch reaching the public corpus", () => {
   });
 
   test("a corpus id refuses with feature_disabled while the gate is closed", async () => {
-    await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
-      const payload = await run({
-        args: { id: `decision:${DECISION_ID}` },
-        context: createContext(),
-        handler: COMPAT_TOOL_HANDLERS.fetch,
-      });
+    await withPublicLaw(
+      { featurePublicLaw: false, localDevOpen: false },
+      async () => {
+        const payload = await run({
+          args: { id: `decision:${DECISION_ID}` },
+          context: createContext(),
+          handler: COMPAT_TOOL_HANDLERS.fetch,
+        });
 
-      expect(payload.error?.code).toBe("feature_disabled");
-      expect(payload.error?.hint).toContain("FEATURE_PUBLIC_LAW");
-    });
+        expect(payload.error?.code).toBe("feature_disabled");
+        expect(payload.error?.hint).toContain("FEATURE_PUBLIC_LAW");
+      },
+    );
   });
 
   test("a malformed id is a validation_error whose hint names search", async () => {

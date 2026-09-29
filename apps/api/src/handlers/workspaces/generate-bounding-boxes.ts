@@ -2,9 +2,9 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isMockAI } from "@/api/consts";
 import { justifications } from "@/api/db/schema";
 import type { BoundingBox } from "@/api/db/schema-validators";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -13,6 +13,7 @@ import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";
 import { generateBBoxesMock } from "@/api/lib/bbox/generate-b-boxes-mock";
 import { prepareJustificationData } from "@/api/lib/bbox/generate-b-boxes-shared";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -31,8 +32,13 @@ const generateBoundingBoxes = createSafeHandler(
     workspaceId,
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
   }) {
+    const accessError = memberAIAccessError(orgAIConfigStatus);
+    if (accessError) {
+      return Result.err(accessError);
+    }
     const organizationId = session.activeOrganizationId;
     const { justificationId } = body;
 
@@ -54,7 +60,10 @@ const generateBoundingBoxes = createSafeHandler(
 
     const preparedData = preparedDataResult.value;
 
-    const generateFn = isMockAI() ? generateBBoxesMock : generateBBoxes;
+    // Same rule as chat: an organization's own key answers for real.
+    const generateFn = mockAnswersForOrganization(orgAIConfig)
+      ? generateBBoxesMock
+      : generateBBoxes;
     const boxes: BoundingBox[] = [];
     if (preparedData.pageNumbers.length === 0) {
       return Result.ok({ boxes });

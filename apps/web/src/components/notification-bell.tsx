@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { BellIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { REALTIME_EVENT_TYPE } from "@stll/api-contract";
@@ -17,6 +16,7 @@ import type {
 } from "@stll/api-contract/notifications";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { BellIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverClose,

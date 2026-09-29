@@ -10,7 +10,6 @@ import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ColumnsIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -26,6 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { ColumnsIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DocumentLanguagePicker } from "@/components/document-language-picker";

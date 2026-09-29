@@ -1,12 +1,6 @@
 import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import {
-  BookOpenIcon,
-  ClipboardCheckIcon,
-  LoaderIcon,
-  PencilLineIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -19,6 +13,13 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  ClipboardCheckIcon,
+  LibraryIcon,
+  LoaderIcon,
+  PencilLineIcon,
+  type LucideIcon,
+} from "@stll/ui/icons";
 import {
   Select,
   SelectItem,
@@ -50,10 +51,10 @@ type CardText = { title: string; blurb: string; inside: string };
 const CARDS = [
   { id: "check-against-rules", Icon: ClipboardCheckIcon },
   { id: "intake-to-draft", Icon: PencilLineIcon },
-  { id: "answer-from-sources", Icon: BookOpenIcon },
+  { id: "answer-from-sources", Icon: LibraryIcon },
 ] as const satisfies readonly {
   id: BlueprintCardId;
-  Icon: typeof BookOpenIcon;
+  Icon: LucideIcon;
 }[];
 
 type BlueprintGallerySheetProps = {

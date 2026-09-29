@@ -229,6 +229,39 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
   );
 });
 
+test("a court filter carries its partitions beside the exact court clause, never alone", () => {
+  expect(
+    caseLawCorpusQuery({
+      text: "habeas",
+      filters: {
+        court: "Supreme Court of the United States",
+        courtPartitions: ["p08"],
+        dateFrom: "1800-01-01",
+      },
+    }),
+  ).toBe(
+    '("habeas")' +
+      ' AND court:"Supreme Court of the United States"' +
+      ' AND (court_partition:"p08")' +
+      " AND decision_date:[1800-01-01 TO *]",
+  );
+  expect(
+    caseLawCorpusQuery({
+      text: "habeas",
+      filters: { court: "A", courtPartitions: ["p01", "p02"] },
+    }),
+  ).toBe(
+    '("habeas") AND court:"A" AND (court_partition:"p01" OR court_partition:"p02")',
+  );
+  // Without a court filter there is nothing for a partition to narrow.
+  expect(
+    caseLawCorpusQuery({
+      text: "habeas",
+      filters: { courtPartitions: ["p08"] },
+    }),
+  ).toBe('("habeas")');
+});
+
 test("an open-ended date range keeps the wildcard bound", () => {
   expect(
     caseLawCorpusQuery({

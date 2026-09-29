@@ -1,12 +1,5 @@
 import { useState } from "react";
 
-import {
-  CheckCheckIcon,
-  PencilIcon,
-  ScissorsIcon,
-  TrashIcon,
-  UndoIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { prorateHourlyCents } from "@stll/money";
@@ -14,6 +7,13 @@ import type { CentsAmount } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import {
+  CheckCheckIcon,
+  PencilIcon,
+  ScissorsIcon,
+  TrashIcon,
+  UndoIcon,
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";

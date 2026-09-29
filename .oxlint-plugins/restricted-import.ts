@@ -95,6 +95,14 @@ const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
   new Set(glyphs.flatMap((glyph) => [glyph, `${glyph}Icon`, `Lucide${glyph}`]));
 
 const LUCIDE = packageWithSubpaths("lucide-react");
+// Every icon reaches the app through one module, so a glyph restricted to an
+// owner component is restricted there too.
+const ICON_MODULE = "packages/ui/src/icons.ts";
+const ICON_SOURCES = [
+  LUCIDE,
+  "@stll/ui/icons",
+  ICON_MODULE.replace(/\.ts$/u, ""),
+] as const;
 const TANSTACK_DEVTOOLS_ROOT =
   "apps/web/src/components/tanstack-devtools-root.tsx";
 const TABLE_DEVTOOLS =
@@ -119,6 +127,25 @@ const staticDevtoolsPackage = (
 });
 
 const RESTRICTED_IMPORT_RULES = {
+  // One icon module decides what each glyph means (a skill, an AI action),
+  // so a call site cannot pick a lucide glyph that means something else
+  // elsewhere. See packages/ui/src/icons.ts for how to add one.
+  "no-direct-lucide-import": [
+    {
+      messageId: "directLucideImport",
+      message:
+        "Import icons from '@stll/ui/icons' (packages/ui/src/icons.ts); " +
+        "add a new icon there with a one-line reason.",
+      modules: [LUCIDE],
+      restriction: {
+        type: "module",
+        typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
+        dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      // The module, and its drift test, which compares entries against lucide.
+      owners: [ICON_MODULE, "packages/ui/src/icons.test.ts"],
+    },
+  ],
   // nanoid is a removed dependency: IDs come from Bun.randomUUIDv7() and
   // custom alphabets from crypto.getRandomValues().
   "no-nanoid": [
@@ -147,13 +174,13 @@ const RESTRICTED_IMPORT_RULES = {
         "matter colour is always applied (matter={{ id, color }}, or " +
         'variant="none" / variant="all" for non-matter affordances). ' +
         "The raw glyph is only allowed in matter-icon.tsx.",
-      modules: [LUCIDE],
+      modules: ICON_SOURCES,
       restriction: {
         type: "exports",
         names: lucideGlyphNames(["Layers", "Layers2"]),
         hit: EXPORT_HIT.binding,
       },
-      owners: ["apps/web/src/components/matter-icon.tsx"],
+      owners: ["apps/web/src/components/matter-icon.tsx", ICON_MODULE],
     },
   ],
   // `<EntityKindIcon>` switches exhaustively over the entity kind. Only the
@@ -170,13 +197,16 @@ const RESTRICTED_IMPORT_RULES = {
         'folderState="expanded" for an open folder), so every entity ' +
         "glyph comes from one exhaustive kind mapping. Use <EntityIcon> " +
         "when the entity is still resolving.",
-      modules: [LUCIDE],
+      modules: ICON_SOURCES,
       restriction: {
         type: "exports",
         names: lucideGlyphNames(["Folder", "FolderOpen", "ListTodo"]),
         hit: EXPORT_HIT.binding,
       },
-      owners: ["apps/web/src/components/workspaces/entity-kind-icon.tsx"],
+      owners: [
+        "apps/web/src/components/workspaces/entity-kind-icon.tsx",
+        ICON_MODULE,
+      ],
     },
   ],
   // Devtools packages can schedule browser work while routes are still

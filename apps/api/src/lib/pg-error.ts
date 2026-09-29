@@ -105,6 +105,10 @@ const pgErrorNodes = (error: unknown): PgErrorNode[] => {
 export const getPgErrorCode = (error: unknown): string | undefined =>
   pgErrorNodes(error).at(0)?.sqlState;
 
+/** Bun's safe Postgres driver code, including connection failures without SQLSTATE. */
+export const getPgDriverErrorCode = (error: unknown): string | undefined =>
+  pgIdentityFields(readEvidence(error))["error.cause.pg_driver_code"];
+
 /** Returns true when `error` is a Postgres error with the given SQLSTATE. */
 export const isPgError = (error: unknown, code: string): boolean =>
   getPgErrorCode(error) === code;
@@ -187,8 +191,8 @@ export const PG_ERROR = {
  * error (`DrizzleQueryError`), so its SQLSTATE lives one or more `.cause` hops
  * down and would otherwise never reach the log sink.
  *
- * Returns the SQLSTATE under `error.cause.pg_code` plus any present schema
- * identifiers (severity, constraint, table, column, schema, routine), read
+ * Returns a SQLSTATE under `error.cause.pg_code`, a Bun driver code under
+ * `error.cause.pg_driver_code`, plus any present schema identifiers, read
  * from the shared failure snapshot, and the grade that failure would get.
  * Returns `{}` when no Postgres error is found. Never throws.
  */

@@ -1,5 +1,4 @@
-import { LayersIcon } from "lucide-react";
-
+import { LayersIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -16,7 +15,8 @@ import { resolveMatterColor } from "@/lib/matter-colors";
 // matter with a default/mono colour.
 //
 // Enforced by `.oxlint-plugins/no-direct-matter-glyph.ts`, which bans the
-// raw `LayersIcon` import everywhere except this file. Callers keep full
+// raw `LayersIcon` import everywhere except this file (and the shared icon
+// module that re-exports it). Callers keep full
 // control of size/spacing via `className`; this component only owns the
 // glyph and its colour.
 

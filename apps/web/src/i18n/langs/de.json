@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "z.B. Standard 2025"
     },
     "revertToDraft": "In Entwurf zurückversetzen",
+    "savedNarratives": {
+      "empty": "Speichern Sie eine Beschreibung zur erneuten Verwendung.",
+      "save": "Beschreibung speichern",
+      "title": "Gespeicherte Beschreibungen"
+    },
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
@@ -884,6 +889,7 @@
       "apiKey": "API-Schlüssel",
       "none": "Keine Einrichtung"
     },
+    "skillNeedsUnavailableTools": "Wird im Chat nicht angeboten. Benötigt ein Tool, das dort nicht verfügbar ist: {tools}",
     "toolNames": {
       "anonymize": "Anonymisieren",
       "createDocx": "DOCX erstellen",
@@ -977,7 +983,15 @@
       "searchFiles": "Dateien suchen",
       "searchMatters": "Akten suchen",
       "searchMcpServers": "MCP-Server suchen...",
-      "searchSkills": "Skills suchen"
+      "searchSkills": "Skills suchen",
+      "skillNeeds": {
+        "browserExtension": "Verbinden Sie die Browsererweiterung, um diesen Skill zu nutzen",
+        "document": "Öffnen Sie ein Dokument, um diesen Skill zu nutzen",
+        "matter": "Starten Sie einen Chat in einer Akte, um diesen Skill zu nutzen",
+        "rawSendMode": "In anonymisierten Chats nicht verfügbar",
+        "reviewEdits": "Stellen Sie Bearbeitungen auf manuelle Prüfung um, um diesen Skill zu nutzen",
+        "webSearch": "Schalten Sie die Websuche ein, um diesen Skill zu nutzen"
+      }
     },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
@@ -1062,6 +1076,10 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "mockModel": {
+      "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
+      "label": "Simulierte KI"
+    },
     "modelSelector": {
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
@@ -1624,6 +1642,7 @@
     "profile": "Profil",
     "properties": "Eigenschaften",
     "queued": "Eingereiht",
+    "reason": "Grund",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
     "refresh": "Aktualisieren",
@@ -1964,6 +1983,19 @@
     "deliveredBy": "Zugestellt von <address>{sender}</address>",
     "deliveredByAuthenticated": "Zugestellt von <address>{sender}</address> · authentifiziert",
     "deliveryAuthentication": "Authentifizierung der Zustellung",
+    "drops": {
+      "authenticationHint": "Bitten Sie die E-Mail-Administration des Absenders, <protocol>SPF</protocol>, <protocol>DKIM</protocol> und <protocol>DMARC</protocol> für die Absenderdomain einzurichten.",
+      "reasons": {
+        "attachmentRejected": "Anhang abgewiesen",
+        "authenticationFailed": "Authentifizierung der Zustellung fehlgeschlagen",
+        "malformedMessage": "Nachricht konnte nicht gelesen werden",
+        "messageTooLarge": "Nachricht zu groß",
+        "revokedAddress": "E-Mail-Adresse widerrufen",
+        "unauthorizedSender": "Absender nicht berechtigt",
+        "unknownRecipient": "Unbekannter Empfänger"
+      },
+      "title": "Abgewiesene Zustellungen"
+    },
     "empty": "Noch keine Korrespondenz.",
     "filers": "Einreicher",
     "forwardedBy": "Weitergeleitet von <address>{sender}</address>",
@@ -5197,7 +5229,6 @@
         "signedDescriptionNoVersion": "Die Signatur wurde als neue Version gespeichert.",
         "signedTitle": "PDF signiert",
         "stampLocation": "Ort",
-        "stampReason": "Grund",
         "stampRejectedDescription": "Der Stempel kann dort nicht platziert werden. Platzieren Sie ihn erneut und versuchen Sie es noch einmal.",
         "stampSignedBy": "Digital signiert von",
         "stampTextUnrenderableDescription": "Grund oder Ort können nicht in einem sichtbaren Stempel angezeigt werden. Ändern Sie den Text oder verwenden Sie eine unsichtbare Signatur.",

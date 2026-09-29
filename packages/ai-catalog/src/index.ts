@@ -287,6 +287,7 @@ export const BYOK_MODEL_OPTIONS = {
     "gemini-3.1-flash-lite",
   ],
   anthropic: [
+    "claude-sonnet-5-5",
     "claude-sonnet-5",
     "claude-fable-5-1",
     "claude-fable-5",
@@ -317,6 +318,7 @@ export const BYOK_MODEL_OPTIONS = {
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
+    "anthropic/claude-sonnet-5.5",
     "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-5",
     "anthropic/claude-opus-4.8",
@@ -396,6 +398,10 @@ export const MODEL_DISPLAY_METADATA = {
   "gemini-3.1-flash-lite": {
     displayName: "Gemini 3.1 Flash Lite",
     iconProvider: "google",
+  },
+  "claude-sonnet-5-5": {
+    displayName: "Claude Sonnet 5.5",
+    iconProvider: "anthropic",
   },
   "claude-sonnet-5": {
     displayName: "Claude Sonnet 5",
@@ -525,6 +531,10 @@ export const MODEL_DISPLAY_METADATA = {
   "google/gemini-3.1-flash-lite": {
     displayName: "Gemini 3.1 Flash Lite",
     iconProvider: "google",
+  },
+  "anthropic/claude-sonnet-5.5": {
+    displayName: "Claude Sonnet 5.5",
+    iconProvider: "anthropic",
   },
   "anthropic/claude-sonnet-5": {
     displayName: "Claude Sonnet 5",
@@ -726,6 +736,7 @@ export const resolveWorkingBYOKModelForRole = ({
  * offered above must appear here or it will 400 on the reasoning role.
  */
 export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
+  "claude-sonnet-5-5",
   "claude-sonnet-5",
   "claude-opus-5",
   "claude-sonnet-4-6",
@@ -865,6 +876,7 @@ export const MODEL_CATALOG_ID_ALIASES = {
   // Aggregator listings use the dotted marketing forms; the catalog's
   // canonical ids are the dashed API forms.
   "claude-opus-4.8": "claude-opus-4-8",
+  "claude-sonnet-5.5": "claude-sonnet-5-5",
   "claude-sonnet-4.6": "claude-sonnet-4-6",
 } as const satisfies Readonly<Record<string, OfferedFirstPartyModelId>>;
 
@@ -935,6 +947,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "google/gemini-3.1-pro-preview": "supported",
   "google/gemini-3.5-flash": "supported",
   "google/gemini-3.1-flash-lite": "supported",
+  "anthropic/claude-sonnet-5.5": "supported",
   "anthropic/claude-sonnet-5": "supported",
   "anthropic/claude-opus-5": "supported",
   "anthropic/claude-opus-4.8": "supported",
@@ -952,6 +965,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "gpt-5.4-mini": "supported",
   "gpt-5.4-nano": "supported",
   "gpt-5.2": "supported",
+  "claude-sonnet-5-5": "supported",
   "claude-sonnet-5": "supported",
   "claude-fable-5-1": "supported",
   "claude-fable-5": "supported",
@@ -1158,11 +1172,12 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.6": 922_000,
   "gpt-5.6-luna": 922_000,
   "gpt-5.6-terra": 922_000,
-  // Anthropic Claude: 200K through Claude 4; Sonnet 5, Opus 5, Opus 5.5, and
-  // Fable 5.1 expose 1M.
+  // Anthropic Claude: 200K through Claude 4; Sonnet 5, Sonnet 5.5, Opus 5,
+  // Opus 5.5, and Fable 5.1 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
   "claude-sonnet-5": 1_000_000,
+  "claude-sonnet-5-5": 1_000_000,
   "claude-opus-4-6": 200_000,
   "claude-opus-4-7": 200_000,
   "claude-opus-4-8": 200_000,
@@ -1184,6 +1199,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "google/gemini-3.1-pro-preview": 1_048_576,
   "google/gemini-3.5-flash": 1_048_576,
   "google/gemini-3.1-flash-lite": 1_048_576,
+  "anthropic/claude-sonnet-5.5": 1_000_000,
   "anthropic/claude-sonnet-5": 1_000_000,
   "anthropic/claude-opus-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,

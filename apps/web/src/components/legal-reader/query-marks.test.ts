@@ -3,8 +3,6 @@ import { describe, expect, test } from "bun:test";
 import {
   MIN_HIGHLIGHT_TOKEN_LENGTH,
   queryHighlightTokens,
-  SEARCH_MARK_CLASS_NAME,
-  SEARCH_MARK_DESCENDANT_CLASS_NAME,
   wordPrefixMatchEnd,
 } from "@/components/legal-reader/query-marks";
 
@@ -72,21 +70,5 @@ describe("where a token may match", () => {
 
     expect(wordPrefixMatchEnd(text, 0, ["\u{10348}abc"])).toBe(5);
     expect(text.slice(0, 5)).toBe("\u{10348}abc");
-  });
-});
-
-describe("the mark a query's words wear", () => {
-  // Both spellings have to exist because Tailwind emits only the classes it
-  // can read in the source, so a generated name produces no CSS. That makes
-  // them two copies of one decision, and a test is what keeps them one.
-  test("the descendant form says exactly what the plain form says", () => {
-    const asDescendant = (utility: string): string =>
-      utility.startsWith("dark:")
-        ? `dark:[&_mark]:${utility.slice("dark:".length)}`
-        : `[&_mark]:${utility}`;
-
-    expect(new Set(SEARCH_MARK_DESCENDANT_CLASS_NAME.split(" "))).toEqual(
-      new Set(SEARCH_MARK_CLASS_NAME.split(" ").map(asDescendant)),
-    );
   });
 });

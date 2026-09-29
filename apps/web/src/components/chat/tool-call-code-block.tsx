@@ -1,13 +1,13 @@
 import type { CSSProperties } from "react";
 
 import { Result } from "better-result";
-import { CopyIcon } from "lucide-react";
 import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
+import { CopyIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";

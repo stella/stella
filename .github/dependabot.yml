@@ -185,9 +185,13 @@ updates:
       - "jan-kubica"
 
   - package-ecosystem: "bun"
-    # given that we use monorepo setup, Dependabot should only point to the root
+    # The monorepo resolves from the root lockfile. .claude/mcp keeps its own
+    # lockfile outside the workspace; CI's code-quality job installs it, so
+    # its bumps are validated like the root's, and they need the same cooldown
+    # (scripts/check-standalone-lockfiles.ts).
     directories:
       - "/"
+      - "/.claude/mcp"
     labels:
       - "📦 dependencies"
     schedule:

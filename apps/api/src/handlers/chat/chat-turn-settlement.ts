@@ -264,17 +264,35 @@ const ENGINE_ASKS_CLIENT_AGAIN = {
  * Close every call on a message the run does not resume that the engine
  * would otherwise ask the client about again. Such a call belongs to a turn
  * that already ended, so nobody can answer it any more.
+ *
+ * Each closing result joins its step's results: before the first stored
+ * result after its call, or at the end of the message. The engine ends a
+ * model message at a result, so a result right after its call would split
+ * the step's calls into two model messages.
  */
 const closeUnresolvedCallsForEngine = (
   parts: readonly ChatPart[],
-): ChatPart[] =>
-  parts.flatMap((part): ChatPart[] =>
-    part.type === "tool-call" &&
-    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&
-    !hasStoredResult(part, parts)
-      ? [part, errorToolResult(part.id, UNRESOLVED_CALL_ERROR)]
-      : [part],
-  );
+): ChatPart[] => {
+  const closed: ChatPart[] = [];
+  let stepResults: ChatPart[] = [];
+  for (const part of parts) {
+    if (part.type === "tool-result") {
+      closed.push(...stepResults);
+      stepResults = [];
+    }
+    closed.push(part);
+    if (
+      part.type !== "tool-call" ||
+      hasStoredResult(part, parts) ||
+      !ENGINE_ASKS_CLIENT_AGAIN[part.state]
+    ) {
+      continue;
+    }
+    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));
+  }
+  closed.push(...stepResults);
+  return closed;
+};
 
 /**
  * Close the approved calls a turn left without a result once it ended some

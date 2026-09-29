@@ -3,12 +3,12 @@ import type { KeyboardEvent } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { ChevronRightIcon, PlusIcon, Settings2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon, PlusIcon, Settings2Icon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";

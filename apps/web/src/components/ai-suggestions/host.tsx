@@ -21,16 +21,6 @@ import type {
   RefObject,
 } from "react";
 
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-  MessageSquareIcon,
-  UserIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { resolveChatComposerAction } from "@stll/chat/composer";
@@ -48,6 +38,16 @@ import {
   COMPOSER_PLACEHOLDER_CLASS,
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  LoaderCircleIcon,
+  MessageSquareIcon,
+  UserIcon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
@@ -75,6 +75,7 @@ import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
@@ -276,6 +277,9 @@ type PromptBarProps = {
   /** The (+) menu's Edit mode submenu; its only home (the dock has none). */
   editMode?: ComposerEditModeMenuProps | undefined;
   skillsOrganizationId?: string | undefined;
+  /** The chat this bar sends in, for the Skills submenu (see
+   *  `ComposerSkillsMenuProps.chat`). */
+  skillChat?: ComposerSkillChatContext | undefined;
   /**
    * Reserved-command availability for this bar's slash menu. Omit on
    * surfaces whose submit path has no reserved-command dispatch.
@@ -508,6 +512,7 @@ export const PromptBar = (props: PromptBarProps) => {
     onNewThread,
     editMode,
     skillsOrganizationId,
+    skillChat,
     reservedCommands,
     context,
     mcpOrganizationId,
@@ -763,7 +768,7 @@ export const PromptBar = (props: PromptBarProps) => {
                 type="button"
                 variant="ghost"
               >
-                <WandSparklesIcon aria-hidden="true" className="size-4" />
+                <AiActionIcon aria-hidden="true" className="size-4" />
                 {preset.label}
               </Button>
             </span>
@@ -832,6 +837,7 @@ export const PromptBar = (props: PromptBarProps) => {
                   skillsOrganizationId
                     ? {
                         activeOrganizationId: skillsOrganizationId,
+                        chat: skillChat,
                         editor,
                         reservedCommands,
                       }
@@ -1208,7 +1214,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
   if (filledBy === "ai") {
     return (
       <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
-        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        <AiActionIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.draftedByAi")}
       </span>
     );
@@ -1217,7 +1223,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
     return (
       <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
         <UserIcon aria-hidden="true" className="size-3 shrink-0" />
-        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        <AiActionIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.textPlusAi")}
       </span>
     );

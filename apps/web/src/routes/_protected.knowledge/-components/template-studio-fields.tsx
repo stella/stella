@@ -2,6 +2,22 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import type { DirectiveRange } from "@stll/folio-react";
+import { isClauseSlotName } from "@stll/template-conditions";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -22,24 +38,8 @@ import {
   TextQuoteIcon,
   Trash2Icon,
   UserIcon,
-  WandSparklesIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type { DirectiveRange } from "@stll/folio-react";
-import { isClauseSlotName } from "@stll/template-conditions";
-import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
-import {
-  Dialog,
-  DialogClose,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -475,7 +475,7 @@ export const StudioGettingStarted = () => {
       </p>
       <ol className="flex flex-col gap-2.5">
         <li className="flex items-start gap-2">
-          <WandSparklesIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+          <AiActionIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
           <span className="text-muted-foreground text-xs leading-relaxed">
             {t("templates.studio.gettingStartedField")}
           </span>
@@ -951,11 +951,11 @@ const FieldCapabilityIcons = ({ field }: { field: StudioField }) => {
       {field.aiAdapt ? (
         <span className="flex items-center gap-0.5">
           <UserIcon className="size-3" />
-          <WandSparklesIcon className="size-3" />
+          <AiActionIcon className="size-3" />
         </span>
       ) : null}
       {!field.aiAdapt && field.aiPrompt !== undefined ? (
-        <WandSparklesIcon className="size-3" />
+        <AiActionIcon className="size-3" />
       ) : null}
       {field.formula === undefined ? null : <SigmaIcon className="size-3" />}
       {field.required ? (
@@ -1361,7 +1361,7 @@ export const FieldFace = ({
               size="sm"
               variant={valueSource === "textAi" ? "default" : "outline"}
             >
-              <WandSparklesIcon className="size-3.5" />
+              <AiActionIcon className="size-3.5" />
               {t("templates.studio.textPlusAi")}
             </Button>
             <Button
@@ -1376,7 +1376,7 @@ export const FieldFace = ({
               size="sm"
               variant={valueSource === "ai" ? "default" : "outline"}
             >
-              <WandSparklesIcon className="size-3.5" />
+              <AiActionIcon className="size-3.5" />
               {t("templates.studio.draftedByAi")}
             </Button>
             {/* A disabled button gets `pointer-events-none`, which suppresses

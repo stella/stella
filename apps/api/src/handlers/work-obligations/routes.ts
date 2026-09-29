@@ -12,6 +12,7 @@ import {
   resourceRealtime,
   workspaceResourceSetUpdates,
 } from "@/api/lib/resource-realtime-macro";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const workObligationRealtimeUpdates = workspaceResourceSetUpdates(
   RESOURCE_TYPE.ENTITY,
@@ -20,7 +21,7 @@ const workObligationRealtimeUpdates = workspaceResourceSetUpdates(
 export const workObligationsRoute = new Elysia({
   prefix: "/work-obligations/:workspaceId",
 })
-  .use(deploymentFeatureGate(env.isDev || env.FEATURE_GOVERNED_WORKFLOW))
+  .use(deploymentFeatureGate(isLocalDevOpen() || env.FEATURE_GOVERNED_WORKFLOW))
   .use(workspaceAccessMacro)
   .use(resourceRealtime)
   .use(permissionMacro)

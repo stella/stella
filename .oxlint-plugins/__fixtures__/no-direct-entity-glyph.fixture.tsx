@@ -1,4 +1,4 @@
-/* oxlint-disable import/no-duplicates, no-duplicate-imports, unicorn/prefer-module, import/namespace, typescript/dot-notation, oxc/no-barrel-file -- fixture: each import form stands on its own line */
+/* oxlint-disable import/no-duplicates, no-duplicate-imports, unicorn/prefer-module, import/namespace, typescript/dot-notation, oxc/no-barrel-file, no-direct-lucide-import/no-direct-lucide-import -- fixture: each import form stands on its own line, straight from lucide */
 
 // Passive regression fixture for
 // `no-direct-entity-glyph/no-direct-entity-glyph`.
@@ -15,6 +15,9 @@ import { FolderIcon, FolderOpen, ListTodoIcon as Task } from "lucide-react";
 import { LucideFolderOpen } from "lucide-react";
 // expect-clean: no-direct-entity-glyph/no-direct-entity-glyph
 import { FileIcon, MailIcon } from "lucide-react";
+
+// oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph -- the shared icon module re-exports the glyph
+import { FolderIcon as IconModuleFolder } from "@stll/ui/icons";
 
 // oxlint-disable-next-line no-direct-entity-glyph/no-direct-entity-glyph -- namespace member
 const NamespaceGlyph = Lucide.Folder;
@@ -44,6 +47,7 @@ export const DirectEntityGlyphFixture = () => (
     <LucideFolderOpen />
     <FileIcon />
     <MailIcon />
+    <IconModuleFolder />
     <NamespaceGlyph />
     <ComputedGlyph />
     <DestructuredGlyph />

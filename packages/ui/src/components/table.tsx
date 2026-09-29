@@ -1,7 +1,6 @@
 import type * as React from "react";
 
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
-
+import { ArrowDownIcon, ArrowUpIcon } from "../icons";
 import { cn } from "../lib/utils";
 
 const Table = ({ className, ...props }: React.ComponentProps<"table">) => (

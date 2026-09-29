@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
-import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/button";
+import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 export type ChatComposerActionState = {

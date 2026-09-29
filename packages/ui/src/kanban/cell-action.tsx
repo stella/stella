@@ -1,8 +1,7 @@
 import type { ComponentProps } from "react";
 
-import { PlusIcon } from "lucide-react";
-
 import { Button } from "../components/button";
+import { PlusIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { KANBAN_CHROME_ROW_HEIGHT } from "./layout-tokens";
 

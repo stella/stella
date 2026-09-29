@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 
-import { ChevronDownIcon } from "lucide-react";
-
 import { DirectionalIcon } from "../components/directional-icon";
+import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import {
   KANBAN_BAND_CAPTION_ROW_HEIGHT,

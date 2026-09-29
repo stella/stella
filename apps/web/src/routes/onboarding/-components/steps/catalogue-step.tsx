@@ -1,13 +1,5 @@
 import { useState } from "react";
 
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ExternalLinkIcon,
-  GlobeIcon,
-  SearchIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -21,6 +13,14 @@ import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import { Form } from "@stll/ui/form";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ExternalLinkIcon,
+  GlobeIcon,
+  SearchIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,

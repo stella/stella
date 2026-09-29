@@ -1,14 +1,4 @@
 import {
-  ClockIcon,
-  FilePlus2Icon,
-  UploadIcon,
-  UserCheckIcon,
-  WandSparklesIcon,
-  ZapIcon,
-  type LucideIcon,
-} from "lucide-react";
-
-import {
   FLOW_RUN_STATUSES,
   FLOW_RUN_STEP_STATUSES,
   FLOW_RUN_TERMINAL_STATUSES,
@@ -22,6 +12,15 @@ import {
   type FlowStepKind,
   type FlowTriggerType,
 } from "@stll/api-contract";
+import {
+  ClockIcon,
+  FilePlus2Icon,
+  UploadIcon,
+  UserCheckIcon,
+  AiActionIcon,
+  ZapIcon,
+  type LucideIcon,
+} from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -53,7 +52,7 @@ export const FLOW_STEP_KIND_LABEL_KEYS = {
 } as const satisfies Record<FlowStepKind, TranslationKey>;
 
 export const FLOW_STEP_KIND_ICONS = {
-  ai: WandSparklesIcon,
+  ai: AiActionIcon,
   "review-gate": UserCheckIcon,
   "create-document": FilePlus2Icon,
 } as const satisfies Record<FlowStepKind, LucideIcon>;

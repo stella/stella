@@ -1,7 +1,7 @@
-import { CompassIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { CompassIcon } from "@stll/ui/icons";
 
 import { useGuideDrawerStore } from "@/features/guides/guide-drawer-store";
 import { GUIDE_TOURS } from "@/features/guides/guide-tours";

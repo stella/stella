@@ -69,19 +69,25 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
+export const decisionTextPresenceQuery = (
+  tx: CaseLawPublicReadTransaction,
+  decisionId: SafeId<"caseLawDecision">,
+) =>
+  tx
+    .select({
+      written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, decisionId))
+    .limit(1);
+
 export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence,
   async (
     tx: CaseLawPublicReadTransaction,
     decisionId: SafeId<"caseLawDecision">,
   ): Promise<boolean | null> => {
-    const [row] = await tx
-      .select({
-        written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-      })
-      .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, decisionId))
-      .limit(1);
+    const [row] = await decisionTextPresenceQuery(tx, decisionId);
     return row?.written ?? null;
   },
 );

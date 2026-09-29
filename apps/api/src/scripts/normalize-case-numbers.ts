@@ -24,6 +24,7 @@
 
 import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   normalizeSheetNumbersStatement,
@@ -36,17 +37,6 @@ const { rootDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH = 2000;
 const DRY_RUN = process.argv.includes("--dry-run");
-
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
 
 const firstNumber = (result: unknown, key: string): number => {
   const row = executedRows(result).at(0);

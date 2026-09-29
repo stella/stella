@@ -7,13 +7,17 @@ import {
   skillPagesForChips,
 } from "@/components/chat-editor-slash-items";
 
+const NONE_UNAVAILABLE: ReadonlySet<string> = new Set();
+
 describe("buildChatSlashItems", () => {
   test("includes reserved commands only for chat composers that support them", () => {
     const withoutReserved = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: [],
     });
     const withReserved = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: [],
       reservedCommands: { hasPersistedThread: true },
@@ -44,6 +48,7 @@ describe("buildChatSlashItems", () => {
 
   test("offers /rename-chat only when the composer has a persisted thread", () => {
     const items = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: [],
       reservedCommands: { hasPersistedThread: false },
@@ -56,6 +61,7 @@ describe("buildChatSlashItems", () => {
 
   test("includes installed skills from every fetched page", () => {
     const items = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: [
         {
@@ -98,6 +104,7 @@ describe("buildChatSlashItems", () => {
       }),
     );
     const items = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: [
         {
@@ -124,6 +131,7 @@ describe("buildChatSlashItems", () => {
 
   test("uses the private installed skill when private and team skills share a slug", () => {
     const items = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: [
         {
@@ -160,33 +168,36 @@ describe("buildChatSlashItems", () => {
   });
 
   test("derives prompt rows from command-bearing skill pages", () => {
-    const rows = commandShortcutRowsFromSkillPages([
-      {
-        installed: [
-          skillRow({
-            body: "Summarise this document.",
-            command: "summarize",
-            id: "summarize-default",
-            name: "Summarise",
-            scope: "private",
-            slug: "summarize-default",
-          }),
-          skillRow({
-            body: "Disabled body.",
-            command: "disabled",
-            enabled: false,
-            id: "disabled-command",
-            slug: "disabled-command",
-          }),
-          skillRow({
-            body: null,
-            command: "missing-body",
-            id: "missing-body",
-            slug: "missing-body",
-          }),
-        ],
-      },
-    ]);
+    const rows = commandShortcutRowsFromSkillPages(
+      [
+        {
+          installed: [
+            skillRow({
+              body: "Summarise this document.",
+              command: "summarize",
+              id: "summarize-default",
+              name: "Summarise",
+              scope: "private",
+              slug: "summarize-default",
+            }),
+            skillRow({
+              body: "Disabled body.",
+              command: "disabled",
+              enabled: false,
+              id: "disabled-command",
+              slug: "disabled-command",
+            }),
+            skillRow({
+              body: null,
+              command: "missing-body",
+              id: "missing-body",
+              slug: "missing-body",
+            }),
+          ],
+        },
+      ],
+      NONE_UNAVAILABLE,
+    );
 
     expect(rows).toEqual([
       {
@@ -201,6 +212,7 @@ describe("buildChatSlashItems", () => {
 
   test("hides installed skills that carry a slash command (covered by prompt feed)", () => {
     const items = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [
         {
           id: "summarize-default",
@@ -241,8 +253,66 @@ describe("buildChatSlashItems", () => {
     ]);
   });
 
+  test("omits skills chat cannot offer, from the chips and the commands", () => {
+    const pages = [
+      {
+        installed: [
+          skillRow({ id: "offered", slug: "offered" }),
+          skillRow({ id: "playbook-builder", slug: "playbook-builder" }),
+          skillRow({
+            body: "Build a playbook.",
+            command: "playbook",
+            id: "playbook-command",
+            slug: "playbook-command",
+          }),
+        ],
+      },
+    ];
+    const unavailableSkillIds = new Set([
+      "playbook-builder",
+      "playbook-command",
+    ]);
+
+    const items = buildChatSlashItems({
+      shortcuts: commandShortcutRowsFromSkillPages(pages, unavailableSkillIds),
+      skillPages: pages,
+      unavailableSkillIds,
+    });
+
+    expect(
+      items.map((item) =>
+        item.kind === "skill" ? item.skill.slug : item.kind,
+      ),
+    ).toEqual(["offered"]);
+  });
+
+  test("offers no skill before chat's availability is known", () => {
+    const pages = [
+      {
+        installed: [
+          skillRow({ id: "plain", slug: "plain" }),
+          skillRow({
+            body: "Summarise.",
+            command: "summarize",
+            id: "summarize",
+            slug: "summarize",
+          }),
+        ],
+      },
+    ];
+
+    expect(
+      buildChatSlashItems({
+        shortcuts: commandShortcutRowsFromSkillPages(pages, undefined),
+        skillPages: pages,
+        unavailableSkillIds: undefined,
+      }),
+    ).toEqual([]);
+  });
+
   test("omits disabled installed skills", () => {
     const items = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: [
         {
@@ -279,6 +349,7 @@ describe("skillPagesForChips", () => {
 
   test("a team-only prompt offers team skill chips alone", () => {
     const items = buildChatSlashItems({
+      unavailableSkillIds: NONE_UNAVAILABLE,
       shortcuts: [],
       skillPages: skillPagesForChips(chipPages(), SKILL_CHIP_CATALOG.team),
     });

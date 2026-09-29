@@ -10,18 +10,18 @@ import {
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
+import type { DocxEditorRef } from "@stll/folio-react";
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   MonitorIcon,
   MoonIcon,
   PrinterIcon,
   SunIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { resolveFindMatchRange } from "@stll/folio-core/prosemirror/findReplaceSelection";
-import type { DocxEditorRef } from "@stll/folio-react";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuPopup,

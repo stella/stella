@@ -3,6 +3,12 @@ import { useState } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { EU_MEMBER_STATES } from "@stll/catalogue";
+import { compareByLocale } from "@stll/collation";
+import { Button } from "@stll/ui/button";
+import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -13,13 +19,7 @@ import {
   PlusIcon,
   SearchIcon,
   XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { EU_MEMBER_STATES } from "@stll/catalogue";
-import { compareByLocale } from "@stll/collation";
-import { Button } from "@stll/ui/button";
-import type { ContextMenuAction } from "@stll/ui/context-menu";
+} from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,
@@ -53,6 +53,7 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
+import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
@@ -704,6 +705,11 @@ const CatalogueEntryRow = ({
 }: CatalogueEntryRowProps) => {
   const t = useTranslations();
   const install = useInstallEntry(organizationId);
+  const chatUnavailableSkills = useChatUnavailableSkills(organizationId);
+  const chatMissingTools =
+    entry.kind === "skill" && entry.chatSkillId !== null
+      ? chatUnavailableSkills?.get(entry.chatSkillId)
+      : undefined;
   const uninstall = useUninstallEntry(entry, organizationId);
   const { removal, requestRemoval, confirmDialog } = useCatalogueRemoval({
     entry,
@@ -805,6 +811,13 @@ const CatalogueEntryRow = ({
         contextActions={contextActions}
         display={toRowDisplay(entry)}
         focused={focused}
+        notice={
+          chatMissingTools === undefined
+            ? undefined
+            : t("catalogue.skillNeedsUnavailableTools", {
+                tools: chatMissingTools.join(", "),
+              })
+        }
         onFocus={onFocus}
       />
       {confirmDialog}

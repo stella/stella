@@ -374,7 +374,10 @@ describe("affected code-check planning", () => {
       input.slice("$TURBO_ROOT$/".length).replace(/\/\*\*$/u, "/fixture.ts"),
     ),
   )("shared root-script input %s schedules full root lint", (changedPath) => {
-    const planned = plan([changedPath], []);
+    const workspace = [...WORKSPACES].find((workspacePath) =>
+      changedPath.startsWith(`${workspacePath}/`),
+    );
+    const planned = plan([changedPath], workspace ? [workspace] : []);
     expect(planned.type).toBe("scoped");
     if (planned.type !== "scoped") {
       throw new Error("Expected a scoped code-check plan");
@@ -411,6 +414,8 @@ describe("changed lint path selection", () => {
     "scripts/guard.mjs",
     "scripts/worker.mts",
     "packages/ui/vite.config.js",
+    "apps/web/src/client.gen.mts",
+    "apps/api/src/generated/schema.ts",
   ])("includes lintable source %s", (changedPath) => {
     expect(isChangedLintPath(changedPath)).toBe(true);
   });
@@ -418,8 +423,7 @@ describe("changed lint path selection", () => {
   test.each([
     "README.md",
     "apps/web/src/routeTree.gen.ts",
-    "apps/web/src/client.gen.mts",
-    "apps/api/src/generated/schema.ts",
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
     "apps/api/src/not-real.mtsx",
     "packages/ui/node_modules/library/index.js",
   ])("excludes non-source or generated path %s", (changedPath) => {

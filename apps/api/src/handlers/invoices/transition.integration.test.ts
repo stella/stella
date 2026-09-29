@@ -16,6 +16,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -208,6 +209,7 @@ const createContext = ({
     createAuditRecorder: () => recordAuditEvent,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     params: { workspaceId: ids.wsA1, invoiceId },
     promptCachingEnabled: false,
     recordAuditEvent,

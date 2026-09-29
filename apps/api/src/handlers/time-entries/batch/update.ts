@@ -7,15 +7,18 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
+import type { TimePolicy } from "@/api/lib/billing-time";
 import {
   rateLookupKey,
   resolveRatesInTransaction,
-} from "@/api/lib/billing-rates";
+} from "@/api/lib/billing/rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const batchUpdateBodySchema = t.Object({
   ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
@@ -98,6 +101,44 @@ const batchChangesFor = (
   return { billable: { old: true, new: false } };
 };
 
+type PolicyCandidate = {
+  dateWorked: string;
+  narrative: string;
+  timezoneId: string;
+};
+
+type BatchPolicyCheckOptions = {
+  candidates: PolicyCandidate[];
+  policy: TimePolicy;
+  now: Date;
+  checkNarrative: boolean;
+};
+
+const getBatchPolicyViolation = ({
+  candidates,
+  policy,
+  now,
+  checkNarrative,
+}: BatchPolicyCheckOptions): HandlerError<400> | null => {
+  for (const entry of candidates) {
+    const today = formatTodayInTimeZone({ timezoneId: entry.timezoneId, now });
+    if (Result.isError(today)) {
+      return today.error;
+    }
+    const violation = getTimePolicyViolation({
+      policy,
+      dateWorked: entry.dateWorked,
+      today: today.value,
+      canApprove: true,
+      narrative: checkNarrative ? entry.narrative : undefined,
+    });
+    if (violation) {
+      return violation;
+    }
+  }
+  return null;
+};
+
 const batchUpdate = createSafeHandler(
   {
     description:
@@ -113,8 +154,15 @@ const batchUpdate = createSafeHandler(
     access: "write",
     body: batchUpdateBodySchema,
   },
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const { ids, action } = body;
+    const policy = yield* Result.await(
+      readTimePolicy({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+      }),
+    );
+    const now = new Date();
 
     const condition = and(
       eq(timeEntries.workspaceId, workspaceId),
@@ -129,13 +177,26 @@ const batchUpdate = createSafeHandler(
               .select({
                 billable: timeEntries.billable,
                 currency: timeEntries.currency,
+                dateWorked: timeEntries.dateWorked,
+                narrative: timeEntries.narrative,
+                timezoneId: timeEntries.timezoneId,
                 timerStartedAt: timeEntries.timerStartedAt,
               })
               .from(timeEntries)
               .where(
                 and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
               )
-              .limit(ids.length);
+              .limit(ids.length)
+              .for("update");
+            const violation = getBatchPolicyViolation({
+              candidates: blockers,
+              policy,
+              now,
+              checkNarrative: true,
+            });
+            if (violation) {
+              return { type: "policy" as const, error: violation, rows: [] };
+            }
             const hasRunningTimer = blockers.some(
               (entry) => entry.timerStartedAt !== null,
             );
@@ -161,6 +222,9 @@ const batchUpdate = createSafeHandler(
             return { type: "updated" as const, rows: updated };
           }),
         );
+        if (rows.type === "policy") {
+          return Result.err(rows.error);
+        }
         if (rows.type === "unpriced") {
           return Result.err(
             new HandlerError({
@@ -183,6 +247,27 @@ const batchUpdate = createSafeHandler(
       case "revert_to_draft": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const candidates = await tx
+              .select({
+                dateWorked: timeEntries.dateWorked,
+                narrative: timeEntries.narrative,
+                timezoneId: timeEntries.timezoneId,
+              })
+              .from(timeEntries)
+              .where(
+                and(condition, eq(timeEntries.status, BILLING_STATUS.APPROVED)),
+              )
+              .limit(ids.length)
+              .for("update");
+            const violation = getBatchPolicyViolation({
+              candidates,
+              policy,
+              now,
+              checkNarrative: false,
+            });
+            if (violation) {
+              return { type: "policy" as const, error: violation };
+            }
             const updated = await tx
               .update(timeEntries)
               .set({ status: BILLING_STATUS.DRAFT, updatedAt: new Date() })
@@ -191,10 +276,13 @@ const batchUpdate = createSafeHandler(
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
-            return updated;
+            return { type: "updated" as const, rows: updated };
           }),
         );
-        return Result.ok({ updated: rows.length });
+        if (rows.type === "policy") {
+          return Result.err(rows.error);
+        }
+        return Result.ok({ updated: rows.rows.length });
       }
 
       case "mark_billable": {
@@ -204,6 +292,8 @@ const batchUpdate = createSafeHandler(
               .select({
                 currency: timeEntries.currency,
                 dateWorked: timeEntries.dateWorked,
+                narrative: timeEntries.narrative,
+                timezoneId: timeEntries.timezoneId,
                 id: timeEntries.id,
                 rateAtEntry: timeEntries.rateAtEntry,
                 userId: timeEntries.userId,
@@ -218,6 +308,15 @@ const batchUpdate = createSafeHandler(
                 ),
               )
               .for("update");
+            const violation = getBatchPolicyViolation({
+              candidates,
+              policy,
+              now,
+              checkNarrative: false,
+            });
+            if (violation) {
+              return { type: "policy" as const, error: violation, rows: [] };
+            }
 
             const rateLookups = candidates.flatMap((row) =>
               row.userId
@@ -332,6 +431,9 @@ const batchUpdate = createSafeHandler(
             return { type: "updated" as const, rows: updated };
           }),
         );
+        if (result.type === "policy") {
+          return Result.err(result.error);
+        }
         if (result.type === "unpriced") {
           return Result.err(
             new HandlerError({
@@ -346,6 +448,32 @@ const batchUpdate = createSafeHandler(
       case "mark_non_billable": {
         const rows = yield* Result.await(
           safeDb(async (tx) => {
+            const candidates = await tx
+              .select({
+                dateWorked: timeEntries.dateWorked,
+                narrative: timeEntries.narrative,
+                timezoneId: timeEntries.timezoneId,
+              })
+              .from(timeEntries)
+              .where(
+                and(
+                  condition,
+                  eq(timeEntries.billable, true),
+                  ne(timeEntries.status, BILLING_STATUS.BILLED),
+                  ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
+                ),
+              )
+              .limit(ids.length)
+              .for("update");
+            const violation = getBatchPolicyViolation({
+              candidates,
+              policy,
+              now,
+              checkNarrative: false,
+            });
+            if (violation) {
+              return { type: "policy" as const, error: violation };
+            }
             const updated = await tx
               .update(timeEntries)
               .set({ billable: false, updatedAt: new Date() })
@@ -359,10 +487,13 @@ const batchUpdate = createSafeHandler(
               )
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
-            return updated;
+            return { type: "updated" as const, rows: updated };
           }),
         );
-        return Result.ok({ updated: rows.length });
+        if (rows.type === "policy") {
+          return Result.err(rows.error);
+        }
+        return Result.ok({ updated: rows.rows.length });
       }
 
       default:

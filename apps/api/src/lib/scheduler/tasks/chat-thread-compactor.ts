@@ -199,20 +199,29 @@ const compactThread = async ({
   signal,
   thread,
 }: CompactThreadOptions): ReturnType<typeof runChatThreadCompaction> => {
-  // `loadOrgAIConfig` throws rather than returning a Result, and a corrupt
-  // encrypted configuration is a property of one organization. Outside the
-  // per-thread boundary that rejection would escape before this thread is
-  // settled, leaving the rest of the claimed batch leased until expiry and
-  // letting the same poison thread abort the batch again on every run.
-  const configResult = await Result.tryPromise({
-    try: async () => await loadOrgAIConfig(db, thread.organizationId),
-    catch: (cause) =>
-      new ChatCompactionError({
-        cause,
-        message: "failed to load the organization AI configuration",
-        threadId: thread.threadId,
-      }),
-  });
+  // `loadOrgAIConfig` throws on a corrupt encrypted configuration, which is a
+  // property of one organization. Outside the per-thread boundary that
+  // rejection would escape before this thread is settled, leaving the rest of
+  // the claimed batch leased until expiry and letting the same poison thread
+  // abort the batch again on every run.
+  const configError = (cause: unknown) =>
+    new ChatCompactionError({
+      cause,
+      message: "failed to load the organization AI configuration",
+      threadId: thread.threadId,
+    });
+  const configResult = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        (
+          await loadOrgAIConfig(db, {
+            organizationId: thread.organizationId,
+            userId: thread.userId,
+          })
+        ).mapError(configError),
+      catch: configError,
+    }),
+  );
   if (Result.isError(configResult)) {
     return configResult;
   }

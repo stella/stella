@@ -45,6 +45,11 @@ const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
   "20260926150000_legislation_payload_revision",
   "migration.sql",
 );
+const LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120000_legislation_expression_identity",
+  "migration.sql",
+);
 const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260926160000_case_law_provision_extraction_state",
@@ -411,6 +416,27 @@ export const installPgliteLegislationPayloadRevision = async (
   }
 };
 
+const LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES = [
+  "CREATE OR REPLACE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the namespace and expression-id guards that schema push omits. */
+export const installPgliteLegislationExpressionIdentity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /**
  * Install the fence that rejects a write of a decision's publisher hash that
  * does not advance its observation order.
@@ -421,6 +447,34 @@ export const installPgliteCaseLawObservationFence = async (
   const statements = readMigrationStatements(
     CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH,
   ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120100_organization_member_capacity",
+  "migration.sql",
+);
+
+const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the member capacity function and guard omitted by schema push. */
+export const installPgliteOrganizationMemberCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
