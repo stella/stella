@@ -699,12 +699,15 @@ describe("source-rejected batch records", () => {
       corpus: landingTransfer().corpus,
     });
     if (Result.isOk(applied)) {
-      throw new Error("expected a ledger-backed rejection");
+      throw new Error("expected a failure streak");
     }
-    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.RECORD_REJECTED);
+    expect(applied.error.reason).toBe(CASE_LAW_BATCH_FAILURE.FAILURE_STREAK);
     expect(applied.error.unsettled).toBe(11);
     expect(applied.error.records.map(({ index }) => index)).toEqual(
       Array.from({ length: 10 }, (_, index) => index),
+    );
+    expect(applied.error.records.map(({ reason }) => reason)).toEqual(
+      Array.from({ length: 10 }, () => CASE_LAW_BATCH_FAILURE.RECORD_REJECTED),
     );
     expect(await ledgerRows(sourceId)).toHaveLength(10);
     expect(await decisionRows(sourceId)).toEqual([]);
