@@ -109,11 +109,9 @@ describe("counterparty_check chat tool", () => {
         {
           source: "eu",
           issuer: "EU",
-          issuerName: "European Union",
           classification: "binding",
           status: "unavailable",
           reason: "registry-unavailable",
-          checkedAt: "2026-09-29T08:00:00.000Z",
           editionId: null,
           publishedAt: null,
           verifiedAt: null,

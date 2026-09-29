@@ -2,7 +2,6 @@ import type {
   EntityType,
   FieldComparison,
   IdentityField,
-  SanctionsIssuer,
   SanctionsSource,
 } from "@stll/sanctions";
 
@@ -54,15 +53,6 @@ export const SANCTIONS_SOURCE_IDS = [
   "uk",
   "ch",
 ] as const satisfies readonly SanctionsSource[];
-export const SANCTIONS_ISSUERS = [
-  "EU",
-  "UN",
-  "CZ",
-  "US",
-  "GB",
-  "CH",
-  "UA",
-] as const satisfies readonly SanctionsIssuer[];
 export const SANCTIONS_ENTITY_TYPES = [
   "person",
   "organisation",
@@ -106,12 +96,11 @@ type GuardCode = (typeof SANCTIONS_REPLACEMENT_GUARD_CODES)[number];
 // fails the schema; a listed value neither produces is dead.
 true satisfies [
   Exclude<SanctionsSource, (typeof SANCTIONS_SOURCE_IDS)[number]>,
-  Exclude<SanctionsIssuer, (typeof SANCTIONS_ISSUERS)[number]>,
   Exclude<EntityType, (typeof SANCTIONS_ENTITY_TYPES)[number]>,
   Exclude<FieldComparison, (typeof SANCTIONS_FIELD_COMPARISONS)[number]>,
   Exclude<IdentityField, (typeof SANCTIONS_IDENTITY_FIELDS)[number]>,
   Exclude<GuardCode, SanctionsPendingUpdateCode>,
   Exclude<SanctionsPendingUpdateCode, GuardCode>,
-] extends [never, never, never, never, never, never, never]
+] extends [never, never, never, never, never, never]
   ? true
   : never;

@@ -67,9 +67,7 @@ const SURFACES = MCP_MODES.map((mode) => ({
 
 // A single tool must not consume an unreviewed multi-thousand-token block of
 // every tools/list. The largest measured schema is in the surface baseline.
-// Reviewed at 4200 for check_counterparty, whose one union carries both the
-// register outcome and the per-list sanctions outcome.
-const OUTPUT_SCHEMA_CHAR_CEILING = 4200;
+const OUTPUT_SCHEMA_CHAR_CEILING = 4000;
 
 // An editorial limit on one description; the largest measured one is in the
 // surface baseline.

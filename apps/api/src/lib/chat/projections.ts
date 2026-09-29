@@ -70,7 +70,6 @@ import {
   SANCTIONS_ENTITY_TYPES,
   SANCTIONS_FIELD_COMPARISONS,
   SANCTIONS_IDENTITY_FIELDS,
-  SANCTIONS_ISSUERS,
   SANCTIONS_PENDING_UPDATE_CODES,
   SANCTIONS_SCREENING_STATUSES,
   SANCTIONS_SOURCE_IDS,
@@ -2258,19 +2257,17 @@ const sanctionsPendingUpdateProjection = v.strictObject({
 // and, when one is on file, the edition it did not use.
 const sanctionsListOutcomeProjection = v.strictObject({
   source: v.picklist(SANCTIONS_SOURCE_IDS),
-  issuer: v.picklist(SANCTIONS_ISSUERS),
-  issuerName: v.string(),
+  // The issuing country's code, or EU or UN. A plain string keeps the output
+  // schema within its budget; the service types it closed.
+  issuer: v.string(),
   classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
   status: v.picklist(SANCTIONS_SCREENING_STATUSES),
   reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
-  checkedAt: v.string(),
-  // The output schema budget leaves room for one note: which edition these
-  // fields name depends on the list's status.
+  // The one note the budget keeps: which edition these fields name depends
+  // on the list's status (the screened one when it answered).
   editionId: v.pipe(
     v.nullable(passthroughId()),
-    v.description(
-      "With publishedAt: the edition screened; if unavailable, the latest on file, NOT screened",
-    ),
+    v.description("If unavailable: latest on file, NOT screened"),
   ),
   publishedAt: v.nullable(v.string()),
   verifiedAt: v.nullable(v.string()),

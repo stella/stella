@@ -44,11 +44,9 @@ const sanctionsPossibleMatch = {
     {
       source: "un",
       issuer: "UN",
-      issuerName: "United Nations",
       classification: "binding",
       status: "possible-match",
       reason: null,
-      checkedAt: NOW.toISOString(),
       editionId: "0b8f7c1e-3a52-4c1b-9d0e-4f6a2b7c8d90",
       publishedAt: "2026-09-28",
       verifiedAt: "2026-09-29T06:00:00.000Z",
@@ -141,7 +139,7 @@ describe("check_counterparty projection", () => {
     expect(v.safeParse(CHECK_COUNTERPARTY_PROJECTION, held).success).toBe(true);
   });
 
-  test("names every registered list, and refuses a source, issuer or register it does not know", () => {
+  test("names every registered list, and refuses a source or register it does not know", () => {
     const [list] = sanctionsPossibleMatch.lists;
     const screening = unavailableSanctionsScreening({
       reason: "registry-unavailable",
@@ -153,7 +151,6 @@ describe("check_counterparty projection", () => {
     );
     const refused = [
       { ...sanctionsPossibleMatch, lists: [{ ...list, source: "xx" }] },
-      { ...sanctionsPossibleMatch, lists: [{ ...list, issuer: "XX" }] },
       {
         ...sanctionsPossibleMatch,
         subject: {

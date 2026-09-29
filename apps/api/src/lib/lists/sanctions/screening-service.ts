@@ -31,10 +31,7 @@ import type {
   SanctionsScreeningStatus,
   SanctionsUnavailableReason,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
-import {
-  SANCTIONS_SOURCE_CONFIG,
-  sanctionsSourceIds,
-} from "@/api/lib/lists/sanctions/source-config";
+import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
 // One screening service for every surface that screens a name: the
 // counterparty check now and the public search later. Both read the same
@@ -103,12 +100,12 @@ export type SanctionsPendingUpdate = {
   nextCount: number | null;
 };
 
+// The screening's `checkedAt` is every list's; the issuer code names the
+// issuer.
 type ListOutcomeBase = {
   source: SanctionsSource;
   issuer: SanctionsIssuer;
-  issuerName: string;
   classification: SanctionsClassification;
-  checkedAt: string;
   pendingUpdate: SanctionsPendingUpdate | null;
 };
 
@@ -228,24 +225,18 @@ const toPendingUpdate = (
 
 const listBase = ({
   source,
-  issuerName,
   practiceJurisdictions,
-  checkedAt,
   heldUpdate,
 }: {
   source: SanctionsSource;
-  issuerName: string;
   practiceJurisdictions: readonly CountryCode[];
-  checkedAt: string;
   heldUpdate: SanctionsSourceFreshness["heldUpdate"];
 }): ListOutcomeBase => {
   const { issuer } = SANCTIONS_SOURCES[source];
   return {
     source,
     issuer,
-    issuerName,
     classification: classifySanctionsIssuer(issuer, practiceJurisdictions),
-    checkedAt,
     pendingUpdate: toPendingUpdate(heldUpdate),
   };
 };
@@ -420,9 +411,7 @@ export const screenSanctionsSubject = async ({
           query,
           base: listBase({
             source: sourceFreshness.source,
-            issuerName: sourceFreshness.issuer,
             practiceJurisdictions,
-            checkedAt,
             heldUpdate: sourceFreshness.heldUpdate,
           }),
           indexCache,
@@ -455,9 +444,7 @@ export const unavailableSanctionsScreening = ({
     unavailableList(
       listBase({
         source,
-        issuerName: SANCTIONS_SOURCE_CONFIG[source].issuer,
         practiceJurisdictions,
-        checkedAt,
         // Nothing was read about the lists: no subject reached them.
         heldUpdate: null,
       }),

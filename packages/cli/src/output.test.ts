@@ -390,10 +390,8 @@ describe("composite results", () => {
     throw new Error("check_counterparty declares no composite view");
   }
   const list = (overrides: Record<string, unknown>) => ({
-    issuerName: "Issuer",
     classification: "informational",
     reason: null,
-    checkedAt: "2026-09-29T08:00:00.000Z",
     editionId: "ed-1",
     publishedAt: "2026-09-28",
     verifiedAt: "2026-09-29T07:00:00.000Z",

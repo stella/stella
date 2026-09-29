@@ -7,11 +7,11 @@
         "title": 1184,
         "description": 28773,
         "inputSchema": 85042,
-        "outputSchema": 57087,
+        "outputSchema": 56913,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 186609,
+      "payloadUtf8Bytes": 186435,
       "largestDescription": {
         "tool": "check_counterparty",
         "chars": 809
@@ -22,7 +22,7 @@
       },
       "largestOutputSchema": {
         "tool": "check_counterparty",
-        "chars": 4172
+        "chars": 3998
       }
     },
     "documents": {

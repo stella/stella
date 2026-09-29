@@ -267,7 +267,6 @@ describe("sanctions screening service", () => {
           editionId: editionIds.get(list.source),
           publishedAt: "2026-09-19",
           verifiedAt: VERIFIED_AT.toISOString(),
-          checkedAt: FRESH_NOW.toISOString(),
           classification: "informational",
           issuer: SANCTIONS_SOURCES[list.source].issuer,
         });

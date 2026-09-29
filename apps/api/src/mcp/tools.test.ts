@@ -1703,11 +1703,9 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             source: "eu",
             issuer: "EU",
-            issuerName: "European Union",
             classification: "binding",
             status: "possible-match",
             reason: null,
-            checkedAt: "2026-09-29T08:00:00.000Z",
             editionId: "0b8f7c1e-3a52-4c1b-9d0e-4f6a2b7c8d90",
             publishedAt: "2026-09-28",
             verifiedAt: "2026-09-29T06:00:00.000Z",
@@ -1740,11 +1738,9 @@ describe("OpenAI-compatible MCP tools", () => {
           {
             source: "uk",
             issuer: "GB",
-            issuerName: "United Kingdom",
             classification: "informational",
             status: "unavailable",
             reason: "stale",
-            checkedAt: "2026-09-29T08:00:00.000Z",
             editionId: "5c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
             publishedAt: "2026-09-20",
             verifiedAt: "2026-09-25T06:00:00.000Z",
