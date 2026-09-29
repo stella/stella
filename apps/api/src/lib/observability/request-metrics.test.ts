@@ -53,7 +53,9 @@ describe("buildRequestDurationRecord", () => {
 
 test("chat shadow metrics emit append latency and per-turn write volume without identifier dimensions", () => {
   const lines: string[] = [];
-  setMetricLineSinkForTesting((line) => lines.push(line));
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
   try {
     emitChatRunLogMetric({ type: "append", durationMs: 12.5 });
     emitChatRunLogMetric({ type: "turn", rows: 3, bytes: 512 });

@@ -36,12 +36,12 @@ export const shadowChatRun = ({
   measure = emitChatRunLogMetric,
 }: ChatRunShadowOptions) => {
   if (!enabled) {
-    return { source, flush: async () => undefined };
+    return { source, flush: async () => await Promise.resolve() };
   }
   const created = Result.try(createLog);
   if (Result.isError(created)) {
     observe(created.error);
-    return { source, flush: async () => undefined };
+    return { source, flush: async () => await Promise.resolve() };
   }
   const log = created.value;
   let pending: StreamChunk[] = [];
@@ -73,7 +73,9 @@ export const shadowChatRun = ({
       pending = [];
       pendingBytes = 0;
       const start = performance.now();
-      const result = await Result.tryPromise(() => log.append(batch));
+      const result = await Result.tryPromise(
+        async () => await log.append(batch),
+      );
       record({ type: "append", durationMs: performance.now() - start });
       if (Result.isError(result)) {
         stop(result.error);

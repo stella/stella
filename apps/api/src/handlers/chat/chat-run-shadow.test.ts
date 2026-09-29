@@ -44,7 +44,9 @@ describe("chat run shadow", () => {
       }),
       source: from(input),
       observe: () => {},
-      measure: (metric) => metrics.push(metric),
+      measure: (metric) => {
+        metrics.push(metric);
+      },
     });
 
     expect(await collect(shadow.source)).toEqual(input);
@@ -77,7 +79,9 @@ describe("chat run shadow", () => {
         },
       }),
       source: from(input),
-      observe: (error) => observed.push(error),
+      observe: (error) => {
+        observed.push(error);
+      },
       measure: () => {},
     });
 
@@ -109,9 +113,13 @@ describe("chat run shadow", () => {
     const observed: unknown[] = [];
     const shadow = shadowChatRun({
       enabled: true,
-      createLog: () => ({ append: () => new Promise<string[]>(() => {}) }),
+      createLog: () => ({
+        append: async () => await new Promise<string[]>(() => {}),
+      }),
       source: from(chunks(1)),
-      observe: (error) => observed.push(error),
+      observe: (error) => {
+        observed.push(error);
+      },
       measure: () => {},
     });
 
@@ -133,13 +141,15 @@ describe("chat run shadow", () => {
     const shadow = shadowChatRun({
       enabled: true,
       createLog: () => ({
-        append: () => {
+        append: async () => {
           appendStarted = true;
-          return new Promise<string[]>(() => {});
+          return await new Promise<string[]>(() => {});
         },
       }),
       source: from(chunks(258)),
-      observe: (error) => observed.push(error),
+      observe: (error) => {
+        observed.push(error);
+      },
       measure: () => {},
     });
 
@@ -173,7 +183,9 @@ describe("chat run shadow", () => {
         },
       }),
       source: from(input),
-      observe: (error) => observed.push(error),
+      observe: (error) => {
+        observed.push(error);
+      },
       measure: () => {},
     });
 
@@ -193,7 +205,7 @@ describe("chat run shadow", () => {
     const appendFailureObserved = Promise.withResolvers<unknown>();
     const shadow = shadowChatRun({
       enabled: true,
-      createLog: () => ({ append: () => append.promise }),
+      createLog: () => ({ append: async () => await append.promise }),
       source: from(chunks(1)),
       observe: (error) => {
         const message = String(error);
