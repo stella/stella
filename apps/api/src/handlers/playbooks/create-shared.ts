@@ -13,13 +13,13 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { StarterPlaybookId } from "@/api/lib/knowledge/starter-playbooks";
 import { LIMITS } from "@/api/lib/limits";
 import type {
   PlaybookPositions,
   PlaybookScope,
 } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
+import type { StarterPlaybookId } from "@/api/lib/workflow/starter-playbooks";
 
 // The one create path every playbook-creating surface shares: the manual
 // editor's "New playbook" save (create.ts) and the one-click starter

@@ -17,7 +17,6 @@ const boundaryLeaves = new Set([
 const allowedModules = new Set([
   "handlers/public-knowledge/endpoints.ts",
   "handlers/public-knowledge/routes.ts",
-  "lib/knowledge/starter-playbooks.ts",
   "lib/observability/response-status.ts",
   "lib/array.ts",
   "lib/docx/block-directives.ts",
@@ -53,6 +52,7 @@ const allowedModules = new Set([
   "lib/runtime-worker-path.ts",
   "lib/sanitize-filename.ts",
   "lib/type-guards.ts",
+  "lib/workflow/starter-playbooks.ts",
   "mime-types.ts",
   ...boundaryLeaves,
 ]);

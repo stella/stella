@@ -15,7 +15,8 @@ import type { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
 import {
   findStarterPlaybook,
   STARTER_PLAYBOOKS,
-} from "@/api/lib/knowledge/starter-playbooks";
+} from "@/api/lib/workflow/starter-playbooks";
+import type { StarterPlaybook } from "@/api/lib/workflow/starter-playbooks";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const packMetadata = (pack: GeneratedTemplatePack) => ({
@@ -50,6 +51,19 @@ const templateMetadata = (
 
 const notFound = () =>
   Result.err(new HandlerError({ status: 404, message: "Not found" }));
+
+/**
+ * Hands a lookup over bundled, in-memory data to a safe handler through
+ * `yield*`, the same short-circuit an awaited read uses. The result is
+ * already settled; the promise only carries it into the async generator.
+ */
+const fromBundle = <T, E>(result: Result<T, E>) =>
+  Result.await(Promise.resolve(result));
+
+const findStarter = (id: string): Result<StarterPlaybook, HandlerError> => {
+  const starter = findStarterPlaybook(id);
+  return starter ? Result.ok(starter) : notFound();
+};
 
 const packParams = t.Object({
   packId: t.String({ minLength: 1, maxLength: 64 }),
@@ -101,16 +115,31 @@ export const createPublicKnowledgeEndpoints = (
     const pack = catalogue().get(packId);
     return pack?.publicDisplay ? pack : null;
   };
+  const findPublicPack = (
+    packId: string,
+  ): Result<GeneratedTemplatePack, HandlerError> => {
+    const pack = publicPack(packId);
+    return pack ? Result.ok(pack) : notFound();
+  };
+  const findPublicTemplate = ({
+    packId,
+    templateId,
+  }: {
+    packId: string;
+    templateId: string;
+  }): Result<GeneratedTemplatePack["templates"][number], HandlerError> => {
+    const template = publicPack(packId)?.templates.find(
+      (item) => item.slug === templateId,
+    );
+    return template ? Result.ok(template) : notFound();
+  };
 
   const listPacks = createSafePublicHandler(
     { mcp: { type: "internal", reason: "public_indexing" } },
-    // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers use async generators.
     async function* () {
+      const packs = yield* fromBundle(Result.ok(catalogue().list()));
       return Result.ok({
-        items: catalogue()
-          .list()
-          .filter((pack) => pack.publicDisplay)
-          .map(packMetadata),
+        items: packs.filter((pack) => pack.publicDisplay).map(packMetadata),
       });
     },
   );
@@ -120,12 +149,8 @@ export const createPublicKnowledgeEndpoints = (
       mcp: { type: "internal", reason: "public_indexing" },
       params: packParams,
     },
-    // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers use async generators.
     async function* ({ params }) {
-      const pack = publicPack(params.packId);
-      if (!pack) {
-        return notFound();
-      }
+      const pack = yield* fromBundle(findPublicPack(params.packId));
       return Result.ok({
         ...packMetadata(pack),
         templates: pack.templates.map(templateMetadata),
@@ -138,14 +163,8 @@ export const createPublicKnowledgeEndpoints = (
       mcp: { type: "internal", reason: "public_indexing" },
       params: templateParams,
     },
-    // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers use async generators.
     async function* ({ params }) {
-      const template = publicPack(params.packId)?.templates.find(
-        (item) => item.slug === params.templateId,
-      );
-      if (!template) {
-        return notFound();
-      }
+      const template = yield* fromBundle(findPublicTemplate(params));
       return Result.ok(templateMetadata(template));
     },
   );
@@ -228,9 +247,9 @@ export const createPublicKnowledgeEndpoints = (
 
   const listStarters = createSafePublicHandler(
     { mcp: { type: "internal", reason: "public_indexing" } },
-    // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers use async generators.
     async function* () {
-      return Result.ok({ items: STARTER_PLAYBOOKS.map(starterMetadata) });
+      const starters = yield* fromBundle(Result.ok(STARTER_PLAYBOOKS));
+      return Result.ok({ items: starters.map(starterMetadata) });
     },
   );
 
@@ -239,12 +258,8 @@ export const createPublicKnowledgeEndpoints = (
       mcp: { type: "internal", reason: "public_indexing" },
       params: starterParams,
     },
-    // oxlint-disable-next-line require-yield, typescript/require-await -- safe handlers use async generators.
     async function* ({ params }) {
-      const starter = findStarterPlaybook(params.id);
-      if (!starter) {
-        return notFound();
-      }
+      const starter = yield* fromBundle(findStarter(params.id));
       return Result.ok({
         ...starterMetadata(starter),
         positions: starter.positions,

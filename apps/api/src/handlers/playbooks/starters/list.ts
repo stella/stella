@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { STARTER_PLAYBOOKS } from "@/api/lib/knowledge/starter-playbooks";
+import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 
 const config = {
   description:

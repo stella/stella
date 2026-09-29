@@ -9,7 +9,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   findStarterPlaybook,
   STARTER_PLAYBOOK_IDS,
-} from "@/api/lib/knowledge/starter-playbooks";
+} from "@/api/lib/workflow/starter-playbooks";
 
 const fromStarterBodySchema = t.Object({
   starterId: t.UnionEnum(STARTER_PLAYBOOK_IDS),

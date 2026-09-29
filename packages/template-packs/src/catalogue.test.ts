@@ -37,7 +37,7 @@ describe("template pack catalogue", () => {
       GENERATED_TEMPLATE_PACKS.filter((pack) => pack.publicDisplay).map(
         (pack) => pack.id,
       ),
-    ).toEqual(PUBLIC_PACK_IDS);
+    ).toEqual([...PUBLIC_PACK_IDS]);
     expect(FIXTURE_PACKS.every((pack) => !pack.publicDisplay)).toBe(true);
   });
 

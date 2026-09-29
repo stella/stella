@@ -21,9 +21,9 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { collectNodePropertyIds } from "@/api/lib/conditions/ast-utils";
-import { STARTER_PLAYBOOKS } from "@/api/lib/knowledge/starter-playbooks";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
+import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {
