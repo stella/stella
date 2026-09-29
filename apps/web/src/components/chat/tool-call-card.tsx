@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
@@ -27,9 +27,10 @@ import {
   type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
+import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 
 type ToolPart = ChatToolCallPart;
 
@@ -347,6 +348,7 @@ export const ToolCallCard = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
+  const queryClient = useQueryClient();
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
   const { data: catalogData } = useQuery({
@@ -459,9 +461,19 @@ export const ToolCallCard = ({
           )}
           onClick={() => {
             if (skillResourceOutput) {
+              // The chat routes load the skills list, so its title is read
+              // from the cache; without it the tab shows the slug.
+              const skillDisplayName = findSkillDisplayName({
+                pages: queryClient.getQueryData(
+                  skillsOptions(activeOrganizationId).queryKey,
+                )?.pages,
+                skillName: skillResourceOutput.skillName,
+                source: skillResourceOutput.source,
+              });
               useInspectorTabsStore.getState().openSkillResourceTab({
                 ...skillResourceOutput.source,
                 skillName: skillResourceOutput.skillName,
+                ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,

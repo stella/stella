@@ -22,7 +22,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
-import { BUILT_IN_SKILL_ORIGIN } from "./inspector-store-types";
+import { BUILT_IN_SKILL_ORIGIN, skillLabel } from "./inspector-store-types";
 import type { InstalledSkillResourceTab } from "./inspector-store-types";
 import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-tabs-store";
@@ -67,19 +67,16 @@ export const SkillResourcePanel = ({
   );
 
 type SkillResourceTabMatterProps = {
-  skillName: string;
-  resourcePath: string;
+  tab: SkillResourceTab;
 };
 
-const SkillResourceTabMatter = ({
-  skillName,
-  resourcePath,
-}: SkillResourceTabMatterProps) => (
+/** The skill's title; the tooltip keeps its slug and the resource path. */
+const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => (
   <Tooltip
-    content={`${skillName} · ${resourcePath}`}
+    content={`${tab.skillName} · ${tab.resourcePath}`}
     render={
-      <span className="text-muted-foreground text-3xs truncate font-mono">
-        {skillName}
+      <span className="text-muted-foreground text-3xs truncate">
+        {skillLabel(tab)}
       </span>
     }
   />
@@ -95,12 +92,7 @@ const BuiltInSkillResourcePanel = ({
     <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
       <InspectorTabHeader
         label={basenameOf(tab.resourcePath)}
-        matter={
-          <SkillResourceTabMatter
-            resourcePath={tab.resourcePath}
-            skillName={tab.skillName}
-          />
-        }
+        matter={<SkillResourceTabMatter tab={tab} />}
         onClose={onClose}
       />
       <SkillResourcePreview
@@ -359,12 +351,7 @@ const InstalledSkillResourcePanel = ({
           ) : null
         }
         label={basenameOf(tab.resourcePath)}
-        matter={
-          <SkillResourceTabMatter
-            resourcePath={tab.resourcePath}
-            skillName={tab.skillName}
-          />
-        }
+        matter={<SkillResourceTabMatter tab={tab} />}
         onClose={onClose}
       />
       {renderContentPane()}

@@ -493,6 +493,7 @@ export const createInspectorTabsSlice = (
 
   openSkillResourceTab: ({
     skillName,
+    skillDisplayName,
     resourcePath,
     label,
     mimeType,
@@ -510,6 +511,7 @@ export const createInspectorTabsSlice = (
         id,
         label,
         skillName,
+        ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
         target,
         resourcePath,
         mimeType,

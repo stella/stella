@@ -65,7 +65,10 @@ export type ChatTab = {
     | {
         /** Absent for a built-in skill, which has no row: `skillName` names it. */
         skillId?: string | undefined;
+        /** The skill's identifier (its slug), never shown as its title. */
         skillName: string;
+        /** The title a person reads (`skillLabel`); absent on older tabs. */
+        skillDisplayName?: string | undefined;
       }
     | undefined;
 };
@@ -143,7 +146,10 @@ type SkillResourceTabFields = {
   type: "skill-resource";
   id: SkillResourceTabId;
   label: string;
+  /** The skill's identifier (its slug), never shown as its title. */
   skillName: string;
+  /** The title a person reads (`skillLabel`), when it was known. */
+  skillDisplayName?: string | undefined;
   target: "body" | "resource";
   resourcePath: string;
   mimeType: string;
@@ -151,6 +157,15 @@ type SkillResourceTabFields = {
 };
 
 export type SkillResourceTab = SkillResourceTabFields & SkillResourceSource;
+
+/** What a skill is called on screen: its title, or its slug if none is known. */
+export const skillLabel = ({
+  skillDisplayName,
+  skillName,
+}: {
+  skillDisplayName?: string | undefined;
+  skillName: string;
+}): string => skillDisplayName ?? skillName;
 
 export type InstalledSkillResourceTab = SkillResourceTabFields & {
   origin: SkillResourceOrigin;

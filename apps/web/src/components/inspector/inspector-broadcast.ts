@@ -272,7 +272,8 @@ const isActiveSkillContext = (
   return (
     isRecord(value) &&
     typeof value["skillName"] === "string" &&
-    isOptionalString(value["skillId"])
+    isOptionalString(value["skillId"]) &&
+    isOptionalString(value["skillDisplayName"])
   );
 };
 
@@ -371,6 +372,7 @@ const isInspectorSkillResourceTab = (
   return (
     typeof label === "string" &&
     typeof value["skillName"] === "string" &&
+    isOptionalString(value["skillDisplayName"]) &&
     parseSkillResourceSource(value["skillId"], value["origin"]) !== undefined &&
     (target === undefined || target === "body" || target === "resource") &&
     typeof value["resourcePath"] === "string" &&

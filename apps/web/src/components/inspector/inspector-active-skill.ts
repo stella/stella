@@ -21,7 +21,9 @@ const isActiveSkillChatContext = (
 ): value is ActiveSkillChatContext =>
   isRecord(value) &&
   typeof value["skillName"] === "string" &&
-  typeof value["skillId"] === "string";
+  typeof value["skillId"] === "string" &&
+  (value["skillDisplayName"] === undefined ||
+    typeof value["skillDisplayName"] === "string");
 
 const getToolDetailActiveSkillContext = (
   payload: unknown,
@@ -46,8 +48,9 @@ const getToolDetailActiveSkillContext = (
     }
 
     return {
+      skillDisplayName: entry.displayName,
       skillId: entry.chatSkillId,
-      skillName: entry.displayName,
+      skillName: entry.slug,
     };
   }
 
@@ -60,9 +63,15 @@ export const getActiveSkillChatContext = (
   catalogueEntries?: readonly ActiveSkillCatalogueEntry[],
 ): ActiveSkillChatContext | undefined => {
   if (tab?.type === "skill-resource") {
+    const names = {
+      skillName: tab.skillName,
+      ...(tab.skillDisplayName === undefined
+        ? {}
+        : { skillDisplayName: tab.skillDisplayName }),
+    };
     return tab.origin === BUILT_IN_SKILL_ORIGIN
-      ? { skillName: tab.skillName }
-      : { skillId: tab.skillId, skillName: tab.skillName };
+      ? names
+      : { ...names, skillId: tab.skillId };
   }
 
   if (tab?.type === "chat") {
