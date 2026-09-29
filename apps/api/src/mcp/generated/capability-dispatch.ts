@@ -1244,6 +1244,18 @@ export const CAPABILITY_DISPATCH = {
   "usage.entitlement.get": {
     load: async () => await import("@/api/handlers/usage/entitlement/get"),
   },
+  "vat-rates.archive": {
+    load: async () => await import("@/api/handlers/vat-rates/archive"),
+  },
+  "vat-rates.create": {
+    load: async () => await import("@/api/handlers/vat-rates/create"),
+  },
+  "vat-rates.list": {
+    load: async () => await import("@/api/handlers/vat-rates/list"),
+  },
+  "vat-rates.update": {
+    load: async () => await import("@/api/handlers/vat-rates/update"),
+  },
   "view-templates.create": {
     load: async () => await import("@/api/handlers/view-templates/create"),
   },
