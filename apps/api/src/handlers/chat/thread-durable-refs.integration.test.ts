@@ -261,7 +261,7 @@ describe("a ref shown in a thread resolves for the rest of it", () => {
         harness.expectStableRefs(threadId);
       } finally {
         conversation.client.dispose();
-        harness.close();
+        await harness.close();
       }
     },
   );

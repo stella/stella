@@ -50,7 +50,8 @@ export type ScriptedTurn =
     }
   | {
       /** The provider call never answers, as when the process serving the
-       *  run dies while it waits. */
+       *  run dies while it waits. Like a real request, it ends only when its
+       *  run aborts it, which is how a test ends the run it left behind. */
       type: "stall";
     }
   | ScriptedStep;
@@ -298,7 +299,7 @@ export async function* scriptedTurnChunks(
     throw new ScriptedProviderError({ message: turn.message });
   }
   if (turn.type === "stall") {
-    await Promise.withResolvers<never>().promise;
+    await untilAborted(signal);
     return;
   }
   const messageId = `provider-message-${String(index + 1)}`;
