@@ -7,6 +7,7 @@ import {
   LANGUAGE_STOPWORDS,
   normalizeTemplateLanguages,
 } from "@/api/lib/templates/template-languages";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 // ── normalizeTemplateLanguages ───────────────────────────
 
@@ -164,11 +165,15 @@ const makeDocx = async (paragraphs: string[]): Promise<Uint8Array> => {
 describe("detectTemplateLanguagesFromDocx", () => {
   test("detects languages from document paragraphs", async () => {
     const docx = await makeDocx([SNIPPETS["en"] ?? ""]);
-    expect(await detectTemplateLanguagesFromDocx(docx)).toEqual(["en"]);
+    expect(await detectTemplateLanguagesFromDocx(testDocxFile(docx))).toEqual([
+      "en",
+    ]);
   });
 
   test("returns [] for an unreadable file instead of throwing", async () => {
     const garbage = new TextEncoder().encode("not a zip archive");
-    expect(await detectTemplateLanguagesFromDocx(garbage)).toEqual([]);
+    expect(
+      await detectTemplateLanguagesFromDocx(testDocxFile(garbage)),
+    ).toEqual([]);
   });
 });

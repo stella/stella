@@ -1,6 +1,6 @@
 {
   "name": "@stll/text-normalize",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Search match-key text normalization — Arabic orthographic variant folding (alef/hamza/teh-marbuta/yeh, tashkeel, tatweel, digits) with per-language fold tables",
   "keywords": [
     "arabic",
@@ -30,12 +30,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "bun": "./src/index.ts",
-      "module": "./src/index.ts",
-      "import": "./dist/index.js"
-    }
+    ".": "./src/index.ts"
   },
   "publishConfig": {
     "access": "public"

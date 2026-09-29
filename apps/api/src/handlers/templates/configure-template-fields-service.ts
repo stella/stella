@@ -19,9 +19,9 @@ import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import type { FieldConfigurationIssue } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
+import { readStoredTemplateFile } from "@/api/lib/templates/stored-template-file";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 
 type ConfigureTemplateFieldsOptions = {
@@ -59,15 +59,23 @@ export const configureTemplateFields = async function* ({
         templateId,
         mode: { type: "current-version" },
         recordAuditEvent,
-        async prepare({ s3Key }) {
+        async prepare(snapshot) {
+          const stored = await readStoredTemplateFile({
+            safeDb,
+            organizationId,
+            row: snapshot,
+          });
+          if (Result.isError(stored)) {
+            return Result.err(stored.error);
+          }
           const configured = await configureTemplateDocument({
-            buffer: Buffer.from(await readS3ArrayBuffer(s3Key)),
+            file: stored.value,
             entries: fields,
           });
           // `prepare` re-runs when a concurrent write moves the template's
           // pointer, so the issue list is replaced, never appended to.
           rejected = configured.issues;
-          return Result.ok({ bytes: new Uint8Array(configured.buffer) });
+          return Result.ok({ file: configured.file });
         },
       }),
     ),

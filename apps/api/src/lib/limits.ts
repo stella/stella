@@ -609,6 +609,13 @@ export const LIMITS = {
   // corpus index two-stage search: lexical candidates fetched per index window
   // before the citation-authority rerank.
   corpusIndexSearchCandidateLimit: 300,
+  /**
+   * Rank at which the rank-derived lexical score has decayed by a factor of e
+   * (`corpusIndexLexicalScore`). Equal to the scan's round size, but its own
+   * constant: a cursor encodes scores computed from it, so resizing a round
+   * must not move them.
+   */
+  corpusIndexLexicalRankDecay: 300,
   // Max corpus-index lexical candidates scanned across windows for one
   // cursor request.
   corpusIndexSearchScanLimit: 10_000,

@@ -166,6 +166,136 @@ export type CorpusIndexSearchResponse = {
 };
 
 /**
+ * A best-first read of the engine's ES-compatible endpoint. It returns the
+ * same `_score` order the native search does for the same query string, and
+ * it can do two things that one cannot: project each hit to named stored
+ * fields, and report the BM25 score beside the hit.
+ */
+type CorpusIndexScoredSearchInput = {
+  indexId: string;
+  /** Full corpus index query string, read exactly as `search` reads it. */
+  query: string;
+  /** Rank of the first hit returned. */
+  from: number;
+  size: number;
+  /** Stored fields each hit carries; nothing else of the document is sent. */
+  fields: readonly string[];
+  /**
+   * Fields every hit must carry. A hit without one of them is a malformed
+   * response, not a hit to skip: a reader that skipped it would still count it
+   * as read and could answer a short page while the engine reports matches.
+   */
+  requiredFields: readonly string[];
+};
+
+type CorpusIndexScoredHit = {
+  /** The hit's stored fields, limited to the requested ones. */
+  fields: CorpusIndexHit;
+  /** BM25 of the hit under the query. */
+  score: number;
+};
+
+export type CorpusIndexScoredSearchResponse = {
+  numHits: number;
+  hits: CorpusIndexScoredHit[];
+};
+
+const STORED_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_.]*$/u;
+
+/**
+ * The request a scored read sends.
+ *
+ * `default_operator` is AND because that is what the native endpoint applies
+ * to the same query string; the ES-compatible default is OR, which would widen
+ * every juxtaposed pair of terms into a disjunction. The sort is spelled out
+ * so the score arrives in each hit's `sort` value, and the hit count is
+ * tracked exactly because the scan decides whether to continue from it.
+ */
+export const corpusIndexScoredSearchRequest = ({
+  indexId,
+  query,
+  from,
+  size,
+  fields,
+  requiredFields,
+}: CorpusIndexScoredSearchInput): {
+  path: string;
+  body: Record<string, unknown>;
+} => {
+  if (fields.length === 0) {
+    panic("A scored corpus search must name the fields it reads");
+  }
+  for (const field of requiredFields) {
+    if (!fields.includes(field)) {
+      panic(`A scored corpus search requires ${field} without reading it`);
+    }
+  }
+  for (const field of fields) {
+    if (!STORED_FIELD_NAME.test(field)) {
+      panic(`Invalid stored field name for a scored search: ${field}`);
+    }
+  }
+  return {
+    path: `/api/v1/_elastic/${indexId}/_search?_source_includes=${fields.join(",")}`,
+    body: {
+      query: { query_string: { query, default_operator: "AND" } },
+      from,
+      size,
+      sort: [{ _score: { order: "desc" } }],
+      track_total_hits: true,
+    },
+  };
+};
+
+const scoreOfScoredHit = (hit: Record<string, unknown>): number | null => {
+  const sort = hit["sort"];
+  const fromSort: unknown = Array.isArray(sort) ? sort.at(0) : undefined;
+  const score = typeof fromSort === "number" ? fromSort : hit["_score"];
+  return typeof score === "number" && Number.isFinite(score) ? score : null;
+};
+
+/**
+ * Null when the body is not the shape the endpoint documents, including a hit
+ * whose `_source` is missing or null, or lacks one of `requiredFields`.
+ */
+export const parseCorpusIndexScoredSearchResponse = (
+  response: unknown,
+  requiredFields: readonly string[],
+): CorpusIndexScoredSearchResponse | null => {
+  const outer = isRecord(response) ? response["hits"] : undefined;
+  if (!isRecord(outer)) {
+    return null;
+  }
+  const total = outer["total"];
+  const numHits = isRecord(total) ? total["value"] : undefined;
+  const rawHits = parseRecordArray(outer["hits"]);
+  if (
+    typeof numHits !== "number" ||
+    !Number.isFinite(numHits) ||
+    numHits < 0 ||
+    rawHits === null
+  ) {
+    return null;
+  }
+  const hits: CorpusIndexScoredHit[] = [];
+  for (const hit of rawHits) {
+    const source = hit["_source"];
+    const score = scoreOfScoredHit(hit);
+    if (
+      !isRecord(source) ||
+      score === null ||
+      requiredFields.some(
+        (field) => source[field] === undefined || source[field] === null,
+      )
+    ) {
+      return null;
+    }
+    hits.push({ fields: source, score });
+  }
+  return { numHits, hits };
+};
+
+/**
  * Durable identity of one asynchronous engine deletion.
  *
  * Quickwit applies delete tasks to published splits after accepting the
@@ -258,6 +388,10 @@ export type CorpusIndexClient = {
   search: (
     input: CorpusIndexSearchInput,
   ) => Promise<Result<CorpusIndexSearchResponse, CorpusIndexError>>;
+  /** `_score` order with scores and projected fields; see the input type. */
+  scoredSearch: (
+    input: CorpusIndexScoredSearchInput,
+  ) => Promise<Result<CorpusIndexScoredSearchResponse, CorpusIndexError>>;
   aggregate: (
     input: CorpusIndexAggregateInput,
   ) => Promise<Result<CorpusIndexAggregations, CorpusIndexError>>;
@@ -923,6 +1057,34 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           hits,
           snippets,
         };
+      },
+      catch: toCorpusIndexError,
+    }),
+
+  scoredSearch: async (input) =>
+    await Result.tryPromise({
+      try: async () => {
+        const { path, body } = corpusIndexScoredSearchRequest(input);
+        const response = await requestJson({
+          baseUrl: searchBaseUrl(cluster),
+          path,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          },
+          timeoutMs: SEARCH_TIMEOUT_MS,
+        });
+        const parsed = parseCorpusIndexScoredSearchResponse(
+          response,
+          input.requiredFields,
+        );
+        if (parsed === null) {
+          throw new CorpusIndexError({
+            message: "corpus index scored search returned an invalid response",
+          });
+        }
+        return parsed;
       },
       catch: toCorpusIndexError,
     }),
