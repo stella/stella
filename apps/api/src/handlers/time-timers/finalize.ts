@@ -256,15 +256,20 @@ export const finalizeTimer = async ({
     lock: completion.type === "admin" ? "advisory" : "update",
   });
   if (!timer) {
-    return Result.err(timerNotFound());
+    return Result.err(timerNotFound(completion.type));
   }
   const workspaceId = timer.workspaceId;
   if (!workspaceId) {
     return Result.err(
       new HandlerError({
         status: 400,
+        code: "timer_matter_required",
         message: "A matter is required to confirm a timer",
-        hint: "Update the timer with a matterId, then confirm it again.",
+        hint: {
+          admin:
+            "Ask the timer owner to assign an accessible matter, then retry time-timers.admin.stop.",
+          owner: "Update the timer with a matterId, then confirm it again.",
+        }[completion.type],
       }),
     );
   }
@@ -272,8 +277,13 @@ export const finalizeTimer = async ({
     return Result.err(
       new HandlerError({
         status: 404,
+        code: "timer_matter_inaccessible",
         message: "Matter not found or not accessible",
-        hint: "Update the timer to a matter you can access.",
+        hint: {
+          admin:
+            "Restore the timer owner's matter access or ask them to reassign it, then retry time-timers.admin.stop.",
+          owner: "Update the timer to a matter you can access.",
+        }[completion.type],
       }),
     );
   }
@@ -297,8 +307,14 @@ export const finalizeTimer = async ({
     return Result.err(
       new HandlerError({
         status: 404,
+        code: "timer_original_entry_inaccessible",
         message: "Original timer entry is not accessible",
-        hint: "Restore access to the original matter before confirming this migrated timer.",
+        hint: {
+          admin:
+            "Restore the timer owner's access to the original matter, then retry time-timers.admin.stop.",
+          owner:
+            "Restore access to the original matter before confirming this migrated timer.",
+        }[completion.type],
       }),
     );
   }
@@ -310,8 +326,13 @@ export const finalizeTimer = async ({
     return Result.err(
       new HandlerError({
         status: 409,
+        code: "timer_original_entry_changed",
         message: "The original timer entry has changed",
-        hint: "Discard the timer and review the original time entry.",
+        hint: {
+          admin:
+            "Ask the timer owner to discard it and review the original time entry.",
+          owner: "Discard the timer and review the original time entry.",
+        }[completion.type],
       }),
     );
   }

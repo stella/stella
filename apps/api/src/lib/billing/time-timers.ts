@@ -38,11 +38,14 @@ export const ownedTimers = ({ organizationId, userId }: TimerOwner) =>
     eq(timeTimers.userId, userId),
   );
 
-export const timerNotFound = () =>
+export const timerNotFound = (caller: "owner" | "admin" = "owner") =>
   new HandlerError({
     status: 404,
     message: "Timer not found",
-    hint: "List your timers before choosing a timer ID.",
+    hint:
+      caller === "admin"
+        ? "List organization running timers with time-timers.admin.list before choosing a timer ID."
+        : "List your timers before choosing a timer ID.",
   });
 
 export const lockTimerOwner = async (tx: Transaction, owner: TimerOwner) => {

@@ -96,21 +96,6 @@ const createInvoice = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
-    const totalInvoices = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(invoices, eq(invoices.workspaceId, workspaceId)),
-      ),
-    );
-
-    if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Invoice limit reached for this workspace",
-        }),
-      );
-    }
-
     const entries = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -181,6 +166,17 @@ const createInvoice = createSafeHandler(
       });
       if (runningError) {
         return runningError;
+      }
+      // The guard holds the matter lock, so competing creations see this count.
+      const totalInvoices = await tx.$count(
+        invoices,
+        eq(invoices.workspaceId, workspaceId),
+      );
+      if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
+        return new HandlerError({
+          status: 400,
+          message: "Invoice limit reached for this workspace",
+        });
       }
       const [created] = await tx
         .insert(invoices)

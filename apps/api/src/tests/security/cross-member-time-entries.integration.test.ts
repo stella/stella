@@ -10,6 +10,8 @@ import {
 import { and, eq } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
+import { Temporal } from "@stll/time";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -814,7 +816,13 @@ describe("admin ending a member's timer", () => {
       .where(eq(timeEntries.organizationId, organizationId));
     await testDb
       .update(organizationSettings)
-      .set({ timeLockedThroughMonth: today })
+      .set({
+        timeLockedThroughMonth: Temporal.PlainDate.from(today)
+          .with({ day: 1 })
+          .add({ months: 1 })
+          .subtract({ days: 1 })
+          .toString(),
+      })
       .where(eq(organizationSettings.organizationId, organizationId));
     expect(await stopAs({ actor: "admin", id })).toMatchObject({
       code: 400,

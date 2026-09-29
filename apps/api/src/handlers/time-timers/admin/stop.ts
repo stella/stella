@@ -71,7 +71,7 @@ const stopMemberTimer = createSafeRootHandler(
               .limit(1);
         const ownerId = timer?.userId ?? receipt?.userId;
         if (!ownerId) {
-          return Result.err(timerNotFound());
+          return Result.err(timerNotFound("admin"));
         }
         return finalizeTimer({
           tx,
