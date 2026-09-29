@@ -328,6 +328,7 @@
         "$TURBO_ROOT$/.github/workflows/**",
         "$TURBO_ROOT$/apps/**",
         "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/**"
       ]
     },

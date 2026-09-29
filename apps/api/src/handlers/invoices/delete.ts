@@ -9,6 +9,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -26,11 +27,20 @@ const deleteInvoice = createSafeHandler(
     mcp: { type: "capability", reason: "billing_admin" },
     params: invoiceParamsSchema,
   },
-  async function* ({ safeDb, workspaceId, params, recordAuditEvent }) {
+  async function* ({ safeDb, user, workspaceId, params, recordAuditEvent }) {
     const now = new Date();
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        const runningError = await guardRunningTimeEntries({
+          tx,
+          workspaceId,
+          actorUserId: user.id,
+          selection: { type: "invoice", invoiceId: params.invoiceId },
+        });
+        if (runningError) {
+          return runningError;
+        }
         const invoice = await lockInvoiceInStatus(tx, {
           invoiceId: params.invoiceId,
           workspaceId,
@@ -126,6 +136,9 @@ const deleteInvoice = createSafeHandler(
       }),
     );
 
+    if (HandlerError.is(txResult)) {
+      return Result.err(txResult);
+    }
     if (!txResult.ok) {
       return Result.err(
         new HandlerError({

@@ -164,6 +164,21 @@ const TIME_TIMER_ADMIN_CHECK = sql`(
 const TIME_TIMER_CONFIRMATION_ADMIN_CHECK = timerOrganizationAdminCheck(
   "time_timer_confirmations",
 );
+const TIME_TIMER_CONFIRMATION_ADMIN_INSERT_CHECK = sql`(
+  ${TIME_TIMER_CONFIRMATION_ADMIN_CHECK}
+  AND EXISTS (
+    SELECT 1 FROM ${member}
+    WHERE ${member.organizationId} = "time_timer_confirmations"."organization_id"
+      AND ${member.userId} = "time_timer_confirmations"."user_id"
+  )
+  AND "time_timer_confirmations"."time_entry_id" IS NOT NULL
+  AND EXISTS (
+    SELECT 1 FROM ${timeEntries}
+    WHERE ${timeEntries.id} = "time_timer_confirmations"."time_entry_id"
+      AND ${timeEntries.organizationId} = "time_timer_confirmations"."organization_id"
+      AND ${timeEntries.userId} = "time_timer_confirmations"."user_id"
+  )
+)`;
 
 export const timeTimers = p.pgTable(
   "time_timers",
@@ -205,6 +220,10 @@ export const timeTimers = p.pgTable(
     p
       .index("time_timers_owner_id_idx")
       .on(table.organizationId, table.userId, table.id),
+    p
+      .index("time_timers_running_org_id_idx")
+      .on(table.organizationId, table.id)
+      .where(sql`${table.state} = 'running'`),
     p.index("time_timers_workspace_idx").on(table.workspaceId),
     p.index("time_timers_legacy_entry_idx").on(table.legacyTimeEntryId),
     p.check(
@@ -271,7 +290,7 @@ export const timeTimerConfirmations = p.pgTable(
     p.pgPolicy("organization_admin_insert", {
       for: "insert",
       to: stella,
-      withCheck: TIME_TIMER_CONFIRMATION_ADMIN_CHECK,
+      withCheck: TIME_TIMER_CONFIRMATION_ADMIN_INSERT_CHECK,
     }),
   ],
 );

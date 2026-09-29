@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -127,7 +128,14 @@ const transitionInvoice = createSafeHandler(
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    user,
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     const transition = TRANSITIONS[body.action];
     const now = new Date();
 
@@ -145,6 +153,15 @@ const transitionInvoice = createSafeHandler(
     if (body.action === "void") {
       const txResult = yield* Result.await(
         abortableTx(safeDb, async (tx) => {
+          const runningError = await guardRunningTimeEntries({
+            tx,
+            workspaceId,
+            actorUserId: user.id,
+            selection: { type: "invoice", invoiceId: params.invoiceId },
+          });
+          if (runningError) {
+            return runningError;
+          }
           const existing = await lockInvoiceInStatus(tx, {
             invoiceId: params.invoiceId,
             workspaceId,
@@ -234,6 +251,9 @@ const transitionInvoice = createSafeHandler(
         }),
       );
 
+      if (HandlerError.is(txResult)) {
+        return Result.err(txResult);
+      }
       return Result.ok({ id: txResult.id });
     }
 

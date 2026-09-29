@@ -310,6 +310,9 @@ const fixtureRuleOverrides = [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
   ]),
+  fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
+    "require-running-entry-guard/require-running-entry-guard",
+  ]),
   fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
     "require-audit-on-mutation/require-audit-on-mutation",
   ]),
@@ -1233,6 +1236,7 @@ export default defineConfig({
     "./.oxlint-plugins/decision-shaped-output-schema.ts",
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
+    "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
@@ -3555,6 +3559,19 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/handlers/**/*.test.ts",
+        // Timer consumption is the transition the running-entry guard requires.
+        "apps/api/src/handlers/time-timers/shared.ts",
+        // The authenticated local fixture reset clears the whole seeded organization.
+        "apps/api/src/handlers/dev/routes.ts",
+      ],
+      rules: {
+        "require-running-entry-guard/require-running-entry-guard": "error",
       },
     },
     {

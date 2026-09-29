@@ -20,6 +20,7 @@ const createDatabase = async (role: string) => {
       timer_started_at timestamptz, timer_stopped_at timestamptz,
       created_at timestamptz DEFAULT now()
     );
+    GRANT SELECT ON time_entries TO stella;
     INSERT INTO organization VALUES ('org-a'), ('org-b');
     INSERT INTO "user" VALUES ('manager'), ('member-a'), ('member-b');
     INSERT INTO "member" VALUES ('org-a', 'manager', 'member'), ('org-a', 'member-a', 'member'), ('org-b', 'member-b', 'member');
@@ -49,6 +50,11 @@ const createDatabase = async (role: string) => {
     ($2, 'org-a', 'member-a', 'paused', now(), NULL),
     ($3, 'org-b', 'member-b', 'running', now(), now())`,
     [RUNNING_TIMER_ID, PAUSED_TIMER_ID, FOREIGN_TIMER_ID],
+  );
+  await db.query(
+    `INSERT INTO time_entries (id, organization_id, user_id) VALUES
+    ($1, 'org-a', 'member-a'), ($2, 'org-b', 'member-b')`,
+    [RUNNING_TIMER_ID, FOREIGN_TIMER_ID],
   );
   await db.exec(
     `SET ROLE stella; SET app.organization_id = 'org-a'; SET app.user_id = 'manager';`,
@@ -127,7 +133,7 @@ test.each(["member", "intern", "external"])(
 test("admin receipt replay stays in the active organization and cannot alter receipts", async () => {
   await using db = await createDatabase("admin");
   await db.query(
-    "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ($1, 'org-a', 'member-a')",
+    "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES ($1, 'org-a', 'member-a', $1)",
     [RUNNING_TIMER_ID],
   );
   expect(
@@ -155,10 +161,15 @@ test("admin receipt replay stays in the active organization and cannot alter rec
     "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES ($1, 'org-b', 'member-b')",
     [FOREIGN_TIMER_ID],
   );
-  await db.exec("SET ROLE stella");
+  await db.exec(
+    "DELETE FROM time_entries WHERE organization_id = 'org-a'; DELETE FROM member WHERE user_id = 'member-a'; SET ROLE stella;",
+  );
   expect(
     (await db.query("SELECT timer_id FROM time_timer_confirmations")).rows,
   ).toEqual([{ timer_id: RUNNING_TIMER_ID }]);
+  expect(
+    (await db.query("SELECT time_entry_id FROM time_timer_confirmations")).rows,
+  ).toEqual([{ time_entry_id: null }]);
   await db.exec(
     "RESET ROLE; UPDATE member SET role = 'member' WHERE user_id = 'manager'; SET ROLE stella;",
   );
@@ -195,4 +206,43 @@ test("admin access still requires current target and actor membership and FORCE 
       )
     ).rows,
   ).toEqual([{ polpermissive: false }]);
+});
+
+test("admin receipt insertion requires a current target and matching nonnull entry", async () => {
+  await using db = await createDatabase("admin");
+  await expect(
+    db.query(
+      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES (gen_random_uuid(), 'org-a', 'member-b', $1)",
+      [RUNNING_TIMER_ID],
+    ),
+  ).rejects.toThrow(/row-level security/u);
+  await expect(
+    db.query(
+      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES (gen_random_uuid(), 'org-a', 'member-a', $1)",
+      [FOREIGN_TIMER_ID],
+    ),
+  ).rejects.toThrow(/row-level security/u);
+  await expect(
+    db.exec(
+      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES (gen_random_uuid(), 'org-a', 'member-a')",
+    ),
+  ).rejects.toThrow(/row-level security/u);
+  await db.exec(
+    "RESET ROLE; UPDATE time_entries SET user_id = 'manager' WHERE organization_id = 'org-a'; SET ROLE stella;",
+  );
+  await expect(
+    db.query(
+      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES (gen_random_uuid(), 'org-a', 'member-a', $1)",
+      [RUNNING_TIMER_ID],
+    ),
+  ).rejects.toThrow(/row-level security/u);
+  await db.exec(
+    "RESET ROLE; UPDATE time_entries SET user_id = 'member-a' WHERE organization_id = 'org-a'; DELETE FROM member WHERE user_id = 'member-a'; SET ROLE stella;",
+  );
+  await expect(
+    db.query(
+      "INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id, time_entry_id) VALUES (gen_random_uuid(), 'org-a', 'member-a', $1)",
+      [RUNNING_TIMER_ID],
+    ),
+  ).rejects.toThrow(/row-level security/u);
 });

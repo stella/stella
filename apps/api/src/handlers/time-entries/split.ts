@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -169,7 +169,7 @@ const splitEntry = createSafeHandler(
         const runningError = await guardRunningTimeEntries({
           tx,
           workspaceId,
-          ids: [body.id],
+          selection: { type: "entries", ids: [body.id] },
           actorUserId: user.id,
         });
         if (runningError) {
@@ -189,15 +189,37 @@ const splitEntry = createSafeHandler(
           }
         }
 
-        // Delete original entry
-        await tx
+        const [current] = await tx
+          .select({ id: timeEntries.id })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.id, body.id),
+              eq(timeEntries.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1);
+        if (!current) {
+          return {
+            ok: false as const,
+            error: new HandlerError({
+              status: 409,
+              message: "Time entry changed; reload and try again",
+            }),
+          };
+        }
+        const [deleted] = await tx
           .delete(timeEntries)
           .where(
             and(
               eq(timeEntries.id, body.id),
               eq(timeEntries.workspaceId, workspaceId),
             ),
-          );
+          )
+          .returning({ id: timeEntries.id });
+        if (!deleted) {
+          return panic("Locked original entry deletion returned no row");
+        }
 
         const createdEntries: {
           id: SafeId<"timeEntry">;

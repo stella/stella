@@ -184,7 +184,7 @@ const batchUpdate = createSafeHandler(
             const runningError = await guardRunningTimeEntries({
               tx,
               workspaceId,
-              ids,
+              selection: { type: "entries", ids },
               actorUserId: user.id,
             });
             if (runningError) {
@@ -267,7 +267,7 @@ const batchUpdate = createSafeHandler(
             const runningError = await guardRunningTimeEntries({
               tx,
               workspaceId,
-              ids,
+              selection: { type: "entries", ids },
               actorUserId: user.id,
             });
             if (runningError) {
@@ -317,7 +317,7 @@ const batchUpdate = createSafeHandler(
             const runningError = await guardRunningTimeEntries({
               tx,
               workspaceId,
-              ids,
+              selection: { type: "entries", ids },
               actorUserId: user.id,
             });
             if (runningError) {
@@ -486,7 +486,7 @@ const batchUpdate = createSafeHandler(
             const runningError = await guardRunningTimeEntries({
               tx,
               workspaceId,
-              ids,
+              selection: { type: "entries", ids },
               actorUserId: user.id,
             });
             if (runningError) {

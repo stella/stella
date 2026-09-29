@@ -80,6 +80,13 @@ time entry, and applies the organization's time policy. Retry confirmation
 with the same timer ID to receive the original entry without creating another.
 These capabilities replace the per-entry timer start and stop capabilities.
 
+Organization owners and admins can use `time-timers.admin.list` to find running
+member timers and `time-timers.admin.stop` to end one into its owner's draft
+entry. Completion uses the timer description; supply `narrative` when the
+description is empty and the organization requires one. Completion refuses
+inaccessible matters and locked months without changing the timer. Another
+member's running entries must be ended before editing or deleting them.
+
 ## Registry drift
 
 The command surface is baked in at build time. When the server you are signed

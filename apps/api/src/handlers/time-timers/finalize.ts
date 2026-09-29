@@ -328,7 +328,7 @@ export const finalizeTimer = async ({
   const narrativeFromAdmin =
     completion.type === "admin" &&
     !timer.description?.trim() &&
-    Boolean(completion.narrative?.trim());
+    completion.narrative !== undefined;
   let narrative = timer.description ?? "";
   if (completion.type === "admin" && !narrative.trim()) {
     narrative = completion.narrative ?? "";

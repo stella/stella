@@ -16,7 +16,6 @@ import {
   BILLING_STATUS,
   auditLogs,
   organizationSettings,
-  timeTimers,
   entities,
   TIME_ENTRY_SOURCE,
   timeEntries,
@@ -103,6 +102,13 @@ beforeAll(async () => {
     name: "Time firm",
     slug: `time-firm-${organizationId}`,
     createdAt: new Date(),
+  });
+
+  await testDb.insert(organizationSettings).values({
+    id: createSafeId<"organizationSettings">(),
+    organizationId,
+    timeMinimumUnitMinutes: 15,
+    timeNarrativeRequired: true,
   });
 
   actors = {
@@ -423,6 +429,61 @@ describe("time entry changes between members of one organization", () => {
   });
 });
 
+test("concurrent splits that read the same original create only one successor group", async () => {
+  const id = await seedEntry({ owner: "owner" });
+  const narrative = `Concurrent split ${id}`;
+  await testDb
+    .update(timeEntries)
+    .set({ narrative })
+    .where(eq(timeEntries.id, id));
+  const snapshotsRead = Promise.withResolvers();
+  let readCount = 0;
+  const realSafeDb = asTestRaw<SafeDb>(contextFor("owner").safeDb);
+  const safeDb: SafeDb = async (run, retry) => {
+    const result = await realSafeDb(run, retry);
+    if (
+      result.isOk() &&
+      typeof result.value === "object" &&
+      result.value !== null &&
+      "id" in result.value &&
+      result.value.id === id
+    ) {
+      readCount += 1;
+      if (readCount === 2) {
+        snapshotsRead.resolve(undefined);
+      }
+      await snapshotsRead.promise;
+    }
+    return result;
+  };
+  const runSplit = async () =>
+    await splitEntry.handler(
+      asTestRaw<SplitCtx>({
+        ...contextFor("owner"),
+        safeDb,
+        body: {
+          id,
+          splits: [
+            { workItemId: workItemA, percentage: 50 },
+            { workItemId: workItemB, percentage: 50 },
+          ],
+        },
+      }),
+    );
+  const results = await Promise.all([runSplit(), runSplit()]);
+  expect(readCount).toBe(2);
+  expect(
+    results.map(statusOf).toSorted((left, right) => (left ?? 0) - (right ?? 0)),
+  ).toEqual([null, 409]);
+  const successors = await testDb
+    .select()
+    .from(timeEntries)
+    .where(eq(timeEntries.narrative, narrative));
+  expect(successors).toHaveLength(2);
+  expect(new Set(successors.map((entry) => entry.splitGroupId)).size).toBe(1);
+  expect(await readEntry(id)).toBeNull();
+});
+
 // ── Timers ────────────────────────────────────────────
 
 type SeedTimerOptions = {
@@ -549,6 +610,10 @@ const assertRunningEntryRefusal = async ({
   });
   const timerId =
     kind === "migrated" ? await seedTimer({ legacyId: entryId }) : null;
+  await testDb
+    .update(timeEntries)
+    .set({ durationMinutes: 60, billedMinutes: 60 })
+    .where(eq(timeEntries.id, entryId));
   if (kind === "migrated") {
     await testDb
       .update(timeEntries)
@@ -562,7 +627,7 @@ const assertRunningEntryRefusal = async ({
   const result = await operation.run("admin", entryId);
   expect(result).toMatchObject({
     code: 409,
-    response: { error: "running_timer" },
+    response: { code: "running_timer" },
   });
   expect(await readEntry(entryId)).toEqual(before);
   expect(await readSplitSuccessors(entryId)).toHaveLength(0);
@@ -616,6 +681,7 @@ describe("admin ending a member's timer", () => {
         status: BILLING_STATUS.DRAFT,
         source: TIME_ENTRY_SOURCE.TIMER,
         narrative: ORIGINAL_NARRATIVE,
+        billedMinutes: 15,
       });
       const events = await testDb
         .select()
@@ -667,16 +733,15 @@ describe("admin ending a member's timer", () => {
   );
 
   test("required narrative refusal keeps timer running; supplied narrative records provenance", async () => {
-    await testDb.insert(organizationSettings).values({
-      id: createSafeId<"organizationSettings">(),
-      organizationId,
-      timeNarrativeRequired: true,
-    });
+    await testDb
+      .update(organizationSettings)
+      .set({ timeNarrativeRequired: true })
+      .where(eq(organizationSettings.organizationId, organizationId));
     const id = await seedTimer({ description: " " });
     const before = await readTimer(id);
     expect(await stopAs({ actor: "admin", id })).toMatchObject({
       code: 400,
-      response: { error: "narrative_required" },
+      response: { code: "narrative_required" },
     });
     expect(await readTimer(id)).toEqual(before);
     const result = await stopAs({
@@ -697,6 +762,127 @@ describe("admin ending a member's timer", () => {
     expect(event).toMatchObject({
       changes: { narrativeFromAdmin: { old: null, new: true } },
     });
+  });
+
+  test("optional policy records whether whitespace narrative was supplied by the admin", async () => {
+    await testDb
+      .update(organizationSettings)
+      .set({ timeNarrativeRequired: false })
+      .where(eq(organizationSettings.organizationId, organizationId));
+    const suppliedId = await seedTimer({ description: null });
+    const supplied = await stopAs({
+      actor: "admin",
+      id: suppliedId,
+      narrative: " ",
+    });
+    if (!("id" in supplied)) {
+      throw new Error(`Admin stop failed: ${JSON.stringify(supplied)}`);
+    }
+    expect(await readEntry(supplied.id)).toMatchObject({ narrative: " " });
+    expect(
+      await testDb.query.auditLogs.findFirst({
+        where: { resourceId: { eq: suppliedId } },
+      }),
+    ).toMatchObject({
+      changes: { narrativeFromAdmin: { old: null, new: true } },
+    });
+    const omittedId = await seedTimer({ description: null });
+    const omitted = await stopAs({ actor: "admin", id: omittedId });
+    if (!("id" in omitted)) {
+      throw new Error(`Admin stop failed: ${JSON.stringify(omitted)}`);
+    }
+    expect(await readEntry(omitted.id)).toMatchObject({ narrative: "" });
+    expect(
+      await testDb.query.auditLogs.findFirst({
+        where: { resourceId: { eq: omittedId } },
+      }),
+    ).toMatchObject({
+      changes: { narrativeFromAdmin: { old: null, new: false } },
+    });
+    await testDb
+      .update(organizationSettings)
+      .set({ timeNarrativeRequired: true })
+      .where(eq(organizationSettings.organizationId, organizationId));
+  });
+
+  test("a locked month refuses admin finalization without changing the timer or creating an entry", async () => {
+    const id = await seedTimer();
+    const before = await readTimer(id);
+    const entriesBefore = await testDb
+      .select()
+      .from(timeEntries)
+      .where(eq(timeEntries.organizationId, organizationId));
+    await testDb
+      .update(organizationSettings)
+      .set({ timeLockedThroughMonth: today })
+      .where(eq(organizationSettings.organizationId, organizationId));
+    expect(await stopAs({ actor: "admin", id })).toMatchObject({
+      code: 400,
+      response: { code: "time_period_locked" },
+    });
+    expect(await readTimer(id)).toEqual(before);
+    expect(
+      await testDb
+        .select()
+        .from(timeEntries)
+        .where(eq(timeEntries.organizationId, organizationId)),
+    ).toEqual(entriesBefore);
+    expect(
+      await testDb.select().from(auditLogs).where(eq(auditLogs.resourceId, id)),
+    ).toHaveLength(0);
+    await testDb
+      .update(organizationSettings)
+      .set({ timeLockedThroughMonth: null })
+      .where(eq(organizationSettings.organizationId, organizationId));
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+  });
+
+  test("admin end refuses a matter the timekeeper can no longer access", async () => {
+    const id = await seedTimer();
+    const before = await readTimer(id);
+    const membership = await testDb
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, actors.timekeeper.userId),
+        ),
+      )
+      .returning();
+    expect(membership).toHaveLength(1);
+    expect(await stopAs({ actor: "admin", id })).toMatchObject({
+      code: 404,
+      response: { message: "Matter not found or not accessible" },
+    });
+    expect(await readTimer(id)).toEqual(before);
+    expect(
+      await testDb.select().from(auditLogs).where(eq(auditLogs.resourceId, id)),
+    ).toHaveLength(0);
+    await testDb.insert(workspaceMembers).values(membership);
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+  });
+
+  test("admin listing contains only running timers and omits descriptions", async () => {
+    const runningId = await seedTimer();
+    const pausedId = await seedTimer({ owner: "colleague", state: "paused" });
+    const result = await adminListTimers.handler(
+      asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
+        ...contextFor("admin"),
+        query: {},
+      }),
+    );
+    if (!("items" in result)) {
+      throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
+    }
+    expect(result.items).toHaveLength(1);
+    expect(result.items.at(0)).toMatchObject({
+      id: runningId,
+      ownerId: actors.timekeeper.userId,
+      matterId: workspaceId,
+    });
+    expect(result.items.at(0)).not.toHaveProperty("description");
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, runningId));
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, pausedId));
   });
 
   test("a supplied narrative does not replace a nonblank timer description", async () => {
@@ -738,6 +924,16 @@ describe("admin ending a member's timer", () => {
     );
     expect(statusOf(listed)).toBe(403);
     expect(statusOf(await stopAs({ actor: "colleague", id }))).toBe(403);
+    const hidden = await contextFor("colleague").safeDb((tx) =>
+      tx.query.timeTimers.findFirst({ where: { id: { eq: id } } }),
+    );
+    expect(hidden.isOk()).toBe(true);
+    if (hidden.isErr()) {
+      throw new Error(
+        `Timer visibility lookup failed: ${JSON.stringify(hidden.error)}`,
+      );
+    }
+    expect(hidden.value).toBeUndefined();
     const ownList = await listTimers.handler(
       asTestRaw<Parameters<typeof listTimers.handler>[0]>({
         ...contextFor("colleague"),

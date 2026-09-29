@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   INVOICE_STATUS,
@@ -15,6 +16,7 @@ import {
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -57,6 +59,22 @@ const billedEntryEvents = (
     },
   }));
 
+const invoiceCreationError = (error: SafeDbError | HandlerError) => {
+  if (isInvoiceEntriesModifiedConcurrentlyError(error)) {
+    return new HandlerError({
+      status: 409,
+      message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+    });
+  }
+  if (DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION) {
+    return new HandlerError({
+      status: 409,
+      message: "An invoice with this number already exists",
+    });
+  }
+  return error;
+};
+
 const createInvoice = createSafeHandler(
   {
     description:
@@ -70,7 +88,14 @@ const createInvoice = createSafeHandler(
     mcp: { type: "capability", reason: "billing_admin" },
     body: createInvoiceBodySchema,
   },
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     const totalInvoices = yield* Result.await(
       safeDb((tx) =>
         tx.$count(invoices, eq(invoices.workspaceId, workspaceId)),
@@ -148,6 +173,15 @@ const createInvoice = createSafeHandler(
     const expectedCount = entries.length;
 
     const txResult = await abortableTx(safeDb, async (tx) => {
+      const runningError = await guardRunningTimeEntries({
+        tx,
+        workspaceId,
+        actorUserId: user.id,
+        selection: { type: "entries", ids: body.timeEntryIds },
+      });
+      if (runningError) {
+        return runningError;
+      }
       const [created] = await tx
         .insert(invoices)
         .values({
@@ -254,29 +288,13 @@ const createInvoice = createSafeHandler(
     });
 
     if (Result.isError(txResult)) {
-      if (isInvoiceEntriesModifiedConcurrentlyError(txResult.error)) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-          }),
-        );
-      }
-      if (
-        DatabaseError.is(txResult.error) &&
-        txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "An invoice with this number already exists",
-          }),
-        );
-      }
-      return Result.err(txResult.error);
+      return Result.err(invoiceCreationError(txResult.error));
     }
 
     const result = txResult.value;
+    if (HandlerError.is(result)) {
+      return Result.err(result);
+    }
 
     return Result.ok({
       id: result.id,

@@ -294,7 +294,7 @@ export const updateTimeEntryHandler = async function* ({
       const runningError = await guardRunningTimeEntries({
         tx,
         workspaceId,
-        ids: [body.id],
+        selection: { type: "entries", ids: [body.id] },
         actorUserId: actor.userId,
       });
       if (runningError) {

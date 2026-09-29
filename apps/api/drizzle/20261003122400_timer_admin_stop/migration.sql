@@ -34,4 +34,17 @@ CREATE POLICY "organization_admin_insert" ON "time_timer_confirmations" AS PERMI
       WHERE "member"."organization_id" = (SELECT current_setting('app.organization_id', true))
         AND "member"."user_id" = (SELECT current_setting('app.user_id', true))
         AND "member"."role" IN ('owner', 'admin')
+    )
+    AND EXISTS (
+      SELECT 1 FROM "member"
+      WHERE "member"."organization_id" = "time_timer_confirmations"."organization_id"
+        AND "member"."user_id" = "time_timer_confirmations"."user_id"
+    )
+    AND "time_timer_confirmations"."time_entry_id" IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM "time_entries"
+      WHERE "time_entries"."id" = "time_timer_confirmations"."time_entry_id"
+        AND "time_entries"."organization_id" = "time_timer_confirmations"."organization_id"
+        AND "time_entries"."user_id" = "time_timer_confirmations"."user_id"
     ));--> statement-breakpoint
+CREATE INDEX "time_timers_running_org_id_idx" ON "time_timers" ("organization_id", "id") WHERE "state" = 'running';--> statement-breakpoint

@@ -17,6 +17,7 @@ import {
   recalculateInvoiceTotals,
   timeEntryLineDraft,
 } from "@/api/handlers/invoices/invoice-lines";
+import { guardRunningTimeEntries } from "@/api/handlers/time-entries/running";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -116,6 +117,7 @@ const addEntries = createSafeHandler(
   async function* ({
     safeDb,
     session,
+    user,
     workspaceId,
     params,
     body,
@@ -282,11 +284,17 @@ const addEntries = createSafeHandler(
     }
 
     const txResult = await safeDb(async (tx) => {
-      // Lock the invoice row before touching any child rows: `delete.ts`
-      // and other invoice mutation handlers lock the invoice first, then
-      // mutate `time_entries`/`expenses`, so this handler must follow the
-      // same order or a concurrent transaction can deadlock (see
-      // `lockInvoiceInStatus`'s doc comment).
+      const runningError = await guardRunningTimeEntries({
+        tx,
+        workspaceId,
+        actorUserId: user.id,
+        selection: { type: "entries", ids: body.timeEntryIds ?? [] },
+      });
+      if (runningError) {
+        return runningError;
+      }
+      // The running-entry guard locks timer owners, the matter and entries first;
+      // lock the invoice next, before changing its lines or totals.
       const invoiceCheck = await lockDraftInvoiceForLines(
         tx,
         {
@@ -434,6 +442,9 @@ const addEntries = createSafeHandler(
       return Result.err(txResult.error);
     }
 
+    if (HandlerError.is(txResult.value)) {
+      return Result.err(txResult.value);
+    }
     if (!txResult.value.ok) {
       return Result.err(
         txResult.value.refusal ??
