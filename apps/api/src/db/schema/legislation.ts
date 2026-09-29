@@ -10,6 +10,11 @@ import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-st
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
 import {
+  legislationVersionRef,
+  notWithdrawn,
+} from "@/api/lib/legal-search/legislation-validity-window";
+
+import {
   caseLawIngestionOnlyPolicies,
   corpusSampleReaderPolicies,
   globalCaseLawPolicies,
@@ -323,6 +328,8 @@ export const legislationDocuments = p.pgTable(
       .index("legislation_documents_sitemap_bucket_idx")
       .on(t.country, statuteSitemapBucket(t.eli), t.eli)
       .where(isNotNull(t.slug)),
+    // Superseded by the listed-versions index below; dropped once no running
+    // release still plans the refresh without the withdrawn filter.
     p
       .index("legislation_documents_sitemap_refresh_idx")
       .on(
@@ -338,6 +345,26 @@ export const legislationDocuments = p.pgTable(
         t.updatedAt,
       )
       .where(isNotNull(t.slug)),
+    // The sitemap lists only versions the publisher still lists, so its
+    // covering path carries the same predicate and a withdrawn tombstone never
+    // reaches the Work grouping.
+    p
+      .index("legislation_documents_sitemap_refresh_v2_idx")
+      .on(
+        t.country,
+        t.sourceId,
+        t.eli,
+        t.language,
+        sql`coalesce(${t.versionValidFrom}, DATE '0001-01-01') DESC`,
+        sql`${t.id} DESC`,
+        // Keep the base column too: index-only scans need it to evaluate the sort expression.
+        t.versionValidFrom,
+        t.slug,
+        t.updatedAt,
+      )
+      .where(
+        sql`${t.slug} IS NOT NULL AND ${notWithdrawn(legislationVersionRef(t))}`,
+      ),
     // The point-in-time read seeks a Work by its identifier and takes the
     // latest window that opened on or before the requested date, so the
     // access path has to carry the language and the opening as well.
