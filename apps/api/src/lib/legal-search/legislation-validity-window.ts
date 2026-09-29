@@ -7,6 +7,8 @@ import {
   LEGISLATION_APPLICABLE_WINDOW_DISPOSITION,
 } from "@stll/api-contract/legislation-expression";
 
+import { legislationDocuments } from "@/api/db/schema";
+
 /** Works with no version window sort below every dated consolidation. */
 export const UNVERSIONED_SORT_DATE = "0001-01-01";
 
@@ -177,6 +179,45 @@ export const legislationVersionRow = (
   eli: table.eli,
   language: table.language,
 });
+
+const newerRef = legislationVersionRefAt("newer");
+
+/**
+ * The one applicable consolidation of its Work on `asOf`: no later eligible
+ * window covering the same date exists for the row's `(source, eli,
+ * language)`. The anti-join keeps a listing flat, so Postgres can stop at the
+ * page limit.
+ */
+export const isVersionOfWorkAt = (
+  row: LegislationVersionRow,
+  asOf: SQLWrapper,
+): SQL => sql`NOT EXISTS (
+    SELECT 1
+    FROM legislation_documents AS newer
+    WHERE newer.source_id = ${row.sourceId}
+      AND newer.eli = ${row.eli}
+      AND newer.language = ${row.language}
+      AND newer.id <> ${row.id}
+      AND ${inForceOn(newerRef, asOf)}
+      AND (
+        ${versionSortKey(newerRef.validFrom)},
+        newer.id
+      ) > (
+        ${versionSortKey(row.validFrom)},
+        ${row.id}
+      )
+  )`;
+
+/**
+ * The version each Work's present-day reads show, over `legislation_documents`
+ * itself. The listing, the shelf and search's one-hit-per-act collapse all
+ * read this one definition, so they cannot disagree about which version of an
+ * act is the current one.
+ */
+export const isCurrentVersionOfWork = isVersionOfWorkAt(
+  legislationVersionRow(legislationDocuments),
+  sql`CURRENT_DATE`,
+);
 
 const INVALID_WINDOW_SQL = sql.raw(`'invalid-window'`);
 

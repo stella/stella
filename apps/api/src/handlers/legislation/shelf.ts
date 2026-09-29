@@ -6,7 +6,6 @@ import type { Static } from "elysia";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
-import { isCurrentVersionOfWork } from "@/api/handlers/legislation/list";
 import { readNonRedistributableLegislationSourceIds } from "@/api/handlers/legislation/non-redistributable-sources";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
@@ -15,6 +14,7 @@ import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation
 import {
   eligibleExpression,
   inForceToday,
+  isCurrentVersionOfWork,
   legislationVersionRef,
   legislationVersionRefAt,
   versionSortKey,
