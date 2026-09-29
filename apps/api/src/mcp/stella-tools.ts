@@ -17,6 +17,7 @@ import {
   SEARCH_SORTS,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 
@@ -2006,6 +2007,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   // search required, so the request it would have made is what answers that
   // rather than a second reading of the filters.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const requests = queries.map((query, index) => {
     // Three states, not two: a string continues this phrasing, `undefined` is
     // its first page, and `null` means it ended on an earlier one. Only a
@@ -2033,7 +2035,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       subCursor,
       interpretation: interpretDecisionQuery(
         body,
-        parseDecisionQuery(query, { grammar }),
+        parseDecisionQuery(query, { grammar, reporters }),
       ),
     };
   });
@@ -2620,6 +2622,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
   // lookup that classified an identifier differently from the search beside it
   // would decline a reference that search resolves.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
+  const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const lookup =
     context.testDependencies?.lookupDecisionsByIdentity ??
     defaultLookupDecisionsByIdentity;
@@ -2637,7 +2640,10 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
         // The sheet number names a page of the court file, not the decision,
         // so it is dropped before the grammars see the reference.
         const { caseNumber } = splitCaseReference(identifier);
-        const intent = parseDecisionQuery(caseNumber, { grammar });
+        const intent = parseDecisionQuery(caseNumber, {
+          grammar,
+          reporters,
+        });
         if (intent.type !== "identifier") {
           return [identifier, { type: "not_an_identifier" }];
         }
@@ -2668,7 +2674,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
           identifier,
           {
             type: "matches",
-            matches: exactDecisionMatches(intent, read.value),
+            matches: exactDecisionMatches(intent, read.value, { reporters }),
           },
         ];
       },

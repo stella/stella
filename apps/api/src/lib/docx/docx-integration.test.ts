@@ -10,6 +10,9 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { discoverTemplate } from "./discover-template";
 import { extractDocxDocument } from "./extract-text";
 import { fillTemplate } from "./patch-template";
@@ -38,7 +41,7 @@ const splitRuns = (text: string, chunkSize: number) => {
   return `<w:p>${runs.join("")}</w:p>`;
 };
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -67,8 +70,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Relationships>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 /** Build a DOCX with header and footer parts containing placeholders. */
@@ -76,7 +78,7 @@ const makeDocxWithHeaderFooter = async (
   bodyXml: string,
   headerXml: string,
   footerXml: string,
-): Promise<Buffer> => {
+): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", bodyXml);
   zip.file("word/header1.xml", headerXml);
@@ -130,8 +132,7 @@ const makeDocxWithHeaderFooter = async (
       "</Relationships>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const HEADER_WRAP = (body: string) =>
@@ -146,6 +147,9 @@ const SPA_FIXTURE = new URL(
   "fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
+
+const spaTemplate = async (): Promise<ScannedFile> =>
+  testDocxFile(await Bun.file(SPA_FIXTURE).arrayBuffer());
 
 const spaValues = {
   price_share_1: "1 250 000",
@@ -163,10 +167,10 @@ const spaValues = {
 describe("filled output is valid DOCX", () => {
   test("output ZIP contains required OOXML parts", async () => {
     const xml = WRAP(P("Name: {{name}}"));
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const result = await fillTemplate(buf, { name: "Alice" });
-    const zip = await JSZip.loadAsync(result.buffer);
+    const result = await fillTemplate(docx, { name: "Alice" });
+    const zip = await JSZip.loadAsync(result.file.bytes);
 
     // Core OOXML parts must exist
     expect(zip.file("[Content_Types].xml")).not.toBeNull();
@@ -175,15 +179,15 @@ describe("filled output is valid DOCX", () => {
 
   test("output document.xml is well-formed XML", async () => {
     const xml = WRAP([P("A: {{a}}"), P("B: {{b}}"), P("C: {{c}}")].join(""));
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       a: "value with <special> & chars",
       b: 'quotes "and" apostrophes',
       c: "unicode: šťůčřž",
     });
 
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
 
     // Should not contain unescaped special chars that break XML
@@ -195,8 +199,8 @@ describe("filled output is valid DOCX", () => {
   });
 
   test("SPA fixture output preserves ZIP structure", async () => {
-    const result = await fillTemplate(SPA_FIXTURE, spaValues);
-    const zip = await JSZip.loadAsync(result.buffer);
+    const result = await fillTemplate(await spaTemplate(), spaValues);
+    const zip = await JSZip.loadAsync(result.file.bytes);
 
     expect(zip.file("[Content_Types].xml")).not.toBeNull();
     expect(zip.file("word/document.xml")).not.toBeNull();
@@ -220,15 +224,15 @@ describe("fill then extract text", () => {
         P("Amount: {{amount}}"),
       ].join(""),
     );
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       client_name: "Acme Corp",
       date: "2026-03-15",
       amount: "1 000 000 CZK",
     });
 
-    const extracted = await extractDocxDocument(result.buffer);
+    const extracted = await extractDocxDocument(result.file);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
 
     expect(allText).toContain("Acme Corp");
@@ -238,10 +242,10 @@ describe("fill then extract text", () => {
 
   test("original placeholders are gone after fill", async () => {
     const xml = WRAP(P("Name: {{name}}"));
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const result = await fillTemplate(buf, { name: "Alice" });
-    const extracted = await extractDocxDocument(result.buffer);
+    const result = await fillTemplate(docx, { name: "Alice" });
+    const extracted = await extractDocxDocument(result.file);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
 
     expect(allText).not.toContain("{{name}}");
@@ -249,8 +253,8 @@ describe("fill then extract text", () => {
   });
 
   test("SPA fixture: filled values in extracted text", async () => {
-    const result = await fillTemplate(SPA_FIXTURE, spaValues);
-    const extracted = await extractDocxDocument(result.buffer);
+    const result = await fillTemplate(await spaTemplate(), spaValues);
+    const extracted = await extractDocxDocument(result.file);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
 
     expect(allText).toContain("Stella Legal a.s.");
@@ -264,10 +268,10 @@ describe("fill then extract text", () => {
 describe("idempotent operations", () => {
   test("discover returns identical results on repeated calls", async () => {
     const xml = WRAP([P("{{name}}"), P("{{date}}"), P("{{amount}}")].join(""));
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const first = await discoverTemplate(buf);
-    const second = await discoverTemplate(buf);
+    const first = await discoverTemplate(docx);
+    const second = await discoverTemplate(docx);
 
     expect(first.fields).toEqual(second.fields);
     expect(first.placeholders).toEqual(second.placeholders);
@@ -276,16 +280,16 @@ describe("idempotent operations", () => {
 
   test("fill with same values produces identical output", async () => {
     const xml = WRAP(P("Name: {{name}}"));
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
     const values = { name: "Alice" };
 
-    const first = await fillTemplate(buf, values);
-    const second = await fillTemplate(buf, values);
+    const first = await fillTemplate(docx, values);
+    const second = await fillTemplate(docx, values);
 
     // Compare logical content, not raw bytes: ZIP entry
     // timestamps make byte-identical comparison unreliable.
-    const zip1 = await JSZip.loadAsync(first.buffer);
-    const zip2 = await JSZip.loadAsync(second.buffer);
+    const zip1 = await JSZip.loadAsync(first.file.bytes);
+    const zip2 = await JSZip.loadAsync(second.file.bytes);
 
     const file1 = zip1.file("word/document.xml");
     const file2 = zip2.file("word/document.xml");
@@ -302,9 +306,9 @@ describe("idempotent operations", () => {
   });
 
   test("SPA discover is idempotent", async () => {
-    const buf = Buffer.from(await Bun.file(SPA_FIXTURE).arrayBuffer());
-    const first = await discoverTemplate(buf);
-    const second = await discoverTemplate(buf);
+    const docx = await spaTemplate();
+    const first = await discoverTemplate(docx);
+    const second = await discoverTemplate(docx);
 
     expect(first.placeholders).toEqual(second.placeholders);
     expect(first.fields).toEqual(second.fields);
@@ -325,29 +329,31 @@ describe("a legacy custom XML manifest never leaves in a filled document", () =>
     '<fields><field path="name" label="Full Name"/></fields>' +
     "</template>";
 
-  const withLegacyManifest = async (docx: Buffer): Promise<Buffer> => {
-    const zip = await JSZip.loadAsync(docx);
+  const withLegacyManifest = async (
+    docx: ScannedFile,
+  ): Promise<ScannedFile> => {
+    const zip = await JSZip.loadAsync(docx.bytes);
     zip.file("customXml/item1.xml", LEGACY_MANIFEST_PART);
-    return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+    return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
   };
 
   test("the part is gone from the output and the fill is unaffected", async () => {
     const xml = WRAP([P("Name: {{name}}"), P("Date: {{date}}")].join(""));
-    const buf = await withLegacyManifest(await makeDocx(xml));
+    const docx = await withLegacyManifest(await makeDocx(xml));
     // The fixture has to reach the stripper for the assertion below to mean
     // anything.
     expect(
-      (await JSZip.loadAsync(buf)).file("customXml/item1.xml"),
+      (await JSZip.loadAsync(docx.bytes)).file("customXml/item1.xml"),
     ).not.toBeNull();
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       name: "Bob",
       date: "2026-06-01",
     });
 
-    const filledZip = await JSZip.loadAsync(result.buffer);
+    const filledZip = await JSZip.loadAsync(result.file.bytes);
     expect(filledZip.file("customXml/item1.xml")).toBeNull();
-    const extracted = await extractDocxDocument(result.buffer);
+    const extracted = await extractDocxDocument(result.file);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
     expect(allText).toContain("Bob");
     expect(allText).toContain("2026-06-01");
@@ -362,15 +368,15 @@ describe("header and footer placeholders", () => {
     const header = HEADER_WRAP(P("Header: {{header_text}}"));
     const footer = FOOTER_WRAP(P("Footer: {{footer_text}}"));
 
-    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+    const docx = await makeDocxWithHeaderFooter(body, header, footer);
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       body_text: "BODY_VALUE",
       header_text: "HEADER_VALUE",
       footer_text: "FOOTER_VALUE",
     });
 
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
 
     // Body should be filled
     const docXml = await zip.file("word/document.xml")?.async("string");
@@ -390,10 +396,10 @@ describe("header and footer placeholders", () => {
     const header = HEADER_WRAP(P("Header: {{header_field}}"));
     const footer = FOOTER_WRAP(P("Footer only"));
 
-    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+    const docx = await makeDocxWithHeaderFooter(body, header, footer);
 
     // discoverTemplate scans document.xml, headers, and footers
-    const discovered = await discoverTemplate(buf);
+    const discovered = await discoverTemplate(docx);
     const names = discovered.placeholders.map((p) => p.name);
     expect(names).toContain("body_field");
     expect(names).toContain("header_field");
@@ -404,11 +410,11 @@ describe("header and footer placeholders", () => {
     const header = HEADER_WRAP(P("Header: {{company}}"));
     const footer = FOOTER_WRAP(P("plain footer"));
 
-    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+    const docx = await makeDocxWithHeaderFooter(body, header, footer);
 
     // Header placeholder is discovered and reported as
     // unmatched when no value is provided
-    const result = await fillTemplate(buf, { name: "Alice" });
+    const result = await fillTemplate(docx, { name: "Alice" });
     expect(result.unmatchedPlaceholders).toContain("company");
   });
 
@@ -420,21 +426,21 @@ describe("header and footer placeholders", () => {
     const footer = FOOTER_WRAP(
       P("Tags: {% for tag in tags %}{{ tag.value }}; {% endfor %}"),
     );
-    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+    const docx = await makeDocxWithHeaderFooter(body, header, footer);
 
-    const discovered = await discoverTemplate(buf);
+    const discovered = await discoverTemplate(docx);
     expect(discovered.fields.map((field) => field.path)).toEqual([
       "name",
       "show_header",
       "tags",
     ]);
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       name: "Alice",
       show_header: true,
       tags: ["urgent", "signed"],
     });
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
     const headerXml = await zip.file("word/header1.xml")?.async("string");
     const footerXml = await zip.file("word/footer1.xml")?.async("string");
     expect(headerXml).toContain("Alice");
@@ -461,13 +467,13 @@ describe("header and footer placeholders", () => {
         P("{% endfor %}"),
       ].join(""),
     );
-    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+    const docx = await makeDocxWithHeaderFooter(body, header, footer);
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       body_items: [{}],
       footer_items: [{}],
     });
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
     const bodyXml = await zip.file("word/document.xml")?.async("string");
     const footerXml = await zip.file("word/footer1.xml")?.async("string");
 
@@ -482,9 +488,9 @@ describe("split-run placeholders", () => {
   test("placeholder split across 3 runs is discovered", async () => {
     // Word commonly splits: "{{" | "client_name" | "}}"
     const xml = WRAP(splitRuns("{{client_name}}", 2));
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const discovered = await discoverTemplate(buf);
+    const discovered = await discoverTemplate(docx);
     expect(discovered.placeholders).toEqual([
       { name: "client_name", count: 1 },
     ]);
@@ -492,13 +498,13 @@ describe("split-run placeholders", () => {
 
   test("placeholder split across 3 runs is filled", async () => {
     const xml = WRAP(splitRuns("{{client_name}}", 2));
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       client_name: "Acme Corp",
     });
 
-    const extracted = await extractDocxDocument(result.buffer);
+    const extracted = await extractDocxDocument(result.file);
     const allText = extracted.paragraphs.map((p) => p.text).join("\n");
     expect(allText).toContain("Acme Corp");
     expect(allText).not.toContain("{{");
@@ -513,9 +519,9 @@ describe("split-run placeholders", () => {
       "<w:r><w:t>b}}</w:t></w:r>",
     ].join("");
     const xml = WRAP(`<w:p>${runs}</w:p>`);
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const discovered = await discoverTemplate(buf);
+    const discovered = await discoverTemplate(docx);
     const names = discovered.placeholders.map((p) => p.name).toSorted();
     expect(names).toEqual(["a", "b"]);
   });
@@ -537,9 +543,9 @@ describe("placeholders in tables", () => {
         "</w:tr></w:tbl>",
       ].join(""),
     );
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const discovered = await discoverTemplate(buf);
+    const discovered = await discoverTemplate(docx);
     const names = discovered.placeholders.map((p) => p.name).toSorted();
     expect(names).toEqual(["col_a", "col_b"]);
   });
@@ -557,14 +563,14 @@ describe("placeholders in tables", () => {
         "</w:tr></w:tbl>",
       ].join(""),
     );
-    const buf = await makeDocx(xml);
+    const docx = await makeDocx(xml);
 
-    const result = await fillTemplate(buf, {
+    const result = await fillTemplate(docx, {
       name: "Alice",
       date: "2026-01-01",
     });
 
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
     expect(docXml).toContain("Alice");
     expect(docXml).toContain("2026-01-01");

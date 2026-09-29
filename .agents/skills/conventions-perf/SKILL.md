@@ -1,6 +1,6 @@
 ---
 name: conventions-perf
-description: 'Apply when a performance-guard check (network baseline, bundle baseline, DB query count, loader-prefetch lint, RC bailouts) fails or when touching a hot route/endpoint.'
+description: "Apply when a performance-guard check (network baseline, bundle baseline, DB query count, loader-prefetch lint, RC bailouts) fails or when touching a hot route/endpoint."
 ---
 
 # Performance Guard Conventions
@@ -50,6 +50,8 @@ is acceptable, and it must be justified in the PR description (why the extra
 request, the deeper wait, or the bigger chunk is worth it).
 
 The network baseline has two write modes for exactly this distinction:
+
+For a new or changed smoked route, add the `baseline:record` label to its pull request; CI records the entry with the pull request's own code, commits it, and opens a review thread on it. Review the recorded values as budget changes and resolve the thread to accept them.
 
 - `E2E_NETWORK_BASELINE=write` merges into the existing baseline: requests
   accumulate as a union, depth and DB-query budgets take the max. Safe to run

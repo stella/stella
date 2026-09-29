@@ -1588,7 +1588,7 @@ const processOneBatch = async ({
     broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.ENTITY);
 
     const settings = await scopedDb(
-      async (tx) => await loadOrgAISettings(tx, organizationId),
+      async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
     );
     if (Result.isError(settings)) {
       throw settings.error;

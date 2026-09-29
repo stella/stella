@@ -386,18 +386,23 @@ const declareRouteSmokeGroup = ({
   });
 };
 
+const baselineMode = process.env["E2E_NETWORK_BASELINE"];
+
 test("route coverage matches the authenticated route tree", async () => {
   await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
-  assertNetworkBaselineCoverage(
-    SMOKE_ROUTE_DEFS.map((def) =>
-      def.expectation?.kind === "redirectsTo"
-        ? `${def.template} target`
-        : def.template,
-    ),
-  );
+  // A write run may be adding the missing route entry; check the committed
+  // baseline only in comparison mode.
+  if (baselineMode !== "write" && baselineMode !== "rewrite") {
+    assertNetworkBaselineCoverage(
+      SMOKE_ROUTE_DEFS.map((def) =>
+        def.expectation?.kind === "redirectsTo"
+          ? `${def.template} target`
+          : def.template,
+      ),
+    );
+  }
 });
 
-const baselineMode = process.env["E2E_NETWORK_BASELINE"];
 if (baselineMode === "write" || baselineMode === "rewrite") {
   // Baseline writes need one complete result set and one writer. Normal checks
   // use isolated groups because each independently compares its observed routes

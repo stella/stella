@@ -16,7 +16,11 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
-import { normalizeDecisionIdentifierValue } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  normalizeDecisionIdentifier,
+  normalizeDecisionIdentifierIn,
+  normalizeDecisionIdentifierValue,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_IDENTIFIER_BACKFILL_VERSION,
   MAX_DECISION_IDENTIFIER_BACKFILL_BATCH_SIZE,
@@ -31,6 +35,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { ensureCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { storeDecisionIdentifiersInMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -381,6 +386,42 @@ test("a declared alias is neither removed nor counted as drift", async () => {
         eq(caseLawDecisionIdentifiers.normalizedValue, "czus2020declaredalias"),
       ),
   ).toEqual([{ value: "ECLI:CZ:US:2020:DECLARED.ALIAS" }]);
+});
+
+test("a declared alias keyed by its jurisdiction's rule is not counted as drift", async () => {
+  const usaDecisionId = createSafeId<"caseLawDecision">();
+  const alias = {
+    type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    value: "347 U.S. Rep. 483",
+  } as const;
+  await db.insert(caseLawDecisions).values({
+    id: usaDecisionId,
+    sourceId,
+    caseNumber: "No. 1",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    country: "USA",
+    language: "en",
+    slug: "decision-identifier-backfill-usa",
+    languageGroupKey: "decision-identifier-backfill-usa",
+    metadata: storeDecisionIdentifiersInMetadata({}, [alias]),
+  });
+  // The jurisdiction's rule keys this spelling as its canonical edition, not
+  // as the spelling itself.
+  const normalizedValue = normalizeDecisionIdentifierIn("USA", alias);
+  expect(normalizedValue).not.toBe(normalizeDecisionIdentifier(alias));
+  await db.insert(caseLawDecisionIdentifiers).values({
+    decisionId: usaDecisionId,
+    ...alias,
+    normalizedValue,
+    declaredAt: new Date(),
+  });
+
+  const repaired = await runDecisionIdentifierBackfill(rootDb(), {
+    batchSize: 10,
+  });
+
+  expect(repaired.verification.gaps.decisionIdentifierMismatches).toBe(0);
 });
 
 test("rejects a batch that could exceed PostgreSQL's bind-parameter limit", async () => {

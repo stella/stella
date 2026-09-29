@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -60,7 +61,12 @@ export const createWorkflowStart = (
       scopedDb,
       body,
       orgAIConfig,
+      orgAIConfigStatus,
     }) {
+      const accessError = memberAIAccessError(orgAIConfigStatus);
+      if (accessError) {
+        return Result.err(accessError);
+      }
       if (
         body.serviceTier === "flex" &&
         !isDeferredServiceTierAvailableForRole("pdf", orgAIConfig)

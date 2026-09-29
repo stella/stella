@@ -624,10 +624,16 @@ describe("publishing", () => {
   });
 
   test("a first verdict is written; the same verdict is not written twice", () => {
-    expect(decidePublish(undefined, output, OPENED)).toBe("write");
+    expect(decidePublish([], output, OPENED)).toBe("write");
+    expect(decidePublish([published(OPENED)], output, OPENED)).toBe(
+      "unchanged",
+    );
+  });
+
+  test("a newer read of the same verdict re-stamps the run instead of writing it again", () => {
     expect(
-      decidePublish(published(OPENED), output, minutesAfter(OPENED, 1)),
-    ).toBe("unchanged");
+      decidePublish([published(OPENED)], output, minutesAfter(OPENED, 1)),
+    ).toBe("restamp");
   });
 
   test("out of order: a success read before a published failure never overwrites it", () => {
@@ -636,7 +642,7 @@ describe("publishing", () => {
       title: failing.title,
       summary: failing.summary,
     });
-    expect(decidePublish(failure, output, minutesAfter(OPENED, 1))).toBe(
+    expect(decidePublish([failure], output, minutesAfter(OPENED, 1))).toBe(
       "stale",
     );
   });
@@ -644,23 +650,37 @@ describe("publishing", () => {
   test("out of order: a failure read before a published success does not overwrite it either", () => {
     expect(
       decidePublish(
-        published(minutesAfter(OPENED, 2)),
+        [published(minutesAfter(OPENED, 2))],
         failing,
         minutesAfter(OPENED, 1),
       ),
     ).toBe("stale");
   });
 
+  test("stale against a newer observation on any run, not only the latest", () => {
+    // Mid-race: the newer observation has been overtaken by an older one.
+    const newer = published(minutesAfter(OPENED, 3), { id: 1 });
+    const overtaking = published(OPENED, { id: 2 });
+    expect(
+      decidePublish([newer, overtaking], failing, minutesAfter(OPENED, 2)),
+    ).toBe("stale");
+  });
+
   test("a newer read replaces an older verdict", () => {
     expect(
-      decidePublish(published(OPENED), failing, minutesAfter(OPENED, 1)),
+      decidePublish([published(OPENED)], failing, minutesAfter(OPENED, 1)),
     ).toBe("write");
   });
 
   test("a run without this gate's identity is overwritten, whatever it says", () => {
     expect(
       decidePublish(
-        published(minutesAfter(OPENED, 60), { identity: null, title: "other" }),
+        [
+          published(minutesAfter(OPENED, 60), {
+            identity: null,
+            title: "other",
+          }),
+        ],
         output,
         OPENED,
       ),

@@ -47,6 +47,9 @@ export const CHAT_ORACLE = {
   liveEqualsReload: "chat.live.equals-reload",
   /** (d) Every tool call and result appears exactly once, live and reloaded. */
   liveToolPartsOnce: "chat.live.tool-parts-once",
+  /** The skills the composer offers in a chat are exactly the ones a send
+   *  from that chat runs rather than names unavailable. */
+  skillsMenuMatchesSend: "chat.skills.menu-matches-send",
   /** The route accepts every request the web client builds for its own
    *  thread. */
   clientRequestsAccepted: "chat.client.requests-accepted",

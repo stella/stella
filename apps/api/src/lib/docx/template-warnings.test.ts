@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { discoverTemplate } from "./discover-template";
 import {
   fieldOverlayWarnings,
@@ -21,10 +24,10 @@ const TC = (text: string) => `<w:tc>${P(text)}</w:tc>`;
 const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
 const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 /** Loaders stand in for registry configuration. `refuseAll` also

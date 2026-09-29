@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  countRootConnectionImports,
+  countRootConnectionTypeImports,
   findRootConnectionShapes,
   findStaleRootOperations,
   ROOT_CONNECTION_SHAPE,
@@ -271,10 +273,27 @@ describe("binding resolution", () => {
         "export const a = (db?: Db) => db ?? root.rootDb;",
         'export const b = (db?: Db) => db ?? root["rootDb"];',
         "export const c = (db?: Db) => db ?? root.rlsDb;",
+        "export const d = (db?: Db) => db ?? root.Transaction;",
       ),
     ).toEqual([
       ROOT_CONNECTION_SHAPE.fallbackOperand,
       ROOT_CONNECTION_SHAPE.fallbackOperand,
+      ROOT_CONNECTION_SHAPE.fallbackOperand,
+    ]);
+  });
+
+  test("treats the scoped-transaction pool like the owner connection", () => {
+    expect(
+      shapesOf(
+        'import { rlsDb as pool } from "@/api/db/root";',
+        "const database = pool;",
+        "export const deps = { db: pool };",
+        "export const load = async (db = pool) => db;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.dependencyProperty,
+      ROOT_CONNECTION_SHAPE.parameterDefault,
     ]);
   });
 
@@ -523,6 +542,155 @@ describe("explicit uses are not shapes", () => {
     expect(
       shapesOf("const rootDb = makeDb();", "export const deps = { rootDb };"),
     ).toEqual([]);
+  });
+});
+
+describe("modules that reach an owner-level handle", () => {
+  const importsOf = (...lines: readonly string[]): number =>
+    countRootConnectionImports(`${lines.join("\n")}\n`);
+  const typesOf = (...lines: readonly string[]): number =>
+    countRootConnectionTypeImports(`${lines.join("\n")}\n`);
+
+  test("one per handle a named import names, renamed or by path", () => {
+    expect(importsOf(ROOT_IMPORT)).toBe(1);
+    expect(importsOf('import { rlsDb } from "@/api/db/root";')).toBe(1);
+    expect(importsOf('import { rootDb, rlsDb } from "@/api/db/root";')).toBe(2);
+    expect(importsOf('import { rootDb as owner } from "../../db/root";')).toBe(
+      1,
+    );
+    expect(importsOf('import { rlsDb } from "./root";')).toBe(1);
+    expect(importsOf('import { rootDb } from "@/api/db/root.ts";')).toBe(1);
+  });
+
+  test("type-only references count apart: a parameter typed from a handle takes it", () => {
+    const typeOnly = [
+      ['import type { rootDb } from "@/api/db/root";', 1],
+      ['import { type rlsDb, type Transaction } from "@/api/db/root";', 1],
+      [
+        'import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";',
+        1,
+      ],
+      ['import type * as root from "@/api/db/root";', 2],
+      ['export type { rootDb } from "@/api/db/root";', 1],
+      ['export { type rlsDb } from "@/api/db/root";', 1],
+      ['export type * from "@/api/db/root";', 2],
+      ['import type root = require("@/api/db/root");', 2],
+      ['export type Db = typeof import("@/api/db/root").rootDb;', 1],
+      ['export type Root = typeof import("@/api/db/root");', 2],
+    ] as const;
+    for (const [line, expected] of typeOnly) {
+      expect([line, typesOf(line), importsOf(line)]).toEqual([
+        line,
+        expected,
+        0,
+      ]);
+    }
+  });
+
+  test("a type-only import turned into a value import moves to the runtime count", () => {
+    const before = 'import type { rootDb } from "@/api/db/root";';
+    const after = 'import { rootDb } from "@/api/db/root";';
+    expect([importsOf(before), typesOf(before)]).toEqual([0, 1]);
+    expect([importsOf(after), typesOf(after)]).toEqual([1, 0]);
+    const mixed = 'import { rootDb, type rlsDb } from "@/api/db/root";';
+    expect([importsOf(mixed), typesOf(mixed)]).toEqual([1, 1]);
+  });
+
+  test("an indexed import type counts the member it selects", () => {
+    for (const [line, expected] of [
+      ['export type Db = typeof import("@/api/db/root")["rootDb"];', 1],
+      ['export type Db = (typeof import("@/api/db/root"))["rlsDb"];', 1],
+      ['export type Tx = import("@/api/db/root")["Transaction"];', 0],
+    ] as const) {
+      expect([line, typesOf(line), importsOf(line)]).toEqual([
+        line,
+        expected,
+        0,
+      ]);
+    }
+  });
+
+  test("the shared transaction type alone does not count", () => {
+    for (const line of [
+      'import type { Transaction } from "@/api/db/root";',
+      'export type Tx = import("@/api/db/root").Transaction;',
+    ]) {
+      expect([importsOf(line), typesOf(line)]).toEqual([0, 0]);
+    }
+  });
+
+  test("re-exports count like imports", () => {
+    expect(importsOf('export { rootDb } from "@/api/db/root";')).toBe(1);
+    expect(importsOf('export { rlsDb as pool } from "../db/root";')).toBe(1);
+    expect(importsOf('export * from "@/api/db/root";')).toBe(2);
+    expect(importsOf('export * as root from "@/api/db/root";')).toBe(2);
+    expect(importsOf('export { Transaction } from "@/api/db/root";')).toBe(0);
+  });
+
+  test("a namespace, require or undestructured dynamic import counts both", () => {
+    expect(importsOf('import * as root from "@/api/db/root";')).toBe(2);
+    expect(importsOf('import root = require("@/api/db/root");')).toBe(2);
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const root = await import("@/api/db/root");',
+        "  return root;",
+        "};",
+      ),
+    ).toBe(2);
+    expect(
+      importsOf(
+        'export const load = () => import("@/api/db/root").then((m) => m.rlsDb);',
+      ),
+    ).toBe(2);
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const { rootDb, ...rest } = await import("@/api/db/root");',
+        "  return [rootDb, rest];",
+        "};",
+      ),
+    ).toBe(2);
+  });
+
+  test("a destructured dynamic import counts the handles it takes", () => {
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const { rlsDb, rootDb: owner } = await import("@/api/db/root");',
+        "  return [rlsDb, owner];",
+        "};",
+      ),
+    ).toBe(2);
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const { rlsDb } = await import("@/api/db/root");',
+        "  return rlsDb;",
+        "};",
+      ),
+    ).toBe(1);
+  });
+
+  test("other modules, side-effect imports, comments and strings do not count", () => {
+    expect(
+      importsOf(
+        'import { rootDb } from "@/api/db/rooted";',
+        'import { rootDb as other } from "@/api/lib/root-scoped-db";',
+        'import "@/api/db/root";',
+        '// import { rootDb } from "@/api/db/root";',
+        "const text = 'import { rlsDb } from \"@/api/db/root\"';",
+      ),
+    ).toBe(0);
+  });
+
+  test("reads a generic arrow in a .ts file", () => {
+    expect(
+      importsOf(
+        "export const first = <T,>(rows: T[]) => rows.at(0);",
+        'import { rlsDb } from "@/api/db/root";',
+      ),
+    ).toBe(1);
   });
 });
 

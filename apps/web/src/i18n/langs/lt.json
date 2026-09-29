@@ -983,7 +983,15 @@
       "searchFiles": "Ieškoti failų",
       "searchMatters": "Ieškoti bylų",
       "searchMcpServers": "Ieškoti MCP serverių...",
-      "searchSkills": "Ieškoti įgūdžių"
+      "searchSkills": "Ieškoti įgūdžių",
+      "skillNeeds": {
+        "browserExtension": "Norėdami naudoti šį įgūdį, prijunkite naršyklės plėtinį",
+        "document": "Norėdami naudoti šį įgūdį, atidarykite dokumentą",
+        "matter": "Norėdami naudoti šį įgūdį, pradėkite pokalbį byloje",
+        "rawSendMode": "Neprieinama anonimizuotuose pokalbiuose",
+        "reviewEdits": "Norėdami naudoti šį įgūdį, perjunkite pakeitimus į rankinę peržiūrą",
+        "webSearch": "Norėdami naudoti šį įgūdį, įjunkite paiešką internete"
+      }
     },
     "contextMeter": {
       "attachments": "Pridėti dokumentai",

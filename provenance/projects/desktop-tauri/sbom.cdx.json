@@ -21233,6 +21233,96 @@
       "version": "0.0.1"
     },
     {
+      "bom-ref": "pkg:cargo/stella-desktop-macos-signing@0.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "name": "stella-desktop-macos-signing",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/stella-desktop-macos-signing@0.0.1",
+      "type": "library",
+      "version": "0.0.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/stella-desktop-signing-core@0.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "name": "stella-desktop-signing-core",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/stella-desktop-signing-core@0.0.1",
+      "type": "library",
+      "version": "0.0.1"
+    },
+    {
+      "bom-ref": "pkg:cargo/stella-desktop-windows-signing@0.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "name": "stella-desktop-windows-signing",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/stella-desktop-windows-signing@0.0.1",
+      "type": "library",
+      "version": "0.0.1"
+    },
+    {
       "bom-ref": "pkg:cargo/string_cache@0.9.0",
       "evidence": {
         "identity": [
@@ -35396,7 +35486,10 @@
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/sha2@0.11.0",
+        "pkg:cargo/stella-desktop-macos-signing@0.0.1",
         "pkg:cargo/stella-desktop-macos@0.0.1",
+        "pkg:cargo/stella-desktop-signing-core@0.0.1",
+        "pkg:cargo/stella-desktop-windows-signing@0.0.1",
         "pkg:cargo/sys-locale@0.3.2",
         "pkg:cargo/tauri-build@2.6.3",
         "pkg:cargo/tauri-plugin-autostart@2.5.1",
@@ -35432,6 +35525,31 @@
         "pkg:cargo/tauri@2.11.6"
       ],
       "ref": "pkg:cargo/stella-desktop-macos@0.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/core-foundation@0.10.1",
+        "pkg:cargo/security-framework-sys@2.17.0",
+        "pkg:cargo/security-framework@3.7.0",
+        "pkg:cargo/stella-desktop-signing-core@0.0.1"
+      ],
+      "ref": "pkg:cargo/stella-desktop-macos-signing@0.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/hex@0.4.3",
+        "pkg:cargo/ring@0.17.14",
+        "pkg:cargo/sha2@0.11.0"
+      ],
+      "ref": "pkg:cargo/stella-desktop-signing-core@0.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/ring@0.17.14",
+        "pkg:cargo/stella-desktop-signing-core@0.0.1",
+        "pkg:cargo/windows-sys@0.61.2"
+      ],
+      "ref": "pkg:cargo/stella-desktop-windows-signing@0.0.1"
     },
     {
       "dependsOn": [
@@ -37109,6 +37227,54 @@
     "component": {
       "bom-ref": "pkg:cargo/stella-desktop@0.0.1",
       "components": [
+        {
+          "bom-ref": "pkg:cargo/stella-desktop-windows-signing@0.0.1",
+          "group": "",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0",
+                "url": "https://opensource.org/licenses/Apache-2.0"
+              }
+            }
+          ],
+          "name": "stella-desktop-windows-signing",
+          "purl": "pkg:cargo/stella-desktop-windows-signing@0.0.1",
+          "type": "library",
+          "version": "0.0.1"
+        },
+        {
+          "bom-ref": "pkg:cargo/stella-desktop-signing-core@0.0.1",
+          "group": "",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0",
+                "url": "https://opensource.org/licenses/Apache-2.0"
+              }
+            }
+          ],
+          "name": "stella-desktop-signing-core",
+          "purl": "pkg:cargo/stella-desktop-signing-core@0.0.1",
+          "type": "library",
+          "version": "0.0.1"
+        },
+        {
+          "bom-ref": "pkg:cargo/stella-desktop-macos-signing@0.0.1",
+          "group": "",
+          "licenses": [
+            {
+              "license": {
+                "id": "Apache-2.0",
+                "url": "https://opensource.org/licenses/Apache-2.0"
+              }
+            }
+          ],
+          "name": "stella-desktop-macos-signing",
+          "purl": "pkg:cargo/stella-desktop-macos-signing@0.0.1",
+          "type": "library",
+          "version": "0.0.1"
+        },
         {
           "bom-ref": "pkg:cargo/stella-desktop-macos@0.0.1",
           "group": "",

@@ -47,6 +47,7 @@ import {
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { errorTag } from "@/api/lib/errors/utils";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { logger } from "@/api/lib/observability/logger";
@@ -383,9 +384,7 @@ const runExport = async ({
   // Deterministic export: skip loading the org AI config entirely; fillReport
   // builds no generators and runs no usage preflight when aiNarrative is off.
   const orgAIConfigResult = aiNarrative
-    ? await actor.scopedDb(
-        async (tx) => await loadOrgAIConfig(tx, actor.organizationId),
-      )
+    ? await actor.scopedDb(async (tx) => await loadOrgAIConfig(tx, actor))
     : Result.ok(null);
   if (Result.isError(orgAIConfigResult)) {
     await markExportFailedRow(actor, orgAIConfigResult.error.message);
@@ -502,6 +501,19 @@ type FillReportResult =
   | { error: string }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: unknown };
+
+type FilledReportDocx =
+  | { templateName: string; fileName: string; file: ScannedFile }
+  | Exclude<FillReportResult, { buffer: Buffer }>;
+
+const toFillReportResult = (filled: FilledReportDocx): FillReportResult =>
+  "file" in filled
+    ? {
+        templateName: filled.templateName,
+        fileName: filled.fileName,
+        buffer: Buffer.from(filled.file.bytes),
+      }
+    : filled;
 
 const fillReport = async ({
   actor,
@@ -679,14 +691,16 @@ const fillReportDocx = async ({
   generators: ReportAiGenerators;
 }): Promise<FillReportResult> => {
   if (templateRef.type === "stored") {
-    return await fillStoredTemplateDocx({
-      templateId: templateRef.templateId,
-      values,
-      scopedDb: actor.scopedDb,
-      organizationId: actor.organizationId,
-      requiredFields: "enforce",
-      ...generators,
-    });
+    return toFillReportResult(
+      await fillStoredTemplateDocx({
+        templateId: templateRef.templateId,
+        values,
+        scopedDb: actor.scopedDb,
+        organizationId: actor.organizationId,
+        requiredFields: "enforce",
+        ...generators,
+      }),
+    );
   }
 
   const builtin = getBuiltinReportTemplate(templateRef.key);
@@ -697,15 +711,27 @@ const fillReportDocx = async ({
     // fillReport routes spec built-ins to renderSpecReport before reaching here.
     return { error: `Report template "${templateRef.key}" is not a DOCX.` };
   }
-  const buffer = await builtin.loadBuffer();
-  return await fillTemplateDocx({
-    source: { name: builtin.name, fileName: `${builtin.name}.docx`, buffer },
-    values,
-    scopedDb: actor.scopedDb,
-    organizationId: actor.organizationId,
-    requiredFields: "enforce",
-    ...generators,
+  const fileName = `${builtin.name}.docx`;
+  // A built-in layout is server-built bytes, scanned like an upload before
+  // the fill parses them.
+  const scanned = await scanUpload({
+    bytes: await builtin.loadBuffer(),
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName,
   });
+  if (Result.isError(scanned)) {
+    return { error: scanned.error.message };
+  }
+  return toFillReportResult(
+    await fillTemplateDocx({
+      source: { name: builtin.name, fileName, file: scanned.value },
+      values,
+      scopedDb: actor.scopedDb,
+      organizationId: actor.organizationId,
+      requiredFields: "enforce",
+      ...generators,
+    }),
+  );
 };
 
 const setExportStatus = async (
