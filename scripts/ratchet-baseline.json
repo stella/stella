@@ -179,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 267,
+    "count": 269,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -288,7 +288,7 @@
       "apps/api/src/lib/folio-collab-rooms.ts": 1,
       "apps/api/src/lib/legal-search/case-law-raw-layout.ts": 1,
       "apps/api/src/lib/legal-search/case-law-raw-sweeps.ts": 1,
-      "apps/api/src/lib/legal-search/case-law-search-index.ts": 2,
+      "apps/api/src/lib/legal-search/case-law-search-index.ts": 4,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 3,
       "apps/api/src/lib/legal-search/corpus-tombstones.ts": 1,
       "apps/api/src/lib/legal-search/reconciliation-store.ts": 6,

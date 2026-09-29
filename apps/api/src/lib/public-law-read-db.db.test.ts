@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   configureReadTransaction,
@@ -10,12 +11,7 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-/**
- * The guards a public read runs under arrive in one statement. Proving their
- * effect against a real PostgreSQL is what keeps that statement honest: a
- * read-only transaction that is not read-only, or a timeout that never took,
- * would otherwise look exactly like the cheaper setup it replaced.
- */
+/** The real PostgreSQL settings must match the public-read transaction guard. */
 
 const readSetting = async (
   tx: { execute: (query: ReturnType<typeof sql>) => Promise<unknown> },
@@ -39,7 +35,7 @@ afterAll(async () => {
   await client.close();
 });
 
-test("one statement makes the transaction read-only and bounds it", async () => {
+test("the public read is read-only and bounded", async () => {
   const settings = await db.transaction(async (tx) => {
     await configureReadTransaction(
       tx,
@@ -60,6 +56,79 @@ test("one statement makes the transaction read-only and bounds it", async () => 
     lockTimeout: "1s",
     idleTimeout: "30s",
   });
+});
+
+test("nested query budgets restore the prior tighter budget", async () => {
+  await db.transaction(async (tx) => {
+    await configureReadTransaction(
+      tx,
+      "read-committed",
+      EXTERNAL_PUBLIC_LAW_READ_GUARDS,
+    );
+    expect(await readSetting(tx, "statement_timeout")).toBe("30s");
+    await withSharedStatementTimeout(tx, 3000, async () => {
+      expect(await readSetting(tx, "statement_timeout")).toBe("3s");
+      await withSharedStatementTimeout(tx, 10_000, async () => {
+        expect(await readSetting(tx, "statement_timeout")).toBe("3s");
+      });
+      expect(await readSetting(tx, "statement_timeout")).toBe("3s");
+    });
+    expect(await readSetting(tx, "statement_timeout")).toBe("30s");
+  });
+});
+
+test("a failed nested read restores its budget when the transaction remains usable", async () => {
+  await db.transaction(async (tx) => {
+    await configureReadTransaction(
+      tx,
+      "read-committed",
+      EXTERNAL_PUBLIC_LAW_READ_GUARDS,
+    );
+    const rejection: unknown = await withSharedStatementTimeout(
+      tx,
+      3000,
+      async () => {
+        expect(await readSetting(tx, "statement_timeout")).toBe("3s");
+        throw new Error("nested read failed");
+      },
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection instanceof Error ? rejection.message : rejection).toBe(
+      "nested read failed",
+    );
+    expect(await readSetting(tx, "statement_timeout")).toBe("30s");
+  });
+});
+
+test("a cancelled statement keeps its original error if its transaction rejects restoration", async () => {
+  const timeout = new Error("statement timed out");
+  let executions = 0;
+  const transaction = {
+    execute: async () => {
+      executions += 1;
+      if (executions === 1) {
+        return [{ statement_timeout: "30s" }];
+      }
+      if (executions === 2) {
+        return [];
+      }
+      throw new Error("transaction is aborted");
+    },
+  };
+  const rejection: unknown = await withSharedStatementTimeout(
+    transaction,
+    3000,
+    async () => {
+      throw timeout;
+    },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBe(timeout);
+  expect(executions).toBe(3);
 });
 
 test("repeatable read binds the snapshot and stays read-only", async () => {

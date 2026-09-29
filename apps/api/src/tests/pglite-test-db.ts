@@ -268,6 +268,10 @@ export const ROLE_GRANT_STATEMENTS = [
       ON ALL TABLES IN SCHEMA public TO stella
   `,
   `
+    REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
+      FROM stella
+  `,
+  `
     REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
   `,
   `
@@ -377,6 +381,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       "case_law_reconciliation_items",
+      "case_law_search_backfill_failures",
       "case_law_coverage_slices",
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",

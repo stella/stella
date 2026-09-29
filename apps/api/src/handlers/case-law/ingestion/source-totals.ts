@@ -1,13 +1,17 @@
-import { Result, TaggedError } from "better-result";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { panic, Result, TaggedError } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
+import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
+import type { RlsDatabase, TransactionOf } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Both halves of a source's coverage figure, and the only writer of either.
@@ -25,8 +29,8 @@ import { pgErrorFields } from "@/api/lib/pg-error";
  * for it. Counting one source is a walk of its whole range of
  * `case_law_decisions_source_generation_cursor_idx`, which on this corpus is
  * seconds, and the public reader that would otherwise run it holds a
- * two-connection pool shared with every other public page. The ingestion
- * connection pays it instead, at most once per
+ * two-connection pool shared with every other public page. A dedicated
+ * ingestion-role connection pays it instead, at most once per
  * `SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS`.
  */
 
@@ -136,7 +140,9 @@ export const SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
  * open behind the next cycle. Exceeding it leaves the previous figure
  * standing.
  */
-const STORED_TOTAL_STATEMENT_TIMEOUT = "120s";
+const STORED_TOTAL_STATEMENT_TIMEOUT_MS = 120_000;
+const STORED_TOTAL_LOCK_TIMEOUT_MS = 10_000;
+const STORED_TOTAL_ABORT_TIMEOUT_MS = 130_000;
 
 /** What one refresh attempt did. */
 export type StoredTotalRefresh =
@@ -152,6 +158,53 @@ type RefreshSourceStoredTotalOptions = {
   sourceId: SafeId<"caseLawSource">;
   /** The instant the interval is measured from, and the as-of that is written. */
   now: Date;
+  /** Test seam for the single-statement count on an ingestion-role handle. */
+  countSource?: (sourceId: SafeId<"caseLawSource">) => Promise<number>;
+};
+
+/** Count in one PostgreSQL statement after the ingestion role is installed. */
+export const countSourceThroughIngestionRole = async (
+  database: RlsDatabase,
+  sourceId: SafeId<"caseLawSource">,
+): Promise<number> => {
+  const ingestionDb = createIngestionDb(database, {
+    laneWaitMs: STORED_TOTAL_STATEMENT_TIMEOUT_MS,
+  });
+  return await ingestionDb(async (tx) => {
+    const row = executedRows(
+      await tx.execute(sql`
+        SELECT count(*)::int AS total
+        FROM case_law_decisions
+        WHERE source_id = ${sourceId}
+      `),
+    ).at(0);
+    return isRecord(row) && typeof row["total"] === "number"
+      ? row["total"]
+      : panic("Source total count returned no row");
+  });
+};
+
+const countSourceOnDedicatedConnection = async (
+  sourceId: SafeId<"caseLawSource">,
+): Promise<number> => {
+  const { withLongRunningConnection } =
+    await import("@/api/db/long-running-connection");
+  return await withLongRunningConnection(
+    {
+      statementTimeout: STORED_TOTAL_STATEMENT_TIMEOUT_MS,
+      lockTimeout: STORED_TOTAL_LOCK_TIMEOUT_MS,
+      signal: AbortSignal.timeout(STORED_TOTAL_ABORT_TIMEOUT_MS),
+    },
+    async ({ db }) =>
+      await countSourceThroughIngestionRole(
+        markRlsDatabase({
+          transaction: async <T>(
+            fn: (tx: TransactionOf<typeof db>) => Promise<T>,
+          ): Promise<T> => await db.transaction(fn),
+        }),
+        sourceId,
+      ),
+  );
 };
 
 /**
@@ -173,62 +226,48 @@ export const refreshSourceStoredTotal = async ({
   now,
   scopedDb,
   sourceId,
+  countSource = countSourceOnDedicatedConnection,
 }: RefreshSourceStoredTotalOptions): Promise<StoredTotalRefresh> => {
-  const attempt = await Result.tryPromise(
-    async () =>
-      await scopedDb(async (tx) => {
-        const observed = (
-          await tx
-            .select({ asOf: caseLawSources.storedTotalAsOf })
-            .from(caseLawSources)
-            .where(eq(caseLawSources.id, sourceId))
-            .limit(1)
-        ).at(0);
-        if (observed === undefined) {
-          return "unavailable" as const;
-        }
-        const observedAsOf = observed.asOf;
-        if (
-          observedAsOf !== null &&
-          now.getTime() - observedAsOf.getTime() <
-            SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS
-        ) {
-          return "fresh" as const;
-        }
+  const attempt = await Result.tryPromise(async () => {
+    const observed = await scopedDb(async (tx) =>
+      (
+        await tx
+          .select({ asOf: caseLawSources.storedTotalAsOf })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+          .limit(1)
+      ).at(0),
+    );
+    if (observed === undefined) {
+      return "unavailable" as const;
+    }
+    const observedAsOf = observed.asOf;
+    if (
+      observedAsOf !== null &&
+      now.getTime() - observedAsOf.getTime() <
+        SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS
+    ) {
+      return "fresh" as const;
+    }
 
-        // Transaction-local, so it reverts with the transaction and a
-        // cancelled count needs no unwinding of its own.
-        await tx.execute(
-          sql`SELECT set_config('statement_timeout', ${STORED_TOTAL_STATEMENT_TIMEOUT}, true)`,
-        );
-        const counted = (
-          await tx
-            .select({ total: sql<number>`count(*)::int` })
-            .from(caseLawDecisions)
-            .where(eq(caseLawDecisions.sourceId, sourceId))
-        ).at(0);
-        if (counted === undefined) {
-          return "unavailable" as const;
-        }
-
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
-        const written = await tx
-          .update(caseLawSources)
-          .set({ storedTotal: counted.total, storedTotalAsOf: now })
-          .where(
-            and(
-              eq(caseLawSources.id, sourceId),
-              or(
-                isNull(caseLawSources.storedTotalAsOf),
-                lte(caseLawSources.storedTotalAsOf, observedAsOf ?? now),
-              ),
-            ),
-          )
-          .returning({ id: caseLawSources.id });
-
-        return written.length > 0 ? ("refreshed" as const) : ("fresh" as const);
-      }),
-  );
+    const counted = await countSource(sourceId);
+    return await scopedDb(async (tx) => {
+      // audit: skip — public case-law corpus bookkeeping, no workspace data
+      const written = await tx
+        .update(caseLawSources)
+        .set({ storedTotal: counted, storedTotalAsOf: now })
+        .where(
+          and(
+            eq(caseLawSources.id, sourceId),
+            observedAsOf === null
+              ? isNull(caseLawSources.storedTotalAsOf)
+              : eq(caseLawSources.storedTotalAsOf, observedAsOf),
+          ),
+        )
+        .returning({ id: caseLawSources.id });
+      return written.length > 0 ? ("refreshed" as const) : ("fresh" as const);
+    });
+  });
 
   if (Result.isError(attempt)) {
     // Deliberately not rethrown: see the doc comment. The previous figure and

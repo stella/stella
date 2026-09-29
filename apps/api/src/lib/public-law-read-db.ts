@@ -8,6 +8,11 @@ import { databaseRelations } from "@/api/db/database-relations";
 import { stellaPublicLawReader } from "@/api/db/rls";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
+import { parsePostgresTimeoutMs } from "@/api/db/shared-pool-timeout-policy";
+import {
+  setSharedReadTransactionGuards,
+  sharedPoolConnectionSettings,
+} from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import {
@@ -356,21 +361,6 @@ export const EXTERNAL_PUBLIC_LAW_READ_GUARDS = [
 ] as const satisfies readonly PublicLawReadGuard[];
 
 /**
- * `SET LOCAL` by another name: `set_config(..., true)` reverts with the
- * transaction, and several settings fit in one statement, so a read pays one
- * round trip for its guards instead of one per guard. The reader pool is
- * narrow, so statements per request, not per statement cost, is what a public
- * page waits on.
- */
-const localSettings = (guards: readonly PublicLawReadGuard[]): SqlFragment =>
-  sql`SELECT ${sql.join(
-    guards.map(
-      ([setting, value]) => sql`set_config(${setting}, ${value}, true)`,
-    ),
-    sql.raw(", "),
-  )}`;
-
-/**
  * The guards a read runs under. Repeatable read needs a statement of its own
  * and must come first: the isolation level binds the snapshot, and Postgres
  * refuses to change it once a query has taken one.
@@ -385,7 +375,38 @@ export const configureReadTransaction = async (
       sql`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY`,
     );
   }
-  await tx.execute(localSettings(guards));
+  let statementTimeoutMs: number | undefined;
+  let lockTimeoutMs: number | undefined;
+  let idleInTransactionTimeoutMs: number | undefined;
+  let readOnly = false;
+  for (const [setting, value] of guards) {
+    switch (setting) {
+      case "transaction_read_only":
+        readOnly = value === "on";
+        break;
+      case "statement_timeout":
+        statementTimeoutMs = parsePostgresTimeoutMs(value);
+        break;
+      case "lock_timeout":
+        lockTimeoutMs = parsePostgresTimeoutMs(value);
+        break;
+      case "idle_in_transaction_session_timeout":
+        idleInTransactionTimeoutMs = parsePostgresTimeoutMs(value);
+        break;
+      default:
+        panic("Unexpected public-law read guard", setting);
+    }
+  }
+  if (!readOnly || statementTimeoutMs === undefined) {
+    panic("Public-law read guards require read-only and a statement timeout");
+  }
+  await setSharedReadTransactionGuards(tx, {
+    statementTimeoutMs,
+    ...(lockTimeoutMs === undefined ? {} : { lockTimeoutMs }),
+    ...(idleInTransactionTimeoutMs === undefined
+      ? {}
+      : { idleInTransactionTimeoutMs }),
+  });
 };
 
 /** A separate database is reached over a network the shared one is not. */
@@ -457,6 +478,7 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
       max: envBase.PUBLIC_LAW_DATABASE_POOL_MAX,
       maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
       idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+      ...sharedPoolConnectionSettings("public_law"),
     });
     const database = drizzle({
       client,
