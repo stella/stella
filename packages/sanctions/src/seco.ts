@@ -98,29 +98,111 @@ const aliasQuality = (node: XmlNode): AliasQuality => {
   }
 };
 
-const nameSpellings = (node: XmlNode): string[] => {
-  const parts = childrenNamed(node, "name-part").toSorted(
-    (left, right) =>
-      Number(attribute(left, "order")) - Number(attribute(right, "order")),
-  );
-  const base = parts.map((part) => childText(part, "value") ?? "");
-  const joined = (values: readonly string[]) =>
-    values.filter(Boolean).join(" ").trim();
-  const spellings = [joined(base)];
-  // Retain each published spelling variant without a Cartesian expansion of
-  // independent part variants (some source names would exceed 1,000 forms).
-  for (const [index, part] of parts.entries()) {
-    for (const variant of childrenNamed(part, "spelling-variant")) {
-      const text = variant.text.trim();
-      if (text === "") {
-        continue;
-      }
-      const values = [...base];
-      values[index] = text;
-      spellings.push(joined(values));
+type NamePart = {
+  value: string;
+  isTitle: boolean;
+  /** Spelling variants grouped by their stated language and script. */
+  variants: Map<string, string[]>;
+};
+
+const namePart = (node: XmlNode): NamePart => {
+  const variants = new Map<string, string[]>();
+  for (const variant of childrenNamed(node, "spelling-variant")) {
+    const text = variant.text.trim();
+    if (text === "") {
+      continue;
+    }
+    const key = `${attribute(variant, "lang") ?? ""}/${attribute(variant, "script") ?? ""}`;
+    const group = variants.get(key);
+    if (group === undefined) {
+      variants.set(key, [text]);
+    } else {
+      group.push(text);
     }
   }
-  return spellings.filter((name) => name !== "");
+  return {
+    value: childText(node, "value") ?? "",
+    isTitle: attribute(node, "name-part-type") === "title",
+    variants,
+  };
+};
+
+const LETTER = /\p{L}/u;
+const LATIN_LETTER = /\p{Script=Latin}/u;
+
+const writing = (text: string): "latin" | "other" | "mixed" | null => {
+  let latin = false;
+  let other = false;
+  for (const char of text) {
+    if (!LETTER.test(char)) {
+      continue;
+    }
+    if (LATIN_LETTER.test(char)) {
+      latin = true;
+    } else {
+      other = true;
+    }
+  }
+  if (latin) {
+    return other ? "mixed" : "latin";
+  }
+  return other ? "other" : null;
+};
+
+// A part that already mixes scripts (the source writes some Cyrillic names
+// with Latin "i") is neutral; only Latin beside non-Latin parts is a mix.
+const mixesScripts = (values: readonly string[]): boolean => {
+  const kinds = new Set(values.map(writing));
+  return kinds.has("latin") && kinds.has("other");
+};
+
+const joinParts = (values: readonly string[]) =>
+  values.filter(Boolean).join(" ").trim();
+
+/**
+ * One language/script group of spelling variants yields complete spellings,
+ * never a Cartesian product. SECO aligns repeated variants by position (a
+ * part that does not vary repeats its value), so slot N takes each part's
+ * Nth variant, or its first when it lists fewer. A part without a variant in
+ * the group keeps its primary value, and a title is left out; a spelling
+ * that would mix Latin and non-Latin parts is not one the source states, so
+ * it is omitted.
+ */
+const groupSpellings = (parts: readonly NamePart[], key: string): string[] => {
+  const slots = Math.max(
+    ...parts.map((part) => part.variants.get(key)?.length ?? 0),
+  );
+  const spellings: string[] = [];
+  for (let slot = 0; slot < slots; slot++) {
+    const values: string[] = [];
+    for (const part of parts) {
+      const own = part.variants.get(key);
+      if (own !== undefined) {
+        values.push(own[slot] ?? own[0] ?? "");
+      } else if (!part.isTitle) {
+        values.push(part.value);
+      }
+    }
+    if (!mixesScripts(values)) {
+      spellings.push(joinParts(values));
+    }
+  }
+  return spellings;
+};
+
+const nameSpellings = (node: XmlNode): string[] => {
+  const parts = childrenNamed(node, "name-part")
+    .toSorted(
+      (left, right) =>
+        Number(attribute(left, "order")) - Number(attribute(right, "order")),
+    )
+    .map(namePart);
+  const spellings = [joinParts(parts.map((part) => part.value))];
+  const keys = new Set(parts.flatMap((part) => [...part.variants.keys()]));
+  for (const key of keys) {
+    spellings.push(...groupSpellings(parts, key));
+  }
+  return [...new Set(spellings)].filter((name) => name !== "");
 };
 
 const birthDate = (

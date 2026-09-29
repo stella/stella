@@ -17,7 +17,7 @@
       <identity ssid="1001" main="true">
         <name ssid="1002" name-type="primary-name" quality="good" lang="eng">
           <name-part order="1" name-part-type="given-name"><value>Alex</value><spelling-variant lang="eng" script="Latn" spelling-variant-type="not-defined">Alek</spelling-variant><spelling-variant lang="rus" script="Cyrl" spelling-variant-type="not-defined">Алекс</spelling-variant></name-part>
-          <name-part order="2" name-part-type="family-name"><value>Example</value></name-part>
+          <name-part order="2" name-part-type="family-name"><value>Example</value><spelling-variant lang="rus" script="Cyrl" spelling-variant-type="not-defined">Пример</spelling-variant></name-part>
         </name>
         <name ssid="1003" name-type="alias" quality="low" lang="eng">
           <name-part order="1" name-part-type="whole-name"><value>Lex Example</value></name-part>
@@ -32,6 +32,11 @@
       </identity>
       <identity ssid="1011" main="false">
         <name ssid="1012" name-type="formerly-known-as" quality="good" lang="eng"><name-part order="1" name-part-type="whole-name"><value>Alex Former</value></name-part></name>
+        <name ssid="1013" name-type="alias" quality="good" lang="eng">
+          <name-part order="1" name-part-type="title"><value>Director of Sample Works</value></name-part>
+          <name-part order="2" name-part-type="family-name"><value>Sampleva</value><spelling-variant lang="RUS" script="CYRL" spelling-variant-type="not-defined">Сэмплова</spelling-variant><spelling-variant lang="BEL" script="CYRL" spelling-variant-type="not-defined">Сэмплава</spelling-variant><spelling-variant lang="RUS" script="LATN" spelling-variant-type="not-defined">Samplova</spelling-variant><spelling-variant lang="RUS" script="LATN" spelling-variant-type="not-defined">Samplova</spelling-variant></name-part>
+          <name-part order="3" name-part-type="given-name"><value>Natallia</value><spelling-variant lang="RUS" script="CYRL" spelling-variant-type="not-defined">Наталья</spelling-variant><spelling-variant lang="BEL" script="CYRL" spelling-variant-type="not-defined">Наталля</spelling-variant><spelling-variant lang="RUS" script="LATN" spelling-variant-type="not-defined">Natalia</spelling-variant><spelling-variant lang="RUS" script="LATN" spelling-variant-type="not-defined">Natalya</spelling-variant><spelling-variant lang="ARA" script="ARAB" spelling-variant-type="not-defined">ناتاليا</spelling-variant></name-part>
+        </name>
       </identity>
     </individual>
     <modification modification-type="amended" effective-date="2026-05-01"/>

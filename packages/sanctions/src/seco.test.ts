@@ -38,9 +38,14 @@ describe("SECO consolidated list", () => {
     expect(person?.names).toEqual([
       { name: "Alex Example", quality: "strong" },
       { name: "Alek Example", quality: "strong" },
-      { name: "Алекс Example", quality: "strong" },
+      { name: "Алекс Пример", quality: "strong" },
       { name: "Lex Example", quality: "weak" },
       { name: "Alex Former", quality: "strong" },
+      { name: "Director of Sample Works Sampleva Natallia", quality: "strong" },
+      { name: "Сэмплова Наталья", quality: "strong" },
+      { name: "Сэмплава Наталля", quality: "strong" },
+      { name: "Samplova Natalia", quality: "strong" },
+      { name: "Samplova Natalya", quality: "strong" },
     ]);
     expect(person?.birthDates).toEqual([
       { precision: "day", year: 1975, month: 8, day: 12, circa: false },
@@ -104,6 +109,28 @@ describe("SECO consolidated list", () => {
       { cutoff: DEFAULT_CUTOFF },
     ).unwrap().possibleMatches[0];
     expect(uncertain?.evidence.birthDate).toBe("not-compared");
+  });
+
+  test("keeps each language and script spelling of a name whole", async () => {
+    const names = (await fixture()).entries[0]?.names.map(({ name }) => name);
+    for (const mixed of [
+      "Алекс Example",
+      "Alex Пример",
+      "Сэмплова Natallia",
+      "Sampleva Наталья",
+      "Сэмплова Наталля",
+      "Samplova Наталья",
+      "Sampleva ناتاليا",
+      "ناتاليا",
+    ]) {
+      expect(names).not.toContain(mixed);
+    }
+    const index = buildScreeningIndex([await fixture()]);
+    for (const name of ["Алекс Пример", "Сэмплава Наталля"]) {
+      const hit = screen(index, { name }, { cutoff: DEFAULT_CUTOFF }).unwrap()
+        .possibleMatches[0];
+      expect(hit?.entry.sourceId).toBe("1000");
+    }
   });
 
   test("reads the root edition without consuming targets and guards replacements", async () => {
