@@ -2,7 +2,6 @@ import { Result, panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
-import { stableStringify } from "@stll/stable-stringify";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -74,6 +73,7 @@ import {
   storedDecisionSignal,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
+import { sortDeep } from "@/api/lib/sort-deep";
 
 type PendingMirrorPayload = Awaited<
   ReturnType<typeof loadPendingMirrorPayload>
@@ -146,9 +146,9 @@ const verifyStoredCitationScopes = async ({
     corpus,
   });
   if (
-    stableStringify(
-      snapshot.row?.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null,
-    ) !== stableStringify(reusedCitationScopeEnvelope)
+    JSON.stringify(
+      sortDeep(snapshot.row?.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null),
+    ) !== JSON.stringify(sortDeep(reusedCitationScopeEnvelope))
   ) {
     return true;
   }
@@ -156,7 +156,10 @@ const verifyStoredCitationScopes = async ({
   const verified = validatedCitationScopes(snapshot.row?.metadata ?? {}, ast);
   if (Result.isError(verified)) {
     const latest = await storedScopeRow(existing.id, scopedDb);
-    if (stableStringify(latest) !== stableStringify(snapshot.row)) {
+    if (
+      JSON.stringify(sortDeep(latest)) !==
+      JSON.stringify(sortDeep(snapshot.row))
+    ) {
       return true;
     }
     throw verified.error;

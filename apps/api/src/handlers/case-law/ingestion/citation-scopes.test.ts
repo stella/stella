@@ -14,7 +14,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
-import { plainTextOf } from "@/api/lib/case-law/document-ast";
+import { isDocumentAst, plainTextOf } from "@/api/lib/case-law/document-ast";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 
 const text = "See 347 U.S. 483. Id. at 495.";
@@ -152,7 +152,7 @@ describe("persisted citation scopes", () => {
     };
     const sanitized = sanitizeResult(input);
     const documentAst = sanitized.documentAst;
-    if (!documentAst || !Array.isArray(documentAst.blocks)) {
+    if (!isDocumentAst(documentAst)) {
       throw new Error("Sanitized fixture must retain its AST");
     }
     const paragraph = documentAst.blocks.at(0);

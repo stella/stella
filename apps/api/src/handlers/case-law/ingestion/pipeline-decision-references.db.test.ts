@@ -414,6 +414,9 @@ const plannedContent = async (
     incomingCarriesDocument: true,
     polarityRules: undefined,
   });
+  if ("status" in plan) {
+    throw new TypeError("A new decision produces a citation write plan");
+  }
   switch (plan.citations.disposition) {
     case "legacy-graph":
       break;

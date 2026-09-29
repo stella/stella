@@ -320,11 +320,18 @@ test.each([
     }
     if (corpus.mode === "canonical") {
       expect(row.documentAst).toBeNull();
-      expect(parseCorpusLocation(row.astS3Key ?? "")?.type).toBe("packed");
+      expect(
+        parseCorpusLocation(row.astS3Key ?? expect.unreachable()).type,
+      ).toBe("packed");
     }
-    const envelope = row.metadata[CITATION_SCOPE_METADATA_KEY];
+    const envelope = (row.metadata ?? expect.unreachable())[
+      CITATION_SCOPE_METADATA_KEY
+    ];
     expect(envelope).toMatchObject({ version: 1, opinions: opinion });
-    const verified = validatedCitationScopes(row.metadata, documentAst);
+    const verified = validatedCitationScopes(
+      row.metadata ?? expect.unreachable(),
+      documentAst,
+    );
     if (Result.isError(verified)) {
       throw verified.error;
     }
@@ -393,7 +400,10 @@ test.each([
         packs.at(-1) ?? expect.unreachable(),
         row.id,
       );
-      const retained = validatedCitationScopes(after.metadata, retainedAst);
+      const retained = validatedCitationScopes(
+        after.metadata ?? expect.unreachable(),
+        retainedAst,
+      );
       if (Result.isError(retained)) {
         throw retained.error;
       }
@@ -433,7 +443,10 @@ test("a changed document and its replay retain annotations without graph rows", 
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.sourceDocumentId, documentId))
     ).at(0) ?? expect.unreachable();
-  const verified = validatedCitationScopes(row.metadata, row.documentAst);
+  const verified = validatedCitationScopes(
+    row.metadata ?? expect.unreachable(),
+    row.documentAst,
+  );
   if (Result.isError(verified)) {
     throw verified.error;
   }
@@ -512,9 +525,14 @@ test("a metadata-only refresh preserves the stored AST and its scope envelope", 
   expect(after.documentAst).toEqual(before.documentAst);
   expect(after.metadata).toMatchObject({
     refreshed: true,
-    [CITATION_SCOPE_METADATA_KEY]: before.metadata[CITATION_SCOPE_METADATA_KEY],
+    [CITATION_SCOPE_METADATA_KEY]: (before.metadata ?? expect.unreachable())[
+      CITATION_SCOPE_METADATA_KEY
+    ],
   });
-  const checked = validatedCitationScopes(after.metadata, after.documentAst);
+  const checked = validatedCitationScopes(
+    after.metadata ?? expect.unreachable(),
+    after.documentAst,
+  );
   if (Result.isError(checked)) {
     throw checked.error;
   }
@@ -544,7 +562,9 @@ test("a metadata-only refresh rejects a stored scope whose AST hash is stale", a
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.sourceDocumentId, documentId))
     ).at(0) ?? expect.unreachable();
-  const envelope = before.metadata[CITATION_SCOPE_METADATA_KEY];
+  const envelope = (before.metadata ?? expect.unreachable())[
+    CITATION_SCOPE_METADATA_KEY
+  ];
   if (typeof envelope !== "object" || envelope === null) {
     throw new Error("Initial row must have a scope envelope");
   }
@@ -674,7 +694,10 @@ test("a metadata refresh retries when a full document wins before the row lock",
     refreshed: true,
     [CITATION_SCOPE_METADATA_KEY]: winningEnvelope,
   });
-  const checked = validatedCitationScopes(after.metadata, after.documentAst);
+  const checked = validatedCitationScopes(
+    after.metadata ?? expect.unreachable(),
+    after.documentAst,
+  );
   if (Result.isError(checked)) {
     throw checked.error;
   }
@@ -720,7 +743,7 @@ test("a metadata refresh retries when a document wins before the scope read", as
   const winningAst = extracted.value.documentAst ?? expect.unreachable();
   const winningEnvelope = citationScopeEnvelope(winningAst, opinion);
   expect(winningEnvelope).not.toEqual(
-    stored.metadata[CITATION_SCOPE_METADATA_KEY],
+    (stored.metadata ?? expect.unreachable())[CITATION_SCOPE_METADATA_KEY],
   );
   let published = false;
   const racing = withScopeReadWinner(async (tx) => {

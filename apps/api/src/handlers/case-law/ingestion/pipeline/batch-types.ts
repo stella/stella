@@ -309,8 +309,7 @@ export const prepareCaseLawIngestionBatch = ({
 > => {
   const inputBatchRecords =
     inputRecords ??
-    decisions?.map((decision) => ({ type: "decision" as const, decision })) ??
-    [];
+    decisions.map((decision) => ({ type: "decision" as const, decision }));
   const { records, encodedBytes } = CASE_LAW_INGESTION_BATCH_LIMITS;
   if (inputBatchRecords.length === 0) {
     return boundsError(

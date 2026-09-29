@@ -2,8 +2,6 @@ import { panic } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { stableStringify } from "@stll/stable-stringify";
-
 import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -44,6 +42,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
+import { sortDeep } from "@/api/lib/sort-deep";
 
 type IdentifierType = DecisionWritePlan["identifierRows"][number]["type"];
 
@@ -139,14 +138,11 @@ const lockedCitationScopeState = ({
   return {
     stale:
       preservesDocument &&
-      stableStringify(
-        replacedState?.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null,
-      ) !== stableStringify(reusedCitationScopeEnvelope ?? null),
+      JSON.stringify(
+        sortDeep(replacedState.metadata?.[CITATION_SCOPE_METADATA_KEY] ?? null),
+      ) !== JSON.stringify(sortDeep(reusedCitationScopeEnvelope ?? null)),
     metadata: preservesDocument
-      ? preserveCitationScopeEnvelope(
-          preparedMetadata,
-          replacedState?.metadata ?? null,
-        )
+      ? preserveCitationScopeEnvelope(preparedMetadata, replacedState.metadata)
       : preparedMetadata,
   };
 };

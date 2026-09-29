@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -59,6 +59,9 @@ export type CitationScopeEnvelope = {
 export const citationScopeAstHash = (ast: DocumentAst): string => {
   const persistedJson = JSON.stringify(ast);
   const persistedAst: unknown = JSON.parse(persistedJson);
+  if (!isDocumentAst(persistedAst)) {
+    panic("A serialized document AST retains its validated shape");
+  }
   return new Bun.CryptoHasher("sha256")
     .update(stableStringify(persistedAst))
     .digest("hex");
@@ -90,33 +93,34 @@ export const validatedCitationScopes = (
   }
   if (
     !isRecord(value) ||
-    value.version !== CITATION_SCOPE_VERSION ||
-    typeof value.astHash !== "string" ||
-    !SHA256_HEX.test(value.astHash) ||
-    !Array.isArray(value.opinions) ||
-    !value.opinions.every(
+    value["version"] !== CITATION_SCOPE_VERSION ||
+    typeof value["astHash"] !== "string" ||
+    !SHA256_HEX.test(value["astHash"]) ||
+    !Array.isArray(value["opinions"]) ||
+    !value["opinions"].every(
       (opinion: unknown) =>
         isRecord(opinion) &&
-        typeof opinion.opinionId === "string" &&
-        typeof opinion.boundaries === "string" &&
-        Array.isArray(opinion.blockIds) &&
-        opinion.blockIds.every((id: unknown) => typeof id === "string"),
+        typeof opinion["opinionId"] === "string" &&
+        typeof opinion["boundaries"] === "string" &&
+        Array.isArray(opinion["blockIds"]) &&
+        opinion["blockIds"].every((id: unknown) => typeof id === "string"),
     )
   ) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
-  if (value.astHash !== citationScopeAstHash(ast)) {
+  if (value["astHash"] !== citationScopeAstHash(ast)) {
     return rejected(CITATION_SCOPE_DEFECTS.AST_HASH_MISMATCH, "");
   }
-  const opinions = value.opinions.filter(
+  const opinions = value["opinions"].filter(
     (opinion: unknown): opinion is CitationOpinionScope =>
       isRecord(opinion) &&
-      typeof opinion.opinionId === "string" &&
-      (opinion.boundaries === "proven" || opinion.boundaries === "unproven") &&
-      Array.isArray(opinion.blockIds) &&
-      opinion.blockIds.every((id: unknown) => typeof id === "string"),
+      typeof opinion["opinionId"] === "string" &&
+      (opinion["boundaries"] === "proven" ||
+        opinion["boundaries"] === "unproven") &&
+      Array.isArray(opinion["blockIds"]) &&
+      opinion["blockIds"].every((id: unknown) => typeof id === "string"),
   );
-  if (opinions.length !== value.opinions.length) {
+  if (opinions.length !== value["opinions"].length) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
   const indexed = indexCitationScopes(ast.blocks, opinions);
