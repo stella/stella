@@ -1,0 +1,922 @@
+{
+  "description": "Citation rows the row builder published for these inputs before references were derived apart from storage. Frozen outputs: the projection must reproduce them exactly. Regenerate only with a reviewed reason.",
+  "vectors": [
+    {
+      "name": "CZE",
+      "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+      "language": "cs",
+      "proceduralKeys": ["7c/12/2019"],
+      "rules": [
+        {
+          "id": "01920000-0000-7000-8000-000000000001",
+          "pattern": "srov\\.",
+          "polarity": "supportive",
+          "confidence": 0.9
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000002",
+          "pattern": "na\\s+rozdíl\\s+od",
+          "polarity": "negative",
+          "confidence": 0.9
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000003",
+          "pattern": "shodně",
+          "polarity": "positive",
+          "confidence": 0.8
+        }
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "text": "Soud vyšel z rozsudku Krajského soudu v Brně ze dne 1. 1. 2021, č. j. 65 A 3/2020-33, a shodně i z usnesení Nejvyššího soudu sp. zn. 21 Cdo 1234/2020."
+        },
+        {
+          "index": 1,
+          "text": "Srov. nález sp. zn. II. ÚS 100/20. Soud se dále zabýval skutkovým stavem věci, výpovědí svědků, listinnými důkazy a průběhem celého řízení před soudy nižších stupňů, přičemž dospěl k závěrům uvedeným níže a shrnutým v dalších odstavcích tohoto odůvodnění, na které lze pro stručnost odkázat. Soud se dále zabýval skutkovým stavem věci, výpovědí svědků, listinnými důkazy a průběhem celého řízení před soudy nižších stupňů, přičemž dospěl k závěrům uvedeným níže a shrnutým v dalších odstavcích tohoto odůvodnění, na které lze pro stručnost odkázat. Na rozdíl od nálezu sp. zn. II. ÚS 100/20 však nelze přehlédnout judikaturu."
+        },
+        {
+          "index": 2,
+          "text": "Podle rozsudku Nejvyššího správního soudu ze dne 6. 1. 2010, č.j. 3 Ads 110/2009-49, č. 2018/2010 Sb. NSS, platí opak."
+        },
+        {
+          "index": 3,
+          "text": "Žalovaný podal dovolání proti rozsudku odvolacího soudu, sp. zn. 5 As 999/2021, jímž bylo rozhodnuto o odvolání."
+        },
+        {
+          "index": 4,
+          "text": "Věc souvisí s řízením sp. zn. 7 C 12/2019 a s rozhodnutím ECLI:EU:C:2020:123."
+        }
+      ],
+      "citations": [
+        {
+          "citationText": "sp. zn. 21 Cdo 1234/2020",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": "usnesení",
+          "identifierType": "case-number",
+          "identifierValue": "sp. zn. 21 Cdo 1234/2020",
+          "citedCourtHint": "Nejvyššího soudu",
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "č. j. 65 A 3/2020",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": "rozsudek",
+          "identifierType": "case-number",
+          "identifierValue": "č. j. 65 A 3/2020",
+          "citedCourtHint": "Krajského soudu v Brně",
+          "citedSheetNumber": "33",
+          "citedDecisionDate": "2021-01-01"
+        },
+        {
+          "citationText": "II. ÚS 100/20",
+          "sectionIndex": 1,
+          "citedDecisionTypeHint": "nález",
+          "identifierType": "case-number",
+          "identifierValue": "II. ÚS 100/20",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "č.j. 3 Ads 110/2009",
+          "sectionIndex": 2,
+          "citedDecisionTypeHint": "rozsudek",
+          "identifierType": "reporter-citation",
+          "identifierValue": "č. 2018/2010 Sb. NSS",
+          "citedCourtHint": "Nejvyššího správního soudu",
+          "citedSheetNumber": "49",
+          "citedDecisionDate": "2010-01-06"
+        },
+        {
+          "citationText": "sp. zn. 5 As 999/2021",
+          "sectionIndex": 3,
+          "citedDecisionTypeHint": "rozsudek",
+          "identifierType": "case-number",
+          "identifierValue": "sp. zn. 5 As 999/2021",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "sp. zn. 7 C 12/2019",
+          "sectionIndex": 4,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "sp. zn. 7 C 12/2019",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "ECLI:EU:C:2020:123.",
+          "sectionIndex": 4,
+          "citedDecisionTypeHint": null,
+          "identifierType": "ecli",
+          "identifierValue": "ECLI:EU:C:2020:123.",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        }
+      ],
+      "rows": [
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+          "citationText": "sp. zn. 21 Cdo 1234/2020",
+          "citationKey": "21cdo/1234/2020",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "21cdo/1234/2020",
+          "citedDecisionTypeHint": "usnesení",
+          "citedCourtHint": "Nejvyššího soudu",
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 0,
+          "polarity": "positive",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000003"
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+          "citationText": "č. j. 65 A 3/2020",
+          "citationKey": "65a/3/2020",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "65a/3/2020",
+          "citedDecisionTypeHint": "rozsudek",
+          "citedCourtHint": "Krajského soudu v Brně",
+          "citedSheetNumber": "33",
+          "citedDecisionDate": "2021-01-01",
+          "kind": "procedural",
+          "sectionIndex": 0,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+          "citationText": "II. ÚS 100/20",
+          "citationKey": "iiús100/20",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "iiús100/20",
+          "citedDecisionTypeHint": "nález",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 1,
+          "polarity": "mixed",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000002"
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+          "citationText": "č.j. 3 Ads 110/2009",
+          "citationKey": "3ads/110/2009",
+          "identifierType": "reporter-citation",
+          "normalizedIdentifierValue": "č20182010sbnss",
+          "citedDecisionTypeHint": "rozsudek",
+          "citedCourtHint": "Nejvyššího správního soudu",
+          "citedSheetNumber": "49",
+          "citedDecisionDate": "2010-01-06",
+          "kind": "precedent",
+          "sectionIndex": 2,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+          "citationText": "sp. zn. 5 As 999/2021",
+          "citationKey": "5as/999/2021",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "5as/999/2021",
+          "citedDecisionTypeHint": "rozsudek",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 3,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+          "citationText": "sp. zn. 7 C 12/2019",
+          "citationKey": "7c/12/2019",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "7c/12/2019",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 4,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c001",
+          "citationText": "ECLI:EU:C:2020:123.",
+          "citationKey": "ecli:eu:c:2020:123.",
+          "identifierType": "ecli",
+          "normalizedIdentifierValue": "euc2020123",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 4,
+          "polarity": null,
+          "polarityRuleId": null
+        }
+      ]
+    },
+    {
+      "name": "SVK",
+      "citingDecisionId": "01920000-0000-7000-8000-00000000c002",
+      "language": "sk",
+      "proceduralKeys": ["9csp/1/2022"],
+      "rules": [
+        {
+          "id": "01920000-0000-7000-8000-000000000011",
+          "pattern": "pozri",
+          "polarity": "supportive",
+          "confidence": 0.8
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000012",
+          "pattern": "odlišne\\s+od",
+          "polarity": "negative",
+          "confidence": 0.9
+        }
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "text": "Pozri rozsudok Krajského súdu v Prešove zo dňa 12. 5. 2021, sp. zn. 7CoCsp 16/2021."
+        },
+        {
+          "index": 1,
+          "text": "Ústavný súd Slovenskej republiky zrušuje uznesenie Krajského súdu v Košiciach sp. zn. 6CoE 14/2007 zo dňa 13. 3. 2007 a vec mu vracia."
+        },
+        {
+          "index": 2,
+          "text": "Odlišne od rozsudku Okresného súdu Prešov sp.zn. 9Csp 1/2022 súd rozhodol; pozri aj C-106/89."
+        }
+      ],
+      "citations": [
+        {
+          "citationText": "sp. zn. 7CoCsp 16/2021",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": "rozsudek",
+          "identifierType": "case-number",
+          "identifierValue": "sp. zn. 7CoCsp 16/2021",
+          "citedCourtHint": "Krajského súdu v Prešove",
+          "citedSheetNumber": null,
+          "citedDecisionDate": "2021-05-12"
+        },
+        {
+          "citationText": "sp. zn. 6CoE 14/2007",
+          "sectionIndex": 1,
+          "citedDecisionTypeHint": "usnesení",
+          "identifierType": "case-number",
+          "identifierValue": "sp. zn. 6CoE 14/2007",
+          "citedCourtHint": "Krajského súdu v Košiciach",
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "sp.zn. 9Csp 1/2022",
+          "sectionIndex": 2,
+          "citedDecisionTypeHint": "rozsudek",
+          "identifierType": "case-number",
+          "identifierValue": "sp.zn. 9Csp 1/2022",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "C-106/89",
+          "sectionIndex": 2,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "C-106/89",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        }
+      ],
+      "rows": [
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c002",
+          "citationText": "sp. zn. 7CoCsp 16/2021",
+          "citationKey": "7cocsp/16/2021",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "7cocsp/16/2021",
+          "citedDecisionTypeHint": "rozsudek",
+          "citedCourtHint": "Krajského súdu v Prešove",
+          "citedSheetNumber": null,
+          "citedDecisionDate": "2021-05-12",
+          "kind": "precedent",
+          "sectionIndex": 0,
+          "polarity": "supportive",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000011"
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c002",
+          "citationText": "sp. zn. 6CoE 14/2007",
+          "citationKey": "6coe/14/2007",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "6coe/14/2007",
+          "citedDecisionTypeHint": "usnesení",
+          "citedCourtHint": "Krajského súdu v Košiciach",
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 1,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c002",
+          "citationText": "sp.zn. 9Csp 1/2022",
+          "citationKey": "9csp/1/2022",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "9csp/1/2022",
+          "citedDecisionTypeHint": "rozsudek",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 2,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c002",
+          "citationText": "C-106/89",
+          "citationKey": "c-106/89",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "c-106/89",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 2,
+          "polarity": "negative",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000012"
+        }
+      ]
+    },
+    {
+      "name": "POL",
+      "citingDecisionId": "01920000-0000-7000-8000-00000000c003",
+      "language": "pl",
+      "proceduralKeys": [],
+      "rules": [
+        {
+          "id": "01920000-0000-7000-8000-000000000021",
+          "pattern": "por\\.",
+          "polarity": "neutral",
+          "confidence": 0.7
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000022",
+          "pattern": "odmiennie\\s+niż",
+          "polarity": "negative",
+          "confidence": 0.9
+        }
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "text": "Por. wyrok II CSK 123/20 oraz II ACa 45/20."
+        },
+        {
+          "index": 1,
+          "text": "uchwały Sądu Najwyższego z 14 marca 1996 r. (I PZ 32/95, OSNP 1997/4/48)"
+        },
+        {
+          "index": 2,
+          "text": "Sąd orzekł odmiennie niż w sprawie III CZP 12/20."
+        }
+      ],
+      "citations": [
+        {
+          "citationText": "II CSK 123/20",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "II CSK 123/20",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "II ACa 45/20",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "II ACa 45/20",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "I PZ 32/95",
+          "sectionIndex": 1,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "I PZ 32/95",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "III CZP 12/20",
+          "sectionIndex": 2,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "III CZP 12/20",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        }
+      ],
+      "rows": [
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c003",
+          "citationText": "II CSK 123/20",
+          "citationKey": "iicsk 123/20",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "iicsk 123/20",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 0,
+          "polarity": "neutral",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000021"
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c003",
+          "citationText": "II ACa 45/20",
+          "citationKey": "iiaca 45/20",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "iiaca 45/20",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 0,
+          "polarity": "neutral",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000021"
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c003",
+          "citationText": "I PZ 32/95",
+          "citationKey": "ipz 32/95",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "ipz 32/95",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 1,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c003",
+          "citationText": "III CZP 12/20",
+          "citationKey": "iiiczp 12/20",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "iiiczp 12/20",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 2,
+          "polarity": "negative",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000022"
+        }
+      ]
+    },
+    {
+      "name": "AUT",
+      "citingDecisionId": "01920000-0000-7000-8000-00000000c004",
+      "language": "de",
+      "proceduralKeys": [],
+      "rules": [
+        {
+          "id": "01920000-0000-7000-8000-000000000031",
+          "pattern": "vgl\\.",
+          "polarity": "supportive",
+          "confidence": 0.8
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000032",
+          "pattern": "abweichend\\s+von",
+          "polarity": "negative",
+          "confidence": 0.9
+        }
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "text": "Vgl. EuGH C-106/89 und ECLI:EU:C:2019:456."
+        },
+        {
+          "index": 1,
+          "text": "Abweichend von C-300/19 ist die Richtlinie auszulegen."
+        },
+        {
+          "index": 2,
+          "text": "Das Verfahren C-999/18 betraf eine andere Frage."
+        }
+      ],
+      "citations": [
+        {
+          "citationText": "C-106/89",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "C-106/89",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "ECLI:EU:C:2019:456.",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": null,
+          "identifierType": "ecli",
+          "identifierValue": "ECLI:EU:C:2019:456.",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "C-300/19",
+          "sectionIndex": 1,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "C-300/19",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "C-999/18",
+          "sectionIndex": 2,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "C-999/18",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        }
+      ],
+      "rows": [
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c004",
+          "citationText": "C-106/89",
+          "citationKey": "c-106/89",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "c-106/89",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 0,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c004",
+          "citationText": "ECLI:EU:C:2019:456.",
+          "citationKey": "ecli:eu:c:2019:456.",
+          "identifierType": "ecli",
+          "normalizedIdentifierValue": "euc2019456",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 0,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c004",
+          "citationText": "C-300/19",
+          "citationKey": "c-300/19",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "c-300/19",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 1,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c004",
+          "citationText": "C-999/18",
+          "citationKey": "c-999/18",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "c-999/18",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 2,
+          "polarity": null,
+          "polarityRuleId": null
+        }
+      ]
+    },
+    {
+      "name": "EU",
+      "citingDecisionId": "01920000-0000-7000-8000-00000000c005",
+      "language": "en",
+      "proceduralKeys": [],
+      "rules": [
+        {
+          "id": "01920000-0000-7000-8000-000000000041",
+          "pattern": "\\bsee\\b",
+          "polarity": "supportive",
+          "confidence": 0.8
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000042",
+          "pattern": "contrary\\s+to",
+          "polarity": "negative",
+          "confidence": 0.9
+        }
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "text": "See judgment in Marleasing, C-106/89, and T-12/19."
+        },
+        {
+          "index": 1,
+          "text": "Contrary to C-55/18, the Court holds that the provision applies."
+        },
+        {
+          "index": 2,
+          "text": "The order in F-1/05 is not relevant."
+        }
+      ],
+      "citations": [
+        {
+          "citationText": "C-106/89",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "C-106/89",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "T-12/19",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "T-12/19",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "C-55/18",
+          "sectionIndex": 1,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "C-55/18",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "F-1/05",
+          "sectionIndex": 2,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "F-1/05",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        }
+      ],
+      "rows": [
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c005",
+          "citationText": "C-106/89",
+          "citationKey": "c-106/89",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "c-106/89",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 0,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c005",
+          "citationText": "T-12/19",
+          "citationKey": "t-12/19",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "t-12/19",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 0,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c005",
+          "citationText": "C-55/18",
+          "citationKey": "c-55/18",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "c-55/18",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 1,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c005",
+          "citationText": "F-1/05",
+          "citationKey": "f-1/05",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "f-1/05",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "procedural",
+          "sectionIndex": 2,
+          "polarity": null,
+          "polarityRuleId": null
+        }
+      ]
+    },
+    {
+      "name": "HUN",
+      "citingDecisionId": "01920000-0000-7000-8000-00000000c006",
+      "language": "hu",
+      "proceduralKeys": [],
+      "rules": [
+        {
+          "id": "01920000-0000-7000-8000-000000000051",
+          "pattern": "lásd",
+          "polarity": "neutral",
+          "confidence": 0.7
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000052",
+          "pattern": "eltérően",
+          "polarity": "negative",
+          "confidence": 0.9
+        }
+      ],
+      "sections": [
+        {
+          "index": 0,
+          "text": "A Kúria ítéletében Pfv.20626/2022/4, BH2023. 129 kifejtette."
+        },
+        {
+          "index": 1,
+          "text": "Lásd Pfv.V.20.675/2022/2."
+        },
+        {
+          "index": 2,
+          "text": "Eltérően a Mfv.10043/2022/5 határozattól a bíróság döntött."
+        }
+      ],
+      "citations": [
+        {
+          "citationText": "Pfv.20626/2022/4",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": "rozsudek",
+          "identifierType": "case-number",
+          "identifierValue": "Pfv.20626/2022/4",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "BH2023. 129",
+          "sectionIndex": 0,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "BH2023. 129",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "Pfv.V.20.675/2022/2",
+          "sectionIndex": 1,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "Pfv.V.20.675/2022/2",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        },
+        {
+          "citationText": "Mfv.10043/2022/5",
+          "sectionIndex": 2,
+          "citedDecisionTypeHint": null,
+          "identifierType": "case-number",
+          "identifierValue": "Mfv.10043/2022/5",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null
+        }
+      ],
+      "rows": [
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c006",
+          "citationText": "Pfv.20626/2022/4",
+          "citationKey": "pfv.20626/2022/4",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "pfv.20626/2022/4",
+          "citedDecisionTypeHint": "rozsudek",
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 0,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c006",
+          "citationText": "BH2023. 129",
+          "citationKey": "bh.2023.129",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "bh.2023.129",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 0,
+          "polarity": null,
+          "polarityRuleId": null
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c006",
+          "citationText": "Pfv.V.20.675/2022/2",
+          "citationKey": "pfv.20675/2022/2",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "pfv.20675/2022/2",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 1,
+          "polarity": "neutral",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000051"
+        },
+        {
+          "citingDecisionId": "01920000-0000-7000-8000-00000000c006",
+          "citationText": "Mfv.10043/2022/5",
+          "citationKey": "mfv.10043/2022/5",
+          "identifierType": "case-number",
+          "normalizedIdentifierValue": "mfv.10043/2022/5",
+          "citedDecisionTypeHint": null,
+          "citedCourtHint": null,
+          "citedSheetNumber": null,
+          "citedDecisionDate": null,
+          "kind": "precedent",
+          "sectionIndex": 2,
+          "polarity": "negative",
+          "polarityRuleId": "01920000-0000-7000-8000-000000000052"
+        }
+      ]
+    }
+  ]
+}

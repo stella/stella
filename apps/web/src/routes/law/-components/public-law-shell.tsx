@@ -23,6 +23,7 @@ import { TopBarCountry } from "@/features/case-law/components/top-bar-country";
 import { isCourtTier } from "@/features/case-law/decision-filter-facets.logic";
 import { DECISION_TITLE_SEPARATOR } from "@/features/case-law/decision-title";
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
+import { readExpressionEligibility } from "@/features/statutes/statute-expression";
 import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
@@ -124,6 +125,14 @@ function PublicLawTopBar() {
   const documentValidFrom = useRouterState({
     select: (state) =>
       readStringField(state.matches.at(-1)?.loaderData, "versionValidFrom"),
+  });
+  const documentExpressionKind = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "expressionKind"),
+  });
+  const documentWindowDisposition = useRouterState({
+    select: (state) =>
+      readStringField(state.matches.at(-1)?.loaderData, "windowDisposition"),
   });
   const statuteDisplayStatus =
     documentStatus === null
@@ -237,6 +246,10 @@ function PublicLawTopBar() {
                     }
                   >
                     <StatuteStatusDot
+                      expression={readExpressionEligibility(
+                        documentExpressionKind,
+                        documentWindowDisposition,
+                      )}
                       status={documentStatus}
                       validFrom={documentValidFrom}
                     />

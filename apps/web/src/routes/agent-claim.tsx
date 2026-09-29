@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -19,9 +20,9 @@ import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";
 
 import { browserApiRootUrl } from "@/lib/api-url";
-import { authClient } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
+import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -60,7 +61,7 @@ function AgentClaimPage() {
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });
-  const { data: organizations } = authClient.useListOrganizations();
+  const { data: organizations } = useQuery(organizationListOptions);
 
   const [userCode, setUserCode] = useState(initialUserCode);
   const [status, setStatus] = useState<ClaimStatus>("idle");

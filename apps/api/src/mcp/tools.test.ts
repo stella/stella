@@ -519,15 +519,29 @@ const createStatuteReadResult = ({
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   versionValidFrom: "2014-01-01",
   versionValidTo: null,
+  ...EFFECTIVE_LABEL,
 });
+
+/** What every stored version in these fixtures is: an effective consolidation. */
+const EFFECTIVE_LABEL = {
+  expressionKind: "consolidation",
+  windowDisposition: "effective",
+  windowDispositionBasis: null,
+} as const;
 
 const createStatuteVersionsPage = () => ({
   items: [
-    { id: STATUTE_ID, versionValidFrom: "2014-01-01", versionValidTo: null },
+    {
+      id: STATUTE_ID,
+      versionValidFrom: "2014-01-01",
+      versionValidTo: null,
+      ...EFFECTIVE_LABEL,
+    },
     {
       id: STATUTE_PRIOR_ID,
       versionValidFrom: "2012-03-22",
       versionValidTo: "2013-12-31",
+      ...EFFECTIVE_LABEL,
     },
   ],
   nextCursor: null,
@@ -542,6 +556,7 @@ const createProvisionVersionRow = ({
   id: STATUTE_ID,
   versionValidFrom: "2014-01-01",
   versionValidTo: null,
+  ...EFFECTIVE_LABEL,
 });
 
 const createSelectBuilder = (rows: unknown[]) => {
@@ -3308,18 +3323,21 @@ describe("OpenAI-compatible MCP tools", () => {
         truncated: true,
         versionValidFrom: "2014-01-01",
         versionValidTo: null,
+        ...EFFECTIVE_LABEL,
         versions: [
           {
             documentId: STATUTE_ID,
             resourceName: `stella://resource/legislation_document/id=${STATUTE_ID}`,
             versionValidFrom: "2014-01-01",
             versionValidTo: null,
+            ...EFFECTIVE_LABEL,
           },
           {
             documentId: STATUTE_PRIOR_ID,
             resourceName: `stella://resource/legislation_document/id=${STATUTE_PRIOR_ID}`,
             versionValidFrom: "2012-03-22",
             versionValidTo: "2013-12-31",
+            ...EFFECTIVE_LABEL,
           },
         ],
       },
@@ -3349,6 +3367,32 @@ describe("OpenAI-compatible MCP tools", () => {
       code: "not_found",
       message: "No version of this legislation was in force on 1990-01-01",
       hint: "Omit as_of for the current text, or call read_provision_history to see the version windows.",
+    });
+    expect(readPublicLegislationHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("read_statute names the versions whose inconsistent publisher dates leave a date unanswered", async () => {
+    resolveStatuteExpressionMock.mockResolvedValue({
+      type: "publisher-data-inconsistent",
+      versions: [
+        {
+          basis: "reversed",
+          id: STATUTE_PRIOR_ID,
+          language: "cs",
+          versionValidFrom: "2017-01-01",
+          versionValidTo: "2016-12-31",
+        },
+      ],
+    });
+    const gap = await handleMcpToolCall({
+      args: { as_of: "2018-06-01", eli: STATUTE_ELI },
+      context: createContext(),
+      toolName: "read_statute",
+    });
+    expectErrorEnvelope(gap, {
+      code: "not_found",
+      message: "No in-force reading for this date: publisher data inconsistent",
+      hint: `Versions with inconsistent publisher dates: stella://resource/legislation_document/id=${STATUTE_PRIOR_ID} (cs, stated window 2017-01-01 to 2016-12-31, reversed). Omit as_of for the current text, or call read_provision_history to see the version windows.`,
     });
     expect(readPublicLegislationHandlerMock).not.toHaveBeenCalled();
   });
@@ -3554,6 +3598,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as amended",
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
+          ...EFFECTIVE_LABEL,
         },
         {
           allowsDerivedAi: true,
@@ -3561,6 +3606,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as enacted",
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
         },
       ],
       nextCursor: "history_cursor_2",
@@ -3598,6 +3644,7 @@ describe("OpenAI-compatible MCP tools", () => {
           truncated: false,
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
+          ...EFFECTIVE_LABEL,
         },
         {
           documentId: STATUTE_PRIOR_ID,
@@ -3607,6 +3654,7 @@ describe("OpenAI-compatible MCP tools", () => {
           truncated: false,
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
         },
       ],
       nextCursor: "history_cursor_2",
@@ -3626,6 +3674,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as amended",
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
+          ...EFFECTIVE_LABEL,
         },
         {
           // The Work was re-licensed between consolidations, so the gate is
@@ -3635,6 +3684,7 @@ describe("OpenAI-compatible MCP tools", () => {
           text: "\u00a7 1729 as enacted",
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
         },
       ],
       nextCursor: null,
@@ -3660,6 +3710,7 @@ describe("OpenAI-compatible MCP tools", () => {
           truncated: false,
           versionValidFrom: "2014-01-01",
           versionValidTo: null,
+          ...EFFECTIVE_LABEL,
         },
         {
           documentId: STATUTE_PRIOR_ID,
@@ -3669,6 +3720,7 @@ describe("OpenAI-compatible MCP tools", () => {
           status: "text_withheld",
           versionValidFrom: "2012-03-22",
           versionValidTo: "2013-12-31",
+          ...EFFECTIVE_LABEL,
         },
       ],
       nextCursor: null,

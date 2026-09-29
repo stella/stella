@@ -72,6 +72,7 @@ const markerFor = (parsed: ParsedList) => async () =>
     source: "cz" as const,
     version: parsed.version,
     downloadUrl: SOURCE_URL,
+    lastModified: null,
   });
 
 const markerKey = (
@@ -89,7 +90,11 @@ test(
     let downloads = 0;
     const fetchEdition = async () => {
       downloads += 1;
-      return Result.ok({ parsed, contentHash: CONTENT_HASH });
+      return Result.ok({
+        parsed,
+        contentHash: CONTENT_HASH,
+        lastModified: null,
+      });
     };
     const options = {
       db: scopedDb,
@@ -141,7 +146,7 @@ test(
       signal: new AbortController().signal,
       fetchMarker: markerFor(parsed),
       fetchEdition: async () =>
-        Result.ok({ parsed, contentHash: "b".repeat(64) }),
+        Result.ok({ parsed, contentHash: "b".repeat(64), lastModified: null }),
     };
     const outcome = await refreshSanctionsSource(options);
     expect(outcome).toEqual({
@@ -255,11 +260,16 @@ test(
           source: "cz" as const,
           version,
           downloadUrl: SOURCE_URL,
+          lastModified: null,
         });
       },
       fetchEdition: async () => {
         downloads += 1;
-        return Result.ok({ parsed: currentList, contentHash: "c".repeat(64) });
+        return Result.ok({
+          parsed: currentList,
+          contentHash: "c".repeat(64),
+          lastModified: null,
+        });
       },
     });
     expect(outcome).toEqual({
@@ -297,7 +307,8 @@ test(
       source: "cz",
       signal: new AbortController().signal,
       fetchMarker: markerFor(parsed),
-      fetchEdition: async () => Result.ok({ parsed, contentHash }),
+      fetchEdition: async () =>
+        Result.ok({ parsed, contentHash, lastModified: null }),
     });
     expect(outcome).toEqual({
       status: "activated",
@@ -358,7 +369,8 @@ test(
       source: "cz" as const,
       signal: new AbortController().signal,
       fetchMarker: markerFor(parsed),
-      fetchEdition: async () => Result.ok({ parsed, contentHash }),
+      fetchEdition: async () =>
+        Result.ok({ parsed, contentHash, lastModified: null }),
     };
     expect(await refreshSanctionsSource(options)).toEqual({
       status: "failed",
@@ -406,7 +418,7 @@ test(
       signal: new AbortController().signal,
       fetchMarker: markerFor(parsed),
       fetchEdition: async () =>
-        Result.ok({ parsed, contentHash: CONTENT_HASH }),
+        Result.ok({ parsed, contentHash: CONTENT_HASH, lastModified: null }),
     });
     expect(outcome).toEqual({
       status: "held",
@@ -445,13 +457,205 @@ test(
       signal: new AbortController().signal,
       fetchMarker: markerFor(parsed),
       fetchEdition: async () =>
-        Result.ok({ parsed, contentHash: "f".repeat(64) }),
+        Result.ok({ parsed, contentHash: "f".repeat(64), lastModified: null }),
     });
     expect(outcome).toEqual({
       status: "activated",
       source: "cz",
       entryCount: 2,
     });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+type DatedSource = "us-sdn" | "uk";
+
+const datedList = (source: DatedSource, publishedAt: string): ParsedList => ({
+  version: { source, publishedAt, fileId: null },
+  entries: [
+    {
+      source,
+      issuer: source === "uk" ? "GB" : "US",
+      sourceId: "1",
+      referenceNumber: null,
+      entityType: "person",
+      names: [{ name: "Person 1", quality: "strong" }],
+      birthDates: [],
+      nationalities: [],
+      identifiers: [],
+      addresses: [],
+      programme: null,
+      legalBasis: null,
+      listedOn: null,
+      sourceUrl: SOURCE_URL,
+    },
+  ],
+});
+
+/** Seeds an active edition keyed as it was before validators joined the key. */
+const seedActiveEdition = async (parsed: ParsedList): Promise<void> => {
+  const source = parsed.version.source;
+  await db
+    .insert(sanctionsSources)
+    .values({ id: source, issuer: "Test", markerUrl: SOURCE_URL });
+  const [edition] = await db
+    .insert(sanctionsEditions)
+    .values({
+      sourceId: source,
+      markerKey: markerKey(parsed),
+      publishedAt: parsed.version.publishedAt,
+      fileId: parsed.version.fileId,
+      contentHash: "0".repeat(64),
+      entryCount: parsed.entries.length,
+      state: "ready",
+      activatedAt: new Date(),
+    })
+    .returning({ id: sanctionsEditions.id });
+  if (!edition) {
+    panic("Missing seeded sanctions edition");
+  }
+  await db
+    .update(sanctionsSources)
+    .set({ activeEditionId: edition.id })
+    .where(eq(sanctionsSources.id, source));
+};
+
+/**
+ * Serves one dated list. Each marker read and each download answers with the
+ * next Last-Modified of its sequence, repeating the last one.
+ */
+const datedRefresh = (
+  source: DatedSource,
+  parsed: ParsedList,
+  stamps: {
+    markers: readonly (string | null)[];
+    downloads: readonly (string | null)[];
+  },
+) => {
+  let markerReads = 0;
+  let downloads = 0;
+  const stampAt = (sequence: readonly (string | null)[], index: number) =>
+    sequence[Math.min(index, sequence.length - 1)] ?? null;
+  const run = async () =>
+    await refreshSanctionsSource({
+      db: scopedDb,
+      source,
+      signal: new AbortController().signal,
+      fetchMarker: async () => {
+        const lastModified = stampAt(stamps.markers, markerReads);
+        markerReads += 1;
+        return Result.ok({
+          source,
+          version: parsed.version,
+          downloadUrl: SOURCE_URL,
+          lastModified,
+        });
+      },
+      fetchEdition: async () => {
+        const lastModified = stampAt(stamps.downloads, downloads);
+        downloads += 1;
+        return Result.ok({
+          parsed,
+          contentHash: createHash("sha256")
+            .update(lastModified ?? "none")
+            .digest("hex"),
+          lastModified,
+        });
+      },
+    });
+  return { run, counts: () => ({ markerReads, downloads }) };
+};
+
+const sameStamp = (stamp: string | null) => ({
+  markers: [stamp],
+  downloads: [stamp],
+});
+
+test(
+  "a same-day OFAC republication with a new Last-Modified is a new edition",
+  async () => {
+    const parsed = datedList("us-sdn", "2026-09-23");
+    await seedActiveEdition(parsed);
+
+    const first = datedRefresh(
+      "us-sdn",
+      parsed,
+      sameStamp("2026-09-23T08:00:00Z"),
+    );
+    expect(await first.run()).toEqual({
+      status: "activated",
+      source: "us-sdn",
+      entryCount: 1,
+    });
+    expect(first.counts().downloads).toBe(1);
+
+    const same = datedRefresh(
+      "us-sdn",
+      parsed,
+      sameStamp("2026-09-23T08:00:00Z"),
+    );
+    expect(await same.run()).toEqual({ status: "unchanged", source: "us-sdn" });
+    expect(same.counts().downloads).toBe(0);
+
+    const republished = datedRefresh(
+      "us-sdn",
+      parsed,
+      sameStamp("2026-09-23T17:30:00Z"),
+    );
+    expect(await republished.run()).toEqual({
+      status: "activated",
+      source: "us-sdn",
+      entryCount: 1,
+    });
+    expect(republished.counts().downloads).toBe(1);
+
+    const editions = await db
+      .select()
+      .from(sanctionsEditions)
+      .where(eq(sanctionsEditions.sourceId, "us-sdn"));
+    expect(editions).toHaveLength(3);
+    expect(
+      editions.every((edition) => edition.publishedAt === "2026-09-23"),
+    ).toBe(true);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "without Last-Modified a same-day edition is keyed by its stated date alone",
+  async () => {
+    const parsed = datedList("uk", "2026-09-21");
+    await seedActiveEdition(parsed);
+
+    const refresh = datedRefresh("uk", parsed, sameStamp(null));
+    expect(await refresh.run()).toEqual({ status: "unchanged", source: "uk" });
+    expect(refresh.counts().downloads).toBe(0);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "re-reads the marker when the download carries a newer Last-Modified",
+  async () => {
+    const parsed = datedList("uk", "2026-09-22");
+    const raced = datedRefresh("uk", parsed, {
+      markers: ["2026-09-22T08:00:00Z", "2026-09-22T09:00:00Z"],
+      downloads: ["2026-09-22T09:00:00Z"],
+    });
+    expect(await raced.run()).toEqual({
+      status: "activated",
+      source: "uk",
+      entryCount: 1,
+    });
+    expect(raced.counts()).toEqual({ markerReads: 2, downloads: 2 });
+
+    const settled = datedRefresh(
+      "uk",
+      parsed,
+      sameStamp("2026-09-22T09:00:00Z"),
+    );
+    expect(await settled.run()).toEqual({ status: "unchanged", source: "uk" });
+    expect(settled.counts().downloads).toBe(0);
   },
   DB_TEST_TIMEOUT_MS,
 );

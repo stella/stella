@@ -4406,7 +4406,13 @@
     "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versão não tem texto disponível.",
     "emptyState": "Nenhuma norma encontrada.",
+    "expression": {
+      "invalidWindow": "Datas do editor inconsistentes",
+      "promulgated": "Texto promulgado",
+      "withdrawn": "O editor não o publica mais"
+    },
     "inForceSince": "Em vigor desde {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Decisões de referência",
     "noVersionInForce": "Nenhuma versão desta norma estava em vigor na data escolhida.",
     "openEnded": "hoje",
@@ -4426,18 +4432,22 @@
     "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), na redação em vigor desde {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "publisherWindowInconsistent": "Não é possível determinar a versão em vigor nesta data: os dados do editor são inconsistentes.",
     "resolvedAlias": "Reconhecido como {label}",
     "searchAskPrompt": "{query} (legislação: {country})",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Número, nome ou título, ex.: 89/2012 Sb.",
     "showInText": "Mostrar no texto",
+    "statedWindow": "Datas informadas pelo editor: {range}",
     "status": {
       "current": "Em vigor",
       "draft": "Em projeto",
       "ended": "Não está mais em vigor",
       "future": "Futura",
       "historical": "Substituída",
-      "repealed": "Revogada"
+      "neverInForce": "Nunca entrou em vigor",
+      "repealed": "Revogada",
+      "unknown": "Situação incerta"
     },
     "title": "Legislação",
     "validity": "Vigente de {from} a {to}"

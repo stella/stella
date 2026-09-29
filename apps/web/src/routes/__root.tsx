@@ -30,6 +30,7 @@ import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
+import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { AppFrameHost } from "@/routes/-app-frame-host";
 import "@/styles/app.css";
 
@@ -44,6 +45,9 @@ export const Route = createRootRouteWithContext<{
   routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
   ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
+  beforeLoad: async ({ context, location }) => {
+    await requireFreshDocument({ queryClient: context.queryClient, location });
+  },
   shellComponent: RootDocument,
   component: RootComponent,
   // Document head management via route `head` option.

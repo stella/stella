@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.37.1
+
+### Patch Changes
+
+- [#3897](https://github.com/stella/stella/pull/3897) [`0072c40`](https://github.com/stella/stella/commit/0072c406d9d6b5af94cc49704e02797870770c2a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The sidebar exports `useSidebarLayout()` (`"rail"` or `"full"`) and `sidebarIdentityTriggerClassName(layout)`, one geometry for an avatar trigger in the footer: centred in the collapsed desktop rail, full size in the expanded sidebar and the mobile sheet.
+
 ## 0.37.0
 
 ### Minor Changes

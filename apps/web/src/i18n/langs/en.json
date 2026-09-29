@@ -4406,7 +4406,13 @@
     "diffRemoved": "Deleted:",
     "emptyDocument": "This version has no text available.",
     "emptyState": "No statutes found.",
+    "expression": {
+      "invalidWindow": "Publisher dates inconsistent",
+      "promulgated": "Text as promulgated",
+      "withdrawn": "No longer listed by the publisher"
+    },
     "inForceSince": "In force since {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Leading decisions",
     "noVersionInForce": "No version of this act was in force on the selected date.",
     "openEnded": "present",
@@ -4426,18 +4432,22 @@
     "provisionHistoryUnavailable": "This provision's history could not be loaded.",
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}",
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})",
+    "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.",
     "resolvedAlias": "Recognized as {label}",
     "searchAskPrompt": "{query} (legislation of {country})",
     "searchLabel": "Search statutes",
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.",
     "showInText": "Show in the text",
+    "statedWindow": "Dates stated by the publisher: {range}",
     "status": {
       "current": "In force",
       "draft": "Proposed",
       "ended": "No longer in force",
       "future": "Future",
       "historical": "Superseded",
-      "repealed": "Repealed"
+      "neverInForce": "Never in force",
+      "repealed": "Repealed",
+      "unknown": "Status unclear"
     },
     "title": "Statutes",
     "validity": "Valid from {from} to {to}"

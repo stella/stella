@@ -44,6 +44,10 @@ export const brandPersistedSellerProfileId = (
   sellerProfileId: string,
 ): SafeId<"sellerProfile"> => toSafeId<"sellerProfile">(sellerProfileId);
 
+export const brandPersistedNumberSeriesId = (
+  numberSeriesId: string,
+): SafeId<"numberSeries"> => toSafeId<"numberSeries">(numberSeriesId);
+
 export const brandPersistedAiMemoryId = (
   aiMemoryId: string,
 ): SafeId<"aiMemory"> => toSafeId<"aiMemory">(aiMemoryId);

@@ -4406,7 +4406,13 @@
     "diffRemoved": "Supprimé :",
     "emptyDocument": "Aucun texte disponible pour cette version.",
     "emptyState": "Aucun texte trouvé.",
+    "expression": {
+      "invalidWindow": "Dates de l'éditeur incohérentes",
+      "promulgated": "Texte tel que promulgué",
+      "withdrawn": "N'est plus publié par l'éditeur"
+    },
     "inForceSince": "En vigueur depuis le {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Décisions de principe",
     "noVersionInForce": "Aucune version de ce texte n'était en vigueur à la date choisie.",
     "openEnded": "aujourd’hui",
@@ -4426,18 +4432,22 @@
     "provisionHistoryUnavailable": "Impossible de charger l'historique de cette disposition.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), dans sa rédaction en vigueur depuis le {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "publisherWindowInconsistent": "Aucune version en vigueur ne peut être établie à cette date : les données de l'éditeur sont incohérentes.",
     "resolvedAlias": "Reconnu comme {label}",
     "searchAskPrompt": "{query} (législation : {country})",
     "searchLabel": "Rechercher dans la législation",
     "searchPlaceholder": "Numéro, nom ou intitulé, p. ex. 89/2012 Sb.",
     "showInText": "Afficher dans le texte",
+    "statedWindow": "Dates indiquées par l'éditeur : {range}",
     "status": {
       "current": "En vigueur",
       "draft": "En projet",
       "ended": "N'est plus en vigueur",
       "future": "À venir",
       "historical": "Remplacé",
-      "repealed": "Abrogé"
+      "neverInForce": "Jamais entré en vigueur",
+      "repealed": "Abrogé",
+      "unknown": "Statut incertain"
     },
     "title": "Législation",
     "validity": "En vigueur du {from} au {to}"

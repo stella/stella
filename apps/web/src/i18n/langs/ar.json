@@ -4406,7 +4406,13 @@
     "diffRemoved": "محذوف:",
     "emptyDocument": "لا يتوفر نص لهذه النسخة.",
     "emptyState": "لم يُعثر على تشريعات.",
+    "expression": {
+      "invalidWindow": "تواريخ الناشر متعارضة",
+      "promulgated": "النص كما صدر",
+      "withdrawn": "لم يعد الناشر يدرجه"
+    },
     "inForceSince": "نافذ منذ {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "القرارات الرائدة",
     "noVersionInForce": "لم تكن أي نسخة من هذا النص نافذة في التاريخ المحدد.",
     "openEnded": "الآن",
@@ -4426,18 +4432,22 @@
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
     "showInText": "عرض في النص",
+    "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
       "current": "نافذ",
       "draft": "مقترح",
       "ended": "لم يعد ساريًا",
       "future": "مستقبلي",
       "historical": "مُستبدَل",
-      "repealed": "مُلغى"
+      "neverInForce": "لم يدخل حيز النفاذ قط",
+      "repealed": "مُلغى",
+      "unknown": "الحالة غير واضحة"
     },
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}"
