@@ -249,7 +249,7 @@ export const corpusIndexScoredSearchRequest = ({
 
 const scoreOfScoredHit = (hit: Record<string, unknown>): number | null => {
   const sort = hit["sort"];
-  const fromSort = Array.isArray(sort) ? sort.at(0) : undefined;
+  const fromSort: unknown = Array.isArray(sort) ? sort.at(0) : undefined;
   const score = typeof fromSort === "number" ? fromSort : hit["_score"];
   return typeof score === "number" && Number.isFinite(score) ? score : null;
 };

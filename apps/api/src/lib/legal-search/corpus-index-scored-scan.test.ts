@@ -238,7 +238,7 @@ beforeEach(() => {
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ): Promise<Response> => {
-    const url = new URL(String(input));
+    const url = new URL(input instanceof Request ? input.url : input);
     const body: Record<string, unknown> =
       typeof init?.body === "string" ? JSON.parse(init.body) : {};
     engineRequests.push({ url, body });
@@ -413,7 +413,8 @@ describe("the candidate scan pages exactly as the recorded ranking does", () => 
   ] as const)("through the %s transport", async (name, transport) => {
     const { pages, endpoints } = await readFixtureSequence(transport);
 
-    expect<unknown>(structuredClone(pages)).toEqual(await readGolden());
+    const recorded: unknown = structuredClone(pages);
+    expect(recorded).toEqual(await readGolden());
     // Guard against a run that never reached the transport under test.
     expect([...endpoints]).toEqual([name]);
   });
@@ -516,12 +517,19 @@ describe("the scored transport", () => {
   test("a hit without its stored fields fails the read rather than shortening the page", async () => {
     sourcelessRank = 3;
 
-    const read = readFixturePage(fixture(), null, SCORED);
+    const refused: unknown = await readFixturePage(
+      fixture(),
+      null,
+      SCORED,
+    ).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
 
     // The same answer as any other malformed engine response: retryable, and
     // never a page that skipped the hit while still counting it as read.
-    await expect(read).rejects.toBeInstanceOf(HandlerError);
-    await expect(read).rejects.toMatchObject({ status: 503 });
+    expect(refused).toBeInstanceOf(HandlerError);
+    expect(refused).toMatchObject({ status: 503 });
   });
 
   test("a date order cannot be read through it", async () => {
