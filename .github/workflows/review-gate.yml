@@ -134,9 +134,13 @@ jobs:
           RELAY_PULL_REQUESTS: ${{ join(github.event.workflow_run.pull_requests.*.number, ',') }}
         run: |
           set -euo pipefail
+          # Every trigger has its own arm and anything else fails the run, so
+          # an event that gains a trigger without a way to read its payload
+          # is loud here instead of evaluating nothing.
           case "$EVENT_NAME" in
             status) bun scripts/review-gate-github.ts sha "$STATUS_SHA" --signal "$STATUS_CONTEXT" ;;
             workflow_run) bun scripts/review-gate-github.ts relay ;;
             schedule) bun scripts/review-gate-github.ts sweep ;;
-            *) bun scripts/review-gate-github.ts pr "$PR_NUMBER" --head "$PR_HEAD" ;;
+            pull_request_target|issue_comment|workflow_dispatch) bun scripts/review-gate-github.ts pr "$PR_NUMBER" --head "$PR_HEAD" ;;
+            *) echo "::error::review gate has no dispatch for $EVENT_NAME"; exit 1 ;;
           esac

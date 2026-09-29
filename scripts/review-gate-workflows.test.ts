@@ -106,6 +106,45 @@ describe("the publisher", () => {
     },
   );
 
+  // The dispatch step's `case` arms, label list to command. A trigger is only
+  // heard if its own arm reads its payload, so arms and triggers are held
+  // together here rather than trusted to be edited in step.
+  const dispatchArms = new Map(
+    Object.values(publisher.jobs)
+      .flatMap((job) => job.steps)
+      .flatMap((step) =>
+        step.run?.includes('case "$EVENT_NAME"') === true ? [step.run] : [],
+      )
+      .flatMap((script) =>
+        [...script.matchAll(/^\s*([a-z_|*]+)\) (.+?) ;;$/gmu)].map(
+          (match): [string, string] => [match[1] ?? "", match[2] ?? ""],
+        ),
+      ),
+  );
+  const armFor = (event: string): string | undefined =>
+    [...dispatchArms].find(([labels]) =>
+      labels.split("|").includes(event),
+    )?.[1];
+
+  test("dispatches every trigger by name and fails any other event", () => {
+    expect(
+      [...dispatchArms.keys()]
+        .filter((labels) => labels !== "*")
+        .flatMap((labels) => labels.split("|"))
+        .toSorted(),
+    ).toEqual(Object.keys(publisher.on).toSorted());
+    expect(armFor("*")).toContain("exit 1");
+  });
+
+  test.each(Object.entries(SIGNAL_TRIGGERS).filter(([, needed]) => needed))(
+    "reads each %s event as a reviewer signal on its commit",
+    (trigger) => {
+      expect(armFor(trigger)).toMatch(
+        /^bun scripts\/review-gate-github\.ts sha "\$\w+" --signal "\$\w+"$/u,
+      );
+    },
+  );
+
   test("publishes only from the default branch ref", () => {
     for (const job of Object.values(publisher.jobs)) {
       expect(job.if).toContain(
