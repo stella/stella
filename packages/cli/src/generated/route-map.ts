@@ -49466,6 +49466,62 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "me-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "time-entries", "me-list"],
+                capabilityId: "time-entries.me.list",
+                description:
+                  "List the signed-in user's time entries for one work date across matters in the active organization. Returns only matters the caller can still access, with a cursor for the next page.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description: "Work date in YYYY-MM-DD format",
+                    flag: "--date",
+                    prop: "date",
+                    required: true,
+                    part: "query",
+                    partPath: "date",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      required: ["date"],
+                      properties: {
+                        date: {
+                          format: "date",
+                          description: "Work date in YYYY-MM-DD format",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 200,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             split: {
               kind: "capability-leaf",
               spec: {
