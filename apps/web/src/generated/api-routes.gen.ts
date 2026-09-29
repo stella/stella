@@ -8978,7 +8978,7 @@ export type WebRoutes = {
                 firstVersionValidFrom: Tbe0400fa4c;
                 amendmentCount: number;
                 lastAmendedOn: Tbe0400fa4c;
-                validity: ("unknown" | "never-in-force" | "ended" | "in-force");
+                validity: ("ended" | "in-force" | "never-in-force" | "unknown");
               }>;
               nextCursor: Tbe0400fa4c;
               limit: number;
@@ -9244,14 +9244,10 @@ export type WebRoutes = {
                     language: string;
                     versionValidFrom: Tbe0400fa4c;
                     versionValidTo: Tbe0400fa4c;
-<<<<<<< HEAD
                     expressionKind: Tbf853c76ba;
                     windowDisposition: T152fa670a3;
-                  });
-                  unresolvedReason: (null | "publisher-data-inconsistent");
-=======
                   } | null;
->>>>>>> origin/main
+                  unresolvedReason: ("publisher-data-inconsistent" | null);
                 }>;
               });
               400: T9a51b7d2bc;
@@ -10172,11 +10168,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-<<<<<<< HEAD
-              200: T5f2f7cb1d6;
-=======
-              200: T2203ecc422;
->>>>>>> origin/main
+              200: Ta8d46408fa;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -24207,15 +24199,9 @@ export type WebRoutes = {
                         position: number;
                         name: string;
                         description: Tbe0400fa4c;
-<<<<<<< HEAD
-                        itemType: ("issue" | "task" | "fact" | "requirement" | "event");
-                        itemStatus: (null | "done" | "open" | "in_progress" | "in_review" | "cancelled");
-                        priority: (null | "none" | "medium" | "urgent" | "high" | "low");
-=======
                         itemType: ("event" | "fact" | "issue" | "requirement" | "task");
                         itemStatus: ("cancelled" | "done" | "in_progress" | "in_review" | "open" | null);
                         priority: ("high" | "low" | "medium" | "none" | "urgent" | null);
->>>>>>> origin/main
                         dueDate: Tbe0400fa4c;
                         suggestedAssigneeUserIds: Array<T56ed95d57c>;
                         status: ("accepted" | "accepting" | "pending" | "rejected");
@@ -33527,11 +33513,6 @@ type T13c40e7e09 = {
   domain: string;
 };
 
-<<<<<<< HEAD
-type T152fa670a3 = "effective" | "never-in-force" | "invalid-window" | "withdrawn";
-
-type T15dbebb935 = "nda" | "dpa" | "msa" | "saas";
-=======
 type T14ae4bed9b = {
   type: "tool-call";
   id: string;
@@ -33547,8 +33528,9 @@ type T14cb63054f = {
   field: ("billingReference" | "name" | "reference" | "status");
 };
 
+type T152fa670a3 = "effective" | "invalid-window" | "never-in-force" | "withdrawn";
+
 type T15dbebb935 = "dpa" | "msa" | "nda" | "saas";
->>>>>>> origin/main
 
 type T15e45ddbb1 = {
   generatedAt: string;
@@ -33803,74 +33785,6 @@ type T21ddbd121a = {
 type T21e7b1b9fc = {
   countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
   isPrimary: Tfddd645dc8;
-};
-
-type T2203ecc422 = {
-  documentAst: {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: "decision-title" | "section-heading" | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
-      note?: T8bbaf16642 | undefined;
-      listDepth?: 1 | 2 | 3 | 4 | undefined;
-      number?: number | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: "metadata-table" | "related-proceedings" | undefined;
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: number | undefined;
-        rowSpan?: number | undefined;
-        header?: true | undefined;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: string | undefined;
-      width?: number | undefined;
-      height?: number | undefined;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4 | null;
-  fulltext: Tbe0400fa4c;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  id: Tfc8a750351;
 };
 
 type T22259c97a4 = string & valibot_Brand<"SafeId"> & {
@@ -34266,1484 +34180,7 @@ type T2e64e7c399 = {
   readonly issues?: undefined;
 };
 
-<<<<<<< HEAD
-type T2e9e8fc862 = {
-  lawId: string;
-  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
-};
-
-type T2eac278e7d = {
-  role?: null | "document-type-classifier";
-  dependencies?: Array<{
-    condition: T60e51917c9;
-    dependsOnSourceId: string;
-  }>;
-  name: string;
-  tool: {
-    type: "ai-model";
-    prompt: string;
-    version: 1;
-  } | {
-    type: "manual-input";
-    version: 1;
-  };
-  version: 1;
-  content: {
-    type: "file";
-    version: 1;
-  } | {
-    type: "text";
-    version: 1;
-  } | {
-    type: Tf795dc12d5;
-    options: Array<{
-      value: string;
-      color: string;
-    }>;
-    version: 1;
-    fallback: Tbe0400fa4c;
-  } | {
-    type: "date";
-    version: 1;
-  } | {
-    type: "int";
-    version: 1;
-  } | {
-    type: "money";
-    version: 1;
-    currency: Tbe0400fa4c;
-  } | {
-    type: "person";
-    version: 1;
-  };
-  sourceId: string;
-  createIfMissing: Tfddd645dc8;
-};
-
-type T2eda26bd51 = {
-  id: T501a665986;
-  decisionId: T406326c84f;
-  workspaceId: T9e07a7d6cd;
-  note: Tbe0400fa4c;
-  linkedBy: string;
-  createdAt: string;
-};
-
-type T2f120574a2 = {
-  status: "ready";
-};
-
-type T2f575449b0 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawJudge";
-};
-
-type T2fb0b2d20e = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
-
-type T2fe5059b53 = {
-  status: "connected";
-};
-
-type T300701e436 = {
-  workspaceId: T8d02a37b3f;
-};
-
-type T3012ed5aad = {
-  readonly value: Tccd7994462;
-  readonly issues?: undefined;
-};
-
-type T30793b9dc0 = {
-  readonly "~standard": {
-    readonly jsonSchema: Tc49e8b2305;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Td72ffb3ca2;
-  };
-} & {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T39bd2e99da | Promise<(T22d9b74f40 | T39bd2e99da)>);
-    };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Td72ffb3ca2;
-  };
-};
-
-type T310abc7c1b = null | {
-  pattern: Tbe0400fa4c;
-  range: Tbe0400fa4c;
-  raw?: unknown;
-};
-
-type T3115fa37b5 = {
-  type: "tool-call";
-  id: string;
-  name: "set_field_value";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T313f510b34 = null | T2a109871bb;
-
-type T3185916700 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListVerificationRun";
-};
-
-type T3217a347d4 = {
-  registry: T347d72c6fa;
-  formats: Array<{
-    key: string;
-    template: string;
-  }>;
-};
-
-type T323404941e = {
-  readonly value: Te384930758;
-  readonly issues?: undefined;
-};
-
-type T32a2c3700a = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillResource";
-};
-
-type T32fdeee18e = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: Tbe0400fa4c;
-  id: string;
-  language: string;
-  slug: Tbe0400fa4c;
-};
-
-type T34252d475f = {
-  viewId: T7e10a0d884;
-};
-
-type T346ea860b1 = {
-  readonly type: "contact";
-  readonly id: stll_api_contract_SafeId<"contact">;
-};
-
-type T347d72c6fa = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
-
-type T347ea842b3 = {
-  type: "tool-call";
-  id: string;
-  name: "delete_clause";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T348bff1a92 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "chatTurn";
-};
-
-type T34da0c446b = {
-  workspaceId: string;
-};
-
-type T350a170d52 = {
-  needsApproval: true;
-  approvalSchema: undefined;
-};
-
-type T353d98c95e = {
-  action: "open";
-  url: string;
-} | {
-  action: "snapshot";
-  textOffset?: undefined | number;
-} | {
-  action: "click";
-  page: T779a78611c;
-  target: T823941dec3;
-} | {
-  action: "fill";
-  page: T779a78611c;
-  target: T823941dec3;
-  value: string;
-} | {
-  action: "select";
-  page: T779a78611c;
-  target: T823941dec3;
-  value: string;
-} | {
-  action: "press-key";
-  key: T28ae3065fc;
-  page: T779a78611c;
-  target: T823941dec3;
-} | {
-  action: "go-back";
-};
-
-type T3582432480 = {
-  type: "tool-call";
-  id: string;
-  name: "business_registry_lookup";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T367a10cc51 = {
-  readonly input: T466db84340;
-  readonly output: T27875dbd24;
-};
-
-type T369422441d = {
-  skillId: T8ff9f6d126;
-  skillName: string;
-};
-
-type T373044b8de = "workspace" | "download";
-
-type T37fe4edf98 = {
-  status: "unconfigured";
-  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
-};
-
-type T37fefd1259 = {
-  entityId: string;
-  fieldId: string;
-  fileId: string;
-  fileName: string;
-  renamed: Tfddd645dc8;
-};
-
-type T3802454091 = "language" | "presence" | "parameter" | "enumeration";
-
-type T38d4bc0e42 = {
-  playbookId: T4e595a8315;
-};
-
-type T38eb7c9eb4 = null | Array<T884a45faa8>;
-
-type T3913e4550c = {
-  lawId: string;
-  blockId: string;
-};
-
-type T392bdfc9ed = {
-  readonly target: ((T5e3ac29766 & string) | "draft-2020-12" | "draft-07" | "openapi-3.0");
-  readonly libraryOptions?: undefined | T631856df6b;
-};
-
-type T3953b344f7 = {
-  type: "tool-call";
-  id: string;
-  name: "suggest_template_fields";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T39bd2e99da = {
-  readonly value: T86d8d3c659;
-  readonly issues?: undefined;
-};
-
-type T3a2aa457e2 = "available" | "unavailable" | "installed";
-
-type T3a5b898b8d = {
-  path: string;
-  label: string;
-};
-
-type T3a8e541c8b = {
-  success: true;
-  entityRef: string;
-  propertyRef: string;
-  newValue: string;
-};
-
-type T3ae9eb741e = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "auditLog";
-};
-
-type T3af8ea50d0 = {
-  readonly value: T64c3504dad;
-  readonly issues?: undefined;
-};
-
-type T3b03b89012 = {
-  documentId: Tfc8a750351;
-  language: string;
-  anchorId: string;
-  citedAnchorId: Tbe0400fa4c;
-  headings: Array<{
-    anchorId: string;
-    level: T83854980c8;
-    text: string;
-  }>;
-  heading: (null | {
-    id: string;
-    anchorId: string;
-    level: T83854980c8;
-    text: string;
-  });
-  blocks: Array<{
-    id: string;
-    anchorId: string;
-    text: string;
-  }>;
-};
-
-type T3b2c7123e2 = {
-  text?: undefined | string;
-  title?: undefined | string;
-  departmentCode?: undefined | string;
-  legalRangeCode?: undefined | string;
-  matterCode?: undefined | string;
-  dateFrom?: undefined | string;
-  dateTo?: undefined | string;
-  offset?: undefined | number;
-  limit?: undefined | number;
-};
-
-type T3b4d67e019 = null | {
-  country?: string;
-  state?: string;
-  line1?: string;
-  line2?: string;
-  postalCode?: string;
-  city?: string;
-};
-
-type T3ba9545800 = {
-  workspaceId: string;
-};
-
-type T3c0c1b0a27 = {
-  title: string;
-  introduction: string;
-  investmentHeading: string;
-  investmentBody: string;
-  equityFinancingHeading: string;
-  equityFinancingBody: string;
-  conversionPriceHeading: string;
-  conversionPriceBody: string;
-  shareClassHeading: string;
-  shareClassBody: string;
-  liquidityEventHeading: string;
-  liquidityEventBody: string;
-  companyRepresentationsHeading: string;
-  companyRepresentationsBody: string;
-  generalHeading: string;
-  generalBody: string;
-};
-
-type T3c3fa57c15 = {
-  country?: string;
-  label?: string;
-  state?: string;
-  line2?: string;
-  postalCode?: string;
-  city?: string;
-  type: T10a0947927;
-  isPrimary: Tfddd645dc8;
-  line1: string;
-};
-
-type T3dc3e2ca32 = {
-  label?: string;
-  text: string;
-  id: string;
-};
-
-type T3e64088e2c = "failed" | "no-backend" | "below-floor";
-
-type T3f3b30a014 = "Unauthorized" | T9a51b7d2bc;
-
-type T3f8f92c9e4 = {
-  [key: string]: never;
-};
-
-type T3fbc5ba165 = readonly [T73b2a1010d, ...T73b2a1010d[]];
-
-type T4042d27c41 = {
-  workspaceId: string;
-};
-
-type T406326c84f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawDecision";
-};
-
-type T4195ea1b74 = {
-  matterRef: string;
-  entityRef: string;
-  propertyRef: string;
-  value: T426e4657a4;
-};
-
-type T41b8bd81bd = {
-  entities: Array<{
-    entity: T2a53b33d09;
-    toolCallId: string;
-    workspace: T4c3eeb6df3;
-  }>;
-  unresolvedInputs: Array<{
-    kind: ("contact" | "entity" | "matter" | "property");
-    param: string;
-    ref: string;
-    toolCallId: string;
-  }>;
-  workspaceScope: Array<T4c3eeb6df3>;
-};
-
-type T41e0ad416a = {
-  quote: string;
-  blockAnchorId: string;
-  startOffset: number;
-  endOffset: number;
-};
-
-type T41ee5fbcc8 = {
-  snippet?: string;
-  citation?: string;
-  jurisdiction?: string;
-  sourceType?: string;
-  type: "clip";
-  url: string;
-  version: 1;
-};
-
-type T42132256a7 = {
-  answers: Array<{
-    question: string;
-    answer: string;
-  }>;
-};
-
-type T426e4657a4 = null | string | number | Array<string>;
-
-type T42a50d3ca2 = {
-  fileName: string;
-  toolCallId: string;
-  originChatMessageId: T66e92cdab1;
-  originChatThreadId: Taf779979ed;
-  docxEditSnapshot: T94af9a40b9;
-};
-
-type T42b0ce8576 = {
-  ok: false;
-  error: string;
-};
-
-type T43ff0c9596 = {
-  ":workspaceId": T5e3ac29766;
-};
-
-type T4498be3bc0 = "Not Found" | {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tfbf26a7023>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T0d3b649ce9;
-  error?: string;
-  claim?: T753574bc22;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T81694d3f69>;
-};
-
-type T44e2cd4568 = null | false | true;
-
-type T44f2e6d941 = {
-  readonly input: Tee12b2a0c6;
-  readonly output: T9b129e6597;
-};
-
-type T450a9782d1 = {
-  value: number;
-  type: "int";
-  version: 1;
-  currency: Tbe0400fa4c;
-};
-
-type T450f33afce = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "folioCollabRoom";
-};
-
-type T451ea4af96 = {
-  type: "tool-call";
-  id: string;
-  name: "counterparty_check";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T453834ba82 = "active" | "archived" | "deleting";
-
-type T4586fbd3dc = {
-  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
-  health: Te354fca58a;
-  stored: {
-    decisions: number;
-    asOf: Tbe0400fa4c;
-  };
-  addedLastWeek: T588d0ee653;
-  completeness: {
-    measuredSources: number;
-    stored: number;
-    reported: number;
-    storedAsOf: Tbe0400fa4c;
-    staleSources: number;
-    notMeasuredSources: number;
-    notCountedSources: number;
-  };
-  sources: ReadonlyArray<{
-    adapterKey: string;
-    name: string;
-    publicHomeUrl: string;
-    health: Te354fca58a;
-    lastSyncAt: Tbe0400fa4c;
-    completeness: {
-      state: "measured";
-    } & T533de96505 | {
-      state: "stale";
-    } & T533de96505 | {
-      state: "not-measured-yet";
-    } | {
-      state: "not-counted-yet";
-    };
-    addedLastWeek: T588d0ee653;
-  }>;
-};
-
-type T45c8485af6 = {
-  scanWarnings?: Array<string>;
-  pdfDerivative?: T77e493d553 | Tf1da61a84f | T2f120574a2 | T7a1942a03f;
-  thumbnailFileId?: null | string;
-  placeholder?: string;
-  thumbnailDerivative?: T77e493d553 | Tf1da61a84f | T2f120574a2 | T7a1942a03f;
-  type: "file";
-  mimeType: string;
-  id: string;
-  pdfFileId: Tbe0400fa4c;
-  encrypted: Tfddd645dc8;
-  fileName: string;
-  version: 1;
-  sizeBytes: number;
-  sha256Hex: string;
-};
-
-type T45d1c6c746 = {
-  name: string;
-  organName: Tbe0400fa4c;
-  position: Tbe0400fa4c;
-  identifier: Tbe0400fa4c;
-  address: Tbe0400fa4c;
-  validFrom: Tbe0400fa4c;
-  validTo: Tbe0400fa4c;
-};
-
-type T466bee4580 = {
-  lawId: string;
-  blockId: string;
-};
-
-type T466db84340 = {
-  courtCode: string;
-  spisZn: string;
-};
-
-type T4750c1f7ee = "user" | "proposed" | "detected";
-
-type T47f7828fc7 = null | T6993bee61f;
-
-type T4866a24af7 = null | T6e37e01eb4;
-
-type T48c9e573fc = {
-  query: string;
-  jurisdiction?: undefined | "global" | "at" | "de" | "eu" | "sk" | "cz";
-  freshness?: undefined | "year" | "any" | "month" | "week" | "day";
-  maxResults?: undefined | number;
-};
-
-type T49bccf09e2 = T501e21fe4d | Tc4816eabc2;
-
-type T49beff9484 = {
-  readonly value: T5282b3aa45;
-  readonly issues?: undefined;
-};
-
-type T4a06edd937 = {
-  id: string;
-  label: string;
-  category: string;
-  startAnchorId: string;
-  endAnchorId: string;
-  annotations: Array<{
-    id: string;
-    summary: string;
-    startAnchorId: string;
-    endAnchorId: string;
-    textSnippet: string;
-  }>;
-  children: Array<T4a06edd937>;
-};
-
-type T4a5707509f = {
-  propertyId: string;
-  kind: ("max" | "count" | "min" | "count-unique" | "count-empty" | "count-filled" | "percent-empty" | "percent-filled" | "sum" | "average" | "median" | "range" | "percent-of-total");
-};
-
-type T4a9a2dd4a4 = null | "year" | "month" | "day";
-
-type T4ac8f6dd24 = {
-  check?: T2cd830774a | T53caa211eb;
-  guidance?: string;
-  negotiation?: Tea672cd0a4;
-  purpose?: string;
-  issue: string;
-  mode: "graded";
-  standard: T7dd13bf604;
-  ask: {
-    derived?: {
-      content: T26d760a340;
-      question: string;
-      rulesHash: string;
-    };
-    mode: "auto";
-  } | {
-    mode: "manual";
-    content: T26d760a340;
-    question: string;
-  };
-  enabled: Tfddd645dc8;
-  severity: T7538035c96;
-  sourceId: string;
-};
-
-type T4ada5516f7 = null | T58ea91aa38;
-
-type T4ae6d071f3 = "table" | "paragraph" | "heading" | "listItem";
-
-type T4b0b703d9e = {
-  type: "tool-call";
-  id: string;
-  name: "borme_get_summary";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T4b83723412 = "google" | "openrouter" | "openai" | "anthropic" | "bedrock" | "mistral";
-
-type T4bb0fb38a9 = {
-  street: Tbe0400fa4c;
-  postalCode: Tbe0400fa4c;
-  city: Tbe0400fa4c;
-  country: Tbe0400fa4c;
-  textAddress: Tbe0400fa4c;
-};
-
-type T4c3eeb6df3 = {
-  readonly type: "workspace";
-  readonly id: stll_api_contract_SafeId<"workspace">;
-};
-
-type T4c60d2e7ad = {
-  date: string;
-};
-
-type T4c6fb063e8 = {
-  type: "tool-call";
-  id: string;
-  name: "save_clause";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T4c703c7179 = {
-  propertyId: string;
-  desc: Tfddd645dc8;
-};
-
-type T4c80e82e5d = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "usagePolicy";
-};
-
-type T4cff2c04a4 = {
-  type: "tool-call";
-  id: string;
-  name: "boe_get_law";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T4d118d2832 = {
-  contactId: (string & valibot_Brand<"SafeId"> & T1c99d77bbc);
-};
-
-type T4d5e4f5d1c = {
-  readonly message: string;
-  readonly code?: string;
-};
-
-type T4d73965770 = {
-  approval?: {
-    id: string;
-    needsApproval: Tfddd645dc8;
-    approved?: false | true;
-  };
-};
-
-type T4deb005d6d = {
-  readonly input: Ta297fc92a3;
-  readonly output: T8de31056e4;
-};
-
-type T4deef1ef75 = {
-  workspaceId: T8d02a37b3f;
-};
-
-type T4e07585f60 = {
-  readonly value: T56c757e5e1;
-  readonly issues?: undefined;
-};
-
-type T4e0b438dd4 = {
-  readonly value: T88a38d2a60;
-  readonly issues?: undefined;
-};
-
-type T4e595a8315 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "playbookDefinition";
-};
-
-type T4e80f4822c = {
-  kind: ("added" | "removed" | "unchanged" | "gap");
-  text: string;
-} | {
-  kind: "changed";
-  runs: Array<{
-    kind: ("same" | "del" | "ins");
-    text: string;
-  }>;
-};
-
-type T4e819907f9 = "assignee" | "reviewer";
-
-type T4eb5cc5545 = {
-  context?: undefined | string;
-  href?: undefined | string;
-  name: string;
-  ref: string;
-  role: string;
-};
-
-type T4f14f5a335 = "year" | "month" | "week" | "day";
-
-type T4f903e0db7 = {
-  readonly input: Tb21d985837;
-  readonly output: Tefa091671d;
-};
-
-type T501a665986 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawMatterLink";
-};
-
-type T501e21fe4d = {
-  protocolVersion: 4;
-  snapshot: {
-    contentTrust: "untrusted-web-content";
-    elements: Array<{
-      context?: undefined | string;
-      href?: undefined | string;
-      name: string;
-      ref: string;
-      role: string;
-      value?: undefined | string;
-    }>;
-    revision: string;
-    text: string;
-    textOffset: number;
-    textTotalChars: number;
-    tabId: number;
-    title: string;
-    url: string;
-  };
-  status: "success";
-};
-
-type T50288d650a = {
-  readonly value: Tc2a8824cf4;
-  readonly issues?: undefined;
-};
-
-type T504bb6d30f = Ta307d8fb8c | Tbc510e9400;
-
-type T5143c04283 = {
-  type: "tool-call";
-  id: string;
-  name: "configure_template_fields";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T516226b2c3 = {
-  type: "tool-call";
-  id: string;
-  name: "save_contact";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T51cc6664d5 = {
-  query: string;
-  results: Array<{
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
-type T51e1843fb9 = null | Array<string>;
-
-type T51f6ece09d = {
-  readonly value: Td84f9e1ca6;
-  readonly issues?: undefined;
-};
-
-type T5282b3aa45 = {
-  templateId: string;
-  values: T98898fcada;
-};
-
-type T529735e682 = {
-  [key: string]: Tcf7096fd53;
-};
-
-type T52fcbe1ef6 = {
-  url: string;
-  maxChars?: undefined | number;
-};
-
-type T5316b44209 = {
-  type: "file";
-  version: 1;
-} | {
-  type: "text";
-  version: 1;
-} | {
-  type: Tf795dc12d5;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: Tbe0400fa4c;
-} | {
-  type: "date";
-  version: 1;
-} | {
-  type: "int";
-  version: 1;
-} | {
-  type: "money";
-  version: 1;
-  currency: Tbe0400fa4c;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type T5334594290 = {
-  workspaceId: string;
-};
-
-type T533de96505 = {
-  stored: number;
-  storedAsOf: string;
-  reported: number;
-  reportedAsOf: string;
-  reportedBy: ("operator" | "publisher" | "listing");
-};
-
-type T5345561adb = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: Tfddd645dc8;
-  provider: "jina";
-};
-
-type T539e1e5c66 = {
-  templateId: string;
-  values: T98898fcada;
-};
-
-type T53be3fbe82 = {
-  code: stll_api_contract_ContactImportIssueCode;
-  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "address_line_1" | "address_line_2" | "postal_code" | "primary_email" | "primary_phone");
-  rowNumber: number;
-};
-
-type T53caa211eb = {
-  kind: "constraint";
-  condition: stll_conditions_ConditionNode;
-};
-
-type T540f9c7521 = {
-  text: string;
-  index: number;
-  style?: string;
-  bold?: false | true;
-  fontSize?: number;
-  alignment?: "left" | "right" | "center" | "both";
-  tableRow?: {
-    table: number;
-    kind: "cells";
-    cells: ReadonlyArray<{
-      paragraphs: ReadonlyArray<{
-        text: string;
-        style?: string;
-        bold?: false | true;
-        fontSize?: number;
-        alignment?: "left" | "right" | "center" | "both";
-      }>;
-    }>;
-  } | {
-    table: number;
-    kind: ("delimiter" | "syntheticHeader");
-  };
-} & {
-  source?: undefined | "body" | "header" | "footer";
-  isDirective?: undefined | false | true;
-  directiveKind?: undefined | "if" | "elif" | "else" | "endif" | "for" | "endfor";
-  directiveExpression?: undefined | string;
-};
-
-type T551b81e20a = {
-  kind: "contact";
-  field: Td16108295a;
-};
-
-type T5535a308b3 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "rateEntry";
-};
-
-type T561c958713 = {
-  code?: string;
-  message: string;
-};
-
-type T563240ea85 = {
-  status: "failed";
-  message: string;
-};
-
-type T565e9250b1 = {
-  text: string;
-  id: string;
-};
-
-type T5681b43fbc = {
-  type: "tool-call";
-  id: string;
-  name: "update-current-skill-resource";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T56b53aeb22 = {
-  updated: Tfddd645dc8;
-};
-
-type T56c757e5e1 = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
-};
-
-type T56ed95d57c = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "user";
-};
-
-type T576bcbcea8 = {
-  documentId: Tfc8a750351;
-};
-
-type T57ebdcbe25 = {
-  workspaceId: string;
-};
-
-type T5855f1649e = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "pendingUpload";
-};
-
-type T588d0ee653 = null | number;
-
-type T58ea91aa38 = {
-  deletedAt: Tbe0400fa4c;
-  id: string;
-  image: Tbe0400fa4c;
-  name: Tbe0400fa4c;
-  type: "user";
-};
-
-type T5971389af6 = {
-  status: ("accepted" | "new" | "snoozed" | "dismissed");
-  origin: ("source" | "model" | "manual");
-  kind: ("request.submitted" | "hearing.changed" | "deadline.detected" | "contract.reviewed" | "work.unacknowledged" | "work.deadline_at_risk");
-  title: string;
-  id: Td6d5acce5e;
-  workspaceId: T63854f81c6;
-  summary: string;
-  workspaceName: Tbe0400fa4c;
-  subject: {
-    type: "workspace";
-    workspaceId: string;
-  } | {
-    type: "entity";
-    workspaceId: string;
-    entityId: string;
-  } | {
-    type: "court-case";
-    courtCode: string;
-    caseNumber: string;
-  } | {
-    type: "none";
-  };
-  severity: ("warning" | "info" | "notice" | "critical");
-  evidence: {
-    kind: "request.submitted";
-    description: string;
-    attachments: Array<{
-      fileId: string;
-      name: string;
-      mimeType: string;
-      size: number;
-    }>;
-  } | {
-    kind: "hearing.changed";
-    courtName: string;
-    caseNumber: string;
-    previousAt: Tbe0400fa4c;
-    currentAt: string;
-    hearingType: Tbe0400fa4c;
-    sourceUrl: Tbe0400fa4c;
-  } | {
-    kind: "deadline.detected";
-    dueAt: string;
-    label: string;
-    quote: string;
-    entityId: string;
-    entityName: string;
-  } | {
-    kind: "contract.reviewed";
-    entityId: string;
-    entityName: string;
-    verdict: ("reject" | "needs-review" | "safe");
-    findings: Array<{
-      title: string;
-      severity: ("warning" | "info" | "notice" | "critical");
-      quote: string;
-    }>;
-    reviewRunId: Tbe0400fa4c;
-  } | {
-    kind: "work.unacknowledged";
-    obligationEntityId: string;
-    ownerUserId: string;
-    assignedAt: string;
-    daysWaiting: number;
-    workingTargetDate: Tbe0400fa4c;
-    hardDeadlineDate: Tbe0400fa4c;
-  } | {
-    kind: "work.deadline_at_risk";
-    obligationEntityId: string;
-    ownerUserId: string;
-    hardDeadlineDate: string;
-    workingTargetDate: Tbe0400fa4c;
-    daysUntilDeadline: number;
-    obligationStatus: ("active" | "awaiting_acknowledgement");
-  };
-  createdByUserId: Tbe0400fa4c;
-  scoutKey: string;
-  confidence: T588d0ee653;
-  suggestions: Array<{
-    kind: "create-deadline";
-    workspaceId: string;
-    name: string;
-    dueAt: string;
-  } | {
-    kind: "create-task";
-    workspaceId: string;
-    name: string;
-    dueAt: Tbe0400fa4c;
-  } | {
-    kind: "promote-to-workspace";
-  } | {
-    kind: "assign";
-  } | {
-    kind: "open-chat";
-    prompt: string;
-  }>;
-  assigneeUserId: Tbe0400fa4c;
-  dismissReason: Tbe0400fa4c;
-  acceptedResult: (null | {
-    suggestionKind: ("create-deadline" | "create-task");
-    result: {
-      type: "entity";
-      entityId: string;
-      workspaceId: string;
-    };
-  } | {
-    suggestionKind: "promote-to-workspace";
-    result: {
-      type: "workspace";
-      workspaceId: string;
-    };
-  } | {
-    suggestionKind: ("assign" | "open-chat");
-    result: {
-      type: "none";
-    };
-  });
-  assigneeUserName: Tbe0400fa4c;
-  assigneeUserImage: Tbe0400fa4c;
-} & {
-  snoozedUntil: Tbe0400fa4c;
-  resolvedAt: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type T5990be2a25 = {
-  readonly input: Tdb5a1ce47f;
-  readonly output: Ta2adf01c0a;
-};
-
-type T59bc5192f7 = {
-  readonly input: Tf72e5821b0;
-  readonly output: Td80ce08c34;
-};
-
-type T5ad5018b7e = {
-  analysis: string;
-  questions: Array<{
-    question: string;
-    reason: string;
-    options?: undefined | Array<string>;
-    default?: undefined | string;
-  }>;
-};
-
-type T5aeeefecac = {
-  spf: Tccc654a7c7;
-  dkim: Tccc654a7c7;
-  dmarc: Tccc654a7c7;
-  alignedIdentifier: Tbe0400fa4c;
-} & {
-  address: string;
-};
-
-type T5b1470ddab = {
-  type: "tool-call";
-  id: string;
-  name: "add_comment";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T5b398cdd9d = {
-  type: "error";
-  version: 1;
-};
-
-type T5b6a988e20 = "timeout" | "client-disconnected";
-
-type T5bb4fea9f8 = {
-  readonly input: Tab11ee99f7;
-  readonly output: T8a03a9eca5;
-};
-
-type T5bd2b68d05 = {
-  status: "unavailable";
-  reason: string;
-};
-
-type T5cb2c9d717 = {
-  [key: string]: string;
-};
-
-type T5cbad7b267 = {
-  type: "tool-call";
-  id: string;
-  name: "read_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T5d1f5ab5f2 = null | Tb532bdabe3;
-
-type T5dace84134 = {
-  kind: "cz-insolvency";
-  source: Tc73807a034;
-  subject: Te6e750ecc6;
-};
-
-type T5e3ac29766 = {};
-
-type T5e6378eb9f = null | {
-  street: Tbe0400fa4c;
-  postalCode: Tbe0400fa4c;
-  city: Tbe0400fa4c;
-  country: Tbe0400fa4c;
-  textAddress: Tbe0400fa4c;
-};
-
-type T5e702ac6d9 = "superseded" | "user-stop";
-
-type T5ed75bc2cc = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalList";
-};
-
-type T5eefd06bf2 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "contactExtractionUpload";
-};
-
-type T5f2f7cb1d6 = {
-  documentAst: (null | {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: undefined | "decision-title" | "section-heading";
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
-      note?: undefined | T1d6100d20a;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
-      number?: undefined | number;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: undefined | "related-proceedings" | "metadata-table";
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
-        header?: undefined | true;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: undefined | string;
-      width?: undefined | number;
-      height?: undefined | number;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4);
-  fulltext: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  expressionKind: Tbf853c76ba;
-  windowDisposition: T152fa670a3;
-  windowDispositionBasis: Tc750daff47;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  id: Tfc8a750351;
-};
-
-type T60db7b1f8f = "new" | "handled";
-
-type T60e51917c9 = null | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
-
-type T6124e792aa = null | Array<T3c3fa57c15>;
-
-type T613c5cabbb = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "pdfSigningSession";
-};
-
-type T61747391b1 = "draft" | "approved" | "billed" | "written_off";
-
-type T61a314e9df = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
-
-type T61d3076ac0 = {
-  country: string;
-  subdivision?: undefined | string;
-};
-
-type T6202858453 = "responsible" | "originating" | "lead";
-
-type T62128c5ec5 = {
-  workspaceId: string;
-};
-
-type T621420426b = {
-  type: "tool-call";
-  id: string;
-  name: "fill_template";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T6225d0be51 = {
-  skillName: string;
-  path: string;
-};
-
-type T6269a5e99e = {
-  configured: false;
-  platformFallback: Tfddd645dc8;
-} | {
-  configured: true;
-  apiKeyMasked: string;
-  platformFallback: Tfddd645dc8;
-};
-
-type T62f288d6ab = "matters" | "all-chats";
-
-type T631856df6b = {
-  [key: string]: unknown;
-};
-
-type T635a859ab7 = "left" | "right" | "preserve" | "center" | "both";
-
-type T63854f81c6 = null | T9e07a7d6cd;
-
-type T63924fc269 = {
-  text: string;
-  id: string;
-};
-
-type T6454934e85 = {
-  type: "tool-call";
-  id: string;
-  name: "create-document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T21d4acdd13 | T7e9fce8170 | T6b4b00e15b | T05cba4d570;
-};
-
-type T645c36442e = {
-  type: "tool-call";
-  id: string;
-  name: "read_section";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T64c3504dad = {
-  skillName: string;
-};
-
-type T64dd0ef184 = {
-  type: "tool-call";
-  id: string;
-  name: "create_reader_annotation";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T64f30e502a = "overview" | "table" | "filesystem" | "kanban" | "calendar" | "timeline" | "avt";
-
-type T64f82fc86d = {
-  bold: Tfddd645dc8;
-  alignment: T635a859ab7;
-  fontFamily: string;
-  fontSizePt: number;
-  spaceAfterPt: number;
-  spaceBeforePt: number;
-  numberingFormat: T9c3d54ef16;
-  indentLeftPt: number;
-  hangingPt: number;
-};
-
-type T653f0c375b = {
-  id: string;
-  name: string;
-  narrative: string;
-  narrativeLanguage: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type T658a00d740 = {
-  address: string;
-  name: Tbe0400fa4c;
-};
-
-type T65bedee18b = null | "free" | "paid";
-
-type T6668c52442 = {
-=======
 type T2e9c7d4856 = {
->>>>>>> origin/main
   registry: T347d72c6fa;
   id: string;
   name: string;
@@ -38120,7 +36557,6 @@ type T7afaf18a37 = {
   maxChars: number;
 };
 
-<<<<<<< HEAD
 type T7b73f082e3 = {
   id: string;
   language: string;
@@ -38129,17 +36565,6 @@ type T7b73f082e3 = {
   basis: Tc750daff47;
 };
 
-type T7c5bb3a7e5 = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
-};
-
-=======
->>>>>>> origin/main
 type T7cf33d5fda = {
   documentTypeId: T1cbe63218a;
 };
@@ -39222,6 +37647,77 @@ type Ta8989496e3 = "high" | "low" | "medium" | "unspecified";
 
 type Ta8d1af4749 = "account" | "api-key" | "none";
 
+type Ta8d46408fa = {
+  documentAst: {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: "decision-title" | "section-heading" | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
+      note?: T8bbaf16642 | undefined;
+      listDepth?: 1 | 2 | 3 | 4 | undefined;
+      number?: number | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: "metadata-table" | "related-proceedings" | undefined;
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: number | undefined;
+        rowSpan?: number | undefined;
+        header?: true | undefined;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: string | undefined;
+      width?: number | undefined;
+      height?: number | undefined;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4 | null;
+  fulltext: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  expressionKind: Tbf853c76ba;
+  windowDisposition: T152fa670a3;
+  windowDispositionBasis: Tc750daff47;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  id: Tfc8a750351;
+};
+
 type Ta90cfc78fd = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "correspondenceAllowedSender";
 };
@@ -39333,11 +37829,7 @@ type Tad027ba68a = {
 
 type Tad12f531bb = "held" | "included";
 
-<<<<<<< HEAD
-type Tada6067f00 = T5f2f7cb1d6 | T279717e2be;
-=======
-type Tada6067f00 = T2203ecc422 | T279717e2be;
->>>>>>> origin/main
+type Tada6067f00 = Ta8d46408fa | T279717e2be;
 
 type Tae4c134ba8 = "active" | "awaiting_acknowledgement" | "cancelled" | "completed" | "unassigned";
 
@@ -39875,25 +38367,13 @@ type Tbedd195a15 = {
 
 type Tbf83a7d346 = string & valibot_Brand<"SafeId"> & T1c99d77bbc;
 
-<<<<<<< HEAD
 type Tbf853c76ba = "consolidation" | "promulgated" | "unversioned";
 
-type Tbff0077d7c = {
-  type: "tool-call";
-  id: string;
-  name: "execute_typescript";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-=======
 type Tbffa2a23cb = {
   status: "not-registered";
   checkedAt: string;
   sourceDataAsOf: Tbe0400fa4c;
 };
->>>>>>> origin/main
 
 type Tc0c1f34102 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "correspondence";
@@ -40036,6 +38516,8 @@ type Tc73807a034 = {
   url: string;
 };
 
+type Tc750daff47 = "deferred-promulgated" | "listed-not-stored" | "missing-start" | "publisher-flag" | "publisher-unlisted" | "replaced-same-day" | "reversed" | "zero-length-window" | null;
+
 type Tc79049686d = "constitutional" | "other" | "regional" | "supreme";
 
 type Tc7eaf8104c = {
@@ -40136,72 +38618,7 @@ type Tcc1d747a33 = "double" | "onePoint15" | "onePoint5" | "preserve" | "single"
 
 type Tcc23752159 = "anthropic" | "azure_foundry" | "bedrock" | "google" | "huggingface" | "mistral" | "openai" | "openai_compatible" | "openrouter";
 
-<<<<<<< HEAD
-type Tc750daff47 = null | "publisher-flag" | "replaced-same-day" | "zero-length-window" | "reversed" | "missing-start" | "publisher-unlisted" | "listed-not-stored" | "deferred-promulgated";
-
-type Tc79049686d = "constitutional" | "supreme" | "regional" | "other";
-
-type Tc7eaf8104c = {
-  placeholder: string;
-  original: string;
-};
-
-type Tc88149628d = undefined | tanstack_ai_ToolExecutionContext<unknown>;
-
-type Tc892bdfad5 = {
-  items: Array<T6d031af10d>;
-  version: 3;
-};
-
-type Tc9f332d529 = {
-  numero?: string;
-  seccion?: Td90f8b552b | Array<Td90f8b552b>;
-  sumario_diario?: {
-    identificador?: string;
-    url_pdf?: {
-      szBytes?: string;
-      szKBytes?: string;
-      texto?: string;
-    };
-  };
-};
-
-type Tcadd7d5047 = null | T4e595a8315;
-
-type Tcb19db2b80 = "other" | "expert_witness" | "filing_fee" | "travel" | "printing" | "courier";
-
-type Tcb216ab4cd = {
-  type: "text";
-  version: 1;
-};
-
-type Tcbd1655cb4 = {
-  kind: "redLine";
-  ruleId: string;
-  text: string;
-};
-
-type Tcbf6fe4665 = null | {
-  premises: Tbe0400fa4c;
-  addressLine1: Tbe0400fa4c;
-  addressLine2: Tbe0400fa4c;
-  locality: Tbe0400fa4c;
-  region: Tbe0400fa4c;
-  postalCode: Tbe0400fa4c;
-  country: Tbe0400fa4c;
-  poBox: Tbe0400fa4c;
-  careOf: Tbe0400fa4c;
-  textAddress: Tbe0400fa4c;
-};
-
-type Tcc1d747a33 = "double" | "single" | "preserve" | "onePoint15" | "onePoint5";
-
-type Tcc23752159 = "google" | "openrouter" | "openai" | "azure_foundry" | "anthropic" | "bedrock" | "mistral" | "openai_compatible" | "huggingface";
-
-type Tcc3a2ff045 = null | {
-=======
 type Tcc3a2ff045 = {
->>>>>>> origin/main
   code: Tbe0400fa4c;
   label: string;
 } | null;
