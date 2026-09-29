@@ -672,7 +672,7 @@ const underSourceLease = async <T>(
         "transient"
         ? CASE_LAW_BATCH_FAILURE.TRANSIENT
         : CASE_LAW_BATCH_FAILURE.UNCLASSIFIED,
-      decisions,
+      records,
       error instanceof Error ? error.message : String(error),
     ),
   );
@@ -729,7 +729,7 @@ const batchFailure = (
     unsettled.find(({ reason }) => matches(reason))?.reason ?? null;
   const reason =
     reasonWhere((found) => found === CASE_LAW_BATCH_FAILURE.FAILURE_WRITE) ??
-    stopFailure(halt, decisions.length - settlements.length) ??
+    stopFailure(halt, records.length - settlements.length) ??
     reasonWhere((found) => found !== CASE_LAW_BATCH_FAILURE.RECORD_REJECTED) ??
     unsettled.at(0)?.reason ??
     null;
