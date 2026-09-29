@@ -180,11 +180,13 @@ const EMPTY_INDEX = buildScreeningIndex([]);
 
 const toScreeningQuery = (
   subject: SanctionsScreeningSubject,
+  nameSource: NonNullable<ScreeningQuery["nameSource"]>,
 ): ScreeningQuery => {
   switch (subject.type) {
     case "organization": {
       return {
         name: subject.name,
+        nameSource,
         entityType: "organisation",
         identifiers: subject.identifiers,
       };
@@ -192,6 +194,7 @@ const toScreeningQuery = (
     case "person": {
       return {
         name: subject.name,
+        nameSource,
         entityType: "person",
         ...(subject.birthDate !== null && { birthDate: subject.birthDate }),
         nationality: subject.nationalityCodes,
@@ -345,6 +348,9 @@ const screenList = async ({
     toPossibleMatch(match, edition.id),
   );
   if (first === undefined) {
+    if (screened.value.truncated) {
+      return unavailableList(base, "load-failed", freshness);
+    }
     return {
       ...base,
       ...screenedEdition,
@@ -370,6 +376,7 @@ export type ScreenSanctionsSubjectProps = {
   /** Any handle that may read the global sanctions tables. */
   db: SanctionsReadDb;
   subject: SanctionsScreeningSubject;
+  nameSource?: ScreeningQuery["nameSource"];
   /** The firm's practice jurisdictions; empty labels every list informational. */
   practiceJurisdictions: readonly CountryCode[];
   now?: Date | undefined;
@@ -384,17 +391,24 @@ export type ScreenSanctionsSubjectProps = {
 export const screenSanctionsSubject = async ({
   db,
   subject,
+  nameSource = "free-text",
   practiceJurisdictions,
   now = new Date(),
   indexCache = sharedSanctionsIndexCache,
 }: ScreenSanctionsSubjectProps): Promise<
   Result<SanctionsScreening, SanctionsSubjectError>
 > => {
-  const query = toScreeningQuery(subject);
+  const query = toScreeningQuery(subject, nameSource);
   const validated = screen(EMPTY_INDEX, query, { cutoff: DEFAULT_CUTOFF });
   if (validated.isErr()) {
     if (validated.error.code === "work-limit") {
-      return panic("Empty sanctions index exhausted the work budget");
+      return Result.ok(
+        unavailableSanctionsScreening({
+          reason: "load-failed",
+          practiceJurisdictions,
+          now,
+        }),
+      );
     }
     return Result.err(
       new SanctionsSubjectError({

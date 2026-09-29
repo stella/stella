@@ -21,6 +21,7 @@ import type {
   screenSanctionsSubject,
   SanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
+import { SanctionsSubjectError } from "@/api/lib/lists/sanctions/screening-service";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
 // The register, the lists and the firm's settings are all replaced: these
@@ -108,6 +109,40 @@ describe("sanctions check", () => {
         },
       },
     });
+  });
+
+  test("register names bypass free-text limits and uncorrectable names return unavailable", async () => {
+    const name = Array.from({ length: 30 }, (_, index) => `Word${index}`).join(
+      " ",
+    );
+    const executeLookup = mock<typeof executeRegistryLookup>(
+      async ({ handler }) => ({
+        type: "lookup",
+        registry: handler.slug,
+        hit: aresHit("26863154", name),
+      }),
+    );
+    const screen = mock<typeof screenSanctionsSubject>(async () =>
+      Result.err(
+        new SanctionsSubjectError({
+          code: "empty-query",
+          message: "the register name could not be screened",
+        }),
+      ),
+    );
+    const result = await runSanctionsCheck({
+      subject: { type: "company-id", value: "26863154", country: "CZ" },
+      dependencies: dependencies({ executeLookup, screen }),
+    });
+    expect(screen.mock.calls.at(0)?.at(0)).toMatchObject({
+      nameSource: "register",
+      subject: { name },
+    });
+    expect(result.isOk()).toBe(true);
+    expect(result.unwrap().status).toBe("unavailable");
+    expect(
+      result.unwrap().lists.every((list) => list.status === "unavailable"),
+    ).toBe(true);
   });
 
   test("reads a Slovak company ID from its own register", async () => {

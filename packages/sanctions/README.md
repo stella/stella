@@ -72,17 +72,27 @@ entity type raise or lower the score. A near-exact name whose client fields
 contradict the listing stays reported at the cutoff, with the conflicts named
 in its evidence. `totalMatches` and `truncated` say when the limit cut results.
 
-Query names may contain at most 12 normalized tokens before deduplication;
-excess tokens return `excess-query-tokens` on every screening path. Accepted
-queries and listed aliases retain the first occurrence of each normalized
-spelling, so repeated words preserve exact-name equality. Each screening has
-one deterministic 20,000-unit work budget shared across name readings,
-vocabulary expansion, postings, candidate alignment and identifier matches.
-Exhaustion returns `ScreeningWorkLimitError` (`work-limit`), discarding
-incomplete matches. Both API paths present the affected list as unavailable
-with the existing `load-failed` reason, never clear. Output truncation still
-describes a complete scan whose matches exceed the requested result count.
-Index construction remains cached separately from query matching.
+Free-text queries may contain at most 24 normalized tokens before
+deduplication. Excess input returns `excess-query-tokens`; register-resolved
+names bypass this input cap because callers cannot correct a publisher's name.
+Repeated query and alias spellings retain their original adjacency graph.
+
+A cheap optimistic score filters candidates that cannot reach the cutoff and
+ranks the rest, with exact names first. Equivalent aliases share a score, so
+a frequent spelling never consumes the candidate allowance repeatedly. Each
+query unit retains its exact vocabulary token and at most 64 fuzzy spellings,
+ranked by shared bigrams before edit distance. Exact name patterns bypass the
+full-alignment cap. At
+most 256 distinct name patterns receive full alignment per reading. A
+2,000,000-unit screening budget covers vocabulary expansion, postings, ranking,
+scoring, identifiers and sorting across both readings of an unknown party.
+Exhaustion returns `ScreeningWorkLimitError` (`work-limit`); both API paths
+report the affected list unavailable with the existing `load-failed` reason.
+
+`truncated` also marks candidate selection that omitted viable patterns;
+`totalMatches` is then the number found, a lower bound. Partial results retain
+possible matches for review. A truncated search with no possible matches is
+unavailable, never clear. Index construction remains cached separately.
 
 ## Evaluation
 

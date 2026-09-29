@@ -214,6 +214,20 @@ describe("anonymous sanctions search", () => {
     expect(validateRole.mock.calls).toHaveLength(0);
   });
 
+  test("accepts legitimate names beyond the previous twelve-token cap", async () => {
+    const screen = clearScreen();
+    const { app } = appWith(screen);
+    const response = await app.handle(
+      request({
+        type: "person",
+        firstName: "Abu Muhammad Abd al-Rahman bin Ali",
+        lastName: "bin Muhammad al-Hashimi al-Qurashi",
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(screen.mock.calls).toHaveLength(1);
+  });
+
   test("reports failed role validation before any screening", async () => {
     const screen = clearScreen();
     const marker = "Private Role Failure Sentinel";

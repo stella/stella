@@ -5,6 +5,7 @@ import path from "node:path";
 import { parseCzList } from "./cz";
 import type { EntityType, ParsedList, SanctionsEntry } from "./entry";
 import { parseEuList } from "./eu";
+import { MAX_SCREENING_WORK } from "./name-match";
 import {
   MAX_QUERY_TOKENS,
   hasExcessQueryTokens,
@@ -575,16 +576,40 @@ test("warm screening work stays bounded for repeated common query tokens", () =>
       expect(result.error.code).toBe("excess-query-tokens");
     }
   }
-  // A short, valid query can still reach too many candidates to finish.
-  for (const entityType of ["organisation", undefined] as const) {
-    const started = performance.now();
-    const incomplete = screen(
-      realistic,
-      { name: "Registered", entityType },
-      { cutoff: DEFAULT_CUTOFF },
-    );
-    expect(performance.now() - started).toBeLessThan(50);
-    expect(incomplete.isErr() && incomplete.error.code).toBe("work-limit");
+  // Valid names retain an answer after the revised ranking bounds.
+  for (const name of ["Registered", "Registered Entity 42 Holdings"]) {
+    for (const entityType of ["organisation", undefined] as const) {
+      screen(
+        realistic,
+        entityType === undefined ? { name } : { name, entityType },
+        { cutoff: DEFAULT_CUTOFF },
+      );
+      const started = performance.now();
+      const result = screen(
+        realistic,
+        entityType === undefined ? { name } : { name, entityType },
+        { cutoff: DEFAULT_CUTOFF },
+      );
+      const milliseconds = performance.now() - started;
+      console.info(
+        JSON.stringify({
+          name,
+          entityType: entityType ?? "unknown",
+          milliseconds,
+        }),
+      );
+      if (name === "Registered") {
+        expect(milliseconds).toBeLessThan(50);
+      }
+      expect(result.isOk()).toBe(true);
+      if (result.isOk() && name !== "Registered") {
+        expect(
+          result.value.possibleMatches.some(
+            ({ entry }) => entry.sourceId === "42",
+          ),
+        ).toBe(true);
+      }
+    }
   }
 });
 
@@ -601,7 +626,7 @@ test("repeated normalized query tokens keep exact-name equality", () => {
     ]);
     const result = screen(
       exactIndex,
-      { name, entityType },
+      entityType === undefined ? { name } : { name, entityType },
       { cutoff: DEFAULT_CUTOFF },
     ).unwrap();
     expect(result.possibleMatches.at(0)?.evidence.nameScore).toBe(1);
@@ -618,7 +643,9 @@ test("query token bounds use normalized input order and count before deduplicati
   for (const entityType of ["person", "organisation", undefined] as const) {
     const rejected = screen(
       index,
-      { name: names.join(" "), entityType },
+      entityType === undefined
+        ? { name: names.join(" ") }
+        : { name: names.join(" "), entityType },
       { cutoff: DEFAULT_CUTOFF },
     );
     expect(rejected.isErr() && rejected.error.code).toBe("excess-query-tokens");
@@ -655,7 +682,7 @@ test("identifier traversal shares the screening budget and cannot report clear o
   const broadIdentifierIndex = {
     ...oneIndex,
     identifierEntries: new Map([
-      ["12345", Array.from({ length: 20_001 }, () => 0)],
+      ["12345", Array.from({ length: MAX_SCREENING_WORK + 1 }, () => 0)],
     ]),
   };
   const result = screen(

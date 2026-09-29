@@ -211,12 +211,20 @@ type NameSubject = Extract<
 type ParityOptions = {
   subject: NameSubject;
   now?: Date;
+  caches?: {
+    product: ReturnType<typeof createSanctionsIndexCache>;
+    public: ReturnType<typeof createSanctionsIndexCache>;
+  };
 };
 
-const assertParity = async ({ subject, now = FRESH_NOW }: ParityOptions) => {
+const assertParity = async ({
+  subject,
+  now = FRESH_NOW,
+  caches,
+}: ParityOptions) => {
   // Separate caches ensure both access boundaries load the corpus themselves.
-  const productCache = createSanctionsIndexCache();
-  const publicCache = createSanctionsIndexCache();
+  const productCache = caches?.product ?? createSanctionsIndexCache();
+  const publicCache = caches?.public ?? createSanctionsIndexCache();
   const inProduct = (
     await runEntityCheckShared({
       check: "sanctions",
@@ -623,12 +631,73 @@ describe("public sanctions search parity", () => {
             warmMs: Number(warmMs.toFixed(2)),
           }),
         );
-        const incomplete = await assertParity({
+        const parityCaches = {
+          product: createSanctionsIndexCache(),
+          public: createSanctionsIndexCache(),
+        };
+        for (const name of [
+          "Registered Entity 42 Holdings",
+          "General Trading LLC",
+          "International Petroleum Shipping",
+        ]) {
+          const normal = await assertParity({
+            subject: { type: "organization", name, companyId: null },
+            caches: parityCaches,
+          });
+          expect(
+            normal.lists.every((list) => list.status !== "unavailable"),
+          ).toBe(true);
+        }
+        const person = await assertParity({
+          caches: parityCaches,
           subject: {
-            type: "organization",
-            name: "Registered",
-            companyId: null,
+            type: "person",
+            firstName: "Ivan",
+            lastName: "Sidorov",
+            dateOfBirth: null,
+            nationalityCodes: [],
           },
+        });
+        expect(person.status).toBe("possible-match");
+        // Valid single-token input can still exceed the edit-distance backstop.
+        const name = "abcde".repeat(90);
+        const costly = Array.from({ length: 8 }, (_, index) =>
+          entry({
+            source: "eu",
+            sourceId: `costly-${index}`,
+            overrides: {
+              names: [{ name: `${name}${index}`, quality: "strong" }],
+            },
+          }),
+        );
+        const partialAliases = Array.from({ length: 100 }, (_, index) =>
+          entry({
+            source: "eu",
+            sourceId: `partial-${index}`,
+            overrides: {
+              entityType: "person",
+              names: [{ name: `Mohammed${index} Ali`, quality: "weak" }],
+            },
+          }),
+        );
+        await seedEntries("eu", [...costly, ...partialAliases]);
+        await db
+          .update(sanctionsEditions)
+          .set({
+            entryCount:
+              entriesFor("eu").length +
+              entries.length +
+              costly.length +
+              partialAliases.length,
+          })
+          .where(eq(sanctionsEditions.id, activeEdition("eu")));
+        const incompleteCaches = {
+          product: createSanctionsIndexCache(),
+          public: createSanctionsIndexCache(),
+        };
+        const incomplete = await assertParity({
+          caches: incompleteCaches,
+          subject: { type: "organization", name, companyId: null },
         });
         expect(
           incomplete.lists.find(({ source }) => source === "eu"),
@@ -639,6 +708,22 @@ describe("public sanctions search parity", () => {
           possibleMatches: [],
         });
         expect(incomplete.status).not.toBe("clear");
+        const partial = await assertParity({
+          caches: incompleteCaches,
+          subject: {
+            type: "organization",
+            name: "Mohammed Ali",
+            companyId: null,
+          },
+        });
+        expect(
+          partial.lists.find(({ source }) => source === "eu"),
+        ).toMatchObject({
+          status: "unavailable",
+          reason: "load-failed",
+          possibleMatches: [],
+        });
+        expect(partial.status).not.toBe("clear");
       } finally {
         await context.kill();
       }

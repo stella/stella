@@ -261,22 +261,48 @@ export const nameTokens = (
 };
 
 /** Maximum normalized input count, before repeated spellings are deduplicated. */
-export const MAX_QUERY_TOKENS = 12;
+export const MAX_QUERY_TOKENS = 24;
 
 export const hasExcessQueryTokens = (
   name: string,
   entityType: EntityType,
 ): boolean => nameTokens(name, entityType).length > MAX_QUERY_TOKENS;
 
+export type NameReading = {
+  tokens: NameToken[];
+  adjacent: [number, number][];
+};
+
+/** Deduplicate spellings without inventing or losing original adjacent pairs. */
+export const nameReading = (
+  name: string,
+  entityType: EntityType,
+): NameReading => {
+  const tokens: NameToken[] = [];
+  const positions = new Map<string, number>();
+  const adjacent: [number, number][] = [];
+  const seen = new Set<string>();
+  let previous: number | undefined;
+  for (const token of nameTokens(name, entityType)) {
+    let position = positions.get(token.raw);
+    if (position === undefined) {
+      position = tokens.length;
+      positions.set(token.raw, position);
+      tokens.push(token);
+    }
+    if (previous !== undefined) {
+      const key = `${previous}:${position}`;
+      if (!seen.has(key)) {
+        adjacent.push([previous, position]);
+        seen.add(key);
+      }
+    }
+    previous = position;
+  }
+  return { tokens, adjacent };
+};
+
 export const distinctNameTokens = (
   name: string,
   entityType: EntityType,
-): NameToken[] => {
-  const distinct = new Map<string, NameToken>();
-  for (const token of nameTokens(name, entityType)) {
-    if (!distinct.has(token.raw)) {
-      distinct.set(token.raw, token);
-    }
-  }
-  return [...distinct.values()];
-};
+): NameToken[] => nameReading(name, entityType).tokens;

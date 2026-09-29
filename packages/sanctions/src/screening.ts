@@ -15,13 +15,18 @@ import {
   MAX_SCREENING_WORK,
   spendScreeningWork,
 } from "./name-match";
-import type { NameIndex, NameMatch, ScreeningWorkBudget } from "./name-match";
+import type {
+  NameIndex,
+  NameMatch,
+  NameMatches,
+  ScreeningWorkBudget,
+} from "./name-match";
 import {
-  distinctNameTokens,
+  nameReading,
   hasExcessQueryTokens,
   MAX_QUERY_TOKENS,
 } from "./normalise";
-import type { NameToken } from "./normalise";
+import type { NameReading } from "./normalise";
 import { isCalendarDate } from "./values";
 
 /**
@@ -180,6 +185,7 @@ const compareBirthDates = (
 
 export type ScreeningQuery = {
   name: string;
+  nameSource?: "free-text" | "register";
   /** Omit when the kind of party is unknown. */
   entityType?: EntityType;
   birthDate?: QueryBirthDate;
@@ -221,7 +227,7 @@ export type ScreeningResult = {
   versions: readonly ListVersion[];
   /** The best `limit` of the entries at or above the cutoff. */
   possibleMatches: PossibleMatch[];
-  /** Every entry at or above the cutoff, including those past the limit. */
+  /** Count found at or above the cutoff; a lower bound when candidate scoring is truncated. */
   totalMatches: number;
   truncated: boolean;
 };
@@ -400,7 +406,7 @@ const scoreEntry = ({
 
 type ScreenNameReadingsOptions = {
   index: NameIndex;
-  readings: readonly (readonly NameToken[])[];
+  readings: readonly NameReading[];
   ceiling: (queryShare: number) => number;
   cutoff: number;
   work: ScreeningWorkBudget;
@@ -413,24 +419,22 @@ const screenNameReadings = ({
   ceiling,
   cutoff,
   work,
-}: ScreenNameReadingsOptions): Result<
-  Map<number, NameMatch>,
-  ScreeningWorkLimitError
-> => {
+}: ScreenNameReadingsOptions): Result<NameMatches, ScreeningWorkLimitError> => {
   const nameMatches = new Map<number, NameMatch>();
+  let truncated = false;
   const distinctReadings = new Map(
     readings.map((reading) => [
-      reading.map((token) => token.raw).join(" "),
+      `${reading.tokens.map((token) => token.raw).join(" ")}|${reading.adjacent.join(";")}`,
       reading,
     ]),
   );
   for (const reading of distinctReadings.values()) {
-    if (reading.length === 0) {
+    if (reading.tokens.length === 0) {
       continue;
     }
     const matched = matchNames({
       index,
-      tokens: reading,
+      reading,
       ceiling,
       cutoff,
       work,
@@ -438,14 +442,71 @@ const screenNameReadings = ({
     if (matched === undefined) {
       return workLimit();
     }
-    for (const [entryIndex, match] of matched) {
+    truncated ||= matched.truncated;
+    for (const [entryIndex, match] of matched.matches) {
       const known = nameMatches.get(entryIndex);
       if (known === undefined || match.score > known.score) {
         nameMatches.set(entryIndex, match);
       }
     }
   }
-  return Result.ok(nameMatches);
+  return Result.ok({ matches: nameMatches, truncated });
+};
+
+type PreparedScreeningQuery = {
+  readings: NameReading[];
+  identifierKeys: Set<string>;
+};
+type PreparedScreeningQueryResult = Result<
+  PreparedScreeningQuery,
+  ScreeningQueryError
+>;
+
+const prepareScreeningQuery = (
+  query: ScreeningQuery,
+): PreparedScreeningQueryResult => {
+  if (query.birthDate !== undefined && !validBirthDate(query.birthDate)) {
+    return Result.err(
+      new ScreeningQueryError({
+        code: "invalid-birth-date",
+        message: "the birth date is not a valid calendar date",
+      }),
+    );
+  }
+  // An unknown party is read both ways: as an organisation, with legal forms
+  // stripped, and as a person, whose "Ag" or "Sa" may be part of the name.
+  const kinds =
+    query.entityType === undefined
+      ? (["organisation", "person"] as const)
+      : [query.entityType];
+  if (
+    query.nameSource !== "register" &&
+    kinds.some((kind) => hasExcessQueryTokens(query.name, kind))
+  ) {
+    return Result.err(
+      new ScreeningQueryError({
+        code: "excess-query-tokens",
+        message: `the name must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
+      }),
+    );
+  }
+  const readings = kinds.map((kind) => nameReading(query.name, kind));
+  const tokens = readings.at(0)?.tokens ?? [];
+  const identifierKeys = new Set(
+    (query.identifiers ?? [])
+      .map(identifierKey)
+      .filter((key) => key.length >= MIN_IDENTIFIER_LENGTH),
+  );
+  if (tokens.length === 0 && identifierKeys.size === 0) {
+    return Result.err(
+      new ScreeningQueryError({
+        code: "empty-query",
+        message: "the query has no name letters and no usable identifier",
+      }),
+    );
+  }
+
+  return Result.ok({ readings, identifierKeys });
 };
 
 /**
@@ -463,43 +524,11 @@ export const screen = (
   if (!Number.isInteger(limit) || limit < 1) {
     panic(`limit must be a positive integer, got ${limit}`);
   }
-  if (query.birthDate !== undefined && !validBirthDate(query.birthDate)) {
-    return Result.err(
-      new ScreeningQueryError({
-        code: "invalid-birth-date",
-        message: "the birth date is not a valid calendar date",
-      }),
-    );
+  const prepared = prepareScreeningQuery(query);
+  if (prepared.isErr()) {
+    return prepared;
   }
-  // An unknown party is read both ways: as an organisation, with legal forms
-  // stripped, and as a person, whose "Ag" or "Sa" may be part of the name.
-  const kinds =
-    query.entityType === undefined
-      ? (["organisation", "person"] as const)
-      : [query.entityType];
-  if (kinds.some((kind) => hasExcessQueryTokens(query.name, kind))) {
-    return Result.err(
-      new ScreeningQueryError({
-        code: "excess-query-tokens",
-        message: `the name must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
-      }),
-    );
-  }
-  const readings = kinds.map((kind) => distinctNameTokens(query.name, kind));
-  const tokens = readings.at(0) ?? [];
-  const identifierKeys = new Set(
-    (query.identifiers ?? [])
-      .map(identifierKey)
-      .filter((key) => key.length >= MIN_IDENTIFIER_LENGTH),
-  );
-  if (tokens.length === 0 && identifierKeys.size === 0) {
-    return Result.err(
-      new ScreeningQueryError({
-        code: "empty-query",
-        message: "the query has no name letters and no usable identifier",
-      }),
-    );
-  }
+  const { readings, identifierKeys } = prepared.value;
 
   // The best final score a name could reach if every identity field matched,
   // given the share of the query it explains; the geometric mean with the
@@ -514,7 +543,11 @@ export const screen = (
     }
     return score;
   };
-  const work = { remaining: MAX_SCREENING_WORK, exhausted: false };
+  const work = {
+    remaining: MAX_SCREENING_WORK,
+    exhausted: false,
+    selection: "complete" as const,
+  };
   const matched = screenNameReadings({
     index: index.names,
     readings,
@@ -525,7 +558,7 @@ export const screen = (
   if (matched.isErr()) {
     return matched;
   }
-  const nameMatches = matched.value;
+  const nameMatches = matched.value.matches;
   const identifierMatches = new Set<number>();
   for (const key of identifierKeys) {
     for (const entryIndex of index.identifierEntries.get(key) ?? []) {
@@ -582,6 +615,6 @@ export const screen = (
     versions: index.versions,
     possibleMatches: possibleMatches.slice(0, limit),
     totalMatches: possibleMatches.length,
-    truncated: possibleMatches.length > limit,
+    truncated: matched.value.truncated || possibleMatches.length > limit,
   });
 };

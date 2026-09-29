@@ -327,9 +327,20 @@ export const runSanctionsCheck = async ({
   const screened = await screen({
     db: dependencies.scopedDb,
     subject: outcome.subject,
+    nameSource: subject.type === "company-id" ? "register" : "free-text",
     practiceJurisdictions,
   });
   if (screened.isErr()) {
+    if (subject.type === "company-id") {
+      return Result.ok({
+        kind: "sanctions",
+        subject: outcome.checked,
+        ...unavailableSanctionsScreening({
+          reason: "load-failed",
+          practiceJurisdictions,
+        }),
+      });
+    }
     return invalidSubject(
       SANCTIONS_SUBJECT_ERROR_MESSAGES[screened.error.code],
     );
