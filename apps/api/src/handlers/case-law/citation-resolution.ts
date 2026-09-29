@@ -74,6 +74,10 @@
  * ids and decision ids are both uuidv7, so walking citations in citing-
  * decision order reads the decisions table in insertion order rather than at
  * random.
+ *
+ * `citations/reference-resolution.ts` states the same doctrine as a function
+ * of one reference's holders; `reference-resolution.db.test.ts` holds the two
+ * to one outcome, rule and target. A rule changed here changes there.
  */
 
 import { panic } from "better-result";
@@ -143,21 +147,39 @@ const decisionTypeArray = (types: readonly string[]): SQL =>
  * the key. Both are matched by concatenation rather than a pattern built from
  * the column, so the sheet travels as a bind parameter; the column's CHECK
  * keeps it to digits, which carry no `LIKE` metacharacter.
+ *
+ * `holder` is the candidate decision's alias and `sheetNumber` the printed
+ * sheet.
  */
-// sql-perf-allow: bounded by CITATION_CANDIDATE_SCAN_CAP candidates per walk
-const sheetMatchSql = sql`
-  b.cited_sheet_number IS NOT NULL
+export const holderAnswersSheetSql = (holder: SQL, sheetNumber: SQL): SQL =>
+  // sql-perf-allow: bounded by CITATION_CANDIDATE_SCAN_CAP candidates per walk (its one reader)
+  sql`
+  ${sheetNumber} IS NOT NULL
   AND (
-        k.ecli LIKE ('%.' || b.cited_sheet_number)
+        ${holder}.ecli LIKE ('%.' || ${sheetNumber})
      OR EXISTS (
           SELECT 1
           FROM ${caseLawDecisionIdentifiers} sheet_identifier
-          WHERE sheet_identifier.decision_id = k.id
+          WHERE sheet_identifier.decision_id = ${holder}.id
             AND sheet_identifier.type = 'case-number'
             AND sheet_identifier.normalized_value
-                  LIKE ('%-' || b.cited_sheet_number)
+                  LIKE ('%-' || ${sheetNumber})
         )
       )`;
+
+/**
+ * A candidate's stored decision type as the type rules compare it: folded by
+ * the database's own `lower()`, under the column's collation, and matched
+ * against the lowercase spellings of `citation-decision-type-hint.ts` and the
+ * merits/procedural lists.
+ */
+export const decisionTypeKeySql = (holder: SQL): SQL =>
+  sql`lower(${holder}.decision_type)`;
+
+const sheetMatchSql = holderAnswersSheetSql(
+  sql.raw("k"),
+  sql.raw("b.cited_sheet_number"),
+);
 
 /**
  * The hint vocabulary as a CTE, one row per family: which stored
@@ -516,10 +538,10 @@ const classificationCtes = (batch: SQL): SQL => sql`
                (array_agg(k.id))[1] AS sole_id,
                count(DISTINCT k.court)::int AS courts,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types)
                )::int AS hinted_n,
                (array_agg(k.id) FILTER (
-                 WHERE lower(k.decision_type) = ANY (hf.decision_types)
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (hf.decision_types)
                ))[1] AS hinted_id,
                count(*) FILTER (
                  WHERE b.cited_court_hint IS NOT NULL
@@ -544,13 +566,13 @@ const classificationCtes = (batch: SQL): SQL => sql`
                    AND k.decision_date = b.cited_decision_date
                ))[1] AS date_id,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                )::int AS merits_n,
                (array_agg(k.id) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(MERITS_DECISION_TYPES)})
                ))[1] AS merits_id,
                count(*) FILTER (
-                 WHERE lower(k.decision_type) = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
+                 WHERE ${decisionTypeKeySql(sql.raw("k"))} = ANY (${decisionTypeArray(PROCEDURAL_DECISION_TYPES)})
                )::int AS procedural_n
           FROM (
             ${citationMatchingHoldersSql({

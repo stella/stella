@@ -8,7 +8,8 @@ export type SanctionsSource =
   | "cz"
   | "us-sdn"
   | "us-non-sdn"
-  | "uk";
+  | "uk"
+  | "ch";
 
 export type SanctionsIssuer = "EU" | "UN" | "CZ" | "US" | "GB" | "CH" | "UA";
 
@@ -50,6 +51,7 @@ export type BirthDate =
       circa: boolean;
     }
   | { precision: "month"; year: number; month: number; circa: boolean }
+  | { precision: "month-day"; month: number; day: number; circa: boolean }
   | { precision: "year"; year: number; circa: boolean }
   | {
       precision: "year-range";

@@ -72,6 +72,10 @@ export const returnPathOf = (location: {
 // matching ignores case and decodes the path, so the check does too.
 const AUTH_FLOW_PATH = /^\/(?:auth|onboarding)(?:\/|$)/iu;
 
+/** Whether a page is a sign-in or onboarding step. */
+export const isAuthFlowPathname = (pathname: string): boolean =>
+  AUTH_FLOW_PATH.test(pathname);
+
 // A malformed escape cannot name a page, so it is no destination either.
 const decodedPathname = (path: string): string | undefined =>
   Result.try(() =>
