@@ -234,19 +234,25 @@
         "position": "root/0/3/0/0",
         "relation": "legislation_documents",
         "nodeType": "Index Only Scan",
-        "index": "legislation_documents_eli_version_lang_idx"
+        "index": "legislation_documents_eli_version_eligibility_idx"
       },
       {
         "position": "root/0/4/0",
         "relation": "legislation_documents",
         "nodeType": "Index Only Scan",
-        "index": "legislation_documents_eli_version_lang_idx"
+        "index": "legislation_documents_eli_version_eligibility_idx"
       },
       {
         "position": "root/0/5",
         "relation": "legislation_documents",
         "nodeType": "Index Only Scan",
-        "index": "legislation_documents_eli_version_lang_idx"
+        "index": "legislation_documents_eli_version_eligibility_idx"
+      },
+      {
+        "position": "root/0/6/0",
+        "relation": "legislation_documents",
+        "nodeType": "Index Scan",
+        "index": "legislation_documents_eli_lang_valid_from_idx"
       }
     ]
   },
