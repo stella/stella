@@ -368,7 +368,7 @@ const chatRecapB = "Recap of thread B";
 const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
   options,
 ) =>
-  "prompt" in options && String(options.prompt).includes("Here is the summary.")
+  "prompt" in options && options.prompt.includes("Here is the summary.")
     ? "Matter summary"
     : "";
 
