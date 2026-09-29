@@ -14,6 +14,7 @@ import {
 import {
   isSqlPerfMigration,
   isSqlPerfSource,
+  SQL_PERF_EXEMPT_MIGRATIONS,
   SQL_PERF_LINT_FILES,
   SQL_PERF_MIGRATION_FILES,
 } from "./sql-perf-scope.ts";
@@ -67,10 +68,18 @@ export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
 
 /**
  * Findings in the migrations the check reads. None is baselined: each is
- * rewritten or carries a `-- sql-perf-allow` reason.
+ * rewritten or carries a `-- sql-perf-allow` reason. An exemption naming a
+ * migration that no longer exists is a finding too.
  */
 export const scanSqlPerfMigrations = (root: string): string[] => {
   const findings: string[] = [];
+  for (const directory of Object.keys(SQL_PERF_EXEMPT_MIGRATIONS)) {
+    if (!existsSync(path.join(root, "apps/api/drizzle", directory))) {
+      findings.push(
+        `${directory}: exempt from the SQL performance check but not a migration`,
+      );
+    }
+  }
   for (const file of new Bun.Glob(SQL_PERF_MIGRATION_FILES).scanSync(root)) {
     if (!isSqlPerfMigration(file)) {
       continue;

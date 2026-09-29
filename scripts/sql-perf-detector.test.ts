@@ -480,6 +480,33 @@ test.each([
   expect(migrationHitLines(ROUTINE_PAGE(predicate))).toEqual([]);
 });
 
+test.each([
+  ["an unquoted name in another case", "(after_id IS NULL OR id > AFTER_ID)"],
+  [
+    "an unquoted record and field in another case",
+    "(job.cursor_id IS NULL OR id > JOB.Cursor_Id)",
+  ],
+  [
+    "a quoted field and its unquoted lower-case name",
+    '(job."cursor_id" IS NULL OR id > job.cursor_id)',
+  ],
+])("names one cursor through %s", (_, predicate) => {
+  expect(migrationHitLines(ROUTINE_PAGE(predicate))).toEqual([5]);
+});
+
+test.each([
+  [
+    "quoted names that differ in case",
+    '(job."Cursor" IS NULL OR id > job."cursor")',
+  ],
+  [
+    "a quoted mixed-case name and its unquoted spelling",
+    '(job."Cursor" IS NULL OR id > job.cursor)',
+  ],
+])("tells apart %s", (_, predicate) => {
+  expect(migrationHitLines(ROUTINE_PAGE(predicate))).toEqual([]);
+});
+
 test("an apostrophe in a migration comment hides no statement", () => {
   expect(
     migrationHitLines(
@@ -526,17 +553,22 @@ test("a migration hit takes a reason, and an unused reason is an error", () => {
   ]);
 });
 
-test("reads migrations from the cutoff on, never applied history", async () => {
+test("reads every migration but the exempt ones, whatever its date", async () => {
   expect(
     isSqlPerfMigration(
       "apps/api/drizzle/20260929180100_case_law_provision_scope_transition_keyset/migration.sql",
     ),
+  ).toBe(true);
+  // Migrations are not ordered, so an older date is no exemption.
+  expect(
+    isSqlPerfMigration("apps/api/drizzle/20200101000000_rebased/migration.sql"),
   ).toBe(true);
   expect(
     isSqlPerfMigration(
       "apps/api/drizzle/20260926170000_case_law_provision_backfill/migration.sql",
     ),
   ).toBe(false);
+  expect(isSqlPerfMigration("apps/api/drizzle/meta/_journal.json")).toBe(false);
   // The shape the check exists for: the applied migration it replaces has it,
   // the replacement does not.
   expect(

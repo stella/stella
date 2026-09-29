@@ -915,6 +915,18 @@ const optionalKeysetOffsets = (
 export type SqlPerfMigrationHit = { line: number; column: number };
 
 /**
+ * A cursor name as PostgreSQL resolves it, per dot-separated part: an
+ * unquoted part folds to lower case, a quoted part keeps its case.
+ */
+const resolvedName = (name: string): string =>
+  name
+    .split(".")
+    .map((part) =>
+      part.startsWith('"') ? part.slice(1, -1) : part.toLowerCase(),
+    )
+    .join(".");
+
+/**
  * Optional keyset bounds in a migration, statement by statement (routine
  * bodies included): in a statement with a LIMIT, a cursor that is `$n`, a
  * PL/pgSQL variable or a record field, tested for NULL and compared in the
@@ -936,7 +948,11 @@ export const analyzeMigrationSqlPerf = (source: string) => {
     if (/\bLIMIT\b/iu.test(statement)) {
       for (const pattern of MIGRATION_OPTIONAL_KEYSETS) {
         for (const match of statement.matchAll(pattern)) {
-          if (match[1] !== undefined && match[1] === match[2]) {
+          if (
+            match[1] !== undefined &&
+            match[2] !== undefined &&
+            resolvedName(match[1]) === resolvedName(match[2])
+          ) {
             rawHits.push(place(start + match.index));
           }
         }
