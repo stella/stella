@@ -15,10 +15,11 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
   propertyOnly ? PROPERTY_DB_TEST_BATCH_SIZE : DB_TEST_BATCH_SIZE;
 
 /**
- * DB files whose own peak RSS leaves too little of the DB budget for two
- * neighbours. Each runs in a process of its own (see `splitSoloTests`).
+ * Test files whose own peak RSS leaves too little of their batch budget for
+ * neighbours. Each runs in a process of its own, whatever its class (see
+ * `splitSoloTests`).
  */
-export const SOLO_DB_TEST_PATHS: ReadonlySet<string> = new Set([
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
   // ~1.7 GB peak alone: replays every recorded conversation scenario through
   // the full send pipeline.
   "src/handlers/chat/recorded-conversations.integration.test.ts",
