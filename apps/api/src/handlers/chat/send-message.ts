@@ -240,6 +240,8 @@ import {
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
@@ -252,6 +254,11 @@ import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
+
+const COMPLETED_TURN_FOLLOW_UPS_FAILED = failureSink({
+  event: "chat.turn.completed_follow_ups_failed",
+  expected: [],
+});
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -2616,9 +2623,9 @@ export const createSendMessage = (
                         async () => await runCompletedTurnFollowUps(followUps),
                       );
                       if (Result.isError(followedUp)) {
-                        captureError(followedUp.error, {
-                          threadId: body.threadId,
-                          source: "send-message.completed-turn-follow-ups",
+                        observeFailure(followedUp.error, {
+                          sink: COMPLETED_TURN_FOLLOW_UPS_FAILED,
+                          ctx: { threadId: body.threadId },
                         });
                       }
                     }
