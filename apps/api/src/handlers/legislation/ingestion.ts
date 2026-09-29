@@ -61,6 +61,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
@@ -638,6 +639,40 @@ const lockStoredVersionTx = async (
 ): Promise<StoredVersion | undefined> =>
   (await storedVersionQuery(tx, where).for("update")).at(0);
 
+/**
+ * Update the stored version, or insert it with its publisher id, and write the
+ * names its title states in the same transaction, so a search never sees the
+ * version without them.
+ */
+const writeDecidedVersionTx = async (
+  tx: Transaction,
+  row: StoredVersion | undefined,
+  values: typeof legislationDocuments.$inferInsert,
+  publisherId: string | undefined,
+) => {
+  let id = row?.id;
+  // audit: skip — background legislation ingestion; public data, not user actions
+  if (id === undefined) {
+    const [insertedRow] = await tx
+      .insert(legislationDocuments)
+      .values({ ...values, publisherExpressionId: publisherId ?? null })
+      .returning({ id: legislationDocuments.id });
+    if (!insertedRow) {
+      panic("Failed to insert legislation document");
+    }
+    id = insertedRow.id;
+  } else {
+    await tx
+      .update(legislationDocuments)
+      .set({ ...values, updatedAt: new Date() })
+      .where(eq(legislationDocuments.id, id));
+  }
+  await syncLegislationWorkNamesTx(tx, [
+    { id, country: values.country, title: values.title },
+  ]);
+  return id;
+};
+
 const selectStoredVersion = async (
   scopedDb: ScopedDb,
   where: SQL | undefined,
@@ -953,29 +988,10 @@ export const processLegislationDocument = async (
       ...decided,
       sourceHash: legislationSourceHash(input, window, decided),
     };
-    // audit: skip — background legislation ingestion; public data, not user actions
-    if (row !== undefined) {
-      await tx
-        .update(legislationDocuments)
-        .set({ ...decidedValues, updatedAt: new Date() })
-        .where(eq(legislationDocuments.id, row.id));
-      return {
-        id: row.id,
-        row,
-        classification: decided,
-        sourceHash: decidedValues.sourceHash,
-      };
-    }
-    const [insertedRow] = await tx
-      .insert(legislationDocuments)
-      .values({ ...decidedValues, publisherExpressionId: publisherId ?? null })
-      .returning({ id: legislationDocuments.id });
-    if (!insertedRow) {
-      panic("Failed to insert legislation document");
-    }
+    const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
     return {
-      id: insertedRow.id,
-      row: undefined,
+      id,
+      row,
       classification: decided,
       sourceHash: decidedValues.sourceHash,
     };

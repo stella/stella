@@ -730,15 +730,15 @@ describe("legislation writer identity", () => {
     // version replaced the day it opened shares its start with its successor,
     // and a work holds one version without a start.
     const uniqueViolation = async (input: LegislationDocumentInput) => {
-      const error = await store(input).then(
+      const outcome = await store(input).then(
         () => null,
         (error: unknown) => error,
       );
-      let cause: unknown = error;
+      let cause: unknown = outcome;
       while (isRecord(cause) && typeof cause["code"] !== "string") {
         cause = cause["cause"];
       }
-      return isRecord(cause) ? cause["code"] : error;
+      return isRecord(cause) ? cause["code"] : outcome;
     };
     const act = "2022/99";
     await store(version({ act, validFrom: "2023-01-01" }));

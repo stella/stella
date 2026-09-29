@@ -8,6 +8,7 @@ import { roles } from "@stll/permissions";
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
+import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
@@ -198,21 +199,41 @@ type InvoiceExpenseTextItem = {
   entity: { name: string };
 };
 
+type InvoiceLineTextItem = {
+  description: string;
+  unit: string | null;
+};
+
+/** Buyer as it reads on the document: every field is authored text. */
+const INVOICE_BUYER_TEXT_FIELDS = [
+  "buyerName",
+  "buyerRegistrationId",
+  "buyerVatId",
+  "buyerAddressLine1",
+  "buyerAddressLine2",
+  "buyerCity",
+  "buyerPostalCode",
+  "buyerCountry",
+] as const;
+
+type InvoiceBuyerTextField = (typeof INVOICE_BUYER_TEXT_FIELDS)[number];
+
 /** Full shape `list_invoices`'s detail branch redacts, one invoice deep. */
 type InvoiceDetailTextPayload = {
-  invoice: {
+  invoice: Record<InvoiceBuyerTextField, string | null> & {
     reference: string | null;
     notes: string | null;
     timeEntries: readonly InvoiceTimeEntryTextItem[];
     expenses: readonly InvoiceExpenseTextItem[];
+    lines: readonly InvoiceLineTextItem[];
   };
 };
 
 /**
  * Every redactable field on one invoice detail response: the invoice's own
- * reference/notes (P1: constant `workspaceId`, single item), plus its nested
- * time-entry and expense line items (each with its own narrative/description
- * pair and the linked entity's name).
+ * reference/notes and buyer details (P1: constant `workspaceId`, single item),
+ * plus its nested time-entry and expense line items (each with its own
+ * narrative/description pair and the linked entity's name) and its lines.
  */
 const invoiceDetailTextFieldSpecs = (
   workspaceId: string,
@@ -235,6 +256,17 @@ const invoiceDetailTextFieldSpecs = (
       item.notes = value;
     },
   }),
+  ...INVOICE_BUYER_TEXT_FIELDS.map((field) =>
+    defineTextFieldSpec({
+      path: `invoice.${field}`,
+      items: (payload: InvoiceDetailTextPayload) => [payload.invoice],
+      scope: () => workspaceId,
+      read: (item: InvoiceDetailTextPayload["invoice"]) => item[field],
+      apply: (item: InvoiceDetailTextPayload["invoice"], value) => {
+        item[field] = value;
+      },
+    }),
+  ),
   defineTextFieldSpec({
     path: "invoice.timeEntries[].narrative",
     items: (payload) => payload.invoice.timeEntries,
@@ -293,6 +325,24 @@ const invoiceDetailTextFieldSpecs = (
     read: (item) => item.entity.name,
     apply: (item, value) => {
       item.entity.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.lines[].description",
+    items: (payload) => payload.invoice.lines,
+    scope: () => workspaceId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.lines[].unit",
+    items: (payload) => payload.invoice.lines,
+    scope: () => workspaceId,
+    read: (item) => item.unit,
+    apply: (item, value) => {
+      item.unit = value;
     },
   }),
 ];
@@ -1247,6 +1297,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     if (!invoiceRow) {
       return notFoundResult("Invoice not found or not accessible");
     }
+    const totals = readInvoiceTotals(invoiceRow);
+    if (totals.isErr()) {
+      return internalFailureResult(totals.error);
+    }
 
     const invoice = {
       id: invoiceRow.id,
@@ -1258,10 +1312,20 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       reference: invoiceRow.reference,
       status: invoiceRow.status,
       invoiceDate: invoiceRow.invoiceDate,
+      taxableSupplyDate: invoiceRow.taxableSupplyDate,
       dueDate: invoiceRow.dueDate,
       currency: invoiceRow.currency,
       totalAmount: invoiceRow.totalAmount,
       notes: invoiceRow.notes,
+      sellerProfileId: invoiceRow.sellerProfileId,
+      buyerName: invoiceRow.buyerName,
+      buyerRegistrationId: invoiceRow.buyerRegistrationId,
+      buyerVatId: invoiceRow.buyerVatId,
+      buyerAddressLine1: invoiceRow.buyerAddressLine1,
+      buyerAddressLine2: invoiceRow.buyerAddressLine2,
+      buyerCity: invoiceRow.buyerCity,
+      buyerPostalCode: invoiceRow.buyerPostalCode,
+      buyerCountry: invoiceRow.buyerCountry,
       paidAt: invoiceRow.paidAt?.toISOString() ?? null,
       createdAt: invoiceRow.createdAt.toISOString(),
       updatedAt: invoiceRow.updatedAt.toISOString(),
@@ -1297,6 +1361,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
           entity: { id: entity.id, name: entity.name },
         };
       }),
+      lines: invoiceRow.lines.map(
+        ({ releasedAt: _releasedAt, ...line }) => line,
+      ),
+      totals: totals.value,
     };
 
     const textFields = runTextFieldSpecs(
@@ -1543,8 +1611,10 @@ export const BILLING_TOOL_DEFINITIONS = [
     },
     description:
       "List invoices in a matter, or read one invoice in detail. Pass " +
-      "invoice_id to get a single invoice with its line items (time entries " +
-      "and expenses). Otherwise pass matter_id to list the matter's " +
+      "invoice_id to get a single invoice with its lines, totals with the " +
+      "VAT breakdown, taxable supply date, seller profile id, buyer details, " +
+      "and attached time entries and expenses. Otherwise pass matter_id to " +
+      "list the matter's " +
       "invoices. Returns each invoice's id, number, reference, status, dates, currency, " +
       "and total (integer minor currency units).",
     inputSchema: listInvoicesArgsSchema,

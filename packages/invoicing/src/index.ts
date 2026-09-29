@@ -6,6 +6,7 @@ export {
   createSingleLineDocument,
   type CreateSingleLineDocumentInput,
 } from "./invoice-document";
+export { calculateLineNetAmount, VAT_TREATMENTS } from "./line-amount";
 export {
   buildCzechQrPaymentPayload,
   type CzechQrPaymentInput,

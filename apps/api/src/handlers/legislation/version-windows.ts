@@ -129,8 +129,10 @@ export const storedWindow = (version: VersionWindow): StoredWindow => {
   } else {
     // Read as data, not trusted as typed: a connector may pass a basis its
     // disposition does not have, or one this contract does not know.
-    const bases: readonly string[] | undefined =
-      LEGISLATION_WINDOW_DISPOSITION_BASES[version.type];
+    const basesByDisposition: Readonly<
+      Partial<Record<string, readonly string[]>>
+    > = LEGISLATION_WINDOW_DISPOSITION_BASES;
+    const bases = basesByDisposition[version.type];
     if (bases === undefined || !bases.includes(version.basis)) {
       return panic(
         "legislation version window basis is not its disposition's",

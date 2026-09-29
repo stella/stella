@@ -893,7 +893,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 1844,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -4789,7 +4789,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:read",
     "access": "read",
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
@@ -7014,7 +7014,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 1844,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -7814,7 +7814,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "scope": "stella:read_anonymized",
     "access": "read",
     "feature": "FEATURE_TIME_BILLING",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
     "annotations": {
       "title": "List invoices",
       "destructiveHint": false,
@@ -8419,7 +8419,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 1844,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }

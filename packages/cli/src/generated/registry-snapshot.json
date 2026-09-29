@@ -873,7 +873,7 @@
         "cursor": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 512,
+          "maxLength": 1844,
           "description": "Opaque cursor from a previous search_legislation call"
         }
       }
@@ -4506,7 +4506,7 @@
       "singleReadWhen": "invoice_id"
     },
     "name": "list_invoices",
-    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its lines, totals with the VAT breakdown, taxable supply date, seller profile id, buyer details, and attached time entries and expenses. Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
     "inputSchema": {
       "type": "object",
       "required": [],
