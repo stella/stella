@@ -14,6 +14,7 @@ type Workflow = {
   name: string;
   on: Record<string, unknown>;
   permissions: unknown;
+  concurrency?: unknown;
   jobs: Record<
     string,
     {
@@ -133,6 +134,21 @@ describe("the publisher", () => {
       workflows: [relay.name],
       types: ["requested"],
     });
+  });
+
+  // Its pull_request_target run is listed among the pull request's checks,
+  // so another event for the same head cancelling it reads as failed CI.
+  test("never lets another run cancel a pull request event's run", () => {
+    const { concurrency } = publisher;
+    const group = isRecord(concurrency) ? concurrency["group"] : undefined;
+    // The first alternative wins; any later one could be shared.
+    const [first] =
+      typeof group === "string"
+        ? group.replaceAll(/\s+/gu, " ").split("||")
+        : [];
+    expect(first?.trim()).toEndWith(
+      "github.event_name == 'pull_request_target' && format('run-{0}', github.run_id)",
+    );
   });
 });
 
