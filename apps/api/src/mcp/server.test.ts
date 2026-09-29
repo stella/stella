@@ -390,6 +390,11 @@ describe("handleMcpHttpRequest", () => {
     if (definitions.length !== 2) {
       panic("Canonical upload and picker tool definitions are missing");
     }
+    const pickerResult = {
+      entityId: "00000000-0000-4000-8000-0000000e0001",
+      workspaceId: "workspace_1",
+      nextStep: "Have the user choose a file in the upload panel.",
+    };
 
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({
@@ -427,13 +432,8 @@ describe("handleMcpHttpRequest", () => {
               },
             }
           : {
-              content: [
-                { type: "text", text: "Choose a file in the upload panel." },
-              ],
-              structuredContent: {
-                entityId: "00000000-0000-4000-8000-0000000e0001",
-                workspaceId: "workspace_1",
-              },
+              content: [{ type: "text", text: JSON.stringify(pickerResult) }],
+              structuredContent: pickerResult,
             },
     );
 
@@ -500,10 +500,7 @@ describe("handleMcpHttpRequest", () => {
         },
         { timeout: 2000 },
       );
-      expect(opened.structuredContent).toEqual({
-        entityId: "00000000-0000-4000-8000-0000000e0001",
-        workspaceId: "workspace_1",
-      });
+      expect(opened.structuredContent).toEqual(pickerResult);
       expect(authenticateMcpRequestMock).toHaveBeenCalledWith("token", {
         mode: "documents",
       });
@@ -1111,6 +1108,45 @@ describe("handleMcpHttpRequest", () => {
     expect(parsed?.error.code).toBe("unknown_tool");
     expect(parsed?.error.hint).toContain("list_matters");
     expect(body.result.isError).toBe(true);
+  });
+
+  test("points a call spelled as a chat script function at the tool it means", async () => {
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: ["stella:read"],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ type: "mcp-context" });
+    getMcpToolRequiredScopesHintMock.mockReturnValue(undefined);
+    getMcpToolDefinitionMock.mockResolvedValue(undefined);
+    listMcpToolsMock.mockResolvedValue([
+      {
+        description: "List matters",
+        inputSchema: { type: "object", properties: {} },
+        name: "list_matters",
+      },
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { arguments: {}, name: "external_list_matters" },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+    const item = body.result.content.at(0);
+    const parsed =
+      item?.type === "text"
+        ? parseUnknownToolErrorEnvelope(item.text)
+        : undefined;
+    expect(parsed?.error.hint).toBe(
+      "No such tool. Did you mean `list_matters`? Call tools/list for the full set.",
+    );
   });
 
   test("does not fuzzy match unusually long unknown tool names", async () => {

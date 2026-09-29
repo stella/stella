@@ -38,6 +38,7 @@ import { envBase } from "@/api/env-base";
 import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
+import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
@@ -238,6 +239,14 @@ export const isS3KeyInSigningScope = (
   key: string,
   scope: S3SigningScope,
 ): boolean => key.startsWith(s3SigningScopePrefix(scope));
+
+const assertKeyInSigningScope = (key: string, scope: S3SigningScope): void => {
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+};
 
 const roleSessionName = (scope: S3SigningScope): string => {
   const scopeHash = new Bun.CryptoHasher("sha256")
@@ -491,11 +500,7 @@ const getTenantAwsS3Client = async ({
   key: string;
   scope: S3SigningScope;
 }): Promise<AwsS3Client> => {
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
+  assertKeyInSigningScope(key, scope);
   if (!isScopedSigningEnabled()) {
     return await getAwsS3Client();
   }
@@ -504,6 +509,11 @@ const getTenantAwsS3Client = async ({
 
 type TenantS3OperationHooks = {
   resolveClient: typeof getTenantAwsS3Client;
+  headObjectSize: (
+    client: AwsS3Client,
+    command: HeadObjectCommand,
+    signal: AbortSignal,
+  ) => Promise<number | null>;
   readObject: (
     client: AwsS3Client,
     command: GetObjectCommand,
@@ -523,6 +533,12 @@ export const createTenantS3RequestSignal = (
 
 const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
   resolveClient: getTenantAwsS3Client,
+  headObjectSize: async (client, command, signal) => {
+    const response = await client.send(command, {
+      abortSignal: createTenantS3RequestSignal(signal),
+    });
+    return response.ContentLength ?? null;
+  },
   readObject: async (client, command, signal) => {
     const response = await client.send(command, {
       abortSignal: createTenantS3RequestSignal(signal),
@@ -543,12 +559,122 @@ const DEFAULT_TENANT_S3_OPERATION_HOOKS: TenantS3OperationHooks = {
 
 let tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
 
-/** Replace tenant-object I/O seams for unit tests. */
+/**
+ * Replace tenant-object I/O seams for unit tests; seams left out keep their
+ * production implementation.
+ */
 export const setTenantS3OperationHooksForTesting = (
-  hooks: TenantS3OperationHooks,
+  hooks: Partial<TenantS3OperationHooks>,
 ): void => {
-  tenantS3OperationHooks = hooks;
+  tenantS3OperationHooks = { ...DEFAULT_TENANT_S3_OPERATION_HOOKS, ...hooks };
 };
+
+/**
+ * Drop the cached client a tenant operation was refused with, so the next
+ * resolution signs with fresh credentials. Only that client is evicted: a
+ * concurrent operation may already have replaced it. When resolution itself
+ * failed, the STS client that signs AssumeRole holds the stale credentials.
+ */
+const evictTenantAwsS3Client = async ({
+  actions,
+  client,
+  scope,
+}: {
+  actions: readonly S3SigningAction[];
+  client: AwsS3Client | null;
+  scope: S3SigningScope;
+}): Promise<void> => {
+  if (client === null) {
+    _stsClientPromise = null;
+    return;
+  }
+  const cacheKey = scopedClientCacheKey(scope, actions);
+  const scoped = _scopedClientCache.get(cacheKey);
+  if (scoped?.cached?.client === client) {
+    removeScopedClient(cacheKey, scoped);
+  }
+  const unscoped = _clientPromise;
+  if (unscoped === null) {
+    return;
+  }
+  // A rejected build has already cleared its own slot, so only a settled
+  // client can still need evicting.
+  const cached = await Result.tryPromise({
+    try: async () => await unscoped,
+    catch: (cause) => cause,
+  });
+  if (
+    Result.isOk(cached) &&
+    cached.value.client === client &&
+    _clientPromise === unscoped
+  ) {
+    _clientPromise = null;
+  }
+};
+
+/**
+ * Run one tenant-object operation on a freshly resolved client. Cached
+ * clients carry credentials that can expire (the task role rotates; a scoped
+ * session ends), so an expired-credential refusal evicts the client and
+ * replays the operation once, as the unscoped documents helpers do.
+ */
+const runTenantS3Operation = async <T>({
+  actions,
+  key,
+  operation,
+  scope,
+}: {
+  actions: readonly S3SigningAction[];
+  key: string;
+  operation: (client: AwsS3Client) => Promise<T>;
+  scope: S3SigningScope;
+}): Promise<T> => {
+  assertKeyInSigningScope(key, scope);
+  let client: AwsS3Client | null = null;
+  const credentials = createS3CredentialGuard({
+    // Both client caches age out their own entries on resolution.
+    isStale: () => false,
+    refresh: async () => {
+      await evictTenantAwsS3Client({ actions, client, scope });
+    },
+  });
+  return await credentials.run(async () => {
+    client = await tenantS3OperationHooks.resolveClient({
+      actions,
+      key,
+      scope,
+    });
+    return await operation(client);
+  });
+};
+
+/**
+ * An object's size without reading it, after enforcing its
+ * organization/workspace key scope. Null when storage does not report a
+ * length.
+ */
+export const readTenantS3ObjectSize = async ({
+  key,
+  scope,
+  signal,
+}: {
+  key: string;
+  scope: S3SigningScope;
+  signal: AbortSignal;
+}): Promise<number | null> =>
+  await runTenantS3Operation({
+    // HeadObject is authorized by s3:GetObject, so the size check and the
+    // following read share one scoped session.
+    actions: ["s3:GetObject"],
+    key,
+    operation: async (client) =>
+      await tenantS3OperationHooks.headObjectSize(
+        client,
+        new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+        signal,
+      ),
+    scope,
+  });
 
 /** Read an object after enforcing its organization/workspace key scope. */
 export const readTenantS3ArrayBuffer = async ({
@@ -560,21 +686,17 @@ export const readTenantS3ArrayBuffer = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<ArrayBuffer> => {
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
-  const client = await tenantS3OperationHooks.resolveClient({
+  const bytes = await runTenantS3Operation({
     actions: ["s3:GetObject"],
     key,
+    operation: async (client) =>
+      await tenantS3OperationHooks.readObject(
+        client,
+        new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+        signal,
+      ),
     scope,
   });
-  const bytes = await tenantS3OperationHooks.readObject(
-    client,
-    new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-    signal,
-  );
   if (bytes.buffer instanceof ArrayBuffer) {
     return bytes.buffer.slice(
       bytes.byteOffset,
@@ -600,26 +722,23 @@ export const writeTenantS3Object = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<void> => {
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
-  const client = await tenantS3OperationHooks.resolveClient({
+  await runTenantS3Operation({
     actions: ["s3:PutObject"],
     key,
+    operation: async (client) => {
+      await tenantS3OperationHooks.writeObject(
+        client,
+        new PutObjectCommand({
+          Body: data,
+          Bucket: envBase.S3_BUCKET,
+          ContentType: contentType,
+          Key: key,
+        }),
+        signal,
+      );
+    },
     scope,
   });
-  await tenantS3OperationHooks.writeObject(
-    client,
-    new PutObjectCommand({
-      Body: data,
-      Bucket: envBase.S3_BUCKET,
-      ContentType: contentType,
-      Key: key,
-    }),
-    signal,
-  );
 };
 
 const getPresignClient = async ({
@@ -641,11 +760,7 @@ const getPresignClient = async ({
     return await getAwsS3Client();
   }
 
-  if (!isS3KeyInSigningScope(key, scope)) {
-    throw new S3PresignError({
-      message: "S3 key is outside the requested signing scope",
-    });
-  }
+  assertKeyInSigningScope(key, scope);
 
   return await getScopedAwsS3Client(scope, actions, expiresIn);
 };

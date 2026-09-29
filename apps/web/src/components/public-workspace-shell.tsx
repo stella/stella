@@ -8,11 +8,11 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { CircleUserRoundIcon, PanelLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
+import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 

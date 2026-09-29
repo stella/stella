@@ -1,11 +1,12 @@
 name: autofix.ci # autofix.ci uses this exact name as a security boundary
 
+# No `paths` filter: each job scopes itself. The Dependabot job runs only on
+# dependabot/bun/* heads, which always carry a bun.lock or
+# packages/*/package.json change, and the regeneration job reads the whole
+# source tree.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - "bun.lock"
-      - "packages/*/package.json"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -56,6 +57,7 @@ jobs:
           git diff --quiet "$BASE_SHA" "$HEAD_SHA" --
           scripts/dependabot-changeset.ts
           scripts/changeset-guard.ts
+          scripts/changeset-entry.ts
           scripts/changeset-policy.json
           scripts/check-resolution-ranges.ts
           scripts/check-resolutions-only-change.ts
@@ -120,7 +122,219 @@ jobs:
 
           git diff --check -- bun.lock package.json
 
+      # The GitHub App writes the commit; its synchronize event is excluded above.
       - name: Push autofixes
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
           commit-message: "chore: autofix Dependabot Bun update"
+
+  regenerate-scope:
+    name: Scope autofixes
+    # Same-repository pull requests only: the generators run the pull
+    # request's own code, and the result lands on that pull request's branch,
+    # which its author can already push to. Fork and Dependabot pull requests
+    # keep the CI drift guards alone.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+      && github.actor != 'dependabot[bot]'
+      && github.actor != 'autofix-ci[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      ready: ${{ steps.planner.outputs.ready }}
+      run: ${{ steps.scope.outputs.run }}
+      ids: ${{ steps.scope.outputs.ids }}
+      allowed: ${{ steps.scope.outputs.allowed }}
+    steps:
+      # Fetch paths before checking out pull request code. Only the planner
+      # files are needed in this job; generators run in the later job.
+      - name: Fetch changed paths
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
+
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: |
+            /scripts/
+            /package.json
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Check planner availability
+        id: planner
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in scripts/autofix-plan.ts scripts/generated-files.ts; do
+            if [[ -f "$path" ]]; then
+              continue
+            fi
+            if git cat-file -e "HEAD:$path" 2>/dev/null; then
+              echo "::error::Sparse checkout omitted $path."
+              exit 1
+            fi
+            echo "::notice::Autofix requires a branch that includes $path."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          done
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      # The manifest owns generator inputs and outputs. The files API lists at
+      # most 3000 files, so a list that long regenerates rather than guessing.
+      - name: Match generator inputs
+        id: scope
+        if: steps.planner.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(wc -l < "$RUNNER_TEMP/changed-paths")" -ge 3000 ]]; then
+            bun --no-install --no-env-file scripts/autofix-plan.ts plan --all < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
+          else
+            bun --no-install --no-env-file scripts/autofix-plan.ts plan < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
+          fi
+
+  regenerate-derived-files:
+    name: Autofix changed files
+    needs: regenerate-scope
+    if: >-
+      needs.regenerate-scope.result == 'success'
+      && needs.regenerate-scope.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout pull request head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          submodules: true
+
+      - name: Record changed paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
+            echo "::error::Autofix moved HEAD away from $HEAD_SHA."
+            exit 1
+          fi
+          git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN; pull request installs get none.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+
+      - name: Regenerate selected files
+        if: needs.regenerate-scope.outputs.run == 'true'
+        env:
+          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+        run: bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+
+      - name: Fix changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          format_paths=()
+          lint_paths=()
+          for path in "${changed[@]}"; do
+            [[ -f "$path" && ! -L "$path" ]] || continue
+            # The GitHub App cannot update workflow files.
+            if [[ "$path" == .github/workflows/* ]]; then
+              continue
+            fi
+            format_paths+=("./$path")
+            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ ]]; then
+              lint_paths+=("./$path")
+            fi
+          done
+
+          if (( ${#lint_paths[@]} > 0 )); then
+            # --fix applies safe fixes only. CI's lint job reports anything left.
+            lint_status=0
+            bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "${lint_paths[@]}" || lint_status=$?
+            if (( lint_status > 1 )); then
+              exit "$lint_status"
+            fi
+          fi
+          if (( ${#format_paths[@]} > 0 )); then
+            bun run format:guard
+            bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
+          fi
+
+      - name: Restrict autofix changes
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
+            echo "::error::Autofix moved HEAD away from $HEAD_SHA."
+            exit 1
+          fi
+
+          mapfile -d '' -t changed < "$RUNNER_TEMP/autofix-changed-paths"
+          IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
+          excludes=()
+          for path in "${changed[@]}"; do
+            if [[ "$path" == .github/workflows/* ]]; then
+              continue
+            fi
+            excludes+=(":(exclude,literal)$path")
+          done
+          for path in "${generated[@]}"; do
+            [[ -n "$path" ]] || continue
+            excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")
+          done
+
+          unexpected_tracked="$(git diff --name-only -- . "${excludes[@]}")"
+          unexpected_untracked="$(git ls-files --others --exclude-standard -- . "${excludes[@]}")"
+          if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
+            echo "::error::Autofix changed files outside the changed and generated paths."
+            git status --short
+            exit 1
+          fi
+
+          git status --short
+
+      - name: Push autofixes
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        with:
+          commit-message: "chore: autofix files"

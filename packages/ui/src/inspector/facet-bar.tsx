@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ChevronDownIcon } from "lucide-react";
-
 import { Button } from "../components/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../components/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/tooltip";
+import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { resolveFacetOverflow } from "./facet-bar.logic";
 import { TOOLBAR_ROW_HEIGHT } from "./layout-tokens";
@@ -254,7 +253,7 @@ const flashFacetChip = (el: HTMLElement) => {
 };
 
 const CHIP_CLASS =
-  "shrink-0 rounded-md px-1.5 py-1 text-xs font-medium whitespace-nowrap transition-colors";
+  "shrink-0 rounded-md px-1.5 py-1 text-xs font-medium whitespace-nowrap";
 const INACTIVE_CHIP_CLASS =
   "text-muted-foreground hover:bg-muted hover:text-foreground";
 

@@ -54,8 +54,10 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
+  "apps/api/src/handlers/saved-time-narratives/**/*.ts",
   "apps/api/src/handlers/saved-searches/**/*.ts",
   "apps/api/src/handlers/search/**/*.ts",
+  "apps/api/src/handlers/seller-profiles/**/*.ts",
   "apps/api/src/handlers/tasks/**/*.ts",
   "apps/api/src/handlers/template-packs/**/*.ts",
   "apps/api/src/handlers/template-recipes/**/*.ts",
@@ -65,13 +67,17 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/verify/**/*.ts",
   "apps/api/src/handlers/work-obligations/**/*.ts",
   "apps/api/src/lib/bbox/**/*.ts",
+  "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",
   "apps/api/src/lib/conditions/**/*.ts",
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
+  "apps/api/src/lib/email/correspondence/**/*.ts",
+  "apps/api/src/lib/email/inbound/**/*.ts",
   "apps/api/src/lib/extraction-runs/**/*.ts",
+  "apps/api/src/lib/files/pdf-signing/**/*.ts",
   "apps/api/src/lib/infosoud/**/*.ts",
   "apps/api/src/lib/json-schema/**/*.ts",
   "apps/api/src/lib/lists/**/*.ts",
@@ -81,6 +87,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/observability/**/*.ts",
   "apps/api/src/lib/properties/**/*.ts",
   "apps/api/src/lib/s3/**/*.ts",
+  "apps/api/src/lib/skills/**/*.ts",
   "apps/api/src/lib/smoke-session/**/*.ts",
   "apps/api/src/lib/template-binding/**/*.ts",
   "apps/api/src/lib/uploads/**/*.ts",
@@ -130,8 +137,12 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
+  "packages/invoicing/src/**/*.ts",
   "packages/legal-atlas/src/**/*.ts",
+  "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
+  "packages/runtime-mode/src/**/*.ts",
+  "packages/sanctions/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
   "packages/time/src/**/*.ts",
@@ -156,6 +167,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
+  // TanStack invokes these server-tool callbacks and turns thrown
+  // ChatToolError values into tool failures; it cannot consume Result.err.
+  "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
   "apps/api/src/lib/workflow-queue.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
@@ -170,6 +184,12 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack AI reads a chat tool's failure only from the error its server
+  // function throws; tools keep `Result`s and raise through this one module.
+  "apps/api/src/handlers/chat/tools/tool-failure.ts",
+  // Handed to LibPDF as a signer and a timestamp authority, which report a
+  // failure back through `pdf.sign` only by rejecting.
+  "apps/api/src/lib/files/pdf-signing/libpdf-callbacks.ts",
   // These packages are boundary adapters by design: the runtime turns
   // invalid startup state into fatal exceptions, while the testkit exposes
   // assertion failures to test runners.
@@ -276,7 +296,6 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "apps/api/src/lib/scouts" },
   { reason: "unreviewed", unit: "apps/api/src/lib/search" },
   { reason: "unreviewed", unit: "apps/api/src/lib/signals" },
-  { reason: "unreviewed", unit: "apps/api/src/lib/skills" },
   { reason: "unreviewed", unit: "apps/api/src/lib/tasks" },
   { reason: "unreviewed", unit: "apps/api/src/lib/templates" },
   { reason: "unreviewed", unit: "apps/api/src/lib/web-search" },

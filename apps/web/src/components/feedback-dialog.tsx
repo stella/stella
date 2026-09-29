@@ -3,7 +3,6 @@ import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { panic, Result } from "better-result";
-import { CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -31,6 +30,7 @@ import {
   FieldLabel,
 } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import { CopyIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,

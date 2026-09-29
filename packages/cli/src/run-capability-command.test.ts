@@ -39,12 +39,17 @@ const startServer = (response: ServerResponse) => {
       }
       const args = body.params.arguments ?? {};
       calls.push({ name: body.params.name, args });
+      // As the server answers: the capability output under `result`, in
+      // structuredContent and as its JSON text.
       const text = (payload: unknown): Response =>
         Response.json({
           jsonrpc: "2.0",
           id: 1,
           result: {
-            content: [{ type: "text", text: JSON.stringify(payload) }],
+            content: [
+              { type: "text", text: JSON.stringify({ result: payload }) },
+            ],
+            structuredContent: { result: payload },
           },
         });
       if (response.kind === "confirm-gate") {
@@ -643,6 +648,38 @@ describe("runCapabilityCommand: reserved flag values", () => {
 });
 
 describe("runCapabilityCommand: output contract", () => {
+  test("a page under `result` renders as a table with its resume cursor", async () => {
+    const server = startServer({
+      kind: "pages",
+      pages: [
+        { items: [{ name: "alpha" }, { name: "beta" }], nextCursor: "c1" },
+      ],
+    });
+    const spec = capSpec({
+      capabilityId: "a.list",
+      paginated: true,
+      paginationPart: "query",
+      itemsKey: "items",
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { output: "table" },
+      spec,
+    });
+    server.stop();
+    const stdout = tty.stdoutText();
+    expect(stdout).toContain("name");
+    expect(stdout).toContain("alpha");
+    expect(stdout).toContain("beta");
+    expect(stdout).not.toContain("result");
+    expect(tty.stderrText()).toBe("more: --cursor c1\n");
+  });
+
   test("a page result under --output jsonl emits one item per line to stdout", async () => {
     const server = startServer({
       kind: "pages",

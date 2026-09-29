@@ -1,4 +1,3 @@
-import { ArrowLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -12,6 +11,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowLeftIcon } from "@stll/ui/icons";
 
 /** Confirmation shown when leaving a detail view with unsaved/un-versioned
  *  changes. The "keep editing" action cancels; the secondary and primary

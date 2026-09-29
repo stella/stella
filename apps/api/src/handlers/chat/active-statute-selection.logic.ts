@@ -21,7 +21,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 // passage back by. Corpus-neutral despite the name.
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 
-export type SelectedStatuteProvision = {
+type SelectedStatuteProvision = {
   /** The provision's own anchor, from the heading that opens it. */
   anchorId: string;
   /**

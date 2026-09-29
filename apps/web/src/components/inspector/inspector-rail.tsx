@@ -3,9 +3,13 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { FileTextIcon, MessageSquareIcon, PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  FileTextIcon,
+  MessageSquareIcon,
+  PanelRightIcon,
+} from "@stll/ui/icons";
 import {
   entityTabGlyph,
   InspectorEntityTab,
@@ -395,7 +399,7 @@ const SuggestedReviveTab = () => {
         <button
           aria-label={label}
           className={cn(
-            "text-foreground-muted hover:bg-accent hover:text-foreground flex min-h-8 w-full items-center justify-center transition-colors",
+            "text-foreground-muted hover:bg-accent hover:text-foreground flex min-h-8 w-full items-center justify-center",
             TOOLBAR_ROW_HEIGHT,
           )}
           onClick={reviveSuggestedTab}

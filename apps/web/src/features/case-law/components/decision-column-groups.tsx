@@ -6,9 +6,9 @@
  * either hidden or not, so a question is hidden the same way a court is.
  */
 
-import { TagIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { TagIcon } from "@stll/ui/icons";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import type { ColumnToggleGroup } from "@/components/workspaces/table/column-toggle";

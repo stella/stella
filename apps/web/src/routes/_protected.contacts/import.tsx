@@ -3,15 +3,6 @@ import type { RefObject } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import {
-  AlertTriangleIcon,
-  ArrowLeftIcon,
-  ArrowRightIcon,
-  CheckCircle2Icon,
-  FileSpreadsheetIcon,
-  Loader2Icon,
-  UploadIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -33,6 +24,15 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  AlertTriangleIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckCircle2Icon,
+  FileSpreadsheetIcon,
+  Loader2Icon,
+  UploadIcon,
+} from "@stll/ui/icons";
 import {
   Select,
   SelectItem,
@@ -467,7 +467,7 @@ const UploadStep = ({
       <button
         aria-busy={isInspecting}
         className={cn(
-          "focus-visible:ring-ring flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          "focus-visible:ring-ring flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl p-8 text-center focus-visible:ring-2 focus-visible:outline-none",
           isDropTarget &&
             "bg-primary/5 outline-primary/40 outline-2 -outline-offset-8 outline-dashed",
           isInspecting && "cursor-progress",

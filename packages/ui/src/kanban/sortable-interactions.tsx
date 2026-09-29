@@ -33,9 +33,9 @@ import type {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import type { SortableContextProps } from "@dnd-kit/sortable";
-import { GripVerticalIcon } from "lucide-react";
 
 import { Button } from "../components/button";
+import { GripVerticalIcon } from "../icons";
 import { BOARD_DRAG_OVERLAY_Z_INDEX } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import {

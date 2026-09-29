@@ -15,6 +15,7 @@ import { encodeCompatId, type CompatCorpusId } from "@/api/mcp/compat-ids";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   MCP_CONTENT_MAX_CHARS,
@@ -95,13 +96,8 @@ export const decodeCompatSearchCursor = (
   };
 };
 
-export const compatSearchCursorError = () =>
-  structuredErrorResult({
-    code: "validation_error",
-    message: "Invalid cursor",
-    issues: [{ path: "cursor", message: "Invalid cursor" }],
-    hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-  });
+export const compatSearchCursorError = (cursor: string) =>
+  invalidCursorResult({ cursor });
 
 /**
  * A malformed id is a validation issue at the boundary, never a database cast

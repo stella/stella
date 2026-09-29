@@ -6,16 +6,6 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-  RotateCcwIcon,
-  Rows3Icon,
-  SparklesIcon,
-  Trash2Icon,
-  TriangleAlertIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
@@ -31,6 +21,16 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  LoaderCircleIcon,
+  RotateCcwIcon,
+  Rows3Icon,
+  SparklesIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
@@ -1036,7 +1036,7 @@ const OrganizerTreePreview = ({
   return (
     <div
       className={cn(
-        "border-border rounded-md border transition-colors",
+        "border-border rounded-md border",
         isRootOver && "border-primary/40 bg-primary/4",
       )}
       ref={containerRef}
@@ -1159,7 +1159,7 @@ const OrganizerFolderNode = ({
     <li>
       <div
         className={cn(
-          "text-foreground flex items-center gap-1.5 rounded-sm px-2 py-1 text-sm font-medium transition-colors",
+          "text-foreground flex items-center gap-1.5 rounded-sm px-2 py-1 text-sm font-medium",
           isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
         )}
         ref={headerRef}

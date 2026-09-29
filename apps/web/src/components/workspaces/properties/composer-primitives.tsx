@@ -1,14 +1,14 @@
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   AtSignIcon,
   FileTextIcon,
   PlusIcon,
   XIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverClose,
@@ -72,7 +72,7 @@ type TypeChipsRowProps<TType extends string> = {
 };
 
 const CHIP_BASE_CLASS =
-  "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium transition-colors";
+  "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium";
 const CHIP_ACTIVE_CLASS =
   "bg-foreground text-background border-foreground shadow-xs/5";
 const CHIP_IDLE_CLASS =

@@ -9,6 +9,7 @@
 
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import type {
   BlockContent,
@@ -16,6 +17,7 @@ import type {
   Run,
   RunContent,
 } from "@stll/docx-core/model";
+import { propertyConfig } from "@stll/property-testing";
 
 import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 
@@ -94,6 +96,159 @@ describe("code pages", () => {
     expect(
       paragraphsOf(String.raw`{\rtf1\ansi\ansicpg1252 Gy\'f5r\par }`),
     ).toEqual(["Győr".replace("ő", "õ")]);
+  });
+
+  test("a font's `\\fcharsetN` outranks the document's ansicpg for its bytes", () => {
+    // Word on a Western-European machine: `\ansicpg1252`, and the Hungarian
+    // text in a Central-European font. Read against the document's page,
+    // every "ő" and "ű" in the collection printed as "õ" and "û".
+    const fonts = String.raw`{\fonttbl{\f0\froman\fcharset238 Times New Roman CE;}{\f1\fswiss\fcharset0 Arial;}}`;
+    expect(
+      paragraphsOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\deff0${fonts}\pard Gy\'f5r b\'fbn\par \f1 Gy\'f5r\par {\f0 Gy\'f5r} Gy\'f5r\par }`,
+      ),
+    ).toEqual(["Győr bűn", "Gyõr", "Győr Gyõr"]);
+  });
+
+  test("bytes before `\\plain` keep the font they were written in", () => {
+    const fonts = String.raw`{\fonttbl{\f0\fcharset238 CE;}{\f1\fcharset0 Arial;}}`;
+    expect(
+      paragraphsOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\deff0${fonts}\f1 S\'f8ren\plain , next\par }`,
+      ),
+    ).toEqual(["Søren, next"]);
+    expect(
+      paragraphsOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\deff1${fonts}\f0 Gy\'f5r\plain , next\par }`,
+      ),
+    ).toEqual(["Győr, next"]);
+  });
+
+  test("every byte reads in the font active when it was written", () => {
+    // Font switches, resets and groups in any order: the reader's text must
+    // equal what a model of the font state says each byte was written in.
+    const FONTS = [
+      { charset: 238, label: "windows-1250" },
+      { charset: 0, label: "windows-1252" },
+      { charset: 204, label: "windows-1251" },
+    ] as const;
+    type Step =
+      | { type: "byte"; byte: number }
+      | { type: "font"; font: number }
+      | { type: "plain" }
+      | { type: "group"; steps: Step[] };
+    const step: fc.Memo<Step> = fc.memo((depth) =>
+      fc.oneof(
+        { depthSize: "small", withCrossShrink: true },
+        fc.record({
+          type: fc.constant("byte" as const),
+          byte: fc.integer({ min: 0xc0, max: 0xff }),
+        }),
+        fc.record({
+          type: fc.constant("font" as const),
+          font: fc.integer({ min: 0, max: FONTS.length - 1 }),
+        }),
+        fc.record({ type: fc.constant("plain" as const) }),
+        depth <= 1
+          ? fc.record({ type: fc.constant("plain" as const) })
+          : fc.record({
+              type: fc.constant("group" as const),
+              steps: fc.array(step(depth - 1), { maxLength: 6 }),
+            }),
+      ),
+    );
+    const render = (steps: readonly Step[]): string =>
+      steps
+        .map((current) => {
+          switch (current.type) {
+            case "byte":
+              return String.raw`\'${current.byte.toString(16)}`;
+            case "font":
+              return String.raw`\f${String(current.font)} `;
+            case "plain":
+              return String.raw`\plain `;
+            case "group":
+              return `{${render(current.steps)}}`;
+            default:
+              current satisfies never;
+              return panic("Unhandled step");
+          }
+        })
+        .join("");
+    const expected = (
+      steps: readonly Step[],
+      entryFont: number,
+      defaultFont: number,
+    ): string => {
+      let font = entryFont;
+      let text = "";
+      for (const current of steps) {
+        switch (current.type) {
+          case "byte":
+            text += new TextDecoder(FONTS[font]?.label).decode(
+              Uint8Array.of(current.byte),
+            );
+            break;
+          case "font":
+            ({ font } = current);
+            break;
+          case "plain":
+            font = defaultFont;
+            break;
+          case "group":
+            text += expected(current.steps, font, defaultFont);
+            break;
+          default:
+            current satisfies never;
+            panic("Unhandled step");
+        }
+      }
+      return text;
+    };
+    const fontTable = FONTS.map(
+      ({ charset }, index) =>
+        String.raw`{\f${String(index)}\fcharset${String(charset)} F;}`,
+    ).join("");
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: FONTS.length - 1 }),
+        fc.array(step(3), { maxLength: 30 }),
+        (defaultFont, steps) => {
+          const rtf = String.raw`{\rtf1\ansi\ansicpg1252\deff${String(defaultFont)}{\fonttbl${fontTable}}\pard ${render(steps)}\par }`;
+          const text = expected(steps, defaultFont, defaultFont);
+          expect(paragraphsOf(rtf).join("")).toBe(text);
+        },
+      ),
+      propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("an OEM code page no decoder here reads is reported, not read as another", () => {
+    // Code page 437 byte 0x82 is "é"; IBM866 reads the same byte as "В".
+    expect(
+      readRtf(bytesOf(String.raw`{\rtf1\ansi\ansicpg437 caf\'82\par }`))
+        .warnings,
+    ).toEqual(["rtf: unhandled control word \\ansicpg437"]);
+    const oemFont = readRtf(
+      bytesOf(
+        String.raw`{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset255 Terminal;}}\f1 caf\'82\par }`,
+      ),
+    );
+    expect(oemFont.warnings).toEqual([
+      "rtf: unhandled control word \\fcharset255",
+    ]);
+    const [paragraph] = oemFont.package.document.content;
+    expect(paragraph === undefined ? "" : textOf(paragraph)).not.toContain("В");
+  });
+
+  test("a font charset no decoder here reads is reported only where the text uses it", () => {
+    expect(
+      readRtf(
+        bytesOf(
+          String.raw`{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0\fcharset0 Arial;}{\f1\fcharset128 MS Mincho;}}caf\'e9\f1 abc\par }`,
+        ),
+      ).warnings,
+    ).toBeUndefined();
   });
 
   test("a code page outside the map is reported, not guessed at", () => {

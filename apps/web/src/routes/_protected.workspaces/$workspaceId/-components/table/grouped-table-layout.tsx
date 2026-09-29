@@ -13,10 +13,10 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import { SearchXIcon, TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ENTITY_KINDS, VIEW_SORTS_MAX } from "@stll/api-contract";
+import { SearchXIcon, TableIcon } from "@stll/ui/icons";
 import type { KanbanGroup } from "@stll/ui/kanban";
 import {
   getKanbanGroupingPropertyId,

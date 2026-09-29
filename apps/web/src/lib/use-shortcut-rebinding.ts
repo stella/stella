@@ -16,7 +16,7 @@ import {
 import type { RebindError, ShortcutOverrides } from "@/lib/shortcut-overrides";
 import { useShortcutOverrides } from "@/lib/use-effective-shortcuts";
 
-export class ShortcutPersistError extends TaggedError("ShortcutPersistError")<{
+class ShortcutPersistError extends TaggedError("ShortcutPersistError")<{
   message: string;
   cause: unknown;
 }> {}

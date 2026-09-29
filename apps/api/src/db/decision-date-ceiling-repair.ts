@@ -1,5 +1,7 @@
 /**
- * Online repair behind migration 20260902100000_case_law_decision_date_ceiling.
+ * Online repair behind migration 20260902100000_case_law_decision_date_ceiling,
+ * and behind 20260927200300_case_law_decision_date_floor_by_jurisdiction,
+ * which swaps the same CHECK for a per-jurisdiction floor the same way.
  *
  * The migration swaps the CHECK on `case_law_decisions.decision_date` for one
  * with a stricter ceiling and leaves it NOT VALID. The data work runs here,
@@ -32,6 +34,7 @@ import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-b
 import type { CorruptDecisionDateRow } from "../scripts/repair-decision-dates-plan";
 import { repairDecisionDateBatch } from "../scripts/repair-decision-dates-plan";
 import { readConstraintCompletion } from "./online-constraint-completion";
+import { onlineMigrationParams } from "./online-migration-connection";
 import type {
   OnlineMigrationConnection,
   OnlineRepair,
@@ -73,7 +76,7 @@ const dialect = new PgDialect();
 const bindTo = (connection: OnlineMigrationConnection) => ({
   execute: async (query: SQL): Promise<unknown> => {
     const { sql: text, params } = dialect.sqlToQuery(query);
-    return await connection.query(text, params);
+    return await connection.query(text, onlineMigrationParams(params));
   },
 });
 

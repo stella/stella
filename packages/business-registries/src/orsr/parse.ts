@@ -1,23 +1,30 @@
+import { trimToNull } from "../shared/strings.js";
 import type {
   OrsrAddress,
   OrsrCompany,
   OrsrCompanyStatus,
   OrsrCourtFile,
+  OrsrDocument,
+  OrsrFileReference,
+  OrsrHistoryEntry,
   OrsrRawAddress,
   OrsrRawCodelistItem,
   OrsrRawCodelistRef,
   OrsrRawCorporateBody,
   OrsrRawDeposit,
+  OrsrRawDocument,
   OrsrRawExtractResponse,
   OrsrRawFileReference,
   OrsrRawLegalForm,
   OrsrRawLegalPerson,
+  OrsrRawRelatedHit,
   OrsrRawSearchHit,
   OrsrRawStakeholderMember,
   OrsrRawStatutoryBodyMember,
   OrsrRawTemporal,
   OrsrRawValueTemporal,
   OrsrRawWrappedCodelist,
+  OrsrRelatedLegalPerson,
   OrsrSearchResult,
   OrsrStakeholder,
   OrsrStatutoryBody,
@@ -556,7 +563,9 @@ export const parseExtract = (
   };
 };
 
-const composeSearchAddress = (hit: OrsrRawSearchHit): string | null => {
+const composeSearchAddress = (
+  hit: Pick<OrsrRawSearchHit, "physicalAddressLine1" | "physicalAddressLine2">,
+): string | null => {
   const parts = [hit.physicalAddressLine1, hit.physicalAddressLine2]
     .map((part) => part?.trim() ?? "")
     .filter(Boolean);
@@ -568,3 +577,173 @@ export const parseSearchHit = (hit: OrsrRawSearchHit): OrsrSearchResult => ({
   name: normalizeName(hit.corporateBodyFullName) ?? "",
   address: composeSearchAddress(hit),
 });
+
+// ---------------------------------------------------------------------------
+// Opt-in parts: `/extract-full` history, `/documents`, and `/related`
+// ---------------------------------------------------------------------------
+
+type ValueKind = Extract<OrsrHistoryEntry, { value: string }>["kind"];
+
+type EndedDates = { validFrom: string | null; validTo: string };
+
+// A record is superseded once the register closed it with an end date; the
+// XML projection marks an open record with the `0001-01-01` sentinel.
+const endedDates = (record: OrsrRawTemporal): EndedDates | null => {
+  const validTo = sentinelToNull(record.effectiveTo);
+  return validTo === null
+    ? null
+    : { validFrom: sentinelToNull(record.effectiveFrom), validTo };
+};
+
+type ValueEntriesOptions<Row extends OrsrRawTemporal> = {
+  kind: ValueKind;
+  records: Row[] | undefined;
+  read: (record: Row) => string | null | undefined;
+};
+
+const valueEntries = <Row extends OrsrRawTemporal>({
+  kind,
+  records,
+  read,
+}: ValueEntriesOptions<Row>): OrsrHistoryEntry[] =>
+  (records ?? []).flatMap((record) => {
+    const dates = endedDates(record);
+    const value = read(record)?.trim();
+    return dates && value
+      ? [{ kind, value, validFrom: dates.validFrom, validTo: dates.validTo }]
+      : [];
+  });
+
+type PersonEntriesOptions<Member extends OrsrRawStatutoryBodyMember> = {
+  kind: "statutory-body-member" | "stakeholder";
+  members: Member[] | undefined;
+  readRole: (member: Member) => string | null;
+};
+
+const personEntries = <Member extends OrsrRawStatutoryBodyMember>({
+  kind,
+  members,
+  readRole,
+}: PersonEntriesOptions<Member>): OrsrHistoryEntry[] =>
+  (members ?? []).flatMap((member) => {
+    const dates = endedDates(member);
+    const name = pickPersonName(member);
+    return dates && name
+      ? [
+          {
+            kind,
+            name,
+            role: readRole(member),
+            validFrom: dates.validFrom,
+            validTo: dates.validTo,
+          },
+        ]
+      : [];
+  });
+
+/**
+ * Collect the superseded entries of a full extract, newest end date first.
+ * Records still in force are the current extract's business and are left out.
+ */
+export const parseHistory = (
+  raw: OrsrRawExtractResponse,
+): OrsrHistoryEntry[] => {
+  const body = raw.legalPerson?.corporateBody;
+  const entries = [
+    ...valueEntries({
+      kind: "name",
+      records: body?.corporateBodyFullName,
+      read: (record) => normalizeName(record.value),
+    }),
+    ...valueEntries({
+      kind: "legal-form",
+      records: body?.legalForm,
+      read: legalFormName,
+    }),
+    ...valueEntries({
+      kind: "address",
+      records: raw.legalPerson?.physicalAddress,
+      read: (record) => parseAddress(record).textAddress,
+    }),
+    ...valueEntries({
+      kind: "share-capital",
+      records: body?.equity,
+      read: (record) =>
+        formatMonetary(record.equityValue, currencyName(record.currency)),
+    }),
+    ...valueEntries({
+      kind: "acting-clause",
+      records: body?.authorizationToExecute,
+      read: (record) => record.value,
+    }),
+    ...valueEntries({
+      kind: "legal-status",
+      records: body?.legalStatusEvents,
+      read: (record) => record.text,
+    }),
+    ...personEntries({
+      kind: "statutory-body-member",
+      members: body?.statutoryBody,
+      // Members without a function of their own hold the body's office
+      // (e.g. "konatelia"); the upstream arrays list the newest record first.
+      readRole: (member) =>
+        member.function ?? body?.statutoryBodyType?.at(0)?.value ?? null,
+    }),
+    ...personEntries({
+      kind: "stakeholder",
+      members: body?.stakeholder,
+      readRole: (member) =>
+        member.function ?? codelistItemName(member.stakeholderType),
+    }),
+  ];
+  return entries.toSorted((a, b) =>
+    (b.validTo ?? "").localeCompare(a.validTo ?? ""),
+  );
+};
+
+/** Parse one filed document. Returns `null` for a row without number or name. */
+export const parseDocument = (raw: OrsrRawDocument): OrsrDocument | null => {
+  const name = normalizeName(raw.name);
+  if (raw.serialNumber === undefined || !name) {
+    return null;
+  }
+  return {
+    serialNumber: raw.serialNumber,
+    name,
+    typeCode: raw.type ?? null,
+    deliveredOn: sentinelToNull(raw.deliveryDate),
+    pageCount: raw.pageCount ?? null,
+    // The portal lists a document as electronic only when the flag is set.
+    medium: raw.isElectronic === true ? "electronic" : "paper",
+  };
+};
+
+const parseFileReference = (
+  raw: OrsrRawFileReference | undefined,
+): OrsrFileReference | null => {
+  if (!raw?.section || raw.insertNumber === undefined || !raw.court) {
+    return null;
+  }
+  return {
+    court: raw.court,
+    section: raw.section,
+    insertNumber: String(raw.insertNumber),
+  };
+};
+
+/** Parse one related legal person. Returns `null` for a row without a name. */
+export const parseRelatedHit = (
+  raw: OrsrRawRelatedHit,
+): OrsrRelatedLegalPerson | null => {
+  const name = normalizeName(raw.corporateBodyFullName);
+  if (!name) {
+    return null;
+  }
+  return {
+    name,
+    ico: trimToNull(raw.registrationNumber),
+    address: composeSearchAddress(raw),
+    connectedThrough: normalizeName(raw.relatedPersonName),
+    fileReference: parseFileReference(raw.fileReference),
+  };
+};

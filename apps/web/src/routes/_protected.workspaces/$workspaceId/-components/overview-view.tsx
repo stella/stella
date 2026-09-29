@@ -8,21 +8,22 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  CalendarClockIcon,
-  ClockIcon,
-  FolderTreeIcon,
-  PlusIcon,
-  SquareCheckIcon,
-  UploadIcon,
-  WorkflowIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  CalendarClockIcon,
+  ClockIcon,
+  FolderTreeIcon,
+  MailIcon,
+  PlusIcon,
+  SquareCheckIcon,
+  UploadIcon,
+  WorkflowIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,
@@ -161,7 +162,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const firstWeekday = getFirstWeekday(locale);
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const queryClient = useQueryClient();
   const { data } = useSuspenseQuery(overviewOptions(workspaceId));
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
@@ -563,7 +564,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   <div className="divide-y">
                     {tasks.map((task) => (
                       <button
-                        className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start transition-colors"
+                        className="hover:bg-accent/50 flex w-full items-center gap-3 px-3 py-2.5 text-start"
                         key={task.entityId}
                         onClick={() =>
                           useInspectorTabsStore.getState().openTask({
@@ -989,6 +990,24 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         </div>
       )}
 
+      <div className="flex justify-end">
+        <Button
+          onClick={() =>
+            detached(
+              navigate({
+                to: "/workspaces/$workspaceId/correspondence",
+                params: { workspaceId },
+              }),
+              "overview-view.open-correspondence",
+            )
+          }
+          size="sm"
+          variant="outline"
+        >
+          <MailIcon className="size-4" />
+          {t("correspondence.title")}
+        </Button>
+      </div>
       <ActivityPanel key={workspaceId} workspaceId={workspaceId} />
     </div>
   );
@@ -1021,7 +1040,7 @@ const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
   if (onClick) {
     return (
       <button
-        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start transition-colors"
+        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
         onClick={onClick}
         type="button"
       >

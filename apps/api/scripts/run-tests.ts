@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { readdirSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 
 import { PROPERTY_TEST_TIMEOUT_BASE_MS_ENV } from "@stll/property-testing";
@@ -20,7 +20,21 @@ import {
   hasModuleScopeProcessEnvMutation,
   isDbTest,
   TEST_BATCH_KIND,
+  type TestBatchKind,
 } from "./test-batch-plan";
+import {
+  acquireCurrentSnapshot,
+  snapshotCacheDir,
+  snapshotDigest,
+  snapshotKey,
+  SnapshotBuildError,
+} from "./test-db-snapshot-cache";
+import {
+  deriveTestLaneCount,
+  laneRunExitCode,
+  orderBatchesForLanes,
+  runInLanes,
+} from "./test-lanes";
 import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 
 const PROPERTY_FLAG = "--property";
@@ -45,10 +59,10 @@ const REGULAR_TEST_BATCH_SIZE = 10;
 // process; on the Linux runners four DB-backed mock files exceeded the DB
 // batch budget, while three stayed below it. Keep these batches small.
 const MODULE_MOCK_TEST_BATCH_SIZE = 3;
-// The test database is embedded PGlite. The schema is built once per run
-// (scripts/build-pglite-snapshot.ts, spawned below) and every DB-touching
-// test process boots from that dumpDataDir snapshot, skipping the ~2.2 GB
-// drizzle-kit push peak that used to dominate each process (measured
+// The test database is embedded PGlite. The schema snapshot is built once
+// per cache key (scripts/build-pglite-snapshot.ts, spawned below). Every
+// DB-touching test process boots from that dumpDataDir snapshot, skipping
+// the ~2.2 GB drizzle-kit push peak that used to dominate each process (measured
 // per-file solo sweep, 2026-07-20). Each further DB file in a shared
 // process still retains its PGlite WASM memory (never shrinks), so
 // DB-touching tests keep running in small dedicated batches; pure-logic
@@ -265,22 +279,80 @@ for (const { source, testPath } of classifiedTests) {
 // literal here keeps the runner from importing the whole API schema graph.
 const PGLITE_TEST_SNAPSHOT_ENV = "PGLITE_TEST_SNAPSHOT";
 
-const buildTestDbSnapshot = async (): Promise<string> => {
-  const snapshotPath = path.join(
-    tmpdir(),
-    `stella-pglite-test-snapshot-${process.pid}.tar`,
-  );
+// Once batches run, runner output goes through the stdout/stderr streams, not
+// console: a stream queues what a full pipe cannot take yet and the process
+// stays alive until the queue is written, while a direct console write to a
+// full pipe can be cut short. The batch phase never calls process.exit(),
+// which would drop the queue.
+const print = (text: string) => {
+  process.stdout.write(`${text}\n`);
+};
+const printError = (text: string) => {
+  process.stderr.write(`${text}\n`);
+};
+
+// Every child process the runner started and has not reaped yet. An interrupt
+// stops them and waits for them before the run ends and releases its cache
+// lease or deletes its private snapshot.
+const liveChildren = new Set<Bun.Subprocess>();
+const runnerShutdown = new AbortController();
+const CHILD_STOP_GRACE_MS = 10_000;
+
+const awaitChild = async (child: Bun.Subprocess): Promise<number> => {
+  liveChildren.add(child);
+  try {
+    return await child.exited;
+  } finally {
+    liveChildren.delete(child);
+  }
+};
+
+const stopLiveChildren = async (signal: NodeJS.Signals): Promise<void> => {
+  const children = [...liveChildren];
+  for (const child of children) {
+    child.kill(signal);
+  }
+  const escalation = setTimeout(() => {
+    for (const child of children) {
+      child.kill("SIGKILL");
+    }
+  }, CHILD_STOP_GRACE_MS);
+  try {
+    await Promise.all(children.map(async (child) => await child.exited));
+  } finally {
+    clearTimeout(escalation);
+  }
+};
+
+// The handler never exits by itself: aborting stops new batches, the running
+// ones end once signalled, and the run then finishes through its normal path,
+// which prints the summary and runs snapshot cleanup in the `exit` hook. A
+// second signal skips the grace period.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    if (runnerShutdown.signal.aborted) {
+      for (const child of liveChildren) {
+        child.kill("SIGKILL");
+      }
+      return;
+    }
+    printError(
+      `${signal} received; stopping ${liveChildren.size} running test ` +
+        "process(es) before cleanup ...",
+    );
+    runnerShutdown.abort();
+    stopLiveChildren(signal).catch((error: unknown) => {
+      printError(`Stopping the test processes failed: ${String(error)}`);
+    });
+  });
+}
+
+const runSnapshotBuilder = async (snapshotPath: string): Promise<void> => {
   console.log("Building the PGlite test-database snapshot ...");
-  // Registered before the build so a failed build's partial file is also
-  // removed; `exit` does not fire on signals, so cover those explicitly.
-  const cleanupSnapshot = () => {
-    rmSync(snapshotPath, { force: true });
-  };
-  process.on("exit", cleanupSnapshot);
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
-    process.on(signal, () => {
-      cleanupSnapshot();
-      process.exit(1);
+  if (runnerShutdown.signal.aborted) {
+    throw new SnapshotBuildError({
+      message: "PGlite snapshot build interrupted.",
+      exitCode: 1,
     });
   }
   const builder = Bun.spawn({
@@ -294,39 +366,271 @@ const buildTestDbSnapshot = async (): Promise<string> => {
     stdout: "inherit",
     stderr: "inherit",
   });
-  const builderExitCode = await builder.exited;
+  const builderExitCode = await awaitChild(builder);
   if (builderExitCode !== 0) {
-    console.error("PGlite snapshot build failed; aborting the test run.");
-    process.exit(builderExitCode);
+    throw new SnapshotBuildError({
+      message: "PGlite snapshot build failed; aborting the test run.",
+      exitCode: builderExitCode,
+    });
   }
+};
+
+const buildPrivateSnapshot = async (): Promise<string> => {
+  const snapshotPath = path.join(
+    tmpdir(),
+    `stella-pglite-test-snapshot-${process.pid}.tar`,
+  );
+  process.on("exit", () => {
+    rmSync(snapshotPath, { force: true });
+  });
+  await runSnapshotBuilder(snapshotPath);
   return snapshotPath;
 };
+
+const validateSnapshot = async (snapshotPath: string): Promise<boolean> => {
+  const digestPath = snapshotPath.replace(/\.tar$/u, ".sha256");
+  if (
+    readFileSync(digestPath, "utf-8") !== (await snapshotDigest(snapshotPath))
+  ) {
+    return false;
+  }
+  const check = Bun.spawn({
+    cmd: ["tar", "-tf", snapshotPath],
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return (await check.exited) === 0;
+};
+
+const buildTestDbSnapshot = async (): Promise<string> => {
+  if (
+    process.env["CI"] !== undefined &&
+    !process.env["STELLA_PGLITE_SNAPSHOT_CACHE_DIR"]
+  ) {
+    return await buildPrivateSnapshot();
+  }
+  try {
+    const repositoryRoot = path.resolve(apiRoot, "../..");
+    const entryPoint = path.join(apiRoot, "scripts/build-pglite-snapshot.ts");
+    const result = await acquireCurrentSnapshot({
+      cacheDir: snapshotCacheDir(process.env),
+      key: () => snapshotKey(repositoryRoot, entryPoint),
+      build: runSnapshotBuilder,
+      validate: validateSnapshot,
+      signal: runnerShutdown.signal,
+    });
+    if (result.status === "hit") {
+      process.on("exit", result.snapshot.release);
+      return result.snapshot.path;
+    }
+    printError(
+      `PGlite snapshot cache unavailable (${result.reason}); building privately.`,
+    );
+  } catch (error) {
+    if (error instanceof SnapshotBuildError) {
+      throw error;
+    }
+    printError(
+      `PGlite snapshot cache unavailable (${String(error)}); building privately.`,
+    );
+  }
+  return await buildPrivateSnapshot();
+};
+
+type PlannedTestBatch = {
+  isolate: boolean;
+  kind: TestBatchKind;
+  label: string;
+  maxPeakRssMb: number;
+  testFiles: string[];
+};
+
+type PlanBatchesOptions = {
+  isolate: boolean;
+  kind: TestBatchKind;
+  maxPeakRssMb: number;
+  testBatches: readonly string[][];
+};
+
+/** Label every composed batch, then keep only the selection inside each. */
+const planBatches = ({
+  isolate,
+  kind,
+  maxPeakRssMb,
+  testBatches,
+}: PlanBatchesOptions): PlannedTestBatch[] =>
+  testBatches
+    .map((batch, index) => ({
+      isolate,
+      kind,
+      label: `${kind} batch ${index + 1}/${testBatches.length}`,
+      maxPeakRssMb,
+      testFiles: selectWithinBatch(batch),
+    }))
+    .filter(({ testFiles }) => testFiles.length > 0);
+
+// A fresh process per test batch makes module memory reclaimable. One
+// process for the full suite grows until the hosted runner terminates it.
+// `evals/` unit tests get their own batches after the `src/` ones so adding
+// one never shifts the composition of a `src/` batch (a shift changes which
+// files share a process, and that has surfaced order-dependent failures).
+// Lanes change only which batches run at the same time, never which files
+// share a process.
+const EVALS_TEST_PREFIX = "evals/";
+const regularSrcTests = regularTests.filter(
+  (testPath) => !testPath.startsWith(EVALS_TEST_PREFIX),
+);
+const regularEvalTests = regularTests.filter((testPath) =>
+  testPath.startsWith(EVALS_TEST_PREFIX),
+);
+const plannedBatches = orderBatchesForLanes([
+  ...planBatches({
+    isolate: false,
+    kind: TEST_BATCH_KIND.regular,
+    maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
+    testBatches: [
+      ...composeTestBatches(regularSrcTests, REGULAR_TEST_BATCH_SIZE),
+      ...composeTestBatches(regularEvalTests, REGULAR_TEST_BATCH_SIZE),
+    ],
+  }),
+  ...planBatches({
+    isolate: false,
+    kind: TEST_BATCH_KIND.heavyLogic,
+    maxPeakRssMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
+    testBatches: composeTestBatches(
+      heavyLogicTests,
+      HEAVY_LOGIC_TEST_BATCH_SIZE,
+    ),
+  }),
+  ...planBatches({
+    isolate: false,
+    kind: TEST_BATCH_KIND.db,
+    maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
+    testBatches: composeTestBatches(dbTests, dbTestBatchSize(propertyOnly)),
+  }),
+  ...planBatches({
+    isolate: true,
+    kind: TEST_BATCH_KIND.moduleMock,
+    maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
+    testBatches: batchModuleMockTests(
+      moduleMockTests,
+      MODULE_MOCK_TEST_BATCH_SIZE,
+    ),
+  }),
+]);
 
 const testProcessEnv: Record<string, string | undefined> = {
   ...process.env,
   [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
 };
-if (dbTests.length > 0 || moduleMockTests.length > 0) {
-  testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+// Only a run that selected a DB-backed or module-mock batch boots PGlite, so
+// a run of logic test files skips the snapshot build.
+if (
+  plannedBatches.some(
+    ({ kind }) =>
+      kind === TEST_BATCH_KIND.db || kind === TEST_BATCH_KIND.moduleMock,
+  )
+) {
+  try {
+    testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+  } catch (error) {
+    if (error instanceof SnapshotBuildError) {
+      printError(error.message);
+      process.exit(error.exitCode);
+    }
+    throw error;
+  }
 }
 
-type RunTestsOptions = {
-  isolate: boolean;
-  maxPeakRssMb: number;
-  testFiles: string[];
+const testLanes = deriveTestLaneCount({
+  availableParallelism: availableParallelism(),
+  env: process.env,
+  // At most one heavy batch runs at a time, so sizing every lane for the
+  // heavy budget over-reserves; that slack covers the runner's own processes.
+  laneMemoryBudgetMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
+  totalMemoryBytes: totalmem(),
+});
+// Concurrent children writing to the inherited terminal would interleave
+// line by line. With more than one lane each batch's output is collected and
+// printed as one block when the batch ends; a serial run streams live.
+const bufferBatchOutput = testLanes > 1;
+
+/** Collects one batch's output, or passes it straight through when serial. */
+type BatchLog = {
+  err: (line: string) => void;
+  out: (line: string) => void;
 };
 
-const runTests = async ({
-  isolate,
-  maxPeakRssMb,
-  testFiles,
-}: RunTestsOptions) => {
-  if (testFiles.length === 0) {
-    return 0;
-  }
+const streamingLog: BatchLog = {
+  err: (line) => {
+    printError(line);
+  },
+  out: (line) => {
+    print(line);
+  },
+};
 
+const collectStream = async (
+  stream: ReadableStream<Uint8Array>,
+  parts: string[],
+): Promise<void> => {
+  const decoder = new TextDecoder();
+  for await (const chunk of stream) {
+    parts.push(decoder.decode(chunk, { stream: true }));
+  }
+  parts.push(decoder.decode());
+};
+
+type ChildResult = {
+  exitCode: number;
+  usage: ReturnType<Bun.Subprocess["resourceUsage"]>;
+};
+
+const spawnStreaming = async (command: string[]): Promise<ChildResult> => {
+  const child = Bun.spawn({
+    cmd: command,
+    cwd: apiRoot,
+    env: testProcessEnv,
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await awaitChild(child);
+  return { exitCode, usage: child.resourceUsage() };
+};
+
+const spawnCollected = async (
+  command: string[],
+  log: BatchLog,
+): Promise<ChildResult> => {
+  const child = Bun.spawn({
+    cmd: command,
+    cwd: apiRoot,
+    env: testProcessEnv,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  // Both streams feed one list in arrival order, so a test's own stdout lines
+  // stay next to the reporter's stderr lines around them.
+  const parts: string[] = [];
+  const [exitCode] = await Promise.all([
+    awaitChild(child),
+    collectStream(child.stdout, parts),
+    collectStream(child.stderr, parts),
+  ]);
+  log.out(parts.join("").trimEnd());
+  return { exitCode, usage: child.resourceUsage() };
+};
+
+const runTests = async (
+  { isolate, label, maxPeakRssMb, testFiles }: PlannedTestBatch,
+  log: BatchLog,
+): Promise<number> => {
   const executionMode = isolate ? "isolated" : "shared-process";
-  console.log(`Running ${testFiles.length} ${executionMode} API test files`);
+  log.out(
+    `Running ${testFiles.length} ${executionMode} API test files (${label})`,
+  );
 
   // Each batch loads many graph-heavy API modules. Prefer more frequent garbage
   // collection so it stays within the hosted runner's memory budget.
@@ -342,28 +646,24 @@ const runTests = async ({
     testFiles,
   });
 
-  const child = Bun.spawn({
-    cmd: command,
-    cwd: apiRoot,
-    env: testProcessEnv,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  const exitCode = await child.exited;
+  const startedAt = performance.now();
+  const { exitCode, usage } = bufferBatchOutput
+    ? await spawnCollected(command, log)
+    : await spawnStreaming(command);
+  const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+  log.out(`${label} finished in ${elapsedSeconds}s with exit code ${exitCode}`);
 
-  const usage = child.resourceUsage();
   if (usage) {
     // Bun exposes Subprocess.resourceUsage().maxRSS in bytes on every
     // platform. Normalizing it as Linux getrusage kibibytes turns a 394 MB
     // process into an impossible 403,796 MB reading under Bun 1.4.
     const peakMb = maxRssBytesToMb(usage.maxRSS);
-    console.log(
+    log.out(
       `${executionMode} batch (${testFiles.length} files) peak RSS: ` +
         `${peakMb} MB (budget ${maxPeakRssMb} MB)`,
     );
     if (exitCode === 0 && peakMb > maxPeakRssMb) {
-      console.error(
+      log.err(
         `Test batch exceeded the ${maxPeakRssMb} MB peak-RSS ` +
           "budget. Find what grew (new fixtures held across files, " +
           "unclosed pools/servers, oversized in-memory corpora) or split " +
@@ -377,117 +677,66 @@ const runTests = async ({
   return exitCode;
 };
 
-type RunTestBatchesOptions = {
-  batchSize: number;
-  isolate: boolean;
-  maxPeakRssMb: number;
-  testFiles: string[];
+/**
+ * Buffered output goes to stdout as one write: separate stdout and stderr
+ * writes can reach a shared log out of order, splitting a batch's block.
+ */
+const runBufferedTests = async (batch: PlannedTestBatch): Promise<number> => {
+  const lines: string[] = [];
+  const bufferedLog: BatchLog = {
+    err: (line) => {
+      lines.push(line);
+    },
+    out: (line) => {
+      lines.push(line);
+    },
+  };
+  try {
+    return await runTests(batch, bufferedLog);
+  } catch (error) {
+    bufferedLog.err(`${batch.label} could not run: ${String(error)}`);
+    return 1;
+  } finally {
+    print(lines.join("\n"));
+  }
 };
 
-const runTestBatches = async ({
-  batchSize,
-  isolate,
-  maxPeakRssMb,
-  testFiles,
-}: RunTestBatchesOptions): Promise<number> =>
-  await runPreparedTestBatches({
-    batchStart: 0,
-    isolate,
-    maxPeakRssMb,
-    testBatches: composeTestBatches(testFiles, batchSize),
-  });
-
-type RunPreparedTestBatchesOptions = {
-  batchStart: number;
-  isolate: boolean;
-  maxPeakRssMb: number;
-  testBatches: readonly string[][];
-};
-
-const runPreparedTestBatches = async ({
-  batchStart,
-  isolate,
-  maxPeakRssMb,
-  testBatches,
-}: RunPreparedTestBatchesOptions): Promise<number> => {
-  if (batchStart >= testBatches.length) {
-    return 0;
-  }
-
-  const batch = testBatches.at(batchStart);
-  if (batch === undefined) {
-    return 0;
-  }
-  const exitCode = await runTests({
-    isolate,
-    maxPeakRssMb,
-    testFiles: selectWithinBatch(batch),
-  });
-  if (exitCode !== 0) {
-    return exitCode;
-  }
-
-  return runPreparedTestBatches({
-    batchStart: batchStart + 1,
-    isolate,
-    maxPeakRssMb,
-    testBatches,
-  });
-};
-
-// A fresh process per test batch makes module memory reclaimable. One
-// process for the full suite grows until the hosted runner terminates it.
-// `evals/` unit tests get their own batches after the `src/` ones so adding
-// one never shifts the composition of a `src/` batch (a shift changes which
-// files share a process, and that has surfaced order-dependent failures).
-const EVALS_TEST_PREFIX = "evals/";
-const regularSrcTests = regularTests.filter(
-  (testPath) => !testPath.startsWith(EVALS_TEST_PREFIX),
+print(
+  `Running ${plannedBatches.length} API test batches in ${testLanes} ` +
+    `lane${testLanes === 1 ? "" : "s"}`,
 );
-const regularEvalTests = regularTests.filter((testPath) =>
-  testPath.startsWith(EVALS_TEST_PREFIX),
+const runStartedAt = performance.now();
+const outcomes = await runInLanes({
+  batches: plannedBatches,
+  lanes: testLanes,
+  runBatch: async (batch) =>
+    bufferBatchOutput
+      ? await runBufferedTests(batch)
+      : await runTests(batch, streamingLog),
+  signal: runnerShutdown.signal,
+});
+const runSeconds = ((performance.now() - runStartedAt) / 1000).toFixed(1);
+const failedOutcomes = outcomes.filter(
+  ({ exitCode }) => exitCode !== null && exitCode !== 0,
 );
-const regularExitCode = await runPreparedTestBatches({
-  batchStart: 0,
-  isolate: false,
-  maxPeakRssMb: MAX_LOGIC_BATCH_PEAK_RSS_MB,
-  testBatches: [
-    ...composeTestBatches(regularSrcTests, REGULAR_TEST_BATCH_SIZE),
-    ...composeTestBatches(regularEvalTests, REGULAR_TEST_BATCH_SIZE),
-  ],
-});
-if (regularExitCode !== 0) {
-  process.exit(regularExitCode);
-}
-
-const heavyLogicExitCode = await runTestBatches({
-  batchSize: HEAVY_LOGIC_TEST_BATCH_SIZE,
-  isolate: false,
-  maxPeakRssMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
-  testFiles: heavyLogicTests,
-});
-if (heavyLogicExitCode !== 0) {
-  process.exit(heavyLogicExitCode);
-}
-
-const dbExitCode = await runTestBatches({
-  batchSize: dbTestBatchSize(propertyOnly),
-  isolate: false,
-  maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
-  testFiles: dbTests,
-});
-if (dbExitCode !== 0) {
-  process.exit(dbExitCode);
-}
-
-process.exit(
-  await runPreparedTestBatches({
-    batchStart: 0,
-    isolate: true,
-    maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
-    testBatches: batchModuleMockTests(
-      moduleMockTests,
-      MODULE_MOCK_TEST_BATCH_SIZE,
-    ),
-  }),
+const unstartedCount = outcomes.filter(
+  ({ exitCode }) => exitCode === null,
+).length;
+print(
+  `Ran ${outcomes.length - unstartedCount} of ${outcomes.length} API test ` +
+    `batches in ${runSeconds}s (${testLanes} lane${testLanes === 1 ? "" : "s"}); ${failedOutcomes.length} failed${unstartedCount > 0 ? `, ${unstartedCount} not started` : ""}`,
 );
+// On stdout with the batch blocks, so it cannot overtake one that is still
+// queued for a slow reader.
+if (failedOutcomes.length > 0) {
+  print(
+    [
+      "Failed API test batches:",
+      ...failedOutcomes.map(
+        ({ batch, exitCode }) =>
+          `  ${batch.label} (exit ${String(exitCode)}):\n    ${batch.testFiles.join("\n    ")}`,
+      ),
+    ].join("\n"),
+  );
+}
+process.exitCode = laneRunExitCode(outcomes);

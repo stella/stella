@@ -1,11 +1,11 @@
 import type { MouseEvent, ReactNode } from "react";
 
-import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -179,7 +179,7 @@ export const MatterOriginLink = ({
   onClick,
 }: MatterOriginLinkProps) => (
   <button
-    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5 transition-colors"
+    className="text-muted-foreground hover:text-foreground hover:bg-accent text-2xs inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5"
     onClick={onClick}
     type="button"
   >

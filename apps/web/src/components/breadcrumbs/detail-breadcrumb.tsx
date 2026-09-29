@@ -31,7 +31,7 @@ export const DetailBreadcrumb = ({
     <>
       <BreadcrumbItem>
         <button
-          className="hover:text-foreground transition-colors"
+          className="hover:text-foreground"
           onClick={open.exit}
           type="button"
         >

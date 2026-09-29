@@ -126,7 +126,7 @@ export const CitationHeader = ({
               // a finger the project's 44px target without moving a pixel of
               // what the eye sees.
               className={cn(
-                "text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5 text-start transition-colors",
+                "text-muted-foreground hover:text-foreground flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm px-1 py-0.5 text-start",
                 CITATION_TRIGGER_TOUCH_TARGET,
               )}
               type="button"

@@ -15,9 +15,12 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
+  cutShortAssistantMessage,
+  ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
   settleChatTurnOnTx,
+  USER_STOP_OUTCOME,
   withClaimedChatTurnExecution,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type {
@@ -30,6 +33,7 @@ import {
   ChatTurnUnsettledToolCallError,
   findDroppedParts,
   findUnsettledToolCallsForOutcome,
+  isCutShortOutcome,
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
@@ -55,12 +59,20 @@ import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  type ChatThreadNamesAdded,
+  type ChatThreadNamesRead,
+  recordChatThreadNamesOnTx,
+} from "@/api/lib/chat/thread-names";
+import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  threadNames?: ChatThreadNamesWrite | undefined;
   messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -75,7 +87,7 @@ export type ChatDataScopeExpansion = {
   newWorkspaceIds: readonly SafeId<"workspace">[];
 };
 
-export type ChatDataScopeReplacement = {
+type ChatDataScopeReplacement = {
   newDataWorkspaceIds: readonly SafeId<"workspace">[];
   observedDataWorkspaceIds: readonly SafeId<"workspace">[];
 };
@@ -88,6 +100,14 @@ type ChatTurnSettlement = {
   outcome: ChatTurnOutcome;
 };
 
+/** What a persisted message's turn writes changed beyond the message. */
+type ChatTurnWrites = {
+  /** The awaiting assistant message an accepted turn superseded, as stored. */
+  superseded: PersistableTerminalAssistantMessage | undefined;
+};
+
+const NO_TURN_WRITES: ChatTurnWrites = { superseded: undefined };
+
 const applyChatTurnWritesOnTx = async ({
   acceptance,
   settlement,
@@ -96,18 +116,31 @@ const applyChatTurnWritesOnTx = async ({
   acceptance: ChatTurnAcceptance | undefined;
   settlement: ChatTurnSettlement | undefined;
   tx: Transaction;
-}): Promise<void> => {
-  if (
-    acceptance !== undefined &&
-    !(await insertChatTurnAcceptanceOnTx({ acceptance, tx }))
-  ) {
+}): Promise<ChatTurnWrites> => {
+  const accepted =
+    acceptance === undefined
+      ? undefined
+      : await insertChatTurnAcceptanceOnTx({ acceptance, tx });
+  if (accepted?.type === "refused") {
     panic("Chat turn acceptance lost its reserved thread slot");
   }
-  if (
-    settlement !== undefined &&
-    !(await settleChatTurnOnTx({ ...settlement, tx }))
-  ) {
-    panic("Chat turn settlement lost execution ownership");
+  const writes = { superseded: accepted?.superseded };
+  if (settlement === undefined) {
+    return writes;
+  }
+  const settled = await settleChatTurnOnTx({ ...settlement, tx });
+  switch (settled) {
+    case "settled":
+      return writes;
+    case "stop-requested":
+      throw new ChatTurnStopRequestedError({
+        message: "The user stopped the chat turn before it settled",
+      });
+    case "not-owned":
+      return panic("Chat turn settlement lost execution ownership");
+    default:
+      settled satisfies never;
+      return panic(`Unhandled settlement: ${String(settled)}`);
   }
 };
 
@@ -146,6 +179,31 @@ const applyChatDataScopeExpansionOnTx = async ({
   });
 };
 
+/** The thread's names as a request read them, and what it adds. */
+export type ChatThreadNamesWrite = {
+  added: ChatThreadNamesAdded;
+  read: ChatThreadNamesRead;
+};
+
+/**
+ * Appends the names a write's messages add to the thread, beside those
+ * messages, so a later request never reads fewer names than the thread shows.
+ */
+const applyThreadNamesOnTx = async ({
+  names,
+  threadId,
+  tx,
+}: {
+  names: ChatThreadNamesWrite | undefined;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  if (names === undefined) {
+    return;
+  }
+  await recordChatThreadNamesOnTx({ ...names, threadId, tx });
+};
+
 const applyChatDataScopeReplacementOnTx = async ({
   recordAuditEvent,
   replacement,
@@ -174,6 +232,7 @@ const applyChatDataScopeReplacementOnTx = async ({
 const insertMessages = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   messages,
   recordAuditEvent,
   safeDb,
@@ -183,10 +242,10 @@ const insertMessages = async ({
   userId,
   workspaceId,
 }: InsertMessagesProps): Promise<
-  Result<void, HandlerError<409> | SafeDbError>
+  Result<ChatTurnWrites, HandlerError<409> | SafeDbError>
 > => {
   if (messages.length === 0) {
-    return Result.ok();
+    return Result.ok(NO_TURN_WRITES);
   }
 
   const insertResult = await safeDb(async (tx) => {
@@ -205,6 +264,7 @@ const insertMessages = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -239,17 +299,16 @@ const insertMessages = async ({
         metadata: { threadId, role: persistedMessage.role },
       })),
     );
-    await applyChatTurnWritesOnTx({
+    return await applyChatTurnWritesOnTx({
       acceptance: turnAcceptance,
       settlement: turnSettlement,
       tx,
     });
-    return true;
   });
 
   return insertResult.andThen((inserted) =>
-    inserted
-      ? Result.ok()
+    inserted !== false
+      ? Result.ok(inserted)
       : Result.err(
           new HandlerError({
             status: 409,
@@ -262,6 +321,8 @@ const insertMessages = async ({
 export type PersistMessageProps = {
   acceptedSendMode?: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names this write's messages add to the thread. */
+  threadNames?: ChatThreadNamesWrite | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -363,6 +424,80 @@ const settleTerminalAssistantMessage = (
     turnOutcome: outcome,
   });
 
+type TerminalSettlement = {
+  message: PersistableTerminalAssistantMessage;
+  outcome: ChatTurnOutcome;
+};
+
+/** A finished turn as stored: how its message was written, and as what. */
+type FinalizedTurn = {
+  persistencePlan: Exclude<MessagePersistencePlan, { type: "none" }>;
+  settlement: TerminalSettlement;
+};
+
+/**
+ * The terminal message as its outcome stores it. A cut-short turn closes
+ * every call that can no longer run or be answered
+ * (`cutShortAssistantMessage`), whether it waited on the user or was cut off
+ * mid-stream; any other outcome keeps what the run produced under its
+ * settlement rules.
+ */
+const endTerminalAssistantMessage = (
+  message: PersistableTerminalAssistantMessage,
+  outcome: ChatTurnOutcome,
+): PersistableTerminalAssistantMessage =>
+  isCutShortOutcome(outcome)
+    ? cutShortAssistantMessage({ message, outcome })
+    : settleTerminalAssistantMessage(message, outcome);
+
+/**
+ * What a turn stores once it ends: its own outcome, or the user's stop when
+ * that committed first.
+ */
+const terminalSettlement = ({
+  outcome,
+  owningAssistantMessage,
+  responseMessage,
+  stopped,
+}: TerminalAssistantMessageProps & {
+  stopped: boolean;
+}): TerminalSettlement => {
+  const settledAs = stopped ? USER_STOP_OUTCOME : outcome;
+  return {
+    message: endTerminalAssistantMessage(
+      toTerminalAssistantMessage({
+        outcome: settledAs,
+        owningAssistantMessage,
+        responseMessage,
+      }),
+      settledAs,
+    ),
+    outcome: settledAs,
+  };
+};
+
+const isStopRequested = (error: { cause?: unknown }): boolean =>
+  ChatTurnStopRequestedError.is(error.cause);
+
+/**
+ * Settle once as `outcome`; if the user's stop committed first, settle again
+ * as the stop. The stop request never disappears once recorded, so the
+ * second attempt cannot be refused for the same reason.
+ */
+const settleHonouringStop = async <T, E extends { cause?: unknown }>(
+  settle: (stopped: boolean) => Promise<Result<T, E>>,
+): Promise<Result<T, E>> => {
+  const settled = await settle(false);
+  return Result.isError(settled) && isStopRequested(settled.error)
+    ? await settle(true)
+    : settled;
+};
+
+const ANON_RESTORATION_CONFLICT_SINK = failureSink({
+  event: "chat.anon_restoration_conflict",
+  expected: [],
+});
+
 const mergeContinuationMetadata = ({
   owning,
   run,
@@ -375,10 +510,19 @@ const mergeContinuationMetadata = ({
     owning?.anonRestorations !== undefined &&
     run?.anonRestorations !== undefined
   ) {
-    merged.anonRestorations = mergeAnonRestorations(
+    const { conflicts, restorations } = mergeAnonRestorations(
       owning.anonRestorations,
       run.anonRestorations,
     );
+    if (conflicts > 0) {
+      observeFailure(
+        new TelemetryError({
+          message: "An anonymization placeholder named two originals",
+        }),
+        { sink: ANON_RESTORATION_CONFLICT_SINK },
+      );
+    }
+    merged.anonRestorations = restorations;
   }
   if (owning?.usage !== undefined && run?.usage !== undefined) {
     const reasoningTokens =
@@ -407,6 +551,7 @@ const mergeContinuationMetadata = ({
 export const finalizeAssistantTurn = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   existingIds,
   execution,
   outcome,
@@ -421,6 +566,8 @@ export const finalizeAssistantTurn = async ({
 }: {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names the assistant message adds to the thread. */
+  threadNames: ChatThreadNamesWrite;
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
   outcome: ChatTurnOutcome;
@@ -433,53 +580,66 @@ export const finalizeAssistantTurn = async ({
   workspaceId: SafeId<"workspace"> | null;
   indexThread?: typeof upsertChatThreadSearchDocument;
 }) => {
-  const producedMessage = toTerminalAssistantMessage({
-    outcome,
-    owningAssistantMessage,
-    responseMessage,
-  });
-  const assistantMessage = settleTerminalAssistantMessage(
-    producedMessage,
-    outcome,
-  );
-  const persistencePlan = planAssistantFinishPersistence({
-    existingIds,
-    finishOutcome: outcome,
-    message: assistantMessage,
-  });
+  const persistResult = await settleHonouringStop(
+    async (
+      stopped,
+    ): Promise<Result<FinalizedTurn, HandlerError<409> | SafeDbError>> => {
+      const settlement = terminalSettlement({
+        outcome,
+        owningAssistantMessage,
+        responseMessage,
+        stopped,
+      });
+      const persistencePlan = planAssistantFinishPersistence({
+        existingIds,
+        finishOutcome: settlement.outcome,
+        message: settlement.message,
+      });
 
-  // A terminal stream always supplies an assistant message. Silently
-  // accepting `none` would acknowledge the stream while leaving its durable
-  // turn running forever.
-  if (persistencePlan.type === "none") {
-    panic("Assistant turn produced no persistence plan");
-  }
+      // A terminal stream always supplies an assistant message. Silently
+      // accepting `none` would acknowledge the stream while leaving its durable
+      // turn running forever.
+      if (persistencePlan.type === "none") {
+        panic("Assistant turn produced no persistence plan");
+      }
 
-  const persistResult = await persistMessage({
-    acceptedSendMode,
-    dataScopeExpansion,
-    persistencePlan,
-    recordAuditEvent,
-    safeDb,
-    threadId,
-    turnSettlement: {
-      assistantMessageId: assistantMessage.id,
-      execution,
-      outcome,
+      const persisted = await persistMessage({
+        acceptedSendMode,
+        dataScopeExpansion,
+        threadNames,
+        persistencePlan,
+        recordAuditEvent,
+        safeDb,
+        threadId,
+        turnSettlement: {
+          assistantMessageId: settlement.message.id,
+          execution,
+          outcome: settlement.outcome,
+        },
+        userId,
+        workspaceId,
+        indexThread,
+      });
+      if (Result.isError(persisted)) {
+        return Result.err(persisted.error);
+      }
+      return Result.ok({ persistencePlan, settlement });
     },
-    userId,
-    workspaceId,
-    indexThread,
-  });
+  );
   if (Result.isError(persistResult)) {
     return Result.err(persistResult.error);
   }
+  const { persistencePlan, settlement } = persistResult.value;
   reportStoredTurnDefects({
     continued: owningAssistantMessage,
-    outcome: outcome.type,
-    stored: producedMessage,
+    outcome: settlement.outcome.type,
+    stored: toTerminalAssistantMessage({
+      outcome: settlement.outcome,
+      owningAssistantMessage,
+      responseMessage,
+    }),
   });
-  return Result.ok({ persistencePlan });
+  return Result.ok({ outcome: settlement.outcome, persistencePlan });
 };
 
 /**
@@ -558,42 +718,41 @@ const persistTerminalAssistantTurn = async ({
   threadId,
   userId,
   workspaceId,
-}: PersistTerminalAssistantTurnProps) => {
-  const assistantMessage = settleTerminalAssistantMessage(
-    toTerminalAssistantMessage({
+}: PersistTerminalAssistantTurnProps) =>
+  await settleHonouringStop(async (stopped) => {
+    const settlement = terminalSettlement({
       outcome,
       owningAssistantMessage,
       responseMessage: undefined,
-    }),
-    outcome,
-  );
-  return await persistMessage({
-    persistencePlan:
-      owningAssistantMessage === undefined
-        ? { type: "insert", message: assistantMessage }
-        : {
-            type: "update",
-            messageId: assistantMessage.id,
-            message: assistantMessage,
-          },
-    recordAuditEvent,
-    safeDb,
-    threadId,
-    turnSettlement: {
-      assistantMessageId: assistantMessage.id,
-      execution,
-      ...(failure === undefined
-        ? {}
-        : {
-            failureCode: failure.code,
-            failureRetryable: failure.retryable,
-          }),
-      outcome,
-    },
-    userId,
-    workspaceId,
+      stopped,
+    });
+    return await persistMessage({
+      persistencePlan:
+        owningAssistantMessage === undefined
+          ? { type: "insert", message: settlement.message }
+          : {
+              type: "update",
+              messageId: settlement.message.id,
+              message: settlement.message,
+            },
+      recordAuditEvent,
+      safeDb,
+      threadId,
+      turnSettlement: {
+        assistantMessageId: settlement.message.id,
+        execution,
+        ...(failure === undefined || stopped
+          ? {}
+          : {
+              failureCode: failure.code,
+              failureRetryable: failure.retryable,
+            }),
+        outcome: settlement.outcome,
+      },
+      userId,
+      workspaceId,
+    });
   });
-};
 
 /**
  * A failure before the stream exists must still hydrate as the same terminal
@@ -657,9 +816,16 @@ export const persistInterruptedChatTurn = async ({
     workspaceId,
   });
 
+/** Persist a turn the user stopped before its provider call started. */
+export const persistStoppedChatTurn = async (
+  props: Omit<PersistTerminalAssistantTurnProps, "failure" | "outcome">,
+) =>
+  await persistTerminalAssistantTurn({ ...props, outcome: USER_STOP_OUTCOME });
+
 const runPersistMessage = async ({
   acceptedSendMode = null,
   dataScopeExpansion,
+  threadNames,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -675,6 +841,7 @@ const runPersistMessage = async ({
     return await insertMessages({
       acceptedSendMode,
       dataScopeExpansion,
+      threadNames,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
@@ -710,6 +877,7 @@ const runPersistMessage = async ({
         tx,
         workspaceId,
       });
+      await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
       if (deleteMessageIds.length > 0) {
         await tx
           .delete(chatMessages)
@@ -772,17 +940,16 @@ const runPersistMessage = async ({
         workspaceId,
         metadata: { threadId, role: persistencePlan.message.role },
       });
-      await applyChatTurnWritesOnTx({
+      return await applyChatTurnWritesOnTx({
         acceptance: turnAcceptance,
         settlement: turnSettlement,
         tx,
       });
-      return true;
     });
 
     return updateResult.andThen((updated) =>
-      updated
-        ? Result.ok()
+      updated !== false
+        ? Result.ok(updated)
         : Result.err(
             new HandlerError({
               status: 409,
@@ -806,7 +973,7 @@ const runPersistMessage = async ({
       turnSettlement === undefined &&
       !marksUsedAnonymization
     ) {
-      return Result.ok();
+      return Result.ok(NO_TURN_WRITES);
     }
     const turnResult = await safeDb(async (tx) => {
       if (
@@ -833,16 +1000,15 @@ const runPersistMessage = async ({
           .set({ usedAnonymization: true })
           .where(eq(chatThreads.id, threadId));
       }
-      await applyChatTurnWritesOnTx({
+      return await applyChatTurnWritesOnTx({
         acceptance: turnAcceptance,
         settlement: turnSettlement,
         tx,
       });
-      return true;
     });
     return turnResult.andThen((written) =>
-      written
-        ? Result.ok()
+      written !== false
+        ? Result.ok(written)
         : Result.err(
             new HandlerError({
               status: 409,
@@ -868,6 +1034,7 @@ const runPersistMessage = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     const deletedMessageId = persistencePlan.deleteMessageId;
     await tx
       .delete(chatMessages)
@@ -924,17 +1091,16 @@ const runPersistMessage = async ({
       workspaceId,
       metadata: { threadId, role: insertedMessage.role },
     });
-    await applyChatTurnWritesOnTx({
+    return await applyChatTurnWritesOnTx({
       acceptance: turnAcceptance,
       settlement: turnSettlement,
       tx,
     });
-    return true;
   });
 
   return replaceResult.andThen((replaced) =>
-    replaced
-      ? Result.ok()
+    replaced !== false
+      ? Result.ok(replaced)
       : Result.err(
           new HandlerError({
             status: 409,
@@ -958,6 +1124,12 @@ type PersistAcceptedMessageWithClaimProps = PersistMessageProps & {
   turnAcceptance: ChatTurnAcceptance;
 };
 
+/** The claimed execution of an accepted message, with what accepting it
+ *  superseded (see `ChatTurnWrites`). */
+type AcceptedMessageClaim = ChatTurnWrites & {
+  execution: ChatTurnExecution;
+};
+
 /**
  * Persist a new user message, create its durable turn, and claim execution
  * before releasing the thread lock. No other sender can observe and supersede
@@ -968,7 +1140,7 @@ export const persistAcceptedMessageWithClaim = async ({
   turnAcceptance,
   ...persistenceProps
 }: PersistAcceptedMessageWithClaimProps): Promise<
-  Result<ChatTurnExecution, HandlerError<409> | SafeDbError>
+  Result<AcceptedMessageClaim, HandlerError<409> | SafeDbError>
 > => {
   const result = await safeDb(async (tx) => {
     const persistenceResult = await runPersistMessage({
@@ -993,7 +1165,10 @@ export const persistAcceptedMessageWithClaim = async ({
     if (execution === null) {
       panic("Newly accepted chat turn lost execution ownership");
     }
-    return Result.ok(execution);
+    return Result.ok({
+      execution,
+      superseded: persistenceResult.value.superseded,
+    });
   });
   if (Result.isError(result)) {
     return Result.err(result.error);

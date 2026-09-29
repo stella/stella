@@ -43,16 +43,6 @@ export type DateFieldError = {
   message: string;
 };
 
-/** Format an ISO date per the field's locale + style; null when the value is
- *  not a valid calendar date. The "iso" style returns the value unchanged.
- *  Thin wrapper over the canonical `formatDate` in @stll/template-conditions
- *  so the api fill engine and the web preview share ONE implementation; keep
- *  the name for existing importers. */
-export const formatIsoDate = (
-  value: string,
-  dateFormat: FieldDateFormat,
-): string | null => formatDate(value, dateFormat);
-
 export { DATE_FORMAT_EXAMPLE_ISO } from "@stll/template-conditions";
 
 /** Render the exemplar date in the given locale + style — the template
@@ -100,7 +90,7 @@ const formatDateValue = (
     });
     return null;
   }
-  const formatted = formatIsoDate(normalized.value, dateFormat);
+  const formatted = formatDate(normalized.value, dateFormat);
   if (formatted === null) {
     return panic(
       `Field "${path}": the normalizer produced ${normalized.value}, which the formatter refused`,

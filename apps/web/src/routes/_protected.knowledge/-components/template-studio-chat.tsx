@@ -18,11 +18,11 @@ import type { RefObject } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { LoaderCircleIcon } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
+import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
   DOCX_SUGGESTION_SURFACE,
@@ -58,6 +58,7 @@ import type {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
+import { LoaderCircleIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -659,6 +660,7 @@ const TemplateStudioChatInner = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     alwaysApprovedTools,
     conversationApprovedTools,
@@ -1298,7 +1300,7 @@ const TemplateStudioChatInner = ({
   // remount only swaps the surface, while the old Chat instance would
   // keep streaming inside the query cache.
   const startNewThread = () => {
-    stop();
+    leave();
     setPanelOpen(false);
     onNewThread();
   };
@@ -1498,6 +1500,16 @@ const TemplateStudioChatInner = ({
           onNewThread={hasMessages ? startNewThread : null}
           queueWhileGenerating
           sendDisabledReason={editorReady ? undefined : "editor-loading"}
+          skillChat={{
+            document: { kind: CHAT_SKILL_DOCUMENT.template },
+            // Pinned like the transport's `getEditApplyMode`.
+            editApplyMode: CHAT_EDIT_APPLY_MODE.manual,
+            threadRef,
+            webSearch: {
+              available: data.webSearchAvailable,
+              enabled: data.webSearchEnabled,
+            },
+          }}
           skillsOrganizationId={activeOrganizationId}
           status={isGenerating ? "generating" : "idle"}
           threadHasMessages={hasMessages}

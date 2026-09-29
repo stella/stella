@@ -63,6 +63,7 @@ export const TOGGLEABLE_NATIVE_TOOL_BACKEND_SLUGS = [
   "orsr",
   "prh",
   "recherche-entreprises",
+  "rpo",
   "vies",
   "web-search",
 ] as const;

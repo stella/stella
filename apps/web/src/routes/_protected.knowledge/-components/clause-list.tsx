@@ -1,15 +1,15 @@
 import { useState } from "react";
 
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   DownloadIcon,
   PlusIcon,
   TextQuoteIcon,
   UploadIcon,
-} from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { InputGroup, InputGroupInput } from "@stll/ui/input-group";
 import {
   DropdownMenu,

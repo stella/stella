@@ -14,7 +14,6 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -394,9 +393,8 @@ export const refreshS3 = async (): Promise<void> => {
 
 const CREDENTIAL_MAX_AGE_MS = 50 * 60 * 1000;
 
-// Lazily built so that importing this module's pure helpers
-// (presignDownloadUrl, contentDisposition) does not construct an S3
-// client at import time. refreshS3() — called at startup and
+// Lazily built so that importing this module's pure helpers does not
+// construct an S3 client at import time. refreshS3() — called at startup and
 // periodically — replaces the client with credentials resolved via
 // the configured provider.
 let _client: S3Client | null = null;
@@ -703,23 +701,6 @@ export const isMissingCorpusObjectError = (
   error: unknown,
 ): error is MissingCorpusObjectError =>
   error instanceof MissingCorpusObjectError;
-
-/**
- * Size of one object without reading it, so a caller can refuse an
- * oversized object before materializing it. Null when storage does not
- * report a length.
- */
-export const getS3ObjectSizeWithSignal = async (
-  key: string,
-  signal: AbortSignal,
-): Promise<number | null> =>
-  await documentsCredentials.run(async () => {
-    const response = await getAbortableS3().send(
-      new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-      { abortSignal: signal },
-    );
-    return response.ContentLength ?? null;
-  });
 
 /**
  * What the store says about one object without reading it, or `null` when
@@ -1454,23 +1435,6 @@ export const deleteCorpusS3ObjectWithSignal = async (
       ),
   );
 };
-
-/**
- * Generate a presigned GET URL that forces the browser to
- * download the file instead of rendering it inline.
- *
- * Filenames are sanitized at upload time. RFC 6266 encoding
- * is applied here for non-ASCII characters.
- */
-export const presignDownloadUrl = (
-  key: string,
-  options: { expiresIn: number; fileName: string },
-) =>
-  getS3().presign(key, {
-    expiresIn: options.expiresIn,
-    method: "GET",
-    contentDisposition: contentDisposition(options.fileName),
-  });
 
 /**
  * Test seam: point every client this module hands out at `endpoint`, an

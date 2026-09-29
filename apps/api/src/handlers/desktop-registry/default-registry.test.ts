@@ -68,6 +68,27 @@ test("conflicting primary jurisdictions still require an explicit choice", () =>
   ).toBeNull();
 });
 
+test("a supplementary register defers to its jurisdiction's primary register", () => {
+  const practiceJurisdictions = [
+    { countryCode: "SK", isPrimary: true },
+  ] as const;
+  expect(
+    getDefaultDesktopRegistry({
+      registries: [
+        { id: "rpo", name: "RPO" },
+        { id: "orsr", name: "ORSR" },
+      ],
+      practiceJurisdictions,
+    }),
+  ).toBe("orsr");
+  expect(
+    getDefaultDesktopRegistry({
+      registries: [{ id: "rpo", name: "RPO" }],
+      practiceJurisdictions,
+    }),
+  ).toBe("rpo");
+});
+
 test("absent or disabled domestic registry does not acquire a default", () => {
   expect(
     getDefaultDesktopRegistry({

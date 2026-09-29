@@ -1,5 +1,77 @@
 # @stll/cli
 
+## 2.2.3
+
+### Patch Changes
+
+- [#4061](https://github.com/stella/stella/pull/4061) [`df37af8`](https://github.com/stella/stella/commit/df37af8b6dc697c9ff45e3c43ab28769c657c796) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The AI availability command's description also covers whether a local development stack answers with canned replies.
+
+## 2.2.2
+
+### Patch Changes
+
+- [#3992](https://github.com/stella/stella/pull/3992) [`525b1ee`](https://github.com/stella/stella/commit/525b1ee8fb98324a8f425301aa7adc53fd20de20) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search cursor accepts the longer continuation cursors a search now issues.
+
+- [#4075](https://github.com/stella/stella/pull/4075) [`a85e17b`](https://github.com/stella/stella/commit/a85e17b17a1a7e3f550bf6d89ae8d60f175f4b69) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ingestion status reports an estimated event total
+
+## 2.2.1
+
+### Patch Changes
+
+- [#4031](https://github.com/stella/stella/pull/4031) [`1005aef`](https://github.com/stella/stella/commit/1005aefe1a9fc73311c34e120c781946cf0ba6cb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add saved time narrative capabilities to the CLI route catalog.
+
+## 2.2.0
+
+### Minor Changes
+
+- [#4060](https://github.com/stella/stella/pull/4060) [`9f1fdc2`](https://github.com/stella/stella/commit/9f1fdc270698327ffee100b0ff3141b413023514) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add issuer profile commands and IBAN validation for billing account details.
+
+## 2.1.2
+
+### Patch Changes
+
+- [#4024](https://github.com/stella/stella/pull/4024) [`feffab3`](https://github.com/stella/stella/commit/feffab369d1e8c336b8dbe08b95e550df53990dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose organization time policy fields through the generated capability catalog.
+
+## 2.1.1
+
+### Patch Changes
+
+- [#3927](https://github.com/stella/stella/pull/3927) [`bcfe443`](https://github.com/stella/stella/commit/bcfe4434f8ac4706ceba7f32bcbd9c2f99b36636) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Clarify delivery authentication and asserted headers in correspondence capability descriptions.
+
+- [#3972](https://github.com/stella/stella/pull/3972) [`5509280`](https://github.com/stella/stella/commit/550928031b4777226a3e211398057c32d04912ed) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `lists items-list` describes each item's first source (document id, document name, locator).
+
+## 2.1.0
+
+### Minor Changes
+
+- [#3926](https://github.com/stella/stella/pull/3926) [`f35fccb`](https://github.com/stella/stella/commit/f35fccbc454ac204ea42477182a5b3879508e4a9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add correspondence read, handling, and sender-approval capabilities.
+
+- [#3923](https://github.com/stella/stella/pull/3923) [`84be555`](https://github.com/stella/stella/commit/84be555cc854258d47451b00c8bbf3bd26bd7ed0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add entity checks: screen a company by IČO or a person by name and birth date against the Czech insolvency register (ISIR). Each check answers clear, found (with typed findings), unavailable, or not-covered; a source error, timeout, outage page, or unparseable answer is never reported as clear. The CLI gains `contact check-counterparty`.
+
+- [#3924](https://github.com/stella/stella/pull/3924) [`bc046e0`](https://github.com/stella/stella/commit/bc046e03f32cf54173e07afaed5c46447c739aac) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the `cz-vat-reliability` entity check: the Czech VAT register's unreliable-payer status and published bank accounts for a DIČ. An IČO is sent as `CZ` + IČO and the result marks the DIČ as derived. A DIČ the register does not hold is reported as `not-registered`, never as clear.
+
+### Patch Changes
+
+- [#3939](https://github.com/stella/stella/pull/3939) [`a65a76b`](https://github.com/stella/stella/commit/a65a76b1ffd9cd85f729512f5e6db305199aea13) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Capability commands read the capability output from the `result` envelope the server returns, so pages still render as tables with their resume cursor.
+
+- [#4003](https://github.com/stella/stella/pull/4003) [`10e27ce`](https://github.com/stella/stella/commit/10e27cece28db716aa4fa51831fcad59c927a000) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Command help describes the lenient input readings: page sizes clamp, range dates accept a bare year or month, and statute ELIs accept short spellings.
+
+- [#4005](https://github.com/stella/stella/pull/4005) [`79de8e7`](https://github.com/stella/stella/commit/79de8e752d185eefb9ef67af49e71120b2f2385c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Command help no longer points at tools a surface does not expose.
+
+- [#3921](https://github.com/stella/stella/pull/3921) [`df1ebaf`](https://github.com/stella/stella/commit/df1ebaf973d8b0278bdde978a24d62412aad2c80) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `orsr.lookupFullRecordByIco` (history, filed documents, related persons) and the opt-in `detail: "full"` registry lookup.
+
+## 2.0.2
+
+### Patch Changes
+
+- [#3873](https://github.com/stella/stella/pull/3873) [`0fc08ad`](https://github.com/stella/stella/commit/0fc08ad1ea1badd2e9c1f044acc0b3905436b2b7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `catalogue install` requires the skill-create permission instead of organization settings access, so a member can install a catalogue skill at private scope. Team scope still requires an owner or admin.
+
+- [#3873](https://github.com/stella/stella/pull/3873) [`0fc08ad`](https://github.com/stella/stella/commit/0fc08ad1ea1badd2e9c1f044acc0b3905436b2b7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills seed` is gone: a member's default skills are installed when the membership is created.
+
+- [#3888](https://github.com/stella/stella/pull/3888) [`718d19d`](https://github.com/stella/stella/commit/718d19d57206fea56a6ae6773e3b2221bb7bf084) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The legislation read help states that full text is returned only when the parsed structure is missing or unusable.
+
+- [#3920](https://github.com/stella/stella/pull/3920) [`49ef142`](https://github.com/stella/stella/commit/49ef1424209cf882ea1aca83fc12f49517e24d5e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the Slovak legal-entity register (RPO) as `@stll/business-registries/rpo` and as the `rpo` registry.
+
 ## 2.0.1
 
 ### Patch Changes

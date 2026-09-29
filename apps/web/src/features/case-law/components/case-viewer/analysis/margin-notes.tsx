@@ -10,10 +10,10 @@ import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { panic } from "better-result";
-import { Building2Icon, LockIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Building2Icon, LockIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -144,6 +144,10 @@ type PositionedItem = MarginItem & {
 };
 
 /** A human comment belongs to the selected words, not merely their paragraph. */
+// A hovered note's anchor carries `on`; leaving sets `off` instead of removing
+// the attribute, so the reader's wash layer stays and fades out.
+const NOTE_HOVER = { on: "on", off: "off" } as const;
+
 const resolveItemAnchor = (
   scrollContainer: HTMLElement,
   item: MarginItem,
@@ -292,11 +296,7 @@ const GutterNotes = ({
     if (!el) {
       return;
     }
-    if (on) {
-      el.dataset["noteHover"] = "";
-    } else {
-      delete el.dataset["noteHover"];
-    }
+    el.dataset["noteHover"] = on ? NOTE_HOVER.on : NOTE_HOVER.off;
   };
 
   const notePresence = (item: MarginItem): NotePresence => {
@@ -580,7 +580,7 @@ const AnalysisNote = ({
   return (
     <button
       className={cn(
-        "text-foreground-muted hover:text-foreground-strong-muted border-s-[3px] py-1 ps-2.5 text-start transition-[color,border-color,box-shadow]",
+        "text-foreground-muted hover:text-foreground-strong-muted border-s-[3px] py-1 ps-2.5 text-start",
         position.className,
       )}
       onBlur={() => onHover?.(false)}
@@ -728,7 +728,7 @@ const CommentNote = ({
   return (
     <div
       className={cn(
-        "group/comment border-s-[3px] py-1 ps-2.5 transition-[border-color,box-shadow]",
+        "group/comment border-s-[3px] py-1 ps-2.5",
         position.className,
       )}
       onMouseEnter={() => onHover?.(true)}
@@ -770,7 +770,7 @@ const CommentNote = ({
         </p>
       ) : (
         <button
-          className="text-foreground-muted hover:text-foreground-strong-muted mt-0.5 block w-full text-start text-[calc(0.75rem*var(--reader-text-scale))] leading-snug transition-colors"
+          className="text-foreground-muted hover:text-foreground-strong-muted mt-0.5 block w-full text-start text-[calc(0.75rem*var(--reader-text-scale))] leading-snug"
           onClick={onJump}
           type="button"
         >

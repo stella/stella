@@ -194,53 +194,6 @@ export const useUpdateProperty = () => {
   });
 };
 
-type PreviewPropertyVars = {
-  workspaceId: string;
-  prompt: string;
-  contentType: "text" | "single-select" | "multi-select" | "date" | "int";
-  entityId: string;
-  options?: SelectPropertyOption[];
-  dependencies?: { dependsOnPropertyId: string }[];
-};
-
-export const usePreviewProperty = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      prompt,
-      contentType,
-      entityId,
-      options,
-      dependencies,
-    }: PreviewPropertyVars) => {
-      const response = await api
-        .properties({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .preview.post({
-          prompt,
-          contentType,
-          entityId: toSafeId<"entity">(entityId),
-          ...(options && options.length > 0 ? { options } : {}),
-          ...(dependencies && dependencies.length > 0
-            ? {
-                dependencies: dependencies.map((d) => ({
-                  dependsOnPropertyId: toSafeId<"property">(
-                    d.dependsOnPropertyId,
-                  ),
-                })),
-              }
-            : {}),
-        });
-
-      return unwrapEden(response);
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
-  });
-};
-
 type SuggestPromptVars = {
   workspaceId: string;
   name: string;

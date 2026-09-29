@@ -1,8 +1,6 @@
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
-  type ApprovalRequiredBuiltInChatToolName,
   type BrowserClientCapability,
-  type BuiltInChatToolPolicyKindByName,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
@@ -27,6 +25,10 @@ import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-cont
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import {
+  COUNTERPARTY_CHECK_TOOL_NAME,
+  createCounterpartyCheckTools,
+} from "@/api/handlers/chat/tools/counterparty-check-tools";
+import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
@@ -34,8 +36,12 @@ import { createCreateWorkspaceDocumentTools } from "@/api/handlers/chat/tools/cr
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
+  type ChatScriptCallTools,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
+import {
+  createFolderConsistencyReviewTools,
+  REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   createFolioAgentDocTools,
   createSuggestChangesTools,
@@ -71,7 +77,11 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
-import { createWebSearchTools } from "@/api/handlers/chat/tools/web-search-tools";
+import {
+  createWebSearchTools,
+  FETCH_URL_TOOL_NAME,
+  WEB_SEARCH_TOOL_NAME,
+} from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
@@ -94,7 +104,7 @@ import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
-export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
+const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
 /**
  * Combine deploy/BYOK provider availability with the org's native-tool
@@ -222,6 +232,7 @@ type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
+type CounterpartyCheckTools = ReturnType<typeof createCounterpartyCheckTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type BrowserControlTools = ReturnType<typeof createBrowserControlTool>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
@@ -262,6 +273,7 @@ type BuiltInChatTools = OrgTools &
   SkillTools &
   CurrentSkillEditTools &
   BusinessRegistryTools &
+  CounterpartyCheckTools &
   BoeTools &
   BrowserControlTools &
   InfosoudTools &
@@ -291,7 +303,7 @@ type BuiltInChatToolPolicyName =
   | keyof BuiltInChatTools
   | CurrentSkillEditToolName;
 
-type GetChatToolsProps = {
+export type GetChatToolsProps = {
   /** Deployment gate; injectable so both disabled and enabled toolsets test. */
   memoryEnabled?: boolean | undefined;
   safeDb: SafeDb;
@@ -450,6 +462,12 @@ type GetChatToolsProps = {
    */
   delegationDepth?: number | undefined;
   /**
+   * Narrows the finished tool set before it is returned (a subagent's
+   * projection). Applied here rather than by the caller so what a code-mode
+   * script is told it can call directly is the set the loop really holds.
+   */
+  projectToolSet?: ((tools: ChatToolMap) => ChatToolMap) | undefined;
+  /**
    * Which DOCX-edit review mode this turn uses; defaults to
    * `DEFAULT_CHAT_EDIT_APPLY_MODE` ("auto": AI edits auto-apply as
    * tracked changes by default). Picks which `suggest_changes` variant is
@@ -550,6 +568,7 @@ type CreateRememberToolsProps = {
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   resolveSourceDataWorkspaceIds: () => readonly SafeId<"workspace">[];
+  toDurableRefText: ChatRefRegistry["toDurableRefText"];
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -560,6 +579,7 @@ const createRememberTools = ({
   recordAuditEvent,
   safeDb,
   resolveSourceDataWorkspaceIds,
+  toDurableRefText,
   userId,
   workspaceId,
 }: CreateRememberToolsProps) => ({
@@ -569,6 +589,7 @@ const createRememberTools = ({
     recordAuditEvent,
     safeDb,
     resolveSourceDataWorkspaceIds,
+    toDurableRefText,
     userId,
     workspaceId,
   }),
@@ -585,19 +606,6 @@ true satisfies Exclude<
 > extends never
   ? true
   : never;
-
-/** Every built-in chat tool's policy kind, keyed by tool name. Single source
- * of truth consumers (e.g. the web client) derive their own tool-name unions
- * from, instead of hand-mirroring this classification. */
-export type { BuiltInChatToolPolicyKindByName };
-
-/**
- * Built-in tool names whose policy kind requires approval, derived from
- * {@link BuiltInChatToolPolicyKindByName} and {@link NeedsApprovalPolicyKind}
- * rather than hand-listed, so a reclassified tool moves in or out of this
- * union automatically.
- */
-export type { ApprovalRequiredBuiltInChatToolName };
 
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
@@ -674,6 +682,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // `discover_tools` companion. Replaces the hand-written run-stella-query /
   // describe-stella-api pair; the read functions it exposes as `external_*`
   // bindings are ref-mediated, so no tenant UUID reaches the model.
+  // A script run reads the turn's finished tool set (assigned at the end), so
+  // a script that calls a direct tool is told to call it directly.
+  let scriptCallTools: ChatScriptCallTools = {
+    directTools: [],
+    unavailableReasons: new Map(),
+  };
   const executionTools = buildChatCodeModeTools({
     memberRole,
     organizationId,
@@ -681,6 +695,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     refRegistry,
     safeDb,
     scopedDb,
+    scriptCallTools: () => scriptCallTools,
     toolDefectMemo,
     toolWorkspaceIds,
     userId,
@@ -707,6 +722,10 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const businessRegistryTools = createBusinessRegistryTools({
     enabledHandlers: businessRegistryHandlers,
   });
+  // Findings name natural persons with birth dates and identifiers, which the
+  // anonymization boundary cannot redact, so anonymized chat never sees them.
+  const counterpartyCheckTools =
+    thirdPartyBoundary.type === "raw" ? createCounterpartyCheckTools() : {};
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
   const browserControlTools = browserClient ? createBrowserControlTool() : {};
@@ -880,6 +899,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           recordAuditEvent,
           safeDb,
           resolveSourceDataWorkspaceIds: resolveMemorySourceWorkspaceIds,
+          toDurableRefText: refRegistry.toDurableRefText,
           userId,
           workspaceId,
         });
@@ -978,27 +998,26 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
 
   // Registry write projections: per-call mutation tools (save/delete/etc.),
-  // each behind approval. Gated on a non-empty workspace set exactly like the
-  // hand-written workspace mutation tool (`createWorkspaceTools`), so
-  // anonymous/public surfaces with no accessible workspace never receive write
-  // tools. Real per-workspace statuses are threaded through so the handlers'
-  // `ensureActiveWorkspace` gate keeps archived matters read-only.
-  const registryWriteTools =
-    toolWorkspaceIds.length === 0
-      ? {}
-      : buildChatWriteTools({
-          memberRole,
-          organizationId,
-          pinServerValidatedWorkspaceId,
-          recordAuditEvent,
-          refRegistry,
-          safeDb,
-          scopedDb,
-          toolDefectMemo,
-          toolWorkspaceIds,
-          userId,
-          workspaceStatusById,
-        });
+  // each behind approval. Registered whatever the caller's matter count: an
+  // organization with no matter yet still manages its library, templates,
+  // contacts and settings, and creates its first matter here. A write that
+  // acts inside a matter answers with a recoverable needs-a-matter result
+  // (`matterRequiredResult`) instead of disappearing. Role checks stay in the
+  // handlers. Real per-workspace statuses are threaded through so the
+  // handlers' `ensureActiveWorkspace` gate keeps archived matters read-only.
+  const registryWriteTools = buildChatWriteTools({
+    memberRole,
+    organizationId,
+    pinServerValidatedWorkspaceId,
+    recordAuditEvent,
+    refRegistry,
+    safeDb,
+    scopedDb,
+    toolDefectMemo,
+    toolWorkspaceIds,
+    userId,
+    workspaceStatusById,
+  });
 
   // Delegation is capped at one level: a subagent's own toolset (built by
   // re-invoking `getChatTools` at `delegationDepth + 1`) never registers
@@ -1009,15 +1028,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const subagentTools = areSubagentToolsRegistered({ delegationDepth })
     ? createSpawnSubagentsTool({
         buildSubagentToolset: (proposalSink) =>
-          projectToolMapForSubagent(
-            getChatTools({
-              ...props,
-              browserClient: undefined,
-              hasActiveDocxEditClient: false,
-              delegationDepth: delegationDepth + 1,
-            }),
-            proposalSink,
-          ),
+          getChatTools({
+            ...props,
+            browserClient: undefined,
+            hasActiveDocxEditClient: false,
+            delegationDepth: delegationDepth + 1,
+            projectToolSet: (tools) =>
+              projectToolMapForSubagent(tools, proposalSink),
+          }),
         organizationId,
         orgAIConfig,
         safeDb,
@@ -1029,13 +1047,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       })
     : {};
 
-  return applyChatToolPolicies({
+  const registered = applyChatToolPolicies({
     policyKinds,
     tools: {
       ...orgTools,
       ...executionTools,
       ...skillTools,
       ...businessRegistryTools,
+      ...counterpartyCheckTools,
       ...boeTools,
       ...browserControlTools,
       ...infosoudTools,
@@ -1056,6 +1075,27 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...subagentTools,
     },
   });
+  const tools = props.projectToolSet?.(registered) ?? registered;
+  scriptCallTools = {
+    directTools: Object.keys(tools),
+    unavailableReasons: new Map([
+      ...(thirdPartyBoundary.type === "raw"
+        ? []
+        : [
+            COUNTERPARTY_CHECK_TOOL_NAME,
+            REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
+          ].map((name) => [name, "anonymized mode is on"] as const)),
+      ...(webResearchAvailable
+        ? []
+        : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(
+            (name) => [name, "web research is off for this chat"] as const,
+          )),
+      ...Object.keys(registered)
+        .filter((name) => !(name in tools))
+        .map((name) => [name, "subagents cannot call it"] as const),
+    ]),
+  };
+  return tools;
 };
 
 type GetChatValidationToolsProps = Omit<

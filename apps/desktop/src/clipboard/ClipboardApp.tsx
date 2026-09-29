@@ -27,6 +27,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { TauriEvent } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
+
+import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
+import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { ContextMenu } from "@stll/ui/context-menu";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
 import {
   Building2Icon,
   ChevronsUpDownIcon,
@@ -52,25 +69,8 @@ import {
   Trash2Icon,
   VideoIcon,
   XIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
-
-import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
-import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
-import { ContextMenu } from "@stll/ui/context-menu";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   InputGroup,
@@ -92,6 +92,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { RegistrySearch } from "../registry/RegistrySearch";
@@ -348,6 +349,7 @@ type ClipboardCardStyle = CSSProperties & {
 
 type ClipboardGroupStyle = CSSProperties & {
   "--clipboard-group-accent"?: string;
+  "--clipboard-window-tint"?: string;
 };
 
 type ClipboardCardFooterMetadataProps = {
@@ -537,12 +539,9 @@ const ClipboardCard = ({
           ) : null}
           {highlightedText.map((segment) =>
             segment.match ? (
-              <mark
-                className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
-                key={segment.start}
-              >
+              <TextMark {...SEARCH_HIT_MARK} key={segment.start}>
                 {segment.text}
-              </mark>
+              </TextMark>
             ) : (
               <span key={segment.start}>{segment.text}</span>
             ),
@@ -1600,6 +1599,14 @@ const ClipboardApp = () => {
   const activeGroup =
     snapshot.groups.find((group) => group.id === selectedGroupId) ?? null;
   const activeGroupId = activeGroup?.id ?? null;
+  // The window's group tint fades out on opacity, so its colour outlives the
+  // filter: `--clipboard-window-tint` keeps the last group's colour while
+  // `--clipboard-group-accent` follows the active group only.
+  const [lastGroupAccent, setLastGroupAccent] = useState<string | null>(null);
+  if (activeGroup !== null && activeGroup.color !== lastGroupAccent) {
+    setLastGroupAccent(activeGroup.color);
+  }
+  const windowTint = activeGroup?.color ?? lastGroupAccent;
   // Typing must never wait on filtering and card re-render: the rail catches
   // up in a deferred render that further keystrokes interrupt. Clearing stays
   // synchronous (the empty filter is free) so the reopen reset can focus the
@@ -2366,9 +2373,18 @@ const ClipboardApp = () => {
     );
   }
 
-  const windowStyle: ClipboardGroupStyle | undefined = activeGroup
-    ? { "--clipboard-group-accent": activeGroup.color }
-    : undefined;
+  const windowStyle: ClipboardGroupStyle | undefined = (() => {
+    if (windowTint === null) {
+      return undefined;
+    }
+    if (activeGroup === null) {
+      return { "--clipboard-window-tint": windowTint };
+    }
+    return {
+      "--clipboard-group-accent": activeGroup.color,
+      "--clipboard-window-tint": windowTint,
+    };
+  })();
 
   return (
     <div

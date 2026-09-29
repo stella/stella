@@ -16,7 +16,7 @@ const ProductShowcase = () => (
           >
             <div
               className={cn(
-                "group border-border/45 relative flex aspect-square min-h-[15rem] items-center justify-center overflow-hidden rounded-[1.45rem] border backdrop-blur-md transition-[border-color,box-shadow,transform] duration-300 ease-out sm:min-h-[18rem]",
+                "group border-border/45 relative flex aspect-square min-h-[15rem] items-center justify-center overflow-hidden rounded-[1.45rem] border backdrop-blur-md sm:min-h-[18rem]",
               )}
               data-showcase-shell
               style={{
@@ -52,7 +52,7 @@ const ProductShowcase = () => (
             </div>
 
             <div className="px-1 pt-5">
-              <h3 className="showcase-title font-display text-xl leading-tight font-medium tracking-tight transition-colors duration-300 sm:text-2xl">
+              <h3 className="showcase-title font-display text-xl leading-tight font-medium tracking-tight sm:text-2xl">
                 <span
                   className="tabular-nums"
                   style={{ color: "var(--muted-foreground)" }}
@@ -68,7 +68,7 @@ const ProductShowcase = () => (
                 </span>
                 {item.title}
               </h3>
-              <p className="showcase-description text-muted-foreground mt-3 text-sm leading-[1.7] transition-colors duration-300">
+              <p className="showcase-description text-muted-foreground mt-3 text-sm leading-[1.7]">
                 {item.description}
               </p>
             </div>

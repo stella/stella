@@ -62,7 +62,7 @@ const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
  * separate query) so resolving a message page never costs more than the
  * lookup that would have run anyway.
  */
-export type ThreadMetadata = {
+type ThreadMetadata = {
   chatModel: string | null;
   chatReasoningEffort: ReasoningEffort | null;
   contextMatterIds: SafeId<"workspace">[];
@@ -79,6 +79,8 @@ export type ThreadMetadata = {
  * `fileChatThreadOptions` seed never has to guess the org-wide flag.
  */
 export type FileThreadMessagePage = {
+  /** See `ChatMessagePage.activeTurnId`. */
+  activeTurnId: SafeId<"chatTurn"> | null;
   messages: ClientMessage[];
   olderCursor: string | null;
   contextMatterIds: SafeId<"workspace">[];
@@ -96,6 +98,7 @@ export type FileThreadMessagePage = {
 export const emptyMessagePage = (
   webSearchAvailable: boolean,
 ): FileThreadMessagePage => ({
+  activeTurnId: null,
   messages: [],
   olderCursor: null,
   contextMatterIds: [],
@@ -237,6 +240,7 @@ export const loadResolvedThreadMessagePage = async ({
     : null;
 
   return {
+    activeTurnId: page.activeTurnId,
     messages: page.messages,
     olderCursor: page.olderCursor,
     contextMatterIds,

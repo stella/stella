@@ -31,6 +31,7 @@ const FIXTURES = {
   HUN: null,
   POL: null,
   SVK: null,
+  USA: null,
 } as const satisfies Record<CaseLawJurisdiction, GrammarFixture | null>;
 
 const czech = PROVISION_CITATION_GRAMMARS.CZE;
@@ -89,7 +90,7 @@ const printed = (
 ): string[] => citations.map(({ end, start }) => text.slice(start, end));
 
 describe("provision citation grammars", () => {
-  test.each([...CASE_LAW_JURISDICTIONS])(
+  test.each(CASE_LAW_JURISDICTIONS)(
     "%s reads its own fixture, or declares no grammar",
     (jurisdiction) => {
       const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];

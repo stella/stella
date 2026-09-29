@@ -88,8 +88,7 @@ const validateProvider = createSafeSessionHandler(
 
     const result = yield* Result.await(
       Result.tryPromise({
-        try: async () =>
-          await probeProvider(body.provider, body.apiKey, undefined, undefined),
+        try: async () => await probeProvider(body.provider, body.apiKey),
         catch: (error: unknown) => {
           const raw = error instanceof Error ? error.message : "Unknown error";
           logger.warn("ai_config.provider_validation_unreachable", {

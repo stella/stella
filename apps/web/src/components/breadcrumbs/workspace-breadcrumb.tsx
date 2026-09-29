@@ -31,7 +31,7 @@ import { useReferenceConflictMessage } from "@/lib/workspaces/use-reference-conf
 import { useConfigStore } from "@/stores/config-store";
 
 const breadcrumbInputClassName =
-  "border-input bg-background text-foreground inline-flex rounded-md border text-sm shadow-xs/5 transition-colors has-focus-visible:border-ring";
+  "border-input bg-background text-foreground inline-flex rounded-md border text-sm shadow-xs/5 has-focus-visible:border-ring";
 
 const matterNameInputClassName = `${breadcrumbInputClassName} font-semibold`;
 
@@ -197,7 +197,7 @@ export const WorkspaceBreadcrumb = ({
         render={
           <button
             aria-label={changeColorLabel}
-            className="hover:bg-muted cursor-pointer rounded p-0.5 transition-colors"
+            className="hover:bg-muted cursor-pointer rounded p-0.5"
             type="button"
           >
             <MatterIcon
@@ -220,7 +220,7 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground min-w-0 truncate transition-colors"
+          className="hover:text-foreground min-w-0 truncate"
           onClick={() => {
             // Clear active filters and group by client so the full grouped
             // list is shown; the route then scrolls to and flashes this
@@ -241,7 +241,7 @@ export const WorkspaceBreadcrumb = ({
     <>
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
-          className="hover:text-foreground text-muted-foreground min-w-0 truncate transition-colors"
+          className="hover:text-foreground text-muted-foreground min-w-0 truncate"
           onClick={() => {
             updateMattersConfig({ clientFilter: null });
           }}
@@ -382,7 +382,7 @@ export const WorkspaceBreadcrumb = ({
                   activeProps={{
                     className: "text-foreground font-semibold",
                   }}
-                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
+                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold"
                   onContextMenu={(e) => {
                     e.preventDefault();
                     startEditingName();
@@ -463,7 +463,7 @@ export const WorkspaceBreadcrumb = ({
         <Link
           activeOptions={{ exact: true, includeSearch: false }}
           activeProps={{ className: "text-foreground font-semibold" }}
-          className="hover:text-foreground max-w-80 truncate font-semibold transition-colors"
+          className="hover:text-foreground max-w-80 truncate font-semibold"
           dir="auto"
           onClick={() => {
             startEditingName();

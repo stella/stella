@@ -1,36 +1,127 @@
 name: Deploy Landing
 
-# Triggers the landing site deploy on every main merge that
-# touches the landing app or shared deps. The public repo cannot
-# call private reusable workflows directly, so this dispatches the
-# private deploy workflow and watches the resulting run.
+# Deploys the landing site after every main merge that changes what the
+# landing build reads. The public repo cannot call private reusable workflows
+# directly, so this dispatches the private deploy workflow and watches the
+# resulting run.
 
 on:
   push:
     branches: [main]
-    paths:
-      - "apps/landing/**"
-      - "packages/**"
-      - "docs/changelog/**"
-      - "bun.lock"
-      - ".github/workflows/deploy-landing.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Each deploy ships the whole site at live main, so a newer push makes an
-# older run redundant.
-concurrency:
-  group: deploy-landing-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  deploy:
+  scope:
     # Belt-and-suspenders: the trigger above already restricts to
     # main, but a manual dispatch via API can pass a feature ref.
     # The private workflow refuses non-main refs as well.
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      affected: ${{ steps.scope.outputs.affected }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The pushed range can span several commits; blobless keeps the
+          # history cheap and fetches only the files the check reads.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # scripts/landing-deploy-scope.ts owns what the landing reads: its
+      # workspace graph, the packages that graph resolves to, and the outside
+      # files turbo.json declares for its build. A manual dispatch always
+      # deploys, and a check that cannot decide deploys too.
+      - name: Decide whether the push changes the site
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [[ "$EVENT_NAME" != "push" ]]; then
+            affected=true
+          elif ! affected="$(
+            bun scripts/landing-deploy-scope.ts --base "$BEFORE" --head "$GITHUB_SHA"
+          )"; then
+            echo "::warning::Could not scope the landing deploy; deploying."
+            affected=true
+          fi
+          echo "affected=${affected}" >> "$GITHUB_OUTPUT"
+
+  # The site is built here, from the pushed commit, with no secrets in reach.
+  # The private deploy downloads this job's artifact and checks where it came
+  # from before publishing it.
+  build:
+    needs: scope
+    if: needs.scope.outputs.affected == 'true'
+    name: Build landing
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      artifact-name: ${{ steps.name.outputs.artifact-name }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The landing build dates sitemap entries from git history and
+          # emits none on a shallow checkout. Blobless keeps the full
+          # history cheap: only the checked-out tree's blobs are fetched.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN; the build installs nothing private.
+          NPM_TOKEN: ""
+
+      - name: Build landing
+        run: bun --filter @stll/landing build
+
+      - name: Name the artifact
+        id: name
+        run: echo "artifact-name=landing-site-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the built site
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.name.outputs.artifact-name }}
+          path: apps/landing/dist/
+          # The site serves files under /.well-known/.
+          include-hidden-files: true
+          if-no-files-found: error
+          # A re-run replaces the artifact instead of failing on the name.
+          overwrite: true
+          retention-days: 1
+
+  deploy:
+    needs: build
+    # Each deploy ships the whole site, so a newer deploy makes an older one
+    # redundant. The group sits on this job so a push that does not change
+    # the site never cancels a deploy that is still watching.
+    concurrency:
+      group: deploy-landing-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     # Allows for the single retry below (a 3-minute wait plus a second deploy).
     timeout-minutes: 30
@@ -39,8 +130,49 @@ jobs:
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # Builds finish in any order, so this job can start after a deploy for a
+      # newer push. When main has since moved on by a commit that changes the
+      # site, that newer push deploys it, and this older build must not
+      # replace it. Anything that cannot be decided deploys; the deploy side
+      # still refuses a build older than the live site.
+      - name: Check whether a newer deploy covers this one
+        id: covered
+        run: |
+          covered=false
+          if ! git fetch --quiet --filter=blob:none origin main; then
+            echo "::warning::Could not fetch main; deploying."
+          else
+            main_sha="$(git rev-parse FETCH_HEAD)"
+            if [[ "$main_sha" != "$GITHUB_SHA" ]]; then
+              if affected="$(
+                bun scripts/landing-deploy-scope.ts --base "$GITHUB_SHA" --head "$main_sha"
+              )"; then
+                if [[ "$affected" == "true" ]]; then
+                  covered=true
+                  echo "::notice::main moved to ${main_sha} with site changes; its deploy covers ${GITHUB_SHA}."
+                fi
+              else
+                echo "::warning::Could not scope ${GITHUB_SHA}..${main_sha}; deploying."
+              fi
+            fi
+          fi
+          echo "covered=${covered}" >> "$GITHUB_OUTPUT"
+
       - name: Mint App token for the private workflows repo
         id: app-token
+        if: steps.covered.outputs.covered != 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
@@ -51,28 +183,25 @@ jobs:
           permission-contents: read
 
       - name: Dispatch and watch deploy-landing.yml
+        if: steps.covered.outputs.covered != 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PRIVATE_WORKFLOWS_REPO: ${{ github.repository_owner }}/private-workflows
           SOURCE_REF: ${{ github.ref }}
           SOURCE_REPOSITORY: ${{ github.repository }}
-          SOURCE_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+          ARTIFACT_NAME: ${{ needs.build.outputs.artifact-name }}
+          ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact-digest }}
           AWS_ROLE_ARN_DEPLOY: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
         run: |
 
           # The dispatched private deploy occasionally fails on a transient
-          # install/registry blip even though the lockfile is unchanged. Wrap a
-          # single dispatch+watch in a function so it can be retried once before
-          # the deploy is failed.
+          # blip. Wrap a single dispatch+watch in a function so it can be
+          # retried once before the deploy is failed. The private workflow
+          # refuses a build older than the live site, so a retry or a re-run
+          # can never put an older site in front of a newer one.
           attempt_deploy() {
-            # Deploy live main rather than the triggering commit. A retry, or
-            # a re-run of an older workflow, then can never put an older site
-            # in front of a newer one; main already contains the trigger.
-            SOURCE_SHA="$(
-              GH_TOKEN="$SOURCE_TOKEN" gh api \
-                "repos/${SOURCE_REPOSITORY}/git/ref/heads/main" \
-                --jq .object.sha
-            )" || return 1
             dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             # Must match the `run-name:` template in
             # stella/private-workflows/.github/workflows/deploy-landing.yml.
@@ -83,6 +212,9 @@ jobs:
                 --field source_repository="$SOURCE_REPOSITORY" \
                 --field source_ref="$SOURCE_REF" \
                 --field source_sha="$SOURCE_SHA" \
+                --field source_run_id="$SOURCE_RUN_ID" \
+                --field artifact_name="$ARTIFACT_NAME" \
+                --field artifact_digest="$ARTIFACT_DIGEST" \
                 --field aws_role_arn_deploy="$AWS_ROLE_ARN_DEPLOY" 2>&1
             )"; then
               printf '%s\n' "$dispatch_output" >&2
@@ -128,8 +260,8 @@ jobs:
               --exit-status
           }
 
-          # The private workflow keeps one running and one pending deploy; a
-          # newer dispatch replaces the pending one, which ends as cancelled.
+          # The private workflow runs one deploy at a time; a newer dispatch
+          # cancels the older run, which then ends as cancelled.
           # A newer deploy that is still running or already succeeded covers
           # this commit, so neither a failure nor a retry is warranted.
           superseded() {
@@ -179,6 +311,7 @@ jobs:
         # gitleaks generic-api-key match below is a false positive.
         # IndexNow is a best-effort SEO notification; a failure here must
         # not fail the deploy, which has already succeeded by this point.
+        if: steps.covered.outputs.covered != 'true'
         continue-on-error: true
         env:
           INDEXNOW_KEY: 4a9799deb8f64ac9be5f9b9e140407ca # gitleaks:allow

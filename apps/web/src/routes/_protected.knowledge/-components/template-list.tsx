@@ -2,20 +2,6 @@ import { type CSSProperties, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import {
-  CheckIcon,
-  DownloadIcon,
-  MoreHorizontalIcon,
-  PencilLineIcon,
-  PlusIcon,
-  Rows2Icon,
-  Rows3Icon,
-  SquarePenIcon,
-  TagIcon,
-  Trash2Icon,
-  WandSparklesIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
@@ -49,6 +35,20 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  CheckIcon,
+  DownloadIcon,
+  MoreHorizontalIcon,
+  PencilLineIcon,
+  PlusIcon,
+  Rows2Icon,
+  Rows3Icon,
+  SquarePenIcon,
+  TagIcon,
+  Trash2Icon,
+  AiActionIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
@@ -641,7 +641,7 @@ const TemplateRow = ({
   if (canUseTemplate) {
     rowActions.push({
       label: t("templates.useTemplate"),
-      icon: <WandSparklesIcon />,
+      icon: <AiActionIcon />,
       onClick: () => setUseOpen(true),
     });
   }
@@ -769,8 +769,8 @@ const TemplateRow = ({
         <div
           className={cn(
             density === "compact"
-              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2 transition-colors"
-              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors",
+              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2"
+              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3",
           )}
           draggable
           onDragStart={handleDragStart}
@@ -1138,7 +1138,7 @@ const TemplateTagsDialogBody = ({
           <div className="flex flex-wrap gap-1">
             {matchingSuggestions.map((tag) => (
               <button
-                className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium transition-colors"
+                className="bg-muted text-muted-foreground hover:text-foreground rounded-full px-2 py-0.5 text-xs font-medium"
                 key={tag}
                 onClick={() => addTag(tag)}
                 type="button"

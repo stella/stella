@@ -15,6 +15,7 @@ import {
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
+import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
@@ -26,7 +27,6 @@ import type {
   AssertTrue,
   HandlerOutputsMatchByName,
   McpToolHandler,
-  TypedHandlerDataByName,
 } from "@/api/mcp/tool-types";
 
 import type {
@@ -100,11 +100,6 @@ const isProjectableRegistryWriteToolName = (
   toolName: RegistryWriteToolName,
 ): toolName is ProjectableRegistryWriteToolName =>
   WRITE_TOOL_REF_FIELD_MAP[toolName].chatProjectable;
-
-export type RegistryWriteToolDataByName = TypedHandlerDataByName<
-  typeof REGISTRY_WRITE_TOOL_HANDLERS,
-  ProjectableRegistryWriteToolName
->;
 
 type RegistryWriteProjectionDataByName = ProjectionDataByName<
   typeof WRITE_TOOL_REF_FIELD_MAP,
@@ -226,6 +221,7 @@ export const runRegistryWriteTool = async (
   }
 
   const normalized = normalizeObjectInputAtBoundary({
+    access: "write",
     exactProperties: ["confirm", "validate_only"],
     schema: staticDefinition.inputSchema,
     value: dehydrated.value.args,
@@ -239,6 +235,17 @@ export const runRegistryWriteTool = async (
         }).error,
       ),
     );
+  }
+
+  const needsMatter = matterRequiredResult({
+    args: normalized.value,
+    context,
+    // Chat carries no OAuth scopes, and save_matter is always projected.
+    saveMatterCallable: WRITE_TOOL_REF_FIELD_MAP.save_matter.chatProjectable,
+    toolName,
+  });
+  if (needsMatter !== null) {
+    return Result.err(toRegistryChatToolError(needsMatter.error));
   }
 
   const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({

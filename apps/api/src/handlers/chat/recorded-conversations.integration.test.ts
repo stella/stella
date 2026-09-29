@@ -1,12 +1,19 @@
 import type { UIMessage } from "@tanstack/ai-client";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { CODE_MODE_EXECUTE_TOOL_NAME } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
@@ -97,7 +104,9 @@ type RecordedAction =
   | { type: "stop" }
   | { type: "drop-connection" }
   /** The user reloads the page. */
-  | { type: "reload" };
+  | { type: "reload" }
+  /** Retry on the latest answer. */
+  | { type: "retry" };
 
 type RecordedStep = {
   action: RecordedAction;
@@ -123,6 +132,8 @@ const ISO_INSTANT_PATTERN = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gu;
 /** Epoch milliseconds from 2023 to 2033, the stream's `timestamp` values. */
 const EPOCH_MS_PATTERN = /(?<![\d.])1[7-9]\d{11}(?![\d.])/gu;
 const RECORDING_EPOCH_MS = Date.UTC(2026, 0, 1);
+/** Elapsed milliseconds a code-mode run reports, raw or inside an SSE body. */
+const DURATION_PATTERN = /(\\?"(?:duration|durationMs)\\?":)\d+/gu;
 
 /** Each distinct match of `pattern`, in order of first appearance, named by
  *  `name(n, match)`: identity is kept, the generated value is not. */
@@ -152,6 +163,7 @@ const renameEach = (
  * a fixed series a second apart in order of appearance. Whether two instants
  * fell in the same millisecond is timing, not behaviour, so instants keep no
  * identity; the page lists messages oldest first, so theirs stay in order.
+ * Durations are timing too, and become 0.
  */
 const stabilize = (recording: RecordedConversation): string => {
   let instants = 0;
@@ -172,7 +184,8 @@ const stabilize = (recording: RecordedConversation): string => {
     .replaceAll(ISO_INSTANT_PATTERN, () =>
       new Date(nextInstant()).toISOString(),
     )
-    .replaceAll(EPOCH_MS_PATTERN, () => String(nextInstant()));
+    .replaceAll(EPOCH_MS_PATTERN, () => String(nextInstant()))
+    .replaceAll(DURATION_PATTERN, (_, key: string) => `${key}0`);
   return `${text}\n`;
 };
 
@@ -221,6 +234,29 @@ const draftCall = (toolCallId: string) => ({
   toolCallId,
   toolName: CREATE_DOCUMENT_TOOL_NAME,
 });
+/** A code-mode run of `typescriptCode`: its result keeps the chat refs the
+ *  script returned, verbatim. */
+const codeCall = (toolCallId: string, typescriptCode: string) => ({
+  arguments: JSON.stringify({ typescriptCode }),
+  toolCallId,
+  toolName: CODE_MODE_EXECUTE_TOOL_NAME,
+});
+/** Lists every document of every matter, by ref. */
+const LIST_DOCUMENTS_SCRIPT = `const { matters } = await external_list_matters({});
+const found = [];
+for (const matter of matters) {
+  const { documents } = await external_list_documents({ matter_id: matter.id });
+  for (const document of documents) {
+    found.push({ id: document.id, matter: matter.id, name: document.name });
+  }
+}
+return found;`;
+/** Lists the documents of `mat_1` alone. */
+const LIST_FIRST_MATTER_SCRIPT = `const { documents } = await external_list_documents({ matter_id: "mat_1" });
+return documents.map(({ id, name }) => ({ id, name }));`;
+/** Reads the document the listing showed as `ent_1`. */
+const READ_FIRST_DOCUMENT_SCRIPT = `const document = await external_read_document({ entity_id: "ent_1" });
+return { id: document.entityId, name: document.name };`;
 const answers = (text: string): ScriptedTurn => ({
   type: "step",
   text,
@@ -287,6 +323,24 @@ const approve = async (
     recorder,
     { decision, toolCallId, type: "approve" },
     async () => await recorder.client.approve(toolCallId, decision !== "deny"),
+  );
+};
+
+/** The user answers the scripted question of `toolCallId`. */
+const answerQuestion = async (
+  recorder: Recorder,
+  toolCallId: string,
+  ...runs: (readonly ScriptedTurn[])[]
+) => {
+  recorder.harness.script(recorder.threadId, ...runs);
+  await step(
+    recorder,
+    { answer: ASK_USER_ANSWER, toolCallId, type: "answer" },
+    async () =>
+      await recorder.client.answer(toolCallId, {
+        // In the order the web app's ask-user card builds it.
+        answers: [{ question: ASK_USER_QUESTION, answer: ASK_USER_ANSWER }],
+      }),
   );
 };
 
@@ -403,16 +457,43 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
   },
   "ask-user": async (recorder) => {
     await send(recorder, "Draft the NDA", [asks([askUserCall("call-1")])]);
-    recorder.harness.script(recorder.threadId, [answers("Drafted")]);
-    await step(
-      recorder,
-      { answer: ASK_USER_ANSWER, toolCallId: "call-1", type: "answer" },
-      async () =>
-        await recorder.client.answer("call-1", {
-          // In the order the web app's ask-user card builds it.
-          answers: [{ question: ASK_USER_QUESTION, answer: ASK_USER_ANSWER }],
-        }),
-    );
+    await answerQuestion(recorder, "call-1", [answers("Drafted")]);
+  },
+  // A code-mode result shows the model refs; the answer to a question is a
+  // new request, which reads a document by the ref the result showed.
+  "code-mode-refs-after-answer": async (recorder) => {
+    await send(recorder, "Which documents do we hold?", [
+      asks([codeCall("call-1", LIST_DOCUMENTS_SCRIPT)]),
+      asks([askUserCall("call-2")], "Two documents"),
+    ]);
+    await answerQuestion(recorder, "call-2", [
+      asks([codeCall("call-3", READ_FIRST_DOCUMENT_SCRIPT)]),
+      answers("Read the first one"),
+    ]);
+  },
+  // The same across an approval.
+  "code-mode-refs-after-approval": async (recorder) => {
+    await send(recorder, "Which documents do we hold?", [
+      asks([codeCall("call-1", LIST_DOCUMENTS_SCRIPT)]),
+      asks([approvalCall("call-2")], "One draft is stale"),
+    ]);
+    await approve(recorder, "call-2", "allow-once", [
+      asks([codeCall("call-3", READ_FIRST_DOCUMENT_SCRIPT)]),
+      answers("Deleted the draft and read the first document"),
+    ]);
+  },
+  // After the answer the model lists one matter first: the document it
+  // refs there must not take a ref the earlier listing showed for another.
+  "code-mode-refs-mint-first": async (recorder) => {
+    await send(recorder, "Which documents do we hold?", [
+      asks([codeCall("call-1", LIST_DOCUMENTS_SCRIPT)]),
+      asks([askUserCall("call-2")], "Two documents"),
+    ]);
+    await answerQuestion(recorder, "call-2", [
+      asks([codeCall("call-3", LIST_FIRST_MATTER_SCRIPT)]),
+      asks([codeCall("call-4", READ_FIRST_DOCUMENT_SCRIPT)]),
+      answers("Read the first one"),
+    ]);
   },
   "client-tool": async (recorder) => {
     await send(recorder, "Draft it as a document", [
@@ -467,6 +548,22 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
     ]);
     await autoApprove(recorder, "call-2", [answers("Both deleted")]);
   },
+  // Retry on an answer that failed, and on one that waits on a card.
+  retry: async (recorder) => {
+    await send(recorder, "Draft the NDA", [
+      { message: "Scripted provider failure", type: "fail-before-output" },
+    ]);
+    recorder.harness.script(recorder.threadId, [
+      asks([approvalCall("call-1")]),
+    ]);
+    await step(recorder, { type: "retry" }, async () => {
+      await recorder.client.resend();
+    });
+    recorder.harness.script(recorder.threadId, [answers("Drafted")]);
+    await step(recorder, { type: "retry" }, async () => {
+      await recorder.client.resend();
+    });
+  },
   "error-before-first-chunk": async (recorder) => {
     await send(recorder, "Draft the NDA", [
       { message: "Scripted provider failure", type: "fail-before-output" },
@@ -496,6 +593,27 @@ const SCENARIOS: Record<string, (recorder: Recorder) => Promise<void>> = {
     recorder.client.dispose();
     recorder.client = await recorder.harness.openWebClient(recorder.threadId);
     await send(recorder, "Thanks", [answers("Anything else?")]);
+  },
+  // The user types past a card that still waits: the new message replaces
+  // the waiting turn.
+  "supersede-approval": async (recorder) => {
+    await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
+    await send(recorder, "Keep it and draft a new one", [answers("Drafted")]);
+  },
+  // The replacing turn asks for the same tool, and the user allows it for the
+  // conversation: the replaced card stays unanswered.
+  "supersede-approval-then-grant": async (recorder) => {
+    await send(recorder, "Delete the NDA", [asks([approvalCall("call-1")])]);
+    await send(recorder, "Delete the older copy instead", [
+      asks([approvalCall("call-2")]),
+    ]);
+    await approve(recorder, "call-2", "allow-in-conversation", [
+      answers("Deleted the older copy"),
+    ]);
+  },
+  "supersede-ask-user": async (recorder) => {
+    await send(recorder, "Draft the NDA", [asks([askUserCall("call-1")])]);
+    await send(recorder, "Use the buyer's form", [answers("Drafted")]);
   },
   "connection-drop": async (recorder) => {
     await sendUntilQuiet(recorder, "before-tool-end");
@@ -549,6 +667,10 @@ const recordScenario = async (
   let failure: unknown;
   try {
     await run(recorder);
+    // The recording keeps what the page saw; which target each stored ref
+    // names in each request is only visible to the server, so it is checked
+    // here, on every scenario.
+    harness.expectStableRefs(threadId);
   } catch (error) {
     failure = error;
   } finally {
@@ -561,28 +683,52 @@ const recordScenario = async (
   };
 };
 
+const checkRecording = async (scenario: string) => {
+  const run =
+    SCENARIOS[scenario] ?? expect.unreachable(`No scenario ${scenario}`);
+  const { failure, recording } = await recordScenario(scenario, run);
+  const recorded = stabilize(recording);
+  const file = path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`);
+  // A message the page never posted is a finding, never a recording: writing
+  // it would make the committed file expect the page to drop it.
+  const unposted = recording.steps.flatMap(({ action, exchanges }, index) =>
+    (action.type === "send" || action.type === "retry") &&
+    exchanges.length === 0
+      ? [`step ${String(index + 1)} (${action.type})`]
+      : [],
+  );
+  if (process.env[WRITE_ENV] === "1" && unposted.length === 0) {
+    writeFileSync(file, recorded);
+  }
+  expect(unposted).toEqual([]);
+  // A scenario step that failed is the finding, not a stale file.
+  expect(failure).toBeUndefined();
+  expect(existsSync(file)).toBe(true);
+  // Regenerate with `bun run gen:chat-transcripts` in apps/api.
+  expect(readFileSync(file, "utf-8")).toBe(recorded);
+};
+
 describe("recorded conversations", () => {
   test.each(Object.keys(SCENARIOS))(
     "the committed recording of %s matches the server",
-    async (scenario) => {
-      const run =
-        SCENARIOS[scenario] ?? expect.unreachable(`No scenario ${scenario}`);
-      const { failure, recording } = await recordScenario(scenario, run);
-      const recorded = stabilize(recording);
-      const file = path.join(FIXTURE_DIR, `${scenario}${RECORDING_EXTENSION}`);
-      if (process.env[WRITE_ENV] === "1") {
-        writeFileSync(file, recorded);
-      }
-      // A scenario step that failed is the finding, not a stale file.
-      expect(failure).toBeUndefined();
-      expect(existsSync(file)).toBe(true);
-      // Regenerate with `bun run gen:chat-transcripts` in apps/api.
-      expect(readFileSync(file, "utf-8")).toBe(recorded);
-    },
+    checkRecording,
     60_000,
   );
 
   test("every committed recording belongs to a scenario", () => {
+    const recordings = new Set(
+      Object.keys(SCENARIOS).map(
+        (scenario) => `${scenario}${RECORDING_EXTENSION}`,
+      ),
+    );
+    if (process.env[WRITE_ENV] === "1") {
+      // A scenario that no longer exists leaves no recording behind.
+      for (const name of readdirSync(FIXTURE_DIR)) {
+        if (name.endsWith(RECORDING_EXTENSION) && !recordings.has(name)) {
+          rmSync(path.join(FIXTURE_DIR, name));
+        }
+      }
+    }
     expect(
       readdirSync(FIXTURE_DIR)
         .filter((name) => name.endsWith(RECORDING_EXTENSION))

@@ -1,6 +1,6 @@
-import { ChevronRightIcon, GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ChevronRightIcon, GlobeIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { ChatMessage } from "@/components/chat/chat-ui-tools";
@@ -44,7 +44,7 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
           "flex cursor-pointer list-none items-center gap-1.5",
           "px-2.5 py-1.5 text-xs",
           "[&::-webkit-details-marker]:hidden",
-          "hover:bg-muted/40 rounded-md transition-colors",
+          "hover:bg-muted/40 rounded-md",
         )}
       >
         <ChevronRightIcon

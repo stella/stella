@@ -18,7 +18,9 @@ import {
   DOCUMENT_TOOL_HANDLERS,
 } from "@/api/mcp/document-tools";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
-import { errorResult } from "@/api/mcp/tool-utils";
+import { getStaticMcpToolOutputContract } from "@/api/mcp/static-tool-definitions";
+import { errorResult, serializeToolResult } from "@/api/mcp/tool-utils";
+import { modelViewOf } from "@/api/tests/helpers/mcp-model-view";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -103,6 +105,42 @@ describe("document file upload surface", () => {
       required: ["entity_id"],
     });
     expect(listedPicker?.inputSchema.properties).not.toHaveProperty("file");
+  });
+
+  test("returns the picker's next step in the result the model reads", async () => {
+    const entityId = "00000000-0000-4000-8000-000000000010";
+    const workspaceId = "00000000-0000-4000-8000-000000000001";
+    const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+      async (run: (tx: unknown) => unknown) =>
+        await run({
+          query: {
+            entities: {
+              findFirst: async () => ({
+                kind: "document",
+                name: "agreement.docx",
+                workspaceId,
+              }),
+            },
+          },
+        }),
+    );
+
+    const result = await DOCUMENT_TOOL_HANDLERS.open_document_version_upload({
+      args: { entity_id: entityId },
+      context: { ...createContext(), safeDb: toSafeDbMock(scopedDb), scopedDb },
+    });
+    if ("egress" in result) {
+      panic("The upload picker returns a finished result");
+    }
+
+    const seen = modelViewOf(
+      serializeToolResult(
+        result,
+        getStaticMcpToolOutputContract("open_document_version_upload"),
+      ),
+    );
+    expect(seen).toMatchObject({ entityId, workspaceId });
+    expect(seen["nextStep"]).toContain("upload panel");
   });
 
   test("rejects a host-file upload before dispatch when the host omitted the file", async () => {

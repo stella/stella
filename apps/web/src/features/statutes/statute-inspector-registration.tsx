@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react";
 
-import { ScrollTextIcon } from "lucide-react";
-
+import { ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";

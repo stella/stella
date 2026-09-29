@@ -1,9 +1,9 @@
 import type { Query } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { GlobeIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -28,12 +28,14 @@ type ChatWebSearchToggleProps = {
   size?: "icon-sm" | "icon-xs" | undefined;
 };
 
-export const ChatWebSearchToggle = ({
-  disabled = false,
-  enabled,
-  threadRef,
-  size = "icon-sm",
-}: ChatWebSearchToggleProps) => {
+/**
+ * Turns the thread's web search on or off: remembers the choice for new
+ * chats and flips the thread optimistically until the server confirms. The
+ * toggle and a skill row's "turn on web search" fix share it.
+ */
+export const useSetChatWebSearch = (
+  threadRef: ChatThreadRef,
+): ((enabled: boolean, options?: { onSaved?: () => void }) => void) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const setEnabledPreference = useChatWebSearchPreferenceStore(
@@ -98,6 +100,25 @@ export const ChatWebSearchToggle = ({
     },
   });
 
+  return (nextEnabled, options) => {
+    setEnabledPreference(nextEnabled);
+    mutate(nextEnabled, {
+      // Only once the thread stores it, so a send that follows reads it.
+      onSuccess: () => {
+        options?.onSaved?.();
+      },
+    });
+  };
+};
+
+export const ChatWebSearchToggle = ({
+  disabled = false,
+  enabled,
+  threadRef,
+  size = "icon-sm",
+}: ChatWebSearchToggleProps) => {
+  const t = useTranslations();
+  const setWebSearch = useSetChatWebSearch(threadRef);
   const tooltipKey = enabled
     ? "chat.webSearch.toggleOff"
     : "chat.webSearch.toggleOn";
@@ -108,16 +129,14 @@ export const ChatWebSearchToggle = ({
       aria-pressed={enabled}
       // Quiet status-row control: muted at rest, borderless, only the
       // usual ghost hover surface. The enabled state speaks through
-      // the info-tinted icon, not a filled chip. `transition-colors`
+      // the info-tinted icon, not a filled chip. ``
       // eases the on/off tint so the optimistic flip reads as a smooth
       // turn-on rather than a blip.
-      className="text-muted-foreground hover:text-foreground transition-colors"
+      className="text-muted-foreground hover:text-foreground"
       data-pressed={enabled ? "" : undefined}
       disabled={disabled}
       onClick={() => {
-        const next = !enabled;
-        setEnabledPreference(next);
-        mutate(next);
+        setWebSearch(!enabled);
       }}
       size={size}
       tooltip={t(tooltipKey)}
@@ -125,7 +144,6 @@ export const ChatWebSearchToggle = ({
     >
       <GlobeIcon
         className={cn(
-          "transition-colors",
           size === "icon-xs" ? "size-3.5" : "size-4",
           enabled && "text-info",
         )}

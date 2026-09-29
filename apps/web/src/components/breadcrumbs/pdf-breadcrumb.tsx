@@ -152,7 +152,7 @@ export const PdfBreadcrumb = () => {
                 explicitUndefined: true,
               }}
               activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-64 truncate transition-colors"
+              className="hover:text-foreground max-w-64 truncate"
               params={{ workspaceId, viewId }}
               onDoubleClick={(event) => {
                 if (!isRenameable) {

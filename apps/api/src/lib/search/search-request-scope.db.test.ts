@@ -7,13 +7,15 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
+  fields,
+  properties,
   searchDocuments,
   workspaceMembers,
   workspaces,
@@ -524,5 +526,40 @@ describe("search reads follow the request scope", () => {
     expect(emptyFacet.buckets).toEqual([]);
     expect(emptyFts.hits).toEqual([]);
     expect(emptyFts.totalCount).toBe(0);
+  });
+
+  test("file fields accept non-JSON string content", async () => {
+    const [document] = await testDb
+      .select({ versionId: entities.currentVersionId })
+      .from(entities)
+      .where(eq(entities.id, documentBy.self));
+    const versionId = document?.versionId;
+    if (!versionId) {
+      panic("Expected the document's current version.");
+    }
+
+    const propertyId = createSafeId<"property">();
+    const fieldId = createSafeId<"field">();
+    await testDb.insert(properties).values({
+      id: propertyId,
+      workspaceId: openMatter,
+      name: "Stored text",
+      status: "fresh",
+      content: { version: 1, type: "file" },
+      tool: { version: 1, type: "manual-input" },
+    });
+    await testDb.insert(fields).values({
+      id: fieldId,
+      workspaceId: openMatter,
+      propertyId,
+      entityVersionId: versionId,
+      content: sql`to_jsonb('not-json'::text)`,
+    });
+    await testDb
+      .update(fields)
+      .set({ content: sql`to_jsonb('still-not-json'::text)` })
+      .where(eq(fields.id, fieldId));
+    await testDb.delete(fields).where(eq(fields.id, fieldId));
+    await testDb.delete(properties).where(eq(properties.id, propertyId));
   });
 });

@@ -29,7 +29,7 @@ import {
 } from "@/lib/consts";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
-export type { OptionColor, WorkspaceFieldContent };
+export type { WorkspaceFieldContent };
 
 export type {
   EntityKind,
@@ -219,7 +219,7 @@ export type EntityField = {
   content: WorkspaceFieldContent;
 };
 
-export type WorkspaceEntityAssignee = {
+type WorkspaceEntityAssignee = {
   userId: string;
   name: string | null;
   image: string | null;
@@ -279,7 +279,7 @@ export type PersonMention = {
   hideAvatar?: boolean;
 };
 
-export type PdfBatesJustificationBlock = {
+type PdfBatesJustificationBlock = {
   kind: "pdf-bates";
   fileFieldId: string;
   statements: {
@@ -300,11 +300,11 @@ export type PdfBatesJustificationBlock = {
  *  - `unverified`: the model's quote matched no source block, so there
  *    is no navigable block; the client renders the raw text as a
  *    non-navigable hint. */
-export type DocxFolioJustificationCitation =
+type DocxFolioJustificationCitation =
   | { citationStatus: "verified"; blockId: string; text: string }
   | { citationStatus: "unverified"; text: string };
 
-export type DocxFolioJustificationBlock = {
+type DocxFolioJustificationBlock = {
   kind: "docx-folio";
   fileFieldId: string;
   statements: {
@@ -318,11 +318,11 @@ export type DocxFolioJustificationBlock = {
 // ASK value against the position's tiers, so the provenance is the model's
 // rationale plus, when the tier decision hinged on specific authored language,
 // the matched fallback option or violated red-line rule.
-export type VerdictMatchedRef =
+type VerdictMatchedRef =
   | { kind: "fallback"; label?: string; text: string }
   | { kind: "redLine"; ruleId: string; text: string };
 
-export type VerdictRationaleJustificationBlock = {
+type VerdictRationaleJustificationBlock = {
   kind: "playbook-verdict";
   rationale: string;
   matchedRef?: VerdictMatchedRef;
@@ -338,7 +338,7 @@ type DecisionPassageJustificationBlock = {
   excerpt: string;
 };
 
-export type JustificationBlock =
+type JustificationBlock =
   | PdfBatesJustificationBlock
   | DocxFolioJustificationBlock
   | VerdictRationaleJustificationBlock

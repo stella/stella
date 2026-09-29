@@ -12,6 +12,7 @@ import {
   TIME_ENTRY_STATUSES,
   centsColumn,
   organization,
+  orgPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -20,6 +21,7 @@ import {
   sql,
   unsafeCents,
   user,
+  userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationUserPolicies,
   wsPolicies,
@@ -57,6 +59,7 @@ export const timeEntries = p.pgTable(
     rateAtEntry: centsColumn("rate_at_entry").notNull(),
     currency: p.varchar({ length: 3 }).notNull(),
     narrative: p.text().notNull(),
+    narrativeLanguage: p.varchar("narrative_language", { length: 64 }),
     invoiceNarrative: p.text("invoice_narrative"),
     billable: p.boolean().notNull().default(true),
     noCharge: p.boolean("no_charge").notNull().default(false),
@@ -115,6 +118,39 @@ export const timeEntries = p.pgTable(
       sql`${table.billedMinutes} >= 0`,
     ),
     ...wsOrganizationPolicies("time_entries"),
+  ],
+);
+
+export const savedTimeNarratives = p.pgTable(
+  "saved_time_narratives",
+  {
+    id: pUuid<"savedTimeNarrative">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: p.varchar({ length: 128 }).notNull(),
+    narrative: p.text().notNull(),
+    narrativeLanguage: p.varchar("narrative_language", { length: 64 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("saved_time_narratives_owner_name_id_idx")
+      .on(table.organizationId, table.userId, table.name, table.id),
+    p.check(
+      "saved_time_narratives_name_check",
+      sql`length(${table.name}) between 1 and 128`,
+    ),
+    p.check(
+      "saved_time_narratives_narrative_check",
+      sql`length(${table.narrative}) between 1 and 10000`,
+    ),
+    ...userOrganizationPolicies(),
   ],
 );
 
@@ -211,6 +247,52 @@ export const billingCodes = p.pgTable(
       .uniqueIndex("billing_codes_ws_type_code_uidx")
       .on(table.workspaceId, table.type, table.code),
     ...wsOrganizationPolicies("billing_codes"),
+  ],
+);
+
+export const sellerProfiles = p.pgTable(
+  "seller_profiles",
+  {
+    id: pUuid<"sellerProfile">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    legalName: p.varchar("legal_name", { length: 512 }).notNull(),
+    registrationId: p.varchar("registration_id", { length: 64 }),
+    vatId: p.varchar("vat_id", { length: 64 }),
+    addressLine1: p.varchar("address_line_1", { length: 512 }),
+    addressLine2: p.varchar("address_line_2", { length: 512 }),
+    city: p.varchar({ length: 256 }),
+    postalCode: p.varchar("postal_code", { length: 32 }),
+    country: p.varchar({ length: 128 }),
+    iban: p.varchar({ length: 34 }),
+    bic: p.varchar({ length: 11 }),
+    accountNumber: p.varchar("account_number", { length: 64 }),
+    defaultCurrency: p.varchar("default_currency", { length: 3 }).notNull(),
+    footerNotes: p.text("footer_notes"),
+    isDefault: p.boolean("is_default").notNull().default(false),
+    archivedAt: timestamptz("archived_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("seller_profiles_org_created_idx")
+      .on(table.organizationId, table.createdAt, table.id)
+      .where(sql`${table.archivedAt} IS NULL`),
+    p
+      .uniqueIndex("seller_profiles_org_default_uidx")
+      .on(table.organizationId)
+      .where(sql`${table.isDefault} AND ${table.archivedAt} IS NULL`),
+    p.check(
+      "seller_profiles_currency_check",
+      sql`${table.defaultCurrency} ~ '^[A-Z]{3}$'`,
+    ),
+    p.check(
+      "seller_profiles_archived_default_check",
+      sql`${table.archivedAt} IS NULL OR NOT ${table.isDefault}`,
+    ),
+    ...orgPolicies(),
   ],
 );
 

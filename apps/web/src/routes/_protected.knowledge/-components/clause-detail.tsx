@@ -1,17 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  Loader2Icon,
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlusIcon,
-  RotateCcwIcon,
-  StarIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -44,6 +33,17 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  Loader2Icon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  RotateCcwIcon,
+  StarIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
@@ -1788,7 +1788,7 @@ const VersionRow = ({
       <button
         className={cn(
           "flex flex-1 items-center justify-between",
-          "px-2 py-3 text-sm transition-colors",
+          "px-2 py-3 text-sm",
           "hover:bg-muted/50 rounded",
           isSelected && "bg-muted",
         )}

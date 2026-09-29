@@ -11,10 +11,11 @@ import {
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
-import { SNOWBALL_RELEASE } from "@/api/lib/legal-search/morphology/snowball/base-stemmer";
 import {
+  GLOBAL_MORPHOLOGY_KEY,
   MORPHOLOGY_LANGUAGES,
-  MORPHOLOGY_VERSION,
+  MORPHOLOGY_REVISIONS,
+  morphologyKey,
 } from "@/api/lib/legal-search/morphology/stem";
 
 const CASE_LAW_INPUT = {
@@ -34,9 +35,20 @@ const CASE_LAW_INPUT = {
     { type: "docket", value: "4 As 3/2008" },
   ],
   court: "Nejvyšší správní soud",
+  courtId: null,
   decisionDate: "2008-02-27",
   ecli: null,
   metadata: null,
+} as const satisfies CaseLawProjectionInput;
+
+const USA_INPUT = {
+  ...CASE_LAW_INPUT,
+  jurisdiction: "USA",
+  language: "en",
+  caseNumber: "No. 19-1392",
+  identifiers: [{ type: "docket", value: "No. 19-1392" }],
+  court: "Supreme Court of the United States",
+  courtId: "scotus",
 } as const satisfies CaseLawProjectionInput;
 
 const LEGISLATION_INPUT = {
@@ -254,10 +266,209 @@ test("only a generation that writes stem fields fingerprints the stemmer set", (
   expect(
     fingerprintOf(CORPUS_INDEX_MANIFESTS.case_law_v7, CASE_LAW_INPUT),
   ).toBe(EXPECTED_FINGERPRINTS.case_law_v7);
-  // Why the v6 pin moves: the version names the release and every language the
-  // module dispatches, so either kind of change reaches the fingerprint.
-  expect(MORPHOLOGY_VERSION).toContain(SNOWBALL_RELEASE);
+});
+
+/**
+ * Fingerprints computed before stemmer revisions became per language, when
+ * every document of a stem-writing generation carried one global key. A
+ * document whose language has not changed since must keep its fingerprint
+ * byte for byte, or it re-projects for a change to another language's
+ * stemmer.
+ */
+const GLOBAL_KEY_FINGERPRINTS = [
+  {
+    generation: "case_law_v6",
+    jurisdiction: "CZE",
+    language: "cs",
+    fingerprint:
+      "5540500bcbe8acfbe983d4841afa81d92bab4e2bbcddd2c7bd025073518bad59",
+  },
+  {
+    generation: "case_law_v7",
+    jurisdiction: "CZE",
+    language: "cs",
+    fingerprint:
+      "60363da479c398457526c95b5c1230c984664349b0419fee5b577e78f61b4dbd",
+  },
+  {
+    generation: "case_law_v6",
+    jurisdiction: "POL",
+    language: "pl",
+    fingerprint:
+      "a8208e052c40cfcaa1012ab094e8a3addd53e986dd28fa9cf8f98ff2296a842d",
+  },
+  {
+    generation: "case_law_v7",
+    jurisdiction: "POL",
+    language: "pl",
+    fingerprint:
+      "1ddd23f9d182101bf056ce28b357460183710f1e47a4d25ca7e4516aca479192",
+  },
+  {
+    generation: "case_law_v6",
+    jurisdiction: "EU",
+    language: "fr",
+    fingerprint:
+      "974a1fd4030519dc1b8c501c6f84628340c376e0e4f658bfb91b35e5c249bbd1",
+  },
+  {
+    generation: "case_law_v7",
+    jurisdiction: "EU",
+    language: "fr",
+    fingerprint:
+      "75ebedd1b3de4d3f1a85d32884ca9a118647d9b10fb954d6caddbd44e39f1ba1",
+  },
+  // Maltese has no stemmer: the document carries the key all the same.
+  {
+    generation: "case_law_v6",
+    jurisdiction: "EU",
+    language: "mt",
+    fingerprint:
+      "fa52e3128ac3964f34fc7eeff5ceb8ed1cdd345e89d49a024eb405584107d701",
+  },
+  {
+    generation: "case_law_v7",
+    jurisdiction: "EU",
+    language: "mt",
+    fingerprint:
+      "ab9c475c59b604f50f68b287453b43757cbc7330cb56f2e7aeaa4fc6922b76f7",
+  },
+  {
+    generation: "case_law_v6",
+    jurisdiction: "AUT",
+    language: "de",
+    fingerprint:
+      "2674245a7c6c13e83cf4aa98207fa16db9da834aafa3499e4859bccba6fcae41",
+  },
+  {
+    generation: "case_law_v7",
+    jurisdiction: "AUT",
+    language: "de",
+    fingerprint:
+      "5fbe7d8e87fd027d3cd5eeee3c2f565d94913c81b81087e3af4304fff535b32b",
+  },
+  {
+    generation: "case_law_v6",
+    jurisdiction: "HUN",
+    language: "hu",
+    fingerprint:
+      "df153ea9217857bdba3a66cc97dbc3341f5c16ce626cd615a41be0996b39de35",
+  },
+  {
+    generation: "case_law_v7",
+    jurisdiction: "HUN",
+    language: "hu",
+    fingerprint:
+      "379f6a7905b0837b33e0b847ff7c14b2e3126823a181dc503e5773947c86032f",
+  },
+  {
+    generation: "case_law_v6",
+    jurisdiction: "SVK",
+    language: "sk",
+    fingerprint:
+      "52e27eb96ebc57c10545481cb6158798b5cf5b1a45fb4326511f4e1c65160186",
+  },
+  {
+    generation: "case_law_v7",
+    jurisdiction: "SVK",
+    language: "sk",
+    fingerprint:
+      "25d74ad07d2c8839c35e17fbb92b0f81436d2b2bb2099e314199bf1809dae7a3",
+  },
+] as const;
+
+test("a stemmer revision re-projects only its own language's documents", () => {
+  for (const pin of GLOBAL_KEY_FINGERPRINTS) {
+    const current = fingerprintOf(CORPUS_INDEX_MANIFESTS[pin.generation], {
+      ...CASE_LAW_INPUT,
+      identifiers: [{ type: "docket", value: "4 As 3/2008" }],
+      court: "Soud",
+      jurisdiction: pin.jurisdiction,
+      language: pin.language,
+    });
+    const label = `${pin.generation} ${pin.jurisdiction} ${pin.language}`;
+    // Slovak is at revision 1, so its documents move and nothing else does.
+    if (pin.language === "sk") {
+      expect(current, label).not.toBe(pin.fingerprint);
+    } else {
+      expect(current, label).toBe(pin.fingerprint);
+    }
+  }
+});
+
+test("every language still at revision 0 keeps the global key", () => {
+  expect(GLOBAL_MORPHOLOGY_KEY).toBe(
+    "v3.1.1+cs,da,de,el,en,es,et,fi,fr,ga,hu,it,lt,nl,pl,pt,ro,sk,sv",
+  );
+  expect(morphologyKey(null)).toBe(GLOBAL_MORPHOLOGY_KEY);
   for (const language of MORPHOLOGY_LANGUAGES) {
-    expect(MORPHOLOGY_VERSION).toContain(language);
+    expect(morphologyKey(language) === GLOBAL_MORPHOLOGY_KEY, language).toBe(
+      MORPHOLOGY_REVISIONS[language] === 0,
+    );
+  }
+});
+
+test("a court-partitioned decision's fingerprint covers its court identity and contract", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+  const corrected = {
+    ...USA_INPUT,
+    court: "Court of Appeals for the First Circuit",
+    courtId: "ca1",
+  } as const satisfies CaseLawProjectionInput;
+  // A court correction keeps the index and moves the fingerprint, so the
+  // decision's desired state changes and its projection is replaced.
+  for (const input of [USA_INPUT, corrected]) {
+    expect(
+      deriveCorpusIndexProjectionDescriptor(manifest, input),
+    ).toMatchObject({ action: "upsert", indexId: "case_law_v7_usa" });
+  }
+  expect(fingerprintOf(manifest, USA_INPUT)).not.toBe(
+    fingerprintOf(manifest, corrected),
+  );
+  // Each generation's effective contract is its own.
+  expect(
+    new Set(
+      [
+        CORPUS_INDEX_MANIFESTS.case_law_v5,
+        CORPUS_INDEX_MANIFESTS.case_law_v6,
+        manifest,
+      ].map((each) => fingerprintOf(each, USA_INPUT)),
+    ).size,
+  ).toBe(3);
+});
+
+test("a court-partitioned decision without a resolvable court identity fails the projection", () => {
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+  expect(() =>
+    deriveCorpusIndexProjectionDescriptor(manifest, {
+      ...USA_INPUT,
+      courtId: null,
+    }),
+  ).toThrow("no court id");
+  expect(() =>
+    deriveCorpusIndexProjectionDescriptor(manifest, {
+      ...USA_INPUT,
+      court: "Supreme Court",
+    }),
+  ).toThrow("does not match the directory");
+  // An erasure needs no identity: the row is leaving the index.
+  expect(
+    deriveCorpusIndexProjectionDescriptor(manifest, {
+      ...USA_INPUT,
+      courtId: null,
+      redacted: true,
+    }),
+  ).toEqual({ action: "erase" });
+});
+
+test("a group under its manifest's contract never reads a court id into its fingerprint", () => {
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    expect(
+      fingerprintOf(manifest, { ...CASE_LAW_INPUT, courtId: "scotus" }),
+    ).toBe(EXPECTED_FINGERPRINTS[manifest.generation]);
   }
 });

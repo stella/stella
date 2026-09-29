@@ -1,7 +1,8 @@
 import type { RefObject } from "react";
 
-import { InfoIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { InfoIcon } from "@stll/ui/icons";
 
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { entityPickerColumns } from "@/components/workspaces/table/entity-find.logic";

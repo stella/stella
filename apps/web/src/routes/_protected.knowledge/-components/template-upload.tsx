@@ -2,11 +2,11 @@ import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { SparklesIcon, UploadIcon, AiActionIcon } from "@stll/ui/icons";
 import { TextSeparator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -143,7 +143,7 @@ export const TemplateUpload = ({
     <div className="flex flex-1 items-center justify-center p-8">
       <div
         className={cn(
-          "flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-[border-color,background-color,box-shadow] duration-200",
+          "flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10",
           isDragOver
             ? "border-foreground/30 bg-accent/50 shadow-primary/20 shadow-lg"
             : "border-border shadow-none",
@@ -210,7 +210,7 @@ export const TemplateUpload = ({
               size="sm"
               variant="outline"
             >
-              <WandSparklesIcon />
+              <AiActionIcon />
               {t("templates.studio.prepareWithAi")}
             </Button>
           </div>

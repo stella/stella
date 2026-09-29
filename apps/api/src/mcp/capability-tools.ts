@@ -59,10 +59,12 @@ import type {
   McpToolResponse,
 } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   closestToolNames,
   confirmationUnavailableResult,
   cursorInput,
   DEFAULT_LIST_LIMIT,
+  didYouMean,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   getWorkspaceStatus,
@@ -71,6 +73,7 @@ import {
   notFoundResult,
   nullAsAbsent,
   oauthScopeRecoveryHint,
+  quoteToolName,
   structuredErrorResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -584,6 +587,9 @@ const validatePart = ({
   // fields surface as issues rather than a whole-object "expected object" error.
   const base = value === undefined ? {} : structuredClone(value);
   const normalized = normalizeInputAtBoundary({
+    // A capability can write, and its catalog entry is not the tool's access,
+    // so a placeholder is asked about rather than read as "not set".
+    access: "write",
     path: part,
     schema,
     value: base,
@@ -863,11 +869,9 @@ const listCapabilitiesHandler: McpToolHandler<
   const afterId =
     cursor === undefined ? undefined : decodeCapabilityCursor(cursor);
   if (afterId === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Malformed cursor" }],
-      hint: "Pass the cursor verbatim as returned by a previous call, or omit it for the first page.",
+    return invalidCursorResult({
+      cursor: cursor ?? "",
+      tool: "list_capabilities",
     });
   }
 
@@ -950,7 +954,7 @@ const featureDisabledResult = (
 const hintForUnknownId = (id: string): string => {
   const suggestions = closestToolNames(id, CATALOG_IDS);
   return suggestions.length > 0
-    ? `Did you mean: ${suggestions.join(", ")}? Call list_capabilities to browse the full set.`
+    ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
     : "Call list_capabilities to browse available capability ids.";
 };
 
@@ -1186,7 +1190,7 @@ const invokeCapabilityArgsSchema = nullAsAbsent(
       v.string(),
       v.minLength(1),
       v.description(
-        "Capability id to invoke, as returned by list_capabilities.",
+        "Capability id to invoke. Use an id list_capabilities returned.",
       ),
     ),
     input: v.optional(
@@ -1980,7 +1984,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     // Confirmation is per capability (from the catalog), so the handler applies
     // the gate from the target capability's `destructive` flag.
     description:
-      "Invoke one capability by id (from list_capabilities/describe_capability). " +
+      "Invoke one capability by id. " +
+      "Take the id from list_capabilities or describe_capability. " +
       "Pass its input under input: { body, params, query } (no other top-level " +
       "argument is accepted); matter-scoped capabilities take the target " +
       "matter as input.params.matterId. Real authority is enforced per " +

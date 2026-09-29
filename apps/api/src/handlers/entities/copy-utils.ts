@@ -13,6 +13,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
+import type { EntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   type CurrentVersionAssignment,
@@ -853,6 +854,521 @@ const validateCopySources = ({
   return Result.ok();
 };
 
+type LockCopyWorkspacesOptions = {
+  tx: Transaction;
+  transfer: EntityTransfer;
+  sourceWorkspaceId: SafeId<"workspace"> | undefined;
+  targetWorkspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Same-workspace duplicate and cross-workspace copy both lock the target only:
+ * a pure copy never mutates the source workspace's rows or its cap, so locking
+ * the source would only add unrelated contention (blocking uploads/tasks/clips
+ * there) for no correctness benefit. Only a cross-workspace MOVE also locks the
+ * source, since the caller deletes the source rows in the same transaction and
+ * that must serialize with concurrent source-side inserts. Both ids go through
+ * `lockWorkspacesForEntityCap`, which sorts them ascending before locking — see
+ * that function for why this closes the cross-workspace ABBA between an A->B
+ * and a concurrent B->A move.
+ */
+const lockCopyWorkspaces = async ({
+  tx,
+  transfer,
+  sourceWorkspaceId,
+  targetWorkspaceId,
+}: LockCopyWorkspacesOptions): Promise<void> => {
+  await lockWorkspacesForEntityCap(
+    tx,
+    sourceWorkspaceId && transfer.type === "move"
+      ? [sourceWorkspaceId, targetWorkspaceId]
+      : [targetWorkspaceId],
+  );
+};
+
+type ValidateCopyTargetOptions = {
+  tx: Transaction;
+  copyCount: number;
+  sourceWorkspaceId: SafeId<"workspace"> | undefined;
+  targetParentId: SafeId<"entity"> | null;
+  targetWorkspaceId: SafeId<"workspace">;
+};
+
+/**
+ * The target workspace must have room for every copy, and a cross-workspace
+ * copy's parent must be a folder there. A same-workspace duplicate already
+ * validated the parent via the source entity fetch.
+ */
+const validateCopyTarget = async ({
+  tx,
+  copyCount,
+  sourceWorkspaceId,
+  targetParentId,
+  targetWorkspaceId,
+}: ValidateCopyTargetOptions): Promise<Result<void, HandlerError>> => {
+  const entityCount = await tx.$count(
+    entities,
+    eq(entities.workspaceId, targetWorkspaceId),
+  );
+
+  if (entityCount + copyCount > LIMITS.entitiesCount) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Entities limit reached",
+      }),
+    );
+  }
+
+  if (!sourceWorkspaceId || !targetParentId) {
+    return Result.ok();
+  }
+
+  const parent = await tx.query.entities.findFirst({
+    where: {
+      id: { eq: targetParentId },
+      workspaceId: { eq: targetWorkspaceId },
+    },
+    columns: { kind: true },
+  });
+
+  if (!parent) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Target parent folder not found",
+      }),
+    );
+  }
+
+  if (parent.kind !== "folder") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Target parent must be a folder",
+      }),
+    );
+  }
+
+  return Result.ok();
+};
+
+/** What every copied entity shares: where it lands and how it is written. */
+type CopyScope = Pick<
+  CopyEntitiesProps,
+  | "organizationId"
+  | "targetWorkspaceId"
+  | "targetParentId"
+  | "userId"
+  | "sourceEntityId"
+  | "targetRootEntityId"
+  | "targetRootName"
+  | "transfer"
+  | "fieldMapping"
+>;
+
+/** Every row and result a copy produces, built before the first insert. */
+type CopyRows = {
+  entityRows: (typeof entities.$inferInsert)[];
+  versionRows: ReturnType<typeof targetVersionValues>[];
+  versionTransfers: VersionTransfer[];
+  currentVersions: CurrentVersionAssignment[];
+  fieldRows: CopiedFieldInsert[];
+  copiedEntities: CopiedEntity[];
+  copiedField: CopiedField | null;
+  entityIdsBySearchIndexOwner: Record<SearchIndexOwner, SafeId<"entity">[]>;
+  nativeExtractionRequests: NativeExtractionRunRequest[];
+  fileFields: CopiedFileField[];
+};
+
+type CopyPlan = CopyRows & { rootEntityId: SafeId<"entity"> };
+
+/** Where one source entity lands in the target workspace. */
+type CopyTarget = {
+  entityId: SafeId<"entity">;
+  parentId: SafeId<"entity"> | null;
+  name: string;
+};
+
+type ResolveCopyTargetOptions = {
+  scope: CopyScope;
+  source: WritableEntitySnapshot;
+  rootCopyName: string | undefined;
+  targetIdBySourceId: ReadonlyMap<SafeId<"entity">, SafeId<"entity">>;
+};
+
+/**
+ * The root takes the caller's parent and resolved name, and the caller's id
+ * when a replay-safe duplicate supplies one. Every descendant keeps its name
+ * under the copy of its parent.
+ */
+const resolveCopyTarget = ({
+  scope: { sourceEntityId, targetParentId, targetRootEntityId },
+  source,
+  rootCopyName,
+  targetIdBySourceId,
+}: ResolveCopyTargetOptions): CopyTarget => {
+  if (source.id === sourceEntityId) {
+    return {
+      entityId: targetRootEntityId ?? createSafeId<"entity">(),
+      parentId: targetParentId,
+      name: rootCopyName ?? panic("Copy root name was not resolved"),
+    };
+  }
+
+  const parentId = source.parentId
+    ? targetIdBySourceId.get(source.parentId)
+    : undefined;
+  if (parentId === undefined) {
+    panic("Copy source parent order was not validated");
+  }
+  return { entityId: createSafeId<"entity">(), parentId, name: source.name };
+};
+
+type AppendVersionRowsOptions = {
+  rows: CopyRows;
+  scope: CopyScope;
+  source: WritableEntitySnapshot;
+  entityId: SafeId<"entity">;
+  copyStamp: string | null;
+};
+
+/** Mint a target version per source version; returns source id -> target id. */
+const appendVersionRows = ({
+  rows,
+  scope: { targetWorkspaceId, transfer },
+  source,
+  entityId,
+  copyStamp,
+}: AppendVersionRowsOptions): Map<
+  SafeId<"entityVersion">,
+  SafeId<"entityVersion">
+> => {
+  const targetVersionIds = new Map<
+    SafeId<"entityVersion">,
+    SafeId<"entityVersion">
+  >();
+  for (const version of source.versions) {
+    const targetVersionId = createSafeId<"entityVersion">();
+    targetVersionIds.set(version.id, targetVersionId);
+    rows.versionTransfers.push({
+      sourceVersionId: version.id,
+      targetVersionId,
+    });
+    rows.versionRows.push(
+      targetVersionValues({
+        copyStamp,
+        entityId,
+        id: targetVersionId,
+        transfer,
+        version,
+        workspaceId: targetWorkspaceId,
+      }),
+    );
+  }
+  return targetVersionIds;
+};
+
+type AppendFieldRowsOptions = {
+  rows: CopyRows;
+  scope: CopyScope;
+  source: WritableEntitySnapshot;
+  target: CopyTarget;
+  currentVersion: WritableEntityVersionSnapshot;
+  targetVersionIds: ReadonlyMap<
+    SafeId<"entityVersion">,
+    SafeId<"entityVersion">
+  >;
+};
+
+/**
+ * Mint a target field per source field across every carried version; returns
+ * the current version's rows. The returned field, derivative queueing and
+ * extraction all describe the document as it stands, so they read the current
+ * version's rows; older versions are carried for their history alone.
+ */
+const appendFieldRows = ({
+  rows,
+  scope: { sourceEntityId, targetRootName, targetWorkspaceId, fieldMapping },
+  source,
+  target,
+  currentVersion,
+  targetVersionIds,
+}: AppendFieldRowsOptions): CopiedFieldInsert[] => {
+  const renamedRootFileFieldId =
+    source.id === sourceEntityId && targetRootName !== undefined
+      ? currentVersion.fields.find(({ content }) => content.type === "file")?.id
+      : undefined;
+
+  const currentFieldRows: CopiedFieldInsert[] = [];
+  for (const version of source.versions) {
+    const entityVersionId =
+      targetVersionIds.get(version.id) ??
+      panic("Carried version was not written for the copied entity");
+    const isCurrentVersion = version.id === currentVersion.id;
+
+    for (const field of version.fields) {
+      const fieldId = createSafeId<"field">();
+
+      if (
+        isCurrentVersion &&
+        fieldMapping.type === "single" &&
+        field.id === fieldMapping.sourceFieldId
+      ) {
+        rows.copiedField = {
+          sourceEntityId: source.id,
+          sourceFieldId: field.id,
+          entityId: target.entityId,
+          fieldId,
+        };
+      }
+
+      // Track file fields for PDF derivative enqueueing
+      if (isCurrentVersion && field.content.type === "file") {
+        rows.fileFields.push({
+          entityId: target.entityId,
+          fieldId,
+          mimeType: field.content.mimeType,
+          encrypted: field.content.encrypted,
+        });
+      }
+
+      const content =
+        field.id === renamedRootFileFieldId && field.content.type === "file"
+          ? {
+              ...field.content,
+              fileName: sanitizeFilename(target.name),
+            }
+          : field.content;
+      const fieldRow = {
+        id: fieldId,
+        workspaceId: targetWorkspaceId,
+        propertyId: field.propertyId,
+        entityVersionId,
+        content,
+      };
+      rows.fieldRows.push(fieldRow);
+      if (isCurrentVersion) {
+        currentFieldRows.push(fieldRow);
+      }
+    }
+  }
+  return currentFieldRows;
+};
+
+type AppendCopiedEntityOptions = {
+  rows: CopyRows;
+  scope: CopyScope;
+  source: WritableEntitySnapshot;
+  target: CopyTarget;
+  stamp: EntityStamp | null;
+};
+
+/** Build every row for one copied entity and record how it gets indexed. */
+const appendCopiedEntity = ({
+  rows,
+  scope,
+  source,
+  target,
+  stamp,
+}: AppendCopiedEntityOptions): void => {
+  const currentVersion =
+    source.versions.find((version) => version.id === source.currentVersionId) ??
+    panic("Copy source current version was not validated");
+
+  rows.entityRows.push({
+    id: target.entityId,
+    workspaceId: scope.targetWorkspaceId,
+    kind: source.kind,
+    parentId: target.parentId,
+    name: target.name,
+    duplicateSourceEntityId:
+      source.id === scope.sourceEntityId && scope.targetRootEntityId
+        ? scope.sourceEntityId
+        : null,
+    createdBy: scope.userId,
+    docSequence: stamp?.docSequence ?? null,
+  });
+
+  const targetVersionIds = appendVersionRows({
+    rows,
+    scope,
+    source,
+    entityId: target.entityId,
+    copyStamp: stamp?.stamp ?? null,
+  });
+  const newVersionId =
+    targetVersionIds.get(currentVersion.id) ??
+    panic("Current version was not written for the copied entity");
+  rows.currentVersions.push({
+    entityId: target.entityId,
+    versionId: newVersionId,
+  });
+
+  const currentFieldRows = appendFieldRows({
+    rows,
+    scope,
+    source,
+    target,
+    currentVersion,
+    targetVersionIds,
+  });
+
+  // The field ids above are minted in insertion order, so this derives the
+  // same source the post-commit processor would select without re-reading
+  // each copied entity.
+  const extractionRequest = nativeExtractionRunRequestForFields({
+    entityId: target.entityId,
+    entityVersionId: newVersionId,
+    fields: currentFieldRows,
+    organizationId: scope.organizationId,
+    workspaceId: scope.targetWorkspaceId,
+  });
+  if (extractionRequest === null) {
+    rows.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark].push(
+      target.entityId,
+    );
+  } else {
+    rows.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.durableExtraction].push(
+      target.entityId,
+    );
+    rows.nativeExtractionRequests.push(extractionRequest);
+  }
+  rows.copiedEntities.push({
+    sourceId: source.id,
+    entityId: target.entityId,
+    kind: source.kind,
+    name: target.name,
+    parentId: target.parentId,
+  });
+};
+
+type PlanEntityCopiesOptions = {
+  scope: CopyScope;
+  sourceEntities: WritableEntitySnapshot[];
+  documentStamps: EntityStamp[];
+  rootCopyName: string | undefined;
+};
+
+/**
+ * Mint every target id and build every row the copy writes, so the caller
+ * writes them in one batch. Sources arrive parents first, so every parent
+ * resolves from the ids already minted.
+ */
+const planEntityCopies = ({
+  scope,
+  sourceEntities,
+  documentStamps,
+  rootCopyName,
+}: PlanEntityCopiesOptions): CopyPlan => {
+  const rows: CopyRows = {
+    entityRows: [],
+    versionRows: [],
+    versionTransfers: [],
+    currentVersions: [],
+    fieldRows: [],
+    copiedEntities: [],
+    copiedField: null,
+    // Split by which mechanism owns each copy's search projection, so every
+    // copy is covered exactly once: a durable extraction run indexes the
+    // documents it extracts, and a dirty mark committed with this transaction
+    // covers everything else.
+    entityIdsBySearchIndexOwner: {
+      [SEARCH_INDEX_OWNER.durableExtraction]: [],
+      [SEARCH_INDEX_OWNER.searchMark]: [],
+    },
+    nativeExtractionRequests: [],
+    fileFields: [],
+  };
+  const targetIdBySourceId = new Map<SafeId<"entity">, SafeId<"entity">>();
+  let nextStampIndex = 0;
+
+  for (const source of sourceEntities) {
+    const target = resolveCopyTarget({
+      scope,
+      source,
+      rootCopyName,
+      targetIdBySourceId,
+    });
+    const stamp =
+      source.kind === "document"
+        ? (documentStamps.at(nextStampIndex++) ??
+          panic("Fewer document stamps allocated than documents copied"))
+        : null;
+    appendCopiedEntity({ rows, scope, source, target, stamp });
+    targetIdBySourceId.set(source.id, target.entityId);
+  }
+
+  return {
+    ...rows,
+    rootEntityId:
+      targetIdBySourceId.get(scope.sourceEntityId) ??
+      panic("Copy root was not validated"),
+  };
+};
+
+type WriteCopyPlanOptions = {
+  tx: Transaction;
+  plan: CopyPlan;
+  transfer: EntityTransfer;
+  targetWorkspaceId: SafeId<"workspace">;
+  sourceWorkspaceId: SafeId<"workspace"> | undefined;
+  recordAuditEvent: AuditRecorder;
+};
+
+/** Insert the planned rows and record an audit event per copied entity. */
+const writeCopyPlan = async ({
+  tx,
+  plan,
+  transfer,
+  targetWorkspaceId,
+  sourceWorkspaceId,
+  recordAuditEvent,
+}: WriteCopyPlanOptions): Promise<void> => {
+  await insertEntityBatch({
+    tx,
+    entityRows: plan.entityRows,
+    versionRows: plan.versionRows,
+    stampOrigin: transfer.type === "copy" ? "issued" : "copied",
+    currentVersions: plan.currentVersions,
+    fieldRows: plan.fieldRows,
+  });
+
+  // A copy's versions were minted their own codes by the insert above. A move
+  // is the same document elsewhere, so the codes already printed on its
+  // versions travel with them and keep resolving.
+  if (transfer.type === "move") {
+    await carryVerificationCodes(tx, plan.versionTransfers);
+  }
+
+  await tx
+    .update(workspaces)
+    .set({ lastActivityAt: new Date() })
+    .where(eq(workspaces.id, targetWorkspaceId));
+
+  await recordAuditEvent(
+    tx,
+    plan.copiedEntities.map((entity) => ({
+      action: AUDIT_ACTION.CREATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: entity.entityId,
+      changes: {
+        created: {
+          old: {
+            sourceEntityId: entity.sourceId,
+            ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
+          },
+          new: {
+            kind: entity.kind,
+            name: entity.name,
+            parentId: entity.parentId,
+          },
+        },
+      },
+    })),
+  );
+};
+
 /**
  * Copy entities to a target workspace. Used by both duplicate
  * (same workspace) and copy-to-workspace (cross-workspace).
@@ -879,66 +1395,22 @@ export const copyEntities = async ({
   fieldMapping,
   dependencies = defaultCopyEntitiesDependencies,
 }: CopyEntitiesProps): Promise<Result<CopyEntitiesResult, HandlerError>> => {
-  // Same-workspace duplicate and cross-workspace copy both lock the
-  // target only: a pure copy never mutates the source workspace's
-  // rows or its cap, so locking the source would only add unrelated
-  // contention (blocking uploads/tasks/clips there) for no
-  // correctness benefit. Only a cross-workspace MOVE also locks the
-  // source, since the caller deletes the source rows in the same
-  // transaction and that must serialize with
-  // concurrent source-side inserts. Both ids go through
-  // `lockWorkspacesForEntityCap`, which sorts them ascending before
-  // locking — see that function for why this closes the
-  // cross-workspace ABBA between an A->B and a concurrent B->A move.
-  await lockWorkspacesForEntityCap(
+  await lockCopyWorkspaces({
     tx,
-    sourceWorkspaceId && transfer.type === "move"
-      ? [sourceWorkspaceId, targetWorkspaceId]
-      : [targetWorkspaceId],
-  );
+    transfer,
+    sourceWorkspaceId,
+    targetWorkspaceId,
+  });
 
-  const entityCount = await tx.$count(
-    entities,
-    eq(entities.workspaceId, targetWorkspaceId),
-  );
-
-  if (entityCount + sourceEntities.length > LIMITS.entitiesCount) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Entities limit reached",
-      }),
-    );
-  }
-
-  // Validate target parent for cross-workspace copy only.
-  // Same-workspace (duplicate) already validated the parent via the source entity fetch.
-  if (sourceWorkspaceId && targetParentId) {
-    const parent = await tx.query.entities.findFirst({
-      where: {
-        id: { eq: targetParentId },
-        workspaceId: { eq: targetWorkspaceId },
-      },
-      columns: { kind: true },
-    });
-
-    if (!parent) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Target parent folder not found",
-        }),
-      );
-    }
-
-    if (parent.kind !== "folder") {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Target parent must be a folder",
-        }),
-      );
-    }
+  const targetValidated = await validateCopyTarget({
+    tx,
+    copyCount: sourceEntities.length,
+    sourceWorkspaceId,
+    targetParentId,
+    targetWorkspaceId,
+  });
+  if (Result.isError(targetValidated)) {
+    return targetValidated;
   }
 
   const validated = validateCopySources({ sourceEntities, sourceEntityId });
@@ -946,19 +1418,6 @@ export const copyEntities = async ({
     return validated;
   }
 
-  const idMap = new Map<SafeId<"entity">, SafeId<"entity">>();
-  const copiedEntities: CopiedEntity[] = [];
-  let copiedField: CopiedField | null = null;
-  // Split by which mechanism owns each copy's search projection, so every
-  // copy is covered exactly once: a durable extraction run indexes the
-  // documents it extracts, and a dirty mark committed with this transaction
-  // covers everything else.
-  const copiedEntityIds: Record<SearchIndexOwner, SafeId<"entity">[]> = {
-    [SEARCH_INDEX_OWNER.durableExtraction]: [],
-    [SEARCH_INDEX_OWNER.searchMark]: [],
-  };
-  const nativeExtractionRequests: NativeExtractionRunRequest[] = [];
-  const fileFields: CopiedFileField[] = [];
   // The document rows are known before the copy starts, so the whole run of
   // sequence numbers is allocated in one counter upsert plus one reference
   // read instead of two statements per copied document. The filter keeps
@@ -968,15 +1427,6 @@ export const copyEntities = async ({
     workspaceId: targetWorkspaceId,
     count: sourceEntities.filter((source) => source.kind === "document").length,
   });
-  let nextStampIndex = 0;
-
-  const versionTransfers: VersionTransfer[] = [];
-  // Every id is minted here and every parent resolves from `idMap`, so the
-  // loop only builds rows and `insertEntityBatch` writes them after it.
-  const entityRows: (typeof entities.$inferInsert)[] = [];
-  const versionRows: ReturnType<typeof targetVersionValues>[] = [];
-  const currentVersions: CurrentVersionAssignment[] = [];
-  const carriedFieldInserts: CopiedFieldInsert[] = [];
   const rootCopyName = await resolveRootCopyName({
     tx,
     rootSource: sourceEntities.find((source) => source.id === sourceEntityId),
@@ -985,234 +1435,51 @@ export const copyEntities = async ({
     targetWorkspaceId,
   });
 
-  for (const source of sourceEntities) {
-    const currentVersion =
-      source.versions.find(
-        (version) => version.id === source.currentVersionId,
-      ) ?? panic("Copy source current version was not validated");
-
-    const newEntityId =
-      source.id === sourceEntityId && targetRootEntityId
-        ? targetRootEntityId
-        : createSafeId<"entity">();
-    const mappedParentId = source.parentId
-      ? idMap.get(source.parentId)
-      : undefined;
-
-    // For root entity: use targetParentId (caller provides the correct value)
-    // For children: use mapped parent from idMap
-    const newParentId =
-      source.id === sourceEntityId ? targetParentId : mappedParentId;
-
-    if (source.id !== sourceEntityId && newParentId === undefined) {
-      panic("Copy source parent order was not validated");
-    }
-
-    const copyName =
-      source.id === sourceEntityId
-        ? (rootCopyName ?? panic("Copy root name was not resolved"))
-        : source.name;
-
-    const entityStamp =
-      source.kind === "document"
-        ? (documentStamps.at(nextStampIndex++) ??
-          panic("Fewer document stamps allocated than documents copied"))
-        : null;
-
-    entityRows.push({
-      id: newEntityId,
-      workspaceId: targetWorkspaceId,
-      kind: source.kind,
-      parentId: newParentId ?? null,
-      name: copyName,
-      duplicateSourceEntityId:
-        source.id === sourceEntityId && targetRootEntityId
-          ? sourceEntityId
-          : null,
-      createdBy: userId,
-      docSequence: entityStamp?.docSequence ?? null,
-    });
-
-    const targetVersionIds = new Map<
-      SafeId<"entityVersion">,
-      SafeId<"entityVersion">
-    >();
-    for (const version of source.versions) {
-      const targetVersionId = createSafeId<"entityVersion">();
-      targetVersionIds.set(version.id, targetVersionId);
-      versionTransfers.push({ sourceVersionId: version.id, targetVersionId });
-      versionRows.push(
-        targetVersionValues({
-          copyStamp: entityStamp?.stamp ?? null,
-          entityId: newEntityId,
-          id: targetVersionId,
-          transfer,
-          version,
-          workspaceId: targetWorkspaceId,
-        }),
-      );
-    }
-
-    const newVersionId =
-      targetVersionIds.get(currentVersion.id) ??
-      panic("Current version was not written for the copied entity");
-
-    const renamedRootFileFieldId =
-      source.id === sourceEntityId && targetRootName !== undefined
-        ? currentVersion.fields.find(({ content }) => content.type === "file")
-            ?.id
-        : undefined;
-
-    currentVersions.push({ entityId: newEntityId, versionId: newVersionId });
-
-    // The returned field, derivative queueing and extraction all describe the
-    // document as it stands, so they read the current version's rows; older
-    // versions are carried for their history alone.
-    const fieldInserts: CopiedFieldInsert[] = [];
-    for (const version of source.versions) {
-      const entityVersionId =
-        targetVersionIds.get(version.id) ??
-        panic("Carried version was not written for the copied entity");
-      const isCurrentVersion = version.id === currentVersion.id;
-
-      for (const field of version.fields) {
-        const fieldId = createSafeId<"field">();
-
-        if (
-          isCurrentVersion &&
-          fieldMapping.type === "single" &&
-          field.id === fieldMapping.sourceFieldId
-        ) {
-          copiedField = {
-            sourceEntityId: source.id,
-            sourceFieldId: field.id,
-            entityId: newEntityId,
-            fieldId,
-          };
-        }
-
-        // Track file fields for PDF derivative enqueueing
-        if (isCurrentVersion && field.content.type === "file") {
-          fileFields.push({
-            entityId: newEntityId,
-            fieldId,
-            mimeType: field.content.mimeType,
-            encrypted: field.content.encrypted,
-          });
-        }
-
-        const content =
-          field.id === renamedRootFileFieldId && field.content.type === "file"
-            ? {
-                ...field.content,
-                fileName: sanitizeFilename(copyName),
-              }
-            : field.content;
-        const fieldInsert = {
-          id: fieldId,
-          workspaceId: targetWorkspaceId,
-          propertyId: field.propertyId,
-          entityVersionId,
-          content,
-        };
-        carriedFieldInserts.push(fieldInsert);
-        if (isCurrentVersion) {
-          fieldInserts.push(fieldInsert);
-        }
-      }
-    }
-
-    idMap.set(source.id, newEntityId);
-    // The field ids above are minted in insertion order, so this derives the
-    // same source the post-commit processor would select without re-reading
-    // each copied entity.
-    const extractionRequest = nativeExtractionRunRequestForFields({
-      entityId: newEntityId,
-      entityVersionId: newVersionId,
-      fields: fieldInserts,
+  const plan = planEntityCopies({
+    scope: {
       organizationId,
-      workspaceId: targetWorkspaceId,
-    });
-    if (extractionRequest === null) {
-      copiedEntityIds[SEARCH_INDEX_OWNER.searchMark].push(newEntityId);
-    } else {
-      copiedEntityIds[SEARCH_INDEX_OWNER.durableExtraction].push(newEntityId);
-      nativeExtractionRequests.push(extractionRequest);
-    }
-    copiedEntities.push({
-      sourceId: source.id,
-      entityId: newEntityId,
-      kind: source.kind,
-      name: copyName,
-      parentId: newParentId ?? null,
-    });
-  }
-
-  await insertEntityBatch({
-    tx,
-    entityRows,
-    versionRows,
-    stampOrigin: transfer.type === "copy" ? "issued" : "copied",
-    currentVersions,
-    fieldRows: carriedFieldInserts,
+      targetWorkspaceId,
+      targetParentId,
+      userId,
+      sourceEntityId,
+      targetRootEntityId,
+      targetRootName,
+      transfer,
+      fieldMapping,
+    },
+    sourceEntities,
+    documentStamps,
+    rootCopyName,
   });
 
-  // A copy's versions were minted their own codes by the insert above. A move
-  // is the same document elsewhere, so the codes already printed on its
-  // versions travel with them and keep resolving.
-  if (transfer.type === "move") {
-    await carryVerificationCodes(tx, versionTransfers);
-  }
-
-  await tx
-    .update(workspaces)
-    .set({ lastActivityAt: new Date() })
-    .where(eq(workspaces.id, targetWorkspaceId));
-
-  await recordAuditEvent(
+  await writeCopyPlan({
     tx,
-    copiedEntities.map((entity) => ({
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-      resourceId: entity.entityId,
-      changes: {
-        created: {
-          old: {
-            sourceEntityId: entity.sourceId,
-            ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
-          },
-          new: {
-            kind: entity.kind,
-            name: entity.name,
-            parentId: entity.parentId,
-          },
-        },
-      },
-    })),
-  );
-
-  const rootEntityId =
-    idMap.get(sourceEntityId) ?? panic("Copy root was not validated");
+    plan,
+    transfer,
+    targetWorkspaceId,
+    sourceWorkspaceId,
+    recordAuditEvent,
+  });
 
   // Written here, inside the copy transaction: the mark commits or rolls back
   // with the copies themselves, so a lost post-commit flush costs nothing.
   await dependencies.enqueueEntitySearchRepairs(
     tx,
-    copiedEntityIds[SEARCH_INDEX_OWNER.searchMark],
+    plan.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
   );
   const nativeExtractionRunIds = await dependencies.requestNativeExtractionRuns(
     {
-      requests: nativeExtractionRequests,
+      requests: plan.nativeExtractionRequests,
       tx,
     },
   );
 
   return Result.ok({
-    entityId: rootEntityId,
-    entityIdsBySearchIndexOwner: copiedEntityIds,
-    copiedEntities,
-    copiedField,
-    fileFields,
+    entityId: plan.rootEntityId,
+    entityIdsBySearchIndexOwner: plan.entityIdsBySearchIndexOwner,
+    copiedEntities: plan.copiedEntities,
+    copiedField: plan.copiedField,
+    fileFields: plan.fileFields,
     nativeExtractionRunIds,
   });
 };

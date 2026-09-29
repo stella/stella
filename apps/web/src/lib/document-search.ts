@@ -277,11 +277,3 @@ export const findDocumentSearchMatches = (
     searchText,
     maxMatches: Number.MAX_SAFE_INTEGER,
   }).matches;
-
-export const findFirstDocumentSearchMatch = (
-  document: Document | null,
-  searchText: SearchTextQuery,
-) =>
-  findDocumentSearchResult({ document, searchText, maxMatches: 1 }).matches.at(
-    0,
-  ) ?? null;

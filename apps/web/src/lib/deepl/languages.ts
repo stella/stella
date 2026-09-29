@@ -5,6 +5,5 @@
  */
 export {
   DOCUMENT_TRANSLATION_TARGET_LANGUAGES as DEEPL_TARGET_LANGUAGES,
-  type DocumentTranslationTargetLanguage as DeepLTargetLanguage,
   type DocumentTranslationTargetLanguageCode as DeepLTargetLanguageCode,
 } from "@stll/api-contract/document-translation";

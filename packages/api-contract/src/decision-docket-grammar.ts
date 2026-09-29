@@ -32,6 +32,7 @@ type DecisionDocketGrammarFor<TJurisdiction extends string> = {
 export const DECISION_DASH_CLASS_SOURCE = String.raw`-‐-―−`;
 
 const DECISION_DASH_RE = new RegExp(`[${DECISION_DASH_CLASS_SOURCE}]`, "gu");
+const DECISION_SHEET_SUFFIX_RE = /-\d{1,4}$/u;
 
 /**
  * Normalize compatibility characters, dash styles, and whitespace before a
@@ -46,7 +47,7 @@ export const foldDecisionIdentifierInput = (raw: string): string =>
 
 export const canonicalDecisionIdentifierKey = (value: string): string =>
   foldDecisionIdentifierInput(value)
-    .replace(/-\d{1,4}$/u, "")
+    .replace(DECISION_SHEET_SUFFIX_RE, "")
     .normalize("NFKD")
     .replace(/\p{M}+/gu, "")
     .toLocaleLowerCase("und")
@@ -435,7 +436,18 @@ const CZE_DOCKET_PATTERNS = [
 ] as const;
 const SVK_DOCKET_RE =
   /^(?<senate>\d{1,3}) ?(?<registry>\p{L}{1,7})(?: ?\/ ?| )(?<ordinal>\d{1,6})\/(?<year>\d{4})$/iu;
-const SVK_DOCKET_PATTERNS = [SVK_DOCKET_RE] as const;
+/**
+ * A Slovak Constitutional Court docket: a Roman senate numeral or `PL.` for
+ * the plenum, `ÚS`, the number and the year as the court wrote it (two digits
+ * in older dockets, four in newer ones): `II. ÚS 55/98`, `PL. ÚS 3/2019`.
+ * Readers drop the dot, the space or the accent (`IV. US 221/04`,
+ * `II.ÚS 55/98`), so each is optional, save that the senate stays apart from
+ * `ÚS` (`plus 5/98` is prose). The court's case lists join `ÚS` to the
+ * number with a slash (`II.ÚS/251/04`), which ingestion keys alike. The year
+ * keeps its width, because the stored key does.
+ */
+const SVK_CONSTITUTIONAL_DOCKET_RE =
+  /^(?<senate>pl|iv|i{1,3})(?:\. ?| )[úu]s(?: ?\/ ?| ?)(?<ordinal>\d{1,5})\/(?<year>\d{2}|\d{4})$/iu;
 /**
  * A Hungarian docket, as the court registry decrees (Büsz. and the OBH's
  * successor rules) prescribe it: an optional Arabic panel number, the registry
@@ -497,6 +509,113 @@ const AUT_DOCKET_PATTERNS = [
   /^[a-z]{1,2} ?\d{1,4}\/\d{4}(?:-\d{1,3})?$/iu,
   /^[a-z]{1,3}\/\d{1,8}\/\d{4}$/iu,
 ] as const;
+
+/**
+ * A Constitutional Court docket in the court's spelling (`II. ÚS 55/98`) and
+ * its stored `citation_key` (`iiús55/98`, `plús3/2019`): senate, `ús`, number
+ * and year run together in lower case, the accent kept, as the ingestion
+ * dedup key writes it. The identity lookup keys the formatted string the way
+ * ingestion keys a case number, so every spelling a reader types has to leave
+ * the grammar as the court's one.
+ */
+const slovakConstitutionalDocketOf = (
+  folded: string,
+): { formatted: string; canonical: string } | null => {
+  const groups = SVK_CONSTITUTIONAL_DOCKET_RE.exec(folded)?.groups;
+  const senate = groups?.["senate"];
+  const ordinal = groups?.["ordinal"];
+  const year = groups?.["year"];
+  if (senate === undefined || ordinal === undefined || year === undefined) {
+    return null;
+  }
+  return {
+    formatted: `${senate.toUpperCase()}. ÚS ${ordinal}/${year}`,
+    canonical: `${senate.toLowerCase()}ús${ordinal}/${year}`,
+  };
+};
+
+const slovakDocketGrammar: DecisionDocketGrammarFor<"SVK"> = {
+  jurisdiction: "SVK",
+  parse: (raw) => {
+    const folded = foldDecisionIdentifierInput(raw).replace(
+      DECISION_SHEET_SUFFIX_RE,
+      "",
+    );
+    const constitutional = slovakConstitutionalDocketOf(folded);
+    if (constitutional !== null) {
+      return { jurisdiction: "SVK", ...constitutional };
+    }
+    if (!SVK_DOCKET_RE.test(folded)) {
+      return null;
+    }
+    return {
+      jurisdiction: "SVK",
+      formatted: folded,
+      canonical: canonicalSlovakDocketKey(folded),
+    };
+  },
+};
+
+/**
+ * The docket numbers the Supreme Court of the United States assigns, each with
+ * the key its form compares under.
+ *
+ * - `21-123`: the term year, then the case's number in that term's docket.
+ * - `20A87`: an application, numbered per term.
+ * - `22O141`: an original-jurisdiction case, in the electronic form.
+ * - `No. 141, Orig.`: the same case, as the Court prints it. Original numbers
+ *   run on across terms, so both forms key by the number alone.
+ * - `No. 1`: a number with no term, as older dockets were written. The `No.`
+ *   is required here, because a bare number is not a docket.
+ *
+ * A leading `No.` is optional on the other forms and never part of the key.
+ * Every digit is: `21-123` and `21-456` are two cases, so the sheet-number
+ * strip the other grammars apply to a trailing `-digits` never runs here.
+ */
+type UnitedStatesDocketParts = {
+  /** The two-digit term year, or empty for a form that carries none. */
+  readonly term: string;
+  readonly number: string;
+};
+
+const originalDocketKey = (number: string): string =>
+  `${Number.parseInt(number, 10)} orig`;
+
+const USA_DOCKET_FORMS = [
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})-(?<number>\d{1,5})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}-${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})a(?<number>\d{1,5})$/iu,
+    key: ({ number, term }: UnitedStatesDocketParts) => `${term}a${number}`,
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<term>\d{2})o(?<number>\d{1,4})$/iu,
+    key: ({ number }: UnitedStatesDocketParts) => originalDocketKey(number),
+  },
+  {
+    pattern: /^(?:no\.? ?)?(?<number>\d{1,4}),? orig(?:inal|\.)?$/iu,
+    key: ({ number }: UnitedStatesDocketParts) => originalDocketKey(number),
+  },
+  {
+    pattern: /^no\.? ?(?<number>\d{1,5})$/iu,
+    key: ({ number }: UnitedStatesDocketParts) => number,
+  },
+] as const;
+
+const USA_DOCKET_PATTERNS = USA_DOCKET_FORMS.map(({ pattern }) => pattern);
+
+const canonicalUnitedStatesDocketKey = (formatted: string): string => {
+  for (const { key, pattern } of USA_DOCKET_FORMS) {
+    const groups = pattern.exec(formatted)?.groups;
+    const number = groups?.["number"];
+    if (number !== undefined) {
+      return key({ number, term: groups?.["term"] ?? "" }).toLowerCase();
+    }
+  }
+  return panic("Accepted United States docket matches no declared form");
+};
 
 const canonicalSlovakDocketKey = (formatted: string): string => {
   const groups = SVK_DOCKET_RE.exec(formatted)?.groups;
@@ -585,10 +704,11 @@ export const DECISION_DOCKET_GRAMMARS = {
     jurisdiction: "POL",
     patterns: POL_DOCKET_PATTERNS,
   }),
-  SVK: createDecisionDocketGrammar({
-    canonicalize: canonicalSlovakDocketKey,
-    jurisdiction: "SVK",
-    patterns: SVK_DOCKET_PATTERNS,
+  SVK: slovakDocketGrammar,
+  USA: createDecisionDocketGrammar({
+    canonicalize: canonicalUnitedStatesDocketKey,
+    jurisdiction: "USA",
+    patterns: USA_DOCKET_PATTERNS,
   }),
 } as const satisfies {
   readonly [
@@ -602,6 +722,20 @@ export type DecisionDocketGrammar =
 
 const DECISION_DOCKET_GRAMMAR_LIST: readonly DecisionDocketGrammar[] =
   Object.values(DECISION_DOCKET_GRAMMARS);
+
+/**
+ * Jurisdictions whose grammar is read only under their own scope. Their forms
+ * are short digit runs (`10-12`, `No. 5`) that also occur in text that is not
+ * a docket, so an entry is read as one only where the scope says which
+ * jurisdiction it comes from; an unscoped entry never reaches them.
+ */
+const SCOPED_ONLY_DOCKET_JURISDICTIONS: ReadonlySet<DecisionDocketJurisdiction> =
+  new Set<DecisionDocketJurisdiction>(["USA"]);
+
+const UNSCOPED_DECISION_DOCKET_GRAMMARS: readonly DecisionDocketGrammar[] =
+  DECISION_DOCKET_GRAMMAR_LIST.filter(
+    (grammar) => !SCOPED_ONLY_DOCKET_JURISDICTIONS.has(grammar.jurisdiction),
+  );
 
 /** Resolve a declared grammar without treating an unknown scope as unscoped. */
 export const decisionDocketGrammarForJurisdiction = (
@@ -619,18 +753,21 @@ type ParseDecisionDocketOptions = {
   readonly grammar?: DecisionDocketGrammar | null | undefined;
 };
 
-/** Parse against one jurisdiction, or every declared grammar when unscoped. */
+/**
+ * Parse against one jurisdiction, or, when unscoped, every declared grammar
+ * that is not read only under its own scope.
+ */
 export const parseDecisionDocket = (
   raw: string,
   { grammar }: ParseDecisionDocketOptions = {},
-): ParsedDecisionDocket | null => {
+): ParsedDecisionDocket<DecisionDocketJurisdiction> | null => {
   if (grammar === null) {
     return null;
   }
   if (grammar !== undefined) {
     return grammar.parse(raw);
   }
-  for (const candidate of DECISION_DOCKET_GRAMMAR_LIST) {
+  for (const candidate of UNSCOPED_DECISION_DOCKET_GRAMMARS) {
     const docket = candidate.parse(raw);
     if (docket !== null) {
       return docket;
@@ -646,3 +783,80 @@ export const formatDecisionDocket = (docket: ParsedDecisionDocket): string =>
 /** Stable comparison form shared by all declared docket grammars. */
 export const canonicalDecisionDocket = (docket: ParsedDecisionDocket): string =>
   docket.canonical;
+
+/**
+ * A Roman numeral from one to thirty-nine, the range publishers number a
+ * ruling's parts or a docket's sibling documents in. Spelled out rather than
+ * `[ivxl]+`, which would read a word made of those letters as a numeral.
+ */
+const ROMAN_PART_NUMERAL_SOURCE = String.raw`(?=[ivx])x{0,3}(?:ix|iv|v?i{0,3})`;
+
+/**
+ * What a publisher can leave glued to the end of a docket without changing
+ * which case it names: punctuation, dashes, symbols and whitespace, with at
+ * most standalone Roman part numerals between them (`- II.`, `.`, ` -`).
+ * It opens on a separator, so a cut never lands inside a token, and it
+ * carries no digit and no other letter, so a sheet number (`-33`) or a word
+ * is never stripped.
+ */
+const DOCKET_JUNK_TAIL_RE = new RegExp(
+  String.raw`^[\s\p{P}\p{S}](?:[\s\p{P}\p{S}]|(?<![\p{L}\p{N}])${ROMAN_PART_NUMERAL_SOURCE}(?![\p{L}\p{N}]))*$`,
+  "iu",
+);
+
+/** How a stored docket reads under its jurisdiction's grammar. */
+export type StoredDecisionDocket =
+  /** The docket parses as written. */
+  | { readonly type: "canonical"; readonly caseNumber: string }
+  /**
+   * The docket parses once a tail the grammar has no place for is removed.
+   * `caseNumber` is the docket without it; `removed` is what was cut.
+   */
+  | {
+      readonly type: "trimmed";
+      readonly caseNumber: string;
+      readonly removed: string;
+    }
+  /** Neither the docket nor any docket inside it parses. */
+  | { readonly type: "unparsed" }
+  /** The jurisdiction declares no docket grammar to read it by. */
+  | { readonly type: "ungoverned" };
+
+/**
+ * Read a stored docket against its jurisdiction's grammar, cutting a trailing
+ * tail the grammar has no place for when that is what keeps it from parsing.
+ *
+ * A docket that parses as written is returned unchanged, so a grammar that
+ * accepts a trailing mark (a Hungarian docket's closing dot) keeps it. The
+ * cut is the shortest one that leaves a docket the grammar accepts, and only
+ * a tail of separators and Roman part numerals is ever cut
+ * (`DOCKET_JUNK_TAIL_RE`). Language-blind: nothing here reads a word.
+ */
+export const storedDecisionDocketOf = (
+  raw: string,
+  jurisdiction: string,
+): StoredDecisionDocket => {
+  const grammar = decisionDocketGrammarForJurisdiction(jurisdiction);
+  if (grammar === null) {
+    return { type: "ungoverned" };
+  }
+  if (grammar.parse(raw) !== null) {
+    return { type: "canonical", caseNumber: raw };
+  }
+  const folded = foldDecisionIdentifierInput(raw);
+  for (let cut = folded.length - 1; cut > 0; cut -= 1) {
+    const tail = folded.slice(cut);
+    if (!DOCKET_JUNK_TAIL_RE.test(tail)) {
+      continue;
+    }
+    const caseNumber = folded.slice(0, cut).trim();
+    if (caseNumber.length > 0 && grammar.parse(caseNumber) !== null) {
+      return {
+        type: "trimmed",
+        caseNumber,
+        removed: folded.slice(caseNumber.length),
+      };
+    }
+  }
+  return { type: "unparsed" };
+};

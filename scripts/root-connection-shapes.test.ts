@@ -1,15 +1,32 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
+  countRootConnectionImports,
+  countRootConnectionTypeImports,
   findRootConnectionShapes,
+  findStaleRootOperations,
   ROOT_CONNECTION_SHAPE,
+  ROOT_OPERATION_RESULTS,
 } from "./root-connection-shapes";
 import type { RootConnectionShape } from "./root-connection-shapes";
 
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const ROOT_IMPORT = 'import { rootDb } from "@/api/db/root";';
+const FIXTURE_FILE = "apps/api/src/lib/fixture.ts";
+const AUTH_FILE = ROOT_OPERATION_RESULTS.resolveMemberAuthorization.file;
+
+const shapesIn = (
+  file: string,
+  ...lines: readonly string[]
+): RootConnectionShape[] =>
+  findRootConnectionShapes(`${lines.join("\n")}\n`, file).map(
+    ({ shape }) => shape,
+  );
 
 const shapesOf = (...lines: readonly string[]): RootConnectionShape[] =>
-  findRootConnectionShapes(`${lines.join("\n")}\n`).map(({ shape }) => shape);
+  shapesIn(FIXTURE_FILE, ...lines);
 
 // Each case below is written in the form it took in the API before the
 // worker handles became explicit, so a regression to that form is caught.
@@ -121,6 +138,83 @@ describe("shapes that supply the owner connection implicitly", () => {
       ROOT_CONNECTION_SHAPE.moduleLevelCall,
       ROOT_CONNECTION_SHAPE.moduleLevelCall,
       ROOT_CONNECTION_SHAPE.moduleLevelCall,
+      ROOT_CONNECTION_SHAPE.alias,
+    ]);
+  });
+
+  test("a conditional that builds a store from it", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const pick = (given?: Store) =>",
+        "  given ? given : createExtractionRunStore(rootDb);",
+        "export const orNew = (given?: Store) =>",
+        "  given === undefined ? new Store(rootDb) : given;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+    ]);
+  });
+
+  test("an assignment of the handle or of a store built from it", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const plain = (given?: Db) => {",
+        "  let db = given;",
+        "  db = rootDb;",
+        "  return db;",
+        "};",
+        "export const built = () => {",
+        "  let store: Store | undefined;",
+        "  store = createExtractionRunStore(rootDb);",
+        "  return store;",
+        "};",
+        "export const braced = (given?: Store) => {",
+        "  let store = given;",
+        "  if (store === undefined) {",
+        "    store = createExtractionRunStore(rootDb);",
+        "  }",
+        "  return store;",
+        "};",
+        "export const unbraced = (given?: Store) => {",
+        "  let store = given;",
+        "  if (!store) store = createExtractionRunStore(rootDb);",
+        "  return store;",
+        "};",
+        "export const ifElse = (given?: Db) => {",
+        "  let db: Db;",
+        "  if (given) db = given;",
+        "  else db = rootDb;",
+        "  return db;",
+        "};",
+        "export const property = (holder: { db?: Db }) => {",
+        "  holder.db = rootDb;",
+        "};",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+    ]);
+  });
+
+  test("an assignment at module level counts its call once", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "let store: Store | undefined;",
+        "store = createExtractionRunStore(rootDb);",
+        "let db: Db | undefined;",
+        "db = rootDb;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.moduleLevelCall,
+      ROOT_CONNECTION_SHAPE.assignment,
     ]);
   });
 
@@ -136,6 +230,23 @@ describe("shapes that supply the owner connection implicitly", () => {
         "  return rootDb;",
         "};",
         "export const handle = () => rootDb;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.alias,
+    ]);
+  });
+
+  test("a returned factory", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const makeStore = () => {",
+        "  return createExtractionRunStore(rootDb);",
+        "};",
+        "export const repairs = () => createRepairDeps(rootDb);",
+        "export const analyses = () => new AnalysisStore(rootDb);",
       ),
     ).toEqual([
       ROOT_CONNECTION_SHAPE.alias,
@@ -162,10 +273,52 @@ describe("binding resolution", () => {
         "export const a = (db?: Db) => db ?? root.rootDb;",
         'export const b = (db?: Db) => db ?? root["rootDb"];',
         "export const c = (db?: Db) => db ?? root.rlsDb;",
+        "export const d = (db?: Db) => db ?? root.Transaction;",
       ),
     ).toEqual([
       ROOT_CONNECTION_SHAPE.fallbackOperand,
       ROOT_CONNECTION_SHAPE.fallbackOperand,
+      ROOT_CONNECTION_SHAPE.fallbackOperand,
+    ]);
+  });
+
+  test("treats the scoped-transaction pool like the owner connection", () => {
+    expect(
+      shapesOf(
+        'import { rlsDb as pool } from "@/api/db/root";',
+        "const database = pool;",
+        "export const deps = { db: pool };",
+        "export const load = async (db = pool) => db;",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.dependencyProperty,
+      ROOT_CONNECTION_SHAPE.parameterDefault,
+    ]);
+  });
+
+  test("follows renamed and namespace imports into assignments, returns and conditionals", () => {
+    expect(
+      shapesOf(
+        'import { rootDb as owner } from "../db/root";',
+        'import * as root from "@/api/db/root";',
+        "export const renamed = (holder: { store?: Store }) => {",
+        "  holder.store = createExtractionRunStore(owner);",
+        "};",
+        "export const namespaced = (given?: Db) => {",
+        "  let db = given;",
+        "  if (!db) db = root.rootDb;",
+        "  return db;",
+        "};",
+        "export const returned = () => createExtractionRunStore(root.rootDb);",
+        "export const ternary = (given?: Store) =>",
+        "  given ? given : createExtractionRunStore(owner);",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
     ]);
   });
 
@@ -200,6 +353,16 @@ describe("binding resolution", () => {
         "  const rootDb = scoped();",
         "  return { db: rootDb };",
         "};",
+        "export const reassigned = (rootDb: Db, holder: { db?: Db }) => {",
+        "  let store: Store | undefined;",
+        "  if (!store) store = createExtractionRunStore(rootDb);",
+        "  holder.db = rootDb;",
+        "  return rootDb ? createExtractionRunStore(rootDb) : store;",
+        "};",
+        "export const returnsLocal = () => {",
+        "  const rootDb = scoped();",
+        "  return createExtractionRunStore(rootDb);",
+        "};",
       ),
     ).toEqual([]);
   });
@@ -221,8 +384,103 @@ describe("binding resolution", () => {
   });
 });
 
+describe("awaiting a call does not make its value explicit", () => {
+  test("an awaited factory in every position that hands a value on", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const returned = async () => {",
+        "  return await createExtractionRunStore(rootDb);",
+        "};",
+        "export const arrow = async () => await createExtractionRunStore(rootDb);",
+        "export const assigned = async () => {",
+        "  let store: Store | undefined;",
+        "  store = await createExtractionRunStore(rootDb);",
+        "  return store;",
+        "};",
+        "export const property = async (holder: { store?: Store }) => {",
+        "  holder.store = await createExtractionRunStore(rootDb);",
+        "};",
+        "export const ternary = async (given?: Store) =>",
+        "  given ? given : await createExtractionRunStore(rootDb);",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+    ]);
+  });
+
+  test("through renamed and namespace imports", () => {
+    expect(
+      shapesOf(
+        'import { rootDb as owner } from "../db/root";',
+        'import * as root from "@/api/db/root";',
+        "export const renamed = async () => await createStore(owner);",
+        "export const namespaced = async (holder: { store?: Store }) => {",
+        "  holder.store = await createStore(root.rootDb);",
+        "};",
+        "export const ternary = async (given?: Store) =>",
+        "  given ? given : await createStore(root.rootDb);",
+        "export const either = async (given?: Store) =>",
+        "  given ?? (await createStore(owner));",
+      ),
+    ).toEqual([
+      ROOT_CONNECTION_SHAPE.alias,
+      ROOT_CONNECTION_SHAPE.assignment,
+      ROOT_CONNECTION_SHAPE.conditionalOperand,
+      ROOT_CONNECTION_SHAPE.fallbackOperand,
+    ]);
+  });
+
+  test("an unlisted operation, a listed one elsewhere, unawaited, or called as a member", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const repairs = async () => await runRepairs(rootDb);",
+        "export const resolve = async (lookup: Lookup) =>",
+        "  await resolveMemberAuthorization(lookup, rootDb);",
+      ),
+    ).toEqual([ROOT_CONNECTION_SHAPE.alias, ROOT_CONNECTION_SHAPE.alias]);
+    expect(
+      shapesIn(
+        AUTH_FILE,
+        ROOT_IMPORT,
+        "export const unawaited = (lookup: Lookup) =>",
+        "  resolveMemberAuthorization(lookup, rootDb);",
+        "export const member = async (lookup: Lookup) =>",
+        "  await auth.resolveMemberAuthorization(lookup, rootDb);",
+      ),
+    ).toEqual([ROOT_CONNECTION_SHAPE.alias, ROOT_CONNECTION_SHAPE.alias]);
+  });
+
+  test("ignores an awaited factory over a local that shadows the import", () => {
+    expect(
+      shapesOf(
+        ROOT_IMPORT,
+        "export const local = async (rootDb: Db) =>",
+        "  await createExtractionRunStore(rootDb);",
+        "export const inner = async (holder: { store?: Store }) => {",
+        "  const rootDb = scoped();",
+        "  holder.store = await createExtractionRunStore(rootDb);",
+        "};",
+      ),
+    ).toEqual([]);
+  });
+});
+
+test("every listed owner operation still names an awaited site in its file", () => {
+  expect(
+    findStaleRootOperations((file) =>
+      readFileSync(path.join(REPO_ROOT, file), "utf-8"),
+    ),
+  ).toEqual([]);
+});
+
 describe("explicit uses are not shapes", () => {
-  test("a direct query, an explicit argument, and a door's operation", () => {
+  test("a direct query, an explicit argument, a local, and a door's operation", () => {
     expect(
       shapesOf(
         ROOT_IMPORT,
@@ -231,10 +489,39 @@ describe("explicit uses are not shapes", () => {
         "export const notifyActor = async (notice: Notice) => {",
         "  await fileNotice(notice, rootDb);",
         "};",
-        "export const repairs = () => createRepairDeps(rootDb);",
+        "export const assignedResults = async (holder: Holder) => {",
+        "  let rows: Row[] = [];",
+        "  rows = await rootDb.select().from(table);",
+        "  holder.rows = await rootDb.execute(query);",
+        "  let settled: unknown;",
+        "  settled = await rootDb.transaction(write);",
+        "  return { rows, settled };",
+        "};",
+        "export const declared = () => {",
+        "  const store = createExtractionRunStore(rootDb);",
+        "  store.flush();",
+        "};",
         "const handles = async () => {",
         '  const { rootDb: owner } = await import("@/api/db/root");',
         "  return { owner: laneHandle(owner) };",
+        "};",
+      ),
+    ).toEqual([]);
+  });
+
+  test("a listed owner operation awaited in its own file", () => {
+    expect(
+      shapesIn(
+        AUTH_FILE,
+        ROOT_IMPORT,
+        "export const resolveCredential = async (lookup: Lookup) =>",
+        "  await resolveMemberAuthorization(lookup, rootDb);",
+        "export const hooks = {",
+        "  seed: async (organizationId: string) =>",
+        "    await ensureDefaultDocumentTypes(organizationId, rootDb),",
+        "};",
+        "export const audience = async (lookup: Lookup) => {",
+        "  return await resolveWorkspaceRealtimeAudience(lookup, rootDb);",
         "};",
       ),
     ).toEqual([]);
@@ -258,10 +545,160 @@ describe("explicit uses are not shapes", () => {
   });
 });
 
+describe("modules that reach an owner-level handle", () => {
+  const importsOf = (...lines: readonly string[]): number =>
+    countRootConnectionImports(`${lines.join("\n")}\n`);
+  const typesOf = (...lines: readonly string[]): number =>
+    countRootConnectionTypeImports(`${lines.join("\n")}\n`);
+
+  test("one per handle a named import names, renamed or by path", () => {
+    expect(importsOf(ROOT_IMPORT)).toBe(1);
+    expect(importsOf('import { rlsDb } from "@/api/db/root";')).toBe(1);
+    expect(importsOf('import { rootDb, rlsDb } from "@/api/db/root";')).toBe(2);
+    expect(importsOf('import { rootDb as owner } from "../../db/root";')).toBe(
+      1,
+    );
+    expect(importsOf('import { rlsDb } from "./root";')).toBe(1);
+    expect(importsOf('import { rootDb } from "@/api/db/root.ts";')).toBe(1);
+  });
+
+  test("type-only references count apart: a parameter typed from a handle takes it", () => {
+    const typeOnly = [
+      ['import type { rootDb } from "@/api/db/root";', 1],
+      ['import { type rlsDb, type Transaction } from "@/api/db/root";', 1],
+      [
+        'import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";',
+        1,
+      ],
+      ['import type * as root from "@/api/db/root";', 2],
+      ['export type { rootDb } from "@/api/db/root";', 1],
+      ['export { type rlsDb } from "@/api/db/root";', 1],
+      ['export type * from "@/api/db/root";', 2],
+      ['import type root = require("@/api/db/root");', 2],
+      ['export type Db = typeof import("@/api/db/root").rootDb;', 1],
+      ['export type Root = typeof import("@/api/db/root");', 2],
+    ] as const;
+    for (const [line, expected] of typeOnly) {
+      expect([line, typesOf(line), importsOf(line)]).toEqual([
+        line,
+        expected,
+        0,
+      ]);
+    }
+  });
+
+  test("a type-only import turned into a value import moves to the runtime count", () => {
+    const before = 'import type { rootDb } from "@/api/db/root";';
+    const after = 'import { rootDb } from "@/api/db/root";';
+    expect([importsOf(before), typesOf(before)]).toEqual([0, 1]);
+    expect([importsOf(after), typesOf(after)]).toEqual([1, 0]);
+    const mixed = 'import { rootDb, type rlsDb } from "@/api/db/root";';
+    expect([importsOf(mixed), typesOf(mixed)]).toEqual([1, 1]);
+  });
+
+  test("an indexed import type counts the member it selects", () => {
+    for (const [line, expected] of [
+      ['export type Db = typeof import("@/api/db/root")["rootDb"];', 1],
+      ['export type Db = (typeof import("@/api/db/root"))["rlsDb"];', 1],
+      ['export type Tx = import("@/api/db/root")["Transaction"];', 0],
+    ] as const) {
+      expect([line, typesOf(line), importsOf(line)]).toEqual([
+        line,
+        expected,
+        0,
+      ]);
+    }
+  });
+
+  test("the shared transaction type alone does not count", () => {
+    for (const line of [
+      'import type { Transaction } from "@/api/db/root";',
+      'export type Tx = import("@/api/db/root").Transaction;',
+    ]) {
+      expect([importsOf(line), typesOf(line)]).toEqual([0, 0]);
+    }
+  });
+
+  test("re-exports count like imports", () => {
+    expect(importsOf('export { rootDb } from "@/api/db/root";')).toBe(1);
+    expect(importsOf('export { rlsDb as pool } from "../db/root";')).toBe(1);
+    expect(importsOf('export * from "@/api/db/root";')).toBe(2);
+    expect(importsOf('export * as root from "@/api/db/root";')).toBe(2);
+    expect(importsOf('export { Transaction } from "@/api/db/root";')).toBe(0);
+  });
+
+  test("a namespace, require or undestructured dynamic import counts both", () => {
+    expect(importsOf('import * as root from "@/api/db/root";')).toBe(2);
+    expect(importsOf('import root = require("@/api/db/root");')).toBe(2);
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const root = await import("@/api/db/root");',
+        "  return root;",
+        "};",
+      ),
+    ).toBe(2);
+    expect(
+      importsOf(
+        'export const load = () => import("@/api/db/root").then((m) => m.rlsDb);',
+      ),
+    ).toBe(2);
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const { rootDb, ...rest } = await import("@/api/db/root");',
+        "  return [rootDb, rest];",
+        "};",
+      ),
+    ).toBe(2);
+  });
+
+  test("a destructured dynamic import counts the handles it takes", () => {
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const { rlsDb, rootDb: owner } = await import("@/api/db/root");',
+        "  return [rlsDb, owner];",
+        "};",
+      ),
+    ).toBe(2);
+    expect(
+      importsOf(
+        "export const load = async () => {",
+        '  const { rlsDb } = await import("@/api/db/root");',
+        "  return rlsDb;",
+        "};",
+      ),
+    ).toBe(1);
+  });
+
+  test("other modules, side-effect imports, comments and strings do not count", () => {
+    expect(
+      importsOf(
+        'import { rootDb } from "@/api/db/rooted";',
+        'import { rootDb as other } from "@/api/lib/root-scoped-db";',
+        'import "@/api/db/root";',
+        '// import { rootDb } from "@/api/db/root";',
+        "const text = 'import { rlsDb } from \"@/api/db/root\"';",
+      ),
+    ).toBe(0);
+  });
+
+  test("reads a generic arrow in a .ts file", () => {
+    expect(
+      importsOf(
+        "export const first = <T,>(rows: T[]) => rows.at(0);",
+        'import { rlsDb } from "@/api/db/root";',
+      ),
+    ).toBe(1);
+  });
+});
+
 test("reports the line of each shape", () => {
   expect(
     findRootConnectionShapes(
       [ROOT_IMPORT, "", "export const deps = { db: rootDb };", ""].join("\n"),
+      FIXTURE_FILE,
     ),
   ).toEqual([{ shape: ROOT_CONNECTION_SHAPE.dependencyProperty, line: 3 }]);
 });

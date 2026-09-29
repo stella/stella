@@ -4,16 +4,6 @@ import { Fragment, isValidElement, useState } from "react";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
-import {
-  FileTextIcon,
-  FileSpreadsheetIcon,
-  GlobeIcon,
-  LandmarkIcon,
-  MailIcon,
-  PresentationIcon,
-  ScrollTextIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -27,6 +17,16 @@ import {
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
 import { isFolioBlockId } from "@stll/folio-react";
+import {
+  FileTextIcon,
+  FileSpreadsheetIcon,
+  GlobeIcon,
+  LandmarkIcon,
+  MailIcon,
+  PresentationIcon,
+  ScrollTextIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -118,7 +118,7 @@ const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
 };
 
 const ENTITY_EXTENSION_RE = /\.(?<ext>[A-Za-z0-9]{1,8})$/u;
-const SKILL_CHIP_ICON = <WandSparklesIcon className="size-3 shrink-0" />;
+const SKILL_CHIP_ICON = <SkillIcon className="size-3 shrink-0" />;
 
 const isReactNodeArray = (
   node: React.ReactNode,
@@ -1209,7 +1209,7 @@ const FaviconCitationChip = ({
         aria-label={`${hoverTitle} (${hostname})`}
         className={cn(
           "text-foreground decoration-border underline",
-          "underline-offset-2 transition-colors",
+          "underline-offset-2",
           "hover:decoration-foreground cursor-pointer",
           "inline-flex items-center gap-1",
         )}

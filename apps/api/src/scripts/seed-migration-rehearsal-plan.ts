@@ -35,6 +35,7 @@ export const REHEARSAL_ROWS_PER_DECISION = {
   case_law_decisions: 1,
   case_law_index_jobs: 1,
   case_law_provision_citations: 2,
+  case_law_provision_extractions: 1,
   case_law_statute_citation_memberships: 2,
   case_law_search_document_preview_passages: 2,
   case_law_search_documents: 1,
@@ -232,6 +233,29 @@ export const REHEARSAL_SEEDERS = {
       END IF;
     END
     $rehearsal$`,
+  // Introduced by a pending migration, and written only by its own
+  // functions: activate the seeded decisions' scope, then seed their state
+  // through ensure_case_law_provision_extraction_state. Conditional until the
+  // promoted base schema carries it.
+  case_law_provision_extractions: () => `
+    DO $rehearsal$
+    BEGIN
+      IF to_regclass('case_law_provision_extractions') IS NOT NULL THEN
+        EXECUTE $seed$
+          INSERT INTO case_law_provision_extraction_scopes AS scope
+            (country, language, status, generation)
+          VALUES ('CZE', 'cs', 'active', 1)
+          ON CONFLICT ON CONSTRAINT case_law_provision_extraction_scopes_pkey
+          DO UPDATE SET status = 'active', generation = scope.generation + 1
+          WHERE scope.status <> 'active'
+        $seed$;
+        PERFORM ensure_case_law_provision_extraction_state(
+          ARRAY(SELECT d.id FROM rehearsal_decisions d),
+          'seed'
+        );
+      END IF;
+    END
+    $rehearsal$`,
   case_law_search_documents: () => `
     INSERT INTO case_law_search_documents
       (decision_id, title, searchable_text, language, regconfig, preview_generation)
@@ -292,6 +316,7 @@ export const REHEARSAL_SEED_ORDER = [
   "case_law_decision_identifiers",
   "case_law_citations",
   "case_law_provision_citations",
+  "case_law_provision_extractions",
   "case_law_statute_citation_memberships",
   "case_law_search_documents",
   "case_law_search_document_preview_passages",
@@ -334,11 +359,11 @@ export const rehearsalSeedSteps = (
       table,
     })),
     { statement: rehearsalFutureDatedCohortStatement(), table: null },
+    // Conditional for every table: the seed runs against the promoted
+    // release's schema, which need not hold every table this checkout
+    // registers yet.
     ...REHEARSAL_SEED_ORDER.map((table) => ({
-      statement:
-        table === "case_law_statute_citation_memberships"
-          ? `DO $rehearsal$ BEGIN IF to_regclass('${table}') IS NOT NULL THEN EXECUTE 'ANALYZE ${table}'; END IF; END $rehearsal$`
-          : `ANALYZE ${table}`,
+      statement: `DO $rehearsal$ BEGIN IF to_regclass('${table}') IS NOT NULL THEN EXECUTE 'ANALYZE ${table}'; END IF; END $rehearsal$`,
       table: null,
     })),
   ];

@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 // Free-text tag input for file extensions. @stll/ui has no dedicated tag input;
@@ -55,7 +55,7 @@ export const FlowExtensionInput = ({
             <li key={extension}>
               <button
                 aria-label={`${t("common.remove")} ${extension}`}
-                className="bg-muted hover:bg-muted/70 text-muted-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors"
+                className="bg-muted hover:bg-muted/70 text-muted-foreground inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs"
                 onClick={() => remove(extension)}
                 type="button"
               >

@@ -220,7 +220,7 @@ const Row = ({
 
   return (
     <button
-      className="catalogue-row-in hover:bg-muted/40 -mx-1 flex items-center gap-2.5 rounded-md px-1 py-1 text-start transition-colors"
+      className="catalogue-row-in hover:bg-muted/40 -mx-1 flex items-center gap-2.5 rounded-md px-1 py-1 text-start"
       onClick={onClick}
       style={{ animationDelay: `${delay}ms` }}
       type="button"

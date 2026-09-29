@@ -7,6 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { isWorkflowRunning, startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
@@ -135,6 +136,7 @@ const cellRetry = createSafeHandler(
             entityIds: [entityId],
             propertyIds: [propertyId],
             serviceTier: "standard",
+            extractionRunStore: requestExtractionRunStore,
           }),
         catch: (cause) =>
           new HandlerError({

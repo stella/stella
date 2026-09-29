@@ -1,11 +1,11 @@
 import type * as React from "react";
 
 import { panic } from "better-result";
-import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { MCP_HTTP_PATH } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { ExternalLinkIcon, MonitorIcon, TerminalIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { AIProviderIcon } from "@/components/ai-provider-icons";
@@ -155,7 +155,7 @@ const TargetCard = ({
     onClick={onSelect}
     type="button"
     className={cn(
-      "rounded-lg border p-4 text-start transition-colors",
+      "rounded-lg border p-4 text-start",
       selected
         ? "border-foreground bg-accent/60 ring-foreground/20 ring-1"
         : "border-border hover:bg-muted/40",
@@ -196,7 +196,7 @@ const AssistantTile = ({
   children,
 }: React.PropsWithChildren<{ name: string }>) => (
   <a
-    className="bg-muted/60 text-foreground hover:bg-muted flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium transition-colors"
+    className="bg-muted/60 text-foreground hover:bg-muted flex flex-1 items-center justify-center gap-2.5 rounded-xl px-4 py-3 text-sm font-medium"
     href={sanitizeHref(ASSISTANT_DOCS_URL)}
     rel="noreferrer"
     target="_blank"

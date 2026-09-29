@@ -371,11 +371,48 @@ div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
   user-select: none;
 }
 
-/* The paragraph a hovered margin note belongs to. */
-[data-note-hover] {
-  background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+/* The paragraph a hovered margin note belongs to. Once a note has been
+   hovered its anchor keeps `data-note-hover` ("on" or "off"), so the wash
+   layer behind the text persists and its opacity transition runs both ways
+   and can be interrupted. An annotation mark is inline, so it keeps a plain
+   background that follows its line boxes. */
+[data-note-hover="on"][data-annotation-id] {
   border-radius: 0.25rem;
-  transition: background-color 120ms ease-out;
+  background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+[data-note-hover]:not([data-annotation-id]) {
+  position: relative;
+  isolation: isolate;
+}
+
+/* ::after, because a landing marker already owns the block's ::before. */
+[data-note-hover]:not([data-annotation-id])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 0.25rem;
+  background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-note-hover="on"]:not([data-annotation-id])::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-note-hover]:not([data-annotation-id])::after {
+    transition: opacity 120ms ease-out;
+  }
+
+  /* The first hover creates the layer; start it transparent so it fades in. */
+  @starting-style {
+    [data-note-hover="on"]:not([data-annotation-id])::after {
+      opacity: 0;
+    }
+  }
 }
 
 /* The footnote's return arrow: back to the sentence that cites it. */

@@ -20,7 +20,7 @@ export const BreadcrumbLink = ({
     <Link
       activeOptions={{ exact: true, includeSearch: false }}
       activeProps={{ className: "text-foreground font-semibold" }}
-      className="hover:text-foreground max-w-64 truncate transition-colors"
+      className="hover:text-foreground max-w-64 truncate"
       onClick={onClick}
       to={to}
     >

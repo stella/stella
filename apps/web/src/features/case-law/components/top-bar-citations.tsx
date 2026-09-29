@@ -92,7 +92,7 @@ const TopBarCitationsFor = ({
           <button
             aria-label={label}
             className={cn(
-              "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs transition-colors",
+              "text-muted-foreground hover:text-foreground ms-3 flex shrink-0 items-center gap-2 rounded-sm px-1 py-0.5 font-sans text-xs",
               CITATION_TRIGGER_TOUCH_TARGET,
             )}
             type="button"

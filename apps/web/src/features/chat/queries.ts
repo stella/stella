@@ -26,6 +26,7 @@ import type { WebApiRoutes } from "@/lib/eden-client";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
 import { invalidateWorkspaceActivity } from "@/lib/workspaces/queries";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
 
@@ -57,6 +58,9 @@ const readChatTimestamp = (value: string): Date =>
 const deserializeChatPart = (
   part: SerializedChatMessage["parts"][number],
 ): PersistedChatMessage["parts"][number] => {
+  if (part.type === "subagent") {
+    return panic("A persisted chat message contains a subagent part");
+  }
   if (part.type !== "tool-result") {
     return part;
   }
@@ -91,6 +95,8 @@ export type ForkProvenance =
     };
 
 type ThreadFetch = {
+  /** The thread's turn not yet settled; null when every turn has settled. */
+  activeTurnId: SafeId<"chatTurn"> | null;
   /** Where this thread's opening history came from. */
   forkProvenance: ForkProvenance;
   messages: PersistedChatMessage[];
@@ -138,6 +144,7 @@ const fetchThreadMessages = async (
 
   if (response.error && allowMissingThread && response.error.status === 404) {
     return {
+      activeTurnId: null,
       forkProvenance: { type: "none" },
       messages: [],
       olderCursor: null,
@@ -156,6 +163,7 @@ const fetchThreadMessages = async (
 
   const data = unwrapEden(response);
   return {
+    activeTurnId: data.activeTurnId,
     forkProvenance: data.forkProvenance,
     messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
@@ -251,6 +259,7 @@ type FileChatThreadFetchResult = {
   /** Null when no thread exists for this file yet; the query layer then
    *  mounts a local draft and the thread is materialized on first send. */
   threadId: ChatThreadId | null;
+  activeTurnId: SafeId<"chatTurn"> | null;
   /** The rest mirror `ChatThreadFetched` so the initial message page the
    *  server already loaded (see `read-file-thread.ts` /
    *  `resolve-file-thread.ts`) can seed `chatThreadOptions`' cache
@@ -291,6 +300,7 @@ const fetchFileChatThread = async ({
 
   return {
     threadId: data.threadId === null ? null : toChatThreadId(data.threadId),
+    activeTurnId: data.activeTurnId,
     messages: deserializeChatMessages(data.messages),
     olderCursor: data.olderCursor,
     contextMatterIds: data.contextMatterIds,
@@ -417,6 +427,11 @@ export const __resetChatRequestStateForTests = (): void => {
 };
 
 export type ChatThreadFetched = {
+  /**
+   * The thread's turn not yet settled when this page was read, which the
+   * composer's Stop cancels. Null when every turn has settled.
+   */
+  activeTurnId: SafeId<"chatTurn"> | null;
   /**
    * Where this thread's opening history came from, driving the "forked from"
    * banner above the transcript.
@@ -555,6 +570,7 @@ const seedFileThreadMessageCache = ({
       // A file thread is opened from its document, never forked: the fork
       // action is only offered on the main chat surface.
       forkProvenance: { type: "none" } as const,
+      activeTurnId: fetched.activeTurnId,
       messages: sanitizeRunningToolCalls(fetched.messages),
       olderCursor: fetched.olderCursor,
       contextMatterIds: fetched.contextMatterIds,
@@ -663,6 +679,7 @@ export const materializeFileChatThread = async ({
       activeOrganizationId,
       client,
       fetched: {
+        activeTurnId: data.activeTurnId,
         messages: deserializeChatMessages(data.messages),
         olderCursor: data.olderCursor,
         contextMatterIds: data.contextMatterIds,
@@ -1396,6 +1413,7 @@ export const acquireChatRuntime = ({
     );
   };
   const runtime = createChatRuntime({
+    activeTurnId: data.activeTurnId,
     context,
     initialMessages: data.messages,
     key,
@@ -1417,6 +1435,7 @@ export const acquireChatRuntime = ({
       // the refetch lands, then the idle reconcile replaces it.
       refreshPersistedThread();
     },
+    reloadThread: refreshPersistedThread,
   });
   chatRuntimeRegistry.set(registryKey, {
     runtime,

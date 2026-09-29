@@ -1,9 +1,9 @@
 import { useId, useState } from "react";
 
-import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -252,7 +252,7 @@ const CourtTierSection = ({
       <button
         aria-controls={panelId}
         aria-expanded={expanded}
-        className="text-foreground-strong-muted hover:text-foreground flex min-h-11 w-full items-center gap-1 py-1 text-start text-xs font-medium transition-colors"
+        className="text-foreground-strong-muted hover:text-foreground flex min-h-11 w-full items-center gap-1 py-1 text-start text-xs font-medium"
         onClick={() => setOpen(!expanded)}
         type="button"
       >

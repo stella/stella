@@ -3,9 +3,11 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  correspondence,
   desktopEditSessions,
   timeEntries,
   WORK_OBLIGATION_EVENT_TYPE,
@@ -22,15 +24,12 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tUserId, workspaceParams } from "@/api/lib/custom-schema";
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "@/api/lib/desktop-edit-session-notifications";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { revokeWorkspaceSseAccess } from "@/api/lib/sse";
+import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
 
 const config = {
   description:
@@ -54,18 +53,48 @@ export type RemoveWorkspaceMemberProps = {
 };
 
 export type RemoveWorkspaceMemberDependencies = {
+  broadcastSessionEvent: typeof broadcastSessionEvent;
   broadcastWorkspaceResourceSetUpdated: typeof broadcastWorkspaceResourceSetUpdated;
   closeSessionConnections: typeof closeSessionConnections;
-  pushSessionEvent: typeof pushSessionEvent;
   revokeWorkspaceSseAccess: typeof revokeWorkspaceSseAccess;
 };
 
 const defaultRemoveWorkspaceMemberDependencies = {
+  broadcastSessionEvent,
   broadcastWorkspaceResourceSetUpdated,
   closeSessionConnections,
-  pushSessionEvent,
   revokeWorkspaceSseAccess,
 } satisfies RemoveWorkspaceMemberDependencies;
+
+type ReadMemberWorkToUnassignOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+};
+
+const readMemberWorkToUnassign = ({
+  tx,
+  workspaceId,
+  userId,
+}: ReadMemberWorkToUnassignOptions) =>
+  tx
+    .select({
+      entityId: workObligations.entityId,
+      status: workObligations.status,
+    })
+    .from(workObligations)
+    .where(
+      and(
+        eq(workObligations.workspaceId, workspaceId),
+        eq(workObligations.ownerUserId, userId),
+        inArray(workObligations.status, [
+          WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+          WORK_OBLIGATION_STATUS.ACTIVE,
+        ]),
+      ),
+    )
+    .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
+    .for("update");
 
 // Shared remove-member logic reused by the HTTP handler and the
 // `manage_organization` MCP tool. Keeps the tx (last-member guard, lead
@@ -146,24 +175,11 @@ export const removeWorkspaceMemberHandler = async function* ({
         });
       }
 
-      const ownedWork = await tx
-        .select({
-          entityId: workObligations.entityId,
-          status: workObligations.status,
-        })
-        .from(workObligations)
-        .where(
-          and(
-            eq(workObligations.workspaceId, workspaceId),
-            eq(workObligations.ownerUserId, userId),
-            inArray(workObligations.status, [
-              WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
-              WORK_OBLIGATION_STATUS.ACTIVE,
-            ]),
-          ),
-        )
-        .limit(LIMITS.workspaceMemberRemovalWorkObligationsMax + 1)
-        .for("update");
+      const ownedWork = await readMemberWorkToUnassign({
+        tx,
+        workspaceId,
+        userId,
+      });
 
       if (ownedWork.length > LIMITS.workspaceMemberRemovalWorkObligationsMax) {
         throw new HandlerError({
@@ -186,6 +202,16 @@ export const removeWorkspaceMemberHandler = async function* ({
       if (!deleted) {
         throw new HandlerError({ status: 404, message: "Member not found" });
       }
+
+      await tx
+        .update(correspondence)
+        .set({ assigneeId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(correspondence.workspaceId, workspaceId),
+            eq(correspondence.assigneeId, userId),
+          ),
+        );
 
       if (ownedWork.length > 0) {
         const activeEntityIds = ownedWork.map(({ entityId }) => entityId);
@@ -267,6 +293,7 @@ export const removeWorkspaceMemberHandler = async function* ({
           metadata: {
             closedDesktopEditSessions: closedSessions.length,
             unassignedWorkObligations: ownedWork.length,
+            correspondenceAssignmentDisposition: "cleared",
           },
         },
       ];
@@ -312,7 +339,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   await dependencies.revokeWorkspaceSseAccess(workspaceId, userId);
 
   for (const sessionId of txResult.closedSessionIds) {
-    dependencies.pushSessionEvent(sessionId, {
+    dependencies.broadcastSessionEvent(sessionId, {
       type: "session-closed",
       data: { reason: "released" },
     });

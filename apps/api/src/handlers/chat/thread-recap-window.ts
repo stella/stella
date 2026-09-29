@@ -1,7 +1,7 @@
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 
-export const RECAP_RECENT_MESSAGE_LIMIT = 24;
+const RECAP_RECENT_MESSAGE_LIMIT = 24;
 
 type RecapWindowMessage = {
   id: string;

@@ -7,7 +7,7 @@ import {
   PaletteIcon,
   TextQuoteIcon,
   WorkflowIcon,
-} from "lucide-react";
+} from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";
 

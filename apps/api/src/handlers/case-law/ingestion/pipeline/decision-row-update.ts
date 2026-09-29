@@ -16,7 +16,6 @@ import {
 import { writeDecisionCitations } from "@/api/handlers/case-law/ingestion/pipeline/citations";
 import {
   payloadChangedSql,
-  rowHoldsDocument,
   storedRowDiffers,
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
@@ -33,6 +32,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -77,10 +77,35 @@ const replacedDecisionState = async (
       type: caseLawDecisionIdentifiers.type,
       normalizedValue: caseLawDecisionIdentifiers.normalizedValue,
       value: caseLawDecisionIdentifiers.value,
+      declaredAt: caseLawDecisionIdentifiers.declaredAt,
     })
     .from(caseLawDecisionIdentifiers)
     .where(eq(caseLawDecisionIdentifiers.decisionId, id));
   return { ...row, identifiers };
+};
+
+/**
+ * The stored identifier rows an observation answers for: the observed ones,
+ * and a declared alias only where this observation derives it too. A declared
+ * alias it does not derive is kept by the write and is no change of it.
+ */
+const observedIdentifiers = <
+  T extends { type: string; normalizedValue: string; declaredAt?: Date | null },
+>(
+  stored: readonly T[],
+  incoming: DecisionWritePlan["identifierRows"],
+): T[] => {
+  const derived = new Set(
+    incoming.map(
+      (identifier) => `${identifier.type}\u0000${identifier.normalizedValue}`,
+    ),
+  );
+  return stored.filter(
+    (identifier) =>
+      identifier.declaredAt === null ||
+      identifier.declaredAt === undefined ||
+      derived.has(`${identifier.type}\u0000${identifier.normalizedValue}`),
+  );
 };
 
 type ReplacedDecisionState = NonNullable<
@@ -101,17 +126,19 @@ const resolutionIdentityChanged = (
     identifiers: {
       type: IdentifierType;
       normalizedValue: string;
+      declaredAt?: Date | null;
     }[];
   },
 ): boolean => {
+  const stored = observedIdentifiers(previous.identifiers, identifierRows);
   const incoming = new Set(
     identifierRows.map(
       (identifier) => `${identifier.type}:${identifier.normalizedValue}`,
     ),
   );
   const identifiersChanged =
-    previous.identifiers.length !== incoming.size ||
-    previous.identifiers.some(
+    stored.length !== incoming.size ||
+    stored.some(
       (identifier) =>
         !incoming.has(`${identifier.type}:${identifier.normalizedValue}`),
     );
@@ -139,12 +166,14 @@ const identifiersRewritten = (
       type: string;
       normalizedValue: string;
       value: string;
+      declaredAt?: Date | null;
     }[];
   } | null,
 ): boolean => {
   if (previous === null) {
     return false;
   }
+  const stored = observedIdentifiers(previous.identifiers, identifierRows);
   const key = (identifier: {
     type: string;
     normalizedValue: string;
@@ -153,8 +182,8 @@ const identifiersRewritten = (
     `${identifier.type}\u0000${identifier.normalizedValue}\u0000${identifier.value}`;
   const incoming = new Set(identifierRows.map(key));
   return (
-    previous.identifiers.length !== incoming.size ||
-    previous.identifiers.some((identifier) => !incoming.has(key(identifier)))
+    stored.length !== incoming.size ||
+    stored.some((identifier) => !incoming.has(key(identifier)))
   );
 };
 
@@ -246,6 +275,7 @@ export const describeRowUpdateTx = async (
         sourceDocumentId: persistedSourceDocumentId,
         ecli: result.ecli,
         court: result.court,
+        courtId: result.courtId ?? null,
         country: result.country,
         language: result.language,
         sheetNumber: result.sheetNumber,

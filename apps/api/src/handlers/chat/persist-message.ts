@@ -142,7 +142,7 @@ export const planMessagePersistence = ({
  * Failed and interrupted messages are durable turn state, not malformed or
  * disposable content; provider projection excludes them from later model input.
  */
-export type ChatAssistantFinishOutcome = ChatTurnOutcome;
+type ChatAssistantFinishOutcome = ChatTurnOutcome;
 
 type PlanAssistantFinishPersistenceProps = {
   existingIds: Set<SafeId<"chatMessage">>;

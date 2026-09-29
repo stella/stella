@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import {
+  buildListingQuery,
   celexToCaseNumber,
+  ECJ_DECISION_PATTERN,
+  ECJ_TOTAL_COUNT_QUERY,
   ecjListingIdentity,
   euEcjAdapter as ecjAdapter,
   SPARQL_LIMIT,
@@ -16,6 +19,7 @@ import {
   listingIdentityKey,
   parseListingIdentityKey,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
   STORED_RAW_REPARSE_REJECTION,
   type StoredRawReparseInput,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -637,6 +641,97 @@ const installTypedDocumentMock = (body: string, contentType: string): void => {
     }),
   );
 };
+
+const CELLAR_LANGUAGE_PREFIX =
+  "http://publications.europa.eu/resource/authority/language/";
+
+const languageCount = (cellarLanguage: string, n: number) => ({
+  language: {
+    type: "uri",
+    value: `${CELLAR_LANGUAGE_PREFIX}${cellarLanguage}`,
+  },
+  n: { type: "literal", value: String(n) },
+});
+
+describe("euEcjAdapter.getTotalCount", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const answerCount = (bindings: readonly unknown[]) => {
+    const queries: string[] = [];
+    globalThis.fetch = asFetchMock(
+      mock((_url: string, init?: RequestInit) => {
+        const body = typeof init?.body === "string" ? init.body : "";
+        queries.push(new URLSearchParams(body).get("query") ?? "");
+        return Promise.resolve(
+          new Response(JSON.stringify({ results: { bindings } }), {
+            status: 200,
+          }),
+        );
+      }),
+    );
+    return queries;
+  };
+
+  test("counts under the listing's own pattern", () => {
+    const listing = buildListingQuery({
+      dateFrom: "2024-01-01",
+      dateTo: "2024-01-31",
+    });
+
+    expect(listing).toContain(ECJ_DECISION_PATTERN);
+    expect(ECJ_TOTAL_COUNT_QUERY).toContain(ECJ_DECISION_PATTERN);
+  });
+
+  test("counts one per stored (CELEX, language) key, not per Cellar work", () => {
+    // Several Cellar works can share one CELEX and language; they settle onto
+    // one stored row, so the count must not be keyed on `?doc`.
+    expect(ECJ_TOTAL_COUNT_QUERY).toContain("COUNT(DISTINCT ?celex)");
+    expect(ECJ_TOTAL_COUNT_QUERY).toContain("GROUP BY ?language");
+    expect(ECJ_TOTAL_COUNT_QUERY).not.toContain("DISTINCT ?doc");
+  });
+
+  test("sums only the languages the listing keeps", async () => {
+    const queries = answerCount([
+      languageCount("ENG", 10),
+      languageCount("FRA", 5),
+      languageCount("LAT", 7),
+    ]);
+
+    expect(
+      await ecjAdapter.getTotalCount(new AbortController().signal),
+    ).toEqual({
+      type: "count",
+      total: 15,
+    });
+    expect(queries).toEqual([ECJ_TOTAL_COUNT_QUERY]);
+  });
+
+  test("refuses rows that do not name a language", async () => {
+    answerCount([{ n: { type: "literal", value: "548326" } }]);
+
+    expect(
+      await ecjAdapter.getTotalCount(new AbortController().signal),
+    ).toEqual({
+      type: "probe-failed",
+      errorTag: SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+    });
+  });
+
+  test("refuses an empty answer instead of reading it as zero", async () => {
+    answerCount([]);
+
+    expect(
+      await ecjAdapter.getTotalCount(new AbortController().signal),
+    ).toEqual({
+      type: "probe-failed",
+      errorTag: SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+    });
+  });
+});
 
 describe("ecjListingIdentity", () => {
   test("keys a variant on its CELEX and the stored language tag", () => {

@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { workspaceContactsQueryRoot } from "@/lib/resource-query-roots.logic";
 
-export const workspaceContactsKeys = {
+const workspaceContactsKeys = {
   all: workspaceContactsQueryRoot,
 };
 

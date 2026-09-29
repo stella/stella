@@ -14,11 +14,13 @@ import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import sendMessage from "@/api/handlers/chat/send-message";
+import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
 import suggestThreadTitle from "@/api/handlers/chat/suggest-thread-title";
 import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
+import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -63,6 +65,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   })
   .get("/model-options", getModelOptions.handler, {
     permissions: getModelOptions.config.permissions,
+  })
+  .get("/skill-availability", listUnavailableChatSkills.handler, {
+    permissions: listUnavailableChatSkills.config.permissions,
+    query: listUnavailableChatSkills.config.query,
   })
   .post("/improve-prompt", improvePrompt.handler, {
     body: improvePrompt.config.body,
@@ -121,6 +127,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: getSuggestedPrompts.config.params,
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
+  })
+  .post("/threads/:threadId/turns/:turnId/cancel", cancelTurn.handler, {
+    params: cancelTurn.config.params,
+    permissions: cancelTurn.config.permissions,
   })
   .post("/threads/:threadId/fork", forkThread.handler, {
     body: forkThread.config.body,

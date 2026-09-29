@@ -1,3 +1,7 @@
+import { useTranslations } from "use-intl";
+
+import type { LoadedCatalogueEntry } from "@stll/catalogue";
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   BanknoteIcon,
@@ -8,11 +12,7 @@ import {
   UserIcon,
   XIcon,
   type LucideIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type { LoadedCatalogueEntry } from "@stll/catalogue";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -53,7 +53,7 @@ export const CatalogueDetailPreview = ({
           render={
             <button
               aria-label={t("common.close")}
-              className="text-muted-foreground hover:text-foreground absolute end-4 top-4 transition-colors"
+              className="text-muted-foreground hover:text-foreground absolute end-4 top-4"
               onClick={onCancel}
               type="button"
             />
@@ -247,7 +247,7 @@ const AuthorField = ({
     return (
       <a
         aria-label={fieldLabel}
-        className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
+        className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5"
         href={sanitizeHref(authorUrl)}
         onClick={(e) => e.stopPropagation()}
         rel="noreferrer"

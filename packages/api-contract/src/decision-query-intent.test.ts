@@ -1,13 +1,17 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
 import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
+import type { DecisionDocketGrammar } from "./decision-docket-grammar";
 import {
+  type DecisionIdentifierIntent,
   exactDecisionMatches,
   parseDecisionQuery,
 } from "./decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "./us-reporter-citation";
 
 /** Dockets as the corpus's courts print them, one per grammar. */
 const canonicalDockets = [
@@ -140,12 +144,105 @@ describe("reading a case-law box entry", () => {
   });
 });
 
-describe("the hits that are the named decision", () => {
-  const hit = (caseNumber: string, ecli: string | null = null) => ({
-    caseNumber,
-    ecli,
+const identityOf = (
+  entry: string,
+  grammar?: DecisionDocketGrammar,
+): DecisionIdentifierIntent => {
+  const intent = parseDecisionQuery(entry, { grammar });
+  return intent.type === "identifier"
+    ? intent
+    : panic(`Not an identifier: ${entry}`);
+};
+
+describe("reading a reporter citation entry", () => {
+  const inUsa = { reporters: decisionReporterGrammarForJurisdiction("USA") };
+
+  test("in the reporter jurisdiction a reporter citation is an identifier in its canonical spelling", () => {
+    expect(parseDecisionQuery("347 U.S. 483", inUsa)).toEqual({
+      type: "identifier",
+      kind: "reporter",
+      value: "347 U.S. 483",
+    });
+    expect(parseDecisionQuery("  163 U. S. 537 ", inUsa)).toEqual({
+      type: "identifier",
+      kind: "reporter",
+      value: "163 U.S. 537",
+    });
+    expect(parseDecisionQuery("87 a. 2d 862", inUsa)).toEqual({
+      type: "identifier",
+      kind: "reporter",
+      value: "87 A.2d 862",
+    });
   });
 
+  test("a pin does not change which decision the entry names", () => {
+    for (const entry of [
+      "347 U.S. 483, 495",
+      "347 U. S. 483, at 494-495",
+      "347 U.S. 483 at 495",
+      "347 U.S. 483, 495, 497",
+    ]) {
+      expect(parseDecisionQuery(entry, inUsa)).toEqual(
+        parseDecisionQuery("347 U.S. 483", inUsa),
+      );
+    }
+  });
+
+  test("elsewhere, and unscoped, a reporter-shaped entry reads as it always did", () => {
+    for (const entry of ["347 U.S. 483", "10 S. Ct. 3", "347 U.S. 483, 495"]) {
+      for (const options of [
+        {},
+        { reporters: decisionReporterGrammarForJurisdiction("CZE") },
+        { grammar: DECISION_DOCKET_GRAMMARS.CZE, reporters: null },
+        {
+          grammar: DECISION_DOCKET_GRAMMARS.POL,
+          reporters: decisionReporterGrammarForJurisdiction("POL"),
+        },
+      ]) {
+        expect(parseDecisionQuery(entry, options)).toEqual({
+          type: "text",
+          text: entry,
+        });
+      }
+    }
+  });
+
+  test("a statute, a short form, a shared spelling and an unknown reporter are not citations of a decision", () => {
+    for (const text of [
+      "28 U.S.C. § 1253",
+      "42 U.S.C. 1983",
+      "347 U.S., at 495",
+      "1 Wall. 1",
+      "12 Xyz. 34",
+    ]) {
+      expect(parseDecisionQuery(text, inUsa)).toEqual({ type: "text", text });
+    }
+  });
+
+  test("no docket the corpus's grammars read is taken for a reporter citation", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...canonicalDockets).chain(spellingOf),
+        (entry) => {
+          expect(parseDecisionQuery(entry, inUsa)).not.toMatchObject({
+            kind: "reporter",
+          });
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+});
+
+const reporterRef = (value: string) =>
+  ({ type: "identifier", kind: "reporter", value }) as const;
+
+const hit = (caseNumber: string, ecli: string | null = null) => ({
+  caseNumber,
+  ecli,
+});
+
+describe("the hits that are the named decision", () => {
   test("spacing, case, dash style and the sheet number do not change identity", () => {
     fc.assert(
       fc.property(
@@ -154,25 +251,68 @@ describe("the hits that are the named decision", () => {
           .chain((docket) => fc.tuple(fc.constant(docket), spellingOf(docket))),
         ([stored, typed]) => {
           const hits = [hit(stored), hit("99 Cdo 1/2000")];
-          expect(exactDecisionMatches(typed, hits)).toEqual([hit(stored)]);
+          expect(exactDecisionMatches(identityOf(typed), hits)).toEqual([
+            hit(stored),
+          ]);
         },
       ),
       propertyConfig(),
     );
     expect(
-      exactDecisionMatches("21 Cdo 470/2017-28", [hit("21 Cdo 470/2017")]),
+      exactDecisionMatches(identityOf("21 Cdo 470/2017-28"), [
+        hit("21 Cdo 470/2017"),
+      ]),
     ).toHaveLength(1);
   });
 
   test("structural separators keep otherwise similar dockets distinct", () => {
     expect(
-      exactDecisionMatches("G 1/2099", [hit("G 1/2099"), hit("G/1/2099")]),
+      exactDecisionMatches(identityOf("G 1/2099"), [
+        hit("G 1/2099"),
+        hit("G/1/2099"),
+      ]),
     ).toEqual([hit("G 1/2099")]);
+  });
+
+  test("under its own scope a United States docket number is identity, not a sheet", () => {
+    const usa = (entry: string) =>
+      identityOf(entry, DECISION_DOCKET_GRAMMARS.USA);
+    const hits = [hit("21-123"), hit("21-456")];
+    expect(exactDecisionMatches(usa("21-123"), hits)).toEqual([hit("21-123")]);
+    expect(exactDecisionMatches(usa("No. 21-456"), hits)).toEqual([
+      hit("21-456"),
+    ]);
+    expect(exactDecisionMatches(usa("21-789"), hits)).toEqual([]);
+    expect(exactDecisionMatches(usa("10-12"), [hit("10-34")])).toEqual([]);
+    expect(
+      exactDecisionMatches(usa("No. 5"), [hit("No. 5"), hit("No. 6")]),
+    ).toEqual([hit("No. 5")]);
+    expect(
+      parseDecisionQuery("No. 21-123", {
+        grammar: DECISION_DOCKET_GRAMMARS.USA,
+      }),
+    ).toEqual({
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "USA",
+      value: "No. 21-123",
+    });
+    expect(
+      parseDecisionQuery("2079", { grammar: DECISION_DOCKET_GRAMMARS.USA }),
+    ).toEqual({ type: "text", text: "2079" });
+  });
+
+  test("unscoped, those forms read as text, as they did before any scope declared them", () => {
+    for (const text of ["10-12", "No. 5", "20A87", "No. 8, Orig."]) {
+      expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
+    }
   });
 
   test("a Polish division split across tokens keeps the same identity", () => {
     expect(
-      exactDecisionMatches("III AUa 999999/99", [hit("III A Ua 999999/99")]),
+      exactDecisionMatches(identityOf("III AUa 999999/99"), [
+        hit("III A Ua 999999/99"),
+      ]),
     ).toHaveLength(1);
   });
 
@@ -186,7 +326,9 @@ describe("the hits that are the named decision", () => {
       },
       { caseNumber: "65 A 4/2025", court: "Krajský soud v Brně", ecli: null },
     ];
-    expect(exactDecisionMatches("65 A 3/2025", hits)).toHaveLength(2);
+    expect(exactDecisionMatches(identityOf("65 A 3/2025"), hits)).toHaveLength(
+      2,
+    );
   });
 
   test("a publisher's parallel case number matches too", () => {
@@ -200,8 +342,10 @@ describe("the hits that are the named decision", () => {
         ],
       },
     ];
-    expect(exactDecisionMatches("III AKz 12/23", hits)).toHaveLength(1);
-    expect(exactDecisionMatches("III AKz 13/23", hits)).toEqual([]);
+    expect(
+      exactDecisionMatches(identityOf("III AKz 12/23"), hits),
+    ).toHaveLength(1);
+    expect(exactDecisionMatches(identityOf("III AKz 13/23"), hits)).toEqual([]);
   });
 
   test("an ECLI matches the hit that carries it", () => {
@@ -209,10 +353,172 @@ describe("the hits that are the named decision", () => {
       hit("22 Cdo 2653/2012", "ECLI:CZ:NS:2014:22.CDO.2653.2012.1"),
     ];
     expect(
-      exactDecisionMatches("ecli:cz:ns:2014:22.cdo.2653.2012.1", hits),
+      exactDecisionMatches(
+        identityOf("ecli:cz:ns:2014:22.cdo.2653.2012.1"),
+        hits,
+      ),
     ).toHaveLength(1);
     expect(
-      exactDecisionMatches("ECLI:CZ:NS:2014:99.CDO.1.2000.1", hits),
+      exactDecisionMatches(identityOf("ECLI:CZ:NS:2014:99.CDO.1.2000.1"), hits),
     ).toEqual([]);
+  });
+
+  describe("typed citations", () => {
+    const brown = {
+      caseNumber: "1",
+      ecli: null,
+      identifiers: [
+        { type: "case-number", value: "1" },
+        { type: "reporter-citation", value: "347 U. S. 483" },
+        { type: "reporter-citation", value: "98 Law. Ed. 873" },
+      ],
+    };
+    const reporters = decisionReporterGrammarForJurisdiction("USA");
+    const other = {
+      caseNumber: "347",
+      ecli: null,
+      identifiers: [{ type: "reporter-citation", value: "347 U.S. 484" }],
+    };
+
+    test("a reporter citation matches its parallel spellings, not a neighbouring page", () => {
+      expect(
+        exactDecisionMatches(reporterRef("347 U.S. 483"), [brown, other], {
+          reporters,
+        }),
+      ).toEqual([brown]);
+      // A variant abbreviation is the same reporter only through the grammar.
+      expect(
+        exactDecisionMatches(reporterRef("98 L. Ed. 873"), [brown, other], {
+          reporters,
+        }),
+      ).toEqual([brown]);
+      expect(
+        exactDecisionMatches(reporterRef("98 L. Ed. 873"), [brown, other]),
+      ).toEqual([]);
+      expect(
+        exactDecisionMatches(reporterRef("347 U.S. 485"), [brown], {
+          reporters,
+        }),
+      ).toEqual([]);
+    });
+
+    test("a typed reference matches only an identifier of its own type", () => {
+      const docketOnly = {
+        caseNumber: "347 U.S. 483",
+        ecli: null,
+        identifiers: [{ type: "case-number", value: "347 U.S. 483" }],
+      };
+      expect(
+        exactDecisionMatches(reporterRef("347 U.S. 483"), [docketOnly]),
+      ).toEqual([]);
+
+      const neutral = {
+        caseNumber: "1",
+        ecli: null,
+        identifiers: [{ type: "neutral-citation", value: "[2020] UKSC 1" }],
+      };
+      expect(
+        exactDecisionMatches(
+          { type: "identifier", kind: "neutral", value: "[2020] uksc 1" },
+          [neutral],
+        ),
+      ).toEqual([neutral]);
+      expect(
+        exactDecisionMatches(reporterRef("[2020] UKSC 1"), [neutral]),
+      ).toEqual([]);
+    });
+  });
+});
+
+type ConstitutionalDocket = {
+  ordinal: number;
+  senate: string;
+  year: string;
+};
+
+/**
+ * A Constitutional Court docket as Czech and Slovak readers and publishers
+ * spell it: the senate's case, the dot, the gap before `ÚS`, its accent, and
+ * the join before the number all vary.
+ */
+const constitutionalSpelling = ({
+  ordinal,
+  senate,
+  year,
+}: ConstitutionalDocket) =>
+  fc
+    .record({
+      dot: fc.constantFrom("", "."),
+      gap: fc.constantFrom("", " "),
+      join: fc.constantFrom("", " ", "/", " / "),
+      lower: fc.boolean(),
+      mark: fc.constantFrom("ÚS", "US", "ús"),
+    })
+    .map(
+      ({ dot, gap, join, lower, mark }) =>
+        `${lower ? senate.toLowerCase() : senate}${dot}${gap}${mark}${join}${ordinal}/${year}`,
+    );
+
+const constitutionalPair = fc
+  .record({
+    ordinal: fc.integer({ min: 1, max: 9999 }),
+    senate: fc.constantFrom("I", "II", "III", "IV", "Pl", "PL"),
+    year: fc.constantFrom("98", "04", "2019"),
+  })
+  .chain((docket) =>
+    fc.tuple(
+      constitutionalSpelling(docket),
+      constitutionalSpelling(docket),
+      fc.constant(`${docket.senate}. ÚS ${docket.ordinal + 1}/${docket.year}`),
+    ),
+  );
+
+describe("an entry finds its decision within its own jurisdiction", () => {
+  for (const jurisdiction of ["CZE", "SVK"] as const) {
+    const grammar = DECISION_DOCKET_GRAMMARS[jurisdiction];
+    const accepted = (text: string) => grammar.parse(text) !== null;
+    const ordinaryPair = fc
+      .constantFrom(...canonicalDockets.filter(accepted))
+      .chain((docket) =>
+        fc.tuple(
+          spellingOf(docket),
+          spellingOf(docket),
+          fc.constant("99 Cdo 1/2000"),
+        ),
+      );
+
+    test(`${jurisdiction}: every accepted spelling matches itself and every stored spelling of it`, () => {
+      fc.assert(
+        fc.property(
+          fc.oneof(constitutionalPair, ordinaryPair),
+          ([typed, stored, other]) => {
+            fc.pre(accepted(typed) && accepted(stored));
+            const hits = [hit(typed), hit(stored), hit(other)];
+            expect(
+              exactDecisionMatches(identityOf(typed, grammar), hits),
+              `${typed} ~ ${stored}`,
+            ).toEqual([hit(typed), hit(stored)]);
+          },
+        ),
+        propertyConfig(),
+      );
+    });
+  }
+
+  test("a Slovak docket finds spaced, compact, and sheet-suffixed spellings", () => {
+    for (const [typed, stored] of [
+      ["II.ÚS55/98", "II. ÚS 55/98"],
+      ["II. ÚS 55/98", "II.ÚS55/98"],
+      ["PL.ÚS3/2019", "PL. ÚS 3/2019"],
+      ["II.ÚS/251/04", "II. ÚS 251/04"],
+      ["II. ÚS 55/98", "II. ÚS 55/98-1"],
+      ["II.ÚS55/98", "II. ÚS 55/98−12"],
+      ["II. ÚS 55/98-1", "II.ÚS55/98"],
+    ] as const) {
+      const identity = identityOf(typed, DECISION_DOCKET_GRAMMARS.SVK);
+      expect(exactDecisionMatches(identity, [hit(stored)]), typed).toEqual([
+        hit(stored),
+      ]);
+    }
   });
 });

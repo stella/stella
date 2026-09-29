@@ -32,12 +32,12 @@ import type { RefObject } from "react";
 
 import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
-import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, ChevronUpIcon } from "@stll/ui/icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import {
@@ -501,7 +501,7 @@ const ChangeLabel = ({ change, onActivate }: ChangeLabelProps) => {
 
   return (
     <button
-      className="hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-start transition-colors outline-none focus-visible:ring-2 @max-[24rem]/review-bar:hidden"
+      className="hover:bg-muted focus-visible:ring-ring min-w-0 flex-1 rounded-md px-1.5 py-0.5 text-start outline-none focus-visible:ring-2 @max-[24rem]/review-bar:hidden"
       onClick={onActivate}
       title={heading}
       type="button"

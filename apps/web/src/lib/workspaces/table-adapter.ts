@@ -83,9 +83,3 @@ export const workspaceTableAdapter = {
   sectionCounts: groupCountsOptions,
   detail: entityOptions,
 } as const satisfies WorkspaceTableAdapter<WorkspaceEntityAdapterKeys>;
-
-export type {
-  EntitiesWindowOptionsInput,
-  GroupCountsOptionsInput,
-  KanbanGroupOptionsInput,
-};

@@ -17,6 +17,8 @@ import {
   SHADCN_LINT_POLICY_OVERRIDES,
   SHADCN_LINT_RULES,
   SHADCN_LINT_SETTINGS,
+  SIZE_LINT_POLICY_OVERRIDES,
+  SIZE_LINT_RULES,
   designLintBacklogOverrides,
 } from "./scripts/design-lint-policy.ts";
 import { OWNERSHIP } from "./scripts/ownership.ts";
@@ -25,6 +27,10 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import {
+  SQL_PERF_LINT_EXCLUDES,
+  SQL_PERF_LINT_FILES,
+} from "./scripts/sql-perf-scope.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -139,6 +145,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
     "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts",
+    "forbid-process-env-outside-env-ts/runtime-mode-keys",
   ]),
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
@@ -152,6 +159,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
+  ]),
+  fixtureRuleOverride("request-lifetime.fixture.ts", [
+    "request-lifetime/confine-request-reads",
   ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
@@ -236,6 +246,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
     "no-custom-account-modal/no-custom-account-modal",
   ]),
+  fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
+    "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
+  ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
@@ -256,6 +269,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
+  ]),
+  fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
+    "no-direct-pdf-save/no-direct-pdf-save",
   ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
@@ -314,6 +330,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-unbounded-response-body.fixture.ts", [
     "no-unbounded-response-body/no-unbounded-response-body",
+  ]),
+  fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
+    "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
@@ -496,6 +515,40 @@ const apiPortableSafeIdBrandingImport = {
   message:
     "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
 };
+
+// The model factory builds every provider text adapter and holds its stream
+// to the provider stream contract (one terminal event, last; a cut-off stream
+// is a run error). An adapter built anywhere else skips that contract, so the
+// runtime entry points of the adapter packages, and of the adapter subclass
+// the factory builds, belong to the factory; type-only imports stay allowed.
+export const API_PROVIDER_ADAPTER_MODULES = [
+  "@/api/lib/stella-openrouter-text-adapter",
+  "@tanstack/ai-anthropic",
+  "@tanstack/ai-anthropic/byok",
+  "@tanstack/ai-anthropic/vertex",
+  "@tanstack/ai-bedrock",
+  "@tanstack/ai-bedrock/byok",
+  "@tanstack/ai-gemini",
+  "@tanstack/ai-gemini/byok",
+  "@tanstack/ai-gemini/experimental",
+  "@tanstack/ai-mistral",
+  "@tanstack/ai-mistral/adapters/text",
+  "@tanstack/ai-mistral/byok",
+  "@tanstack/ai-mistral/vertex",
+  "@tanstack/ai-openai",
+  "@tanstack/ai-openai/byok",
+  "@tanstack/ai-openai/compatible",
+  "@tanstack/ai-openrouter",
+  "@tanstack/ai-openrouter/byok",
+  "@tanstack/openai-base",
+] as const;
+
+const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Build provider adapters through createTanStackTextAdapterFactory in '@/api/lib/tanstack-ai-models', which holds their streams to the provider stream contract.",
+}));
 
 // pragmatic-drag-and-drop's element adapter keeps exactly one live drop
 // target, and one draggable, per element behind a private WeakMap registry:
@@ -699,6 +752,10 @@ export default defineConfig({
   },
   rules: {
     ...libraryRules,
+    // The upstream rule treats String#slice like Array#slice and can turn
+    // substring checks into single-character Set membership under --fix.
+    // It has no fix-only option.
+    "unicorn/prefer-set-has": "off",
     // Design-system rules (@shadcn/lint): policy, overlap resolution, and
     // backlog handling live in scripts/design-lint-policy.ts.
     ...SHADCN_LINT_RULES,
@@ -710,7 +767,6 @@ export default defineConfig({
     // `no-network-await-in-loop` flag with the owner in hand.
     "no-await-in-loop": "off",
     "no-console": "error",
-    "no-shadow": "error",
     "no-unused-vars": [
       "error",
       {
@@ -723,22 +779,9 @@ export default defineConfig({
     // The TypeScript extension below recognizes returned thenables. Retain
     // the base rule only for JavaScript through the override below.
     "require-await": "off",
-    "no-useless-catch": "error",
-    "no-non-null-assertion": "error",
 
-    "typescript/no-explicit-any": "error",
-    "typescript/no-dynamic-delete": "error",
     "typescript/require-await": "error",
-    "typescript/no-misused-promises": [
-      "error",
-      { checksVoidReturn: { attributes: false } },
-    ],
-    "typescript/consistent-type-definitions": ["error", "type"],
 
-    "unicorn/no-useless-undefined": "off",
-    "unicorn/prefer-array-find": "error",
-    "unicorn/prefer-at": "error",
-    "unicorn/prefer-node-protocol": "error",
     // Stylistic only; the negated form (`a !== b ? x : y`) is often
     // clearer than the swapped equivalent. No bug-catching value.
     "unicorn/no-negated-condition": "off",
@@ -756,7 +799,6 @@ export default defineConfig({
     // properties (e.g. `result.fonts ??= {}`). Pure stylistic anyway.
     "logical-assignment-operators": "off",
 
-    "react/rules-of-hooks": "error",
     // Override libraryRules so React correctness is checked in every app and
     // shared package.
     "react/jsx-key": "error",
@@ -780,15 +822,8 @@ export default defineConfig({
         unnamedComponents: "arrow-function",
       },
     ],
-    "react/style-prop-object": "error",
-    "react/jsx-no-comment-textnodes": "error",
-    "react/iframe-missing-sandbox": "error",
-    "react/jsx-no-target-blank": "error",
     "react/jsx-no-script-url": ["error", { includeFromSettings: true }],
-    "react/button-has-type": "error",
-    "react/checked-requires-onchange-or-readonly": "error",
     "react/no-unknown-property": "error",
-    "react/no-object-type-as-default-prop": "error",
     // Allow component creation in prop position: i18n rich-text render
     // callbacks (`t.rich({ link: (chunks) => <a/> })`) and IIFE-as-prop
     // element builders are idiomatic here and are not remounted components.
@@ -797,9 +832,6 @@ export default defineConfig({
     // `yield* Result.await(...)`) have no meaningful user-facing yield type
     // to document, and the codebase's JSDoc style uses bare tags.
     "jsdoc/require-yields-type": "off",
-    "promise/always-return": "error",
-    "promise/no-return-in-finally": "error",
-    "no-useless-assignment": "error",
 
     // Keep `import/no-cycle`: current web profiling puts it below 1% of rule
     // time. The Module Side Effects section in AGENTS.md documents the TDZ class
@@ -902,54 +934,40 @@ export default defineConfig({
     "no-nanoid/no-nanoid": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
+    "no-direct-lucide-import/no-direct-lucide-import": "error",
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
     "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
     "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
     "no-unpaired-playbook-verdict/no-unpaired-playbook-verdict": "error",
     "require-relative-time-helpers/require-relative-time-helpers": "error",
     "no-raw-date-input/no-raw-date-input": "error",
-    "stella-lowercase/stella-lowercase": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-unjustified-double-assertion/no-unjustified-double-assertion": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
     "require-function-replacer/require-function-replacer": "error",
-    "no-void": ["error", { allowAsStatement: true }],
 
-    // --- Disabled ultracite defaults ---
+    // Object keys follow meaning (id first, related fields together).
     "sort-keys": "off",
-    "no-plusplus": "off",
-    "no-inline-comments": "off",
-    "max-statements": "off",
-    "prefer-destructuring": "off",
-    "no-negated-condition": "off",
-    "no-nested-ternary": "error",
-    "no-use-before-define": "off",
+    // promise/always-return requires the trailing `return;` in `.then`
+    // callbacks that this rule flags.
     "no-useless-return": "off",
+    // Only a handful of task markers exist; "todo" is also domain vocabulary
+    // (kanban todos, React Compiler "Todo" bailouts).
     "no-warning-comments": "off",
-    "no-unexpected-multiline": "off",
-    "max-classes-per-file": "off",
-    "class-methods-use-this": "off",
     "no-unmodified-loop-condition": [
       "error",
       { checkConditionalExpressions: true },
     ],
-    "no-loop-func": "error",
-    complexity: ["error", 50],
-    "func-style": "off",
-    "func-names": "off",
+    ...SIZE_LINT_RULES,
+    // libraryRules sets the bare `complexity` key, which outranks the
+    // canonical id above.
+    complexity: SIZE_LINT_RULES["eslint/complexity"],
 
+    // Annotations on literal initializers are deliberate widening
+    // (`const marker: string = "…"`); removing them narrows to the literal.
     "typescript/no-inferrable-types": "off",
-    "typescript/consistent-return": "error",
-    "typescript/dot-notation": "error",
-    "typescript/prefer-readonly": "error",
-    "typescript/no-unnecessary-type-conversion": "error",
-    "typescript/no-unnecessary-condition": [
-      "error",
-      { allowConstantLoopConditions: "only-allowed-literals" },
-    ],
-    "typescript/no-unnecessary-type-arguments": "error",
 
     // Redundant with switch-exhaustiveness-check: an exhaustive switch
     // covers every union member by construction, so a `default:` clause
@@ -985,63 +1003,54 @@ export default defineConfig({
       },
     ],
 
+    // Formatting only: braces around `case` bodies.
     "unicorn/switch-case-braces": "off",
+    // Formatting only: the letter case of `\x`/`\u` escapes.
     "unicorn/escape-case": "off",
+    // `\x1b` and `\u001b` name the same character.
     "unicorn/no-hex-escape": "off",
+    // A global regex `replace` and `replaceAll` behave the same.
     "unicorn/prefer-string-replace-all": "off",
-    "unicorn/consistent-function-scoping": "off",
-    "unicorn/filename-case": "off",
+    // Nearly every hit is a test double spelling out a fake upstream body.
     "unicorn/prefer-response-static-json": "off",
+    // Filling a new Map or Set line by line reads as well as a literal.
     "unicorn/no-immediate-mutation": "off",
-    "unicorn/prefer-ternary": "off",
     // Disabled: the legitimate "throw Error() needs new" case is already
     // covered (more strictly) by the custom no-bare-error rule, and oxlint
     // 1.70+ broadened this rule to flag error-named factory calls in a class
     // `extends` clause — a false positive on the better-result
     // `TaggedError("X")<{...}>()` pattern used throughout the codebase.
     "unicorn/throw-new-error": "off",
-    "unicorn/no-array-reduce": "error",
-    "unicorn/no-array-sort": "error",
+    // Flags `for (const n of [...el.childNodes])`, where the copy detaches a
+    // live NodeList (or Set) from the mutations the loop body makes.
     "unicorn/no-useless-spread": "off",
-    // NOT enabled: unicorn/prefer-number-coercion. Its parseInt(x, 10) ->
-    // Number(x) transform is not semantics-preserving (lenient prefix parsing,
-    // "" handling, hex strings); ingestion adapters rely on parseInt behavior.
+    // `(await response.json()).field` is clear; a temporary adds nothing.
     "unicorn/no-await-expression-member": "off",
     // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
     "unicorn/no-nested-ternary": "off",
-    "unicorn/prefer-set-has": "error",
+    // `Array.from(x)` and `[...x]` are equivalent copies.
     "unicorn/prefer-spread": "off",
 
+    // Naming convention only (`[value, setValue]`).
     "react/hook-use-state": "off",
     // These categories report React Compiler implementation limits and internal
     // invariants. The former monolithic rule filtered them unless
     // reportAllBailouts was enabled; keep that behavior while actionable
     // categories remain enabled by Ultracite.
     "react/invariant": "off",
+    // Compiler implementation limits, as with react/invariant above.
     "react/todo": "off",
-    "react/no-children-prop": "off",
+    // no-unsafe-inner-html checks what reaches `dangerouslySetInnerHTML`.
     "react/no-danger": "off",
+    // Naming convention only, like hook-use-state above.
     "react/jsx-handler-names": "off",
 
+    // Libraries document members of their default export (`fc.property`).
     "import/no-named-as-default-member": "off",
+    // Libraries document their default export as the entry point
+    // (`import Bold from "@tiptap/extension-bold"`).
     "import/no-named-as-default": "off",
 
-    "promise/prefer-await-to-then": "off",
-    "promise/prefer-await-to-callbacks": "off",
-    "promise/avoid-new": "off",
-
-    "typescript/strict-boolean-expressions": [
-      "error",
-      { allowNullableString: true, allowNullableBoolean: true },
-    ],
-    "typescript/no-confusing-void-expression": [
-      "error",
-      { ignoreArrowShorthand: true, ignoreVoidReturningFunctions: true },
-    ],
-    "typescript/prefer-nullish-coalescing": [
-      "error",
-      { ignorePrimitives: { string: true, boolean: true } },
-    ],
     // The rule is still nursery; restrict it to actual nullish operands so
     // replacing a truthiness check cannot change 0/false/empty-string behavior.
     "typescript/prefer-optional-chain": ["error", { requireNullish: true }],
@@ -1057,19 +1066,28 @@ export default defineConfig({
         ],
       },
     ],
-    "typescript/return-await": ["error", "error-handling-correctness-only"],
+    // It rewrites `x as NonNullable<T>` to `x!`, which no-non-null-assertion
+    // bans.
     "typescript/non-nullable-type-assertion-style": "off",
 
-    // Ultracite 7.9.3 removed its slow JS-plugin rules from the default
-    // presets. These native-rule exceptions remain Stella-specific.
+    // Importing a symbol, then exporting it, is how a module that also uses
+    // it locally re-exports it.
     "unicorn/prefer-export-from": "off",
+    // Its parseInt(x, 10) -> Number(x) transform is not semantics-preserving
+    // (lenient prefix parsing, "" handling, hex strings); ingestion adapters
+    // rely on parseInt behavior.
     "unicorn/prefer-number-coercion": "off",
+    // Style only: one `push` with several arguments.
     "unicorn/prefer-single-call": "off",
-    "prefer-named-capture-group": "off",
+    // Style only: `a="x"` over `a={"x"}` in JSX.
     "react/jsx-curly-brace-presence": "off",
+    // Short patterns read better with positional groups.
+    "prefer-named-capture-group": "off",
+    // Quotes and apostrophes render correctly in JSX text.
     "react/no-unescaped-entities": "off",
     // Fires on any method named setState; no class components exist here.
     "react/no-set-state": "off",
+    // Arrow components take their name from the binding.
     "react/display-name": "off",
 
     // React Compiler memoizes context values in apps/web; the remaining
@@ -1142,9 +1160,11 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
+    "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -1199,6 +1219,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
+    "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
@@ -1211,6 +1232,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",
@@ -1225,6 +1247,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
+    "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
@@ -1280,6 +1303,7 @@ export default defineConfig({
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
@@ -1289,6 +1313,7 @@ export default defineConfig({
 
   overrides: [
     ...SHADCN_LINT_POLICY_OVERRIDES,
+    ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
@@ -2249,6 +2274,22 @@ export default defineConfig({
       },
     },
     {
+      // A chat turn's run outlives the request that started it (see
+      // `chat-turn-run.ts`), so nothing on the send-to-settlement path may
+      // read the request except the send's own disconnect probe.
+      files: [
+        "apps/api/src/handlers/chat/send-message*.ts",
+        "apps/api/src/handlers/chat/stream-chat.ts",
+        "apps/api/src/handlers/chat/chat-turn-*.ts",
+        "apps/api/src/handlers/chat/chat-message-persistence.ts",
+        "apps/api/src/handlers/chat/tools/**/*.ts",
+      ],
+      excludeFiles: ["apps/api/src/handlers/chat/**/*.test.ts"],
+      rules: {
+        "request-lifetime/confine-request-reads": "error",
+      },
+    },
+    {
       // The other half of the type-cost guard: awaiting a ternary whose
       // branches are two chain states of one query builder instantiates both
       // builder types and their union before `Awaited<>` resolves. Scoped to
@@ -2465,6 +2506,27 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-file-input/no-raw-file-input": "error",
+      },
+    },
+    {
+      // Words in running text are marked through `@stll/ui/text-mark`, so a
+      // search hit, a reader's highlight and a verdict underline share one
+      // shape and differ only in hue and line.
+      files: [...productUiFiles],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "error",
+      },
+    },
+    {
+      // The owner and its test spell the mark out; the review badge's
+      // `highlight` tone is a status colour, not a text mark.
+      files: [
+        "packages/ui/src/review/text-mark.tsx",
+        "packages/ui/src/review/text-mark.test.ts",
+        "packages/ui/src/review/review-status-badge.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
       },
     },
     {
@@ -3284,6 +3346,16 @@ export default defineConfig({
       },
     },
     {
+      // The baseline counter reads the same scope.
+      files: SQL_PERF_LINT_FILES,
+      excludeFiles: SQL_PERF_LINT_EXCLUDES,
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/sql-perf.fixture.ts"],
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts": [
@@ -3310,6 +3382,12 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/server.ts",
+              // The one reader of NODE_ENV and the local development opt-in.
+              "packages/runtime-mode/src/index.ts",
+              // The web server entrypoint reads its listen address from Bun's
+              // environment before any app module loads; the web app's env
+              // contract is the Vite build, not this process.
+              "apps/web/src/runtime.ts",
               "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
@@ -3330,7 +3408,13 @@ export default defineConfig({
               // rather than through env.ts so it stays side-effect-free at
               // import time, matching the two call sites it replaces.
               "apps/api/src/lib/version.ts",
+              // Reads the stack URLs and credentials agent:drive hands it;
+              // e2e infra has no app env module to route through.
+              "apps/web/e2e/agent/drive.ts",
               "apps/web/e2e/helpers/api.ts",
+              // Passes its own environment on to the correspondence seed,
+              // adding the local development opt-in seeds require.
+              "apps/web/e2e/helpers/correspondence.ts",
               // Reads E2E_API_URL (same contract as helpers/api.ts) and the
               // E2E_NETWORK_BASELINE write/rewrite mode switch; e2e infra has
               // no app env module to route through.
@@ -3349,6 +3433,28 @@ export default defineConfig({
               // to tune fast-check at assert time. Never imported by runtime
               // code, so there is no app env module to route through.
               "packages/property-testing/src/index.ts",
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // NODE_ENV and the local development opt-in are read by the runtime
+      // mode owner alone; everything else consumes the resolved mode.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
+      ],
+      rules: {
+        "forbid-process-env-outside-env-ts/runtime-mode-keys": [
+          "error",
+          {
+            allowedFiles: [
+              // The API test and tooling harness opts its processes in.
+              "apps/api/src/tests/setup-env.ts",
+              // The environment doctor picks which mode's env files to layer.
+              "scripts/env-tool.ts",
             ],
           },
         ],
@@ -3518,6 +3624,7 @@ export default defineConfig({
           { drizzleObjectName: ["db", "tx"] },
         ],
         "security-guards/no-raw-filename-write": "error",
+        "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
     },
     {
@@ -3663,6 +3770,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3719,6 +3827,7 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3734,6 +3843,28 @@ export default defineConfig({
           {
             paths: [
               noZodImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The model factory and the adapter subclass it builds are the provider
+      // adapters' owners. Only that restriction is lifted.
+      files: [
+        "apps/api/src/lib/tanstack-ai-models.ts",
+        "apps/api/src/lib/stella-openrouter-text-adapter.ts",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
             ],
@@ -3803,6 +3934,22 @@ export default defineConfig({
       ],
       rules: {
         "no-unbounded-response-body/no-unbounded-response-body": "error",
+      },
+    },
+    {
+      // `execute` answers in the driver's shape (rows, or PGlite's `{ rows }`),
+      // so rows are read through the one reader that handles both and panics
+      // on a third. Tests read PGlite results directly, knowing the driver.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/scripts/**/*.test.ts",
+        "apps/api/src/**/test-utils.ts",
+        "apps/api/src/tests/**",
+        "apps/api/src/lib/db/executed-rows.ts",
+      ],
+      rules: {
+        "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows": "error",
       },
     },
     {
@@ -4017,6 +4164,7 @@ export default defineConfig({
                   "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/db",
                 importNames: ["createScopedDb"],
@@ -4126,6 +4274,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],
@@ -4202,6 +4351,7 @@ export default defineConfig({
         "apps/api/src/handlers/auth/ui-routes.ts",
         "apps/api/src/handlers/dev/routes.ts",
         "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+        "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts",
         "apps/api/src/handlers/feedback/routes.ts",
         "apps/api/src/handlers/folio-collab/routes.ts",
         "apps/api/src/handlers/health/routes.ts",

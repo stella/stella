@@ -48,6 +48,7 @@ export const REGISTRY_FORMAT_SLUGS: readonly [
   "orsr",
   "prh",
   "recherche-entreprises",
+  "rpo",
   "vies",
 ] = [
   "ares",
@@ -60,6 +61,7 @@ export const REGISTRY_FORMAT_SLUGS: readonly [
   "orsr",
   "prh",
   "recherche-entreprises",
+  "rpo",
   "vies",
 ];
 
@@ -170,6 +172,14 @@ export const BUSINESS_REGISTRY_FORMAT_CAPABILITIES: Readonly<
     defaultFormat: RECHERCHE_ENTREPRISES_DEFAULT_FORMAT,
     resultShape: "full-record",
   },
+  // RPO spans every Slovak legal person and entrepreneur, most of which have
+  // no court file, so its output cites the IČO rather than a registration.
+  rpo: {
+    type: "registry-reference",
+    defaultFormat:
+      "**[company name]**, [legal form], sídlo: [address], IČO: [registry number]",
+    resultShape: "full-record",
+  },
   vies: {
     type: "registry-reference",
     defaultFormat: "**[company name]**, VAT number [VAT number], [address]",
@@ -200,6 +210,7 @@ const NON_CLAUSE_DRIVEN_REGISTRY_SLUGS = [
   "denue",
   "edgar",
   "gcis",
+  "rpo",
   "vies",
 ] as const;
 

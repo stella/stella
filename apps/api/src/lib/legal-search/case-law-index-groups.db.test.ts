@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import { readdirSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 import {
   CASE_LAW_INDEX_GROUP_OF,
@@ -114,4 +116,59 @@ test("the query fragment and corpusIndexId derive the same id", async () => {
   expect(corpusIndexId("case_law_v3", "PL")).not.toBe(
     corpusIndexId("case_law_v3", "POL"),
   );
+});
+
+const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
+const INDEX_ID_FUNCTION = "CREATE OR REPLACE FUNCTION case_law_corpus_index_id";
+
+/** The function body the latest migration that (re)creates it installs. */
+const latestIndexIdFunctionSql = (): string => {
+  const statement = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted()
+    .flatMap((directory) =>
+      readFileSync(
+        nodePath.join(DRIZZLE_DIR, directory, "migration.sql"),
+        "utf-8",
+      )
+        .split("--> statement-breakpoint")
+        .filter((part) => part.includes(INDEX_ID_FUNCTION)),
+    )
+    .at(-1);
+  if (statement === undefined) {
+    throw new Error("no migration creates case_law_corpus_index_id");
+  }
+  return statement;
+};
+
+test("the migrated index-id function derives the same id as the declaration", async () => {
+  // The projection trigger calls the function the latest routing migration
+  // created, so a migration that re-points a declared jurisdiction, or a
+  // shared group declared without one, fails here.
+  await db.execute(sql.raw(latestIndexIdFunctionSql()));
+  const countryValues = sql.join(
+    COUNTRIES.map((country) => sql`(${country}::varchar(3))`),
+    sql`, `,
+  );
+  for (const generation of GENERATIONS) {
+    const rows = executedRows(
+      await db.execute(sql`
+        SELECT c.country AS "country",
+               case_law_corpus_index_id(${generation}, c.country) AS "migrated"
+          FROM (VALUES ${countryValues}) AS c(country)
+      `),
+    );
+    expect(rows.length).toBe(COUNTRIES.length);
+    for (const row of rows) {
+      const country = readString(row, "country");
+      expect([generation, country, readString(row, "migrated")]).toEqual([
+        generation,
+        country,
+        corpusIndexId(generation, country),
+      ]);
+    }
+  }
+  expect(corpusIndexId("case_law_v7", "USA")).toBe("case_law_v7_usa");
+  expect(corpusIndexId("case_law_v7", "SVK")).toBe("case_law_v7_cs_sk");
 });

@@ -118,8 +118,64 @@ export const DECISION_DOCKET_GRAMMAR_FIXTURES = {
   ],
   SVK: [
     {
+      canonical: "IV. ÚS 999/99",
+      variants: [
+        "IV. US 999/99",
+        "iv.ús 999/99",
+        "IV ÚS999/99",
+        "IV.US 999/99",
+        "IV.ÚS/999/99",
+        "IV. ÚS 999/99-1",
+        "IV.ÚS/999/99−12",
+      ],
+    },
+    {
+      canonical: "PL. ÚS 99/2099",
+      variants: ["Pl. ÚS 99/2099", "pl us 99/2099", "PL.ÚS 99/2099"],
+    },
+    {
       canonical: "99Xyz/999999/2099",
-      variants: ["99 xyz 999999/2099", "99 xyz / 999999/2099"],
+      variants: [
+        "99 xyz 999999/2099",
+        "99 xyz / 999999/2099",
+        "99Xyz/999999/2099‑42",
+      ],
+    },
+  ],
+  USA: [
+    {
+      canonical: "21-123",
+      variants: ["No. 21-123", "no.21‑123", " 21–123 "],
+    },
+    // The same term one number apart is another case, not a sheet of it.
+    {
+      canonical: "21-456",
+      variants: ["No. 21-456"],
+    },
+    {
+      canonical: "19-1392",
+      variants: ["No. 19-1392", "no 19−1392"],
+    },
+    {
+      canonical: "20A87",
+      variants: ["20a87", "No. 20A87"],
+    },
+    // An original case: its electronic and printed forms are one docket.
+    {
+      canonical: "22O141",
+      variants: ["22o141", "No. 22O141", "No. 141, Orig.", "141, Orig."],
+    },
+    {
+      canonical: "No. 8, Orig.",
+      variants: ["8, Orig.", "No. 8 Orig", "no. 8, original"],
+    },
+    {
+      canonical: "No. 1",
+      variants: ["no. 1", "No 1", "No.1"],
+    },
+    {
+      canonical: "No. 8",
+      variants: ["no.8"],
     },
   ],
 } as const satisfies Record<

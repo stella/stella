@@ -122,7 +122,7 @@ export const getEntityBBoxes = ({
  * they share the same pageIndex and their y coordinates are
  * within half a fontSize of each other.
  */
-export const mergeAdjacentBBoxes = (bboxes: readonly PDFBBox[]): PDFBBox[] => {
+const mergeAdjacentBBoxes = (bboxes: readonly PDFBBox[]): PDFBBox[] => {
   if (bboxes.length <= 1) {
     return bboxes.map((bbox) => ({ ...bbox }));
   }

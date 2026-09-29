@@ -70,7 +70,7 @@ const HEX_RUN_MIN = 32;
 const HEX_RUN_DIGITS_ONLY_MIN = 48;
 
 /** How much of the offending text a report carries. */
-const MARKUP_RESIDUE_EXCERPT_CHARS = 120;
+export const MARKUP_RESIDUE_EXCERPT_CHARS = 120;
 
 /**
  * Ordered: the first rule that matches names the finding, so a run of 48

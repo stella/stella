@@ -52,6 +52,7 @@ import {
   playbookRunStartOutcome,
 } from "@/api/lib/document-review/playbook-run-start";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedClauseCategoryId,
@@ -1687,11 +1688,10 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
   const mintId = () => Bun.randomUUIDv7();
   // A call that only renames, rescopes, or removes names no positions.
   const positions = input.positions ?? NO_POSITION_INPUTS;
+  const reader = { organizationId, userId: context.userId };
   const loadOrgSettings = async () =>
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(organizationId) ??
-      context.scopedDb(
-        async (tx) => await loadOrgSettingsForAuth(tx, organizationId),
-      ));
+    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+      context.scopedDb(async (tx) => await loadOrgSettingsForAuth(tx, reader)));
 
   // Create branch.
   if (input.playbook_id === undefined) {
@@ -1970,6 +1970,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
         userId: context.userId,
         scopedDb: context.scopedDb,
         propertyIds: outcome.materializedPropertyIds,
+        extractionRunStore: requestExtractionRunStore,
       }),
     catch: (cause) => cause,
   });

@@ -15,11 +15,13 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { resolveRate } from "@/api/lib/billing-rates";
 import {
-  getTimeEntryDateValidationError,
+  getTimePolicyViolation,
+  readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
+import { resolveRate } from "@/api/lib/billing/rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -34,7 +36,8 @@ const updateTimeEntryBodySchema = t.Object({
   dateWorked: t.Optional(t.String({ format: "date" })),
   timezoneId: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
   durationMinutes: t.Optional(t.Integer({ minimum: 1 })),
-  narrative: t.Optional(t.String({ minLength: 1, maxLength: 10_000 })),
+  narrative: t.Optional(t.String({ minLength: 0, maxLength: 10_000 })),
+  narrativeLanguage: t.Optional(narrativeLanguageSchema),
   invoiceNarrative: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   billable: t.Optional(t.Boolean()),
   noCharge: t.Optional(t.Boolean()),
@@ -80,12 +83,14 @@ export const updateTimeEntryHandler = async function* ({
           workspaceId: { eq: workspaceId },
         },
         columns: {
+          organizationId: true,
           status: true,
           dateWorked: true,
           timezoneId: true,
           durationMinutes: true,
           billedMinutes: true,
           narrative: true,
+          narrativeLanguage: true,
           invoiceNarrative: true,
           billable: true,
           noCharge: true,
@@ -142,6 +147,24 @@ export const updateTimeEntryHandler = async function* ({
     );
   }
 
+  const policy = yield* Result.await(
+    readTimePolicy({ safeDb, organizationId: existing.organizationId }),
+  );
+  const existingToday = yield* formatTodayInTimeZone({
+    timezoneId: existing.timezoneId,
+  });
+  const canApprove = canApproveTimeEntries(actor.memberRole);
+  const existingViolation = getTimePolicyViolation({
+    policy,
+    dateWorked: existing.dateWorked,
+    today: existingToday,
+    canApprove,
+    narrative: body.narrative ?? existing.narrative,
+  });
+  if (existingViolation) {
+    return Result.err(existingViolation);
+  }
+
   const changedDateWorked =
     body.dateWorked !== undefined && body.dateWorked !== existing.dateWorked
       ? body.dateWorked
@@ -156,17 +179,17 @@ export const updateTimeEntryHandler = async function* ({
         }),
       );
     }
-    const today = yield* formatTodayInTimeZone({
+    const changedToday = yield* formatTodayInTimeZone({
       timezoneId: body.timezoneId,
     });
-    const dateValidationError = getTimeEntryDateValidationError({
+    const dateValidationError = getTimePolicyViolation({
+      policy,
       dateWorked: changedDateWorked,
-      today,
+      today: changedToday,
+      canApprove,
     });
     if (dateValidationError) {
-      return Result.err(
-        new HandlerError({ status: 400, message: dateValidationError }),
-      );
+      return Result.err(dateValidationError);
     }
     changedTimezoneId = body.timezoneId;
   }
@@ -239,6 +262,7 @@ export const updateTimeEntryHandler = async function* ({
       "dateWorked",
       "durationMinutes",
       "narrative",
+      "narrativeLanguage",
       "invoiceNarrative",
       "billable",
       "noCharge",
@@ -248,7 +272,12 @@ export const updateTimeEntryHandler = async function* ({
     ]),
     ...(changedTimezoneId !== null ? { timezoneId: changedTimezoneId } : {}),
     ...(body.durationMinutes !== undefined
-      ? { billedMinutes: roundToBillingIncrement(body.durationMinutes) }
+      ? {
+          billedMinutes: roundToBillingIncrement(
+            body.durationMinutes,
+            policy.timeMinimumUnitMinutes,
+          ),
+        }
       : {}),
     ...(resolvedRateUpdate.type === "resolved"
       ? {
@@ -274,6 +303,9 @@ export const updateTimeEntryHandler = async function* ({
             eq(timeEntries.durationMinutes, existing.durationMinutes),
             eq(timeEntries.billedMinutes, existing.billedMinutes),
             eq(timeEntries.narrative, existing.narrative),
+            existing.narrativeLanguage === null
+              ? isNull(timeEntries.narrativeLanguage)
+              : eq(timeEntries.narrativeLanguage, existing.narrativeLanguage),
             existing.invoiceNarrative === null
               ? isNull(timeEntries.invoiceNarrative)
               : eq(timeEntries.invoiceNarrative, existing.invoiceNarrative),

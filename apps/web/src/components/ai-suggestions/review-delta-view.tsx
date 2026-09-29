@@ -1,10 +1,10 @@
 import { type PropsWithChildren, useId, useState } from "react";
 
 import { panic } from "better-result";
-import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { ReviewAlignedPair } from "@/components/ai-suggestions/review-aligned-pair";
@@ -122,7 +122,7 @@ export const PassagesDisclosure = ({
       <button
         aria-controls={panelId}
         aria-expanded={open}
-        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs transition-colors"
+        className="text-muted-foreground hover:text-foreground -mx-1 flex min-h-8 items-center gap-1 px-1 text-xs"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >

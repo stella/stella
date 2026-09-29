@@ -53,7 +53,6 @@ function KnowledgeLanding() {
       <Link
         className={cn(
           "bg-card flex h-full flex-col rounded-xl border p-5",
-          "transition-colors",
           "hover:border-foreground/15 hover:shadow-sm",
         )}
         key={section.key}

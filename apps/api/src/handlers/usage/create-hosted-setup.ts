@@ -11,6 +11,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createHostedSetupSession } from "@/api/lib/hosted-usage-provider/client";
 import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
+import {
+  checkMemberCapacityChange,
+  memberCapacityOf,
+} from "@/api/lib/usage/member-capacity";
 import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 
 /** Create a hosted setup session for an active usage policy. */
@@ -57,6 +61,7 @@ const createHostedSetup = createSafeRootHandler(
             visibility: usagePolicies.visibility,
             hostedPolicyRef: usagePolicies.hostedPolicyRef,
             priceBasis: usagePolicies.priceBasis,
+            maxMembers: usagePolicies.maxMembers,
           })
           .from(usagePolicies)
           .where(eq(usagePolicies.id, body.usagePolicyId))
@@ -125,6 +130,27 @@ const createHostedSetup = createSafeRootHandler(
           return { kind: "seats_on_non_subscription" as const };
         }
 
+        // A subscription replaces the organization's member capacity: one
+        // that would leave more members than it admits is refused rather
+        // than removing anyone. The provider applies a missing quantity as
+        // one seat.
+        if (policy.kind === "subscription") {
+          const change = await checkMemberCapacityChange(tx, {
+            organizationId: session.activeOrganizationId,
+            nextCapacity: memberCapacityOf({
+              maxMembers: policy.maxMembers,
+              priceBasis: policy.priceBasis,
+              seats: body.seats ?? 1,
+            }),
+          });
+          if (Result.isError(change)) {
+            return {
+              kind: "member_capacity_exceeded" as const,
+              error: change.error,
+            };
+          }
+        }
+
         return {
           kind: "ok" as const,
           policyRef: policy.hostedPolicyRef,
@@ -163,6 +189,9 @@ const createHostedSetup = createSafeRootHandler(
             "An active subscription is required before purchasing add-on packs",
         }),
       );
+    }
+    if (dbResult.kind === "member_capacity_exceeded") {
+      return Result.err(dbResult.error);
     }
     if (dbResult.kind === "seats_on_non_subscription") {
       return Result.err(

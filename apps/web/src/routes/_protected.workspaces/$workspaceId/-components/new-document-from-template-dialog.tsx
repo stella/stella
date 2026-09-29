@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { ArrowLeftIcon, LayoutTemplateIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -16,6 +15,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowLeftIcon, LayoutTemplateIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 import { TemplateForm } from "@/components/templates/template-form";

@@ -11,7 +11,7 @@ import {
   decisionIdentifiersFromMetadata,
   extractCitations,
   isSelfCitation,
-  normalizeDecisionIdentifier,
+  normalizeDecisionIdentifierIn,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { buildCitationRows } from "@/api/handlers/case-law/ingestion/pipeline/citations";
@@ -29,7 +29,10 @@ import type {
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
-import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import {
+  corpusCarriesDocument,
+  payloadCarriesDocument,
+} from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   corpusMirrorColumns,
@@ -39,6 +42,11 @@ import {
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
+import {
+  TEXT_ENCODING_INCOMPLETE,
+  TEXT_MISDECODED,
+  textEncodingReport,
+} from "@/api/lib/legal-search/parsers/text-encoding";
 import {
   AST_MARKUP_RESIDUE,
   storedDecisionSignal,
@@ -121,6 +129,33 @@ const reportStoredDocumentQuality = ({
       residueAnchorId: "fulltext",
       residueExcerpt: storedResidue.excerpt,
     });
+  }
+
+  // Text read through the wrong character set, by the adapter or upstream.
+  // Checked on every stored text, parsed or not: the parser sees the text
+  // after decoding and cannot tell either.
+  const encoding =
+    preserveStoredDocument || pendingMirrorPayload !== null || !result.fulltext
+      ? undefined
+      : textEncodingReport(result.fulltext, result.language);
+  const subject = {
+    sourceId,
+    caseNumber: result.caseNumber,
+    language: result.language,
+    url: result.sourceUrl ?? result.documentUrl ?? "",
+  };
+  switch (encoding?.type) {
+    case undefined:
+      break;
+    case "misdecoded":
+      logger.error(TEXT_MISDECODED, { ...subject, ...encoding.fields });
+      break;
+    case "incomplete":
+      logger.warn(TEXT_ENCODING_INCOMPLETE, { ...subject, ...encoding.fields });
+      break;
+    default:
+      encoding satisfies never;
+      panic("Unhandled text encoding report");
   }
 };
 
@@ -212,9 +247,7 @@ const planCorpusPayload = ({
           jurisdiction: result.country,
           ...pendingMirrorPayload,
         };
-  const mirrorCarriesDocument = Boolean(
-    corpusPayload.text || hasUsableAst(corpusPayload.ast),
-  );
+  const mirrorCarriesDocument = payloadCarriesDocument(corpusPayload);
 
   // A payload with no document has nothing to put in the corpus: its
   // mirror write stores nothing and settles the row with no pointers.
@@ -383,11 +416,12 @@ export const planDecisionWrite = async ({
     caseNumber: result.caseNumber,
     ecli: result.ecli ?? null,
     identifiers: result.identifiers,
+    jurisdiction: result.country,
   });
   const identifierRows = decisionIdentifiers.map((identifier) => ({
     type: identifier.type,
     value: identifier.value,
-    normalizedValue: normalizeDecisionIdentifier(identifier),
+    normalizedValue: normalizeDecisionIdentifierIn(result.country, identifier),
   }));
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),

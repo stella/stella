@@ -1,14 +1,6 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  FileTextIcon,
-  UploadIcon,
-  WandSparklesIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -16,6 +8,14 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FileTextIcon,
+  UploadIcon,
+  AiActionIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -159,7 +159,7 @@ export const TemplatePrefillPanel = ({
             icon={ChevronRightIcon}
           />
         )}
-        <WandSparklesIcon className="text-muted-foreground size-4 shrink-0" />
+        <AiActionIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="text-sm font-medium">
           {t("templates.prefillTitle")}
         </span>
@@ -175,7 +175,7 @@ export const TemplatePrefillPanel = ({
           {file === null ? (
             <button
               className={cn(
-                "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm transition-colors",
+                "text-muted-foreground hover:text-foreground hover:border-ring flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-3 py-4 text-sm",
                 dragOver && "border-ring text-foreground",
               )}
               onClick={() => {
@@ -251,7 +251,7 @@ export const TemplatePrefillPanel = ({
             size="sm"
             type="button"
           >
-            <WandSparklesIcon />
+            <AiActionIcon />
             {loading ? t("common.loading") : t("templates.prefillRun")}
           </Button>
         </div>

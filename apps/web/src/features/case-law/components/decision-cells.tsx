@@ -21,12 +21,13 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  SEARCH_HIT_DESCENDANT_MARK_CLASS,
+  SEARCH_HIT_MARK,
+  TextMark,
+} from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
-import {
-  SEARCH_MARK_CLASS_NAME,
-  SEARCH_MARK_DESCENDANT_CLASS_NAME,
-} from "@/components/legal-reader/query-marks";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { parseDecisionDate } from "@/features/case-law/citation-format";
 import { CourtName } from "@/features/case-law/components/court-name";
@@ -427,9 +428,9 @@ const HighlightedProse = ({
   <>
     {highlightSegments(text, queryTokens).map((segment) =>
       segment.match ? (
-        <mark className={SEARCH_MARK_CLASS_NAME} key={segment.start}>
+        <TextMark {...SEARCH_HIT_MARK} key={segment.start}>
           {segment.text}
-        </mark>
+        </TextMark>
       ) : (
         <Fragment key={segment.start}>
           <HighlightedText columnId={columnId} text={segment.text} />
@@ -606,7 +607,7 @@ export const HeadnoteProse = ({
           <button
             aria-expanded={showingWhole}
             // The vertical padding extends the hit area without growing the row.
-            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2 transition-colors"
+            className="text-muted-foreground hover:text-foreground -my-2 rounded-sm py-2 underline underline-offset-2"
             onClick={onActivate}
             type="button"
           >
@@ -638,7 +639,7 @@ const HighlightedPassage = ({
       // `wrap-break-word` keeps an unbroken citation inside the cell.
       "wrap-break-word whitespace-normal",
       decisionClampClassName(contentMode),
-      SEARCH_MARK_DESCENDANT_CLASS_NAME,
+      SEARCH_HIT_DESCENDANT_MARK_CLASS,
     )}
     dangerouslySetInnerHTML={{
       // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the case-law decisions search handler

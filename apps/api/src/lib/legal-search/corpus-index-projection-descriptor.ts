@@ -7,6 +7,10 @@ import {
 } from "@/api/lib/case-law/publisher-summary";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
+  corpusIndexGroupContractForJurisdiction,
+  requireCourtPartitionIdentity,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
+import {
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
   corpusIndexManifestDigest,
@@ -16,7 +20,8 @@ import {
   type CorpusIndexPublisherFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
-import { MORPHOLOGY_VERSION } from "@/api/lib/legal-search/morphology/stem";
+import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
 
 type ProjectionInputBase = {
   documentId: string;
@@ -41,6 +46,8 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
   caseNumber: string;
   identifiers: readonly { type: string; value: string }[];
   court: string;
+  /** The directory court id, where the jurisdiction stores one. */
+  courtId: string | null;
   decisionDate: string | null;
   ecli: string | null;
   /**
@@ -134,6 +141,40 @@ const publisherFingerprintFields = (
   }
 };
 
+/**
+ * What a group contract adds to a fingerprint: nothing for a group under its
+ * manifest's contract, so every such fingerprint keeps its bytes. A
+ * court-partitioned group covers its effective contract and the court
+ * identity it writes, so a contract change or a court correction re-projects
+ * the decision.
+ */
+const groupContractFingerprintFields = (
+  manifest: CorpusIndexManifest,
+  input: CaseLawProjectionInput,
+): { groupContract?: Record<string, string> } => {
+  const contract = corpusIndexGroupContractForJurisdiction(
+    manifest,
+    input.jurisdiction,
+  );
+  switch (contract.type) {
+    case "base":
+      return {};
+    case "court_partition_v1": {
+      const { courtId, courtPartition } = requireCourtPartitionIdentity(input);
+      return {
+        groupContract: {
+          effectiveDigest: contract.effectiveDigest,
+          courtId,
+          courtPartition,
+        },
+      };
+    }
+    default:
+      contract satisfies never;
+      return panic(`Unhandled group contract: ${String(contract)}`);
+  }
+};
+
 export const deriveCorpusIndexProjectionDescriptor = (
   manifest: CorpusIndexManifest,
   input: CorpusIndexProjectionInput,
@@ -154,15 +195,18 @@ export const deriveCorpusIndexProjectionDescriptor = (
 
   const indexId = corpusIndexIdFromManifest(manifest, input.jurisdiction);
   // The manifest digest pins the stem *fields*; the algorithms filling them
-  // live outside it, so a new language or a Snowball upgrade would otherwise
-  // leave already-projected documents holding stems the read path no longer
-  // asks for. A generation that writes stem fields folds the stemmer set in
-  // and re-projects when it moves; one that writes none keeps the
-  // fingerprints it already has.
+  // live outside it, so a stemmer change would otherwise leave
+  // already-projected documents holding stems the read path no longer asks
+  // for. A generation that writes stem fields folds in the key of the
+  // document's own language, the one the builder stems it under, so a change
+  // to one language re-projects that language's documents alone; one that
+  // writes none keeps the fingerprints it already has.
   const morphology =
     corpusIndexStemFields(manifest) === null
       ? {}
-      : { morphology: MORPHOLOGY_VERSION };
+      : {
+          morphology: morphologyKey(documentMorphologyLanguage(input.language)),
+        };
   const common = {
     contract: "corpus-index-projection-v1",
     manifestDigest: corpusIndexManifestDigest(manifest),
@@ -202,6 +246,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
             input.decisionDate ?? UNDATED_DECISION_TIMESTAMP,
           ecli: input.ecli,
           ...publisher,
+          ...groupContractFingerprintFields(manifest, input),
         }),
       };
     }

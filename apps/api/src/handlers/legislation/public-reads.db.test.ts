@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
@@ -20,10 +20,7 @@ import {
   readLegislationFacets,
   readLegislationFacetsHandler,
 } from "@/api/handlers/legislation/facets";
-import {
-  readLegislationHandler,
-  readPublicLegislationHandler,
-} from "@/api/handlers/legislation/get";
+import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   LEGISLATION_LIST_CURSOR_KIND,
   listStatutesHandler,
@@ -60,7 +57,7 @@ let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let legislationDb: LegislationReadDb;
 let shelfDb: LegislationReadDb;
 let shelfClient: Awaited<ReturnType<typeof createTestPglite>> | undefined;
-let workspaceDb: LegislationReadDb;
+let ownerDb: LegislationReadDb;
 
 const unpublishedStatutes = ["SVK", "POL", "DEU"].map((country) => ({
   country,
@@ -410,7 +407,7 @@ beforeAll(
       }),
     ]);
 
-    workspaceDb = async (read) =>
+    ownerDb = async (read) =>
       await db.transaction(
         async (tx) =>
           // SAFETY: the PGlite transaction has the statement surface under
@@ -1257,31 +1254,35 @@ describe("public statute versions", () => {
   });
 });
 
+const readStoredColumns = async (id: SafeId<"legislationDocument">) =>
+  await ownerDb(
+    async (tx) =>
+      await tx
+        .select({
+          metadata: legislationDocuments.metadata,
+          fulltext: legislationDocuments.fulltext,
+        })
+        .from(legislationDocuments)
+        .where(eq(legislationDocuments.id, id)),
+  );
+
 describe("public statute read", () => {
   test("keeps the stored publisher metadata off the public response", async () => {
-    const workspaceRead = await readLegislationHandler(
-      civilCodeCurrent,
-      workspaceDb,
-    );
     const publicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
       legislationDb,
     );
 
     // The fixture must actually carry metadata, or the omission proves nothing.
-    expect(workspaceRead).toHaveProperty("metadata", {
-      publisherNote: "not for public display",
-    });
+    expect(await readStoredColumns(civilCodeCurrent)).toMatchObject([
+      { metadata: { publisherNote: "not for public display" } },
+    ]);
     expect(publicRead).not.toHaveProperty("metadata");
     expect(publicRead).toHaveProperty("title", "Civil Code");
     expect(publicRead).toHaveProperty("citationCaseCount", 0);
   });
 
   test("returns full text only as the AST fallback", async () => {
-    const workspaceRead = await readLegislationHandler(
-      civilCodeCurrent,
-      workspaceDb,
-    );
     const structuredPublicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
       legislationDb,
@@ -1291,10 +1292,10 @@ describe("public statute read", () => {
       legislationDb,
     );
 
-    expect(workspaceRead).toHaveProperty(
-      "fulltext",
-      "The duplicate plain-text consolidation.",
-    );
+    // The structured version stores text too, so the null is the fallback.
+    expect(await readStoredColumns(civilCodeCurrent)).toMatchObject([
+      { fulltext: "The duplicate plain-text consolidation." },
+    ]);
     expect(structuredPublicRead).toHaveProperty("fulltext", null);
     expect(plainPublicRead).toHaveProperty(
       "fulltext",
@@ -1791,7 +1792,8 @@ describe("statute country publication", () => {
       expect(
         await readPublicLegislationHandler(id, legislationDb),
       ).toMatchObject({ code: 404 });
-      expect(await readLegislationHandler(id, workspaceDb)).toMatchObject({
+      // The publication filter holds even without the public-law role.
+      expect(await readPublicLegislationHandler(id, ownerDb)).toMatchObject({
         code: 404,
       });
       expect(

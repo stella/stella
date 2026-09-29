@@ -7,24 +7,10 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { invoicesQueryRoot } from "@/lib/resource-query-roots.logic";
 
-type InvoicesFilters = {
-  limit?: number;
-  cursor?: string;
-};
-
-type InvoicesListKey = {
-  limit?: number | undefined;
-  cursor?: string | undefined;
-};
-
 const getInitialInvoicesPageParam = (): string | undefined => undefined;
 
 export const invoicesKeys = {
   all: invoicesQueryRoot,
-  list: (workspaceId: string, key: InvoicesListKey) => [
-    ...invoicesKeys.all(workspaceId),
-    { limit: key.limit, cursor: key.cursor },
-  ],
   infinite: (workspaceId: string, limit: number) => [
     ...invoicesKeys.all(workspaceId),
     "infinite",
@@ -35,25 +21,6 @@ export const invoicesKeys = {
     id,
   ],
 };
-
-export const invoicesOptions = (
-  workspaceId: string,
-  filters: InvoicesFilters = {},
-) =>
-  queryOptions({
-    queryKey: invoicesKeys.list(workspaceId, filters),
-    queryFn: async ({ signal }) => {
-      const response = await api.invoices({ workspaceId }).get({
-        query: {
-          ...(filters.limit !== undefined && { limit: filters.limit }),
-          ...(filters.cursor !== undefined && { cursor: filters.cursor }),
-        },
-        fetch: { signal },
-      });
-
-      return unwrapEden(response);
-    },
-  });
 
 export const invoicesInfiniteOptions = (workspaceId: string, limit: number) =>
   infiniteQueryOptions({

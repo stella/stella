@@ -12,11 +12,11 @@ import type {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import {
-  persistManualOcrRun,
-  type ManualOcrSource,
-  type PersistedDocumentProcessingRun,
+import type {
+  ManualOcrSource,
+  PersistedDocumentProcessingRun,
 } from "@/api/lib/document-processing-request";
+import { persistRequestedManualOcrRun } from "@/api/lib/entity-versions/manual-ocr-request-run";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -55,7 +55,7 @@ type RequestManualOcrProps = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
-  persistRun?: typeof persistManualOcrRun;
+  persistRun: typeof persistRequestedManualOcrRun;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -158,7 +158,7 @@ export const requestManualOcrHandler = async function* ({
   entityId,
   fieldId,
   organizationId,
-  persistRun = persistManualOcrRun,
+  persistRun,
   recordAuditEvent,
   safeDb,
   userId,
@@ -212,6 +212,7 @@ const requestOcr = createSafeHandler(
       entityId: params.entityId,
       fieldId: body.fieldId,
       organizationId: session.activeOrganizationId,
+      persistRun: persistRequestedManualOcrRun,
       recordAuditEvent,
       safeDb,
       userId: user.id,

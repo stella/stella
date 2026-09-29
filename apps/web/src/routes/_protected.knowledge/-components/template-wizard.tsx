@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isBuiltInRegistryFormat } from "@stll/business-registries/default-formats";
@@ -17,6 +16,7 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -162,7 +162,7 @@ const OptionsTagInput = ({
   return (
     // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events -- wrapper extends click target to focus the nested input; the input is natively keyboard-focusable
     <div
-      className="border-input bg-background ring-ring/24 focus-within:border-ring flex min-h-9 w-full flex-wrap gap-1 rounded-lg border p-[calc(--spacing(1)-1px)] text-base shadow-xs/5 transition-shadow outline-none focus-within:ring-[3px] sm:min-h-8 sm:text-sm"
+      className="border-input bg-background ring-ring/24 focus-within:border-ring flex min-h-9 w-full flex-wrap gap-1 rounded-lg border p-[calc(--spacing(1)-1px)] text-base shadow-xs/5 outline-none focus-within:ring-[3px] sm:min-h-8 sm:text-sm"
       onClick={() => inputRef.current?.focus()}
     >
       {options.map((option, i) => (

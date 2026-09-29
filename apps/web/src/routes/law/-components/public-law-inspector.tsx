@@ -1,9 +1,9 @@
 import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
 
-import { PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { PanelRightIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton, InspectorRailTab } from "@stll/ui/inspector";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import type { WorkspaceEndRailChatAction } from "@stll/ui/workspace-shell";

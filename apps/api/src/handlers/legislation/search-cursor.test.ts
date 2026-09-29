@@ -30,6 +30,7 @@ const CASE_LAW_CURSOR = encodeCorpusSearchCursor({
   score: 0.5,
   sort: "relevance",
   windowStart: 0,
+  target: null,
 });
 
 test.each(["SVK", "POL", "DEU", "cze", "cz", "*"])(

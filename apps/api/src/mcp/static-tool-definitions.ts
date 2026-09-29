@@ -19,6 +19,10 @@ import { READER_ANNOTATION_TOOL_SET } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
 import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
+import {
+  scopeProseToSurface,
+  type ToolVocabulary,
+} from "@/api/mcp/tool-mentions";
 import type {
   McpToolDefinition,
   McpToolHandler,
@@ -104,6 +108,85 @@ export const MCP_STATIC_TOOL_NAMES = DEFAULT_MCP_TOOL_DEFINITIONS.map(
 );
 
 /**
+ * Every advertised tool name, the law audience's own `search`/`fetch`
+ * included. Named from the sets directly: `ALL_MCP_TOOL_DEFINITIONS` is
+ * declared below the projections that read this.
+ */
+export const REGISTERED_MCP_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...MCP_STATIC_TOOL_NAMES,
+  ...LAW_COMPAT_TOOL_SET.definitions.map(({ name }) => name),
+]);
+
+/**
+ * One JSON Schema entry with every `description` string beneath it scoped.
+ * Returns the same value when nothing changed, so an untouched schema keeps
+ * its identity.
+ */
+const scopeSchemaEntry = (
+  key: string,
+  value: unknown,
+  vocabulary: ToolVocabulary,
+): unknown => {
+  if (key === "description" && typeof value === "string") {
+    return scopeProseToSurface(value, vocabulary) ?? "";
+  }
+  if (Array.isArray(value)) {
+    const next = value.map((item, index) =>
+      scopeSchemaEntry(String(index), item, vocabulary),
+    );
+    return next.every((item, index) => item === value[index]) ? value : next;
+  }
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [childKey, child] of Object.entries(value)) {
+    const scoped = scopeSchemaEntry(childKey, child, vocabulary);
+    changed ||= scoped !== child;
+    next[childKey] = scoped;
+  }
+  return changed ? next : value;
+};
+
+/**
+ * One audience's projection with every sentence of its tool descriptions
+ * (top-level and input-schema) that names a tool the audience does not list
+ * dropped. Descriptions are shared across audiences and written one step per
+ * sentence, so a step that needs a tool this audience cannot call falls away
+ * on its own rather than each audience keeping a hand-edited copy. The same
+ * rule scopes error hints at the dispatch boundary
+ * (`surface-tool-mentions.ts`), and `surface-tool-mentions.test.ts` holds
+ * every served text to it.
+ */
+const scopeDefinitionsToSurface = (
+  definitions: readonly McpToolDefinition[],
+): McpToolDefinition[] => {
+  const vocabulary: ToolVocabulary = {
+    registered: REGISTERED_MCP_TOOL_NAMES,
+    listed: new Set(definitions.map(({ name }) => name)),
+  };
+  return definitions.map((tool) => {
+    const description =
+      scopeProseToSurface(tool.description, vocabulary) ?? tool.description;
+    let inputSchemaChanged = false;
+    const inputSchema: McpToolDefinition["inputSchema"] = {
+      ...tool.inputSchema,
+    };
+    for (const [key, value] of Object.entries(tool.inputSchema)) {
+      const scoped = scopeSchemaEntry(key, value, vocabulary);
+      if (scoped !== value) {
+        inputSchemaChanged = true;
+        inputSchema[key] = scoped;
+      }
+    }
+    return description === tool.description && !inputSchemaChanged
+      ? tool
+      : { ...tool, description, inputSchema };
+  });
+};
+
+/**
  * Default -> anonymized scope remap. A tool available in anonymized mode keeps
  * its schema and (usually) description but is advertised under the paired
  * `stella:*_anonymized` scope so anonymized-mode tokens cannot reach the
@@ -155,11 +238,12 @@ const toAnonymizedProjection = (
   };
 };
 
-export const ANONYMIZED_MCP_TOOL_DEFINITIONS =
+export const ANONYMIZED_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface(
   DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((tool) => {
     const projected = toAnonymizedProjection(tool);
     return projected === null ? [] : [projected];
-  }) satisfies readonly McpToolDefinition[];
+  }),
+) satisfies readonly McpToolDefinition[];
 
 const invokeCapabilityDefinition = CAPABILITY_TOOL_SET.definitions.find(
   ({ name }) => name === "invoke_capability",
@@ -171,7 +255,7 @@ const DOCUMENT_MCP_TOOL_DEFINITION_SET: ReadonlySet<McpToolDefinition> =
   new Set(DOCUMENT_TOOL_SET.definitions);
 
 /** Projection from the canonical registry; no host-specific tool copies. */
-export const DOCUMENTS_MCP_TOOL_DEFINITIONS =
+export const DOCUMENTS_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface(
   DEFAULT_MCP_TOOL_DEFINITIONS.filter(
     (tool) =>
       DOCUMENT_MCP_TOOL_DEFINITION_SET.has(tool) ||
@@ -179,7 +263,8 @@ export const DOCUMENTS_MCP_TOOL_DEFINITIONS =
       // through this existing capability seam. tools.ts applies a mode-specific
       // capability allowlist, so guessed non-upload capability IDs fail closed.
       tool === invokeCapabilityDefinition,
-  ) satisfies readonly McpToolDefinition[];
+  ),
+) satisfies readonly McpToolDefinition[];
 
 /**
  * The tool sets only the law audience serves.
@@ -264,14 +349,14 @@ const LAW_MCP_TOOL_NAMES: ReadonlySet<string> = new Set(
  * tools projected from the canonical registry in registry order. No scope
  * remap: every tool here already reads under `stella:search`/`stella:read`.
  */
-export const LAW_MCP_TOOL_DEFINITIONS = [
+export const LAW_MCP_TOOL_DEFINITIONS = scopeDefinitionsToSurface([
   ...LAW_ONLY_MCP_TOOL_DEFINITIONS,
   ...DEFAULT_MCP_TOOL_DEFINITIONS.filter(
     (tool) =>
       LAW_MCP_TOOL_NAMES.has(tool.name) &&
       !LAW_ONLY_MCP_TOOL_NAMES.has(tool.name),
   ),
-] satisfies readonly McpToolDefinition[];
+]) satisfies readonly McpToolDefinition[];
 
 /**
  * The advertised tool list per audience, in wire order. Total over `McpMode`:

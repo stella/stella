@@ -6,6 +6,7 @@ import {
 } from "@tanstack/ai";
 import type { StreamChunk, TokenUsage } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
@@ -28,16 +29,22 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
-import { WIRE_TOOL_NAME } from "@/api/tests/helpers/provider-wire-cassette";
+import {
+  providerWireCassetteSchema,
+  WIRE_TOOL_NAME,
+} from "@/api/tests/helpers/provider-wire-cassette";
 import type {
   ProviderWireCassette,
   ProviderWireProvider,
+  ProviderWireRequestShape,
   ProviderWireScenario,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import { encodeAwsEventStreamMessage } from "@/api/tests/helpers/provider-wire-replay";
 import type {
+  Chunking,
   ProviderWireReplay,
   ProviderWireReplayFindings,
+  ReplayedRequest,
 } from "@/api/tests/helpers/provider-wire-replay";
 
 // One contract for every provider adapter. A run sends the fixed synthetic
@@ -48,10 +55,11 @@ import type {
 // its replay differ only in who answers.
 
 /** The declared input of the wire tool: `note` is optional, so a strict
- *  provider widens it to `null` on the wire. */
+ *  provider widens it to `null` on the wire, and a route that fills every
+ *  field sends ""; a note is never empty, so "" is not one. */
 export const WIRE_TOOL_INPUT = v.object({
   name: v.string(),
-  note: v.optional(v.string()),
+  note: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
 export const wireTool = () =>
@@ -61,8 +69,8 @@ export const wireTool = () =>
     inputSchema: toTanStackToolSchema(WIRE_TOOL_INPUT),
   });
 
-const TEXT_PROMPT =
-  "Reply with exactly this sentence and nothing else: The cassette plays.";
+export const EXPECTED_TEXT = "The cassette plays.";
+const TEXT_PROMPT = `Reply with exactly this sentence and nothing else: ${EXPECTED_TEXT}`;
 
 /** The one user message each scenario sends. Recordings capture exactly
  *  these prompts and nothing else. */
@@ -79,20 +87,44 @@ export const SCENARIO_PROMPTS = {
   "server-error": TEXT_PROMPT,
   "malformed-chunk": TEXT_PROMPT,
   "early-eof": TEXT_PROMPT,
+  "unusable-stop": TEXT_PROMPT,
+  "unlisted-stop": TEXT_PROMPT,
 } as const satisfies Record<ProviderWireScenario, string>;
+
+/** A provider's own wording for a scenario, where the shared prompt records
+ *  something else. */
+const PROVIDER_SCENARIO_PROMPTS: Partial<
+  Record<ProviderWireProvider, Partial<Record<ProviderWireScenario, string>>>
+> = {
+  // Bedrock's Claude fills the optional note unless told to leave it out.
+  bedrock: {
+    "tool-call": `Call the ${WIRE_TOOL_NAME} tool once with only name "draft", leaving note out. Do not write any text.`,
+    "parallel-tool-calls": `Call the ${WIRE_TOOL_NAME} tool twice in parallel, in one response: once with name "draft" and once with name "memo", neither with a note. Do not write any text.`,
+  },
+};
+
+/** The one user message a scenario sends to `provider`. */
+export const scenarioPrompt = (
+  provider: ProviderWireProvider,
+  scenario: ProviderWireScenario,
+): string =>
+  PROVIDER_SCENARIO_PROMPTS[provider]?.[scenario] ?? SCENARIO_PROMPTS[scenario];
 
 /** The output ceiling the length scenario asks for. */
 const LENGTH_SCENARIO_MAX_TOKENS = 16;
 /** A model id no provider serves, for the rejected request. */
 export const UNKNOWN_MODEL_ID = "stella-cassette-no-such-model";
 
-/** The chat model a provider's corpus is recorded with. */
+/** The chat model a provider's corpus is recorded with by default. */
 export const wireChatModel = (provider: ProviderWireProvider): string =>
   BYOK_DEFAULT_MODELS[provider].chat;
 
-/** A second model of the provider's, for side calls such as thread titles. */
-export const wireSideModel = (provider: ProviderWireProvider): string => {
-  const chat = wireChatModel(provider);
+/** A model of the provider's other than `chat`, for side calls such as
+ *  thread titles. */
+export const wireSideModel = (
+  provider: ProviderWireProvider,
+  chat: string,
+): string => {
   const options: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return options.find((model) => model !== chat) ?? chat;
 };
@@ -175,7 +207,9 @@ const prepareWireRequest = ({
   });
   return {
     adapter,
-    messages: [{ role: "user" as const, content: SCENARIO_PROMPTS[scenario] }],
+    messages: [
+      { role: "user" as const, content: scenarioPrompt(provider, scenario) },
+    ],
     modelOptions,
     tools,
   };
@@ -400,7 +434,7 @@ const toolCallsOf = (chunks: readonly StreamChunk[]): ToolCallSummary[] => {
 
 const usageProblems = (usage: TokenUsage | undefined): string[] => {
   if (usage === undefined) {
-    return ["the finished run reports no usage"];
+    return ["the run reports no usage"];
   }
   const fields = {
     completionTokens: usage.completionTokens,
@@ -415,6 +449,34 @@ const usageProblems = (usage: TokenUsage | undefined): string[] => {
     usage.totalTokens < usage.promptTokens + usage.completionTokens
   ) {
     problems.push("usage.totalTokens is below prompt + completion");
+  }
+  return problems;
+};
+
+/**
+ * A provider that reported usage before the run failed billed it: the run
+ * error carries exactly that, and no usage the wire never reported.
+ */
+const runErrorUsageProblems = (
+  expected: ProviderWireCassette["expect"]["usage"],
+  failed: RunError,
+): unknown[] => {
+  if (Array.isArray(failed.usage)) {
+    return ["the run error reports usage in the spec array form"];
+  }
+  if (expected === undefined) {
+    return failed.usage === undefined
+      ? []
+      : [{ expected: null, got: failed.usage }];
+  }
+  const problems: unknown[] = usageProblems(failed.usage);
+  if (
+    failed.usage !== undefined &&
+    (failed.usage.promptTokens !== expected.promptTokens ||
+      failed.usage.completionTokens !== expected.completionTokens ||
+      failed.usage.totalTokens !== expected.totalTokens)
+  ) {
+    problems.push({ expected, got: failed.usage });
   }
   return problems;
 };
@@ -538,7 +600,12 @@ export const findWireContractViolations = ({
       }
     }
     const streamedText = textOf(chunks);
-    const expectsText = (expected.toolCalls ?? []).length === 0;
+    // A reply cut off at the output ceiling may have spent the whole budget
+    // before writing any text (a reasoning model); every other answer that
+    // calls no tool has text.
+    const expectsText =
+      (expected.toolCalls ?? []).length === 0 &&
+      expected.finishReason !== "length";
     if (expected.text !== undefined && streamedText !== expected.text) {
       text.push({ expected: expected.text, got: streamedText });
     }
@@ -593,6 +660,7 @@ export const findWireContractViolations = ({
     if (kind !== expected.errorKind) {
       errors.push({ expected: expected.errorKind, got: kind });
     }
+    usage.push(...runErrorUsageProblems(expected.usage, failed));
   }
 
   return [
@@ -648,22 +716,136 @@ export const findWireCancelViolations = ({
   ];
 };
 
+// --- The request shape ------------------------------------------------------
+
+/** Request headers that change what a provider does with a request. The rest
+ *  (credentials, SDK versions, retry counters, invocation ids) stay out of a
+ *  request's shape. */
+const PINNED_REQUEST_HEADERS = [
+  "accept",
+  "anthropic-beta",
+  "anthropic-version",
+  "content-type",
+] as const;
+
+const PROMPT_PLACEHOLDER = "[prompt]";
+
+const withPromptReplaced = (value: unknown, prompt: string): unknown => {
+  if (value === prompt) {
+    return PROMPT_PLACEHOLDER;
+  }
+  if (Array.isArray(value)) {
+    return value.map((child) => withPromptReplaced(child, prompt));
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, child]) => [
+        key,
+        withPromptReplaced(child, prompt),
+      ]),
+    );
+  }
+  return value;
+};
+
+/** The shape of one request that sent `prompt`. */
+export const wireRequestShape = ({
+  body,
+  headers,
+  prompt,
+}: {
+  body: string;
+  headers: Headers;
+  prompt: string;
+}): ProviderWireRequestShape => {
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  return {
+    headers: Object.fromEntries(
+      PINNED_REQUEST_HEADERS.flatMap((name) => {
+        const value = headers.get(name);
+        return value === null ? [] : [[name, value]];
+      }),
+    ),
+    body: Result.isOk(parsed)
+      ? withPromptReplaced(parsed.value, prompt)
+      : body.replaceAll(prompt, () => PROMPT_PLACEHOLDER),
+  };
+};
+
+/** The prompt a cassette's requests send. */
+export const cassettePrompt = (cassette: ProviderWireCassette): string =>
+  cassette.prompt ?? scenarioPrompt(cassette.provider, cassette.scenario);
+
+/** A shape as it is compared and shown: headers by name, the body in the
+ *  order it was written, since a strict provider generates a tool's input
+ *  in its schema's property order. */
+const requestShapeText = (shape: ProviderWireRequestShape): string =>
+  JSON.stringify(
+    {
+      headers: Object.fromEntries(
+        // Header names are ASCII and unique.
+        Object.entries(shape.headers).toSorted(([left], [right]) =>
+          left < right ? -1 : 1,
+        ),
+      ),
+      body: shape.body,
+    },
+    null,
+    2,
+  );
+
+export type RequestShapeDrift = {
+  exchange: number;
+  expected: string;
+  got: string;
+};
+
+/** Every answered request whose shape is not the one its exchange pins. A
+ *  refused or side request is the transport oracle's finding. */
+export const findRequestShapeDrift = ({
+  cassette,
+  sent,
+}: {
+  cassette: ProviderWireCassette;
+  sent: readonly ReplayedRequest[];
+}): RequestShapeDrift[] => {
+  const prompt = cassettePrompt(cassette);
+  return sent.flatMap((request) => {
+    if (typeof request.exchange !== "number") {
+      return [];
+    }
+    const exchange =
+      cassette.exchanges[request.exchange] ??
+      panic(`No exchange ${String(request.exchange)} answered the request`);
+    const pinned = exchange.request.shape;
+    const expected =
+      pinned === undefined ? "(no shape pinned)" : requestShapeText(pinned);
+    const got = requestShapeText(wireRequestShape({ ...request, prompt }));
+    return got === expected
+      ? []
+      : [{ exchange: request.exchange, expected, got }];
+  });
+};
+
 /** Serves `cassette` and runs its scenario against its provider's adapter. */
 export const replayWireScenario = async ({
   cancelAfterFirstDelta,
   cassette,
+  chunking,
   replay,
 }: {
   cancelAfterFirstDelta?: boolean | undefined;
   cassette: ProviderWireCassette;
+  /** Where the bodies are cut into reads; the replay's default otherwise. */
+  chunking?: Chunking | undefined;
   replay: ProviderWireReplay;
 }) => {
-  replay.serve(
-    cassette,
-    cancelAfterFirstDelta === true
+  replay.serve(cassette, {
+    chunking,
+    ...(cancelAfterFirstDelta === true
       ? { holdAfterBytes: holdPoint(cassette) }
-      : {},
-  );
+      : {}),
+  });
   const request = {
     apiKey: "cassette-replay-no-credentials",
     model: cassette.model,
@@ -674,8 +856,14 @@ export const replayWireScenario = async ({
     cancelAfterFirstDelta === true
       ? await runCancelledWireScenario(request)
       : await runWireScenario(request);
-  const requests = replay.requests().length;
-  return { findings: replay.takeFindings(), requests, run };
+  const sent = [...replay.requests()];
+  return {
+    findings: replay.takeFindings(),
+    requests: sent.length,
+    run,
+    sent,
+    transcripts: replay.takeRequests(),
+  };
 };
 
 /** Where a text cassette goes quiet for the cancel run: at the end of its
@@ -706,4 +894,102 @@ const holdPoint = (cassette: ProviderWireCassette): number => {
       ? text.length
       : marker + separator.index + separator[0].length;
   return new TextEncoder().encode(text.slice(0, end)).length;
+};
+
+// --- Reads split anywhere ---------------------------------------------------
+
+/**
+ * Words the split replay spells in multi-byte UTF-8 (two, three and four
+ * bytes a character), in answer text and in tool arguments, so a one-byte
+ * read lands inside each kind of character. Every text answer in the corpus
+ * starts with "The"; the others reach the words a provider did not split
+ * into separate deltas.
+ */
+const MULTIBYTE_SPELLINGS = [
+  ["The", "Thé ✓ 🎞"],
+  ["cassette", "kazetě"],
+  ["draft", "návrh 📄"],
+] as const;
+
+const spelledMultibyte = (text: string): string => {
+  let spelled = text;
+  for (const [word, multibyte] of MULTIBYTE_SPELLINGS) {
+    spelled = spelled.replaceAll(word, () => multibyte);
+  }
+  return spelled;
+};
+
+/** `cassette` with those words spelled in multi-byte characters wherever
+ *  its bodies carry them. */
+export const withMultibyteText = (
+  cassette: ProviderWireCassette,
+): ProviderWireCassette =>
+  v.parse(
+    providerWireCassetteSchema,
+    JSON.parse(spelledMultibyte(JSON.stringify(cassette))),
+  );
+
+/** Event fields that carry an id an adapter generates per run. */
+const isGeneratedIdField = (key: string): boolean =>
+  key.endsWith("Id") || key === "stepName";
+
+/** `run` as the split replay compares it: no timestamps, and each generated
+ *  id replaced by its order of first appearance. */
+const comparableRun = (run: WireRun) => {
+  const ids = new Map<string, string>();
+  const events = run.chunks.map((chunk): string =>
+    JSON.stringify(chunk, (key, value: unknown) => {
+      if (key === "timestamp") {
+        return undefined;
+      }
+      if (isGeneratedIdField(key) && typeof value === "string") {
+        const known = ids.get(value) ?? `id-${String(ids.size + 1)}`;
+        ids.set(value, known);
+        return known;
+      }
+      return value;
+    }),
+  );
+  return {
+    events,
+    ending: {
+      overdue: run.overdue === true,
+      thrown: run.thrown === undefined ? null : Bun.inspect(run.thrown),
+    },
+  };
+};
+
+/**
+ * Every way `split` (the run over bodies cut into reads by `chunking`)
+ * differs from `whole` (the run over each body in one read): the first event
+ * that differs, and how the run ended.
+ */
+export const findWireSplitViolations = ({
+  chunking,
+  split,
+  whole,
+}: {
+  chunking: Chunking;
+  split: WireRun;
+  whole: WireRun;
+}): OracleViolation[] => {
+  const expected = comparableRun(whole);
+  const got = comparableRun(split);
+  const findings: unknown[] = [];
+  const differs = Array.from(
+    { length: Math.max(expected.events.length, got.events.length) },
+    (_, index) => index,
+  ).find((index) => expected.events[index] !== got.events[index]);
+  if (differs !== undefined) {
+    findings.push({
+      chunking,
+      event: differs,
+      expected: expected.events[differs] ?? null,
+      got: got.events[differs] ?? null,
+    });
+  }
+  if (JSON.stringify(expected.ending) !== JSON.stringify(got.ending)) {
+    findings.push({ chunking, expected: expected.ending, got: got.ending });
+  }
+  return violationsOf(CHAT_ORACLE.providerWireSplit, findings);
 };

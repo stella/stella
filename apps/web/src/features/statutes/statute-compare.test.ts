@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import {
   actCompareSide,
@@ -485,5 +487,474 @@ describe("resolveCompareVersions", () => {
         versions,
       }).type,
     ).toBe("same");
+  });
+});
+
+/** The shape of a row: one-sided, or paired and changed or not. */
+const rowShape = (row: StatuteCompareRow) => {
+  if (row.before === null) {
+    return "inserted";
+  }
+  if (row.after === null) {
+    return "deleted";
+  }
+  return row.status;
+};
+
+/** A generated item's label and wording, split at its first space. */
+const labelled = (side: StatuteCompareSide | null) => {
+  const whole = textOf(side) ?? "";
+  const space = whole.indexOf(" ");
+
+  return { label: whole.slice(0, space), body: whole.slice(space) };
+};
+
+const markedText = (
+  side: StatuteCompareSide | null,
+  type: "del" | "ins",
+): string =>
+  (side?.segments ?? [])
+    .filter((segment) => segment.type === type)
+    .map((segment) => segment.text)
+    .join("")
+    .trim();
+
+const wordsOf = (value: string): string[] =>
+  value.match(/[\p{L}\p{N}]+/gu) ?? [];
+
+/**
+ * The words a side marks, in order. Where the whitespace and punctuation
+ * between a marked sentence and its neighbour fall is the word diff's choice;
+ * which words it marks is the contract.
+ */
+const markedWords = (
+  side: StatuteCompareSide | null,
+  type: "del" | "ins",
+): string[] =>
+  (side?.segments ?? [])
+    .filter((segment) => segment.type === type)
+    .flatMap((segment) => wordsOf(segment.text));
+
+// Each item speaks its own vocabulary, so no two items read alike.
+const itemBody = (item: number): string =>
+  `stanoví postup ${Array.from({ length: 5 }, (_, word) => `s${item}w${word}`).join(" ")},`;
+
+const LETTERS = "abcdefghijklmnopqrstuvwxyz";
+
+const letter = (index: number): string =>
+  index < LETTERS.length
+    ? (LETTERS.at(index) ?? "")
+    : `${LETTERS.at(Math.floor(index / LETTERS.length) - 1) ?? ""}${LETTERS.at(index % LETTERS.length) ?? ""}`;
+
+/** A list lettered in order: `a) …`, `b) …`. */
+const letteredList = (items: readonly number[]): Block[] =>
+  items.map((item, index) => text(`${letter(index)}) ${itemBody(item)}`));
+
+const listInsertion = fc.integer({ min: 1, max: 12 }).chain((count) =>
+  fc.record({
+    count: fc.constant(count),
+    positions: fc.array(fc.nat({ max: count + 4 }), {
+      minLength: 1,
+      maxLength: 4,
+    }),
+  }),
+);
+
+type ListRevision = { older: Block[]; newer: Block[]; inserted: number };
+
+const insertItems = ({
+  count,
+  positions,
+}: {
+  count: number;
+  positions: readonly number[];
+}): ListRevision => {
+  const original = Array.from({ length: count }, (_, item) => item);
+  const revised = [...original];
+  for (const [ordinal, position] of positions.entries()) {
+    revised.splice(position % (revised.length + 1), 0, count + ordinal);
+  }
+  return {
+    older: [heading("§ 1"), ...letteredList(original)],
+    newer: [heading("§ 1"), ...letteredList(revised)],
+    inserted: positions.length,
+  };
+};
+
+// Sentences share no word, so the word diff has one way to mark the change.
+const sentences = fc.uniqueArray(
+  fc
+    .integer({ min: 0, max: 99 })
+    .map(
+      (item) =>
+        `${Array.from({ length: 6 }, (_, word) => `v${item}w${word}`).join(" ")}.`,
+    ),
+  { minLength: 2, maxLength: 5 },
+);
+
+/** Wording statutes repeat: repealed or reserved paragraphs, shared clauses. */
+const repeatedBody = fc.constantFrom(
+  "zrušeno",
+  "Tento odstavec se nepoužije.",
+  itemBody(900),
+);
+
+/**
+ * Numbered paragraphs, at least one body said twice, and the paragraphs a
+ * consolidation drops without renumbering the rest.
+ */
+const numberedWithDrops = fc
+  .tuple(
+    repeatedBody,
+    fc.array(fc.oneof(repeatedBody, fc.nat({ max: 99 }).map(itemBody)), {
+      minLength: 0,
+      maxLength: 10,
+    }),
+    fc.nat(),
+  )
+  .chain(([twice, rest, at]) => {
+    const bodies = [...rest];
+    bodies.splice(at % (bodies.length + 1), 0, twice, twice);
+    return fc.record({
+      bodies: fc.constant(bodies),
+      dropped: fc.uniqueArray(fc.nat({ max: bodies.length - 1 }), {
+        minLength: 1,
+        maxLength: bodies.length - 1,
+      }),
+    });
+  });
+
+describe("aligning a renumbered or extended subdivision", () => {
+  test("new letters anywhere in a list read as inserted, the rest as the same wording relabelled", () => {
+    fc.assert(
+      fc.property(listInsertion, (edit) => {
+        const { inserted, newer, older } = insertItems(edit);
+        const rows = rowsOf(older, newer);
+        const shapes = rows.map(rowShape);
+
+        expect(shapes.filter((shape) => shape === "inserted")).toHaveLength(
+          inserted,
+        );
+        expect(shapes.filter((shape) => shape === "deleted")).toHaveLength(0);
+        const paired = rows.filter(
+          (row) => row.before !== null && row.after !== null,
+        );
+        // The heading and every original letter.
+        expect(paired).toHaveLength(edit.count + 1);
+        for (const row of paired) {
+          expect(labelled(row.after).body).toBe(labelled(row.before).body);
+          // Only the label may be marked: the wording reads as it was.
+          expect(markedWords(row.before, "del")).toEqual(
+            row.status === "changed" ? wordsOf(labelled(row.before).label) : [],
+          );
+        }
+      }),
+      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+    );
+  });
+
+  test("a sentence added to or dropped from a paragraph marks exactly that sentence", () => {
+    fc.assert(
+      fc.property(sentences, fc.nat(), (wording, pick) => {
+        const at = pick % wording.length;
+        const shorter = wording.filter((_, index) => index !== at);
+        const paragraph = (parts: readonly string[]) =>
+          text(`(8) ${parts.join(" ")}`);
+        const surrounding = text(`(7) ${itemBody(500)}`);
+        const added = rowsOf(
+          [surrounding, paragraph(shorter)],
+          [surrounding, paragraph(wording)],
+        );
+        const dropped = rowsOf(
+          [surrounding, paragraph(wording)],
+          [surrounding, paragraph(shorter)],
+        );
+
+        for (const [rows, side, type] of [
+          [added, "after", "ins"],
+          [dropped, "before", "del"],
+        ] as const) {
+          const changed = rows.filter((row) => row.status === "changed");
+          expect(changed.map(rowShape)).toEqual(["changed"]);
+          expect(markedWords(changed[0]?.[side] ?? null, type)).toEqual(
+            wordsOf(wording.slice(at, at + 1).join("")),
+          );
+        }
+      }),
+      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+    );
+  });
+
+  test("a repealed paragraph dropped beside another repealed one is the one deleted", () => {
+    const rows = rowsOf(
+      [text("(1) zrušeno"), text("(2) zrušeno")],
+      [text("(2) zrušeno")],
+    );
+
+    expect(
+      rows.map((row) => [rowShape(row), textOf(row.before), textOf(row.after)]),
+    ).toEqual([
+      ["deleted", "(1) zrušeno", null],
+      ["unchanged", "(2) zrušeno", "(2) zrušeno"],
+    ]);
+  });
+
+  test("a repealed paragraph dropped beside another repealed one is the one deleted under a renumbered heading", () => {
+    const rows = rowsOf(
+      [heading("§ 5"), text("(1) zrušeno"), text("(2) zrušeno")],
+      [heading("§ 6"), text("(2) zrušeno")],
+    );
+
+    expect(
+      rows
+        .filter((row) => row.type === "text")
+        .map((row) => [rowShape(row), textOf(row.before), textOf(row.after)]),
+    ).toEqual([
+      ["deleted", "(1) zrušeno", null],
+      ["unchanged", "(2) zrušeno", "(2) zrušeno"],
+    ]);
+  });
+
+  test("wording another provision repeats does not stop a relabelled letter pairing with its old self", () => {
+    const [first, second, third] = [itemBody(0), itemBody(1), itemBody(2)];
+    const rows = rowsOf(
+      [
+        heading("§ 1"),
+        text(`a) ${first}`),
+        text(`b) ${second}`),
+        heading("§ 2"),
+        text(`a) ${first}`),
+      ],
+      [
+        heading("§ 1"),
+        text(`a) ${third}`),
+        text(`b) ${first}`),
+        text(`c) ${second}`),
+        heading("§ 2"),
+        text(`a) ${first}`),
+      ],
+    );
+
+    expect(
+      rows.map((row) => [
+        rowShape(row),
+        textOf(row.before),
+        textOf(row.after),
+        markedWords(row.before, "del"),
+        markedWords(row.after, "ins"),
+      ]),
+    ).toEqual([
+      ["unchanged", "§ 1", "§ 1", [], []],
+      ["inserted", null, `a) ${third}`, [], wordsOf(`a) ${third}`)],
+      ["changed", `a) ${first}`, `b) ${first}`, ["a"], ["b"]],
+      ["changed", `b) ${second}`, `c) ${second}`, ["b"], ["c"]],
+      ["unchanged", "§ 2", "§ 2", [], []],
+      ["unchanged", `a) ${first}`, `a) ${first}`, [], []],
+    ]);
+  });
+
+  test("unchanged neighbouring provisions, even ones sharing its wording, never change how an amended provision pairs", () => {
+    const AMENDED = "§ 1";
+    const amendedRows = (older: Block[], newer: Block[]) =>
+      groupCompareRows(rowsOf(older, newer))
+        .find(
+          (group) =>
+            group.rows[0]?.type === "heading" &&
+            textOf(group.rows[0].after ?? group.rows[0].before) === AMENDED,
+        )
+        ?.rows.map((row) => [
+          rowShape(row),
+          textOf(row.before),
+          textOf(row.after),
+          markedText(row.before, "del"),
+          markedText(row.after, "ins"),
+        ]);
+    const amendment = fc.oneof(
+      listInsertion.map(insertItems),
+      numberedWithDrops.map(({ bodies, dropped }) => {
+        const all = bodies.map((body, index) =>
+          text(`(${String(index + 1)}) ${body}`),
+        );
+        return {
+          older: [heading(AMENDED), ...all],
+          newer: [
+            heading(AMENDED),
+            ...all.filter((_, index) => !dropped.includes(index)),
+          ],
+        };
+      }),
+    );
+    // Small item numbers, so neighbours say what the amended provision says.
+    const neighbourBodies = fc.array(
+      fc.oneof(repeatedBody, fc.nat({ max: 16 }).map(itemBody)),
+      { minLength: 1, maxLength: 4 },
+    );
+    const neighbours = fc.array(neighbourBodies, { maxLength: 3 });
+    const provisions = (lists: readonly string[][], first: number): Block[] =>
+      lists.flatMap((bodies, index) => [
+        heading(`§ ${String(first + index)}`),
+        ...bodies.map((body, item) => text(`${letter(item)}) ${body}`)),
+      ]);
+
+    fc.assert(
+      fc.property(
+        amendment,
+        neighbours,
+        neighbours,
+        ({ newer, older }, above, below) => {
+          const preceding = provisions(above, 100);
+          const following = provisions(below, 200);
+          const alone = amendedRows(older, newer);
+
+          expect(alone).toBeDefined();
+          expect(
+            amendedRows(
+              [...preceding, ...older, ...following],
+              [...preceding, ...newer, ...following],
+            ),
+          ).toEqual(alone);
+        },
+      ),
+      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+    );
+  });
+
+  test("paragraphs dropped or added among repeated wording keep every other paragraph paired with its own label", () => {
+    fc.assert(
+      fc.property(numberedWithDrops, ({ bodies, dropped }) => {
+        const all = bodies.map((body, index) =>
+          text(`(${String(index + 1)}) ${body}`),
+        );
+        const kept = all.filter((_, index) => !dropped.includes(index));
+        // A body said more than once is what the label must tell apart.
+        expect(new Set(bodies).size).toBeLessThan(bodies.length);
+
+        for (const [older, newer, gone] of [
+          [all, kept, "deleted"],
+          [kept, all, "inserted"],
+        ] as const) {
+          const rows = rowsOf(older, newer);
+          const shapes = rows.map(rowShape);
+
+          expect(shapes.filter((shape) => shape === gone)).toHaveLength(
+            dropped.length,
+          );
+          expect(
+            rows
+              .filter((row) => row.before !== null && row.after !== null)
+              .map((row) => [rowShape(row), textOf(row.before)]),
+          ).toEqual(
+            kept.map((block) => [
+              "unchanged",
+              block.type === "paragraph" ? block.plainText : null,
+            ]),
+          );
+        }
+      }),
+      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+    );
+  });
+
+  test("identical consolidations have no changed row", () => {
+    fc.assert(
+      fc.property(listInsertion, (edit) => {
+        const { newer } = insertItems(edit);
+        expect(
+          rowsOf(newer, newer).filter((row) => row.status === "changed"),
+        ).toEqual([]);
+      }),
+      propertyConfig({ seed: propertySeed(), numRuns: 100 }),
+    );
+  });
+
+  test("swapping the consolidations swaps insertions for deletions", () => {
+    fc.assert(
+      fc.property(listInsertion, (edit) => {
+        const { newer, older } = insertItems(edit);
+        const forward = rowsOf(older, newer);
+        const backward = rowsOf(newer, older);
+
+        expect(
+          backward.map((row) => ({
+            before: textOf(row.after),
+            after: textOf(row.before),
+          })),
+        ).toEqual(
+          forward.map((row) => ({
+            before: textOf(row.before),
+            after: textOf(row.after),
+          })),
+        );
+        expect(
+          backward.map(rowShape).filter((s) => s === "deleted"),
+        ).toHaveLength(
+          forward.map(rowShape).filter((s) => s === "inserted").length,
+        );
+      }),
+      propertyConfig({ seed: propertySeed(), numRuns: 200 }),
+    );
+  });
+
+  // 120/2001 Sb., § 110 odst. 7 and 8, consolidations of 1 January and
+  // 1 October 2026: a new letter l) renumbers l) to n), and paragraph (8)
+  // gains a sentence.
+  test("reads the amendment of § 110 of the Enforcement Code as one insertion, three relabellings and one extension", () => {
+    const consent =
+      "(8) K platnosti zkušebního, kárného a kancelářského řádu, jakož i k postupu při vyhlašování a organizaci výběrového řízení podle § 10 je zapotřebí souhlasu ministerstva.";
+    const appended =
+      "O přijetí návrhu stavovského předpisu podle odstavce 7 písm. l) sněm rozhodne poté, co ministerstvo s návrhem vyslovilo předběžný souhlas.";
+    const older = [
+      text(
+        "k) stanoví postup při vyhlašování a organizaci výběrového řízení podle § 10,",
+      ),
+      text(
+        "l) stanoví postup při vedení, správě a provozu centrální evidence exekucí,",
+      ),
+      text(
+        "m) stanoví podrobnosti k plnění povinnosti pořizovat a uchovávat záznamy podle § 53,",
+      ),
+      text("n) usnáší se o dalších věcech, které si vyhradí."),
+      text(consent),
+    ];
+    const newer = [
+      text(
+        "k) stanoví postup při vyhlašování a organizaci výběrového řízení podle § 10,",
+      ),
+      text("l) stanoví postup při vedení, správě a provozu evidence srážek,"),
+      text(
+        "m) stanoví postup při vedení, správě a provozu centrální evidence exekucí,",
+      ),
+      text(
+        "n) stanoví podrobnosti k plnění povinnosti pořizovat a uchovávat záznamy podle § 53,",
+      ),
+      text("o) usnáší se o dalších věcech, které si vyhradí."),
+      text(`${consent} ${appended}`),
+    ];
+    const rows = rowsOf(older, newer);
+
+    expect(rows.map(rowShape)).toEqual([
+      "unchanged",
+      "inserted",
+      "changed",
+      "changed",
+      "changed",
+      "changed",
+    ]);
+    expect(
+      rows
+        .slice(2, 5)
+        .map((row) => [
+          markedWords(row.before, "del"),
+          markedWords(row.after, "ins"),
+        ]),
+    ).toEqual([
+      [["l"], ["m"]],
+      [["m"], ["n"]],
+      [["n"], ["o"]],
+    ]);
+    expect(markedWords(rows[5]?.before ?? null, "del")).toEqual([]);
+    expect(markedWords(rows[5]?.after ?? null, "ins")).toEqual(
+      wordsOf(appended),
+    );
   });
 });

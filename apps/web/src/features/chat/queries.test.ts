@@ -1110,11 +1110,13 @@ describe("chat runtime", () => {
         }),
     );
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
+      reloadThread: () => {},
     });
 
     const stream = sendThreadChatMessage(
@@ -1176,6 +1178,7 @@ describe("chat runtime", () => {
       ]),
     );
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -1183,6 +1186,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
     const observedSources: string[] = [];
     const unsubscribe = runtime.subscribe(() => {
@@ -1245,6 +1249,7 @@ describe("chat runtime", () => {
       source: "@doc kind=other locale=en page=A4\n@title Power of attorney",
     };
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [
         {
@@ -1267,6 +1272,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
 
     await runtime.addToolResult({
@@ -1350,11 +1356,13 @@ describe("chat runtime", () => {
         ),
     );
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [pendingMessage],
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
+      reloadThread: () => {},
     });
 
     const result = await Result.tryPromise(async () => {
@@ -1400,11 +1408,13 @@ describe("chat runtime", () => {
       ]),
     );
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [pendingMessage],
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
+      reloadThread: () => {},
     });
     const output = {
       success: true,
@@ -1458,11 +1468,13 @@ describe("chat runtime", () => {
         ),
     );
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [pendingMessage],
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
+      reloadThread: () => {},
     });
     const output = {
       success: true,
@@ -1539,11 +1551,13 @@ describe("chat runtime", () => {
       ]);
     });
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [pendingMessage],
       key: { scope: "global", threadId },
       onError: () => {},
       onFinish: () => {},
+      reloadThread: () => {},
     });
     const firstOutput = {
       success: true,
@@ -1620,6 +1634,7 @@ describe("chat runtime", () => {
     });
 
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: { getSendMode: () => CHAT_SEND_MODE.anonymized },
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -1629,6 +1644,7 @@ describe("chat runtime", () => {
       onFinish: () => {
         finishCount += 1;
       },
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -1700,6 +1716,7 @@ describe("chat runtime", () => {
     });
 
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [
         createMessage(userMessageId),
@@ -1714,6 +1731,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
 
     await runtime.reload();
@@ -1754,6 +1772,7 @@ describe("chat runtime", () => {
     );
 
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -1763,6 +1782,7 @@ describe("chat runtime", () => {
       onFinish: () => {
         finishCount += 1;
       },
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -1811,6 +1831,7 @@ describe("chat runtime", () => {
     );
 
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -1818,6 +1839,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
     const unsubscribe = runtime.subscribe(() => {
       snapshots.push(runtime.getSnapshot().messages);
@@ -1885,6 +1907,7 @@ describe("chat runtime", () => {
     });
 
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -1892,6 +1915,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
     const message = createOutgoingMessage(
       "22222222-2222-4222-8222-222222222204",
@@ -1952,6 +1976,7 @@ describe("chat runtime", () => {
     });
 
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -1959,6 +1984,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
 
     const messageId = toSafeId<"chatMessage">(
@@ -2115,6 +2141,7 @@ describe("chat runtime", () => {
     });
 
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -2122,6 +2149,7 @@ describe("chat runtime", () => {
         throw error;
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -2179,6 +2207,456 @@ describe("chat runtime", () => {
     expect(childRunId).not.toBe(parentRunId);
   });
 
+  // TanStack refuses `sendMessage` while its interrupt manager still owns the
+  // turn ("Use resumeInterrupts() instead"). The server's contract is the
+  // reverse: a new turn supersedes the awaited one and cancels it. The
+  // runtime must reconcile the two locally, or a user who ignores an approval
+  // or a card cannot type anything until they answer it.
+  const createPendingInterruptChunks = ({
+    interrupt,
+    runId,
+    threadId,
+    toolCall,
+  }: {
+    interrupt: Record<string, unknown>;
+    runId: string;
+    threadId: string;
+    toolCall: { id: string; input: Record<string, unknown>; name: string };
+  }) => [
+    { type: "RUN_STARTED", threadId, runId },
+    {
+      type: "TOOL_CALL_START",
+      parentMessageId: assistantMessageId,
+      toolCallId: toolCall.id,
+      toolCallName: toolCall.name,
+      toolName: toolCall.name,
+    },
+    {
+      type: "TOOL_CALL_ARGS",
+      delta: JSON.stringify(toolCall.input),
+      toolCallId: toolCall.id,
+    },
+    {
+      type: "TOOL_CALL_END",
+      input: toolCall.input,
+      toolCallId: toolCall.id,
+      toolCallName: toolCall.name,
+      toolName: toolCall.name,
+    },
+    {
+      type: "RUN_FINISHED",
+      threadId,
+      runId,
+      finishReason: "tool_calls",
+      outcome: { type: "interrupt", interrupts: [interrupt] },
+    },
+  ];
+
+  const createApprovalInterrupt = (
+    runId: string,
+    toolCallId = "tool-save",
+  ) => ({
+    id: `approval_${toolCallId}`,
+    reason: "tool_call",
+    toolCallId,
+    metadata: {
+      kind: "approval",
+      toolName: "save_playbook",
+      input: { name: "Employment terms" },
+      "tanstack:interruptBinding": {
+        v: 1,
+        kind: "tool-approval",
+        interruptId: `approval_${toolCallId}`,
+        interruptedRunId: runId,
+        generation: 0,
+        toolName: "save_playbook",
+        toolCallId,
+        originalArgs: { name: "Employment terms" },
+        inputSchemaHash: "server-owned",
+        approvalSchemaHash: "server-owned",
+        responseSchemaHash: "server-owned",
+      },
+    },
+  });
+
+  const createClientToolInterrupt = (runId: string) => ({
+    id: "client_tool_tool-ask",
+    reason: "tanstack:client_tool_execution",
+    message: "Client tool ask-user is ready to run",
+    toolCallId: "tool-ask",
+    responseSchema: {},
+    metadata: {
+      kind: "client_tool",
+      toolName: "ask-user",
+      input: { question: "Which position titles should the playbook cover?" },
+      "tanstack:interruptBinding": {
+        v: 1,
+        kind: "client-tool-execution",
+        interruptId: "client_tool_tool-ask",
+        interruptedRunId: runId,
+        generation: 0,
+        toolName: "ask-user",
+        toolCallId: "tool-ask",
+        outputSchemaHash: "server-owned",
+        responseSchemaHash: "server-owned",
+      },
+    },
+  });
+
+  const sendWhileInterruptPending = async ({
+    interruptFor,
+    threadId,
+    toolCall,
+  }: {
+    interruptFor: (runId: string) => Record<string, unknown>;
+    threadId: ReturnType<typeof toChatThreadId>;
+    toolCall: { id: string; input: Record<string, unknown>; name: string };
+  }) => {
+    const requests: unknown[] = [];
+    const followUpAssistantId = "11111111-1111-4111-8111-111111111112";
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const runId = parseChatRequestRunId(init);
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse(
+          createPendingInterruptChunks({
+            interrupt: interruptFor(runId),
+            runId,
+            threadId,
+            toolCall,
+          }),
+        );
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId },
+        {
+          type: "TEXT_MESSAGE_START",
+          messageId: followUpAssistantId,
+          role: "assistant",
+        },
+        {
+          type: "TEXT_MESSAGE_CONTENT",
+          messageId: followUpAssistantId,
+          delta: "Two titles: Engineer and Counsel.",
+        },
+        { type: "TEXT_MESSAGE_END", messageId: followUpAssistantId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]);
+    });
+    const runtime = createChatRuntime({
+      activeTurnId: null,
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+      reloadThread: () => {},
+    });
+
+    const firstMessageId = "22222222-2222-4222-8222-222222222301";
+    const followUpMessageId = "22222222-2222-4222-8222-222222222302";
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(firstMessageId, "Save the playbook"),
+    );
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        followUpMessageId,
+        "Before saving, briefly list the position titles you plan to include.",
+      ),
+    );
+
+    return { firstMessageId, followUpMessageId, requests, runtime };
+  };
+
+  const expectSupersededSend = ({
+    firstMessageId,
+    followUpMessageId,
+    requests,
+    runtime,
+  }: Awaited<ReturnType<typeof sendWhileInterruptPending>>) => {
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).toMatchObject({
+      data: { message: { id: followUpMessageId } },
+    });
+    expect(requests.at(1)).not.toHaveProperty("resume");
+    expect(requests.at(1)).not.toHaveProperty("parentRunId");
+    const snapshot = runtime.getSnapshot();
+    expect(
+      snapshot.messages
+        .filter((message) => message.role === "user")
+        .map((message) => message.id),
+    ).toEqual([firstMessageId, followUpMessageId]);
+    expect(snapshot).toMatchObject({
+      error: undefined,
+      status: "ready",
+      turnAbandoned: false,
+    });
+  };
+
+  test("supersedes a pending tool approval when the user sends a new message", async () => {
+    const sent = await sendWhileInterruptPending({
+      interruptFor: createApprovalInterrupt,
+      threadId: toChatThreadId("thread-superseded-approval"),
+      toolCall: {
+        id: "tool-save",
+        input: { name: "Employment terms" },
+        name: "save_playbook",
+      },
+    });
+    expectSupersededSend(sent);
+
+    // The superseded card stays in the transcript until the server's
+    // snapshot or the authoritative refresh replaces it. Answering it late
+    // must not start a request: the server already cancelled that
+    // interaction when it accepted the new turn.
+    await sent.runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-save",
+    });
+    expect(sent.requests).toHaveLength(2);
+  });
+
+  test("supersedes a pending ask-user card when the user sends a new message", async () => {
+    const sent = await sendWhileInterruptPending({
+      interruptFor: createClientToolInterrupt,
+      threadId: toChatThreadId("thread-superseded-card"),
+      toolCall: {
+        id: "tool-ask",
+        input: { question: "Which position titles should the playbook cover?" },
+        name: "ask-user",
+      },
+    });
+    expectSupersededSend(sent);
+  });
+
+  // An answer to one card of a batch waits for the rest of the batch before
+  // it is submitted. A message that supersedes the batch withdraws what the
+  // answer waited for; the answer concludes then, it does not wait forever.
+  test("concludes a partly answered approval batch when a new message supersedes it", async () => {
+    const threadId = toChatThreadId("thread-superseded-batch");
+    const requests: unknown[] = [];
+    const toolCallChunks = (id: string) => [
+      {
+        type: "TOOL_CALL_START",
+        parentMessageId: assistantMessageId,
+        toolCallId: id,
+        toolCallName: "save_playbook",
+        toolName: "save_playbook",
+      },
+      {
+        type: "TOOL_CALL_ARGS",
+        delta: JSON.stringify({ name: "Employment terms" }),
+        toolCallId: id,
+      },
+      {
+        type: "TOOL_CALL_END",
+        input: { name: "Employment terms" },
+        toolCallId: id,
+        toolCallName: "save_playbook",
+        toolName: "save_playbook",
+      },
+    ];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const runId = parseChatRequestRunId(init);
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse([
+          { type: "RUN_STARTED", threadId, runId },
+          ...toolCallChunks("tool-first"),
+          ...toolCallChunks("tool-second"),
+          {
+            type: "RUN_FINISHED",
+            threadId,
+            runId,
+            finishReason: "tool_calls",
+            outcome: {
+              type: "interrupt",
+              interrupts: [
+                createApprovalInterrupt(runId, "tool-first"),
+                createApprovalInterrupt(runId, "tool-second"),
+              ],
+            },
+          },
+        ]);
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]);
+    });
+    const runtime = createChatRuntime({
+      activeTurnId: null,
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+      reloadThread: () => {},
+    });
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "22222222-2222-4222-8222-222222222303",
+        "Save both playbooks",
+      ),
+    );
+
+    const firstAnswer = runtime.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-first",
+    });
+    // The answer is applied on a microtask; let it wait for the batch.
+    await new Promise((resolve) => {
+      setTimeout(() => resolve(undefined), 0);
+    });
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "22222222-2222-4222-8222-222222222304",
+        "Save neither for now.",
+      ),
+    );
+    await firstAnswer;
+
+    expect(requests).toHaveLength(2);
+    expect(requests.at(1)).not.toHaveProperty("resume");
+    expect(runtime.getSnapshot()).toMatchObject({
+      error: undefined,
+      status: "ready",
+    });
+  });
+
+  // The local interrupt state is dropped before the server accepts the new
+  // message. A send that then fails is the turn's error: the runtime reports
+  // it so the thread refreshes from the server, and a runtime rebuilt from a
+  // transcript that still ends on the approval answers it without a native
+  // interrupt.
+  test("reports a send that fails after superseding an approval, which the rebuilt runtime can still answer", async () => {
+    const threadId = toChatThreadId("thread-superseded-send-failed");
+    const requests: unknown[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      const runId = parseChatRequestRunId(init);
+      requests.push(parseJsonRequestBody(init));
+      if (requests.length === 1) {
+        return createSseResponse(
+          createPendingInterruptChunks({
+            interrupt: createApprovalInterrupt(runId),
+            runId,
+            threadId,
+            toolCall: {
+              id: "tool-save",
+              input: { name: "Employment terms" },
+              name: "save_playbook",
+            },
+          }),
+        );
+      }
+      if (requests.length === 2) {
+        return new Response(
+          JSON.stringify({ code: "INTERNAL", message: "Unavailable" }),
+          { headers: { "Content-Type": "application/json" }, status: 500 },
+        );
+      }
+      return createSseResponse([
+        { type: "RUN_STARTED", threadId, runId },
+        {
+          type: "RUN_FINISHED",
+          threadId,
+          runId,
+          finishReason: "stop",
+          outcome: { type: "success" },
+        },
+      ]);
+    });
+    const reported: Error[] = [];
+    const runtime = createChatRuntime({
+      activeTurnId: null,
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        reported.push(error);
+      },
+      onFinish: () => {},
+      reloadThread: () => {},
+    });
+    const firstMessageId = "22222222-2222-4222-8222-222222222305";
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(firstMessageId, "Save the playbook"),
+    );
+    // What the server stores while the send below never reaches it.
+    const serverTranscript = runtime.getSnapshot().messages;
+    await sendThreadChatMessage(
+      runtime,
+      createOutgoingMessage(
+        "22222222-2222-4222-8222-222222222306",
+        "Before saving, list the position titles.",
+      ),
+    );
+
+    expect(requests).toHaveLength(2);
+    expect(reported).toHaveLength(1);
+    expect(runtime.getSnapshot().status).toBe("error");
+
+    // The server never accepted the message, so its transcript still ends on
+    // the approval request; the refresh `onError` triggers rebuilds the
+    // runtime from it.
+    expect(serverTranscript.at(-1)?.parts.at(0)).toMatchObject({
+      state: "approval-requested",
+      type: "tool-call",
+    });
+    const rebuilt = createChatRuntime({
+      activeTurnId: null,
+      context: undefined,
+      initialMessages: serverTranscript,
+      key: { scope: "global", threadId },
+      onError: (error) => {
+        throw error;
+      },
+      onFinish: () => {},
+      reloadThread: () => {},
+    });
+    await rebuilt.resolveToolApproval({
+      approved: true,
+      id: "approval_tool-save",
+    });
+
+    expect(requests).toHaveLength(3);
+    expect(requests.at(2)).toMatchObject({
+      forwardedProps: {
+        message: {
+          role: "assistant",
+          parts: [
+            {
+              approval: { approved: true, id: "approval_tool-save" },
+              state: "approval-responded",
+              type: "tool-call",
+            },
+          ],
+        },
+      },
+    });
+  });
+
   // A refused chat request must not reach the user as the connection
   // adapter's opaque `HTTP error! status: 400`. chatFetchClient reads the body
   // while the response is whole and rejects with an APIError; TanStack wraps
@@ -2198,6 +2676,7 @@ describe("chat runtime", () => {
     );
     const reported: unknown[] = [];
     const runtime = createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId },
@@ -2205,6 +2684,7 @@ describe("chat runtime", () => {
         reported.push(error);
       },
       onFinish: () => {},
+      reloadThread: () => {},
     });
 
     await sendThreadChatMessage(
@@ -2234,11 +2714,13 @@ describe("chat runtime identity across query refetch", () => {
   // distinct runtime identities.
   const buildFetched = (estimatedTokens: number) => ({
     chat: createChatRuntime({
+      activeTurnId: null,
       context: undefined,
       initialMessages: [],
       key: { scope: "global", threadId: toChatThreadId("thread-shared") },
       onError: () => {},
       onFinish: () => {},
+      reloadThread: () => {},
     }),
     olderCursor: null as string | null,
     contextMatterIds: [] as string[],
@@ -2319,6 +2801,7 @@ describe("acquireChatRuntime reconcile", () => {
   const buildThreadData = (
     overrides: Partial<ChatThreadFetched> = {},
   ): ChatThreadFetched => ({
+    activeTurnId: null,
     forkProvenance: { type: "none" },
     messages: [],
     olderCursor: null,

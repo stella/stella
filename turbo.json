@@ -27,6 +27,21 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
     },
+    // The landing build also reads files outside its workspace graph: release
+    // notes, the generated tool reference, and the media sync script its build
+    // script runs. scripts/landing-deploy-scope.ts reads these inputs to decide
+    // whether a push can change the site, so a new outside read belongs here.
+    "@stll/landing#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        ".env*",
+        "$TURBO_ROOT$/docs/changelog/**",
+        "$TURBO_ROOT$/packages/cli/src/generated/**",
+        "$TURBO_ROOT$/scripts/product-media.ts"
+      ],
+      "outputs": ["dist/**"]
+    },
     "@stll/extension#build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$"],
@@ -80,13 +95,47 @@
       ],
       "outputs": [".cache/tsbuildinfo*.json"]
     },
+    // A workspace whose typecheck generates declarations first keeps the
+    // shared typecheck inputs, records the generated directory as an output,
+    // and orders its type-checking lint after it (see the `#lint` overrides).
+    // Left unrecorded, a cache hit replays the logs and writes nothing, so the
+    // lint would type-check a program without the generated declarations.
     "@stll/landing#typecheck": {
       "dependsOn": ["transit"],
-      // `astro check` generates the content types that type-aware lint reads,
-      // so they are the task's outputs. Left unrecorded, a cache hit replays
-      // the logs and writes nothing, and the lint that depends on this task
-      // then resolves `astro:content` to `error` on a fresh checkout.
+      // `astro check` generates the `astro:content` types.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**"
+      ],
       "outputs": [".astro/**"]
+    },
+    "@stll/extension#typecheck": {
+      "dependsOn": ["transit"],
+      // `wxt prepare` generates `.wxt/wxt.d.ts`, which the tsconfig includes
+      // for the `import.meta.env` and browser declarations.
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**"
+      ],
+      "outputs": [
+        ".cache/tsbuildinfo*.json",
+        "**/.cache/tsbuildinfo*.json",
+        ".wxt/**"
+      ]
     },
     "lint": {
       "dependsOn": ["transit"],
@@ -103,6 +152,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/packages/typescript-config/**",
@@ -126,6 +178,34 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/tsconfig.tooling.json",
+        "$TURBO_ROOT$/types/**"
+      ]
+    },
+    "@stll/extension#lint": {
+      // Type-checking lint reads the `.wxt` declarations `wxt prepare` writes.
+      "dependsOn": ["typecheck"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json",
         "$TURBO_ROOT$/packages/typescript-config/**",
@@ -143,6 +223,9 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
         "$TURBO_ROOT$/scripts/design-lint-policy.ts",
         "$TURBO_ROOT$/scripts/design-lint-baseline.json"
       ],
@@ -185,6 +268,9 @@
     },
     "@stll/api#test": {
       "dependsOn": [],
+      // How many test batches run at once; it never changes results, so it
+      // passes through without entering the cache key.
+      "passThroughEnv": ["API_TEST_LANES"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",

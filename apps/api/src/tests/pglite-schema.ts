@@ -40,6 +40,36 @@ const STATUTE_CITATION_COUNTS_MIGRATION_PATH = nodePath.join(
   "20260911150000_statute_citation_counts",
   "migration.sql",
 );
+const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926150000_legislation_payload_revision",
+  "migration.sql",
+);
+const LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120000_legislation_expression_identity",
+  "migration.sql",
+);
+const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926160000_case_law_provision_extraction_state",
+  "migration.sql",
+);
+const PROVISION_BACKFILL_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260926170000_case_law_provision_backfill",
+  "migration.sql",
+);
+const PROVISION_READ_STATUS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260927090000_case_law_provision_read_status",
+  "migration.sql",
+);
+const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260731190000_case_law_observation_legacy_fence",
+  "migration.sql",
+);
 const CORPUS_PROJECTION_REVISION_MIGRATION_PATHS = [
   nodePath.join(
     DRIZZLE_DIR,
@@ -244,6 +274,38 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260928101000_pdf_signing_sessions",
+  "migration.sql",
+);
+
+const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
+  'ALTER TABLE "pdf_signing_sessions"\n  FORCE ROW LEVEL SECURITY',
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
+] as const;
+
+/**
+ * Install what schema push cannot say about PDF signing sessions: forced row
+ * security and the token-scope lookups the desktop's calls go through.
+ */
+export const installPglitePdfSigningTokenScopes = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    PDF_SIGNING_SESSIONS_MIGRATION_PATH,
+  ).filter((statement) =>
+    PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
   'INSERT INTO "case_law_statute_citation_count_state"',
   "CREATE FUNCTION",
@@ -275,6 +337,38 @@ export const installPgliteStatuteCitationCounts = async (
   }
 };
 
+const PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "CREATE OR REPLACE FUNCTION",
+  "CREATE TRIGGER",
+  "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
+] as const;
+
+/**
+ * Install the provision extraction functions and triggers, including the
+ * decision enqueue trigger, which declarative schema push omits.
+ */
+export const installPgliteProvisionExtractionState = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const migrationPath of [
+    PROVISION_EXTRACTION_STATE_MIGRATION_PATH,
+    PROVISION_BACKFILL_MIGRATION_PATH,
+    PROVISION_READ_STATUS_MIGRATION_PATH,
+  ]) {
+    const statements = readMigrationStatements(migrationPath).filter(
+      (statement) =>
+        PROVISION_EXTRACTION_STATE_STATEMENT_PREFIXES.some((prefix) =>
+          executableSql(statement).startsWith(prefix),
+        ),
+    );
+    for (const statement of statements) {
+      await db.execute(sql.raw(statement));
+    }
+  }
+};
+
 const CORPUS_PROJECTION_REVISION_STATEMENT_PREFIXES = [
   "CREATE FUNCTION",
   "CREATE OR REPLACE FUNCTION",
@@ -297,6 +391,92 @@ export const installPgliteCorpusProjectionRevisionFence = async (
     for (const statement of statements) {
       await db.execute(sql.raw(statement));
     }
+  }
+};
+
+const LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES = [
+  'ALTER TABLE "legislation_work_changes" FORCE ROW LEVEL SECURITY',
+  "CREATE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the triggers and forced row security that schema push omits. */
+export const installPgliteLegislationPayloadRevision = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH,
+  ).filter((statement) =>
+    LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES = [
+  "CREATE OR REPLACE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the namespace and expression-id guards that schema push omits. */
+export const installPgliteLegislationExpressionIdentity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/**
+ * Install the fence that rejects a write of a decision's publisher hash that
+ * does not advance its observation order.
+ */
+export const installPgliteCaseLawObservationFence = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH,
+  ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120100_organization_member_capacity",
+  "migration.sql",
+);
+
+const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the member capacity function and guard omitted by schema push. */
+export const installPgliteOrganizationMemberCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
   }
 };
 

@@ -6,6 +6,7 @@ import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the
 // N+1 e2e guard. Local/CI only: deployed environments pass no logger at all,
@@ -13,7 +14,7 @@ import { queryCountLogger } from "@/api/lib/db-query-counter";
 // no-op unless a request has activated a counter store, so background jobs
 // and boot-time queries are unaffected even when it is wired in. Must match
 // the header gate in index.ts.
-const queryLogger = envBase.isDev ? queryCountLogger : undefined;
+const queryLogger = isLocalDevOpen() ? queryCountLogger : undefined;
 
 // Optional pool recycling. Defaults remain disabled until the Bun SQL runtime
 // retires only idle connections; values are seconds and apply to both pools.
@@ -22,15 +23,29 @@ const poolRecycling = {
   idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
 } as const;
 
+// Optional per-deployment statement ceiling, set on every connection as it
+// opens. Work that needs longer raises it with `SET LOCAL`, and `RESET`
+// returns to this value rather than to the server default.
+const sessionSettings =
+  envBase.DATABASE_STATEMENT_TIMEOUT_MS > 0
+    ? {
+        connection: {
+          statement_timeout: envBase.DATABASE_STATEMENT_TIMEOUT_MS,
+        },
+      }
+    : {};
+
 const rootClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_ROOT_POOL_MAX,
   ...poolRecycling,
+  ...sessionSettings,
 });
 const rlsClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_RLS_POOL_MAX,
   ...poolRecycling,
+  ...sessionSettings,
 });
 
 /**

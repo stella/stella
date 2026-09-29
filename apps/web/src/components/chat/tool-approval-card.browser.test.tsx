@@ -35,7 +35,7 @@ const renderCard = (part: unknown) => {
             handleDeny: noop,
           }}
         >
-          <ToolApprovalCard isTurnActive={false} part={part} />
+          <ToolApprovalCard isAwaitingUser isTurnActive={false} part={part} />
         </ChatApprovalContext>
       </IntlProvider>
     </QueryClientProvider>,
@@ -71,6 +71,7 @@ describe("browser approval card", () => {
           contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
           elements: [],
           revision: "revision-1",
+          tabId: 7,
           text: "Ready",
           textOffset: 0,
           textTotalChars: 5,

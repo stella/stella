@@ -322,7 +322,7 @@ export const KanbanVirtualCell = <TRow,>({
     <div
       className={cn(
         KANBAN_CELL_SURFACE_CLASS,
-        "min-h-20 rounded-xl p-2 transition-[background-color,outline-color]",
+        "min-h-20 rounded-xl p-2",
         rows.length === 0
           ? "overflow-visible"
           : "max-h-[min(60vh,40rem)] overflow-y-auto overscroll-y-contain",

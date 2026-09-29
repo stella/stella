@@ -220,7 +220,6 @@ h1[data-page-title] {
   min-height: 2.75rem;
   min-width: 2.75rem;
   padding-inline: 0.5rem;
-  transition: color 150ms;
 }
 [data-theme-toggle]:hover {
   color: var(--foreground);

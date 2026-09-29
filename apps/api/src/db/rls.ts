@@ -33,6 +33,12 @@ export const stellaCaseLawAnalysisReader = p
   .pgRole("stella_case_law_analysis_reader")
   .existing();
 
+// Read-only role for internal corpus sampling. Column-restricted to the corpus
+// relations a sample reads; it holds nothing on tenant tables.
+export const stellaCorpusSampleReader = p
+  .pgRole("stella_corpus_sample_reader")
+  .existing();
+
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
@@ -97,6 +103,7 @@ export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
 // without the pin bypass, sealing a workspace to 'deleting' would hide its
 // embedded-data threads from the deletion transaction's own cleanup DELETE,
 // leaving rows that break the workspaces FK.
+// sql-perf-allow: bounded by one row's workspace ID array and one authorization probe per element
 const workspaceArrayCheck = (workspaceIds: SQL) => sql`NOT EXISTS (
   SELECT 1
   FROM pg_catalog.unnest(${workspaceIds}) AS scoped_workspace(workspace_id)
@@ -137,6 +144,7 @@ const authOrganizationCheck = sql`id =
     '${sql.raw(SETTING_ORGANIZATION_ID)}', true
   ))`;
 
+// sql-perf-allow: bounded by one user ID and session organization per RLS row
 const authUserVisibleCheck = sql`(
   id = (SELECT current_setting(
     '${sql.raw(SETTING_USER_ID)}', true
@@ -813,6 +821,31 @@ export const caseLawAnalysisReaderPolicies = () => [
     for: "select",
     to: stellaCaseLawAnalysisReader,
     using: allowAllRows,
+  }),
+];
+
+/**
+ * Row visibility for the corpus sample reader. Applied only to the relations in
+ * its column map; the SELECT grants narrow the columns, this makes the rows
+ * visible.
+ */
+export const corpusSampleReaderPolicies = () => [
+  p.pgPolicy("corpus_sample_reader_read", {
+    for: "select",
+    to: stellaCorpusSampleReader,
+    using: allowAllRows,
+  }),
+];
+
+/**
+ * Decisions a redaction marked stay invisible to the sample reader, even while
+ * a failed object deletion leaves their storage keys set for retry.
+ */
+export const corpusSampleReaderDecisionPolicies = () => [
+  p.pgPolicy("corpus_sample_reader_read", {
+    for: "select",
+    to: stellaCorpusSampleReader,
+    using: sql`redacted_at IS NULL`,
   }),
 ];
 
@@ -1498,6 +1531,24 @@ export const chatThreadCompactionPolicies = () => [
     for: "delete",
     to: stella,
     using: chatDerivedThreadScopeCheck(sql`chat_thread_compactions.thread_id`),
+  }),
+];
+
+/**
+ * Append-only: a name keeps its meaning for the thread's life, so rows are
+ * inserted and read, never changed; they go with their thread (the foreign
+ * key cascades).
+ */
+export const chatThreadNamePolicies = () => [
+  p.pgPolicy("chat_thread_name_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(sql`chat_thread_names.thread_id`),
+  }),
+  p.pgPolicy("chat_thread_name_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatDerivedThreadScopeCheck(sql`chat_thread_names.thread_id`),
   }),
 ];
 

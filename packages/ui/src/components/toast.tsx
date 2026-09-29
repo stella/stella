@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Toast } from "@base-ui/react/toast";
 import type { ToastManagerAddOptions } from "@base-ui/react/toast";
+
 import {
   CircleAlertIcon,
   CircleCheckIcon,
@@ -11,8 +12,7 @@ import {
   LoaderCircleIcon,
   TriangleAlertIcon,
   XIcon,
-} from "lucide-react";
-
+} from "../icons";
 import { cn } from "../lib/utils";
 import { buttonVariants } from "./button";
 
@@ -201,7 +201,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
           return (
             <Toast.Root
               className={cn(
-                "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_.5s_cubic-bezier(.22,1,.36,1),opacity_.5s,height_.15s] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+                "bg-popover text-popover-foreground absolute z-[calc(9999-var(--toast-index))] h-(--toast-calc-height) w-full rounded-lg border shadow-lg/5 [transition:transform_.5s_var(--ease-smooth),opacity_.5s,height_.15s] not-dark:bg-clip-padding before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] motion-reduce:transition-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
                 // Base positioning using data-position
                 "data-[position*=right]:start-auto data-[position*=right]:end-0",
                 "data-[position*=left]:start-0 data-[position*=left]:end-auto",
@@ -289,7 +289,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
                     </Toast.Action>
                   )}
                   <Toast.Close
-                    className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 transition-colors select-none"
+                    className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 select-none"
                     data-slot="toast-close"
                     aria-label="Close notification"
                   >

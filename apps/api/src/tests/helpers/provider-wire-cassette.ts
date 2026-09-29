@@ -59,6 +59,14 @@ export const PROVIDER_WIRE_SCENARIOS = {
   "malformed-chunk": { outcome: "error", recordable: false },
   /** A stream that stops before its terminal event. */
   "early-eof": { outcome: "either", recordable: false },
+  /** The provider ends the response with a stop reason no answer stands
+   *  on: a paused turn, a tool call it could not form, a failure
+   *  mid-response. */
+  "unusable-stop": { outcome: "error", recordable: false },
+  /** The provider ends the response with a stop reason its SDK does not
+   *  list yet: an answer the step wrote stands, a tool call it left to run
+   *  does not. */
+  "unlisted-stop": { outcome: "either", recordable: false },
 } as const satisfies Record<
   string,
   { outcome: "either" | "error" | "finished"; recordable: boolean }
@@ -123,11 +131,30 @@ const bodySchema = v.variant("encoding", [
   }),
 ]);
 
+/**
+ * The request as the adapter sent it, minus what varies between runs: the
+ * protocol headers (`PINNED_REQUEST_HEADERS`, never a credential or an SDK
+ * version), and the JSON body in the order it was written, with the prompt
+ * text replaced by `[prompt]`. Tool schemas, strict flags, message roles and
+ * part kinds, model options and cache markers all live in it.
+ */
+const requestShapeSchema = v.strictObject({
+  headers: headersSchema,
+  body: v.unknown(),
+});
+
+export type ProviderWireRequestShape = v.InferOutput<typeof requestShapeSchema>;
+
 const exchangeSchema = v.strictObject({
   request: v.strictObject({
     method: v.literal("POST"),
     /** Path and query, without credentials. */
     path: v.string(),
+    /** What the scenario's synthetic request must look like on the wire:
+     *  written by the recorder from the live request, and for a synthetic
+     *  cassette by `record:provider-cassettes --update-request-shapes`. The
+     *  replay test fails an exchange without one. */
+    shape: v.optional(requestShapeSchema),
   }),
   response: v.strictObject({
     status: v.pipe(v.number(), v.integer(), v.minValue(100), v.maxValue(599)),
@@ -166,6 +193,12 @@ const expectSchema = v.variant("outcome", [
   v.strictObject({
     outcome: v.literal("error"),
     errorKind: v.picklist(AI_ERROR_KINDS),
+    /** The usage the provider reported before the run failed, which the run
+     *  error carries. */
+    usage: v.optional(usageSchema),
+    /** Why a cassette whose body reports usage expects none on the run
+     *  error: the provider reports it only after the point the run fails. */
+    usageAfterFailure: v.optional(v.pipe(v.string(), v.minLength(1))),
   }),
 ]);
 
@@ -175,10 +208,15 @@ export const providerWireCassetteSchema = v.strictObject({
   format: v.literal(1),
   provider: v.picklist(PROVIDER_WIRE_PROVIDERS),
   scenario: v.picklist(SCENARIO_NAMES),
+  /** A further shape of the same scenario, beside its main cassette. */
+  variant: v.optional(v.pipe(v.string(), v.regex(/^[a-z0-9-]+$/u))),
   source: v.picklist(["recorded", "synthetic"]),
   /** Where a synthetic cassette's bytes come from. */
   basis: v.optional(v.string()),
   recordedAt: v.optional(v.pipe(v.string(), v.isoTimestamp())),
+  /** The user prompt a recording sent; its request shapes hold `[prompt]`
+   *  in its place. */
+  prompt: v.optional(v.string()),
   /** The model the request named. */
   model: v.string(),
   exchanges: v.pipe(v.array(exchangeSchema), v.minLength(1)),
@@ -192,7 +230,21 @@ export type ProviderWireCassette = v.InferOutput<
 export const cassettePath = (
   provider: ProviderWireProvider,
   scenario: ProviderWireScenario,
-): string => path.join(PROVIDER_WIRE_DIR, provider, `${scenario}.json`);
+  variant?: string,
+): string =>
+  path.join(
+    PROVIDER_WIRE_DIR,
+    provider,
+    `${scenario}${variant === undefined ? "" : `.${variant}`}.json`,
+  );
+
+/** A cassette's name: provider, scenario and any variant. */
+export const cassetteKey = ({
+  provider,
+  scenario,
+  variant,
+}: Pick<ProviderWireCassette, "provider" | "scenario" | "variant">): string =>
+  `${provider}/${scenario}${variant === undefined ? "" : `.${variant}`}`;
 
 /** Problems with one cassette file, beyond its schema. */
 const cassetteProblems = (
@@ -200,15 +252,22 @@ const cassetteProblems = (
   cassette: ProviderWireCassette,
 ): string[] => {
   const problems: string[] = [];
-  const expected = cassettePath(cassette.provider, cassette.scenario);
+  const expected = cassettePath(
+    cassette.provider,
+    cassette.scenario,
+    cassette.variant,
+  );
   if (path.resolve(file) !== expected) {
     problems.push(`${file}: lives at ${expected} by its provider and scenario`);
   }
   if (cassette.source === "synthetic" && (cassette.basis ?? "") === "") {
     problems.push(`${file}: a synthetic cassette names its basis`);
   }
-  if (cassette.source === "recorded" && cassette.recordedAt === undefined) {
-    problems.push(`${file}: a recording carries its recordedAt`);
+  if (
+    cassette.source === "recorded" &&
+    (cassette.recordedAt === undefined || cassette.prompt === undefined)
+  ) {
+    problems.push(`${file}: a recording carries its recordedAt and prompt`);
   }
   const { outcome } = PROVIDER_WIRE_SCENARIOS[cassette.scenario];
   if (outcome !== "either" && outcome !== cassette.expect.outcome) {
@@ -248,12 +307,47 @@ export const loadProviderWireCassettes = (): ProviderWireCassette[] => {
   return cassettes;
 };
 
+/** A usage object in a provider's body: `usage` (OpenAI-style, Anthropic,
+ *  Bedrock's `metadata`) or Gemini's `usageMetadata`. */
+const USAGE_FIELD_PATTERN = /"(?:usage|usageMetadata)"\s*:\s*\{/u;
+
+const bodyText = (exchange: ProviderWireExchange): string =>
+  exchange.response.body.encoding === "text"
+    ? exchange.response.body.text
+    : JSON.stringify(exchange.response.body.messages);
+
+/**
+ * Error cassettes that decide nothing about the usage their body reports:
+ * each such cassette expects the usage its run error carries, or says why it
+ * carries none (`usageAfterFailure`); a cassette whose body reports no usage
+ * does neither.
+ */
+export const findUndecidedErrorUsage = (
+  cassettes: readonly ProviderWireCassette[],
+): string[] =>
+  cassettes.flatMap((cassette) => {
+    const { expect } = cassette;
+    if (expect.outcome !== "error") {
+      return [];
+    }
+    const reportsUsage = cassette.exchanges.some((exchange) =>
+      USAGE_FIELD_PATTERN.test(bodyText(exchange)),
+    );
+    const decisions =
+      (expect.usage === undefined ? 0 : 1) +
+      (expect.usageAfterFailure === undefined ? 0 : 1);
+    return decisions === (reportsUsage ? 1 : 0) ? [] : [cassetteKey(cassette)];
+  });
+
 /** Every provider × scenario pair that needs a cassette and has none. */
 export const findMissingCassettes = (
   cassettes: readonly ProviderWireCassette[],
 ): string[] => {
+  // A variant sits beside its main cassette; it does not stand in for one.
   const present = new Set(
-    cassettes.map(({ provider, scenario }) => `${provider}/${scenario}`),
+    cassettes
+      .filter(({ variant }) => variant === undefined)
+      .map(({ provider, scenario }) => `${provider}/${scenario}`),
   );
   return PROVIDER_WIRE_PROVIDERS.flatMap((provider) =>
     SCENARIO_NAMES.filter(
@@ -272,5 +366,7 @@ export const cassetteFor = (
 ): ProviderWireCassette =>
   cassettes.find(
     (cassette) =>
-      cassette.provider === provider && cassette.scenario === scenario,
+      cassette.provider === provider &&
+      cassette.scenario === scenario &&
+      cassette.variant === undefined,
   ) ?? panic(`No ${provider}/${scenario} provider wire cassette`);

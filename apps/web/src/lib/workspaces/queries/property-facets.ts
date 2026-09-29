@@ -13,7 +13,7 @@ export type PropertyFacetsKey = {
   filters: ConditionNode[];
 };
 
-export const propertyFacetsKeys = {
+const propertyFacetsKeys = {
   facets: ({ workspaceId, propertyId, filters }: PropertyFacetsKey) => [
     ...entitiesKeys.all(workspaceId),
     "property-facets",

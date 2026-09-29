@@ -3,11 +3,11 @@ import type { UIEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import { CalendarIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isTaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
+import { CalendarIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -621,7 +621,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               >
                 <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-20 border-b px-4 py-1.5 backdrop-blur">
                   <button
-                    className="text-muted-foreground hover:text-foreground rounded text-xs font-medium transition-colors"
+                    className="text-muted-foreground hover:text-foreground rounded text-xs font-medium"
                     onClick={() => scrollToMonth(viewDate)}
                     type="button"
                   >

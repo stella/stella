@@ -144,6 +144,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The release source may predate the retry helper.
+      - name: Checkout workflow tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
       # Smoke the artifact that was actually pushed (with its release build
       # args baked in), not a local rebuild that could drift from it.
       - name: Pull pushed image by digest
@@ -156,7 +166,7 @@ jobs:
             echo "::error::arm64 image digest was not resolved from the build job."
             exit 1
           fi
-          docker pull "${IMAGE}@${IMAGE_DIGEST}"
+          bash .workflow-tooling/scripts/retry.sh docker pull "${IMAGE}@${IMAGE_DIGEST}"
           docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
 
       # CI rehearses this same runtime contract before a VERSION bump merges.
@@ -220,6 +230,27 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The selected source may predate the pull script, so it runs from the
+      # workflow revision; the copy is removed before it can enter the build
+      # context.
+      - name: Checkout workflow tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/pull-base-images.sh
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Pull API base images
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          bash .workflow-tooling/scripts/pull-base-images.sh --buildx "$PLATFORM" apps/api/Dockerfile
+          rm -rf .workflow-tooling
 
       - name: Build and push by digest
         id: build
@@ -528,7 +559,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --cert-identity-regex "$identity_pattern" \
               --deny-self-hosted-runners >/dev/null
-            docker pull --platform linux/arm64 "${IMAGE}@${tagged_digest}" >/dev/null
+            bash .workflow-source/scripts/retry.sh docker pull --platform linux/arm64 "${IMAGE}@${tagged_digest}" >/dev/null
             image_env="$(docker image inspect "${IMAGE}@${tagged_digest}" --format '{{json .Config.Env}}')"
             jq -e \
               --arg commit "$SHA" \

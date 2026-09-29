@@ -7,7 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatThreads, chatTurns } from "@/api/db/schema";
+import { chatThreadNames, chatThreads, chatTurns } from "@/api/db/schema";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import {
   createSendMessage,
@@ -17,7 +17,10 @@ import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-ef
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -77,6 +80,7 @@ const rollbackUnpersistedChatSideEffectsMock = mock(
   ) => await realRollbackUnpersistedChatSideEffects(options),
 );
 const sendMessage = createSendMessage({
+  createRefRegistry: createChatRefRegistry,
   indexThread: upsertChatThreadSearchDocumentMock,
   loadExternalMcpTools: loadExternalMcpToolsForUserMock,
   loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
@@ -131,15 +135,28 @@ const orgAIConfig = {
 } satisfies OrgAIConfig;
 
 const emptyOrderedRows = () => Object.assign([], { limit: async () => [] });
+const startedThreadNames = [
+  { kind: CHAT_THREAD_NAME_KIND.ledgerStart, name: "", target: null },
+];
 
 const selectChatMessages = () => ({
-  from: () => ({
-    where: () => ({
-      for: async () => [],
-      limit: async () => [],
-      orderBy: emptyOrderedRows,
-    }),
-  }),
+  from: (table: unknown) =>
+    table === chatThreadNames
+      ? { where: async () => startedThreadNames }
+      : {
+          where: () => ({
+            for: async () => [],
+            limit: async () => [],
+            orderBy: emptyOrderedRows,
+          }),
+        },
+});
+
+const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
+  from: (table: unknown) =>
+    table === chatThreadNames
+      ? { where: async () => startedThreadNames }
+      : select().from(),
 });
 
 const withRegistryCredentialQuery = (transaction: unknown): unknown => {
@@ -148,6 +165,7 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   }
   const query = "query" in transaction ? transaction.query : undefined;
   return {
+    select: selectChatMessages,
     ...transaction,
     query: {
       businessRegistryCredentials: { findMany: async () => [] },
@@ -224,6 +242,7 @@ const createContext = ({
     getWorkspaceAccess: async () => null,
     memberRole: { role: "owner" },
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
@@ -277,7 +296,7 @@ describe("agent sandbox preflight", () => {
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => undefined },
             organizationSettings: { findFirst: async () => null },
           },
           select: selectChatMessages,
@@ -320,7 +339,7 @@ describe("agent connector isolation", () => {
         runMode: CHAT_RUN_MODE.agent,
         transaction: {
           query: {
-            chatThreads: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => undefined },
             organizationSettings: { findFirst: async () => null },
           },
         },
@@ -378,7 +397,7 @@ describe("send message disconnect handling", () => {
     const abortController = new AbortController();
     const findChatThread = mock(async () => {
       abortController.abort();
-      return null;
+      return undefined;
     });
     loadExternalMcpToolsForUserMock.mockClear();
     loadWebSearchProvidersForOrgMock.mockClear();
@@ -433,7 +452,7 @@ describe("send message disconnect handling", () => {
         }),
         transaction: {
           query: {
-            chatThreads: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => undefined },
             organizationSettings: { findFirst: async () => null },
           },
         },
@@ -454,7 +473,7 @@ describe("send message disconnect handling", () => {
     externalMcpToolsLoadHook = () => {
       abortController.abort();
     };
-    const findChatThread = mock(async () => null);
+    const findChatThread = mock(async () => undefined);
     loadExternalMcpToolsForUserMock.mockClear();
 
     const result = await sendMessage.handler(
@@ -505,7 +524,7 @@ describe("send message disconnect handling", () => {
           }),
           insert: () => ({ values: insertValues }),
           query: {
-            chatThreads: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => undefined },
             organizationSettings: { findFirst: async () => null },
           },
           select: selectChatMessages,
@@ -540,7 +559,7 @@ describe("send message disconnect handling", () => {
           }),
           insert: () => ({ values: insertValues }),
           query: {
-            chatThreads: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => undefined },
             organizationSettings: { findFirst: async () => null },
           },
           select: selectChatMessages,
@@ -655,7 +674,7 @@ describe("send message disconnect handling", () => {
             },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectWithAbort,
+          select: withThreadNameReads(selectWithAbort),
           update,
         },
       }),
@@ -756,7 +775,7 @@ describe("send message disconnect handling", () => {
             },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectWithThreadLock,
+          select: withThreadNameReads(selectWithThreadLock),
           update,
         },
       }),
@@ -868,7 +887,7 @@ describe("send message disconnect handling", () => {
             },
             organizationSettings: { findFirst: findOrganizationSettings },
           },
-          select: selectWithThreadLock,
+          select: withThreadNameReads(selectWithThreadLock),
           update,
         },
       }),
@@ -958,7 +977,7 @@ describe("send message disconnect handling", () => {
             },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectWithThreadLock,
+          select: withThreadNameReads(selectWithThreadLock),
           update,
         },
       }),
@@ -1063,7 +1082,7 @@ describe("send message disconnect handling", () => {
             },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectWithThreadLock,
+          select: withThreadNameReads(selectWithThreadLock),
           update: (table: unknown) => {
             if (table === chatThreads) {
               return { set: () => ({ where: updateWhere }) };
@@ -1214,7 +1233,7 @@ describe("send message turn persistence", () => {
             chatTurns: { findFirst: async () => ({ id: turnId }) },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectWithThreadLock,
+          select: withThreadNameReads(selectWithThreadLock),
           update: () => ({
             set: () => ({
               where: () => ({ returning: async () => [] }),

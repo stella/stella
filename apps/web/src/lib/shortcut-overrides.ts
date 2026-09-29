@@ -30,7 +30,7 @@ const flattenShortcuts = (groups: readonly ShortcutGroup[]) =>
  * chord. `char` bindings (e.g. `?`) are layout characters, not chords, so they
  * are read-only and can never appear in an override map.
  */
-export const REBINDABLE_SHORTCUT_IDS: readonly ShortcutId[] = Object.freeze(
+const REBINDABLE_SHORTCUT_IDS: readonly ShortcutId[] = Object.freeze(
   flattenShortcuts(SHORTCUT_GROUPS).flatMap((shortcut) =>
     shortcut.binding.type === "hotkey" ? [shortcut.id] : [],
   ),
@@ -120,7 +120,7 @@ export const applyOverridesToGroups = (
   }));
 
 /** Canonical identity for a binding; two bindings collide iff these are equal. */
-export const bindingKey = (binding: ShortcutBinding): string => {
+const bindingKey = (binding: ShortcutBinding): string => {
   switch (binding.type) {
     case "hotkey":
       return `hotkey:${binding.hotkey}`;

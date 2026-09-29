@@ -40,6 +40,8 @@ type CatalogueRowProps = {
    */
   actions?: React.ReactNode;
   contextActions?: readonly ContextMenuAction[];
+  /** A short line under the description, such as why chat hides a skill. */
+  notice?: string | undefined;
   /**
    * Optional decorative variant for the unfocused state (e.g. onboarding
    * uses a slightly highlighted background when an entry is "selected"
@@ -56,6 +58,7 @@ export const CatalogueRow = ({
   onFocus,
   actions,
   contextActions = EMPTY_CONTEXT_ACTIONS,
+  notice,
   accentWhenUnfocused = false,
 }: CatalogueRowProps) => {
   const t = useTranslations();
@@ -71,7 +74,7 @@ export const CatalogueRow = ({
       <div
         aria-pressed={focused}
         className={cn(
-          "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start transition-colors",
+          "flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start",
           focused && "border-foreground bg-accent/60 ring-foreground/20 ring-1",
           !focused &&
             accentWhenUnfocused &&
@@ -112,6 +115,11 @@ export const CatalogueRow = ({
               dir="auto"
             >
               {display.description}
+            </p>
+          )}
+          {notice !== undefined && (
+            <p className="text-muted-foreground text-xs" dir="auto">
+              {notice}
             </p>
           )}
           <div className="flex flex-wrap items-center gap-1.5">

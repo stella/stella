@@ -2,11 +2,11 @@ import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { fetchWithTimeout } from "@stll/fetch";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -290,7 +290,7 @@ export const ProcuracaoDropZone = ({
       <button
         aria-busy={isExtracting}
         className={cn(
-          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center focus-visible:ring-2 focus-visible:outline-none",
           isDropTarget && "border-primary bg-primary/5",
           isExtracting && "cursor-progress",
         )}

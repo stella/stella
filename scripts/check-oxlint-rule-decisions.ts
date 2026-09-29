@@ -3,9 +3,12 @@
 // only a new rule's default category by itself, so without this check an
 // upgrade can land rules nobody decided on. It also fails on a config key
 // that names a built-in plugin but no rule in it (a typo or a removed rule),
-// which oxlint would otherwise ignore.
+// which oxlint would otherwise ignore. Every top-level rule the config turns
+// off carries its reason in a comment directly above it.
 //
 // Usage: bun scripts/check-oxlint-rule-decisions.ts
+
+import { readFileSync } from "node:fs";
 
 import config from "../oxlint.config.ts";
 import { isRecord, readScopes, stringArray } from "./oxlint-config-scopes.ts";
@@ -83,8 +86,29 @@ const undecided = rules
   .map((rule) => `${rule.scope}/${rule.value} (${rule.category})`)
   .toSorted();
 
+const OFF_ENTRY = /^ {4}(?:"([^"]+)"|([\w-]+)): "off",$/u;
+const configLines = readFileSync(
+  new URL("../oxlint.config.ts", import.meta.url),
+  "utf-8",
+).split("\n");
+const rulesStart = configLines.indexOf("  rules: {");
+const rulesEnd = configLines.indexOf("  },", rulesStart);
+const unexplainedOff: string[] = [];
+for (let index = rulesStart + 1; index < rulesEnd; index++) {
+  const match = OFF_ENTRY.exec(configLines[index] ?? "");
+  if (!match) {
+    continue;
+  }
+  if (!(configLines[index - 1] ?? "").trimStart().startsWith("//")) {
+    unexplainedOff.push(
+      `${match[1] ?? match[2] ?? ""} (line ${String(index + 1)})`,
+    );
+  }
+}
+
 const failures = [
   ...undecided.map((rule) => `built-in rule with no on/off decision: ${rule}`),
+  ...unexplainedOff.map((rule) => `rule turned off without a reason: ${rule}`),
   ...[...unknownKeys]
     .toSorted()
     .map((key) => `config key names no built-in rule: ${key}`),

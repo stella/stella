@@ -29,6 +29,7 @@ import {
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -118,17 +119,6 @@ export const buildCitationRows = async ({
       polarityRuleId: match?.ruleId ?? null,
     };
   });
-};
-
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
 };
 
 /** Each rule that labelled one of these citations, and how many it labelled. */
@@ -259,6 +249,13 @@ const citationContent = (row: {
  * is, a stored row nothing matches is deleted, and only an incoming row
  * nothing matches is written.
  *
+ * Reviews are applied before the comparison, not after it. A reviewed row is
+ * stored with the review's polarity and no rule, so the incoming row it is
+ * compared with has to carry the same, or an unchanged document would read as
+ * a changed one and rewrite the row on every refresh. The rule verdicts are
+ * then settled for the written rows only, and a reviewed row carries no rule,
+ * so a rule neither labels it nor counts it as a match.
+ *
  * A written row is settled before it is inserted, by the resolver's own
  * doctrine, so it goes in once with its outcome. A kept row keeps its outcome:
  * whatever changes the answer for it (a decision arriving under its key, this
@@ -340,7 +337,7 @@ export const writeDecisionCitations = async (
 
   const incoming: CitationRow[] = [];
   let kept = 0;
-  for (const row of rows) {
+  for (const row of await applyCitationReviews(tx, rows)) {
     const matches = unmatched.get(citationContent(row));
     if (matches !== undefined && matches.length > 0) {
       matches.pop();
@@ -364,7 +361,7 @@ export const writeDecisionCitations = async (
 
   if (incoming.length > 0) {
     const written: (CitationRow & { id: SafeId<"caseLawCitation"> })[] = [];
-    for (const row of await settleCitationPolarity(tx, incoming, observedAt)) {
+    for (const row of await settleRuleVerdicts(tx, incoming, observedAt)) {
       written.push({ ...row, id: createSafeId<"caseLawCitation">() });
     }
     const resolutions = await classifyCitationsBeforeWrite(tx, {
@@ -400,18 +397,3 @@ export const writeDecisionCitations = async (
     await resolveCitationsForDecision(tx, decisionId);
   }
 };
-
-/**
- * The polarity each citation row is published with. A reviewed citation takes
- * its review first, so a rule neither labels it nor counts it as a match.
- */
-const settleCitationPolarity = async (
-  tx: Transaction,
-  rows: readonly (typeof caseLawCitations.$inferInsert)[],
-  observedAt: Date,
-): Promise<(typeof caseLawCitations.$inferInsert)[]> =>
-  await settleRuleVerdicts(
-    tx,
-    await applyCitationReviews(tx, rows),
-    observedAt,
-  );

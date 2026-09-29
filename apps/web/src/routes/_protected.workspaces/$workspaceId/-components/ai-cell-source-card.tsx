@@ -223,7 +223,7 @@ export const AICellSourceCard = ({
       <PreviewCardPopup align="start" className="w-80 p-0">
         {onOpen ? (
           <button
-            className="hover:bg-accent/40 flex w-full cursor-pointer flex-col gap-2 rounded-lg p-3 text-start transition-colors"
+            className="hover:bg-accent/40 flex w-full cursor-pointer flex-col gap-2 rounded-lg p-3 text-start"
             onClick={onOpen}
             type="button"
           >

@@ -47,10 +47,10 @@ export { SPAWN_SUBAGENTS_TOOL_NAME };
 export const SUBAGENT_DELEGATION_DEPTH_CAP = 1;
 
 /** Upper bound on how many subtasks one `spawn_subagents` call may batch. */
-export const MAX_SUBAGENTS_PER_CALL = 8;
+const MAX_SUBAGENTS_PER_CALL = 8;
 
 /** Step budget for each subagent's own nested agentic loop. */
-export const SUBAGENT_MAX_STEPS = 25;
+const SUBAGENT_MAX_STEPS = 25;
 
 /**
  * Wall-clock cap applied only when the tool context provides no `abortSignal`
@@ -125,12 +125,7 @@ const spawnSubagentsOutputSchema = v.strictObject({
   results: v.array(spawnSubagentsResultSchema),
 });
 
-export type SpawnSubagentsToolInput = v.InferOutput<
-  typeof spawnSubagentsInputSchema
->;
-export type SpawnSubagentsToolOutput = v.InferOutput<
-  typeof spawnSubagentsOutputSchema
->;
+type SpawnSubagentsToolInput = v.InferOutput<typeof spawnSubagentsInputSchema>;
 
 type SubagentSpec = SpawnSubagentsToolInput["subagents"][number];
 
@@ -360,7 +355,7 @@ type CreateSpawnSubagentsToolProps = {
   dependencies?: SpawnSubagentsDependencies | undefined;
 };
 
-export type SpawnSubagentsDependencies = {
+type SpawnSubagentsDependencies = {
   assertUsageAvailable: typeof assertUsageAvailable;
   runSubagent: typeof runSubagent;
 };

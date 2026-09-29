@@ -84,10 +84,7 @@ export const OrganizationStep = ({
               <FieldLabel>{t("onboarding.orgNameLabel")}</FieldLabel>
               <Input
                 autoFocus
-                className={cn(
-                  "transition-shadow",
-                  isInputPulsing && "ring-primary ring-2",
-                )}
+                className={cn(isInputPulsing && "ring-primary ring-2")}
                 maxLength={50}
                 onBlur={field.handleBlur}
                 onChange={(e) => {

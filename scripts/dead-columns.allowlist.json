@@ -68,5 +68,55 @@
     "table": "legislation_documents",
     "column": "citationAuthorityComputedAt",
     "reason": "unreferenced as of 2026-09-23; drop with its case-law twin in the next schema release"
+  },
+  {
+    "table": "legislation_documents",
+    "column": "payloadRevision",
+    "reason": "maintained by a database trigger on every payload or version-selection change and read by ingestion outside this workspace; app code never writes or reads it."
+  },
+  {
+    "table": "case_law_provision_extraction_revisions",
+    "column": "desiredRevision",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extraction_revisions_registry",
+    "column": "engineInputDigest",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extraction_revisions_registry",
+    "column": "profileDigest",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extractions",
+    "column": "enqueueReason",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extractions",
+    "column": "transientAttempts",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extractions",
+    "column": "blockedInputDigest",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extractions",
+    "column": "terminalReason",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extractions",
+    "column": "rowsDigest",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
+  },
+  {
+    "table": "case_law_provision_extractions",
+    "column": "unresolvedCounts",
+    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
   }
 ]

@@ -9,12 +9,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
-import {
-  closeSessionConnections,
-  pushSessionEvent,
-} from "@/api/lib/desktop-edit-session-notifications";
+import { closeSessionConnections } from "@/api/lib/desktop-edit-session-notifications";
 import { liveOwnDesktopEditSessionTargetPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const config = {
   permissions: { entity: ["update"] },
@@ -73,7 +71,7 @@ export default createSafeHandler(
 
     // Notify the desktop app via SSE before closing the connection
     if (releasedSessionId) {
-      pushSessionEvent(releasedSessionId, {
+      broadcastSessionEvent(releasedSessionId, {
         type: "session-closed",
         data: { reason: "released" },
       });

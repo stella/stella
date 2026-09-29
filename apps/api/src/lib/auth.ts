@@ -28,6 +28,7 @@ import Elysia, { t } from "elysia";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
+import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -73,6 +74,7 @@ import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
+import { clearOrganizationCorrespondenceAssignments } from "@/api/lib/email/correspondence/offboarding";
 import {
   isTransactionalEmailConfigured,
   sendNewDeviceLoginEmail,
@@ -125,12 +127,18 @@ import {
 import { revokeUserSseAccess } from "@/api/lib/sse";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { includes, isRecord } from "@/api/lib/type-guards";
+import {
+  checkMemberAdmission,
+  MEMBER_CAPACITY_REACHED_ERROR_CODE,
+} from "@/api/lib/usage/member-capacity";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
+import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 /** Access token lifetime in seconds (15 minutes). */
 const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
@@ -207,17 +215,19 @@ export const runEmailOtpRequestOnResponseSchedule = async ({
 };
 
 type EmailOtpMinimumResponseDurationOptions = {
-  isDev: boolean;
   path: string | undefined;
+  runtimeMode: RuntimeMode;
   type: string;
 };
 
 export const getEmailOtpMinimumResponseDuration = ({
-  isDev,
   path,
+  runtimeMode: mode,
   type,
 }: EmailOtpMinimumResponseDurationOptions): number =>
-  !isDev && path === SEND_VERIFICATION_OTP_PATH && type === "sign-in"
+  mode.mode !== RUNTIME_MODE.open &&
+  path === SEND_VERIFICATION_OTP_PATH &&
+  type === "sign-in"
     ? EMAIL_OTP_MIN_RESPONSE_DURATION_MS
     : 0;
 
@@ -851,8 +861,32 @@ const createAuth = () => {
     twoFactorPlugin,
   ) satisfies BetterAuthPlugin;
 
+  const refuseBeyondMemberCapacity = async (
+    organizationId: SafeId<"organization">,
+    kind: "invitation" | "membership",
+  ): Promise<void> => {
+    const admission = await checkMemberAdmission(rootDb, {
+      organizationId,
+      kind,
+    });
+    // Better Auth rejects a request from an organization hook by the
+    // APIError it throws.
+    if (Result.isError(admission)) {
+      throw new APIError("FORBIDDEN", {
+        error: MEMBER_CAPACITY_REACHED_ERROR_CODE,
+        message: admission.error.message,
+      });
+    }
+  };
+
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
+    // Insert-once on the owner connection, like the seeds below.
+    recordAccessState: async (organizationId: SafeId<"organization">) =>
+      await recordNewOrganizationAccessState(rootDb, {
+        organizationId,
+        now: new Date(),
+      }),
     // Idempotent via the (organization_id, key) unique. Runs on the owner
     // connection (`rootDb`), which bypasses RLS the same way the org row's
     // own creation did.
@@ -870,10 +904,10 @@ const createAuth = () => {
     trustedOrigins: [
       ...frontendOrigins({
         frontendUrl: env.FRONTEND_URL,
-        isDev: env.isDev,
+        runtimeMode: runtimeMode(),
       }),
-      ...(env.isDev ? ["chrome-extension://*"] : []),
-      ...(env.isDev ? DEV_INSPECTOR_ORIGINS : []),
+      ...(isLocalDevOpen() ? ["chrome-extension://*"] : []),
+      ...(isLocalDevOpen() ? DEV_INSPECTOR_ORIGINS : []),
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
     ],
     disabledPaths: [
@@ -1089,8 +1123,8 @@ const createAuth = () => {
         async sendVerificationOTP({ email, otp, type }, ctx) {
           await runEmailOtpRequestOnResponseSchedule({
             responseDelayMs: getEmailOtpMinimumResponseDuration({
-              isDev: env.isDev,
               path: ctx?.path,
+              runtimeMode: runtimeMode(),
               type,
             }),
             runRequest: async () => {
@@ -1114,8 +1148,8 @@ const createAuth = () => {
                   );
               }
 
-              if (env.isDev) {
-                // oxlint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
+              if (isLocalDevOpen()) {
+                // oxlint-disable-next-line no-console -- local development OTP echo (gated on the runtime opt-in; value printed verbatim by design)
                 console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
                 stashDevOtp(email, otp);
                 return;
@@ -1209,23 +1243,40 @@ const createAuth = () => {
               requestIds: teardown.value.requestIds,
             });
           },
+          // A readable refusal before the plugin writes anything; the
+          // `member_organization_capacity` trigger is what holds the bound
+          // under concurrent additions.
+          async beforeCreateInvitation({ organization: org }) {
+            await refuseBeyondMemberCapacity(
+              brandPersistedOrganizationId(org.id),
+              "invitation",
+            );
+          },
+          async beforeAcceptInvitation({ organization: org }) {
+            await refuseBeyondMemberCapacity(
+              brandPersistedOrganizationId(org.id),
+              "membership",
+            );
+          },
+          async beforeAddMember({ organization: org }) {
+            await refuseBeyondMemberCapacity(
+              brandPersistedOrganizationId(org.id),
+              "membership",
+            );
+          },
           async afterRemoveMember({
             member: removedMember,
             organization: org,
           }) {
-            // Branded here, at the boundary: both ids are read off persisted
-            // rows by the plugin itself (the membership it just removed), not
-            // supplied by the caller, so this is where they become ownership
-            // ids for the tenant predicates the helper applies.
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
             await rootDb.transaction(async (tx) => {
-              await closeRemovedMemberActiveTimer({
+              await revokeOrganizationMemberAuthArtifacts(tx, {
                 organizationId,
-                tx,
                 userId,
               });
-              await revokeOrganizationMemberAuthArtifacts(tx, {
+              await clearOrganizationCorrespondenceAssignments({
+                tx,
                 organizationId,
                 userId,
               });
@@ -1235,10 +1286,42 @@ const createAuth = () => {
             // only re-checked on the next event.
             await revokeUserSseAccess(userId, organizationId);
           },
+          async beforeRemoveMember({
+            member: removedMember,
+            organization: org,
+          }) {
+            // Branded here, at the boundary: both ids are read off persisted
+            // rows by the plugin, not supplied by the caller, so these become ownership
+            // ids for the tenant predicates the helper applies.
+            const organizationId = brandPersistedOrganizationId(org.id);
+            const userId = brandPersistedUserId(removedMember.userId);
+            await rootDb.transaction(async (tx) => {
+              const timerClose = await closeRemovedMemberActiveTimer({
+                organizationId,
+                tx,
+                userId,
+              });
+              if (Result.isError(timerClose)) {
+                throw timerClose.error;
+              }
+              // Better Auth deletes the member after this hook, outside this
+              // transaction. Remove the exact row here so a timer cannot start
+              // between the timer check and membership removal.
+              await tx
+                .delete(member)
+                .where(
+                  and(
+                    eq(member.id, removedMember.id),
+                    eq(member.organizationId, organizationId),
+                    eq(member.userId, userId),
+                  ),
+                );
+            });
+          },
         },
         async sendInvitationEmail(data, request) {
           const inviteLink = `${env.FRONTEND_URL}/auth/accept-invitation/${data.id}`;
-          if (env.isDev) {
+          if (isLocalDevOpen()) {
             // oxlint-disable-next-line no-console -- dev-only invitation-link echo for local testing
             console.log(
               `[DEV] Org invitation for ${data.email}: ${inviteLink}`,
@@ -1399,7 +1482,7 @@ const createAuth = () => {
         return undefined;
       }),
       after: createAuthMiddleware(async (ctx) => {
-        if (!isSessionCreatingAuthPath(ctx.path) || env.isDev) {
+        if (!isSessionCreatingAuthPath(ctx.path) || isLocalDevOpen()) {
           return;
         }
 
@@ -1666,6 +1749,7 @@ export const resolveMemberAuthorization = async (
       and(
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
+        // sql-perf-allow: bounded by one workspaceId and one member per user and organization
         or(
           membershipExists,
           and(
@@ -1794,6 +1878,7 @@ export const resolveWorkspaceRealtimeAudience = async (
         eq(workspaces.id, workspaceId),
         eq(workspaces.organizationId, member.organizationId),
         eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
+        // sql-perf-allow: bounded by one workspaceId and LIMITS.organizationMembersCount members
         or(
           membershipExists,
           and(
@@ -1897,10 +1982,10 @@ const resolveValidateAuth = async (
 
   // Read before the request scope exists, at the same boundary as the
   // membership lookup above, so it goes through the same connection.
-  const orgSettings = await loadOrgSettingsForAuth(
-    rootDb,
-    activeOrganizationId,
-  );
+  const orgSettings = await loadOrgSettingsForAuth(rootDb, {
+    organizationId: activeOrganizationId,
+    userId,
+  });
   const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the

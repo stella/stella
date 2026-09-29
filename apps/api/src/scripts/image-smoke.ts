@@ -25,6 +25,12 @@ import { validateIco } from "@stll/business-registries/ares";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
+import {
+  loadStampFontLicenses,
+  loadStampFonts,
+} from "@/api/lib/files/pdf-signing/stamp-font";
+import { layoutStampRow } from "@/api/lib/files/pdf-signing/stamp-layout";
+import { stampTextCheck } from "@/api/lib/files/pdf-signing/stamp-text";
 import { newQuickJsAsyncContext } from "@/api/lib/quickjs-runtime";
 import {
   RUNTIME_WORKER_FILES,
@@ -167,6 +173,35 @@ await probe("anonymize native engine", () => {
 await probe("stdnum native binding", () => {
   if (!validateIco("27082440")) {
     panic("stdnum rejected a well-formed identifier");
+  }
+});
+
+// Visible signature stamps draw with embedded fonts and shape with an
+// embedded WebAssembly shaper, all carried by the compiled binary as
+// assets, together with the fonts' licences.
+await probe("signature stamp fonts and shaper", async () => {
+  const fonts = await loadStampFonts();
+  if (
+    !stampTextCheck(fonts).canDraw("Čř \u0645\u062D\u0645\u062F \u6771\u4EAC")
+  ) {
+    panic("the stamp fonts cannot draw the scripts they are chosen for");
+  }
+  const row = layoutStampRow({
+    direction: "rtl",
+    fonts,
+    text: "\u0628\u0628\u0628",
+  });
+  const glyphs = new Set(
+    row.runs.flatMap(({ glyphs: shaped }) =>
+      shaped.map(({ glyphId }) => glyphId),
+    ),
+  );
+  if (glyphs.size !== 3) {
+    panic("the stamp shaper did not join Arabic letters");
+  }
+  const licenses = await loadStampFontLicenses();
+  if (licenses.some((license) => license.length === 0)) {
+    panic("a stamp font's licence is missing");
   }
 });
 

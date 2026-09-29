@@ -1,15 +1,18 @@
 import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import {
   createChatAttachmentPart,
   getChatAttachmentUrl,
   isChatAttachmentPart,
+  toChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   applyChatToolPolicy,
@@ -72,6 +75,7 @@ const {
   prepareToolsForThirdParty,
   prepareUnknownForThirdParty,
   reserveThirdPartyBoundarySourcePlaceholders,
+  storedRestorationsOf,
 } = await import("@/api/handlers/chat/third-party-boundary");
 
 const createBoundary = () => {
@@ -85,6 +89,7 @@ const createBoundary = () => {
     ),
     scopedDb,
     sendMode: CHAT_SEND_MODE.anonymized,
+    threadRestorations: [],
   });
 };
 
@@ -99,6 +104,7 @@ const createRawBoundary = () => {
     ),
     scopedDb,
     sendMode: CHAT_SEND_MODE.rawOverride,
+    threadRestorations: [],
   });
 };
 
@@ -118,6 +124,7 @@ describe("chat third-party anonymization boundary", () => {
       ),
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
 
     const prepared = await prepareTextForThirdParty({
@@ -169,6 +176,7 @@ describe("chat third-party anonymization boundary", () => {
       organizationId,
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
 
     const prepared = await prepareUnknownForThirdParty({
@@ -218,6 +226,7 @@ describe("chat third-party anonymization boundary", () => {
       organizationId: toSafeId<"organization">(organizationId),
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
 
     const prepared = await prepareUnknownForThirdParty({
@@ -609,6 +618,7 @@ describe("chat third-party anonymization boundary", () => {
       organizationId,
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
     const messages: ChatMessage[] = [
       {
@@ -956,6 +966,7 @@ describe("chat third-party anonymization boundary", () => {
       ),
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
     let executedInput: unknown;
     const sourceTool = toolDefinition({
@@ -1018,6 +1029,7 @@ describe("chat third-party anonymization boundary", () => {
       organizationId,
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
     const sourceTool = toolDefinition({
       name: `mcp__crm__${organizationId}`,
@@ -1307,6 +1319,7 @@ describe("chat third-party anonymization boundary", () => {
       ),
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
 
     const first = await prepareTextForThirdParty({
@@ -1367,6 +1380,7 @@ describe("chat third-party anonymization boundary", () => {
       ),
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
 
     const first = await prepareTextForThirdParty({
@@ -1384,7 +1398,9 @@ describe("chat third-party anonymization boundary", () => {
       throw new TypeError("Expected anonymization to succeed");
     }
     expect(first.value).toBe("[PERSON_1] prepared the memo.");
-    expect(second.value).toBe("Results for [PERSON_1]: [PERSON_2]");
+    expect(second.value).toBe(
+      "Results for [LITERAL_PLACEHOLDER_1]: [PERSON_2]",
+    );
     if (boundary.type !== "anonymized") {
       throw new TypeError("Expected anonymized boundary");
     }
@@ -1393,6 +1409,9 @@ describe("chat third-party anonymization boundary", () => {
         ["[PERSON_1]", "Bob"],
         ["[PERSON_2]", "Alice"],
       ]),
+    );
+    expect(deanonymizeFromBoundary({ boundary, text: second.value })).toBe(
+      "Results for [PERSON_1]: Alice",
     );
   });
 
@@ -1450,6 +1469,7 @@ describe("chat third-party anonymization boundary", () => {
       ),
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
 
     const prepared = await prepareTextForThirdParty({
@@ -1489,6 +1509,7 @@ describe("chat third-party anonymization boundary", () => {
       ),
       scopedDb,
       sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
     });
     const literal = "[MISC_9007199254740991]";
 
@@ -1631,5 +1652,193 @@ describe("chat third-party anonymization boundary", () => {
     // External tool got the raw placeholder — real names never
     // leave Stella for third parties.
     expect(seenInputs).toEqual([{ query: "[PERSON_1]" }]);
+  });
+});
+
+// Anonymization numbers each call from `[LABEL_1]` in order of appearance,
+// as the native pipeline does, so two requests that meet the same people in
+// a different order number them differently unless the boundary starts from
+// the thread's names.
+const PEOPLE = ["Alice", "Bob", "Carol"] as const;
+
+const anonymizeInOrderOfAppearance = async ({
+  fields,
+}: {
+  fields: string[];
+}) => {
+  const redactionMap = new Map<string, string>();
+  const anonymized = fields.map((field) => {
+    const byAppearance = PEOPLE.filter((person) => field.includes(person))
+      .map((person) => ({ at: field.indexOf(person), person }))
+      .toSorted((a, b) => a.at - b.at);
+    let next = field;
+    for (const [index, { person }] of byAppearance.entries()) {
+      const placeholder = `[PERSON_${String(index + 1)}]`;
+      next = next.replaceAll(person, () => placeholder);
+      redactionMap.set(placeholder, person);
+    }
+    return next;
+  });
+  return { entityCount: redactionMap.size, fields: anonymized, redactionMap };
+};
+
+const createThreadBoundary = (
+  threadRestorations: readonly { original: string; placeholder: string }[],
+) => {
+  const { scopedDb } = createScopedDbMock({});
+  return createChatThirdPartyBoundary({
+    anonymizeFields: anonymizeInOrderOfAppearance,
+    anonymizationScopeId: "workspace-A",
+    organizationId: toSafeId<"organization">(
+      "11111111-1111-4111-8111-111111111111",
+    ),
+    scopedDb,
+    sendMode: CHAT_SEND_MODE.anonymized,
+    threadRestorations,
+  });
+};
+
+describe("anonymization placeholders across a thread's requests", () => {
+  test("a later request keeps earlier names and numbers new ones after them", async () => {
+    const boundary = createThreadBoundary([
+      { placeholder: "[PERSON_1]", original: "Alice" },
+    ]);
+
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Bob briefed Alice.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared) || boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymization to succeed");
+    }
+    expect(prepared.value).toBe("[PERSON_2] briefed [PERSON_1].");
+    expect(boundary.redactionMap).toEqual(
+      new Map([
+        ["[PERSON_1]", "Alice"],
+        ["[PERSON_2]", "Bob"],
+      ]),
+    );
+  });
+
+  test("does not restore an omitted historical placeholder", () => {
+    const boundary = createThreadBoundary([
+      { placeholder: "[PERSON_1]", original: "Alice" },
+    ]);
+
+    expect(deanonymizeFromBoundary({ boundary, text: "[PERSON_1]" })).toBe(
+      "[PERSON_1]",
+    );
+    expect(
+      deanonymizeUnknownStringsFromBoundary(boundary, {
+        value: "[PERSON_1]",
+      }),
+    ).toEqual({ value: "[PERSON_1]" });
+  });
+
+  test("aliases a literal historical placeholder in the current request", async () => {
+    const boundary = createThreadBoundary([
+      { placeholder: "[PERSON_1]", original: "Alice" },
+    ]);
+    const prepared = await prepareTextForThirdParty({
+      boundary,
+      text: "Echo [PERSON_1]; Alice answered.",
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared) || boundary.type !== "anonymized") {
+      throw new TypeError("Expected anonymization to succeed");
+    }
+    expect(prepared.value).toBe(
+      "Echo [LITERAL_PLACEHOLDER_1]; [PERSON_1] answered.",
+    );
+    expect(boundary.redactionMap).toEqual(new Map([["[PERSON_1]", "Alice"]]));
+    expect(deanonymizeFromBoundary({ boundary, text: prepared.value })).toBe(
+      "Echo [PERSON_1]; Alice answered.",
+    );
+  });
+
+  test("one placeholder never names two originals in a thread", async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        // Each request mentions some of the people in some order.
+        fc.array(fc.shuffledSubarray([...PEOPLE], { minLength: 1 }), {
+          minLength: 1,
+          maxLength: 4,
+        }),
+        async (requests) => {
+          const threadRestorations: {
+            original: string;
+            placeholder: string;
+          }[] = [];
+          for (const people of requests) {
+            const boundary = createThreadBoundary(threadRestorations);
+            const prepared = await prepareTextForThirdParty({
+              boundary,
+              text: people.join(" met "),
+            });
+            if (Result.isError(prepared) || boundary.type !== "anonymized") {
+              throw new TypeError("Expected anonymization to succeed");
+            }
+            // What the turn stores: every placeholder the request sent.
+            for (const [placeholder, original] of boundary.redactionMap) {
+              threadRestorations.push({ placeholder, original });
+            }
+          }
+          const named = new Map<string, Set<string>>();
+          for (const { original, placeholder } of threadRestorations) {
+            named.set(
+              placeholder,
+              new Set([...(named.get(placeholder) ?? []), original]),
+            );
+          }
+          for (const originals of named.values()) {
+            expect(originals.size).toBe(1);
+          }
+        },
+      ),
+      propertyConfig({ numRuns: 200, seed: propertySeed() }),
+    );
+  });
+});
+
+describe("the restorations a request's history holds", () => {
+  test("are read from current and legacy stored turns, oldest first", () => {
+    const pairs = storedRestorationsOf([
+      {
+        id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000001"),
+        role: "assistant",
+        content: {
+          version: 1,
+          data: [
+            {
+              type: "data-stella-anon-restorations",
+              data: {
+                pairs: [{ placeholder: "[PERSON_1]", original: "Alice" }],
+              },
+            },
+          ],
+        },
+      },
+      {
+        id: toSafeId<"chatMessage">("00000000-0000-4000-8000-000000000002"),
+        role: "assistant",
+        content: toChatMessageContent({
+          data: [{ type: "text", content: "Noted." }],
+          metadata: {
+            anonRestorations: {
+              pairs: [{ placeholder: "[PERSON_2]", original: "Bob" }],
+            },
+          },
+          version: 2,
+        }),
+      },
+    ]);
+
+    expect(pairs).toEqual([
+      { placeholder: "[PERSON_1]", original: "Alice" },
+      { placeholder: "[PERSON_2]", original: "Bob" },
+    ]);
   });
 });

@@ -32,14 +32,6 @@ export const isDesktopEditSessionCloseSignal = (
 ): event is DesktopEditSessionCloseSignal =>
   event.type === DESKTOP_EDIT_SESSION_CLOSE_SIGNAL;
 
-/** Broadcast an event to this session's SSE streams on every API instance. */
-export const pushSessionEvent = (
-  sessionId: SafeId<"desktopEditSession">,
-  event: DesktopEditSessionRealtimeEvent,
-): void => {
-  broadcastSessionEvent(sessionId, event);
-};
-
 /** Close this session's SSE streams on every API instance. */
 export const closeSessionConnections = (
   sessionId: SafeId<"desktopEditSession">,

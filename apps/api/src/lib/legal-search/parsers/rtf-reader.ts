@@ -12,7 +12,7 @@
  *
  * Scope is the court dialect, not the RTF specification: groups, control words
  * with an optional numeric parameter, `\'xx` bytes against the document's
- * `\ansicpgN` code page, `\uN?` escapes, `\par`/`\pard`, `\line`, `\tab`, the
+ * `\ansicpgN` code page (or the current font's `\fcharsetN`), `\uN?` escapes, `\par`/`\pard`, `\line`, `\tab`, the
  * character state (`\b`, `\i`, `\ul`, `\cfN`), alignment, `\trowd`/`\cell`/
  * `\row` tables, and `\footnote`. Header tables (`\fonttbl`, `\colortbl`,
  * `\stylesheet`, `\info`) and every `\*` destination are skipped, because they
@@ -56,7 +56,6 @@ const ANSI_CODE_PAGES = [
   [1253, "windows-1253"],
   [1254, "windows-1254"],
   [1257, "windows-1257"],
-  [437, "ibm866"],
   [10_000, "macintosh"],
 ] as const;
 
@@ -66,6 +65,32 @@ type CodePageLabel = (typeof ANSI_CODE_PAGES)[number][1];
 const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(ANSI_CODE_PAGES);
 
 const DEFAULT_CODE_PAGE_LABEL: CodePageLabel = "windows-1252";
+
+/**
+ * The code page a font's `\fcharsetN` selects. A font's charset outranks the
+ * document's `\ansicpgN` for the `\'xx` bytes written in it: Word on a
+ * Western-European machine writes `\ansicpg1252` and a Hungarian text in a
+ * `\fcharset238` font, whose byte F5 is "ő", not the "õ" of windows-1252.
+ * `0` (ANSI) and `1` (default) defer to the document; `2` (symbol) has no
+ * code page and does too. Any other charset (`255`, the OEM code page 437,
+ * which no WHATWG decoder reads; the double-byte Asian sets) is reported
+ * where text is written in it, never read as a neighbour.
+ */
+const FONT_CHARSET_CODE_PAGES = new Map<number, number>([
+  [77, 10_000],
+  [161, 1253],
+  [162, 1254],
+  [186, 1257],
+  [204, 1251],
+  [238, 1250],
+]);
+
+const DOCUMENT_FONT_CHARSETS = new Set([0, 1, 2]);
+
+/** What a font's `\fcharsetN` says its bytes are read against. */
+type FontCharset =
+  | { type: "code-page"; label: CodePageLabel }
+  | { type: "unsupported"; charset: number };
 
 /**
  * Control words the dialect states and this reader answers for. Every other
@@ -258,6 +283,8 @@ type CharacterState = {
   italic: boolean;
   underline: boolean;
   colorIndex: number;
+  /** `\fN`, or undefined for the document's `\deffN`. */
+  font: number | undefined;
 };
 
 type ParagraphState = {
@@ -272,6 +299,8 @@ type GroupState = {
   destination: Destination;
   /** Replacement characters that follow each `\uN`, as `\ucN` last set it. */
   unicodeFallbackCount: number;
+  /** Inside `\fonttbl`, where `\fN` defines a font rather than selects one. */
+  fontTable: boolean;
 };
 
 /** A note being collected, and the paragraphs written into it so far. */
@@ -287,6 +316,7 @@ const initialCharacterState = (): CharacterState => ({
   italic: false,
   underline: false,
   colorIndex: 0,
+  font: undefined,
 });
 
 const initialParagraphState = (): ParagraphState => ({
@@ -299,6 +329,7 @@ const copyGroupState = (state: GroupState): GroupState => ({
   paragraph: { ...state.paragraph },
   destination: state.destination,
   unicodeFallbackCount: state.unicodeFallbackCount,
+  fontTable: state.fontTable,
 });
 
 /**
@@ -339,11 +370,14 @@ type ParagraphBuffer = {
  * Text accumulated for the run being written.
  *
  * Bytes and decoded characters are kept apart because they decode differently:
- * a `\'xx` byte is read against the document's code page, and a `\uN` escape
- * already names a code point. Joining them as bytes would put a `\uN`
- * character through the single-byte decoder.
+ * a `\'xx` byte is read against the code page in force when it was written,
+ * and a `\uN` escape already names a code point. Joining them as bytes would
+ * put a `\uN` character through the single-byte decoder. `label` is the code
+ * page every byte in `bytes` was written under: a byte written under another
+ * decodes the ones before it first, so no later font change, `\plain` or
+ * group close can reread them.
  */
-type PendingText = { bytes: number[]; text: string };
+type PendingText = { bytes: number[]; label: CodePageLabel; text: string };
 
 export type ReadRtfOptions = {
   /**
@@ -531,6 +565,16 @@ const readRtfInto = (
     paragraph: initialParagraphState(),
     destination: { type: "body" },
     unicodeFallbackCount: 1,
+    fontTable: false,
+  };
+  /** Each font's charset, from its `\fcharsetN`, where it states its own. */
+  const fontCharsets = new Map<number, FontCharset>();
+  let definingFont: number | undefined;
+  let defaultFont: number | undefined;
+
+  const currentFontCharset = (): FontCharset | undefined => {
+    const font = state.character.font ?? defaultFont;
+    return font === undefined ? undefined : fontCharsets.get(font);
   };
   /**
    * One frame per open group. `heldParagraph` is the body paragraph a
@@ -541,7 +585,7 @@ const readRtfInto = (
     [];
 
   let paragraph: ParagraphBuffer = { content: [], alignment: undefined };
-  let pending: PendingText = { bytes: [], text: "" };
+  let pending: PendingText = { bytes: [], label: codePageLabel, text: "" };
   let pendingFormatting: TextFormatting | undefined;
   let hasPendingRun = false;
 
@@ -558,13 +602,28 @@ const readRtfInto = (
    * the sentence.
    */
   const appendText = (text: string): void => {
-    pending.text += decodeBytes(pending.bytes, codePageLabel) + text;
+    pending.text += decodeBytes(pending.bytes, pending.label) + text;
     pending.bytes = [];
   };
 
+  /** A byte of text, read later against the code page in force now. */
+  const appendByte = (byte: number): void => {
+    const fontCharset = currentFontCharset();
+    if (fontCharset?.type === "unsupported" && byte >= 0x80) {
+      unknownWords.add(`fcharset${String(fontCharset.charset)}`);
+    }
+    const label =
+      fontCharset?.type === "code-page" ? fontCharset.label : codePageLabel;
+    if (label !== pending.label) {
+      appendText("");
+      pending.label = label;
+    }
+    pending.bytes.push(byte);
+  };
+
   const flushRun = (): void => {
-    const text = pending.text + decodeBytes(pending.bytes, codePageLabel);
-    pending = { bytes: [], text: "" };
+    const text = pending.text + decodeBytes(pending.bytes, pending.label);
+    pending = { bytes: [], label: pending.label, text: "" };
     // A skipped destination is the writer's metadata: its text is not the
     // document's, and keeping it would print a colour table into the decision.
     if (text.length === 0 || state.destination.type === "skipped") {
@@ -700,6 +759,49 @@ const readRtfInto = (
   };
 
   /**
+   * Apply a font word: which font the bytes that follow are written in, and,
+   * inside the font table, which code page each font declares. Returns
+   * whether the word was one.
+   */
+  const applyFontWord = (
+    word: string,
+    parameter: number | undefined,
+  ): boolean => {
+    switch (word) {
+      case "deff":
+        defaultFont = parameter;
+        return true;
+      case "f":
+        if (state.fontTable) {
+          definingFont = parameter;
+          return true;
+        }
+        state.character.font = parameter;
+        return true;
+      case "fcharset": {
+        if (
+          !state.fontTable ||
+          definingFont === undefined ||
+          parameter === undefined ||
+          DOCUMENT_FONT_CHARSETS.has(parameter)
+        ) {
+          return true;
+        }
+        const label = codePageOf(FONT_CHARSET_CODE_PAGES.get(parameter));
+        fontCharsets.set(
+          definingFont,
+          label === undefined
+            ? { type: "unsupported", charset: parameter }
+            : { type: "code-page", label },
+        );
+        return true;
+      }
+      default:
+        return false;
+    }
+  };
+
+  /**
    * Apply one control word.
    *
    * Its own function rather than a branch of the scanner: the dialect is
@@ -728,8 +830,16 @@ const readRtfInto = (
       colors.push({ auto: true });
     }
 
+    if (word === "fonttbl") {
+      state.fontTable = true;
+    }
+
     if (SKIPPED_DESTINATIONS.has(word)) {
       enterDestination({ type: "skipped" });
+      return;
+    }
+
+    if (applyFontWord(word, parameter)) {
       return;
     }
 
@@ -904,7 +1014,7 @@ const readRtfInto = (
       // Line endings between control words are the writer's formatting of the
       // file, never the document's text.
       if (byte !== 0x0d && byte !== 0x0a) {
-        pending.bytes.push(byte);
+        appendByte(byte);
       }
       cursor += 1;
       continue;
@@ -918,7 +1028,7 @@ const readRtfInto = (
 
     // Escaped literals and the `\'xx` byte.
     if (after === 0x5c || after === 0x7b || after === 0x7d) {
-      pending.bytes.push(after);
+      appendByte(after);
       cursor += 2;
       continue;
     }
@@ -926,7 +1036,7 @@ const readRtfInto = (
       const high = String.fromCodePoint(source[cursor + 2] ?? 0);
       const low = String.fromCodePoint(source[cursor + 3] ?? 0);
       if (HEX_DIGITS.includes(high) && HEX_DIGITS.includes(low)) {
-        pending.bytes.push(Number.parseInt(`${high}${low}`, 16));
+        appendByte(Number.parseInt(`${high}${low}`, 16));
         cursor += 4;
         continue;
       }

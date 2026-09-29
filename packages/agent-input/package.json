@@ -2,7 +2,7 @@
   "name": "@stll/agent-input",
   "version": "0.0.0",
   "private": true,
-  "description": "Lenient readers for values agents write: dates, date-format specs, numbers, booleans, locales, countries, enum values",
+  "description": "Lenient readers for values agents write: dates, date bounds, date-format specs, numbers, booleans, locales, countries, enum and vocabulary values, ids, ELIs, string lists",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -14,7 +14,7 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/agent-input",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/agent-input",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-input",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },

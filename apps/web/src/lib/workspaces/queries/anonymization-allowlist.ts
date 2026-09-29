@@ -13,7 +13,7 @@ export type AnonymizationAllowlistKey = {
   entityId: string | null;
 };
 
-export const anonymizationAllowlistKeys = {
+const anonymizationAllowlistKeys = {
   root: anonymizationAllowlistQueryRoot(),
   all: ({ workspaceId, entityId }: AnonymizationAllowlistKey): string[] => [
     ...anonymizationAllowlistKeys.root,

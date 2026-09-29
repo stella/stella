@@ -8,7 +8,6 @@ import {
 } from "@stll/api-contract";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { legalSourceToDocx } from "@/api/lib/docx-authoring/from-legal-source";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
@@ -73,20 +72,11 @@ export default createSafeHandler(
       }).then((r) => Result.mapError(r, toHandlerError)),
     );
 
-    const refRegistry = createChatRefRegistry();
-    const entityRef = refRegistry.toEntityRef({
-      entityId: created.entityId,
-      workspaceId,
-    });
-    const matterRef = refRegistry.toMatterRef(workspaceId);
-    // Use the resolved `#stella-entity={workspaceId}:{entityId}`
-    // form. The chat's session-level ref registry was minted in
-    // a different request and doesn't know the opaque ref this
-    // endpoint produces, so an indirected mention would render as
-    // a non-interactive span on the chat surface. The direct form
-    // is what `MentionChip` resolves and routes through
-    // `openEntityInInspector`, so the AI's follow-up text link
-    // stays clickable.
+    // The resolved `#stella-entity={workspaceId}:{entityId}` form: this
+    // request holds no chat ref registry, and a chat's registry cannot
+    // resolve refs minted elsewhere. `MentionChip` resolves the direct form
+    // and routes it through `openEntityInInspector`, so the link stays
+    // clickable wherever the caller pastes it.
     const href = toChatResourceHref({
       type: RESOURCE_TYPE.ENTITY,
       resource: resourceRef({
@@ -113,8 +103,6 @@ export default createSafeHandler(
       // clicks "Open in editor".
       fieldId: created.fieldId,
       workspaceId,
-      entityRef,
-      matterRef,
       href,
       mention,
     });

@@ -266,6 +266,10 @@
       },
       "evidencePinned": "Overené voči {count, plural, one {# faktu} few {# faktom} many {# faktom} other {# faktom}} v stave ku dňu {checkedAt}. Neskoršie úpravy zoznamu toto overenie nemenia.",
       "failedTitle": "Overenie zlyhalo",
+      "history": {
+        "label": "História overení",
+        "loadFailed": "Predchádzajúce overenia tohto dokumentu sa nepodarilo načítať."
+      },
       "inProgress": "Porovnávanie tvrdení dokumentu s faktami zoznamu…",
       "loadFailed": "Toto overenie sa nepodarilo načítať.",
       "noClaims": "V tomto dokumente sa nenašli žiadne tvrdenia.",
@@ -541,6 +545,11 @@
       "tableNamePlaceholder": "napr. Štandard 2025"
     },
     "revertToDraft": "Vrátiť do konceptu",
+    "savedNarratives": {
+      "empty": "Uložte popis na ďalšie použitie.",
+      "save": "Uložiť popis",
+      "title": "Uložené popisy"
+    },
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis na spustenie merania",
     "selectedCount": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
@@ -790,6 +799,12 @@
       "resultsFor": "Výsledky pre: <bdi>{query}</bdi>",
       "searchEveryWord": "Hľadať všetky slová"
     },
+    "seo": {
+      "collectionName": "Judikatúra stella",
+      "description": "Verejná databáza judikatúry s indexovateľnými súdnymi rozhodnutiami a právnymi prameňmi.",
+      "homeDescription": "Verejná právna databáza súdnych rozhodnutí a konsolidovaných právnych predpisov; vyhľadávanie podľa identifikátora alebo slov.",
+      "scopedDescription": "Verejná databáza judikatúry ({scope}) s indexovateľnými súdnymi rozhodnutiami a právnymi prameňmi."
+    },
     "showWholeHeadnote": "Zobraziť celú právnu vetu",
     "sort": {
       "newest": "Najnovšie",
@@ -867,6 +882,7 @@
       "apiKey": "API kľúč",
       "none": "Bez nastavenia"
     },
+    "skillNeedsUnavailableTools": "V chate sa neponúka. Potrebuje nástroj, ktorý tam nie je k dispozícii: {tools}",
     "toolNames": {
       "anonymize": "Anonymizovať",
       "createDocx": "Vytvoriť DOCX",
@@ -960,7 +976,15 @@
       "searchFiles": "Hľadať súbory",
       "searchMatters": "Hľadať spisy",
       "searchMcpServers": "Hľadať MCP servery...",
-      "searchSkills": "Hľadať zručnosti"
+      "searchSkills": "Hľadať zručnosti",
+      "skillNeeds": {
+        "browserExtension": "Na túto zručnosť pripojte rozšírenie prehliadača",
+        "document": "Na túto zručnosť otvorte dokument",
+        "matter": "Na túto zručnosť založte chat v spise",
+        "rawSendMode": "Nie je k dispozícii v anonymizovaných chatoch",
+        "reviewEdits": "Na túto zručnosť prepnite úpravy na ručnú kontrolu",
+        "webSearch": "Na túto zručnosť zapnite vyhľadávanie na webe"
+      }
     },
     "contextMeter": {
       "attachments": "Pripojené dokumenty",
@@ -1045,6 +1069,10 @@
       "loadError": "Nepodarilo sa načítať položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "mockModel": {
+      "description": "Vopred pripravené odpovede lokálneho simulovaného modelu",
+      "label": "Simulovaná AI"
+    },
     "modelSelector": {
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
@@ -1134,6 +1162,7 @@
     "sourcePlaceholder": "Chatovať o {title}",
     "sourcePlaceholderAction": "Chatovať o",
     "sources": "Zdroje:",
+    "stopFailed": "Odpoveď sa nepodarilo zastaviť. Skúste to znova.",
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
     "suggestTitle": "Navrhnúť názov",
@@ -1166,6 +1195,7 @@
       "business_registry_lookup": "Vyhľadávanie v obchodnom registri",
       "compare_versions": "Porovnávanie verzií",
       "configure_template_fields": "Nastaviť polia vzoru",
+      "counterparty_check": "Preverovanie protistrany",
       "create-document": "Pripravujem dokument",
       "create_matter_document": "Vytváram dokument",
       "create_reader_annotation": "Pridať zvýraznenie alebo komentár",
@@ -1461,6 +1491,7 @@
     "displayName": "Zobrazované meno",
     "document": "Dokument",
     "documentName": "Názov dokumentu",
+    "documentPage": "<bdi>{document}</bdi> · str. {page}",
     "documentReference": "Referenčné číslo dokumentu",
     "documentTitle": "Názov dokumentu",
     "documentation": "Dokumentácia",
@@ -1604,6 +1635,7 @@
     "profile": "Profil",
     "properties": "Vlastnosti",
     "queued": "V poradí",
+    "reason": "Dôvod",
     "reconnecting": "Obnovenie spojenia…",
     "reference": "Referencia",
     "refresh": "Obnoviť",
@@ -1915,6 +1947,54 @@
       "organization": "Organizácia",
       "person": "Osoba"
     }
+  },
+  "correspondence": {
+    "addressTitle": "E-mailová adresa spisu",
+    "assertedOriginal": "Pôvodné hlavičky (podľa preposielajúceho)",
+    "authResults": {
+      "fail": "Neúspešné",
+      "pass": "Úspešné",
+      "unknown": "Neurčené"
+    },
+    "backToList": "Späť na korešpondenciu",
+    "createAddress": "Vytvoriť adresu",
+    "deliveredBy": "Doručil <address>{sender}</address>",
+    "deliveredByAuthenticated": "Doručil <address>{sender}</address> · overené",
+    "deliveryAuthentication": "Overenie doručenia",
+    "drops": {
+      "authenticationHint": "Požiadajte správcu e-mailu odosielateľa o nastavenie <protocol>SPF</protocol>, <protocol>DKIM</protocol> a <protocol>DMARC</protocol> pre odosielajúcu doménu.",
+      "reasons": {
+        "attachmentRejected": "Príloha bola odmietnutá",
+        "authenticationFailed": "Overenie doručenia zlyhalo",
+        "malformedMessage": "Správu sa nepodarilo prečítať",
+        "messageTooLarge": "Správa je príliš veľká",
+        "revokedAddress": "E-mailová adresa bola zrušená",
+        "unauthorizedSender": "Odosielateľ nemá oprávnenie",
+        "unknownRecipient": "Neznámy príjemca"
+      },
+      "title": "Odmietnuté doručenia"
+    },
+    "empty": "Zatiaľ žiadna korešpondencia.",
+    "filers": "Odosielatelia",
+    "forwardedBy": "Preposlal <address>{sender}</address>",
+    "forwardedByAuthenticated": "Preposlal <address>{sender}</address> · overené",
+    "inboundNotConfigured": "Prichádzajúci e-mail nie je nastavený. Požiadajte správcu o nastavenie domény pre prichádzajúcu poštu.",
+    "markHandled": "Označiť ako vybavené",
+    "markNew": "Označiť ako nové",
+    "noAddress": "Nie je aktívna žiadna e-mailová adresa.",
+    "originalSender": "Pôvodný odosielateľ",
+    "originalSenderUnverified": "Pôvodný odosielateľ (uvedený, neoverený)",
+    "originalSignatureVerified": "Pôvodný podpis overený (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Prijaté",
+    "revokeAddress": "Zrušiť adresu",
+    "rotateAddress": "Zmeniť adresu",
+    "sentAt": "Odoslané dňa",
+    "sharedMailboxFiler": "Zdieľaná schránka {address}, schválil(a) {approver}",
+    "states": {
+      "handled": "Vybavené"
+    },
+    "title": "Korešpondencia",
+    "unknownApprover": "Neznámy schvaľovateľ"
   },
   "docxReview": {
     "acceptAll": "Prijať všetky",
@@ -4289,6 +4369,7 @@
     "compareVersionMissing": "Verzia na porovnanie v histórii tohto predpisu nie je.",
     "compareWholeAct": "Porovnať celý predpis",
     "compareWithVersion": "Porovnať so znením {version}",
+    "description": "Verejná databáza konsolidovaných právnych predpisov, indexovateľných podľa predpisu a jeho znenia.",
     "diffInserted": "Vložené:",
     "diffRemoved": "Vypustené:",
     "emptyDocument": "Toto znenie nemá dostupný text.",
@@ -5085,6 +5166,57 @@
       "ocrAlreadyProcessed": "Rozpoznávanie textu už bolo dokončené",
       "ocrQueueFailed": "Rozpoznávanie textu sa nepodarilo zaradiť do fronty",
       "ocrQueued": "Rozpoznávanie textu bolo zaradené do nasledujúcej dávky OCR",
+      "pdfSigning": {
+        "action": "Podpísať v desktopovej aplikácii",
+        "cancelledBaseVersionDescription": "Dokument sa počas podpisovania zmenil. Otvorte najnovšiu verziu a podpíšte ho znova.",
+        "cancelledCertificateDescription": "Vybraný certifikát sa nedá použiť na podpis. Zvoľte certifikát, ktorý umožňuje digitálny podpis.",
+        "cancelledCertifiedDescription": "Toto PDF je certifikované a jeho certifikácia nepovoľuje ďalšie podpisy.",
+        "cancelledDescription": "Podpisovanie sa nedokončilo.",
+        "cancelledDigestDescription": "Podpis nezodpovedal pripravenému dokumentu. Skúste podpísať znova.",
+        "cancelledFailedDescription": "Podpis sa do tohto PDF nepodarilo vložiť.",
+        "cancelledPlatformDescription": "Podpisovanie certifikátom zo systémovej kľúčenky zatiaľ funguje na macOS.",
+        "cancelledRevokedDescription": "Vybraný certifikát alebo certifikát, ktorý ho vydal, bol zrušený. Zvoľte platný certifikát.",
+        "cancelledSignatureDescription": "Podpis zo stella desktop nezodpovedal vybranému certifikátu. Skúste podpísať znova.",
+        "cancelledStampNameDescription": "Meno držiteľa certifikátu nemožno zobraziť vo viditeľnej pečiatke. Podpíšte znova neviditeľným podpisom.",
+        "cancelledStampOverflowDescription": "Text pečiatky sa nezmestí do nakresleného rámčeka. Nakreslite väčšiu pečiatku, skráťte dôvod alebo miesto, alebo použite neviditeľný podpis.",
+        "cancelledTitle": "Podpisovanie zrušené",
+        "cancelledUserDescription": "Podpisovanie bolo zrušené v stella desktop.",
+        "cancelledWouldBreakSignaturesDescription": "Podpísaním tohto PDF by prestali platiť podpisy, ktoré už obsahuje.",
+        "encryptedDescription": "Toto PDF je chránené heslom. Pred podpísaním ochranu odstráňte.",
+        "expiredDescription": "stella desktop nestihol podpisovanie dokončiť. Spustite ho a skúste to znova.",
+        "expiredTitle": "Čas na podpísanie vypršal",
+        "inProgressDescription": "Tento súbor sa už podpisuje. Najprv toto podpisovanie v stella desktop dokončite alebo zrušte.",
+        "noFileDescription": "K tomuto dokumentu nie je pripojený žiadny súbor na podpis.",
+        "notAPdfDescription": "Podpísať možno iba súbory PDF.",
+        "placementBox": "Umiestnenie pečiatky",
+        "placementConfirm": "Otvoriť stella desktop",
+        "placementDescription": "Zvoľte, ako sa podpis v PDF zobrazí.",
+        "placementHint": "Potiahnutím pečiatku presuniete, potiahnutím jej rohu zmeníte jej veľkosť. Keď je pečiatka vybraná, šípky ju posúvajú a Shift so šípkou mení jej veľkosť.",
+        "placementInvisible": "Neviditeľný podpis",
+        "placementInvisibleDescription": "Podpis sa uloží do súboru bez značky na ktorejkoľvek stránke.",
+        "placementPageLabel": "Strana pečiatky",
+        "placementPageOption": "Stránka {page, number} z {count, number}",
+        "placementPreview": "Náhľad stránky {page, number}",
+        "placementPreviewFailed": "Náhľad stránky sa nepodarilo načítať.",
+        "placementTitle": "Podpísať PDF",
+        "placementTooSmall": "Táto stránka je na pečiatku príliš malá. Zvoľte inú stránku.",
+        "placementVisible": "Viditeľná pečiatka",
+        "placementVisibleDescription": "Rámček na stránke ukazuje, kto a kedy podpísal.",
+        "readOnlyDescription": "Tento dokument je len na čítanie.",
+        "signedDescription": "Podpis bol uložený ako verzia {versionNumber, number}.",
+        "signedDescriptionNoVersion": "Podpis bol uložený ako nová verzia.",
+        "signedTitle": "PDF podpísané",
+        "stampLocation": "Miesto",
+        "stampRejectedDescription": "Pečiatku na toto miesto nemožno umiestniť. Umiestnite ju znova a skúste to znova.",
+        "stampSignedBy": "Digitálne podpísal",
+        "stampTextUnrenderableDescription": "Dôvod alebo miesto nemožno zobraziť vo viditeľnej pečiatke. Upravte text alebo použite neviditeľný podpis.",
+        "startFailedTitle": "Tento súbor sa nedá podpísať",
+        "statusUnavailableDescription": "Skontrolujte v histórii verzií, či sa podpis uložil.",
+        "statusUnavailableTitle": "Stav podpisovania nie je dostupný",
+        "tooLargeDescription": "Toto PDF je príliš veľké na podpísanie.",
+        "waitingDescription": "Vyberte v aplikácii stella desktop podpisový certifikát a podpíšte toto PDF.",
+        "waitingTitle": "Čaká sa na stella desktop"
+      },
       "rateLimited": "Obmedzenie rýchlosti; pokračovanie za {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Čo urobiť so súborom {fileName}",
@@ -5346,6 +5478,7 @@
         },
         "targets": {
           "automation": "automatizácia",
+          "correspondence": "korešpondencia",
           "court": "súdny záznam",
           "document": "dokument",
           "documentReview": "kontrola dokumentu",

@@ -8,9 +8,9 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { pushSessionEvent } from "@/api/lib/desktop-edit-session-notifications";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { broadcastSessionEvent } from "@/api/lib/sse";
 
 const config = {
   permissions: { entity: ["update"] },
@@ -127,7 +127,7 @@ export default createSafeHandler(
 
     // Push SSE event after transaction commits to avoid notifying
     // before the DB state is visible.
-    pushSessionEvent(result.sessionId, {
+    broadcastSessionEvent(result.sessionId, {
       type: "takeover-requested",
       data: {
         requestedBy: result.requestedByName,

@@ -7,9 +7,11 @@ import {
   toolDefinition,
 } from "@tanstack/ai";
 import type {
+  AdapterYieldChunk,
   AnyTextAdapter,
   ModelMessage,
   StreamChunk,
+  TokenUsage,
   ToolCallPart,
   UIMessage,
 } from "@tanstack/ai";
@@ -33,6 +35,8 @@ import {
   CHAT_RUN_MODE,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
+import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import { SUGGEST_CHANGES_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
@@ -61,6 +65,7 @@ import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+  DatabaseError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -97,7 +102,13 @@ import {
   normalizeFinalAssistantMessageId,
   remapOutgoingMessageIds,
 } from "./stream-message-identity";
-import type { MessageIdMapper } from "./stream-message-identity";
+import type { MessageIdMapper, StoredHistory } from "./stream-message-identity";
+
+/** A run whose history the engine holds exactly as stored. */
+const NOTHING_REWRITTEN: StoredHistory = {
+  loadServed: async () => await Promise.resolve(Result.ok(new Map())),
+  rewrittenOnAcceptance: [],
+};
 
 const collectChunks = async (
   stream: AsyncIterable<StreamChunk>,
@@ -273,7 +284,7 @@ const createScriptedAdapter = (
       threadId: resolvedThreadId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     // Provider adapters open a text message only when text arrives; a
     // tool-only iteration (Gemini, OpenAI Responses) carries no
     // TEXT_MESSAGE_START, so only the first scripted turn emits one.
@@ -284,7 +295,7 @@ const createScriptedAdapter = (
         role: "assistant",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
     }
     yield {
       type: EventType.TOOL_CALL_START,
@@ -292,20 +303,20 @@ const createScriptedAdapter = (
       toolCallName: toolName,
       parentMessageId: messageId,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TOOL_CALL_ARGS,
       toolCallId: callId,
       delta: argumentsText,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TOOL_CALL_END,
       toolCallId: callId,
       ...(input === undefined ? {} : { input }),
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: resolvedRunId,
@@ -314,7 +325,7 @@ const createScriptedAdapter = (
       model,
       timestamp,
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
   },
   structuredOutput: () => {
     throw new Error("Structured output is not part of this fixture");
@@ -345,27 +356,27 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
       threadId: resolvedThreadId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_START,
       messageId,
       role: "assistant",
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_CONTENT,
       messageId,
       delta: text,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.TEXT_MESSAGE_END,
       messageId,
       model,
       timestamp,
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
     yield {
       type: EventType.RUN_FINISHED,
       runId: resolvedRunId,
@@ -374,7 +385,7 @@ const createTextReplyAdapter = (text: string): AnyTextAdapter => ({
       model,
       timestamp,
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    } satisfies StreamChunk;
+    } satisfies AdapterYieldChunk;
   },
   structuredOutput: () => {
     throw new Error("Structured output is not part of this fixture");
@@ -482,7 +493,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
           code: "aborted",
           model,
           timestamp,
-        } satisfies StreamChunk;
+        } satisfies AdapterYieldChunk;
         return;
       }
       yield {
@@ -491,26 +502,26 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         threadId: resolvedThreadId,
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_START,
         toolCallId: "call-1",
         toolCallName: "run-code",
         parentMessageId: "provider-message-1",
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_ARGS,
         toolCallId: "call-1",
         delta: '{"source":"1 + 1"}',
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.TOOL_CALL_END,
         toolCallId: "call-1",
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
       yield {
         type: EventType.RUN_FINISHED,
         runId: resolvedRunId,
@@ -518,7 +529,7 @@ const createAbortedAfterToolCallAdapter = (cut: () => void): AnyTextAdapter => {
         finishReason: "tool_calls",
         model,
         timestamp,
-      } satisfies StreamChunk;
+      } satisfies AdapterYieldChunk;
     },
     structuredOutput: () => {
       throw new Error("Structured output is not part of this fixture");
@@ -557,6 +568,80 @@ const persistCutTurn = async (cause: TurnCut) => {
     { abortSignal: abortController.signal, deadlineSignal: deadline.signal },
   );
 };
+
+/** A model call that fails after the provider reported usage, having
+ *  written `text` first (none when empty). */
+const createFailingAfterUsageAdapter = ({
+  text,
+  usage,
+}: {
+  text: string;
+  usage: TokenUsage;
+}): AnyTextAdapter => ({
+  kind: "text",
+  name: "failing-after-usage",
+  model: "failing-after-usage",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ runId, threadId }) {
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: runId ?? "run-1",
+      threadId: threadId ?? "thread-1",
+    } satisfies StreamChunk;
+    if (text !== "") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "provider-message-1",
+        role: "assistant",
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId: "provider-message-1",
+        delta: text,
+      } satisfies StreamChunk;
+    }
+    yield {
+      type: EventType.RUN_ERROR,
+      message: "The provider stream ended with an error.",
+      code: "incomplete-stream",
+      usage,
+    } satisfies StreamChunk;
+  },
+  structuredOutput: () => {
+    throw new Error("Structured output is not part of this fixture");
+  },
+});
+
+describe("a turn whose model call fails after reporting usage", () => {
+  for (const text of ["", "The cass"]) {
+    test(`stores the usage on the failed turn's message (text: ${JSON.stringify(text)})`, async () => {
+      const usage = {
+        promptTokens: 24,
+        completionTokens: 2,
+        totalTokens: 26,
+      } satisfies TokenUsage;
+      const { finish } = await persistNativeInterruptTurn(
+        chat({
+          adapter: createFailingAfterUsageAdapter({ text, usage }),
+          messages: [{ role: "user", content: "Reply." }],
+          threadId: "thread-1",
+        }),
+      );
+
+      expect(finish?.outcome).toMatchObject({ type: "failed" });
+      expect(finish?.responseMessage.metadata).toMatchObject({
+        usage: chatMessageUsageFromTokenUsage(usage),
+      });
+    });
+  }
+});
 
 describe("a turn cut while the model was thinking", () => {
   test("settles as interrupted, not as a completion with no answer", async () => {
@@ -1258,6 +1343,18 @@ describe("outgoing chat stream message ids", () => {
             {
               type: EventType.RUN_FINISHED,
               finishReason: "tool_calls",
+              // The engine hands the call out as an interrupt either way; only
+              // its input decides whether the turn may wait on it.
+              outcome: {
+                type: "interrupt",
+                interrupts: [
+                  {
+                    id: `interrupt-${callChunks[0].toolCallId}`,
+                    reason: "tool_call",
+                    toolCallId: callChunks[0].toolCallId,
+                  },
+                ],
+              },
               runId: "run-1",
               threadId: "thread-1",
             },
@@ -3311,7 +3408,7 @@ describe("guarded model-ingress seam", () => {
     const system = "You are stella. Matter scope: mat_1.";
 
     const surfaces: GuardedChatSurfaces = {
-      messages: guardModelMessages({ messages, workspaceIds }),
+      messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
@@ -3342,6 +3439,15 @@ describe("guarded model-ingress seam", () => {
     // reach the provider dispatch
     const bypass: GuardedChatSurfaces = unguarded;
     void bypass;
+
+    const unanswered = {
+      ...surfaces,
+      messages: guardModelMessages({ messages, workspaceIds }),
+    };
+    // @ts-expect-error a history whose calls were not answered in their step
+    // must not reach the provider dispatch
+    const skippedAnswers: GuardedChatSurfaces = unanswered;
+    void skippedAnswers;
   });
 });
 
@@ -3441,6 +3547,7 @@ const createBoundary = (
   pipelineContext: createPipelineContext(),
   placeholderOffsets: new Map<string, number>(),
   literalPlaceholderAliases: new Map<string, string>(),
+  historicalRedactionMap: new Map<string, string>(),
   redactionMap: new Map(pairs),
   sourcePlaceholders: new Set<string>(),
   type: "anonymized",
@@ -3605,6 +3712,7 @@ describe("chat stream refs", () => {
           }),
         resolveAssistantValueRefs: registry.resolveAssistantValueRefs,
         source: processed,
+        storedHistory: NOTHING_REWRITTEN,
       }),
     );
 
@@ -3655,6 +3763,7 @@ describe("chat stream refs", () => {
         resolveAssistantValueRefs: (value) =>
           JSON.parse(JSON.stringify(value).replaceAll(ref, () => resolved)),
         source: streamChunks([buildEngineSnapshot(history)]),
+        storedHistory: NOTHING_REWRITTEN,
       }),
     );
     if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
@@ -3667,6 +3776,38 @@ describe("chat stream refs", () => {
     expect(assistant).toHaveProperty("parts");
     expect(JSON.stringify(assistant)).not.toContain(ref);
     expect(JSON.stringify(assistant)).toContain(resolved);
+  });
+
+  test("reports a failed served-history read as a terminal stream error", async () => {
+    const chunks = await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks([
+          buildEngineSnapshot([]),
+          {
+            type: EventType.TEXT_MESSAGE_CONTENT,
+            messageId: "later",
+            delta: "later content",
+          },
+        ]),
+        storedHistory: {
+          loadServed: async () =>
+            Result.err(
+              new DatabaseError({ message: "sensitive storage detail" }),
+            ),
+          rewrittenOnAcceptance: [],
+        },
+      }),
+    );
+
+    expect(chunks).toEqual([
+      {
+        type: EventType.RUN_ERROR,
+        code: "unknown",
+        message: "unknown",
+        timestamp: expect.any(Number),
+      },
+    ]);
+    expect(JSON.stringify(chunks)).not.toContain("sensitive storage detail");
   });
 
   test("resolves assistant text refs across streamed chunk boundaries", async () => {
@@ -4358,6 +4499,83 @@ describe("anonymized outgoing chat stream", () => {
           },
         },
       },
+    ]);
+  });
+});
+
+// A user who types past an ask-user card supersedes the turn: the card's call
+// is stored as an error with no result. Handed to the engine as is, that call
+// still reads as pending, so the run pauses for the client again and answers
+// nothing. The settled history closes it and the model runs. The first test
+// is the canary for that engine behaviour: once an upgrade makes it fail, the
+// engine no longer needs `closeUnresolvedCallsForEngine`, and both go.
+describe("a superseded client-tool call in the engine's history", () => {
+  const askUserTool = toolDefinition({
+    name: "ask-user",
+    description: "Client-rendered clarification",
+    inputSchema: toTanStackToolSchema(v.object({ question: v.string() })),
+  });
+  const supersededHistory: ChatMessage[] = [
+    {
+      id: "user-1",
+      parts: [{ type: "text", content: "Create a document in the matter" }],
+      role: "user",
+    },
+    {
+      id: "assistant-1",
+      parts: [
+        {
+          arguments: '{"question":"Which matter?"}',
+          id: "call-ask",
+          name: "ask-user",
+          state: "error",
+          type: "tool-call",
+        },
+      ],
+      role: "assistant",
+    },
+    {
+      id: "user-2",
+      parts: [
+        {
+          type: "text",
+          content: "Before you create anything, tell me what it will say.",
+        },
+      ],
+      role: "user",
+    },
+  ];
+  const runOver = async (messages: ChatMessage[]) =>
+    await persistNativeInterruptTurn(
+      chat({
+        adapter: createTextReplyAdapter("It will say one sentence."),
+        agentLoopStrategy: maxIterations(3),
+        messages,
+        threadId: "thread-1",
+        tools: [askUserTool],
+      }),
+    );
+
+  test("canary: the engine ends the raw history with an empty completion", async () => {
+    const { finish } = await runOver(supersededHistory);
+
+    expect(finish?.outcome).toEqual({
+      error: "empty_completion",
+      type: "failed",
+    });
+  });
+
+  test("the settled history lets the model answer", async () => {
+    const { finish } = await runOver(
+      settleHistoryForRun({
+        messages: supersededHistory,
+        resumedMessageId: undefined,
+      }),
+    );
+
+    expect(finish?.outcome).toEqual({ type: "completed" });
+    expect(finish?.responseMessage.parts).toMatchObject([
+      { type: "text", content: "It will say one sentence." },
     ]);
   });
 });

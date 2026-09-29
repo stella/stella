@@ -518,10 +518,22 @@ export const mapClientErrorExit = (error: McpClientError): ExitCode => {
   return EXIT_CODES.server;
 };
 
+/**
+ * `invoke_capability` returns the capability's output under `result`, its one
+ * key (a structured result must be an object, and a capability may return a
+ * list). Unwrapped here so a capability page renders like a curated tool's.
+ */
+const unwrapCapabilityResult = (payload: unknown): unknown =>
+  isRecord(payload) &&
+  Object.keys(payload).length === 1 &&
+  Object.hasOwn(payload, "result")
+    ? payload["result"]
+    : payload;
+
 export const parsePayload = (result: CallToolResult): unknown => {
   const text = result.content.at(0)?.text ?? "";
   const parsed = Result.try((): unknown => JSON.parse(text));
-  return Result.isOk(parsed) ? parsed.value : undefined;
+  return Result.isOk(parsed) ? unwrapCapabilityResult(parsed.value) : undefined;
 };
 
 /** One structured validation issue: dot-path (empty for root) plus reason. */

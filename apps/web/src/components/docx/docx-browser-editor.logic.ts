@@ -3,7 +3,11 @@ import { panic } from "better-result";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import { selectStableArrayBuffer } from "@/lib/files/array-buffer-utils";
 
-import type { EditSessionState } from "./use-edit-session.logic";
+import type {
+  EditSessionErrorReason,
+  EditSessionState,
+} from "./use-edit-session.logic";
+import type { FolioCollaborationRoomState } from "./use-folio-collaboration-room";
 
 export type DocxPreviewFile = {
   fileId: string;
@@ -16,6 +20,12 @@ export type DocxPreviewFile = {
 export type OptimisticPreviewFile = {
   fieldId: string;
   file: DocxPreviewFile;
+};
+
+/** Bytes the editor last showed, kept for the document they belong to. */
+export type PreservedLoadedBuffer = {
+  buffer: ArrayBuffer;
+  fieldId: string;
 };
 
 type SelectPreviewFileOptions = {
@@ -300,3 +310,65 @@ export const shouldUseDocxBrowserEditor = ({
   isDocxFile,
   hasFilePropertyId,
 }: ShouldUseDocxBrowserEditorOptions) => isDocxFile && hasFilePropertyId;
+
+type EditSessionErrorMessageKey =
+  | "folio.editAuthRequired"
+  | "folio.editPermissionDenied"
+  | "folio.editDownloadFailed"
+  | "folio.editOpenFailed";
+
+export const editSessionErrorDescriptionKey = (
+  reason: EditSessionErrorReason,
+): EditSessionErrorMessageKey => {
+  switch (reason) {
+    case "authRequired":
+      return "folio.editAuthRequired";
+    case "permissionDenied":
+      return "folio.editPermissionDenied";
+    case "downloadFailed":
+      return "folio.editDownloadFailed";
+    case "unknown":
+      return "folio.editOpenFailed";
+    default: {
+      reason satisfies never;
+      return panic(`Unhandled reason: ${String(reason)}`);
+    }
+  }
+};
+
+/** A failure that replaces the editor with a closable error message. */
+export type DocxEditorBlockingError =
+  | {
+      type: "finalizeFailed";
+      reason: EditSessionErrorReason;
+      detail: string | undefined;
+    }
+  | { type: "collaborationUnavailable"; message: string };
+
+type GetDocxEditorBlockingErrorOptions = {
+  collaborationState: FolioCollaborationRoomState;
+  state: EditSessionState;
+};
+
+export const getDocxEditorBlockingError = ({
+  collaborationState,
+  state,
+}: GetDocxEditorBlockingErrorOptions): DocxEditorBlockingError | null => {
+  if (state.status === "error" && state.source === "finalize") {
+    return {
+      type: "finalizeFailed",
+      reason: state.reason,
+      detail: state.detail,
+    };
+  }
+  if (
+    collaborationState.status === "unavailable" &&
+    collaborationState.message !== null
+  ) {
+    return {
+      type: "collaborationUnavailable",
+      message: collaborationState.message,
+    };
+  }
+  return null;
+};

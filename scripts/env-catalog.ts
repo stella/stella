@@ -55,6 +55,9 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "ACTION_ADMISSION_LEASE_MS",
+  "ACTION_ADMISSION_ORG_CONCURRENCY",
+  "ACTION_ADMISSION_USER_CONCURRENCY",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -85,6 +88,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CORPUS_STORAGE_MODE",
   "DATABASE_POOL_IDLE_TIMEOUT_S",
   "DATABASE_POOL_MAX_LIFETIME_S",
+  "DATABASE_STATEMENT_TIMEOUT_MS",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
   "DB_HOST",
@@ -100,6 +104,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
+  "FEATURE_ACTION_ADMISSION",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_CALENDAR",
@@ -112,6 +117,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MCP",
+  "FEATURE_ORG_ACCESS_STATE",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_TOOLS",
   "FEATURE_SHAREPOINT",
@@ -126,13 +132,18 @@ const INTERNAL_SERVER_KEYS = new Set([
   "HOSTED_USAGE_PROVIDER",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
+  "INBOUND_MAIL_DOMAIN",
   "LEGAL_CORPUS_S3_BUCKET",
   "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
+  "ORG_EVALUATION_PERIOD_DAYS",
   "PORT",
   "POSTHOG_HOST",
   "POSTHOG_KEY",
+  "PDF_SIGNING_TSA_URL",
+  "PDF_SIGNING_TSA_URLS",
+  "PDF_SIGNING_TSA_TRUST_PEM",
   "POSTHOG_LOCAL_DEBUG",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
@@ -183,6 +194,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   DB_SSLMODE: "require",
   DB_USER: "postgres",
   EMAIL_PROVIDER: "smtp",
+  INBOUND_MAIL_DOMAIN: "inbound.example.com",
   EDGAR_USER_AGENT: "stella admin@example.com",
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
@@ -254,10 +266,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Idle database connection lifetime in seconds; zero disables retirement.",
   DATABASE_POOL_MAX_LIFETIME_S:
     "Maximum database connection lifetime in seconds; zero disables retirement.",
+  DATABASE_STATEMENT_TIMEOUT_MS:
+    "Statement timeout in milliseconds set on each root and RLS pool connection; zero keeps the server default.",
   DATABASE_RLS_POOL_MAX:
-    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX within the process connection budget.",
+    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
-    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX within the process connection budget.",
+    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
@@ -291,6 +305,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
+  INBOUND_MAIL_DOMAIN:
+    "Dedicated catch-all domain for matter inbound addresses. Unset disables address creation.",
   FEATURE_AI_MEMORY:
     "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_INBOX_DOCUMENT_SCOUTS:
@@ -299,6 +315,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
     "Enable first-class legal lists across REST, agents, and task UI.",
+  FEATURE_ORG_ACCESS_STATE:
+    "Enforce the per-organization access state before a model call falls back to the instance provider.",
+  ORG_EVALUATION_PERIOD_DAYS:
+    "Length in days of the evaluation period a new organization starts.",
   FEATURE_PUBLIC_TOOLS:
     "Enable GitHub-sourced public skills in the authenticated catalogue.",
   FEATURE_TEMPLATE_PACKS:
@@ -339,6 +359,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
     "Allow PostHog capture from localhost when using a real project key.",
+  PDF_SIGNING_TSA_URL:
+    "Single RFC 3161 timestamp authority for PDF signing, appended to PDF_SIGNING_TSA_URLS.",
+  PDF_SIGNING_TSA_TRUST_PEM:
+    "Trust anchors for PDF signing timestamps: PEM text or a path to a PEM file (CA certificates, or an authority's own certificate to pin it). Unset embeds timestamps without counting them as trusted time.",
+  PDF_SIGNING_TSA_URLS:
+    "RFC 3161 timestamp authorities for PDF signing in preference order, comma separated; the next one is tried when one fails. Unset signs at PAdES B-B.",
   PUBLIC_URL:
     "Public API origin for OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:
@@ -403,7 +429,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   TYPESAFE_MODEL:
     'System One model id sent to TypeSafe. Defaults to "jev-latest"; pin a versioned id to hold calibrated thresholds.',
   USE_MOCK_AI:
-    "Return canned AI responses in local development and tests. Deployed runtimes reject this setting.",
+    'Return canned AI responses in local development and tests. An organization\'s own AI key still answers for real; "force" mocks those requests too. Deployed runtimes reject this setting.',
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
   VITE_BROWSER_API_URL:
     "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
@@ -439,12 +465,13 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_HARNESS_MODEL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
-  CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
+  CONTENT_ENCRYPTION_KEY: "the process runs without local development access",
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  ORG_EVALUATION_PERIOD_DAYS: "FEATURE_ORG_ACCESS_STATE is true",
   REDIS_URL: "the API server or the document-processing worker runs",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
   S3_SECRET_ACCESS_KEY: 'S3_CREDENTIALS_PROVIDER is "env"',
@@ -492,7 +519,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
 const HIDDEN_SCHEMA_KEYS = new Set([
   "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_DATABASE_URL",
-  "isDev",
 ]);
 
 const humanizeEnvName = (name: string) => {
@@ -528,7 +554,7 @@ const sectionFor = (name: string) => {
   ) {
     return "Authentication";
   }
-  if (/^(EMAIL|SES_|SMTP_|TRANSACTIONAL|FEEDBACK)/u.test(name)) {
+  if (/^(EMAIL|INBOUND_MAIL|SES_|SMTP_|TRANSACTIONAL|FEEDBACK)/u.test(name)) {
     return "Email and feedback";
   }
   if (
@@ -637,7 +663,7 @@ export const API_ENV_SCHEMA = {
   ...envApiServerSchema,
 };
 
-export type ApiEnvironmentName = Exclude<keyof typeof API_ENV_SCHEMA, "isDev">;
+export type ApiEnvironmentName = keyof typeof API_ENV_SCHEMA;
 
 export const WEB_ENV_SCHEMA = envWebClientSchema;
 export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
@@ -655,6 +681,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "DEV",
   "DB_BACKFILL_TRANSACTION_TIMEOUT_MS",
   "DB_ROOT_QUERY_TIMEOUT_MS",
+  "DB_STATEMENT_TIMEOUT_MS",
   "DB_TRANSACTION_TIMEOUT_MS",
   "DISABLED_ADAPTERS",
   "HOME",
@@ -674,6 +701,7 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_DESKTOP_VIEW_PORT",
   "STELLA_ENABLE_DEBUG_CLIPBOARD_PERSISTENCE",
   "STELLA_OPEN_CLIPBOARD_ON_LAUNCH",
+  "STELLA_PGLITE_SNAPSHOT_CACHE_DIR",
   "STELLA_SEED_EMAIL_WORKSPACE_ID",
   "STELLA_SERVER_URL",
   "STELLA_WEB_PORT",
@@ -761,11 +789,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "APP_VERSION",
   "AWS_ENDPOINT_URL_BEDROCK_RUNTIME",
   "BASE_REF",
+  "BASE_SHA",
   "CANARY_PORT",
   "CANARY_PROBE_TOKEN",
   "CANARY_SERVER_URL",
   "CANARY_SIGNING_SECRET",
   "CANARY_STATE_PATH",
+  "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
@@ -820,14 +850,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  "RELAY_EVENT",
+  "RELAY_HEAD_SHA",
+  "RELAY_PULL_REQUESTS",
   "RELEASE_REF",
   "REPO",
   "RETRY_ATTEMPTS",
+  "REVIEW_GATE_BASE",
   "RETRY_DELAYS_SECONDS",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
   "STELLA_DESKTOP_RELEASE_API_PATH",
@@ -836,6 +871,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
   "STELLA_PORT_OFFSET",
+  "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
@@ -843,6 +879,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
   "STELLA_TEST_OMIT_ASSET",
+  "STELLA_TEST_RELEASE_NUMBERS",
+  "STELLA_UPDATE_PLAN_CONTRACTS",
+  "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_SCM_BASE",
   "WXT_STELLA_ORIGINS",
 ]);
@@ -863,5 +902,7 @@ export const AMBIENT_ENV_KEYS = new Set([
   "NODE_ENV",
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
+  "STELLA_LOCAL_DEV",
+  "TMPDIR",
   "TZ",
 ]);

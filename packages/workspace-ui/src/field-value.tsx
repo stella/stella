@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { SquareMinusIcon } from "lucide-react";
 import { Temporal } from "temporal-polyfill/full";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { formatMoneyCents } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
+import { SquareMinusIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 

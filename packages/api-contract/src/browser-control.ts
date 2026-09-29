@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-export const BROWSER_CONTROL_PROTOCOL_VERSION = 3 as const;
+export const BROWSER_CONTROL_PROTOCOL_VERSION = 4 as const;
 export const BROWSER_CONTROL_TOOL_NAME = "use-browser" as const;
 
 export const BROWSER_CONTROL_CONTENT_TRUST = {
@@ -47,7 +47,15 @@ export const BROWSER_CONTROL_LIMITS = {
   revisionIdChars: 128,
   requestIdChars: 128,
   selectValueChars: 2000,
+  /** Commands other than `snapshot` one extension connection may run. */
+  sessionActions: 400,
+  /** `open` and `go-back` commands one extension connection may run. */
+  sessionNavigations: 150,
   titleChars: 1000,
+  /** Commands other than `snapshot` one chat turn may run. */
+  turnActions: 40,
+  /** `open` and `go-back` commands one chat turn may run. */
+  turnNavigations: 15,
   urlChars: 4096,
   valueChars: 10_000,
 } as const;
@@ -56,6 +64,14 @@ const boundedIdSchema = v.pipe(
   v.string(),
   v.minLength(1),
   v.maxLength(BROWSER_CONTROL_LIMITS.requestIdChars),
+);
+
+const tabIdSchema = v.pipe(v.number(), v.integer(), v.minValue(0));
+
+const revisionSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(BROWSER_CONTROL_LIMITS.revisionIdChars),
 );
 
 /**
@@ -115,11 +131,7 @@ const urlSchema = v.pipe(
 );
 
 const pageSchema = v.strictObject({
-  revision: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(BROWSER_CONTROL_LIMITS.revisionIdChars),
-  ),
+  revision: revisionSchema,
   url: urlSchema,
 });
 
@@ -236,16 +248,14 @@ const browserControlSnapshotSchema = v.strictObject({
     v.array(browserControlElementSchema),
     v.maxLength(BROWSER_CONTROL_LIMITS.elements),
   ),
-  revision: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(BROWSER_CONTROL_LIMITS.revisionIdChars),
-  ),
+  revision: revisionSchema,
   text: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.pageTextChars)),
   /** Offset of `text` within the collected page text. */
   textOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
   /** Length of the collected page text; read further with `snapshot` and `textOffset`. */
   textTotalChars: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  /** The Chrome tab the snapshot was read from. */
+  tabId: tabIdSchema,
   title: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.titleChars)),
   url: v.pipe(v.string(), v.maxLength(BROWSER_CONTROL_LIMITS.urlChars)),
 });
@@ -255,6 +265,10 @@ export type BrowserControlSnapshot = v.InferOutput<
 >;
 
 export const BROWSER_CONTROL_ERROR_CODE = {
+  /** The chat turn or the extension connection used up its action or navigation budget. */
+  budgetExceeded: "budget-exceeded",
+  /** Stopped from chat or the extension before the command reached the page. */
+  cancelled: "cancelled",
   controllerBusy: "controller-busy",
   disconnected: "disconnected",
   elementNotFound: "element-not-found",
@@ -275,6 +289,8 @@ export const BROWSER_CONTROL_ERROR_CODE = {
   sensitiveField: "sensitive-field",
   staleController: "stale-controller",
   staleSnapshot: "stale-snapshot",
+  /** The controlled tab changed since the page was last read; take a snapshot first. */
+  tabChanged: "tab-changed",
   tabClosed: "tab-closed",
   timedOut: "timed-out",
   unsupportedPage: "unsupported-page",
@@ -324,19 +340,48 @@ const browserExtensionPingRequestSchema = v.strictObject({
   type: v.literal("ping"),
 });
 
+/**
+ * The tab and snapshot the web client last saw a result for. The extension
+ * refuses a navigation or action when the controlled tab or its latest
+ * snapshot is no longer this one.
+ */
+const observedTabSchema = v.strictObject({
+  revision: revisionSchema,
+  tabId: tabIdSchema,
+});
+
+export type BrowserObservedTab = v.InferOutput<typeof observedTabSchema>;
+
 const browserExtensionCommandRequestSchema = v.strictObject({
   command: browserControlCommandSchema,
   controllerId: controllerIdSchema,
+  observedTab: v.nullable(observedTabSchema),
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   requestId: requestIdSchema,
   source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.web),
   toolCallId: toolCallIdSchema,
+  /** The chat turn the command belongs to; per-turn budgets count by it. */
+  turnId: boundedIdSchema,
   type: v.literal("command"),
+});
+
+/**
+ * Stops the controller's queued or running command of one chat turn; a
+ * command of a later turn is never touched. Nothing is answered.
+ */
+const browserExtensionCancelRequestSchema = v.strictObject({
+  controllerId: controllerIdSchema,
+  protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
+  requestId: requestIdSchema,
+  source: v.literal(BROWSER_EXTENSION_MESSAGE_SOURCE.web),
+  turnId: boundedIdSchema,
+  type: v.literal("cancel"),
 });
 
 export const browserExtensionRequestSchema = v.variant("type", [
   browserExtensionPingRequestSchema,
   browserExtensionCommandRequestSchema,
+  browserExtensionCancelRequestSchema,
 ]);
 
 export type BrowserExtensionRequest = v.InferOutput<
@@ -345,6 +390,8 @@ export type BrowserExtensionRequest = v.InferOutput<
 
 const browserExtensionPongResponseSchema = v.strictObject({
   allSitesGranted: v.boolean(),
+  /** The tab chat currently operates, or null when none is controlled. */
+  controlledTabId: v.nullable(tabIdSchema),
   controllerId: v.nullable(controllerIdSchema),
   protocolVersion: v.literal(BROWSER_CONTROL_PROTOCOL_VERSION),
   requestId: requestIdSchema,

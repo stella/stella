@@ -73,6 +73,16 @@ const normalizeErrorCode = (errorCode: string | undefined): string =>
 export type ExtractionRunStore = ReturnType<typeof createExtractionRunStore>;
 
 /**
+ * The transitions a run's starter performs before any worker holds the run:
+ * create it, then start, skip or fail it. Progress, completion and
+ * reconciliation belong to the workers.
+ */
+export type ExtractionRunStartStore = Pick<
+  ExtractionRunStore,
+  "create" | "fail" | "skip" | "start"
+>;
+
+/**
  * Postgres lifecycle store for extraction orchestration. Every mutation is
  * tenant-keyed and terminal states are immutable. Progress accepts absolute
  * Redis SCARD snapshots and advances monotonically, so repeated or out-of-order

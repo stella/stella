@@ -22,7 +22,6 @@ import {
   stripSearchParams,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -37,6 +36,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { UploadIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/utils";
@@ -50,13 +50,13 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
-import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxEditorActionBar } from "@/components/docx/docx-editor-action-bar";
 import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
 import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
 import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import {
   DOCUMENT_PANE,
   DOCUMENT_PANE_SEARCH_VALUES,

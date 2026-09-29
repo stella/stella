@@ -29,6 +29,7 @@ import {
   resolveReasoningEffort,
   shouldEmitTemperature,
   supportsStreamingToolUse,
+  TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import type {
   AIProvider,
@@ -47,9 +48,8 @@ import {
   type OrgAIConfig,
   type OrgAIProviderConfig,
 } from "@/api/lib/ai-config";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -334,15 +334,55 @@ export const registerTanStackMockTextAdapterFactory = (
  */
 const activeMockTextAdapterFactory = ():
   | TanStackTextAdapterFactory
-  | undefined => (env.USE_MOCK_AI ? mockTextAdapterFactory : undefined);
+  | undefined =>
+  env.USE_MOCK_AI === false ? undefined : mockTextAdapterFactory;
 
 /**
- * Whether requests are actually served by the mock adapter. Callers that shape
- * a request differently for the mock must ask this, not the env flag, or they
- * will shape a real provider's request by mistake.
+ * Whether requests on the deployment's own provider are served by the mock
+ * adapter. A request made with an organization's key may still reach its real
+ * provider (see `mockAnswersRequest`), so a caller shaping one request must ask
+ * `isMockTextAdapter` about that request's adapter instead.
  */
-export const isMockTextAdapterActive = (): boolean =>
+const isMockTextAdapterActive = (): boolean =>
   activeMockTextAdapterFactory() !== undefined;
+
+/**
+ * Whether the mock answers a request, given whether the request carries a key
+ * its organization configured. A key the user entered wins over the mock, so
+ * a local stack with `USE_MOCK_AI="true"` never passes canned text off as the
+ * answer of a model the user chose. `"force"` keeps every request on the mock
+ * for runs that must be deterministic whatever keys the database holds.
+ */
+const mockAnswersRequest = ({
+  organizationKey,
+}: {
+  organizationKey: boolean;
+}): boolean =>
+  isMockTextAdapterActive() &&
+  (env.USE_MOCK_AI === "force" || !organizationKey);
+
+/**
+ * `mockAnswersRequest` for an organization's whole AI configuration. Without
+ * an organization key the request runs on the deployment's provider, which
+ * dispatch refuses when none is offered (`REQUIRE_PERSONAL_AI_KEY`), so the
+ * mock answers only where that dispatch can reach it.
+ */
+export const mockAnswersForOrganization = (
+  orgConfig: OrgAIConfig | null | undefined,
+): boolean => {
+  const organizationKey =
+    orgConfig?.providers.some((provider) => provider.apiKey !== "") ?? false;
+  return (
+    mockAnswersRequest({ organizationKey }) &&
+    (organizationKey || hasTanStackInstanceProvider())
+  );
+};
+
+const mockTextAdapters = new WeakSet<AnyTextAdapter>();
+
+/** Whether this adapter is the mock's, so its request is shaped for it. */
+export const isMockTextAdapter = (adapter: AnyTextAdapter): boolean =>
+  mockTextAdapters.has(adapter);
 
 const decodeModelOverride = (value: string): ModelOverride => {
   const [providerRaw, ...modelParts] = value.split("::");
@@ -671,12 +711,30 @@ const createExtendedBedrockAdapter = (
 export const createTanStackTextAdapterFactory = (
   options: TanStackModelFactoryOptions,
 ): TanStackTextAdapterFactory => {
-  const mockFactory = activeMockTextAdapterFactory();
-  if (mockFactory) {
-    return mockFactory;
+  const stopReasons = TANSTACK_AI_PROVIDERS.find(
+    (provider) => provider === options.provider,
+  );
+  // Only a BYOK factory carries a key; the deployment's own factory reads its
+  // key from the environment.
+  const mockFactory = mockAnswersRequest({
+    organizationKey: options.apiKey !== undefined && options.apiKey !== "",
+  })
+    ? activeMockTextAdapterFactory()
+    : undefined;
+  if (mockFactory !== undefined) {
+    // A mock adapter is held to the same contract, so tests and local runs
+    // read what production reads.
+    return (modelId) => {
+      const adapter = withProviderStreamContract(
+        mockFactory(modelId),
+        stopReasons,
+      );
+      mockTextAdapters.add(adapter);
+      return adapter;
+    };
   }
   const factory = createProviderTextAdapterFactory(options);
-  return (modelId) => withProviderStreamContract(factory(modelId));
+  return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
 };
 
 const createProviderTextAdapterFactory = ({
@@ -952,11 +1010,12 @@ export const requireTanStackAIAvailableForRole = ({
   orgConfig: OrgAIConfig | null;
   role: ModelRole;
 }): Result<void, HandlerError> => {
-  // A stored config that did not decrypt is not the same as no config: the
-  // null below would otherwise resolve to the instance provider, running an
-  // org that configured its own key on the shared one and metering it there.
-  if (configStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-    return Result.err(storedAIConfigUnreadableError(undefined));
+  // A stored config that did not decrypt, or an org barred from the instance
+  // provider, is not the same as no config: the null below would otherwise
+  // resolve to the instance provider and meter the work there.
+  const statusError = orgAIConfigStatusError(configStatus);
+  if (statusError) {
+    return Result.err(statusError);
   }
 
   if (!orgConfig) {
@@ -1164,7 +1223,14 @@ const factoryExtras = (
 const getCachedFactory = (
   config: OrgAIProviderConfig,
 ): TanStackTextAdapterFactory => {
-  const key = byokCacheKey(config);
+  // The mock decision is part of the key: a cached mock factory must not keep
+  // answering once the mock mode no longer applies to this key.
+  const answeredBy = mockAnswersRequest({
+    organizationKey: config.apiKey !== "",
+  })
+    ? "mock"
+    : "provider";
+  const key = `${byokCacheKey(config)}:${answeredBy}`;
   const cached = byokCache.get(key);
   if (cached) {
     return cached;

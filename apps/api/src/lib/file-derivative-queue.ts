@@ -61,7 +61,7 @@ import {
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
-  brandPersistedUserId,
+  brandNullablePersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -148,7 +148,7 @@ type FileDerivativeJobData = {
   entityId: string;
   fieldId: string;
   organizationId: string;
-  userId: string;
+  userId: string | null;
   workspaceId: string;
 };
 
@@ -158,7 +158,7 @@ type EnqueueFileDerivativeArgs = {
   fieldId: SafeId<"field">;
   mimeType: string;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -386,12 +386,12 @@ const processPdfDerivativeJob = async ({
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const safeDb = createRootSafeDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const brandedEntityId = brandPersistedEntityId(entityId);
@@ -544,9 +544,6 @@ const processPdfDerivativeJob = async ({
   await processExtraction(brandedEntityId);
 };
 
-const getS3File = async (key: string): Promise<ArrayBuffer> =>
-  await readS3ArrayBuffer(key);
-
 // The derivative-state literals below cast `::text::jsonb`, never a bare
 // `::jsonb`. A bare cast fixes the bind parameter's type to jsonb, so the
 // driver JSON-encodes the already-serialized string and `jsonb_set` stores a
@@ -578,7 +575,7 @@ const markPdfDerivativeFailed = async (
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
 
@@ -613,12 +610,12 @@ const processImageThumbnailJob = async ({
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const safeDb = createRootSafeDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const brandedFieldId = brandPersistedFieldId(fieldId);
@@ -658,7 +655,7 @@ const processImageThumbnailJob = async ({
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const sourceBuffer = await getS3File(sourceKey);
+  const sourceBuffer = await readS3ArrayBuffer(sourceKey);
   const thumbnailResult = await generateImageThumbnail(
     new Uint8Array(sourceBuffer),
   );
@@ -806,7 +803,7 @@ const markImageThumbnailFailed = async (
   });
   const scopedDb = createRootScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
 
@@ -919,7 +916,7 @@ type RequeueFileDerivativeArgs = {
   fieldId: SafeId<"field">;
   kind: FileDerivativeKind;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -966,7 +963,7 @@ export const requeueFileDerivative = async (
   });
   const scopedDb = createScopedDb({
     organizationId: branded.organizationId,
-    userId: brandPersistedUserId(userId),
+    userId,
     workspaceIds: [branded.workspaceId],
   });
 

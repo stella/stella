@@ -96,15 +96,23 @@ const githubUrl = "https://github.com/stella/stella";
   }
   .site-header-overlay {
     background: transparent;
-    transition:
-      background-color 240ms,
-      border-color 240ms,
-      backdrop-filter 240ms;
   }
-  .site-header-overlay.is-scrolled {
-    border-color: var(--border);
+  /* The scrolled surface is a layer that fades in on opacity; it reaches
+     over the header's transparent bottom border to draw the hairline. */
+  .site-header-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 -1px;
+    z-index: -1;
+    border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--background) 82%, transparent);
     backdrop-filter: blur(12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 240ms;
+  }
+  .site-header-overlay.is-scrolled::before {
+    opacity: 1;
   }
 </style>
 

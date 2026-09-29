@@ -17,6 +17,7 @@ import { enqueueDocumentReviewRuns } from "@/api/lib/document-review/run-queue";
 import { PLAYBOOK_RUN_DOCUMENTS_MAX } from "@/api/lib/document-review/table-run-create";
 import type { CreatePlaybookTableRunsResult } from "@/api/lib/document-review/table-run-create";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
@@ -193,6 +194,7 @@ export const createRunPlaybook = (
                 userId: user.id,
                 scopedDb,
                 propertyIds: txResult.materializedPropertyIds,
+                extractionRunStore: requestExtractionRunStore,
               }),
             catch: (cause) =>
               new HandlerError({

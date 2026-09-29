@@ -45,7 +45,7 @@ type DocxSuggestionsKey = {
   entityId: string;
 };
 
-export const docxSuggestionsKeys = {
+const docxSuggestionsKeys = {
   all: ({ workspaceId, entityId }: DocxSuggestionsKey) => [
     ...entitiesKeys.all(workspaceId),
     entityId,

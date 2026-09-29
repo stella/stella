@@ -5,8 +5,8 @@ import { useTranslations } from "use-intl";
 import type { DocxCompatibility } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/toast";
 
-import type { DocxBrowserEditorActions } from "@/components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/components/docx/docx-browser-editor.logic";
+import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import type {
   FileTab,

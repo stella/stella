@@ -123,6 +123,9 @@ const APEX_COURT_PATTERNS = {
     [/najvyšší\s+správny\s+súd/iu, "NSS"],
     [/najvyšší\s+súd/iu, "NS"],
   ],
+  // Anchored to the court directory's canonical name, the one spelling a
+  // decision of that court is stored under.
+  USA: [[/^supreme\s+court\s+of\s+the\s+united\s+states$/iu, "SCOTUS"]],
 } as const satisfies Readonly<
   Record<string, readonly (readonly [RegExp, string])[]>
 >;

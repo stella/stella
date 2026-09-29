@@ -1,4 +1,6 @@
+import { SQL } from "bun";
 import { afterEach, describe, expect, test } from "bun:test";
+import { DrizzleQueryError } from "drizzle-orm";
 
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger, sanitizeLogAttributes } from "@/api/lib/observability/logger";
@@ -159,6 +161,34 @@ describe("logger attributes", () => {
     const emitted: unknown = JSON.parse(chunks.join(""));
     expect(fingerprint["error.cause.class"]).toBe("Error");
     expect(emitted).toMatchObject(fingerprint);
+  });
+
+  test("request log retains a wrapped Bun Postgres idle code", () => {
+    const driver = new SQL.PostgresError("idle", {
+      code: "ERR_POSTGRES_IDLE_TIMEOUT",
+    });
+    const chunks: string[] = [];
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+
+    logger.request({
+      durationMs: 1,
+      errorFingerprint: errorFingerprint(
+        new DrizzleQueryError("query failed", [], driver),
+      ),
+      message: "request.failed",
+      method: "POST",
+      route: "/test",
+      severity: "ERROR",
+      statusCode: 500,
+    });
+
+    const emitted: unknown = JSON.parse(chunks.join(""));
+    expect(emitted).toMatchObject({
+      "error.cause.pg_driver_code": "ERR_POSTGRES_IDLE_TIMEOUT",
+    });
   });
 
   test("request sink never falls back to a raw unmatched URL", () => {

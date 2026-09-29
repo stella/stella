@@ -9,9 +9,12 @@ export type {
 } from "./agenda";
 
 export {
+  CHAT_SKILL_CONTEXT_NEED,
+  CHAT_SKILL_DOCUMENT,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
 } from "./agent-skills";
+export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {
@@ -59,18 +62,21 @@ export {
   BUSINESS_REGISTRY_SLUGS,
   BUSINESS_REGISTRY_CONFIGURATION,
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
+  BUSINESS_REGISTRY_LOOKUP_DETAILS,
   isBusinessRegistryCredentialSlug,
   isBusinessRegistrySlug,
 } from "./business-registries";
 export type {
   BusinessRegistrySlug,
   BusinessRegistryCredentialSlug,
+  BusinessRegistryLookupDetail,
 } from "./business-registries";
 export {
   CHAT_RUN_MODE,
   CHAT_THREAD_ORIGIN,
   CHAT_THREAD_PLACEHOLDER_TITLE,
   CHAT_TOOL_SCOPE,
+  CHAT_TURN_ID_HEADER,
   CHAT_TURN_INTENT,
 } from "./chat";
 export {
@@ -269,6 +275,7 @@ export {
   API_VALIDATION_ERROR_CODE,
   API_VERSION_CONFLICT_ERROR_CODE,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  CHAT_TURN_NOT_OWNED_ERROR_CODE,
   DOCX_SUGGESTIONS_PENDING_LIMIT_ERROR_CODE,
   FILE_SECURITY_REMEDIATION,
   normalizeApiError,

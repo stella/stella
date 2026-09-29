@@ -2,10 +2,14 @@ import cors from "@elysia/cors";
 import { panic } from "better-result";
 import { Elysia } from "elysia";
 
-import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+import {
+  CHAT_TURN_ID_HEADER,
+  STELLA_API_VERSION_PREFIX,
+} from "@stll/api-contract";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
 import { env } from "@/api/env";
+import { envBase } from "@/api/env-base";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -30,7 +34,6 @@ import {
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
-import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -38,6 +41,7 @@ import { documentTypesRoute } from "@/api/handlers/document-types/routes";
 import { documentsRoute } from "@/api/handlers/documents/routes";
 import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
+import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
@@ -80,7 +84,9 @@ import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
+import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
+import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
@@ -121,6 +127,10 @@ import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied"
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  openFreshLoginClient,
+  startDatabaseLoginProbe,
+} from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
@@ -138,6 +148,7 @@ import {
   completeRequest,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -153,6 +164,7 @@ import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -203,9 +215,9 @@ const startMemoryPressureHandler = () => {
 const allowedBrowserOrigins = (): (string | RegExp)[] => {
   const origins: (string | RegExp)[] = frontendOrigins({
     frontendUrl: env.FRONTEND_URL,
-    isDev: env.isDev,
+    runtimeMode: runtimeMode(),
   });
-  if (env.isDev) {
+  if (isLocalDevOpen()) {
     origins.push(/^chrome-extension:\/\//u);
     origins.push(...DEV_INSPECTOR_ORIGINS);
   }
@@ -216,6 +228,18 @@ const allowedBrowserOrigins = (): (string | RegExp)[] => {
 };
 
 const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
+
+// Local development routes exist only in an open runtime. The module is
+// imported on demand because it loads seeding and search maintenance; the
+// browser contract names the routes in eden-contract.ts.
+const localDevPublicRoutes = new Elysia();
+const localDevVersionedRoutes = new Elysia();
+if (isLocalDevOpen()) {
+  const { devPublicRoute, devRoute } =
+    await import("@/api/handlers/dev/routes");
+  localDevPublicRoutes.use(devPublicRoute);
+  localDevVersionedRoutes.use(devRoute);
+}
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
@@ -304,6 +328,7 @@ const api = new Elysia()
         "Content-Disposition",
         "X-Ai-Field-Errors",
         REQUEST_ID_HEADER,
+        CHAT_TURN_ID_HEADER,
       ],
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     }),
@@ -362,7 +387,7 @@ const api = new Elysia()
   .use(feedbackPublicRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
-  .use(devPublicRoute)
+  .use(localDevPublicRoutes)
   .use(smokeRoute)
   .use(operatorRoute)
   .mount(getAuth().handler)
@@ -451,6 +476,7 @@ const api = new Elysia()
       .use(ratesRoute)
       .use(expensesRoute)
       .use(invoicesRoute)
+      .use(sellerProfilesRoute)
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
       .use(sharepointRoute)
@@ -467,6 +493,7 @@ const api = new Elysia()
       .use(publicLegislationRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)
+      .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
       .use(caseLawRoute)
       .use(legalReaderRoute)
@@ -482,13 +509,15 @@ const api = new Elysia()
       .use(workObligationsRoute)
       .use(myWorkRoute)
       .use(meRoute)
-      .use(devRoute)
+      .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),
   )
   // Mounted after the versioned group on purpose: a route added before it
   // deepens the type the group callback infers, which is already at
-  // TypeScript's instantiation limit for the browser's Eden client.
-  .use(feedbackRoute);
+  // TypeScript's instantiation limit for the browser's Eden client. The
+  // signing route carries the version prefix itself.
+  .use(feedbackRoute)
+  .use(pdfSigningSessionsRoute);
 
 export default api;
 
@@ -577,6 +606,14 @@ const startServer = async (): Promise<void> => {
 
   const backgroundWorkers = initApiBackgroundWorkers();
 
+  // Every process outside local development starts it. Same URL as the pools
+  // in `db/root.ts`.
+  const closeDatabaseLoginProbe = isLocalDevOpen()
+    ? undefined
+    : startDatabaseLoginProbe({
+        openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
+      });
+
   scopeRequestAsyncStores();
 
   api.listen({
@@ -615,6 +652,7 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: backgroundWorkers.close,
+      closeDatabaseLoginProbe,
       // Undefined when the signal beat scheduler registration; there is
       // nothing claimed to drain.
       drainScheduler: scheduler.loop?.drained,
@@ -632,6 +670,7 @@ const startServer = async (): Promise<void> => {
       stopSse,
       timeout: Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     });
+    closeActionAdmissionRedis();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
         logger.info("api.shutdown_complete", { signal });

@@ -11,7 +11,6 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { LanguagesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -26,6 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { LanguagesIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DocumentLanguagePicker } from "@/components/document-language-picker";
@@ -620,7 +620,7 @@ const RadioCard = ({
 }: RadioCardProps) => (
   <label
     aria-label={label}
-    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
+    className="has-[:checked]:border-primary has-[:checked]:bg-muted/50 flex min-h-11 cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
   >
     <input
       checked={checked}

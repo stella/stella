@@ -22,7 +22,7 @@ export const fileContentQueryKey = (key: FileMetadataQueryKey) => [
   key.purpose ?? "display",
 ];
 
-export const fileMetadataQueryRoot = () => [...filesQueryRoot(), "metadata"];
+const fileMetadataQueryRoot = () => [...filesQueryRoot(), "metadata"];
 
 export const fileMetadataByFieldQueryRoot = ({
   workspaceId,

@@ -333,7 +333,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         : content.value.length === 0);
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
+        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -425,7 +425,7 @@ const InlineDateEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
+        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -496,7 +496,7 @@ const InlineTextEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
+        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
         data-open-expanded-cell
         onClick={(event) => {
           if (stopPropagation) {
@@ -587,7 +587,7 @@ const InlineIntEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm transition-colors"
+        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();

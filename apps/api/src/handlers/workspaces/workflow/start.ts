@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { LIMITS } from "@/api/lib/limits";
 import { isDeferredServiceTierAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { startWorkflow } from "@/api/lib/workflow-queue";
@@ -59,7 +61,12 @@ export const createWorkflowStart = (
       scopedDb,
       body,
       orgAIConfig,
+      orgAIConfigStatus,
     }) {
+      const accessError = memberAIAccessError(orgAIConfigStatus);
+      if (accessError) {
+        return Result.err(accessError);
+      }
       if (
         body.serviceTier === "flex" &&
         !isDeferredServiceTierAvailableForRole("pdf", orgAIConfig)
@@ -87,6 +94,7 @@ export const createWorkflowStart = (
               }),
               ...(body.propertyIds && { propertyIds: body.propertyIds }),
               ...(body.serviceTier && { serviceTier: body.serviceTier }),
+              extractionRunStore: requestExtractionRunStore,
             }),
           catch: (cause) =>
             new HandlerError({

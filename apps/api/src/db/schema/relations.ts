@@ -4,6 +4,8 @@ import {
   invoices,
   rateEntries,
   rateTables,
+  sellerProfiles,
+  savedTimeNarratives,
   timeEntries,
 } from "./billing";
 import {
@@ -25,6 +27,7 @@ import {
   chatMessages,
   chatTurns,
   chatThreadCompactions,
+  chatThreadNames,
   chatThreadSearchDocuments,
   chatThreads,
   fileChatThreads,
@@ -131,6 +134,7 @@ export const relations = defineRelations(
     agentSkills,
     agentSkillResources,
     savedSearches,
+    savedTimeNarratives,
     entityViews,
     styleSets,
     user,
@@ -175,6 +179,7 @@ export const relations = defineRelations(
     reportExports,
     timeEntries,
     billingCodes,
+    sellerProfiles,
     rateTables,
     rateEntries,
     expenses,
@@ -214,6 +219,7 @@ export const relations = defineRelations(
     chatTurns,
     chatMessageSearchDocuments,
     chatThreadCompactions,
+    chatThreadNames,
     chatThreadSearchDocuments,
     fileChatThreads,
     templateChatThreads,
@@ -980,6 +986,7 @@ export const relations = defineRelations(
         to: r.workspaces.id,
       }),
     },
+    sellerProfiles: {},
     timeEntries: {
       workspace: r.one.workspaces({
         from: r.timeEntries.workspaceId,

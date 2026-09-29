@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.34.5",
+  "version": "0.37.0",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -59,6 +59,7 @@
     "./form": "./src/components/form.tsx",
     "./frame": "./src/components/frame.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
+    "./icons": "./src/icons.ts",
     "./input": "./src/components/input.tsx",
     "./input-group": "./src/components/input-group.tsx",
     "./initials": "./src/lib/initials.ts",
@@ -83,6 +84,7 @@
     "./review-out-of-date-notice": "./src/review/review-out-of-date-notice.tsx",
     "./review-severity-dot": "./src/review/review-severity-dot.tsx",
     "./review-status-badge": "./src/review/review-status-badge.tsx",
+    "./text-mark": "./src/review/text-mark.tsx",
     "./scroll-area": "./src/components/scroll-area.tsx",
     "./scroll-to-top": "./src/components/scroll-to-top.tsx",
     "./secret-input": "./src/components/secret-input.tsx",
@@ -185,7 +187,7 @@
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/ui",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/ui",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ui",
     "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build"

@@ -266,6 +266,10 @@
       },
       "evidencePinned": "Kontrollitud {count, plural, one {# fakti} other {# fakti}} põhjal seisuga {checkedAt}. Loendi hilisemad muudatused seda kontrolli ei muuda.",
       "failedTitle": "Kontroll nurjus",
+      "history": {
+        "label": "Kontrollide ajalugu",
+        "loadFailed": "Selle dokumendi varasemaid kontrolle ei õnnestunud laadida."
+      },
       "inProgress": "Dokumendi väidete kontrollimine loendi faktide alusel…",
       "loadFailed": "Seda kontrolli ei õnnestunud laadida.",
       "noClaims": "Sellest dokumendist ei leitud ühtegi väidet.",
@@ -541,6 +545,11 @@
       "tableNamePlaceholder": "nt Standard 2025"
     },
     "revertToDraft": "Tagasta mustandiks",
+    "savedNarratives": {
+      "empty": "Salvesta kirjeldus, et seda uuesti kasutada.",
+      "save": "Salvesta kirjeldus",
+      "title": "Salvestatud kirjeldused"
+    },
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
@@ -790,6 +799,12 @@
       "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
       "searchEveryWord": "Otsi kõiki sõnu"
     },
+    "seo": {
+      "collectionName": "Stella kohtupraktika",
+      "description": "Avalik kohtupraktika andmebaas indekseeritavate kohtulahendite ja õiguse allikatega.",
+      "homeDescription": "Avalik õigusandmebaas kohtulahendite ja konsolideeritud õigusaktidega; otsida saab tunnuse või sõnade järgi.",
+      "scopedDescription": "Avalik kohtupraktika andmebaas ({scope}) indekseeritavate kohtulahendite ja õiguse allikatega."
+    },
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",
@@ -867,6 +882,7 @@
       "apiKey": "API-võti",
       "none": "Seadistus puudub"
     },
+    "skillNeedsUnavailableTools": "Vestluses seda ei pakuta. See vajab tööriista, mis seal pole saadaval: {tools}",
     "toolNames": {
       "anonymize": "Anonüümimine",
       "createDocx": "Loo DOCX",
@@ -960,7 +976,15 @@
       "searchFiles": "Otsi faile",
       "searchMatters": "Otsi toimikuid",
       "searchMcpServers": "Otsi MCP-servereid...",
-      "searchSkills": "Otsi oskusi"
+      "searchSkills": "Otsi oskusi",
+      "skillNeeds": {
+        "browserExtension": "Selle oskuse kasutamiseks ühendage brauserilaiendus",
+        "document": "Selle oskuse kasutamiseks avage dokument",
+        "matter": "Selle oskuse kasutamiseks alustage vestlust toimikus",
+        "rawSendMode": "Pole anonüümitud vestlustes saadaval",
+        "reviewEdits": "Selle oskuse kasutamiseks lülitage muudatused käsitsi ülevaatamisele",
+        "webSearch": "Selle oskuse kasutamiseks lülitage veebiotsing sisse"
+      }
     },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",
@@ -1045,6 +1069,10 @@
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
     "messageTimestampToday": "Täna, {time}",
+    "mockModel": {
+      "description": "Valmisvastused kohalikult simuleeritud mudelilt",
+      "label": "Simuleeritud AI"
+    },
     "modelSelector": {
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
@@ -1134,6 +1162,7 @@
     "sourcePlaceholder": "Vestle teemal {title}",
     "sourcePlaceholderAction": "Vestle teemal",
     "sources": "Allikad:",
+    "stopFailed": "Vastust ei õnnestunud peatada. Proovige uuesti.",
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "suggestTitle": "Paku pealkiri",
@@ -1166,6 +1195,7 @@
       "business_registry_lookup": "Äriregistrist otsimine",
       "compare_versions": "Versioonide võrdlemine",
       "configure_template_fields": "Seadista malli väljad",
+      "counterparty_check": "Vastaspoole kontrollimine",
       "create-document": "Dokumendi ettevalmistamine",
       "create_matter_document": "Dokumendi loomine",
       "create_reader_annotation": "Lisa esiletõst või kommentaar",
@@ -1461,6 +1491,7 @@
     "displayName": "Kuvatav nimi",
     "document": "Dokument",
     "documentName": "Dokumendi nimi",
+    "documentPage": "<bdi>{document}</bdi> · lk {page}",
     "documentReference": "Dokumendi viitenumber",
     "documentTitle": "Dokumendi pealkiri",
     "documentation": "Dokumentatsioon",
@@ -1604,6 +1635,7 @@
     "profile": "Profiil",
     "properties": "Omadused",
     "queued": "Ootel",
+    "reason": "Põhjus",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
     "refresh": "Värskenda",
@@ -1915,6 +1947,54 @@
       "organization": "Organisatsioon",
       "person": "Isik"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Toimiku e-posti aadress",
+    "assertedOriginal": "Algsed päised (edasi saatja esitatud)",
+    "authResults": {
+      "fail": "Ebaõnnestunud",
+      "pass": "Läbitud",
+      "unknown": "Määramata"
+    },
+    "backToList": "Tagasi kirjavahetuse juurde",
+    "createAddress": "Loo aadress",
+    "deliveredBy": "Edastas <address>{sender}</address>",
+    "deliveredByAuthenticated": "Edastas <address>{sender}</address> · autenditud",
+    "deliveryAuthentication": "Edastuse autentimine",
+    "drops": {
+      "authenticationHint": "Paluge saatja e-posti administraatoril seadistada saatva domeeni <protocol>SPF</protocol>, <protocol>DKIM</protocol> ja <protocol>DMARC</protocol>.",
+      "reasons": {
+        "attachmentRejected": "Manus lükati tagasi",
+        "authenticationFailed": "Edastuse autentimine ebaõnnestus",
+        "malformedMessage": "Sõnumit ei saanud lugeda",
+        "messageTooLarge": "Sõnum on liiga suur",
+        "revokedAddress": "E-posti aadress tühistatud",
+        "unauthorizedSender": "Saatjal puudub luba",
+        "unknownRecipient": "Tundmatu saaja"
+      },
+      "title": "Tagasi lükatud sõnumid"
+    },
+    "empty": "Kirjavahetust veel pole.",
+    "filers": "Esitajad",
+    "forwardedBy": "Edasi saatis <address>{sender}</address>",
+    "forwardedByAuthenticated": "Edasi saatis <address>{sender}</address> · autenditud",
+    "inboundNotConfigured": "Saabuv e-post pole seadistatud. Paluge administraatoril seadistada saabuva posti domeen.",
+    "markHandled": "Märgi käsitletuks",
+    "markNew": "Märgi uueks",
+    "noAddress": "Aktiivset e-posti aadressi pole.",
+    "originalSender": "Algne saatja",
+    "originalSenderUnverified": "Algne saatja (esitatud, kontrollimata)",
+    "originalSignatureVerified": "Algne allkiri kontrollitud (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Saabunud",
+    "revokeAddress": "Tühista aadress",
+    "rotateAddress": "Vaheta aadress",
+    "sentAt": "Saadetud",
+    "sharedMailboxFiler": "Jagatud postkast {address}, kinnitas {approver}",
+    "states": {
+      "handled": "Käsitletud"
+    },
+    "title": "Kirjavahetus",
+    "unknownApprover": "Tundmatu kinnitaja"
   },
   "docxReview": {
     "acceptAll": "Nõustu kõigiga",
@@ -4289,6 +4369,7 @@
     "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
     "compareWholeAct": "Võrdle kogu akti",
     "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
     "diffInserted": "Lisatud:",
     "diffRemoved": "Välja jäetud:",
     "emptyDocument": "Sellel redaktsioonil puudub tekst.",
@@ -5085,6 +5166,57 @@
       "ocrAlreadyProcessed": "Tekstituvastus on juba lõpetatud",
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
       "ocrQueued": "Tekstituvastus lisati järgmisse OCR-i paketti",
+      "pdfSigning": {
+        "action": "Allkirjasta töölauarakenduses",
+        "cancelledBaseVersionDescription": "Dokument muutus allkirjastamise ajal. Ava uusim versioon ja allkirjasta uuesti.",
+        "cancelledCertificateDescription": "Valitud sertifikaati ei saa allkirjastamiseks kasutada. Vali sertifikaat, mis lubab digiallkirja.",
+        "cancelledCertifiedDescription": "See PDF on sertifitseeritud ja sertifitseerimine ei luba rohkem allkirju lisada.",
+        "cancelledDescription": "Allkirjastamine jäi pooleli.",
+        "cancelledDigestDescription": "Allkiri ei sobinud ettevalmistatud dokumendiga. Proovi uuesti allkirjastada.",
+        "cancelledFailedDescription": "Allkirja ei õnnestunud sellele PDF-ile lisada.",
+        "cancelledPlatformDescription": "Süsteemi võtmehoidla sertifikaadiga allkirjastamine töötab praegu macOS-is.",
+        "cancelledRevokedDescription": "Valitud sertifikaat või selle väljastanud sertifikaat on tühistatud. Vali kehtiv sertifikaat.",
+        "cancelledSignatureDescription": "stella desktopi allkiri ei sobinud valitud sertifikaadiga. Proovi uuesti allkirjastada.",
+        "cancelledStampNameDescription": "Sertifikaadi omaniku nime ei saa nähtavas templis näidata. Allkirjasta uuesti nähtamatu allkirjaga.",
+        "cancelledStampOverflowDescription": "Templi tekst ei mahu joonistatud kasti. Joonista suurem tempel, lühenda põhjust või asukohta või kasuta nähtamatut allkirja.",
+        "cancelledTitle": "Allkirjastamine tühistatud",
+        "cancelledUserDescription": "Allkirjastamine tühistati rakenduses stella desktop.",
+        "cancelledWouldBreakSignaturesDescription": "Selle PDF-i allkirjastamine muudaks selles juba olevad allkirjad kehtetuks.",
+        "encryptedDescription": "See PDF on parooliga kaitstud. Eemalda kaitse enne allkirjastamist.",
+        "expiredDescription": "stella desktop ei jõudnud allkirjastamist lõpetada. Käivita see ja proovi uuesti.",
+        "expiredTitle": "Allkirjastamise aeg sai läbi",
+        "inProgressDescription": "Seda faili juba allkirjastatakse. Lõpeta või tühista see allkirjastamine stella desktopis enne.",
+        "noFileDescription": "Sellel dokumendil pole allkirjastatavat faili.",
+        "notAPdfDescription": "Allkirjastada saab ainult PDF-faile.",
+        "placementBox": "Templi asukoht",
+        "placementConfirm": "Ava stella desktop",
+        "placementDescription": "Vali, kuidas allkiri PDF-is paistab.",
+        "placementHint": "Lohista templit selle liigutamiseks või selle nurka suuruse muutmiseks. Kui tempel on valitud, liigutavad nooleklahvid seda ja Shift koos nooleklahviga muudab selle suurust.",
+        "placementInvisible": "Nähtamatu allkiri",
+        "placementInvisibleDescription": "Allkiri salvestatakse faili ilma ühelegi leheküljele märki lisamata.",
+        "placementPageLabel": "Templi lehekülg",
+        "placementPageOption": "Lehekülg {page, number}/{count, number}",
+        "placementPreview": "Lehekülje {page, number} eelvaade",
+        "placementPreviewFailed": "Lehekülje eelvaadet ei õnnestunud laadida.",
+        "placementTitle": "Allkirjasta PDF",
+        "placementTooSmall": "See lehekülg on templi jaoks liiga väike. Vali mõni teine lehekülg.",
+        "placementVisible": "Nähtav tempel",
+        "placementVisibleDescription": "Leheküljel olev kast näitab, kes ja millal allkirjastas.",
+        "readOnlyDescription": "See dokument on kirjutuskaitstud.",
+        "signedDescription": "Allkiri salvestati versioonina {versionNumber, number}.",
+        "signedDescriptionNoVersion": "Allkiri salvestati uue versioonina.",
+        "signedTitle": "PDF allkirjastatud",
+        "stampLocation": "Asukoht",
+        "stampRejectedDescription": "Templit ei saa sinna paigutada. Paiguta see uuesti ja proovi uuesti.",
+        "stampSignedBy": "Digitaalselt allkirjastanud",
+        "stampTextUnrenderableDescription": "Põhjust või asukohta ei saa nähtavas templis näidata. Muuda teksti või kasuta nähtamatut allkirja.",
+        "startFailedTitle": "Seda faili ei saa allkirjastada",
+        "statusUnavailableDescription": "Vaata versioonide ajaloost, kas allkiri salvestati.",
+        "statusUnavailableTitle": "Allkirjastamise olek pole saadaval",
+        "tooLargeDescription": "See PDF on allkirjastamiseks liiga suur.",
+        "waitingDescription": "Vali rakenduses stella desktop allkirjastamissertifikaat, et see PDF allkirjastada.",
+        "waitingTitle": "Ootame rakendust stella desktop"
+      },
       "rateLimited": "Kiiruspiirang; jätkatakse {seconds, number} s pärast",
       "referencedUpload": {
         "choiceLabel": "Mida teha failiga {fileName}",
@@ -5346,6 +5478,7 @@
         },
         "targets": {
           "automation": "automatiseerimine",
+          "correspondence": "kirjavahetus",
           "court": "kohtukirje",
           "document": "dokument",
           "documentReview": "dokumendi ülevaatus",

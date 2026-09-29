@@ -1,0 +1,205 @@
+{
+  "format": 1,
+  "provider": "bedrock",
+  "scenario": "unlisted-stop",
+  "variant": "tool-call",
+  "source": "synthetic",
+  "basis": "The bedrock/tool-call cassette with messageStop's stopReason set to one no SDK lists: a call left to run has no answer to stand on",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/model/us.anthropic.claude-sonnet-4-5-20250929-v1%3A0/converse-stream",
+        "shape": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "text": "[prompt]"
+                  }
+                ]
+              }
+            ],
+            "inferenceConfig": {
+              "maxTokens": 64000,
+              "temperature": 0
+            },
+            "toolConfig": {
+              "tools": [
+                {
+                  "toolSpec": {
+                    "name": "mcp__external__delete",
+                    "inputSchema": {
+                      "json": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": ["name"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "description": "Delete a draft by name."
+                  }
+                }
+              ],
+              "toolChoice": {
+                "auto": {}
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/vnd.amazon.eventstream"
+        },
+        "body": {
+          "encoding": "aws-eventstream",
+          "messages": [
+            {
+              "headers": {
+                ":event-type": "messageStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFG",
+                "role": "assistant"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStart",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "p": "abcdefghijklm",
+                "start": {
+                  "toolUse": {
+                    "name": "mcp__external__delete",
+                    "toolUseId": "tooluse_4wZwyWq4NfhGjMO1BcvB1F",
+                    "type": "tool_use"
+                  }
+                }
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": ""
+                  }
+                },
+                "p": "abcdefghijkl"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": "{\"name\": \"dr"
+                  }
+                },
+                "p": "abcdefghijklm"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockDelta",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "delta": {
+                  "toolUse": {
+                    "input": "aft\"}"
+                  }
+                },
+                "p": "abcdefghijklmnopqrstuvwxy"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "contentBlockStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "contentBlockIndex": 0,
+                "p": "abcdef"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "messageStop",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "p": "abcdefghijklmnopqr",
+                "stopReason": "unlisted_stop"
+              }
+            },
+            {
+              "headers": {
+                ":event-type": "metadata",
+                ":content-type": "application/json",
+                ":message-type": "event"
+              },
+              "payload": {
+                "metrics": {
+                  "latencyMs": 1641
+                },
+                "p": "abcdefghijklmnopqrstuvwxyzABCDEFGH",
+                "usage": {
+                  "inputTokens": 609,
+                  "outputTokens": 56,
+                  "serverToolUsage": {},
+                  "totalTokens": 665
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown",
+    "usage": {
+      "promptTokens": 609,
+      "completionTokens": 56,
+      "totalTokens": 665
+    }
+  }
+}

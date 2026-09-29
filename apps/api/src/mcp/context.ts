@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { getLawTextBlock, searchConsolidatedLegislation } from "@stll/boe";
+import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
@@ -37,8 +38,11 @@ import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overvie
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { resolveAgentAuditExecution } from "@/api/lib/agent-audit-principal";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import type { OrgSettingsForAuth } from "@/api/lib/ai-config-loader";
+import type {
+  loadOrgAIConfig,
+  OrgAIConfigReader,
+  OrgSettingsForAuth,
+} from "@/api/lib/ai-config-loader";
 import type { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -115,12 +119,12 @@ export type McpRequestContext = {
   testDependencies?: {
     /** Replaces the scoped `organization_settings` read, transaction included. */
     loadOrgSettingsForAuth?: (
-      organizationId: SafeId<"organization">,
+      reader: OrgAIConfigReader,
     ) => Promise<OrgSettingsForAuth>;
     /** Replaces the scoped AI-config read, transaction included. */
     loadOrgAIConfig?: (
-      organizationId: SafeId<"organization">,
-    ) => Promise<OrgAIConfig | null>;
+      reader: OrgAIConfigReader,
+    ) => ReturnType<typeof loadOrgAIConfig>;
     configureTemplateFields?: typeof configureTemplateFields;
     consumeInvokeCapabilityRateLimit?: typeof consumeInvokeCapabilityRateLimit;
     isCapabilityFeatureEnabled?: (feature: string | undefined) => boolean;
@@ -131,6 +135,8 @@ export type McpRequestContext = {
     createPlaybookTableRuns?: typeof createPlaybookTableRuns;
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    /** Every court spelling one corpus country holds, for reading a court filter. */
+    readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
@@ -151,6 +157,7 @@ export type McpRequestContext = {
     getSearchReader?: typeof getSearchReader;
     describeStoredTemplate?: typeof describeStoredTemplate;
     executeRegistryLookup?: typeof executeRegistryLookup;
+    runEntityCheck?: typeof runEntityCheck;
     searchConsolidatedLegislation?: typeof searchConsolidatedLegislation;
     getLawTextBlock?: typeof getLawTextBlock;
     withTimeout?: typeof withTimeout;

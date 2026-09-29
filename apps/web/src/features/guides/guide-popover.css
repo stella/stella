@@ -200,11 +200,7 @@
   outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .stella-guide-popover .driver-popover-footer-btn,
-  .stella-guide-popover .driver-popover-close-btn {
-    transition:
-      color 120ms ease,
-      background-color 120ms ease;
-  }
+/* driver.css fades the close button's colour; hover colours apply instantly. */
+.stella-guide-popover .driver-popover-close-btn {
+  transition: none;
 }

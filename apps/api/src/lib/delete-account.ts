@@ -18,7 +18,9 @@ import {
   deleteDesktopEditSessionsAndHandoffs,
   deleteMcpCredentialsAndOAuthState,
   deleteFileComparisonUploads,
+  deletePdfSigningSessions,
   deletePendingUploads,
+  deletePersonalAiMemories,
   deletePersonalBillingRates,
   deletePersonalWorkspaceViewTemplatesAndAgentSkills,
   deleteUserFiles,
@@ -329,6 +331,7 @@ export const verifyAndDeleteUser = async (
           currentUserId,
           s3KeysToDelete,
         });
+        await deletePdfSigningSessions(tx, currentUserId);
         await deletePendingUploads({ tx, currentUserId, s3KeysToDelete });
         await deleteFileComparisonUploads({
           tx,
@@ -337,6 +340,7 @@ export const verifyAndDeleteUser = async (
         });
         await deleteUserFiles({ tx, currentUserId, s3KeysToDelete });
         await deleteChatThreadsAndFileLinks(tx, currentUserId);
+        await deletePersonalAiMemories(tx, currentUserId);
         await deletePersonalWorkspaceViewTemplatesAndAgentSkills(
           tx,
           currentUserId,

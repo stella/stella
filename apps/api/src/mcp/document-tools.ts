@@ -116,6 +116,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -558,6 +559,7 @@ const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
 const OPEN_DOCUMENT_VERSION_UPLOAD_OUTPUT_SCHEMA = v.strictObject({
   entityId: v.string(),
   workspaceId: v.string(),
+  nextStep: v.string(),
 });
 
 // The list cursor is [createdAt, entityId]; the query resolves the (createdAt,
@@ -683,12 +685,7 @@ const handleListDocumentsTool: TypedMcpToolHandler<
   if (parsed.output.cursor !== undefined) {
     boundary = decodeEntityPageCursor(parsed.output.cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor: parsed.output.cursor });
     }
   }
 
@@ -833,12 +830,7 @@ const loadVersionHistory = async ({
   if (cursor !== undefined) {
     boundary = decodeVersionsPageCursor(cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor });
     }
   }
 
@@ -2029,13 +2021,12 @@ const handleOpenDocumentVersionUploadTool: TypedMcpToolHandler<
     return target.response;
   }
 
-  const data = {
+  return toolDataResult({
     entityId: target.entityId,
     workspaceId: target.workspaceId,
-  };
-  return toolDataResult(data, {
-    primaryText:
-      "Choose a file in the upload panel to add a new document version.",
+    nextStep:
+      "Have the user choose a file in the upload panel; the panel uploads " +
+      "it as the document's new version.",
   });
 };
 
@@ -2175,12 +2166,7 @@ const handleListPropertiesTool: TypedMcpToolHandler<
   if (parsed.output.cursor !== undefined) {
     boundary = propertyPageCursorCodec.decode(parsed.output.cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor: parsed.output.cursor });
     }
   }
   const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;

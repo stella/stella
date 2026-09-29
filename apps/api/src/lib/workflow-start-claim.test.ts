@@ -10,6 +10,9 @@
  * `reconcileOrphanedWorkflows` both close it eventually) but it is exactly the
  * window a retryable error invites a caller into.
  *
+ * The same release applies when the run's lifecycle row cannot be written: a
+ * start with no run row plans and enqueues nothing.
+ *
  * Its own file because the mocks below replace the run-state store and the
  * queue module process-wide.
  */
@@ -57,6 +60,15 @@ const ORGANIZATION_ID = toSafeId<"organization">(
 );
 const USER_ID = toSafeId<"user">("01931f4a-0000-7000-8000-000000000103");
 
+const unusedRunStore = asTestRaw<
+  Parameters<typeof startWorkflow>[0]["extractionRunStore"]
+>({
+  create: async () => {
+    await Promise.resolve();
+    throw new Error("no run is recorded after a failed claim");
+  },
+});
+
 const startAfterFailedClaimWrite = async () =>
   await startWorkflow({
     workspaceId: WORKSPACE_ID,
@@ -66,6 +78,7 @@ const startAfterFailedClaimWrite = async () =>
       throw new Error("the plan must not be read after a failed claim");
     }),
     runStateStore,
+    extractionRunStore: unusedRunStore,
   });
 
 describe("startWorkflow when the run state write fails after the claim", () => {
@@ -97,5 +110,73 @@ describe("startWorkflow when the run state write fails after the claim", () => {
     expect(releasedClaims.map((release) => release.requestId)).toEqual(
       claimedRequestIds,
     );
+  });
+});
+
+describe("startWorkflow when its run cannot be recorded", () => {
+  const claimed: string[] = [];
+  const released: { requestId: string; workspaceId: string }[] = [];
+  const clearAfterCreate = mock(async () => undefined);
+  const leaseAfterCreate = mock(async () => undefined);
+  const claimingStore = asTestRaw<
+    NonNullable<Parameters<typeof startWorkflow>[0]["runStateStore"]>
+  >({
+    tryClaim: async ({ requestId }: { requestId: string }) => {
+      claimed.push(requestId);
+      return await Promise.resolve(true);
+    },
+    setRequestId: async () => await Promise.resolve(true),
+    releaseClaim: async (release: {
+      requestId: string;
+      workspaceId: string;
+    }) => {
+      released.push(release);
+      return await Promise.resolve(true);
+    },
+    clear: clearAfterCreate,
+    extendPlanningLease: leaseAfterCreate,
+    initializeCompletion: leaseAfterCreate,
+  });
+  const createdIds: string[] = [];
+  const transitionAfterCreate = mock(async () => undefined);
+  const refusingRunStore = asTestRaw<
+    Parameters<typeof startWorkflow>[0]["extractionRunStore"]
+  >({
+    create: async ({ id }: { id: string }) => {
+      createdIds.push(id);
+      await Promise.resolve();
+      throw new Error("insert refused");
+    },
+    fail: transitionAfterCreate,
+    skip: transitionAfterCreate,
+    start: transitionAfterCreate,
+  });
+  const readPlan = mock(() => {
+    throw new Error("the plan must not be read without a run");
+  });
+
+  test("dispatches nothing and releases only its own claim", async () => {
+    const result = await startWorkflow({
+      workspaceId: WORKSPACE_ID,
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
+      scopedDb: asTestRaw<ScopedDb>(readPlan),
+      runStateStore: claimingStore,
+      extractionRunStore: refusingRunStore,
+    });
+
+    expect(result.status).toBe("failed");
+    // The run was attempted on the store the caller supplied, under the id
+    // this attempt claimed with.
+    expect(createdIds).toEqual(claimed);
+    // No planning, so no lease, no completion state and no queued job.
+    expect(readPlan).not.toHaveBeenCalled();
+    expect(leaseAfterCreate).not.toHaveBeenCalled();
+    expect(transitionAfterCreate).not.toHaveBeenCalled();
+    // The claim is released by its own request id, never cleared wholesale.
+    expect(released).toEqual([
+      { requestId: claimed.at(0) ?? "", workspaceId: WORKSPACE_ID },
+    ]);
+    expect(clearAfterCreate).not.toHaveBeenCalled();
   });
 });

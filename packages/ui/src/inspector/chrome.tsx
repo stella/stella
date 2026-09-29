@@ -112,7 +112,7 @@ export const InspectorRailIconButton = ({
 }: React.ComponentProps<"button">) => (
   <button
     className={cn(
-      "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md outline-hidden transition-colors focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
+      "text-muted-foreground hover:bg-accent hover:text-foreground flex items-center justify-center rounded-md outline-hidden focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50",
       SIDE_RAIL_ICON_BUTTON_SIZE,
       className,
     )}
@@ -136,7 +136,7 @@ export const InspectorRailTab = ({
   <button
     aria-current={active ? "true" : undefined}
     className={cn(
-      "group/tab relative flex w-full shrink-0 items-center justify-center border-b transition-colors",
+      "group/tab relative flex w-full shrink-0 items-center justify-center border-b",
       TOOLBAR_ROW_HEIGHT,
       active
         ? "bg-background text-foreground before:bg-primary before:absolute before:inset-y-0 before:inset-s-0 before:w-0.5"

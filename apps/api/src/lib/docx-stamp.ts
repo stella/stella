@@ -957,7 +957,11 @@ const injectFooter = async (
   const docRelsPath = "word/_rels/document.xml.rels";
   const docRels = (await archive.readEntryString(docRelsPath)) ?? "";
 
-  const verifyUrl = `${frontendUrl}/verify/${verificationCode}`;
+  const content: StampFooterContent = {
+    stamp,
+    verificationCode,
+    verifyUrl: `${frontendUrl}/verify/${verificationCode}`,
+  };
   const footerMatches = findExistingFooters(docXml, docRels);
 
   if (footerMatches.length > 0) {
@@ -985,33 +989,28 @@ const injectFooter = async (
         docXml,
         ...footerParts.map(({ xml }) => xml),
       ]);
-      for (const { path, relsPath, xml } of footerParts) {
-        await updateExistingFooter(
+      for (const footer of footerParts) {
+        await updateExistingFooter({
           archive,
-          path,
-          relsPath,
-          xml,
-          stamp,
-          verificationCode,
-          verifyUrl,
-          String(bookmarkId),
-        );
+          footer,
+          content,
+          bookmarkId: String(bookmarkId),
+        });
         bookmarkId += 1;
       }
       return Result.ok();
     }
   }
 
-  await createNewFooter(
-    archive,
-    docXml,
-    docRelsPath,
-    docRels,
-    stamp,
-    verificationCode,
-    verifyUrl,
-  );
+  await createNewFooter({ archive, docXml, docRelsPath, docRels, content });
   return Result.ok();
+};
+
+/** The visible stamp line, its code, and where the code links to. */
+type StampFooterContent = {
+  stamp: string;
+  verificationCode: string;
+  verifyUrl: string;
 };
 
 type FooterMatch = {
@@ -1068,62 +1067,58 @@ const findExistingFooters = (
   });
 };
 
-const updateExistingFooter = async (
-  archive: DocxArchive,
-  footerPath: string,
-  footerRelsPath: string,
-  footerXml: string,
-  stamp: string,
-  verificationCode: string,
-  verifyUrl: string,
-  bookmarkId: string,
-): Promise<void> => {
-  const footerRels = (await archive.readEntryString(footerRelsPath)) ?? "";
+const updateExistingFooter = async ({
+  archive,
+  footer,
+  content: { stamp, verificationCode, verifyUrl },
+  bookmarkId,
+}: {
+  archive: DocxArchive;
+  footer: LoadedFooterMatch;
+  content: StampFooterContent;
+  bookmarkId: string;
+}): Promise<void> => {
+  const footerRels = (await archive.readEntryString(footer.relsPath)) ?? "";
 
   const hyperlinkRId = STAMP_HYPERLINK_REL_ID;
 
   // Ensure hyperlink relationship exists
   archive.zip.file(
-    footerRelsPath,
+    footer.relsPath,
     ensureHyperlinkRel(footerRels, hyperlinkRId, verifyUrl),
   );
 
-  if (footerXml.includes(STAMP_BOOKMARK)) {
+  const stampPara = buildStampParagraph(
+    stamp,
+    verificationCode,
+    hyperlinkRId,
+    bookmarkId,
+  );
+  if (footer.xml.includes(STAMP_BOOKMARK)) {
     // Replace existing stamp paragraph
-    archive.zip.file(
-      footerPath,
-      replaceStampParagraph(
-        footerXml,
-        stamp,
-        verificationCode,
-        hyperlinkRId,
-        bookmarkId,
-      ),
-    );
+    archive.zip.file(footer.path, replaceStampParagraph(footer.xml, stampPara));
   } else {
     // Append stamp paragraph before </w:ftr>
-    const stampPara = buildStampParagraph(
-      stamp,
-      verificationCode,
-      hyperlinkRId,
-      bookmarkId,
-    );
     archive.zip.file(
-      footerPath,
-      footerXml.replace(CLOSING_FTR_RE, () => `${stampPara}\n</w:ftr>`),
+      footer.path,
+      footer.xml.replace(CLOSING_FTR_RE, () => `${stampPara}\n</w:ftr>`),
     );
   }
 };
 
-const createNewFooter = async (
-  archive: DocxArchive,
-  docXml: string,
-  docRelsPath: string,
-  docRels: string,
-  stamp: string,
-  verificationCode: string,
-  verifyUrl: string,
-): Promise<void> => {
+const createNewFooter = async ({
+  archive,
+  docXml,
+  docRelsPath,
+  docRels,
+  content: { stamp, verificationCode, verifyUrl },
+}: {
+  archive: DocxArchive;
+  docXml: string;
+  docRelsPath: string;
+  docRels: string;
+  content: StampFooterContent;
+}): Promise<void> => {
   const footerFileName = findAvailableFooterName(archive);
   const footerPath = `word/${footerFileName}`;
   const footerRelsPath = `word/_rels/${footerFileName}.rels`;
@@ -1214,20 +1209,7 @@ const findNextBookmarkId = (xmlParts: Iterable<string>): number => {
   return max + 1;
 };
 
-const replaceStampParagraph = (
-  footerXml: string,
-  stamp: string,
-  verificationCode: string,
-  hyperlinkRId: string,
-  bookmarkId: string,
-): string => {
-  const newPara = buildStampParagraph(
-    stamp,
-    verificationCode,
-    hyperlinkRId,
-    bookmarkId,
-  );
-
+const replaceStampParagraph = (footerXml: string, newPara: string): string => {
   // Match the entire paragraph containing the bookmark
   const re = new RegExp(
     `<w:p>[\\s\\S]*?w:name="${STAMP_BOOKMARK_NAME_SOURCE}"[\\s\\S]*?</w:p>`,

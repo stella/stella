@@ -6,13 +6,18 @@ import {
   getRouteApi,
   useNavigate,
 } from "@tanstack/react-router";
-import { ArrowLeftIcon, BuildingIcon, PlusIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ArrowLeftIcon,
+  BuildingIcon,
+  PlusIcon,
+  UserIcon,
+} from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -439,7 +444,7 @@ function ContactDetailPage() {
               {activeClientMatters.map((matter) => (
                 <li key={matter.id}>
                   <MatterRefLink
-                    className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
+                    className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm"
                     workspaceId={matter.id}
                   >
                     <MatterIcon className="size-4 shrink-0" matter={matter} />

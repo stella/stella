@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
+import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { persistExplicitMemory } from "@/api/lib/memory/persist-explicit-memory";
 
@@ -28,7 +28,7 @@ const createFirmMemory = createSafeRootHandler(
     // Firm memory is replayed into every member's chat prompt, so this is
     // the highest-blast-radius write; refuse model-control sequences here
     // even though only admins reach this route.
-    const sanitized = sanitizeMemoryContent(body.content);
+    const sanitized = sanitizePersonMemoryContent(body.content);
     if (Result.isError(sanitized)) {
       return Result.err(
         new HandlerError({

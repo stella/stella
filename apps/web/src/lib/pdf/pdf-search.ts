@@ -17,7 +17,7 @@ export type PDFSearchBox = {
   height: number;
 };
 
-export type PDFSearchMatch = {
+type PDFSearchMatch = {
   pageIndex: number;
   boxes: PDFSearchBox[];
   textEndOffset: number;

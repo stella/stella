@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { envBase } from "@/api/env-base";
 import {
   deleteS3ObjectWithSignal,
-  getS3ObjectSizeWithSignal,
+  headS3ObjectWithSignal,
   isMissingS3ObjectError,
   listS3ObjectKeys,
   putS3ObjectWithSignal,
@@ -45,9 +45,10 @@ describe("fake S3 carries the real s3 helpers", () => {
     expect(fake.objects.get(`${bucket}/org_1/ws_1/doc.txt`)?.contentType).toBe(
       "text/plain",
     );
-    expect(await getS3ObjectSizeWithSignal("org_1/ws_1/doc.txt", signal)).toBe(
-      bytes.byteLength,
-    );
+    expect(await headS3ObjectWithSignal("org_1/ws_1/doc.txt", signal)).toEqual({
+      contentLength: bytes.byteLength,
+      contentType: "text/plain",
+    });
     expect(
       new TextDecoder().decode(await readS3ArrayBuffer("org_1/ws_1/doc.txt")),
     ).toBe("hello object");

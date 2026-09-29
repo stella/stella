@@ -33,14 +33,7 @@ type DocxFolioJustificationCitation = Extract<
   { kind: "docx-folio" }
 >["statements"][number]["citations"][number];
 
-export const CHAT_EXPORT_FORMATS = ["docx"] as const;
-export type ChatExportFormat = (typeof CHAT_EXPORT_FORMATS)[number];
-
-export const CHAT_EXPORT_CITATION_STYLES = [
-  "footnotes",
-  "inline",
-  "none",
-] as const;
+const CHAT_EXPORT_CITATION_STYLES = ["footnotes", "inline", "none"] as const;
 export type ChatExportCitationStyle =
   (typeof CHAT_EXPORT_CITATION_STYLES)[number];
 

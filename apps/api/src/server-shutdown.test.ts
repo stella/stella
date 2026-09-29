@@ -21,6 +21,7 @@ describe("API service shutdown", () => {
 
     const shutdown = shutdownApiServices({
       closeBackgroundWorkers: async () => undefined,
+      closeDatabaseLoginProbe: async () => undefined,
       drainScheduler: Promise.resolve(),
       onHttpStopError: () => undefined,
       stopHttp: async () => {
@@ -53,6 +54,7 @@ describe("API service shutdown", () => {
     const outcome = observeWithinDeadline(
       shutdownApiServices({
         closeBackgroundWorkers: async () => await never,
+        closeDatabaseLoginProbe: async () => await never,
         drainScheduler: never,
         onHttpStopError: () => undefined,
         stopHttp: async () => await never,
@@ -65,7 +67,12 @@ describe("API service shutdown", () => {
     expect(await outcome).toBe(API_SHUTDOWN_OUTCOME.timedOut);
   });
 
-  for (const failedService of ["http", "scheduler", "workers"] as const) {
+  for (const failedService of [
+    "http",
+    "login-probe",
+    "scheduler",
+    "workers",
+  ] as const) {
     test(`reports failed ${failedService} cleanup`, async () => {
       const failure = new Error(`${failedService} cleanup failed`);
       const loggedErrors: unknown[] = [];
@@ -75,6 +82,11 @@ describe("API service shutdown", () => {
         shutdownApiServices({
           closeBackgroundWorkers: async () => {
             if (failedService === "workers") {
+              throw failure;
+            }
+          },
+          closeDatabaseLoginProbe: async () => {
+            if (failedService === "login-probe") {
               throw failure;
             }
           },

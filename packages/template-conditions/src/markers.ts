@@ -877,7 +877,8 @@ const singularize = (segment: string): string => {
 };
 
 /** The loop alias the codemod (and the legacy-marker message) generates for a
- *  `{{#each path}}`: the singular of the last plain-word segment, else `item`. */
+ *  `{{#each path}}`: the singular of the last plain-word segment, else `item`.
+ *  A fresh `{% for %}` inserted by the Studio names its item by the same rule. */
 export const legacyLoopAlias = (path: string): string => {
   const segment = path.split(".").at(-1) ?? "";
   if (!IDENTIFIER_RE.test(segment)) {

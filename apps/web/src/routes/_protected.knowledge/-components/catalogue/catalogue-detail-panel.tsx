@@ -1,5 +1,8 @@
 import { useCallback, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   BanknoteIcon,
   CogIcon,
@@ -13,10 +16,7 @@ import {
   UserIcon,
   XIcon,
   type LucideIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -374,7 +374,7 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
         render={
           <a
             aria-label={fieldLabel}
-            className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
+            className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5"
             href={sanitizeHref(authorUrl)}
             onClick={(e) => e.stopPropagation()}
             rel="noreferrer"

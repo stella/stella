@@ -88,6 +88,34 @@ test("append tails coalesce serialized revisions across read windows", () => {
   expect(second.tails.size).toBe(0);
 });
 
+test("single append entries remain singleton requests", () => {
+  const result = advanceCorpusProjectionAppendTails({
+    tails: new Map(),
+    entries: [
+      {
+        indexId: "case_law_v5_cs_sk",
+        ndjson: "single-1",
+        ndjsonBytes: 8,
+        leaseExpiresAtMs: 300_000,
+        appendMode: "single",
+      },
+      {
+        indexId: "case_law_v5_cs_sk",
+        ndjson: "single-2",
+        ndjsonBytes: 8,
+        leaseExpiresAtMs: 300_000,
+        appendMode: "single",
+      },
+    ],
+    mode: "buffer",
+    nowMs: 0,
+  });
+  expect(
+    result.flush.map(({ entries }) => entries.map(({ ndjson }) => ndjson)),
+  ).toEqual([["single-1"], ["single-2"]]);
+  expect(result.tails.size).toBe(0);
+});
+
 test("append tails flush before their earliest lease deadline", () => {
   const result = advanceCorpusProjectionAppendTails({
     tails: new Map(),
@@ -133,6 +161,48 @@ test("append tails flush before crossing the physical request budget", () => {
   expect(
     result.tails.get("case_law_v5_cs_sk")?.entries.map(({ ndjson }) => ndjson),
   ).toEqual(["cs-2"]);
+});
+
+test("a multipart revision flushes alone between ordinary revisions", () => {
+  const entries = [
+    {
+      indexId: "legislation_v2_cze",
+      ndjson: "first",
+      ndjsonBytes: 5,
+      leaseExpiresAtMs: 300_000,
+      parts: ["first"],
+    },
+    {
+      indexId: "legislation_v2_cze",
+      ndjson: "multipart-first",
+      ndjsonBytes: 15,
+      leaseExpiresAtMs: 300_000,
+      parts: ["multipart-first", "multipart-second"],
+    },
+    {
+      indexId: "legislation_v2_cze",
+      ndjson: "last",
+      ndjsonBytes: 4,
+      leaseExpiresAtMs: 300_000,
+      parts: ["last"],
+    },
+  ];
+  const advanced = advanceCorpusProjectionAppendTails({
+    tails: new Map(),
+    entries,
+    mode: "buffer",
+    nowMs: 0,
+  });
+  expect(
+    advanced.flush.map(({ entries: requestEntries }) =>
+      requestEntries.map(({ ndjson }) => ndjson),
+    ),
+  ).toEqual([["first"], ["multipart-first"]]);
+  expect(
+    advanced.tails
+      .get("legislation_v2_cze")
+      ?.entries.map(({ ndjson }) => ndjson),
+  ).toEqual(["last"]);
 });
 
 test("the commit mode picks the ingest the request runs through", async () => {

@@ -1,8 +1,8 @@
-import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
+import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

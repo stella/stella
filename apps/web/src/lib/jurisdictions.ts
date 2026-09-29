@@ -3,7 +3,6 @@ import { type CountryCode, isCountryCode } from "@stll/country-codes";
 
 import { COUNTRY_CENTROIDS, COUNTRY_CODES } from "@/lib/country-centroids";
 
-export { COUNTRY_CODES };
 export type { CountryCode };
 
 export type PracticeJurisdiction = {

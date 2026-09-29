@@ -11,17 +11,17 @@
 
 import { useState } from "react";
 
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  Loader2Icon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  Loader2Icon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -202,11 +202,7 @@ export const VersionRow = ({
   if (onActivate) {
     headerElement = (
       <button
-        className={cn(
-          headerClassName,
-          "transition-colors",
-          !isSelected && "hover:bg-muted/50",
-        )}
+        className={cn(headerClassName, !isSelected && "hover:bg-muted/50")}
         type="button"
         onClick={onActivate}
         onContextMenu={onContextMenu}
@@ -268,7 +264,7 @@ export const VersionRow = ({
               {summary.status === "loading" ? (
                 <Loader2Icon className="size-3.5 animate-spin" />
               ) : (
-                <WandSparklesIcon className="size-3.5" />
+                <AiActionIcon className="size-3.5" />
               )}
             </Button>
           )}

@@ -1,7 +1,7 @@
-import { ChevronDownIcon, Columns2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ChevronDownIcon, Columns2Icon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverClose,
@@ -160,7 +160,7 @@ export const StatuteVersionMenu = ({
                 <button
                   aria-current={selected ? "true" : undefined}
                   className={cn(
-                    "hover:bg-muted focus-visible:ring-ring grid w-full grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4 text-start transition-colors focus-visible:ring-2 focus-visible:outline-none",
+                    "hover:bg-muted focus-visible:ring-ring grid w-full grid-cols-[auto_1fr] items-start gap-3 rounded-md px-4 text-start focus-visible:ring-2 focus-visible:outline-none",
                     inForce ? "py-3" : "py-2",
                     selected && "bg-muted/60",
                     compareFrom !== null && "pe-12",

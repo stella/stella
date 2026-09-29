@@ -3,6 +3,10 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouteContext } from "@tanstack/react-router";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowLeftIcon,
   HistoryIcon,
@@ -10,11 +14,7 @@ import {
   RotateCcwIcon,
   ShieldAlertIcon,
   XIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -593,7 +593,7 @@ const TaskDetailPanelContent = ({
             />
           ) : (
             <button
-              className="hover:text-foreground-strong-muted w-full text-start text-base font-semibold transition-colors"
+              className="hover:text-foreground-strong-muted w-full text-start text-base font-semibold"
               onClick={startEditingName}
               type="button"
             >

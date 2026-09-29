@@ -45,8 +45,10 @@ describe("updateTimeEntryById", () => {
     const recordedEvents: AuditEvent[] = [];
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
+        organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
           findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test"),
             status: BILLING_STATUS.DRAFT,
             dateWorked: "2026-06-14",
             timezoneId: "UTC",
@@ -113,8 +115,10 @@ describe("updateTimeEntryById", () => {
     let appliedUpdates: Record<string, unknown> | undefined;
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
+        organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
           findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test"),
             status: BILLING_STATUS.DRAFT,
             dateWorked: "2026-06-14",
             timezoneId: "UTC",
@@ -175,8 +179,10 @@ describe("updateTimeEntryById", () => {
     let appliedUpdates: Record<string, unknown> | undefined;
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
+        organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
           findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test"),
             status: BILLING_STATUS.DRAFT,
             dateWorked: "2026-08-07",
             timezoneId: "UTC",
@@ -236,8 +242,10 @@ describe("updateTimeEntryById", () => {
     const workItemId = toSafeId<"entity">("work_item_compare_test");
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
+        organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
           findFirst: async () => ({
+            organizationId: toSafeId<"organization">("org_test"),
             status: BILLING_STATUS.DRAFT,
             dateWorked: "2026-07-11",
             timezoneId: "Europe/Vienna",

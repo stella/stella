@@ -79,28 +79,33 @@ body:has(.clipboard-editor-window) .font-sans {
 }
 
 /* Filtering to a group tints the whole window, so the rail chip is not the
- * only thing carrying the selection. Over the macOS material the wash is the
- * tint itself; the painted surface tints its own background instead, so it
- * stays near-opaque. */
-.clipboard-window[data-active-group] {
+ * only thing carrying the selection. The tint is a layer behind the content
+ * (the window isolates its stacking context) whose opacity follows the
+ * filter; its colour comes from `--clipboard-window-tint`, which keeps the
+ * last group's accent so the layer fades out as well as in. Over the painted
+ * surface it sits on the near-opaque wash. */
+.clipboard-window::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
   background-color: color-mix(
     in oklab,
-    var(--clipboard-group-accent) 7%,
+    var(--clipboard-window-tint) 7%,
     transparent
   );
+  opacity: 0;
+  pointer-events: none;
 }
 
-.clipboard-window-painted[data-active-group] {
-  background-color: color-mix(
-    in srgb,
-    color-mix(in oklab, var(--clipboard-group-accent) 7%, var(--background)) 94%,
-    transparent
-  );
+.clipboard-window[data-active-group]::before {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .clipboard-window {
-    transition: background-color 200ms ease-out;
+  .clipboard-window::before {
+    transition: opacity 200ms ease-out;
   }
 }
 
@@ -296,7 +301,6 @@ body:has(.clipboard-editor-window) .font-sans {
 
 .clipboard-source-icon {
   filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.28));
-  transition: filter 150ms;
 }
 
 .clipboard-card:hover .clipboard-source-icon {

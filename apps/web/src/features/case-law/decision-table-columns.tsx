@@ -11,6 +11,8 @@
 import { createContext, use, useMemo } from "react";
 
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
 import {
   CalendarIcon,
   FileDigitIcon,
@@ -22,9 +24,8 @@ import {
   QuoteIcon,
   ShapesIcon,
   TagIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
 import type {

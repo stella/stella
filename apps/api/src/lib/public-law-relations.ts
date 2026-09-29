@@ -1,5 +1,5 @@
 /**
- * Exact PostgreSQL columns exposed through the public-law reader role.
+ * Exact PostgreSQL columns required or permitted for the public-law reader role.
  *
  * Every relation is column-restricted. Operational cursors, source config,
  * raw publisher payloads, ingestion leases and index-repair state stay on the
@@ -13,18 +13,27 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
   caseLawDecisions: "case_law_decisions",
+  caseLawBrowseFacetCounts: "case_law_browse_facet_counts",
   caseLawFtsConfigs: "case_law_fts_configs",
   caseLawJudges: "case_law_judges",
   caseLawProvisionCitations: "case_law_provision_citations",
+  caseLawProvisionExtractionRevisions:
+    "case_law_provision_extraction_revisions",
+  caseLawProvisionExtractionRevisionsRegistry:
+    "case_law_provision_extraction_revisions_registry",
+  caseLawProvisionExtractions: "case_law_provision_extractions",
   caseLawSearchDocuments: "case_law_search_documents",
+  caseLawSitemapShards: "case_law_sitemap_shards",
   caseLawStatuteCitationCounts: "case_law_statute_citation_counts",
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
+  corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
+  statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
 export type PublicLawRelation =
@@ -41,22 +50,65 @@ export type PublicLawColumnGrantsByRelation = Readonly<
   Record<string, Readonly<Record<string, PublicLawColumnGrant>>>
 >;
 
+const PROVISION_LINK_STATUS_GRANT = "permitted";
+
+/** Columns the provision link status capability requires after its grants land. */
+export const PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION = {
+  case_law_provision_citations: {
+    span_role: PROVISION_LINK_STATUS_GRANT,
+    print_piece_id: PROVISION_LINK_STATUS_GRANT,
+    print_start: PROVISION_LINK_STATUS_GRANT,
+    print_end: PROVISION_LINK_STATUS_GRANT,
+    print_text: PROVISION_LINK_STATUS_GRANT,
+    name_piece_id: PROVISION_LINK_STATUS_GRANT,
+    name_start: PROVISION_LINK_STATUS_GRANT,
+    name_end: PROVISION_LINK_STATUS_GRANT,
+    name_text: PROVISION_LINK_STATUS_GRANT,
+    selection: PROVISION_LINK_STATUS_GRANT,
+    printed_work_identifier: PROVISION_LINK_STATUS_GRANT,
+    target_document_id: PROVISION_LINK_STATUS_GRANT,
+    target_status: PROVISION_LINK_STATUS_GRANT,
+  },
+  case_law_provision_extraction_revisions: {
+    jurisdiction: PROVISION_LINK_STATUS_GRANT,
+    min_current_revision: PROVISION_LINK_STATUS_GRANT,
+  },
+  case_law_provision_extraction_revisions_registry: {
+    jurisdiction: PROVISION_LINK_STATUS_GRANT,
+    revision: PROVISION_LINK_STATUS_GRANT,
+  },
+  case_law_provision_extractions: {
+    decision_id: PROVISION_LINK_STATUS_GRANT,
+    desired_input_digest: PROVISION_LINK_STATUS_GRANT,
+    work_status: PROVISION_LINK_STATUS_GRANT,
+    generation: PROVISION_LINK_STATUS_GRANT,
+    outcome: PROVISION_LINK_STATUS_GRANT,
+    published_input_digest: PROVISION_LINK_STATUS_GRANT,
+    published_jurisdiction: PROVISION_LINK_STATUS_GRANT,
+    published_revision: PROVISION_LINK_STATUS_GRANT,
+    published_projection_digest: PROVISION_LINK_STATUS_GRANT,
+    payload_class: PROVISION_LINK_STATUS_GRANT,
+    payload_class_input_digest: PROVISION_LINK_STATUS_GRANT,
+  },
+} as const satisfies PublicLawColumnGrantsByRelation;
+
 /**
  * Each column declares how this release relates to its grant:
  *
  * - `required`: this release reads the column, so a role that cannot read it
  *   cannot serve. A missing grant fails the attestation.
- * - `permitted`: this release does not read it. The role may hold the grant
- *   or not, and serves either way.
+ * - `permitted`: this release can use it when granted, but also serves
+ *   without it. The role may hold the grant or not.
  *
  * The attestation holds the role to `required ⊆ grants ⊆ required ∪
  * permitted`, column by column; a table-wide grant is refused outright.
  *
  * Both bounds come from the running release's own map, and a release cannot
  * know a column a later map adds: it reads any grant outside its map as
- * over-privilege. So a new grant ships as `required`, in the same release as
- * the read that needs it and the migration that grants it. That is a
- * coordinated cutover; no earlier release serves against the widened role.
+ * over-privilege. The provision link status columns are `permitted` during
+ * the expand phase. The read checks for the complete capability grant and
+ * falls back until a follow-up grant migration lands. Deploy this expansion
+ * release before applying that migration, so running readers accept it.
  * Giving a grant up runs the other way: drop the read and mark the column
  * `permitted` first, revoke in a later release, so both releases serve while
  * the two steps are apart.
@@ -111,6 +163,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     ecli: "required",
     citation_key: "required",
     court: "required",
+    court_id: "required",
     country: "required",
     language: "required",
     language_group_key: "required",
@@ -173,6 +226,16 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     span_end: "required",
     work_source: "required",
     confidence: "required",
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_citations,
+  },
+  case_law_provision_extraction_revisions: {
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_extraction_revisions,
+  },
+  case_law_provision_extraction_revisions_registry: {
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_extraction_revisions_registry,
+  },
+  case_law_provision_extractions: {
+    ...PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION.case_law_provision_extractions,
   },
   // What a search matches, ranks and cuts its headline from. The stored
   // title, the preview generation and the refresh time serve the indexer.
@@ -182,6 +245,22 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     regconfig: "required",
     tsv: "required",
     searchable_text: "required",
+  },
+  // The shards the public sitemap index lists. The count is how the refresh
+  // splits a month, not what the index states.
+  case_law_sitemap_shards: {
+    country: "required",
+    year: "required",
+    month: "required",
+    bucket: "required",
+    last_modified_at: "required",
+  },
+  case_law_browse_facet_counts: {
+    kind: "required",
+    country: "required",
+    source_id: "required",
+    value: "required",
+    total: "required",
   },
   case_law_statute_citation_counts: {
     source_id: "required",
@@ -221,6 +300,16 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     manifest_digest: "required",
     status: "required",
   },
+  // Whether a serving group under its own contract is ready to be read: the
+  // bound digest and the readiness. The physical id and the timestamps are
+  // operator bookkeeping.
+  corpus_index_group_enrollments: {
+    family: "required",
+    generation: "required",
+    index_group: "required",
+    effective_digest: "required",
+    provisioning_status: "required",
+  },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The applied revision, the work schedule and the failure detail are
   // operator state and stay on the owning service side.
@@ -250,6 +339,9 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     effective_date: "required",
     version_valid_from: "required",
     version_valid_to: "required",
+    expression_kind: "required",
+    window_disposition: "required",
+    window_disposition_basis: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",
@@ -274,6 +366,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
     retry_after: "required",
+  },
+  statute_sitemap_shards: {
+    country: "required",
+    bucket: "required",
+    lastmod: "required",
+    total: "required",
   },
   legislation_sources: {
     id: "required",

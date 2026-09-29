@@ -1,16 +1,17 @@
-import type { Result } from "better-result";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { Result } from "better-result";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
-import { chatMessages } from "@/api/db/schema";
+import { chatMessages, chatTurns } from "@/api/db/schema";
 import {
   chatMessageFromPersisted,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
+import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/handlers/chat/chat-turn-state";
 import type {
   ChatMessageMetadata,
   ChatMessageRole,
@@ -41,7 +42,7 @@ export type ClientMessage = {
  * derived client-side from the user-file id, so only the DB-sourced
  * placeholder needs to travel with the message.
  */
-export const attachPlaceholders = (
+const attachPlaceholders = (
   parts: ChatPart[],
   placeholderById: Map<string, string>,
 ): ChatPart[] =>
@@ -92,6 +93,9 @@ type LoadChatMessagePageArgs = SafeDbOrTx &
   Omit<LoadChatMessagePageOnTxArgs, "tx">;
 
 export type ChatMessagePage = {
+  /** The thread's turn not yet settled (accepted, running, or awaiting the
+   *  user), which the page stops; null when every turn has settled. */
+  activeTurnId: SafeId<"chatTurn"> | null;
   messages: ClientMessage[];
   olderCursor: string | null;
   /** ISO timestamp of the newest message in this page (the last ascending
@@ -143,21 +147,45 @@ const loadChatMessagePageOnTx = async ({
   const olderCursor =
     hasOlder && oldest ? encodeMessagePageCursor(oldest.id) : null;
 
-  const placeholderById = await loadPlaceholdersOnTx({
-    tx,
-    userId,
-    rows: pageAscending,
-  });
-
   const lastActivityAt = pageAscending.at(-1)?.createdAt.toISOString() ?? null;
 
+  const activeTurn = (
+    await tx
+      .select({ id: chatTurns.id })
+      .from(chatTurns)
+      .where(
+        and(
+          eq(chatTurns.threadId, threadId),
+          inArray(chatTurns.status, [...ACTIVE_CHAT_TURN_STATUSES]),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+
   return {
-    messages: pageAscending.map((row) =>
-      clientMessageFromPageRow(row, placeholderById),
-    ),
+    activeTurnId: activeTurn?.id ?? null,
+    messages: await projectPageRowsOnTx({ rows: pageAscending, tx, userId }),
     olderCursor,
     lastActivityAt,
   };
+};
+
+/**
+ * Rows as the thread's page serves them: each message with its stored
+ * timestamp, its attachments carrying the placeholders of the files they
+ * reference.
+ */
+const projectPageRowsOnTx = async ({
+  rows,
+  tx,
+  userId,
+}: {
+  rows: readonly ChatMessagePageRow[];
+  tx: Transaction;
+  userId: SafeId<"user">;
+}): Promise<ClientMessage[]> => {
+  const placeholderById = await loadPlaceholdersOnTx({ rows, tx, userId });
+  return rows.map((row) => clientMessageFromPageRow(row, placeholderById));
 };
 
 /**
@@ -177,6 +205,44 @@ export const loadChatMessagePage = async ({
     async (tx) =>
       await loadChatMessagePageOnTx({ tx, threadId, userId, before }),
   );
+
+/**
+ * The thread's messages `messageIds` names, as its page serves them, in
+ * thread order. Naming none reads nothing.
+ */
+export const loadClientMessages = async ({
+  messageIds,
+  threadId,
+  userId,
+  ...handle
+}: SafeDbOrTx & {
+  messageIds: readonly SafeId<"chatMessage">[];
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+}): Promise<Result<ClientMessage[], SafeDbError>> => {
+  if (messageIds.length === 0) {
+    return Result.ok([]);
+  }
+  return await withScopedTx(handle, async (tx) => {
+    const rows = await tx
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+        content: chatMessages.content,
+        createdAt: chatMessages.createdAt,
+      })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.threadId, threadId),
+          inArray(chatMessages.id, [...messageIds]),
+        ),
+      )
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+      .limit(messageIds.length);
+    return await projectPageRowsOnTx({ rows, tx, userId });
+  });
+};
 
 type ChatMessagePageRow = {
   content: PersistedChatMessageContent;
@@ -202,7 +268,7 @@ export const clientMessageFromPageRow = (
 type LoadPlaceholdersOnTxArgs = {
   tx: Transaction;
   userId: SafeId<"user">;
-  rows: { content: PersistedChatMessageContent }[];
+  rows: readonly { content: PersistedChatMessageContent }[];
 };
 
 const loadPlaceholdersOnTx = async ({

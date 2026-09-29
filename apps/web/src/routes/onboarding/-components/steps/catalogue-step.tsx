@@ -1,13 +1,5 @@
 import { useState } from "react";
 
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ExternalLinkIcon,
-  GlobeIcon,
-  SearchIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -21,6 +13,14 @@ import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import { Form } from "@stll/ui/form";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ExternalLinkIcon,
+  GlobeIcon,
+  SearchIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,
@@ -318,7 +318,7 @@ export const CatalogueStep = ({
                   <>
                     <button
                       aria-pressed={jurisdictionFilter.size === 0}
-                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
+                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                       onClick={() => setJurisdictionFilter(new Set())}
                       type="button"
                     >
@@ -358,7 +358,7 @@ export const CatalogueStep = ({
                     return (
                       <button
                         aria-pressed={active}
-                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
+                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
                         key={code}
                         onClick={() =>
                           setJurisdictionFilter((prev) => {
@@ -402,7 +402,7 @@ export const CatalogueStep = ({
                 {t("common.noResults")}
               </p>
               <a
-                className="border-border bg-background hover:bg-muted text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
+                className="border-border bg-background hover:bg-muted text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium"
                 href={sanitizeHref(PROPOSE_TOOL_URL)}
                 rel="noreferrer"
                 target="_blank"

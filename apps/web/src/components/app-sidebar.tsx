@@ -26,9 +26,17 @@ import {
   useMatch,
   useRouterState,
 } from "@tanstack/react-router";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+import { useShallow } from "zustand/react/shallow";
+
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronRightIcon,
   CircleHelpIcon,
+  Clock3Icon,
   EllipsisVerticalIcon,
   MessageSquareIcon,
   PanelLeftIcon,
@@ -37,14 +45,7 @@ import {
   PlusIcon,
   SearchIcon,
   UsersIcon,
-} from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
-import { useShallow } from "zustand/react/shallow";
-
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
 import {
@@ -127,6 +128,7 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -175,6 +177,9 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
+  const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
+  const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
+  const showTimesheetLink = timeBillingPreviewEnabled && canReadTimeEntries;
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
     includePublicLaw: publicLawPreviewEnabled,
@@ -713,6 +718,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       onEntityDrop={handleEntityDropOnMatter}
                       onExpandedChange={() => toggleMatterExpansion(ws.id)}
                       onReorder={reorderPinned}
+                      showTimesheetLink={showTimesheetLink}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -737,6 +743,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                       onDeleted={handleMatterDeleted}
                       onEntityDrop={handleEntityDropOnMatter}
                       onExpandedChange={() => toggleMatterExpansion(ws.id)}
+                      showTimesheetLink={showTimesheetLink}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -945,6 +952,7 @@ type MatterItemProps = {
   isActive: boolean;
   isPinned?: boolean;
   isExpanded: boolean;
+  showTimesheetLink: boolean;
   onExpandedChange: () => void;
   onTogglePin: (id: string) => void;
   /** Navigate-away (or other cleanup) after the matter is deleted; the
@@ -1021,6 +1029,7 @@ const MatterItem = ({
   workspace: ws,
   isActive,
   isExpanded,
+  showTimesheetLink,
   isPinned: _isPinnedProp,
   onTogglePin,
   onDeleted,
@@ -1113,6 +1122,7 @@ const MatterItem = ({
     pages: cachedActivity?.pages,
     status: activityStatus,
   });
+  const hasExpandableContent = !activityIsKnownEmpty || showTimesheetLink;
 
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
@@ -1305,7 +1315,7 @@ const MatterItem = ({
         })}
         ref={dropRef}
       >
-        {activityIsKnownEmpty ? null : (
+        {hasExpandableContent ? (
           <Tooltip
             content={isExpanded ? t("common.showLess") : t("common.showMore")}
             render={
@@ -1332,7 +1342,7 @@ const MatterItem = ({
               icon={ChevronRightIcon}
             />
           </Tooltip>
-        )}
+        ) : null}
         {!isCollapsed && (
           <MatterColorContextPicker
             className="absolute start-2 top-2 z-10 size-4"
@@ -1349,7 +1359,7 @@ const MatterItem = ({
           asChild
           className={cn(
             "relative py-0 ps-8 group-data-[collapsible=icon]:ps-2",
-            activityIsKnownEmpty ? "pe-12" : "pe-20",
+            hasExpandableContent ? "pe-20" : "pe-12",
           )}
           tooltip={[
             ws.name,
@@ -1404,14 +1414,14 @@ const MatterItem = ({
         </SidebarMenuButton>
         {navBadge !== undefined ? (
           <NavBadge
-            className={cn(!activityIsKnownEmpty && "end-7")}
+            className={cn(hasExpandableContent && "end-7")}
             digit={navBadge}
           />
         ) : (
           <div
             className={cn(
               "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100",
-              activityIsKnownEmpty ? "end-1" : "end-7",
+              hasExpandableContent ? "end-7" : "end-1",
             )}
             data-pinned={isPinned || undefined}
           >
@@ -1466,11 +1476,31 @@ const MatterItem = ({
           </div>
         )}
         {isExpanded ? (
-          <MatterActivityList
-            activeOrganizationId={activeOrganizationId}
-            id={`matter-activity-${ws.id}`}
-            workspaceId={ws.id}
-          />
+          <div id={`matter-activity-${ws.id}`}>
+            {showTimesheetLink && (
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                  <MatterActivityRow>
+                    <Link
+                      activeProps={{ "data-active": true }}
+                      params={{ workspaceId: ws.id }}
+                      to="/workspaces/$workspaceId/timesheets"
+                    >
+                      <Clock3Icon className="text-muted-foreground size-3.5 shrink-0" />
+                      <span className="truncate">
+                        {t("billing.timesheets")}
+                      </span>
+                    </Link>
+                  </MatterActivityRow>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            )}
+            <MatterActivityList
+              activeOrganizationId={activeOrganizationId}
+              id={`matter-recent-${ws.id}`}
+              workspaceId={ws.id}
+            />
+          </div>
         ) : null}
       </SidebarMenuItem>
 

@@ -19,6 +19,16 @@ import {
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
 import type { SearchTotal } from "@stll/api-contract/search";
+import {
+  CZ_INSOLVENCY_MATCH_BASES,
+  CZ_INSOLVENCY_PHASES,
+  CZ_VAT_FINDING_TYPES,
+  CZ_VAT_SUBJECT_TYPES,
+  ENTITY_CHECK_KINDS,
+  ENTITY_CHECK_NOT_COVERED_REASONS,
+  ENTITY_CHECK_SUBJECT_TYPES,
+  ENTITY_CHECK_UNAVAILABLE_REASONS,
+} from "@stll/business-registries/entity-checks";
 import { CITATION_PASSAGE_MENTIONS } from "@stll/legal-ast/citation-passage";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
@@ -31,6 +41,7 @@ import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
+import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -157,6 +168,9 @@ export const LIST_MATTERS_LIST_PROJECTION = v.strictObject({
   ),
   // Opaque base64 cursor (boundary matter id), not UUID-formatted.
   nextCursor: v.nullable(passthroughId()),
+  // Only on an empty page while the organization has no practice
+  // jurisdictions: how to set them.
+  nextStep: v.optional(v.string()),
 });
 
 /**
@@ -1107,6 +1121,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     rateAtEntry: v.number(),
     currency: v.string(),
     narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
     invoiceNarrative: v.nullable(v.string()),
     billable: v.boolean(),
     noCharge: v.boolean(),
@@ -1381,7 +1396,10 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       // phrasing that required every word it carried and found something.
       warnings: v.array(
         v.strictObject({
-          code: v.picklist(CASE_LAW_SEARCH_WARNING_CODES),
+          code: v.picklist([
+            ...CASE_LAW_SEARCH_WARNING_CODES,
+            ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
+          ]),
           message: v.string(),
           hint: v.string(),
         }),
@@ -1424,6 +1442,9 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
     }),
   ),
   total: searchTotalProjection,
+  // Only on an empty result while the organization has no practice
+  // jurisdictions: how to set them.
+  nextStep: v.optional(v.string()),
 });
 
 const decisionTextFieldProjection = v.variant("type", [
@@ -2005,6 +2026,130 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
   ),
 ]);
 
+const entityCheckSourceProjection = v.strictObject({
+  name: v.string(),
+  authority: v.string(),
+  url: publicUrl(),
+});
+
+const entityCheckSubjectProjection = v.variant("type", [
+  v.strictObject({ type: v.literal("company-id"), value: v.string() }),
+  v.strictObject({
+    type: v.literal("tax-id"),
+    value: v.string(),
+    // Set when the check derived the tax ID from a company ID.
+    derivedFrom: v.nullable(
+      v.strictObject({ type: v.literal("company-id"), value: v.string() }),
+    ),
+  }),
+  v.strictObject({
+    type: v.literal("person"),
+    firstName: v.string(),
+    lastName: v.string(),
+    birthDate: v.string(),
+  }),
+]);
+
+const czInsolvencyFindingProjection = v.strictObject({
+  fileNumber: v.string(),
+  court: v.nullable(v.string()),
+  phase: v.picklist(CZ_INSOLVENCY_PHASES),
+  stateCode: v.nullable(v.string()),
+  matchedBy: v.picklist(CZ_INSOLVENCY_MATCH_BASES),
+  debtor: v.strictObject({
+    name: v.nullable(v.string()),
+    firstName: v.nullable(v.string()),
+    companyId: v.nullable(v.string()),
+    birthDate: v.nullable(v.string()),
+    address: v.nullable(v.string()),
+  }),
+  insolvencyDeclaredOn: v.nullable(v.string()),
+  insolvencyEndedOn: v.nullable(v.string()),
+  // The register's public page for the proceeding.
+  url: v.nullable(publicUrl()),
+});
+
+const czVatFindingProjection = v.strictObject({
+  type: v.picklist(CZ_VAT_FINDING_TYPES),
+  publishedOn: v.nullable(v.string()),
+});
+
+// What the VAT register holds beyond the reliability answer.
+const czVatPayerRecordProjection = v.strictObject({
+  subjectType: v.picklist(CZ_VAT_SUBJECT_TYPES),
+  name: v.nullable(v.string()),
+  address: v.nullable(v.string()),
+  taxOfficeCode: v.nullable(v.string()),
+  publishedAccounts: v.array(
+    v.strictObject({
+      account: v.string(),
+      publishedOn: v.string(),
+      withdrawnOn: v.nullable(v.string()),
+    }),
+  ),
+});
+
+const entityCheckOutcomeEntries = {
+  kind: v.picklist(ENTITY_CHECK_KINDS),
+  source: entityCheckSourceProjection,
+  subject: entityCheckSubjectProjection,
+};
+
+/**
+ * check_counterparty. Source of truth: `runEntityCheck`'s `EntityCheckResult`
+ * union, forwarded verbatim by `handleCheckCounterpartyTool`
+ * (`matter-tools.ts`). Public-register data about the screened subject.
+ */
+export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("clear"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      sourceDataAsOf: v.nullable(v.string()),
+      record: v.nullable(czVatPayerRecordProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("found"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      sourceDataAsOf: v.nullable(v.string()),
+      findings: v.array(
+        v.union([czInsolvencyFindingProjection, czVatFindingProjection]),
+      ),
+      totalMatches: v.number(),
+      record: v.nullable(czVatPayerRecordProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("not-registered"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      sourceDataAsOf: v.nullable(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("unavailable"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      reason: v.picklist(ENTITY_CHECK_UNAVAILABLE_REASONS),
+      detail: v.nullable(v.string()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("not-covered"),
+      ...entityCheckOutcomeEntries,
+      reason: v.picklist(ENTITY_CHECK_NOT_COVERED_REASONS),
+      supportedSubjectTypes: v.array(v.picklist(ENTITY_CHECK_SUBJECT_TYPES)),
+    }),
+  ),
+]);
+
 const TEMPLATE_WARNINGS_PROJECTION = v.array(
   v.strictObject({
     // Tied to the producer's catalog: a code the warning module does not
@@ -2347,6 +2492,10 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),
+  timeMinimumUnitMinutes: v.optional(v.number()),
+  timeEditWindowDays: v.optional(v.number()),
+  timeLockedThroughMonth: v.optional(v.nullable(v.string())),
+  timeNarrativeRequired: v.optional(v.boolean()),
 });
 
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([

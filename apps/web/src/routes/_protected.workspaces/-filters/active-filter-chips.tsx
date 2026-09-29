@@ -1,7 +1,7 @@
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
@@ -170,7 +170,7 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
         <button
           className={cn(
             "bg-muted/72 hover:bg-muted text-muted-foreground hover:text-foreground",
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 transition-colors",
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
           )}
           key={chip.key}
           onClick={chip.clear}

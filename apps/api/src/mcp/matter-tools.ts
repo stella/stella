@@ -1,12 +1,16 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
+  BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
   resourceRef,
   RESOURCE_TYPE,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import { ENTITY_CHECK_KINDS } from "@stll/business-registries/entity-checks";
+import type { EntityCheckSubject } from "@stll/business-registries/entity-checks";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries/lookup";
@@ -32,7 +36,11 @@ import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import {
+  BUSINESS_REGISTRY_SLUGS,
+  LOOKUP_DETAIL_DESCRIPTION,
+} from "@/api/lib/business-registries/dispatch";
+import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import {
   type AssertNoExtraFields,
   DELETED_TRUE_PROJECTION,
@@ -43,6 +51,7 @@ import {
   type LIST_TASKS_DETAIL_PROJECTION,
   type LIST_TASKS_LIST_PROJECTION,
   LIST_TASKS_PROJECTION,
+  CHECK_COUNTERPARTY_PROJECTION,
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   SAVE_CONTACT_PROJECTION,
   SAVE_MATTER_PROJECTION,
@@ -78,6 +87,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   ensureActiveWorkspace,
@@ -88,7 +98,6 @@ import {
   ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
-  structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -105,6 +114,7 @@ type MatterToolName =
   | "save_contact"
   | "delete_contact"
   | "lookup_business_registry"
+  | "check_counterparty"
   | "list_tasks"
   | "save_task"
   | "delete_task"
@@ -893,6 +903,12 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
         "Canonical identifier (e.g. company number, VAT number) or company name",
       ),
     ),
+    detail: v.optional(
+      v.pipe(
+        v.picklist(BUSINESS_REGISTRY_LOOKUP_DETAILS),
+        v.description(LOOKUP_DETAIL_DESCRIPTION),
+      ),
+    ),
   }),
 );
 
@@ -913,6 +929,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     organizationId: context.organizationId,
     registry: parsed.output.registry,
     q: parsed.output.query,
+    detail: parsed.output.detail,
     executeLookup: context.testDependencies?.executeRegistryLookup,
   });
   if (Result.isError(result)) {
@@ -926,6 +943,137 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
   >;
   return toolDataResult(result.value satisfies LookupBusinessRegistryPayload);
+};
+
+// --- check_counterparty -------------------------------------------------
+
+const checkCounterpartySubjectSchema = v.variant("type", [
+  v.strictObject({
+    type: v.pipe(
+      v.literal("company-id"),
+      v.description("A registered business, by its national business ID."),
+    ),
+    company_id: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description(
+        "National business ID in the check's country, e.g. the Czech IČO 26863154",
+      ),
+    ),
+  }),
+  v.strictObject({
+    type: v.pipe(
+      v.literal("tax-id"),
+      v.description("A taxpayer, by its tax ID."),
+    ),
+    tax_id: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description(
+        "Tax ID in the check's country, e.g. the Czech DIČ CZ45274649",
+      ),
+    ),
+  }),
+  v.strictObject({
+    type: v.pipe(
+      v.literal("person"),
+      v.description("A natural person, by name and birth date."),
+    ),
+    first_name: v.pipe(
+      v.string(),
+      v.minLength(2),
+      v.maxLength(100),
+      v.description("First name"),
+    ),
+    last_name: v.pipe(
+      v.string(),
+      v.minLength(2),
+      v.maxLength(100),
+      v.description("Last name (surname)"),
+    ),
+    birth_date: v.pipe(
+      ISO_DATE_SCHEMA,
+      v.maxLength(10),
+      v.description("Birth date"),
+    ),
+  }),
+]);
+
+/** Shared with the chat tool, so both surfaces accept the same call. */
+export const CHECK_COUNTERPARTY_INPUT_SCHEMA = v.strictObject({
+  check: v.pipe(
+    v.picklist(ENTITY_CHECK_KINDS),
+    v.description(
+      "Source to screen against. cz-insolvency: the Czech insolvency " +
+        "register (ISIR), pending and ended proceedings; takes a company " +
+        "or a person. cz-vat-reliability: the Czech VAT register, " +
+        "unreliable-payer status and published bank accounts; takes a " +
+        "tax ID, or a company ID sent as CZ + IČO and marked derived.",
+    ),
+  ),
+  subject: v.pipe(
+    checkCounterpartySubjectSchema,
+    v.description("The company or person to screen"),
+  ),
+});
+
+const checkCounterpartyArgsSchema = nullAsAbsent(
+  CHECK_COUNTERPARTY_INPUT_SCHEMA,
+);
+
+export const toEntityCheckSubject = (
+  subject: v.InferOutput<typeof checkCounterpartySubjectSchema>,
+): EntityCheckSubject => {
+  switch (subject.type) {
+    case "company-id": {
+      return { type: "company-id", value: subject.company_id };
+    }
+    case "tax-id": {
+      return { type: "tax-id", value: subject.tax_id };
+    }
+    case "person": {
+      return {
+        type: "person",
+        firstName: subject.first_name,
+        lastName: subject.last_name,
+        birthDate: subject.birth_date,
+      };
+    }
+    default: {
+      subject satisfies never;
+      return panic("Unhandled subject");
+    }
+  }
+};
+
+const handleCheckCounterpartyTool: TypedMcpToolHandler<
+  v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
+> = async ({ args, context }) => {
+  if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(checkCounterpartyArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult(parsed.issues);
+  }
+
+  const result = await runEntityCheckShared({
+    check: parsed.output.check,
+    subject: toEntityCheckSubject(parsed.output.subject),
+    runCheck: context.testDependencies?.runEntityCheck,
+  });
+  if (Result.isError(result)) {
+    return internalFailureResult(result.error);
+  }
+  // Passthrough: public-register data about a subject the caller named.
+  type CheckCounterpartyPayload = AssertNoExtraFields<
+    typeof result.value,
+    v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
+  >;
+  return toolDataResult(result.value satisfies CheckCounterpartyPayload);
 };
 
 // --- list_tasks ---------------------------------------------------------
@@ -1215,12 +1363,7 @@ const handleListTasksTool: TypedMcpToolHandler<
   const cursor =
     input.cursor === undefined ? null : decodeTaskListCursor(input.cursor);
   if (input.cursor !== undefined && cursor === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
+    return invalidCursorResult({ cursor: input.cursor, tool: "list_tasks" });
   }
 
   const listed = await listTasksPage({
@@ -2149,18 +2292,46 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Look up a company in a public business register (ARES, Brreg, " +
-      "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
-      "or VIES). Pass a canonical identifier (company/registration number, " +
-      "VAT number) for an exact match, or a company name to search where the " +
-      "register supports it. Returns registered names, addresses, and " +
-      "registry-specific details. Result IDs belong to the external registry, " +
-      "not stella's contact directory; create a contact with save_contact " +
-      "before using read_contact.",
+      "Look up a company in a public business register. Pass a canonical " +
+      "identifier (company/registration number, VAT number) for an exact " +
+      "match, or a company name to search where the register supports it. " +
+      "Result IDs belong to the external registry, not stella's contact " +
+      "directory. Create a contact with save_contact before using " +
+      "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
+    scope: "stella:read",
+  }),
+  defineValibotMcpTool({
+    annotations: {
+      title: "Check counterparty",
+      destructiveHint: false,
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
+    description:
+      "Screen a company or a person against an official register for due " +
+      "diligence. `check` picks the source; `subject` is a company ID, a " +
+      "tax ID or a person by name and birth date. Returns one outcome: clear " +
+      "(the source answered and lists nothing adverse), found (the adverse " +
+      "records), not-registered (the source holds no record, e.g. not a VAT " +
+      "payer; not a clearance), unavailable (the source did not answer: the " +
+      "subject is NOT cleared; retry later or say the check could not run), " +
+      "or not-covered (the source cannot screen this subject type, or needs " +
+      "the tax ID because one derived from the company ID was not on file). " +
+      "Person " +
+      "matches rely on name and birth date: compare the record before " +
+      "relying on one.",
+    inputSchema: checkCounterpartyArgsSchema,
+    inputNormalization: {
+      check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },
+      "subject.birth_date": { kind: AGENT_INPUT_NORMALIZATION_KIND.date },
+    },
+    access: "read",
+    anonymized: { exposure: "excluded", reason: "personal_register_data" },
+    name: "check_counterparty",
     scope: "stella:read",
   }),
   defineValibotMcpTool({
@@ -2270,6 +2441,7 @@ export const MATTER_TOOL_HANDLERS = {
   save_contact: handleSaveContactTool,
   delete_contact: handleDeleteContactTool,
   lookup_business_registry: handleLookupBusinessRegistryTool,
+  check_counterparty: handleCheckCounterpartyTool,
   list_tasks: handleListTasksTool,
   save_task: handleSaveTaskTool,
   delete_task: handleDeleteTaskTool,
@@ -2290,6 +2462,9 @@ export const MATTER_TOOL_SET = defineMcpToolSet(
     list_tasks: defineChatProjectionMcpToolOutput(LIST_TASKS_PROJECTION),
     lookup_business_registry: defineChatProjectionMcpToolOutput(
       LOOKUP_BUSINESS_REGISTRY_PROJECTION,
+    ),
+    check_counterparty: defineChatProjectionMcpToolOutput(
+      CHECK_COUNTERPARTY_PROJECTION,
     ),
     save_contact: defineChatProjectionMcpToolOutput(SAVE_CONTACT_PROJECTION),
     save_matter: defineChatProjectionMcpToolOutput(SAVE_MATTER_PROJECTION),

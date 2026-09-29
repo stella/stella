@@ -3,7 +3,6 @@ import { useId, useState } from "react";
 import { useHotkeyRecorder } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
-import { PencilIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -15,6 +14,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { PencilIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -124,7 +124,7 @@ const ShortcutRow = ({
   return (
     <li
       className={cn(
-        "group flex items-center justify-between gap-4 rounded px-1 py-1 transition-colors",
+        "group flex items-center justify-between gap-4 rounded px-1 py-1",
         isFlashing && "bg-accent/60",
       )}
     >

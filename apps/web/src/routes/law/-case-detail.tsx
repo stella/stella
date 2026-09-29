@@ -1,10 +1,10 @@
 import { lazy, Suspense } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Minimize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Minimize2Icon } from "@stll/ui/icons";
 
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";

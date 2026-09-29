@@ -113,6 +113,7 @@ const wireSchemaFor = (
   properties: readonly AIBatchProperty[],
 ): unknown =>
   structuredOutputWireJsonSchema({
+    mock: false,
     outputSchema: buildBatchSchema(properties, FILENAMES),
     provider,
   });

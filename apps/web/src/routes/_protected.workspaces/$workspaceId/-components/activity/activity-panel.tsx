@@ -5,20 +5,8 @@ import {
   useInfiniteQuery,
   useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import {
-  BotIcon,
-  ChevronDownIcon,
-  Clock3Icon,
-  DownloadIcon,
-  LanguagesIcon,
-  LandmarkIcon,
-  ListChecksIcon,
-  ListIcon,
-  ListFilterIcon,
-  UsersIcon,
-  WorkflowIcon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -33,6 +21,20 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import {
+  BotIcon,
+  ChevronDownIcon,
+  Clock3Icon,
+  DownloadIcon,
+  LanguagesIcon,
+  LandmarkIcon,
+  ListChecksIcon,
+  ListIcon,
+  ListFilterIcon,
+  MailIcon,
+  UsersIcon,
+  WorkflowIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,
@@ -140,6 +142,7 @@ const categoryLabelKeys = {
   all: "workspaces.overview.activity.filters.all",
   automation: "workspaces.overview.activity.filters.automation",
   court: "workspaces.overview.activity.filters.court",
+  correspondence: "correspondence.title",
   documents: "workspaces.overview.activity.filters.documents",
   matter: "workspaces.overview.activity.filters.matter",
   tasks: "workspaces.overview.activity.filters.tasks",
@@ -992,7 +995,7 @@ const HorizontalActivityMilestone = ({
     return (
       <HorizontalMilestoneFrame activityAt={first.activityAt} dateAt={dateAt}>
         <button
-          className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start transition-colors"
+          className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-start rounded-md px-2 py-1 text-start"
           onClick={() => onSelectGroup(group)}
           type="button"
         >
@@ -1089,7 +1092,7 @@ const HorizontalRunActivityItem = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
   <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
     type="button"
   >
@@ -1207,7 +1210,7 @@ const TimelineEntry = ({
           aria-hidden="true"
           className="bg-border absolute inset-y-0 start-1/2 w-px"
         />
-        <span className="bg-background text-muted-foreground ring-background group-hover:text-foreground relative z-10 mt-2.5 flex size-7 items-center justify-center rounded-full ring-4 transition-colors">
+        <span className="bg-background text-muted-foreground ring-background group-hover:text-foreground relative z-10 mt-2.5 flex size-7 items-center justify-center rounded-full ring-4">
           {marker}
         </span>
       </span>
@@ -1224,7 +1227,7 @@ const RunActivityItem = ({
   onSelectGroup: (group: ActivityGroup) => void;
 }) => (
   <button
-    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start transition-colors"
+    className="hover:bg-muted/40 -ms-2 flex min-h-11 w-[calc(100%+0.5rem)] items-center rounded-md px-2 text-start"
     onClick={() => onSelectGroup(toSingleActivityGroup(item))}
     type="button"
   >
@@ -1250,7 +1253,7 @@ const ActivityItemRow = ({
   return (
     <TimelineEntry activityAt={item.activityAt} marker={icon}>
       <button
-        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start transition-colors"
+        className="hover:bg-muted/40 flex min-h-11 w-full items-center rounded-md py-2 ps-3 pe-4 text-start"
         onClick={() => onSelectGroup(group)}
         type="button"
       >
@@ -1318,7 +1321,7 @@ const ActivityList = ({
                 </td>
                 <td className="col-span-2 min-w-0 p-0 align-middle text-sm leading-5 md:table-cell">
                   <button
-                    className="hover:bg-muted/40 focus-visible:bg-muted/40 min-h-14 w-full px-4 py-2.5 text-start transition-colors"
+                    className="hover:bg-muted/40 focus-visible:bg-muted/40 min-h-14 w-full px-4 py-2.5 text-start"
                     onClick={() => onSelectGroup(group)}
                     type="button"
                   >
@@ -1358,6 +1361,7 @@ const ActivityDetailsSheet = ({
 }) => {
   const format = useFormatter();
   const t = useTranslations();
+  const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   if (!group) {
     return null;
   }
@@ -1367,10 +1371,21 @@ const ActivityDetailsSheet = ({
     resolveVisibleActivityTriggerType(item.trigger.type) !== null;
   // Every decision in a folded review sitting is about the same document, so
   // the group opens it the way a single row does.
-  const openTarget =
-    group.items.length === 1 || group.type === "review_decisions"
-      ? getOpenTarget(item, workspaceId)
-      : undefined;
+  let openTarget: (() => void) | undefined;
+  if (group.items.length === 1 || group.type === "review_decisions") {
+    if (item.target.kind === "correspondence") {
+      openTarget = () =>
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId/correspondence/$correspondenceId",
+            params: { workspaceId, correspondenceId: item.target.id },
+          }),
+          "activity.open-correspondence",
+        );
+    } else {
+      openTarget = getOpenTarget(item, workspaceId);
+    }
+  }
   const rows = [
     {
       label: t("workspaces.overview.activity.details.dateTime"),
@@ -1431,7 +1446,7 @@ const ActivityDetailsSheet = ({
                   }
                   return (
                     <button
-                      className="hover:bg-muted -ms-2 grid min-h-11 w-[calc(100%+0.5rem)] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1 text-start transition-colors"
+                      className="hover:bg-muted -ms-2 grid min-h-11 w-[calc(100%+0.5rem)] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-x-1.5 rounded-md px-2 py-1 text-start"
                       key={batchItem.id}
                       onClick={() => {
                         onOpenChange(false);
@@ -1796,6 +1811,8 @@ const targetIcon = (item: MatterActivityItem) => {
       return <UsersIcon className="text-muted-foreground size-3.5" />;
     case "court":
       return <LandmarkIcon className="text-muted-foreground size-3.5" />;
+    case "correspondence":
+      return <MailIcon className="text-muted-foreground size-3.5" />;
     case "automation":
       return <WorkflowIcon className="text-muted-foreground size-3.5" />;
     default: {

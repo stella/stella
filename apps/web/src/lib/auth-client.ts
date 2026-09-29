@@ -248,4 +248,3 @@ export const isTwoFactorEnabledUser = (user: unknown): boolean => {
 };
 
 export type Role = keyof typeof roles;
-export type AuthErrorCode = keyof typeof authClient.$ERROR_CODES;

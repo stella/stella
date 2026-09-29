@@ -6,8 +6,7 @@
 // `--report-unused-disable-directives-severity=error` fails CI. Lines without a
 // directive cover the allow-list and must keep passing.
 
-import { SearchIcon, SlidersHorizontalIcon } from "lucide-react";
-
+import { SearchIcon, SlidersHorizontalIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   InputGroup,

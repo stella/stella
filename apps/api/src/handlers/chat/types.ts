@@ -30,34 +30,18 @@ import type {
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
 import type { ChatMentionsData } from "@/api/lib/chat/references";
-import type { UserFileUrl } from "@/api/lib/user-files/types";
 
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 
-export {
-  CHAT_MENTION_CATEGORIES,
-  CHAT_MENTION_HREF_PREFIXES,
-  CHAT_REFERENCE_HREF_PREFIXES,
-} from "@/api/lib/chat/references";
-export type {
-  ChatMention,
-  ChatMentionCategory,
-  ChatMentionHref,
-  ChatMentionHrefPrefix,
-  ChatMentionHrefPrefixMap,
-  ChatMentionsData,
-  ChatReferenceCategory,
-  ChatReferenceHrefPrefix,
-} from "@/api/lib/chat/references";
-
-export type ChatUserFileUrl = UserFileUrl;
+export { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/lib/chat/references";
+export type { ChatMention } from "@/api/lib/chat/references";
 
 export type ChatAnonRestoration = {
   placeholder: string;
   original: string;
 };
 
-export type ChatAnonRestorationsData = {
+type ChatAnonRestorationsData = {
   pairs: ChatAnonRestoration[];
 };
 
@@ -89,7 +73,7 @@ export type ChatUITools = Omit<
   RegisteredFolioAgentToolName
 > &
   FolioAgentChatUITools;
-export type ChatClientTools = ChatClientToolsFor<
+type ChatClientTools = ChatClientToolsFor<
   ChatTools,
   ChatBuiltinApprovalToolName
 >;
@@ -234,7 +218,7 @@ export type ChatCompactionSummary = {
  *  Bump the version and add a new variant when the parts
  *  shape changes; migrate in-place by reading the version
  *  and transforming old shapes on read. */
-export type LegacyChatMessageContent = {
+type LegacyChatMessageContent = {
   version: 1;
   data: unknown[];
 };
@@ -252,9 +236,7 @@ export type ChatMessageContent = {
   version: 2;
 };
 
-export type PersistedChatToolPartV3 =
-  | PersistedToolCallPart
-  | PersistedToolResultPart;
+type PersistedChatToolPartV3 = PersistedToolCallPart | PersistedToolResultPart;
 
 export type PersistedChatMessageContentV3 = {
   data: (

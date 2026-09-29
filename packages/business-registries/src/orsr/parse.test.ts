@@ -1,10 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseAddress, parseExtract, parseSearchHit } from "./parse.js";
+import {
+  parseAddress,
+  parseDocument,
+  parseExtract,
+  parseHistory,
+  parseRelatedHit,
+  parseSearchHit,
+} from "./parse.js";
 import type {
   OrsrRawAddress,
+  OrsrRawDocument,
   OrsrRawExtractResponse,
   OrsrRawSearchHit,
+  OrsrRawSearchResponse,
 } from "./types.js";
 
 const readFixture = async <T>(name: string): Promise<T> => {
@@ -382,5 +391,116 @@ describe("parseSearchHit", () => {
       physicalAddressLine2: "",
     };
     expect(parseSearchHit(hit).address).toBeNull();
+  });
+});
+
+describe("parseHistory", () => {
+  test("keeps only records the register closed, newest first", async () => {
+    const full = await readFixture<OrsrRawExtractResponse>(
+      "extract-full-eset.json",
+    );
+    const history = parseHistory(full);
+
+    expect(history.length).toBeGreaterThan(0);
+    for (const entry of history) {
+      expect(entry.validTo).not.toBeNull();
+      expect(entry.validTo?.startsWith("0001-")).toBe(false);
+    }
+    const ends = history.map(({ validTo }) => validTo ?? "");
+    expect(ends).toEqual(ends.toSorted().toReversed());
+  });
+
+  test("reads former seats, capital, officers, and legal-status events", async () => {
+    const history = parseHistory(
+      await readFixture<OrsrRawExtractResponse>("extract-full-eset.json"),
+    );
+
+    expect(history).toContainEqual({
+      kind: "address",
+      value: "Ondavská 3, 821 08 Bratislava",
+      validFrom: "1992-09-17T00:00:00",
+      validTo: "2000-02-06T00:00:00",
+    });
+    // Pre-euro capital keeps the register's currency; the Slovak thousands
+    // separator is a no-break space.
+    expect(history).toContainEqual(
+      expect.objectContaining({
+        kind: "share-capital",
+        value: "150 000 Sk",
+      }),
+    );
+    expect(history).toContainEqual(
+      expect.objectContaining({
+        kind: "legal-status",
+        value: "Spoločnosť vznikla v dôsledku zlúčenia",
+      }),
+    );
+    expect(history).toContainEqual(
+      expect.objectContaining({
+        kind: "statutory-body-member",
+        name: "Rudolf Hrubý",
+        role: "konatelia",
+      }),
+    );
+  });
+
+  test("history and the current extract never report the same record", async () => {
+    const full = await readFixture<OrsrRawExtractResponse>(
+      "extract-full-eset.json",
+    );
+    const current = parseExtract(full);
+    const formerNames = parseHistory(full)
+      .filter((entry) => entry.kind === "name")
+      .map((entry) => ("value" in entry ? entry.value : ""));
+
+    expect(current?.name).toBe("ESET, spol. s r.o.");
+    expect(formerNames).not.toContain(current?.name);
+  });
+});
+
+describe("parseDocument", () => {
+  test("parses every filed document of the collection of deeds", async () => {
+    const raw = await readFixture<OrsrRawDocument[]>("documents-eset.json");
+    const documents = raw.map(parseDocument);
+
+    expect(documents.length).toBe(raw.length);
+    expect(documents).not.toContain(null);
+    expect(documents.at(0)).toEqual({
+      serialNumber: 185,
+      name: "Konsolidovaná výročná správa za rok 2025",
+      typeCode: 5,
+      deliveredOn: "2026-06-20T00:00:00",
+      pageCount: 0,
+      medium: "electronic",
+    });
+  });
+
+  test("a document the register does not flag as electronic is on paper", () => {
+    expect(
+      parseDocument({ serialNumber: 1, name: "Zakladateľská listina" }),
+    ).toMatchObject({ medium: "paper", typeCode: null, deliveredOn: null });
+    expect(parseDocument({ name: "no serial number" })).toBeNull();
+  });
+});
+
+describe("parseRelatedHit", () => {
+  test("reads a row shaped like the register's search rows", async () => {
+    const { data } = await readFixture<OrsrRawSearchResponse>(
+      "search-by-ico-volkswagen.json",
+    );
+    const row = data?.at(0);
+    if (!row) {
+      throw new Error("Volkswagen search fixture must hold a row");
+    }
+
+    expect(
+      parseRelatedHit({ ...row, relatedPersonName: " Ján  Novák " }),
+    ).toEqual({
+      name: "VOLKSWAGEN SLOVAKIA, a.s.",
+      ico: "35757442",
+      address: expect.any(String),
+      connectedThrough: "Ján Novák",
+      fileReference: { court: "B", section: "Sa", insertNumber: "1973" },
+    });
   });
 });

@@ -8,7 +8,7 @@ type UsageEntitlementKey = {
   organizationId: string;
 };
 
-export const usageEntitlementKeys = {
+const usageEntitlementKeys = {
   all: ["usage", "entitlement"] as const,
   byOrganization: ({ organizationId }: UsageEntitlementKey) => [
     ...usageEntitlementKeys.all,
@@ -19,7 +19,7 @@ export const usageEntitlementKeys = {
 type UsageEntitlementOptionsInput = QueryOptionsInput<UsageEntitlementKey>;
 
 /** The org's usage entitlement state; `{ entitlement: null }` when absent. */
-export type UsageEntitlementResponse = NonNullable<
+type UsageEntitlementResponse = NonNullable<
   Awaited<ReturnType<typeof api.usage.entitlement.get>>["data"]
 >;
 
@@ -51,7 +51,7 @@ type UsageLaneKey = {
   organizationId: string;
 };
 
-export const usageLaneKeys = {
+const usageLaneKeys = {
   all: ["usage", "lane"] as const,
   byOrganization: ({ organizationId }: UsageLaneKey) => [
     ...usageLaneKeys.all,
@@ -65,7 +65,7 @@ type UsageLaneOptionsInput = QueryOptionsInput<UsageLaneKey>;
  * The calling user's own budget-lane state; `{ budgets: null }` when the
  * organization's plan declares no per-user budgets.
  */
-export type UsageLaneResponse = NonNullable<
+type UsageLaneResponse = NonNullable<
   Awaited<ReturnType<typeof api.usage.lane.get>>["data"]
 >;
 

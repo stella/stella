@@ -60,7 +60,7 @@ export type PersistedSearchSummarySources = {
 /** A source label assigned by the search-summary producer to a claim marker.
  * The caller still requires server-owned provenance before treating this
  * layout-derived mapping as verified. */
-export type PersistedSearchSummaryCitationSource = {
+type PersistedSearchSummaryCitationSource = {
   number: number;
   source: string;
 };

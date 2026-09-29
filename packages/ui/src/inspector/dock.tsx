@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
-import { EllipsisIcon } from "lucide-react";
-
+import { EllipsisIcon } from "../icons";
 import { SHELL_CHROME_LAYER_CLASS_NAME } from "../lib/overlay-layer";
 import { cn } from "../lib/utils";
 import { INSPECTOR_RAIL_WIDTH } from "./pane-width";
@@ -135,7 +134,7 @@ export const InspectorDock = ({
             />
             <span
               aria-hidden="true"
-              className="bg-background/80 text-foreground-placeholder ring-border/60 group-hover:bg-accent group-hover:text-foreground group-focus-visible:bg-accent group-focus-visible:text-foreground relative flex h-5 w-3 items-center justify-center rounded-full opacity-0 shadow-xs ring-1 backdrop-blur-sm transition-[color,background-color,opacity] group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"
+              className="bg-background/80 text-foreground-placeholder ring-border/60 group-hover:bg-accent group-hover:text-foreground group-focus-visible:bg-accent group-focus-visible:text-foreground relative flex h-5 w-3 items-center justify-center rounded-full opacity-0 shadow-xs ring-1 backdrop-blur-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"
               data-slot="inspector-resize-grip"
             >
               <EllipsisIcon className="size-3 rotate-90" />

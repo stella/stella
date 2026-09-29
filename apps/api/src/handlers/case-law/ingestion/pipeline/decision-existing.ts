@@ -5,7 +5,6 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
@@ -22,7 +21,10 @@ import type {
   DecisionRefresh,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
-import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import {
+  corpusCarriesDocument,
+  payloadCarriesDocument,
+} from "@/api/handlers/case-law/stored-payload";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -59,9 +61,11 @@ export const classifyObservation = ({
   const storedPartialObservation = existing
     ? partialObservationFromMetadata(existing.metadata)
     : { caseNumberIsPlaceholder: false, isListingOnly: false };
-  const incomingCarriesDocument = Boolean(
-    result.fulltext || hasUsableAst(result.documentAst),
-  );
+  const incomingCarriesDocument = payloadCarriesDocument({
+    text: result.fulltext ?? null,
+    sections: result.sections ?? null,
+    ast: result.documentAst,
+  });
   const storesUnpublishedWithoutDocument =
     !incomingCarriesDocument &&
     result.documentDelivery !== DOCUMENT_DELIVERY.DEFERRED;
@@ -306,6 +310,7 @@ export const resolveExistingDecisionPolicy = async ({
   existing,
   result,
   shape: {
+    incomingCarriesDocument,
     preservesExistingDetail,
     storedPartialObservation,
     storesUnpublishedWithoutDocument,
@@ -350,6 +355,9 @@ export const resolveExistingDecisionPolicy = async ({
     existing &&
     existing.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
     refresh === DECISION_REFRESH.WHEN_SOURCE_CHANGED &&
+    // A matching publisher hash cannot settle a row whose stored document
+    // is gone when this observation can restore it.
+    !(incomingCarriesDocument && !existing.hasStoredDocument) &&
     // A row stored with no document before the marker existed is still
     // public. The unchanged observation that would be skipped is the one
     // that can mark it, so it is written instead.

@@ -9,7 +9,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
@@ -92,11 +92,20 @@ type IngestOptions = {
   caseNumber: string;
   cited: string;
   rawHash: string;
+  /** A section before the citing one, which moves the citation's section. */
+  leading?: string;
 };
 
-const ingest = async ({ caseNumber, cited, rawHash }: IngestOptions) => {
+const ingest = async ({
+  caseNumber,
+  cited,
+  rawHash,
+  leading,
+}: IngestOptions) => {
   observationOrder += 1n;
-  const text = departureFrom(cited);
+  const citing = departureFrom(cited);
+  const paragraphs = leading === undefined ? [citing] : [leading, citing];
+  const text = paragraphs.join("\n\n");
   const input: IngestionResult = {
     caseNumber,
     court: "Nejvyšší soud",
@@ -107,7 +116,12 @@ const ingest = async ({ caseNumber, cited, rawHash }: IngestOptions) => {
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     rawHash,
     fulltext: text,
-    sections: [{ index: 0, type: "argumentation", title: null, text }],
+    sections: paragraphs.map((paragraph, index) => ({
+      index,
+      type: "argumentation",
+      title: null,
+      text: paragraph,
+    })),
     documentAst: EMPTY_AST,
   };
   const result = await processDecision({
@@ -152,6 +166,16 @@ const ingestRuleLabelled = async (options: IngestOptions) => {
 };
 
 type LabelledRow = Awaited<ReturnType<typeof readCitation>>;
+
+/** `xmin`/`xmax` of one row: unchanged, nobody wrote or locked it. */
+const tupleHeader = async (id: SafeId<"caseLawCitation">): Promise<unknown> =>
+  (
+    await db.execute(sql`
+      SELECT xmin::text AS xmin, xmax::text AS xmax
+        FROM ${caseLawCitations}
+       WHERE id = ${id}::uuid
+    `)
+  ).rows;
 
 const labelFor = (
   row: LabelledRow,
@@ -256,19 +280,55 @@ describe("reviewed citation labels", () => {
       throw new TypeError("the fixture row carries a rule's verdict");
     }
     const before = await readRule(ruleId);
+    const header = await tupleHeader(labelled.id);
     await ingest({
       caseNumber: "30 Cdo 1001/2026",
       cited,
       rawHash: "after-the-publisher-touched-it",
     });
-    const refreshed = await readCitation(cited);
-    // A new row: the refresh deleted and re-inserted the decision's citations.
-    expect(refreshed.id).not.toBe(labelled.id);
-    expect(refreshed).toMatchObject({
+    // The same document on a moved page: the reviewed row is the one the
+    // document and its review describe, so the refresh leaves it untouched.
+    expect(await readCitation(cited)).toEqual({
+      ...labelled,
       polarity: POLARITY.POSITIVE,
       polarityRuleId: null,
     });
-    // The rule matched the re-inserted row and did not label it.
+    expect(await tupleHeader(labelled.id)).toEqual(header);
+    // The rule reads the mention and neither labels the row nor counts it.
+    expect(await readRule(ruleId)).toEqual(before);
+  });
+
+  test("a changed document rewrites a reviewed row with its review", async () => {
+    const cited = "sp. zn. 23 Cdo 5069/2014";
+    const caseNumber = "30 Cdo 1005/2026";
+    const labelled = await ingestRuleLabelled({
+      caseNumber,
+      cited,
+      rawHash: "first-sight",
+    });
+    await runReviewedCitationLabels(
+      db,
+      [labelFor(labelled, POLARITY.POSITIVE)],
+      "apply",
+    );
+    const ruleId = labelled.polarityRuleId;
+    if (ruleId === null) {
+      throw new TypeError("the fixture row carries a rule's verdict");
+    }
+    const before = await readRule(ruleId);
+    await ingest({
+      caseNumber,
+      cited,
+      rawHash: "a-new-section",
+      leading: "Dovolání je přípustné.",
+    });
+    const rewritten = await readCitation(cited);
+    // The fault boundary: the sentence changed, so the row is a new one.
+    expect(rewritten.id).not.toBe(labelled.id);
+    expect(rewritten).toMatchObject({
+      polarity: POLARITY.POSITIVE,
+      polarityRuleId: null,
+    });
     expect(await readRule(ruleId)).toEqual(before);
   });
 

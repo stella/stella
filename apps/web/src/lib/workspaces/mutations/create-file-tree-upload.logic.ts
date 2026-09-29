@@ -6,13 +6,13 @@ import { ClientOperationError } from "@/lib/errors/client";
 
 const DIRECTORY_PATH_SEPARATOR = "\0";
 
-export type DirectoryUploadStep = {
+type DirectoryUploadStep = {
   key: string;
   name: string;
   parentKey: string | null;
 };
 
-export type FileUploadPlacement = {
+type FileUploadPlacement = {
   file: File;
   parentKey: string | null;
 };

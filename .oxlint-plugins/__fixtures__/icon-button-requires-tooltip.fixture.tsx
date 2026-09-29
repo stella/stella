@@ -1,6 +1,5 @@
-import { SettingsIcon, XIcon } from "lucide-react";
-
 import { Button } from "@stll/ui/button";
+import { SettingsIcon, XIcon } from "@stll/ui/icons";
 import { MenuTrigger } from "@stll/ui/menu";
 import {
   Tooltip as TooltipRoot,

@@ -69,7 +69,7 @@ export const InlineEdit = ({
         aria-label={inputAriaLabel ?? t("common.rename")}
         autoFocus
         className={cn(
-          "border-input bg-background text-foreground h-6 min-w-0 rounded-sm border px-1.5 text-xs leading-none transition-[box-shadow,border-color] duration-150 outline-none",
+          "border-input bg-background text-foreground h-6 min-w-0 rounded-sm border px-1.5 text-xs leading-none outline-none",
           "focus:border-ring focus:ring-ring/16 focus:ring-2 focus:ring-offset-0",
           inputClassName,
         )}

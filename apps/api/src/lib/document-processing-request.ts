@@ -1,6 +1,6 @@
 import { and, eq, inArray, ne, or } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
@@ -86,7 +86,8 @@ export type PersistedDocumentProcessingRun = {
 };
 
 export type PersistManualOcrRunOptions = {
-  db?: Pick<typeof rootDb, "transaction">;
+  /** The owner connection, from the manual OCR request door or a test. */
+  db: Pick<typeof rootDb, "transaction">;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   source: ManualOcrSource;
@@ -100,7 +101,7 @@ export const persistManualOcrRun = async ({
   source,
   userId,
   workspaceId,
-  db = rootDb,
+  db,
 }: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
   await db.transaction(async (tx) => {
     // Re-check and lock the mutable entity under the root write. The scoped

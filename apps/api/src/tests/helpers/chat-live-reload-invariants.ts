@@ -118,6 +118,7 @@ const messageView = (message: UIMessage): MessageView => {
       case "document":
       case "image":
       case "structured-output":
+      case "subagent":
       case "ui-resource":
       case "video": {
         // Attachments and rich parts round-trip as stored parts; the chat
@@ -180,6 +181,119 @@ export const findWireIdentityViolations = (
         : [{ chunk: index, messageIds, toolCallIds, toolResultIds }];
     }),
   );
+
+/** The calls `parts` hold a result for: a tool-result part, or an output on
+ *  the call. */
+const resultIdsOf = (parts: readonly unknown[]): string[] =>
+  parts.flatMap((part) => {
+    if (typeof part !== "object" || part === null) {
+      return [];
+    }
+    const type: unknown = Reflect.get(part, "type");
+    const id: unknown = Reflect.get(
+      part,
+      type === "tool-result" ? "toolCallId" : "id",
+    );
+    const carriesResult =
+      type === "tool-result" ||
+      (type === "tool-call" && Reflect.get(part, "output") !== undefined);
+    return carriesResult && typeof id === "string" ? [id] : [];
+  });
+
+type SnapshotMessage = Extract<
+  StreamChunk,
+  { type: EventType.MESSAGES_SNAPSHOT }
+>["messages"][number];
+
+/** The calls a snapshot message carries a result for: a tool message, or a
+ *  message in UI form, whose `parts` the client takes as they are. */
+const snapshotResultIds = (message: SnapshotMessage): string[] => {
+  if (message.role === "tool") {
+    return [message.toolCallId];
+  }
+  const parts: unknown = Reflect.get(message, "parts");
+  return Array.isArray(parts) ? resultIdsOf(parts) : [];
+};
+
+/**
+ * `chat.wire.results-stored`: every tool result a messages snapshot carries is
+ * one the stored thread holds once the response is done. A result only the
+ * engine was handed (the error that closes, for the model, a call an ended
+ * turn left open) must never reach a client.
+ */
+export const findUnstoredWireResults = ({
+  chunks,
+  stored,
+}: {
+  chunks: readonly StreamChunk[];
+  stored: readonly UIMessage[];
+}): OracleViolation[] => {
+  const storedResults = new Set(
+    stored.flatMap(({ parts }) => resultIdsOf(parts)),
+  );
+  return violationsOf(
+    CHAT_ORACLE.wireResultsStored,
+    chunks.flatMap((chunk, index) => {
+      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+        return [];
+      }
+      const unstored = chunk.messages
+        .flatMap(snapshotResultIds)
+        .filter((toolCallId) => !storedResults.has(toolCallId));
+      return unstored.length === 0 ? [] : [{ chunk: index, unstored }];
+    }),
+  );
+};
+
+/**
+ * `chat.wire.snapshot-served`: every message a messages snapshot carries that
+ * the thread's page serves, other than a message the response writes, is the
+ * message as the page serves it, field for field. A client replaces its
+ * messages with a snapshot, so a field the snapshot drops or changes (a
+ * timestamp, the metadata, an attachment's placeholder) is gone from the page
+ * until it reloads. AG-UI's required `content` is the one field a snapshot
+ * adds. `served` is the page once the response is done, as JSON.
+ */
+export const findUnservedSnapshotMessages = ({
+  chunks,
+  served,
+}: {
+  chunks: readonly StreamChunk[];
+  served: readonly unknown[];
+}): OracleViolation[] => {
+  const written = new Set(
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.TEXT_MESSAGE_START ? [chunk.messageId] : [],
+    ),
+  );
+  const servedById = new Map(
+    served.flatMap((message): [unknown, unknown][] =>
+      typeof message === "object" && message !== null
+        ? [[Reflect.get(message, "id"), message]]
+        : [],
+    ),
+  );
+  return violationsOf(
+    CHAT_ORACLE.wireSnapshotServed,
+    chunks.flatMap((chunk, index) => {
+      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+        return [];
+      }
+      return chunk.messages.flatMap((message) => {
+        const page = servedById.get(message.id);
+        if (page === undefined || written.has(message.id)) {
+          return [];
+        }
+        const snapshot = Object.fromEntries(
+          Object.entries(message).filter(([key]) => key !== "content"),
+        );
+        return jsonValue(snapshot) === jsonValue(page)
+          ? []
+          : [{ chunk: index, id: message.id, page, snapshot }];
+      });
+    }),
+  );
+};
 
 /** An interrupt the page received with its latest response. */
 export type DeliveredInterrupt = {

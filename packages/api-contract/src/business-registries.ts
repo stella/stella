@@ -9,10 +9,21 @@ export const BUSINESS_REGISTRY_SLUGS = [
   "orsr",
   "prh",
   "recherche-entreprises",
+  "rpo",
   "vies",
 ] as const;
 
 export type BusinessRegistrySlug = (typeof BUSINESS_REGISTRY_SLUGS)[number];
+
+/**
+ * How much of the record a canonical-ID lookup reads. `full` also reads what
+ * a register keeps beyond the current record (ORSR history, filed documents,
+ * and related persons; RPO superseded records) at the cost of more requests.
+ */
+export const BUSINESS_REGISTRY_LOOKUP_DETAILS = ["standard", "full"] as const;
+
+export type BusinessRegistryLookupDetail =
+  (typeof BUSINESS_REGISTRY_LOOKUP_DETAILS)[number];
 
 export const BUSINESS_REGISTRY_CONFIGURATION = {
   ares: "none",
@@ -25,6 +36,7 @@ export const BUSINESS_REGISTRY_CONFIGURATION = {
   orsr: "none",
   prh: "none",
   "recherche-entreprises": "none",
+  rpo: "none",
   vies: "none",
 } as const satisfies Record<
   BusinessRegistrySlug,

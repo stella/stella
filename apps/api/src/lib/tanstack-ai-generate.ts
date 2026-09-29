@@ -7,7 +7,6 @@ import type {
   AnyTextAdapter,
   ModelMessage,
   RunErrorEvent,
-  StreamChunk,
   StructuredOutputPart,
   SystemPrompt,
 } from "@tanstack/ai";
@@ -44,9 +43,11 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
+import { readOutputCeilingStopAsLength } from "@/api/lib/chat/provider-stream-contract";
 import {
   finishReasonOf,
   generateChatObject,
+  runFinishedOutcomeOf,
   streamChatChunks,
   streamChatObject,
 } from "@/api/lib/chat/tanstack-chat-runtime";
@@ -70,7 +71,7 @@ import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
   getTanStackTextModelForRole,
-  isMockTextAdapterActive,
+  isMockTextAdapter,
 } from "@/api/lib/tanstack-ai-models";
 import type {
   ResolvedTanStackTextModel,
@@ -314,89 +315,6 @@ export const streamTanStackTextForRole = (
 };
 
 /**
- * The provider code for a response the model stopped writing because it
- * reached the output ceiling the request set.
- *
- * The Anthropic adapter reports that stop reason as a `RUN_ERROR`, where it
- * reports every other one as a `RUN_FINISHED`. Normalize it before TanStack's
- * chat engine sees the event: the engine, middleware, and caller must agree
- * that the same run reached a `length` finish rather than recording a failure
- * while returning its partial text.
- */
-const TRUNCATED_AT_OUTPUT_CEILING_CODE = "max_tokens";
-// These upstream variants use string-literal discriminants rather than
-// EventType members. Named, checked literals keep Oxlint's exhaustiveness
-// analysis aligned with the SDK union.
-const CUSTOM_STREAM_CHUNK_TYPE = "CUSTOM" satisfies StreamChunk["type"];
-const TOOL_CALL_END_STREAM_CHUNK_TYPE =
-  "TOOL_CALL_END" satisfies StreamChunk["type"];
-const TOOL_CALL_START_STREAM_CHUNK_TYPE =
-  "TOOL_CALL_START" satisfies StreamChunk["type"];
-
-const readOutputCeilingStopAsLength = async function* (
-  chunks: AsyncIterable<StreamChunk>,
-): AsyncIterable<StreamChunk> {
-  let runIdentity: { runId: string; threadId: string } | undefined;
-
-  for await (const chunk of chunks) {
-    switch (chunk.type) {
-      case EventType.RUN_STARTED: {
-        runIdentity = { runId: chunk.runId, threadId: chunk.threadId };
-        break;
-      }
-      case EventType.RUN_ERROR: {
-        if (
-          chunk.code !== TRUNCATED_AT_OUTPUT_CEILING_CODE ||
-          runIdentity === undefined
-        ) {
-          break;
-        }
-        yield {
-          type: EventType.RUN_FINISHED,
-          finishReason: "length",
-          runId: runIdentity.runId,
-          threadId: runIdentity.threadId,
-          ...(chunk.metadata === undefined ? {} : { metadata: chunk.metadata }),
-          ...(chunk.model === undefined ? {} : { model: chunk.model }),
-          ...(chunk.timestamp === undefined
-            ? {}
-            : { timestamp: chunk.timestamp }),
-          ...(chunk.usage === undefined ? {} : { usage: chunk.usage }),
-        };
-        continue;
-      }
-      case EventType.RUN_FINISHED:
-      case EventType.TEXT_MESSAGE_START:
-      case EventType.TEXT_MESSAGE_CONTENT:
-      case EventType.TEXT_MESSAGE_END:
-      case TOOL_CALL_START_STREAM_CHUNK_TYPE:
-      case EventType.TOOL_CALL_ARGS:
-      case TOOL_CALL_END_STREAM_CHUNK_TYPE:
-      case EventType.TOOL_CALL_RESULT:
-      case EventType.STEP_STARTED:
-      case EventType.STEP_FINISHED:
-      case EventType.MESSAGES_SNAPSHOT:
-      case EventType.STATE_SNAPSHOT:
-      case EventType.STATE_DELTA:
-      case CUSTOM_STREAM_CHUNK_TYPE:
-      case EventType.REASONING_START:
-      case EventType.REASONING_MESSAGE_START:
-      case EventType.REASONING_MESSAGE_CONTENT:
-      case EventType.REASONING_MESSAGE_END:
-      case EventType.REASONING_END:
-      case EventType.REASONING_ENCRYPTED_VALUE: {
-        break;
-      }
-      default: {
-        chunk satisfies never;
-        panic(`Unhandled chunk: ${String(chunk)}`);
-      }
-    }
-    yield chunk;
-  }
-};
-
-/**
  * Text only: a truncated structured response is unusable however the caller
  * grades completeness, so structured-output methods remain untouched.
  */
@@ -416,12 +334,12 @@ const normalizeOutputCeilingTextStops = (
  * one provider and as a whole answer on the next. Every caller that grades a
  * finish goes through here.
  *
- * Every adapter is normalized rather than a named few: the pass keys on the
- * event a run reports, not on who reported it, so an adapter that already
- * ends a ceiling stop with `RUN_FINISHED` passes through untouched and an
- * adapter that adopts the `RUN_ERROR` shape needs no edit here. A ceiling
- * stop read as `length` still fails `require-complete`, so a caller that
- * demands a whole answer rejects it either way.
+ * The rule is `readOutputCeilingStopAsLength`'s, which the model factory
+ * already applies to every provider adapter; reading a stream through it
+ * twice changes nothing, and this keeps an adapter the factory did not build
+ * (the local mock model) graded the same way. A ceiling stop read as
+ * `length` still fails `require-complete`, so a caller that demands a whole
+ * answer rejects it either way.
  */
 export const textAdapterWithNormalizedStops = (
   model: ResolvedTanStackTextModel,
@@ -458,7 +376,10 @@ export const collectTanStackTextRun = async (
     if (chunk.type === EventType.RUN_FINISHED) {
       // A tool loop runs several times inside one call; the last finish is
       // the one that produced the answer being returned.
-      run.finish = { kind: "finished", reason: finishReasonOf(chunk) };
+      run.finish =
+        runFinishedOutcomeOf(chunk) === "cancelled"
+          ? { kind: "unfinished" }
+          : { kind: "finished", reason: finishReasonOf(chunk) };
       continue;
     }
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
@@ -753,15 +674,21 @@ const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const structuredOutputProjectionOptions = (
-  provider: string,
-): ProviderSafeJsonSchemaProjectionOptions =>
+const structuredOutputProjectionOptions = ({
+  mock,
+  provider,
+}: {
+  mock: boolean;
+  provider: string;
+}): ProviderSafeJsonSchemaProjectionOptions =>
   providerSafeJsonSchemaOptionsForTanStackProvider(
     provider,
-    isMockTextAdapterActive() ? "mock-structured-output" : "structured-output",
+    mock ? "mock-structured-output" : "structured-output",
   );
 
 type StructuredOutputWireJsonSchemaOptions = {
+  /** Whether the local mock answers the request instead of `provider`. */
+  mock: boolean;
   outputSchema: v.GenericSchema;
   provider: TanStackAIProvider;
 };
@@ -772,13 +699,14 @@ type StructuredOutputWireJsonSchemaOptions = {
  * request against anything else would drift from what the provider compiles.
  */
 export const structuredOutputWireJsonSchema = ({
+  mock,
   outputSchema,
   provider,
 }: StructuredOutputWireJsonSchemaOptions): unknown =>
   convertSchemaToJsonSchema(
     toTanStackValibotSchema(
       outputSchema,
-      structuredOutputProjectionOptions(provider),
+      structuredOutputProjectionOptions({ mock, provider }),
     ),
     { forStructuredOutput: true },
   );
@@ -799,7 +727,7 @@ const guardStructuredOutputBudget = ({
 }): void => {
   // The mock adapter answers locally: no provider compiles the grammar, and
   // its projection deliberately keeps keywords the wire schema drops.
-  if (isMockTextAdapterActive()) {
+  if (isMockTextAdapter(model.adapter)) {
     return;
   }
 
@@ -807,6 +735,7 @@ const guardStructuredOutputBudget = ({
     provider: model.provider,
     modelId: model.modelId,
     schema: structuredOutputWireJsonSchema({
+      mock: false,
       outputSchema,
       provider: model.provider,
     }),
@@ -833,7 +762,10 @@ export const generateTanStackObjectForRole = async <
   guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
-    structuredOutputProjectionOptions(model.provider),
+    structuredOutputProjectionOptions({
+      mock: isMockTextAdapter(model.adapter),
+      provider: model.provider,
+    }),
   );
 
   const output = await withStandardServiceTierFallback({
@@ -923,7 +855,10 @@ const streamTanStackStructuredOutput = async function* <
   guardStructuredOutputBudget({ model, outputSchema });
   const tanStackOutputSchema = toTanStackValibotSchema(
     outputSchema,
-    structuredOutputProjectionOptions(model.provider),
+    structuredOutputProjectionOptions({
+      mock: isMockTextAdapter(model.adapter),
+      provider: model.provider,
+    }),
   );
 
   const stream = iterateWithStandardServiceTierFallback({

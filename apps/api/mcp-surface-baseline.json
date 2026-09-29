@@ -1,0 +1,104 @@
+{
+  "surfaces": {
+    "default": {
+      "tools": 68,
+      "chars": {
+        "name": 1149,
+        "title": 1184,
+        "description": 28620,
+        "inputSchema": 81086,
+        "outputSchema": 53854,
+        "annotations": 7250,
+        "instructions": 1699
+      },
+      "payloadUtf8Bytes": 179267,
+      "largestDescription": {
+        "tool": "create_template",
+        "chars": 807
+      },
+      "largestInputSchema": {
+        "tool": "save_playbook",
+        "chars": 5559
+      },
+      "largestOutputSchema": {
+        "tool": "read_document",
+        "chars": 2976
+      }
+    },
+    "documents": {
+      "tools": 13,
+      "chars": {
+        "name": 247,
+        "title": 255,
+        "description": 5511,
+        "inputSchema": 14640,
+        "outputSchema": 8229,
+        "annotations": 1502,
+        "instructions": 888
+      },
+      "payloadUtf8Bytes": 31730,
+      "largestDescription": {
+        "tool": "compare_documents",
+        "chars": 770
+      },
+      "largestInputSchema": {
+        "tool": "compare_documents",
+        "chars": 3326
+      },
+      "largestOutputSchema": {
+        "tool": "read_document",
+        "chars": 2976
+      }
+    },
+    "anonymized": {
+      "tools": 29,
+      "chars": {
+        "name": 472,
+        "title": 496,
+        "description": 12893,
+        "inputSchema": 26219,
+        "outputSchema": 30755,
+        "annotations": 2756,
+        "instructions": 1005
+      },
+      "payloadUtf8Bytes": 76090,
+      "largestDescription": {
+        "tool": "read_case_law_citations",
+        "chars": 802
+      },
+      "largestInputSchema": {
+        "tool": "search_case_law",
+        "chars": 3237
+      },
+      "largestOutputSchema": {
+        "tool": "read_document",
+        "chars": 2976
+      }
+    },
+    "law": {
+      "tools": 10,
+      "chars": {
+        "name": 161,
+        "title": 176,
+        "description": 6055,
+        "inputSchema": 12263,
+        "outputSchema": 8622,
+        "annotations": 956,
+        "instructions": 1188
+      },
+      "payloadUtf8Bytes": 29094,
+      "largestDescription": {
+        "tool": "read_case_law_citations",
+        "chars": 802
+      },
+      "largestInputSchema": {
+        "tool": "search_case_law",
+        "chars": 3237
+      },
+      "largestOutputSchema": {
+        "tool": "search_case_law",
+        "chars": 2209
+      }
+    }
+  }
+}

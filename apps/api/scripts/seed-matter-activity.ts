@@ -18,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { DEFAULT_USER_ID, seedId } from "./seed-utils";
 
@@ -28,9 +29,7 @@ const minutesAgo = (minutes: number, now: Date) =>
   new Date(now.getTime() - minutes * 60_000);
 
 export const seedMatterActivity = async () => {
-  if (process.env.NODE_ENV === "production") {
-    panic("Refusing to seed Matter Activity in production.");
-  }
+  requireLocalDevOpen("Seeding");
   const db = openMaintenanceDb({ readOnly: false });
 
   const configuredWorkspaceId = process.env["MATTER_ACTIVITY_WORKSPACE_ID"];

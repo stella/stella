@@ -1,8 +1,12 @@
+import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 
+import type { AgentInputPlaceholderPolicy } from "@stll/agent-input";
 import { normalizeAgentInput } from "@stll/agent-input";
 
+import { withNullOptionalsOmitted } from "@/api/lib/json-schema/null-optionals";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { MCP_AGENT_INPUT_READERS } from "@/api/mcp/agent-input-readers";
 import type { McpValidationIssue } from "@/api/mcp/error-codes";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
@@ -10,6 +14,8 @@ import { structuredErrorResult } from "@/api/mcp/tool-utils";
 type BoundaryNormalizationResult<TValue> =
   | { ok: true; value: TValue; notes: readonly string[] }
   | { ok: false; issues: readonly McpValidationIssue[]; hint: string };
+
+export { withNullOptionalsOmitted };
 
 export type BoundaryNormalizationFailure = Extract<
   BoundaryNormalizationResult<unknown>,
@@ -47,167 +53,6 @@ export const agentInputValidationError = ({
     issues: [...failure.issues],
     hint: failure.hint,
   });
-
-const CONSTRAINING_KEYWORDS = [
-  "type",
-  "anyOf",
-  "oneOf",
-  "allOf",
-  "enum",
-  "const",
-  "$ref",
-] as const;
-
-const admitsNull = (schema: unknown): boolean => {
-  if (!isRecord(schema)) {
-    return true;
-  }
-  const type = schema["type"];
-  if (type === "null" || (isUnknownArray(type) && type.includes("null"))) {
-    return true;
-  }
-  for (const keyword of ["anyOf", "oneOf"] as const) {
-    const branches = schema[keyword];
-    if (isUnknownArray(branches) && branches.some(admitsNull)) {
-      return true;
-    }
-  }
-  return CONSTRAINING_KEYWORDS.every((keyword) => !(keyword in schema));
-};
-
-const UNION_KEYWORDS = ["anyOf", "oneOf"] as const;
-
-/**
- * Whether a union branch could be the one `value` was written for: no `const`
- * property of the branch (a discriminator) disagrees with the value. A branch
- * with no discriminator always could.
- */
-const branchCouldMatch = (
-  branch: Record<string, unknown>,
-  value: Record<string, unknown>,
-): boolean => {
-  const properties = branch["properties"];
-  if (!isRecord(properties)) {
-    return true;
-  }
-  return Object.entries(properties).every(
-    ([name, property]) =>
-      !isRecord(property) ||
-      !("const" in property) ||
-      !(name in value) ||
-      property["const"] === value[name],
-  );
-};
-
-/**
- * A union node declares nothing itself: its members do. Without reading them,
- * an optional null inside a discriminated member (an array of `mode` variants)
- * reached validation and was refused.
- */
-const matchingUnionBranches = (
-  schema: Record<string, unknown>,
-  value: Record<string, unknown>,
-): Record<string, unknown>[] => {
-  const matching: Record<string, unknown>[] = [];
-  for (const keyword of UNION_KEYWORDS) {
-    const branches = schema[keyword];
-    if (!isUnknownArray(branches)) {
-      continue;
-    }
-    for (const branch of branches) {
-      if (isRecord(branch) && branchCouldMatch(branch, value)) {
-        matching.push(branch);
-      }
-    }
-  }
-  return matching;
-};
-
-const requiredNamesOf = (
-  schema: Record<string, unknown>,
-  value: Record<string, unknown>,
-): Set<unknown> => {
-  const required = schema["required"];
-  const names = new Set(isUnknownArray(required) ? required : []);
-  for (const branch of matchingUnionBranches(schema, value)) {
-    for (const name of requiredNamesOf(branch, value)) {
-      names.add(name);
-    }
-  }
-  return names;
-};
-
-const objectChildSchemas = (
-  schema: Record<string, unknown>,
-  key: string,
-  value: Record<string, unknown>,
-): unknown[] => {
-  const children: unknown[] = [];
-  for (const branch of matchingUnionBranches(schema, value)) {
-    children.push(...objectChildSchemas(branch, key, value));
-  }
-  const properties = schema["properties"];
-  if (isRecord(properties) && key in properties) {
-    children.push(properties[key]);
-  }
-  const patternProperties = schema["patternProperties"];
-  if (isRecord(patternProperties)) {
-    for (const [pattern, childSchema] of Object.entries(patternProperties)) {
-      if (new RegExp(pattern, "u").test(key)) {
-        children.push(childSchema);
-      }
-    }
-  }
-  const additionalProperties = schema["additionalProperties"];
-  if (children.length === 0 && isRecord(additionalProperties)) {
-    children.push(additionalProperties);
-  }
-  return children;
-};
-
-/**
- * Apply the common optional-null rule before any agent-value coercion. The
- * decision comes from the same schema validation will use: nullable values keep
- * null, required values still fail, and optional non-null values read null as
- * omission at every declared object level.
- */
-export const withNullOptionalsOmitted = (
-  schema: unknown,
-  value: unknown,
-): unknown => {
-  if (!isRecord(schema)) {
-    return value;
-  }
-  const items = schema["items"];
-  if (items !== undefined && isUnknownArray(value)) {
-    return value.map((entry) => withNullOptionalsOmitted(items, entry));
-  }
-  if (!isRecord(value)) {
-    return value;
-  }
-  const requiredNames = requiredNamesOf(schema, value);
-  const present: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    const childSchemas = objectChildSchemas(schema, key, value);
-    if (childSchemas.length === 0) {
-      present[key] = entry;
-      continue;
-    }
-    if (
-      entry === null &&
-      !requiredNames.has(key) &&
-      childSchemas.some((childSchema) => !admitsNull(childSchema))
-    ) {
-      continue;
-    }
-    let current = entry;
-    for (const childSchema of childSchemas) {
-      current = withNullOptionalsOmitted(childSchema, current);
-    }
-    present[key] = current;
-  }
-  return present;
-};
 
 /**
  * Report keys the schema cleaner removed. Capability handlers intentionally use
@@ -261,11 +106,26 @@ export const findRemovedInputIssues = ({
   return issues;
 };
 
+/**
+ * Whether the call reads or writes. A placeholder in an optional property of
+ * a read is "not filtering" and is dropped with a note; on a write it may be
+ * an id that switches update into create, so it is asked about. Required, so
+ * a new dispatch surface has to say which it is.
+ */
+type BoundaryAccess = "read" | "write";
+
+const PLACEHOLDER_POLICY = {
+  read: "absent",
+  write: "ask",
+} as const satisfies Record<BoundaryAccess, AgentInputPlaceholderPolicy>;
+
 export const normalizeInputAtBoundary = ({
+  access,
   path = "",
   schema,
   value,
 }: {
+  access: BoundaryAccess;
   path?: string;
   schema: unknown;
   value: unknown;
@@ -273,6 +133,8 @@ export const normalizeInputAtBoundary = ({
   const withoutNullOptionals = withNullOptionalsOmitted(schema, value);
   const normalized = normalizeAgentInput({
     path,
+    placeholders: PLACEHOLDER_POLICY[access],
+    readers: MCP_AGENT_INPUT_READERS,
     schema,
     value: withoutNullOptionals,
   });
@@ -283,10 +145,12 @@ export const normalizeInputAtBoundary = ({
 };
 
 export const normalizeObjectInputAtBoundary = ({
+  access,
   exactProperties = [],
   schema,
   value,
 }: {
+  access: BoundaryAccess;
   /** Boundary-control booleans must retain literal JSON semantics. */
   exactProperties?: readonly string[];
   schema: unknown;
@@ -307,6 +171,8 @@ export const normalizeObjectInputAtBoundary = ({
       : schema;
   const withoutNullOptionals = withNullOptionalsOmitted(schema, value);
   const normalized = normalizeAgentInput({
+    placeholders: PLACEHOLDER_POLICY[access],
+    readers: MCP_AGENT_INPUT_READERS,
     schema: normalizationSchema,
     value: withoutNullOptionals,
   });
@@ -316,4 +182,31 @@ export const normalizeObjectInputAtBoundary = ({
   return isRecord(normalized.value)
     ? { ok: true, value: normalized.value, notes: normalized.notes }
     : panic("An object input schema normalized to a non-object value");
+};
+
+/**
+ * Carry the boundary's "read X as Y" notes to the caller beside the result.
+ *
+ * A note is what makes a repaired input safe to repair: the caller learns the
+ * value the server acted on, so a wrong reading is visible on this call
+ * rather than in the answer. It rides as its own text block after the
+ * payload rather than inside it, because the payload is the tool's validated
+ * output contract and a note is about the request, not the result. Repeated
+ * notes (one placeholder in every phrasing of a batch) are said once.
+ */
+export const withInputNotes = (
+  result: CallToolResult,
+  notes: readonly string[],
+): CallToolResult => {
+  const distinct = [...new Set(notes)];
+  if (distinct.length === 0) {
+    return result;
+  }
+  return {
+    ...result,
+    content: [
+      ...result.content,
+      { type: "text", text: `Input read: ${distinct.join(" ")}` },
+    ],
+  };
 };

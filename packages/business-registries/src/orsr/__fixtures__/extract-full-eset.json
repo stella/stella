@@ -1,0 +1,552 @@
+{
+  "createDateTime": "2026-09-26T16:18:02.1663369+02:00",
+  "dataSyncDate": "2026-09-24T18:11:22.04",
+  "fileReference": {
+    "section": "Sro",
+    "insertNumber": 3586,
+    "court": "B",
+    "formattedValueSpaced": "Sro 3586/B",
+    "formattedValueUrlSafe": "Sro 3586 B"
+  },
+  "legalForm": "SpolocnostsRucenimObmedzenym",
+  "courtName": "Mestský súd Bratislava III",
+  "legalPerson": {
+    "corporateBody": {
+      "corporateBodyFullName": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "ESET, spol. s r.o."
+        }
+      ],
+      "legalForm": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "item": {
+            "codelistCode": "Corwin-CL000056",
+            "codelistItem": {
+              "itemCode": "3",
+              "itemName": "Spoločnosť s ručením obmedzeným"
+            }
+          }
+        }
+      ],
+      "organizationUnit": [],
+      "establishment": "1992-09-17T00:00:00",
+      "termination": null,
+      "activities": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "economicActivityDescription": "nákup a predaj výpočtovej techniky, elektroniky, kancelárskej techniky a kancelárskych potrieb",
+          "economicActivityClassification": null
+        }
+      ],
+      "otherLegalFacts": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "Spoločnosť s ručením obmedzeným bola založená spoločenskou zmluvou zo dňa 26. 6. 1992 v zmysle Zákona č. 513/91 Zb. \r\nStary spis: S.r.o.   7326 "
+        }
+      ],
+      "equity": [
+        {
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "currency": {
+            "item": "EUR"
+          },
+          "equityValue": 140000.0,
+          "equityValueSpecified": true,
+          "equityValuePaid": 140000.0,
+          "equityValuePaidSpecified": true,
+          "equityValueApproved": 0,
+          "equityValueApprovedSpecified": false
+        },
+        {
+          "current": false,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "2000-02-06T00:00:00",
+          "effectiveToSpecified": true,
+          "currency": {
+            "item": "Sk "
+          },
+          "equityValue": 150000.0,
+          "equityValueSpecified": true,
+          "equityValuePaid": 0,
+          "equityValuePaidSpecified": false,
+          "equityValueApproved": 0,
+          "equityValueApprovedSpecified": false
+        }
+      ],
+      "shares": [],
+      "deposits": [
+        {
+          "stakeholder": [
+            {
+              "current": true,
+              "effectiveFrom": "2022-02-16T00:00:00",
+              "effectiveTo": "0001-01-01T00:00:00",
+              "effectiveToSpecified": false,
+              "value": "Ing. Peter Paško"
+            },
+            {
+              "current": false,
+              "effectiveFrom": "2009-07-23T00:00:00",
+              "effectiveTo": "2022-02-15T00:00:00",
+              "effectiveToSpecified": true,
+              "value": "Ing. Peter Paško"
+            }
+          ],
+          "shareholder": [],
+          "depositPayedValue": 30800.0,
+          "depositType2": null,
+          "depositValue2": null,
+          "depositPayedValue2": null,
+          "lien": null,
+          "lienDatas": [],
+          "depositType": null,
+          "depositValue": 30800.0,
+          "currency": {
+            "item": {
+              "codelistCode": "Corwin-CL010076",
+              "codelistItem": {
+                "itemCode": "6",
+                "itemName": "EUR"
+              }
+            }
+          },
+          "depositDueDate": "0001-01-01T00:00:00",
+          "depositDueDateSpecified": false,
+          "current": true,
+          "effectiveFrom": "2009-07-23T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        }
+      ],
+      "legalStatus": null,
+      "legalStatusEvents": [
+        {
+          "type": "PremenyNastupca",
+          "dateTime": null,
+          "text": "Spoločnosť vznikla v dôsledku zlúčenia",
+          "current": false,
+          "effectiveFrom": "2010-06-01T00:00:00",
+          "effectiveTo": "2024-03-27T00:00:00",
+          "effectiveToSpecified": true
+        }
+      ],
+      "statutoryBodyType": [
+        {
+          "current": true,
+          "effectiveFrom": "1992-09-17T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "konatelia"
+        }
+      ],
+      "statutoryBody": [
+        {
+          "statutoryBodyType": null,
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ing. Peter Paško",
+                "legalName": null,
+                "givenName": ["Peter"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Paško"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": null,
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "1992-09-17T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2022-04-21T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "statutoryBodyType": null,
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Rudolf Hrubý",
+                "legalName": null,
+                "givenName": ["Rudolf"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Hrubý"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": null,
+            "id": []
+          },
+          "function": null,
+          "functionCreationDate": "1992-09-17T00:00:00",
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": false,
+          "effectiveFrom": "2022-04-21T00:00:00",
+          "effectiveTo": "2024-01-03T00:00:00",
+          "effectiveToSpecified": true
+        }
+      ],
+      "authorizationToExecute": [
+        {
+          "current": true,
+          "effectiveFrom": "2022-02-16T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false,
+          "value": "V mene spoločnosti voči tretím osobám konajú a podpisujú vždy dvaja konatelia spoločne. V mene spoločnosti konatelia podpisujú tak, že k napísanému alebo vytlačenému obchodnému menu spoločnosti pripoja dvaja konatelia svoj podpis, pričom pri podpise musí byť vždy uvedené slovo „konateľ“."
+        },
+        {
+          "current": false,
+          "effectiveFrom": "2010-02-19T00:00:00",
+          "effectiveTo": "2022-02-15T00:00:00",
+          "effectiveToSpecified": true,
+          "value": "Za spoločnosť konajú voči tretím osobám vždy dvaja konatelia spoločne, okrem nasledovných situácií, kedy za spoločnosť môže konať jeden konateľ: (a) uzatváranie pracovných zmlúv so zamestnancami spoločnosti;\r\n(b) uzatváranie zmlúv alebo prijatia záväzku ( s výnimkou podpisovania zmeniek alebo prevzatia ručenia), ktorého hodnota nepresahuje výšku EUR 150 000,-.\r\nV mene spoločnosti konatelia podpisujú tak, že k napísanému alebo vytlačenému obchodnému menu spoločnosti pripoja dvaja konatelia svoj podpis, pričom pri podpise musí byť vždy uvedené slovo \"konateľ.\""
+        }
+      ],
+      "stakeholder": [
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Predchodca",
+                "itemName": "Predchodca"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": null,
+            "corporateBody": {
+              "corporateBodyFullName": "COMDOM Software s.r.o.",
+              "legalForm": null,
+              "activities": null,
+              "otherLegalFacts": null,
+              "equity": null,
+              "legalStatus": null,
+              "legalStatusEvents": null,
+              "statutoryBodyType": null,
+              "statutoryBody": [],
+              "authorizationToExecute": null,
+              "stakeholder": null,
+              "proxyHolderAuthorizationToExecute": null,
+              "liquidatorAuthorizationToExecute": null,
+              "source": null,
+              "stateLaw": null
+            },
+            "physicalAddress": [
+              {
+                "addressLine": null,
+                "country": {
+                  "item": "Slovenská republika"
+                },
+                "region": null,
+                "county": null,
+                "municipality": {
+                  "item": "Košice"
+                },
+                "district": null,
+                "streetName": "Komenského",
+                "additionalStreetData": null,
+                "buildingNumber": "11/A",
+                "propertyRegistrationNumber": null,
+                "addressPoint": null,
+                "buildingIndex": null,
+                "deliveryAddress": {
+                  "postalCode": "04001",
+                  "postOfficeBox": null,
+                  "recipient": null
+                },
+                "building": null,
+                "addressType": {
+                  "addressClass": {
+                    "item": {
+                      "codelistCode": "CL010139",
+                      "codelistItem": {
+                        "itemCode": "100101",
+                        "itemName": "Sídlo právnickej osoby"
+                      }
+                    }
+                  },
+                  "addressRecordDate": "0001-01-01T00:00:00",
+                  "addressRecordDateSpecified": false,
+                  "addressRecordDateTermination": "0001-01-01T00:00:00",
+                  "addressRecordDateTerminationSpecified": false
+                },
+                "buildingUnit": null
+              }
+            ],
+            "id": [
+              {
+                "identifierType": {
+                  "item": {
+                    "codelistCode": "CL004001",
+                    "codelistItem": {
+                      "itemCode": "7",
+                      "itemName": "IČO (Identifikačné číslo organizácie)"
+                    }
+                  }
+                },
+                "identifierValue": "35889691"
+              }
+            ]
+          },
+          "function": null,
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": null,
+          "hasRegisteredIdentifiers": true,
+          "current": true,
+          "effectiveFrom": "2010-06-01T00:00:00",
+          "effectiveTo": "0001-01-01T00:00:00",
+          "effectiveToSpecified": false
+        },
+        {
+          "stakeholderType": {
+            "item": {
+              "codelistCode": "CORWIN-CL010109",
+              "codelistItem": {
+                "itemCode": "Spolocnik",
+                "itemName": "spoločník"
+              }
+            }
+          },
+          "personData": {
+            "physicalPerson": {
+              "id": null,
+              "personName": {
+                "formattedName": "Ján Hrubý",
+                "legalName": null,
+                "givenName": ["Ján"],
+                "preferredGivenName": null,
+                "otherName": null,
+                "familyName": [
+                  {
+                    "primary": null,
+                    "prefix": null,
+                    "value": "Hrubý"
+                  }
+                ],
+                "givenFamilyName": null,
+                "affix": null
+              },
+              "alternativeName": null,
+              "maritalStatus": null,
+              "sex": null,
+              "birth": null,
+              "death": null,
+              "citizenship": null,
+              "confession": null,
+              "occupation": null,
+              "relatedPerson": null,
+              "bankConnection": null,
+              "nationality": null,
+              "civilDisability": null,
+              "residenceBan": null,
+              "occupationBan": null
+            },
+            "corporateBody": null,
+            "physicalAddress": null,
+            "id": []
+          },
+          "function": "Spoločný zástupca bez vkladu",
+          "functionCreationDate": null,
+          "functionTerminationDate": null,
+          "isIdentifiedWithRFO": true,
+          "hasRegisteredIdentifiers": true,
+          "current": false,
+          "effectiveFrom": "2024-03-28T00:00:00",
+          "effectiveTo": "2025-02-14T00:00:00",
+          "effectiveToSpecified": true
+        }
+      ],
+      "founder": [],
+      "proxyHolderAuthorizationToExecute": [
+        {
+          "current": false,
+          "effectiveFrom": "2016-03-03T00:00:00",
+          "effectiveTo": "2024-01-03T00:00:00",
+          "effectiveToSpecified": true,
+          "value": "Rozsah udelenej prokúry: všetky právne úkony spoločnosti podľa § 14 ods. 1 Obchodného zákonníka. Prokurista podpisuje za spoločnosť tak, že k vytlačenému alebo napísanému obchodnému menu spoločnosti pripojí dodatok označujúci prokúru a svoj podpis."
+        }
+      ],
+      "liquidatorAuthorizationToExecute": [],
+      "sales": []
+    },
+    "physicalAddress": [
+      {
+        "current": true,
+        "effectiveFrom": "2009-07-23T00:00:00",
+        "effectiveTo": "0001-01-01T00:00:00",
+        "effectiveToSpecified": false,
+        "addressLine": null,
+        "country": null,
+        "region": null,
+        "county": null,
+        "municipality": {
+          "item": "Bratislava"
+        },
+        "district": null,
+        "streetName": "Einsteinova",
+        "additionalStreetData": null,
+        "buildingNumber": "24",
+        "propertyRegistrationNumber": null,
+        "addressPoint": null,
+        "buildingIndex": null,
+        "deliveryAddress": {
+          "postalCode": "85101",
+          "postOfficeBox": null,
+          "recipient": null
+        },
+        "building": null,
+        "addressType": {
+          "addressClass": {
+            "item": {
+              "codelistCode": "CL010139",
+              "codelistItem": {
+                "itemCode": "100101",
+                "itemName": "Sídlo právnickej osoby"
+              }
+            }
+          },
+          "addressRecordDate": "0001-01-01T00:00:00",
+          "addressRecordDateSpecified": false,
+          "addressRecordDateTermination": "0001-01-01T00:00:00",
+          "addressRecordDateTerminationSpecified": false
+        },
+        "buildingUnit": null
+      },
+      {
+        "current": false,
+        "effectiveFrom": "1992-09-17T00:00:00",
+        "effectiveTo": "2000-02-06T00:00:00",
+        "effectiveToSpecified": true,
+        "addressLine": null,
+        "country": null,
+        "region": null,
+        "county": null,
+        "municipality": {
+          "item": "Bratislava"
+        },
+        "district": null,
+        "streetName": "Ondavská",
+        "additionalStreetData": null,
+        "buildingNumber": "3",
+        "propertyRegistrationNumber": null,
+        "addressPoint": null,
+        "buildingIndex": null,
+        "deliveryAddress": {
+          "postalCode": "82108",
+          "postOfficeBox": null,
+          "recipient": null
+        },
+        "building": null,
+        "addressType": {
+          "addressClass": {
+            "item": {
+              "codelistCode": "CL010139",
+              "codelistItem": {
+                "itemCode": "100101",
+                "itemName": "Sídlo právnickej osoby"
+              }
+            }
+          },
+          "addressRecordDate": "0001-01-01T00:00:00",
+          "addressRecordDateSpecified": false,
+          "addressRecordDateTermination": "0001-01-01T00:00:00",
+          "addressRecordDateTerminationSpecified": false
+        },
+        "buildingUnit": null
+      }
+    ],
+    "id": [
+      {
+        "current": true,
+        "effectiveFrom": "1992-09-17T00:00:00",
+        "effectiveTo": "0001-01-01T00:00:00",
+        "effectiveToSpecified": false,
+        "identifierType": {
+          "item": {
+            "codelistCode": "CL004001",
+            "codelistItem": {
+              "itemCode": "7",
+              "itemName": "IČO (Identifikačné číslo organizácie)"
+            }
+          }
+        },
+        "identifierValue": "31333532"
+      }
+    ]
+  },
+  "fileChange": null
+}

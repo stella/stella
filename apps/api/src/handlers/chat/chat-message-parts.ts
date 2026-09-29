@@ -89,7 +89,7 @@ export type LegacyAiSdkFilePart = {
   url: string;
 };
 
-export type LegacyAiSdkTextPart = {
+type LegacyAiSdkTextPart = {
   text: string;
   type: "text";
 };
@@ -186,20 +186,16 @@ export const createChatAttachmentPart = ({
   };
 };
 
-export const isLegacyAiSdkTextPart = (
-  part: unknown,
-): part is LegacyAiSdkTextPart =>
+const isLegacyAiSdkTextPart = (part: unknown): part is LegacyAiSdkTextPart =>
   isRecord(part) && part["type"] === "text" && typeof part["text"] === "string";
 
-export const isLegacyAiSdkFilePart = (
-  part: unknown,
-): part is LegacyAiSdkFilePart =>
+const isLegacyAiSdkFilePart = (part: unknown): part is LegacyAiSdkFilePart =>
   isRecord(part) &&
   part["type"] === "file" &&
   typeof part["mediaType"] === "string" &&
   typeof part["url"] === "string";
 
-export const legacyAiSdkTextPartToTanStack = (
+const legacyAiSdkTextPartToTanStack = (
   part: LegacyAiSdkTextPart,
 ): Extract<ChatTanStackPart, { type: "text" }> => ({
   type: "text",
@@ -217,7 +213,7 @@ export const legacyAiSdkFilePartToTanStack = (
     url: part.url,
   });
 
-export const normalizeLegacyMessagePartsToTanStack = (
+const normalizeLegacyMessagePartsToTanStack = (
   parts: readonly unknown[],
 ): NormalizedLegacyMessageParts => {
   const normalized: ChatPart[] = [];
@@ -232,10 +228,12 @@ export const normalizeLegacyMessagePartsToTanStack = (
       continue;
     }
     if (isLegacyAnonRestorationsPart(part)) {
+      // Legacy parts predate thread-wide placeholder numbering, so a repeated
+      // placeholder here is expected history, not a fault: not reported.
       metadata.anonRestorations = mergeAnonRestorations(
         metadata.anonRestorations,
         part.data,
-      );
+      ).restorations;
       continue;
     }
     if (isLegacyMentionsPart(part)) {
@@ -561,6 +559,11 @@ const CHAT_PART_POLICY = {
     invalidHandling: "panic",
     providerVisibility: "model",
   },
+  subagent: {
+    clientAcceptance: "server-only",
+    invalidHandling: "drop",
+    providerVisibility: "ui-only",
+  },
   text: {
     clientAcceptance: "accept",
     invalidHandling: "panic",
@@ -596,30 +599,6 @@ const CHAT_PART_POLICY = {
 export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
-export const toProviderVisibleMessage = (
-  message: ChatMessage,
-): ChatMessage | null => {
-  if (
-    message.metadata?.turnOutcome?.type === "cancelled" ||
-    message.metadata?.turnOutcome?.type === "failed" ||
-    message.metadata?.turnOutcome?.type === "interrupted"
-  ) {
-    return null;
-  }
-  const parts: ChatPart[] = [];
-  for (const part of message.parts) {
-    if (isProviderVisibleChatPart(part)) {
-      parts.push(part);
-    }
-  }
-  if (parts.length === 0) {
-    return null;
-  }
-  return parts.length === message.parts.length
-    ? message
-    : { ...message, parts };
-};
-
 /**
  * Whether a client-executed tool call (ask-user, or any tool without a server
  * `execute`) still awaits its client resolution. A server-executed call never
@@ -643,7 +622,7 @@ const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
 const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
   name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
 
-type AwaitingUserInteraction = Extract<
+export type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
   { type: "awaiting-user" }
 >["interaction"];
@@ -872,19 +851,6 @@ export const getResumedUserInteraction = ({
   return unchangedInteraction;
 };
 
-export const toProviderVisibleMessages = (
-  messages: readonly ChatMessage[],
-): ChatMessage[] => {
-  const visible: ChatMessage[] = [];
-  for (const message of messages) {
-    const next = toProviderVisibleMessage(message);
-    if (next) {
-      visible.push(next);
-    }
-  }
-  return visible;
-};
-
 export const getUserFileIdFromAttachmentPart = (
   part: ChatAttachmentPart,
 ): SafeId<"userFile"> | null => {
@@ -1009,6 +975,9 @@ const CHAT_PART_PERSISTENCE = {
   document: "persist",
   image: "persist",
   "structured-output": "persist",
+  // Stella runs subagents through its own tool, not TanStack's
+  // `chat({ subagents })`, so the engine never builds this part.
+  subagent: "drop",
   text: "persist",
   thinking: "persist",
   "tool-call": "persist",
@@ -1066,6 +1035,7 @@ const CHAT_PART_VALIDATORS = {
   document: isContentPartWithSource,
   image: isContentPartWithSource,
   "structured-output": isStructuredOutputPart,
+  subagent: () => false,
   text: (part) => typeof part["content"] === "string",
   thinking: (part) => typeof part["content"] === "string",
   "tool-call": (part) =>
@@ -1206,6 +1176,8 @@ const normalizeMediaSource = (source: ContentPartSource): ContentPartSource => {
         value: source.value,
         ...(source.mimeType === undefined ? {} : { mimeType: source.mimeType }),
       };
+    case "file":
+      return panic("A validated media part has no provider file source");
     default: {
       source satisfies never;
       return panic(`Unhandled source: ${String(source)}`);
@@ -1258,6 +1230,8 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-call":
     case "tool-result":
       return part;
+    case "subagent":
+      return panic("A subagent part is never persisted");
     default: {
       part satisfies never;
       return panic(`Unhandled part: ${String(part)}`);
@@ -1633,12 +1607,39 @@ const isTanStackToolResultContentPart = (part: unknown): boolean => {
   );
 };
 
+/**
+ * One message's restorations, each placeholder once. A placeholder names one
+ * original across a thread (`createChatThirdPartyBoundary` numbers every
+ * request after the thread's earlier ones), so a pair naming another original
+ * for a placeholder already held is a numbering fault: the first meaning
+ * stays, and the count of such pairs is returned for the caller to report.
+ */
 export const mergeAnonRestorations = (
   current: ChatMessageMetadata["anonRestorations"],
   next: NonNullable<ChatMessageMetadata["anonRestorations"]>,
-): NonNullable<ChatMessageMetadata["anonRestorations"]> => ({
-  pairs: [...(current === undefined ? [] : current.pairs), ...next.pairs],
-});
+): {
+  conflicts: number;
+  restorations: NonNullable<ChatMessageMetadata["anonRestorations"]>;
+} => {
+  const pairs = current === undefined ? [] : [...current.pairs];
+  const named = new Map<string, string>();
+  for (const { original, placeholder } of pairs) {
+    if (!named.has(placeholder)) {
+      named.set(placeholder, original);
+    }
+  }
+  let conflicts = 0;
+  for (const pair of next.pairs) {
+    const held = named.get(pair.placeholder);
+    if (held === undefined) {
+      named.set(pair.placeholder, pair.original);
+      pairs.push(pair);
+    } else if (held !== pair.original) {
+      conflicts += 1;
+    }
+  }
+  return { conflicts, restorations: { pairs } };
+};
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.activeDraftContext === undefined &&

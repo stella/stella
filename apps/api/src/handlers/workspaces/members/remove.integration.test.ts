@@ -42,11 +42,12 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { removeWorkspaceMemberHandler } from "./remove";
 
-const pushSessionEventMock = mock(() => undefined);
+const broadcastSessionEventMock = mock(() => undefined);
 const closeSessionConnectionsMock = mock(() => undefined);
 const broadcastMock = mock(() => undefined);
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
 const dependencies = {
+  broadcastSessionEvent: broadcastSessionEventMock,
   broadcastWorkspaceResourceSetUpdated: (workspaceId, resourceType) =>
     broadcastWorkspaceResourceSetUpdated(
       workspaceId,
@@ -54,7 +55,6 @@ const dependencies = {
       broadcastMock,
     ),
   closeSessionConnections: closeSessionConnectionsMock,
-  pushSessionEvent: pushSessionEventMock,
   revokeWorkspaceSseAccess: revokeWorkspaceSseAccessMock,
 } satisfies NonNullable<
   Parameters<typeof removeWorkspaceMemberHandler>[0]["dependencies"]
@@ -226,7 +226,7 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
             }),
           ]),
         );
-        expect(pushSessionEventMock).not.toHaveBeenCalled();
+        expect(broadcastSessionEventMock).not.toHaveBeenCalled();
         expect(closeSessionConnectionsMock).not.toHaveBeenCalled();
         expect(broadcastMock).not.toHaveBeenCalled();
         expect(revokeWorkspaceSseAccessMock).toHaveBeenCalledWith(

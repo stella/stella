@@ -12,6 +12,7 @@ type CreateTimeEntryVars = {
   timezoneId: string;
   durationMinutes: number;
   narrative: string;
+  narrativeLanguage?: string | null;
   billable?: boolean;
   taskCode?: string | null;
   activityCode?: string | null;
@@ -52,6 +53,7 @@ type UpdateTimeEntryVars = {
   timezoneId: string;
   durationMinutes: number;
   narrative: string;
+  narrativeLanguage: string | null;
   invoiceNarrative: string | null;
   billable: boolean;
   noCharge: boolean;
@@ -90,6 +92,7 @@ type TimeSuggestionDecision =
       type: "accept";
       durationMinutes: number;
       narrative: string;
+      narrativeLanguage?: string | null;
       billable: boolean;
     }
   | { type: "dismiss" };

@@ -45,7 +45,7 @@ function PublicToolsTopBar() {
         className="flex min-w-0 items-center gap-1.5 text-sm"
       >
         <Link
-          className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+          className="text-muted-foreground hover:text-foreground shrink-0"
           from="/tools"
           to="/tools"
         >

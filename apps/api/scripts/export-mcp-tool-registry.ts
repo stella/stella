@@ -11,6 +11,10 @@
 // `bun run codegen` from `packages/cli` (which runs this first, then the pure
 // generator). The snapshot is committed, so registry drift shows up as a diff.
 
+// Side-effect import, first: the tooling harness runs this as a local
+// development process, which is what the registry projects (every feature
+// gate open).
+import "../src/tests/setup-env";
 import { panic } from "better-result";
 
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";

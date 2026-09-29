@@ -10,9 +10,9 @@ import { isEditableEventTarget } from "@/lib/hotkeys";
 import type { ShortcutBinding, ShortcutId } from "@/lib/hotkeys";
 
 /** How long a press echo stays visible before auto-clearing. */
-export const SHORTCUT_ECHO_DURATION_MS = 1200;
+const SHORTCUT_ECHO_DURATION_MS = 1200;
 
-export type ShortcutEcho = {
+type ShortcutEcho = {
   readonly shortcutId: ShortcutId;
   /** Monotonic-ish timestamp; changes on each press so repeats re-trigger. */
   readonly at: number;

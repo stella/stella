@@ -32,41 +32,18 @@ import {
   type LegislationReadDb,
 } from "@/api/lib/legislation-public-read-db";
 
-const LEGISLATION_TEXT_MODE = {
-  ALWAYS: "always",
-  FALLBACK: "fallback",
-} as const;
-
-type LegislationTextMode =
-  (typeof LEGISLATION_TEXT_MODE)[keyof typeof LEGISLATION_TEXT_MODE];
-
-type ReadLegislationOptions = {
-  /** Controls the response projection, never corpus publication permission. */
-  audience: "public" | "workspace";
-  textMode: LegislationTextMode;
-};
-
-const DEFAULT_READ_OPTIONS = {
-  audience: "workspace",
-  textMode: LEGISLATION_TEXT_MODE.ALWAYS,
-} as const satisfies ReadLegislationOptions;
-
-const PUBLIC_READ_OPTIONS = {
-  audience: "public",
-  textMode: LEGISLATION_TEXT_MODE.FALLBACK,
-} as const satisfies ReadLegislationOptions;
-
 /**
  * Read one legislation document for display. Prefers canonical text/AST
  * from object storage when enabled, falling back to the Postgres columns
- * (mirrors case-law read-by-id). The corpus tables are global, so the same
- * read serves the workspace route and the public reader; the caller passes
- * the database handle its own boundary allows.
+ * (mirrors case-law read-by-id). Full text is read only when the AST is
+ * unusable. The corpus tables are global, so the same read serves the
+ * authenticated route, the public reader and agent tools; the caller passes
+ * the database handle its own boundary allows. `metadata` is an open JSONB
+ * bag filled from whatever the publisher shipped, so it is never projected.
  */
-export const readLegislationHandler = async (
+export const readPublicLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
   legislationDb: LegislationReadDb,
-  options: ReadLegislationOptions = DEFAULT_READ_OPTIONS,
 ) => {
   const [document] = await legislationDb(
     async (tx) =>
@@ -100,9 +77,6 @@ export const readLegislationHandler = async (
           // permissions, so a reader that only renders the text ignores this
           // while an agent read withholds the text when it is false.
           allowsDerivedAi: derivedAiLegislationSource,
-          ...(options.audience === "workspace"
-            ? { metadata: legislationDocuments.metadata }
-            : {}),
         })
         .from(legislationDocuments)
         .innerJoin(
@@ -140,50 +114,25 @@ export const readLegislationHandler = async (
     step: "readLegislation.corpusAst",
   });
 
-  const fulltext =
-    options.textMode === LEGISLATION_TEXT_MODE.ALWAYS ||
-    !hasUsableAst(documentAst)
-      ? await readVersionText({
-          row: { id: documentId, textS3Key, fulltext: pgText },
-          legislationDb,
-          step: "readLegislation.corpusText",
-        })
-      : null;
+  const fulltext = hasUsableAst(documentAst)
+    ? null
+    : await readVersionText({
+        row: { id: documentId, textS3Key, fulltext: pgText },
+        legislationDb,
+        step: "readLegislation.corpusText",
+      });
 
   return { ...rest, documentAst, fulltext };
-};
-
-/**
- * The unauthenticated reader's projection. `metadata` is an open JSONB bag
- * filled from whatever the publisher shipped, so it stays on the
- * workspace-scoped read and never reaches a public response.
- */
-export const readPublicLegislationHandler = async (
-  documentId: SafeId<"legislationDocument">,
-  legislationDb: LegislationReadDb,
-) => {
-  const document = await readLegislationHandler(
-    documentId,
-    legislationDb,
-    PUBLIC_READ_OPTIONS,
-  );
-
-  if (!("metadata" in document)) {
-    return document;
-  }
-
-  const { metadata: _metadata, ...publicFields } = document;
-
-  return publicFields;
 };
 
 const config = {
   description:
     "Read one legislation document from the stella corpus by id: its ELI, " +
     "title, country, language, document type, status, effective and " +
-    "version-validity dates, source links, full text, and parsed " +
-    "structure. Only documents from sources cleared for redistribution are " +
-    "returned; anything else reads as not found.",
+    "version-validity dates, source links, and parsed structure. Full text " +
+    "is returned only when the parsed structure is missing or unusable, and " +
+    "is null otherwise. Only documents from sources cleared for " +
+    "redistribution are returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_statute" },
   access: "read",

@@ -29,15 +29,14 @@ import type {
   AskUserOutput,
   ChatPart,
   ChatUITools,
-  PersistedChatMessage,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import {
   getExternalMcpConnectorApprovalGrant,
   getChatAssistantTurnError,
+  getCurrentApprovalPendingMessageId,
   getExternalMcpConnectorSlugFromToolName,
   getToolApprovalGrant,
-  hasRunningToolCallInLatestAssistantMessage,
   isApprovalToolName,
   isChatClientRequestActive,
   isExternalMcpToolName,
@@ -47,6 +46,7 @@ import {
   sanitizeRunningToolCalls,
   SUGGEST_CHANGES_TOOL_NAME,
 } from "@/components/chat/chat-ui-tools";
+import { isChatTurnGenerating } from "@/components/chat/chat-user-actions";
 import {
   beginCreateDocumentDraftPersistence,
   completeCreateDocumentDraft,
@@ -301,6 +301,7 @@ export const useChatSession = ({
     error: runtimeError,
     sessionGenerating,
     status,
+    stop: stopState,
     turnAbandoned,
   } = snapshot;
   const notifyError = useLatestCallback((nextError: Error) => {
@@ -521,6 +522,7 @@ export const useChatSession = ({
   );
   const setMessages = chat.setMessages;
   const stop = chat.stop;
+  const leave = chat.leave;
   const resolveToolApproval = chat.resolveToolApproval;
 
   // Load-older paging. `olderCursor` seeds from the thread fetch and advances
@@ -1312,15 +1314,17 @@ export const useChatSession = ({
     [messages],
   );
 
-  const hasRunningToolCall = useMemo(
-    () => hasRunningToolCallInLatestAssistantMessage({ messages }),
-    [messages],
+  const isGenerating = useMemo(
+    () =>
+      isChatTurnGenerating({
+        hasError: error !== undefined,
+        messages,
+        requestActive: isChatClientRequestActive(status),
+        sessionGenerating,
+        stopStatus: stopState.status,
+      }),
+    [error, messages, sessionGenerating, status, stopState.status],
   );
-  const isGenerating =
-    error === undefined &&
-    (isChatClientRequestActive(status) ||
-      sessionGenerating ||
-      hasRunningToolCall);
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "generation-status-synced", isGenerating });
   }, [applySendQueueEvent, isGenerating]);
@@ -1343,6 +1347,21 @@ export const useChatSession = ({
     lastHandledErrorRef.current = runtimeError;
     notifyError(runtimeError);
   }, [notifyError, runtimeError]);
+
+  // A Stop the server refused leaves the turn running and Stop available;
+  // say so once per refusal.
+  const lastStopFailureRef = useRef<Error | undefined>(undefined);
+  useExternalSyncEffect(() => {
+    if (stopState.status !== "failed") {
+      return;
+    }
+    if (lastStopFailureRef.current === stopState.error) {
+      return;
+    }
+    lastStopFailureRef.current = stopState.error;
+    getAnalytics().captureError(stopState.error);
+    stellaToast.add({ title: t("chat.stopFailed"), type: "error" });
+  }, [stopState, t]);
 
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "conversation-switched", conversationId });
@@ -1457,6 +1476,7 @@ export const useChatSession = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,
@@ -1722,27 +1742,6 @@ const getApprovedToolsChangedDetail = (
       scope: "session",
       conversationId: detail.conversationId,
     };
-  }
-
-  return null;
-};
-
-const getCurrentApprovalPendingMessageId = (
-  messages: PersistedChatMessage[],
-) => {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const msg = messages.at(index);
-    if (!msg || msg.role !== "assistant") {
-      continue;
-    }
-
-    for (const part of msg.parts) {
-      if (part.type === "tool-call" && part.state === "approval-requested") {
-        return msg.id;
-      }
-    }
-
-    return null;
   }
 
   return null;

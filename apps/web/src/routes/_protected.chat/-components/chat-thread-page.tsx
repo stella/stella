@@ -9,11 +9,11 @@ import {
 } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { Minimize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button, buttonVariants } from "@stll/ui/button";
+import { Minimize2Icon, PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -221,6 +221,7 @@ export const ChatThreadPage = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,
@@ -389,7 +390,7 @@ export const ChatThreadPage = ({
   // first — `chatThreadOptions` keeps the in-flight Chat alive in the
   // query cache, so navigating away would leave it streaming.
   const startNewThread = () => {
-    stop();
+    leave();
     if (threadRef.scope === "workspace") {
       detached(
         navigate({
@@ -440,7 +441,7 @@ export const ChatThreadPage = ({
         // Abort any live stream first: `chatThreadOptions` keeps the
         // in-flight Chat alive in the query cache, so navigating away
         // would leave it streaming against the abandoned thread.
-        stop();
+        leave();
         controller.setContent(composerText(""));
         if (threadRef.scope === "workspace") {
           detached(
@@ -512,7 +513,7 @@ export const ChatThreadPage = ({
         queryClient,
         threadRef: newThreadRef,
       });
-      stop();
+      leave();
       if (newThreadRef.scope === "workspace") {
         await navigate({
           params: {
@@ -753,6 +754,15 @@ export const ChatThreadPage = ({
                     }}
                     reservedCommands={{
                       hasPersistedThread: messages.length > 0,
+                    }}
+                    skillChat={{
+                      contextMatterIds: selectedContextMatterIds,
+                      document: null,
+                      threadRef,
+                      webSearch: {
+                        available: data.webSearchAvailable,
+                        enabled: data.webSearchEnabled,
+                      },
                     }}
                     skillsOrganizationId={activeOrganizationId}
                     onNewThread={messages.length > 0 ? startNewThread : null}

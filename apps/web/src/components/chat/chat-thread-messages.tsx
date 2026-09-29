@@ -2,6 +2,13 @@ import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
 import { Result } from "better-result";
+import type { PluggableList } from "unified";
+import { useTranslations } from "use-intl";
+
+import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
+import type { AIErrorKind } from "@stll/api-contract";
+import { copyToClipboard } from "@stll/clipboard";
+import { Button } from "@stll/ui/button";
 import {
   ChevronRightIcon,
   ClockIcon,
@@ -11,14 +18,7 @@ import {
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
-} from "lucide-react";
-import type { PluggableList } from "unified";
-import { useTranslations } from "use-intl";
-
-import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
-import type { AIErrorKind } from "@stll/api-contract";
-import { copyToClipboard } from "@stll/clipboard";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -64,11 +64,16 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
+  getAwaitedAssistantMessageId,
   getChatToolTitleKey,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import {
+  canForkAssistantMessage,
+  canRetryAssistantMessage,
+} from "@/components/chat/chat-user-actions";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-export-menu.logic";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
@@ -132,6 +137,10 @@ export const ChatThreadMessages = ({
   // carry the same id, so React would render it twice. Collapse by id before
   // any downstream read.
   const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
+  const awaitedAssistantMessageId = useMemo(
+    () => getAwaitedAssistantMessageId(messages),
+    [messages],
+  );
   const generationActive = error === undefined && isGenerating;
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
@@ -260,6 +269,7 @@ export const ChatThreadMessages = ({
               activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
               assistantTextDensity={assistantTextDensity}
+              isAwaitingUser={awaitedAssistantMessageId === message.id}
               isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
@@ -287,10 +297,16 @@ export const ChatThreadMessages = ({
                 messages,
                 index,
               )}
-              isGenerating={generationActive}
-              isLatestAssistantMessage={
-                message.id === retryableAssistantMessageId
-              }
+              canFork={canForkAssistantMessage({
+                isGenerating: generationActive,
+                messageId: message.id,
+                messages,
+              })}
+              canRetry={canRetryAssistantMessage({
+                isGenerating: generationActive,
+                messageId: message.id,
+                messages,
+              })}
               message={message}
               onResend={onResend}
               threadRef={threadRef}
@@ -1020,16 +1036,18 @@ const getMessageText = (message: PersistedChatMessage) => {
 };
 
 const AssistantMessageActions = ({
+  canFork: forkOffered,
+  canRetry: retryOffered,
   exportArtifact,
-  isGenerating,
-  isLatestAssistantMessage,
   message,
   onResend,
   threadRef,
 }: {
+  /** `canForkAssistantMessage`: also whether the answer may be exported. */
+  canFork: boolean;
+  /** `canRetryAssistantMessage`. */
+  canRetry: boolean;
   exportArtifact: CreateDocumentDraft | null;
-  isGenerating: boolean;
-  isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
   onResend?:
     | ((options?: ChatResendOptions) => void | PromiseLike<void>)
@@ -1040,16 +1058,8 @@ const AssistantMessageActions = ({
 }) => {
   const t = useTranslations();
   const text = useMemo(() => getMessageText(message), [message]);
-  const canRetry = Boolean(
-    onResend && isLatestAssistantMessage && !isGenerating,
-  );
-  // Forking reads persisted history, so it is offered on every settled
-  // answer rather than only the latest: unlike retry, it neither replaces nor
-  // discards anything in this thread. Only answers carry it — a fork branches
-  // off an answer, and the server rejects any other boundary.
-  const canFork = Boolean(
-    threadRef && (!isGenerating || !isLatestAssistantMessage),
-  );
+  const canRetry = Boolean(onResend) && retryOffered;
+  const canFork = Boolean(threadRef) && forkOffered;
 
   if (!text && !canRetry && !canFork) {
     return null;
@@ -1098,19 +1108,15 @@ const AssistantMessageActions = ({
           {t("common.retry")}
         </Button>
       )}
-      {threadRef &&
-        (canFork ||
-          ((!isGenerating || !isLatestAssistantMessage) && Boolean(text))) && (
-          <ChatMessageActionsMenu
-            canExport={
-              (!isGenerating || !isLatestAssistantMessage) && Boolean(text)
-            }
-            canFork={canFork}
-            exportArtifact={exportArtifact}
-            message={message}
-            threadRef={threadRef}
-          />
-        )}
+      {threadRef && forkOffered && (
+        <ChatMessageActionsMenu
+          canExport={Boolean(text)}
+          canFork={canFork}
+          exportArtifact={exportArtifact}
+          message={message}
+          threadRef={threadRef}
+        />
+      )}
     </div>
   );
 };
@@ -1296,6 +1302,9 @@ type AssistantMessagePartsProps = Pick<
 > & {
   activeOrganizationId: string;
   assistantTextDensity: "compact" | "default";
+  /** Whether the conversation still waits on this message's cards; see
+   *  `getAwaitedAssistantMessageId`. */
+  isAwaitingUser: boolean;
   isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: ChatUIMessage;
@@ -1468,6 +1477,7 @@ const AssistantMessageParts = ({
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
+  isAwaitingUser,
   isGenerating,
   isLatestAssistantMessage,
   message,
@@ -1552,6 +1562,7 @@ const AssistantMessageParts = ({
       return (
         <AskUserCard
           discardsDownstream={!isLatestAssistantMessage}
+          isAwaitingUser={isAwaitingUser}
           key={part.id}
           {...(onAskUserEditAndRerun && {
             onEditAndRerun: (toolCallId, output) => {
@@ -1618,6 +1629,7 @@ const AssistantMessageParts = ({
       ) {
         return (
           <ToolApprovalCard
+            isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
             key={part.id}
             part={part}
@@ -1632,6 +1644,7 @@ const AssistantMessageParts = ({
         return (
           <ToolApprovalCard
             activeFileName={activeFileName}
+            isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
             key={part.id}
             part={part}
@@ -1739,7 +1752,6 @@ const AssistantProcessGroup = ({
           !isOpen &&
             "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
           "text-muted-foreground",
-          "transition-colors",
           "[&::-webkit-details-marker]:hidden",
         )}
       >
@@ -1854,7 +1866,6 @@ const AssistantThinkingPart = ({
           !isOpen &&
             "border-border/70 bg-background/70 hover:bg-muted/40 border shadow-sm",
           "text-muted-foreground",
-          "transition-colors",
           "[&::-webkit-details-marker]:hidden",
         )}
       >

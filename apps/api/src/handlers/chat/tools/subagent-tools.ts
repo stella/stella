@@ -1,9 +1,7 @@
 import {
   createSubagentProposalBuffer,
   SPAWN_SUBAGENTS_TOOL_NAME,
-  type SubagentProposalBuffer,
   type SubagentProposalSink,
-  type SubagentWriteProposal,
 } from "@/api/handlers/chat/tools/subagent-tool-shared";
 import {
   copyChatToolPolicy,
@@ -15,12 +13,7 @@ import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 // (`spawn-subagents-tool.ts`, tests); the canonical definitions live in
 // `subagent-tool-shared.ts` so this module and `spawn-subagents-tool.ts`
 // don't have to import each other.
-export {
-  createSubagentProposalBuffer,
-  type SubagentProposalBuffer,
-  type SubagentProposalSink,
-  type SubagentWriteProposal,
-};
+export { createSubagentProposalBuffer, type SubagentProposalSink };
 
 const hasServerExecute = (tool: ChatTool): boolean =>
   typeof tool.execute === "function";

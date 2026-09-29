@@ -3,11 +3,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { FileIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
+import { FileIcon } from "@stll/ui/icons";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -93,7 +93,7 @@ export const MatterCard = ({
             render={
               <div
                 className={cn(
-                  "bg-card relative isolate flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2 transition-colors",
+                  "bg-card relative isolate flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2",
                   isOverdue
                     ? "bg-destructive/[0.04] hover:bg-destructive/[0.08]"
                     : "hover:bg-[var(--matter-tint)]",

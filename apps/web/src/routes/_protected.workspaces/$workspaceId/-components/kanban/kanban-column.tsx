@@ -2,16 +2,6 @@ import { useRef, useState } from "react";
 
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  EllipsisVerticalIcon,
-  EyeOffIcon,
-  FileUpIcon,
-  GripVerticalIcon,
-  PaletteIcon,
-  PlusIcon,
-  SquareCheckIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -30,6 +20,16 @@ import {
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  EllipsisVerticalIcon,
+  EyeOffIcon,
+  FileUpIcon,
+  GripVerticalIcon,
+  PaletteIcon,
+  PlusIcon,
+  SquareCheckIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { KanbanColumnHeader } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
@@ -254,7 +254,7 @@ export const KanbanColumn = ({
   return (
     <div
       className={cn(
-        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-[opacity,background-color,outline-color]",
+        "group/column relative flex w-[300px] max-w-[320px] min-w-[280px] shrink-0 flex-col rounded-lg transition-opacity",
         !colorBg && "bg-muted/50",
         isColumnActive && !color && "bg-primary/5 ring-primary/50 ring-2",
         isDragging && "opacity-40",

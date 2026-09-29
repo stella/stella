@@ -18,6 +18,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// With its extension: oxlint.config.ts loads this file under Node's resolver.
+import { formattedLikeRepository } from "./generated-artifacts.ts";
+
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
 export type AllowedFile = {
@@ -117,6 +120,27 @@ export const ROOT_CONNECTION_DOORS = [
     },
   },
   {
+    id: "manual-ocr-request-run",
+    capability: "Recording a user's manual OCR request",
+    owner: ["apps/api/src/lib/entity-versions/manual-ocr-request-run.ts"],
+    summary:
+      "A manual OCR request may promote, retry or reuse a run another requester " +
+      "or an upload owns, and cancels competing manual selections, in one " +
+      "serialized transaction with the entity locked. Those updates are outside " +
+      "the requester's scope, so the operation runs on the owner connection; " +
+      "the helper it wraps takes its connection as a required argument.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/entity-versions/manual-ocr-request-run"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/entities/ocr/create.ts",
+          reason: "Records the manual OCR request the route accepted.",
+        },
+      ],
+    },
+  },
+  {
     id: "search-projection-flush",
     capability: "Flushing a mutation's search marks after it commits",
     owner: ["apps/api/src/lib/search/projection-repair-flush.ts"],
@@ -177,6 +201,42 @@ export const ROOT_CONNECTION_DOORS = [
         {
           path: "apps/api/src/handlers/case-law/analysis/significance-run.ts",
           reason: "Stores the significance pass over an analysis.",
+        },
+      ],
+    },
+  },
+  {
+    id: "request-extraction-run-store",
+    capability: "Recording the extraction run a request starts",
+    owner: ["apps/api/src/lib/extraction-runs/request-run-store.ts"],
+    summary:
+      "`extraction_runs` admits no tenant writes, so a request that starts a " +
+      "workflow records its run on the owner connection. The door exposes only " +
+      "the transitions a starter performs before a worker holds the run " +
+      "(create, start, skip, fail); workers pass the store their host built.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/extraction-runs/request-run-store"],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/playbooks/applicable/run.ts",
+          reason: "Starts the workflow for the applicable playbooks it opened.",
+        },
+        {
+          path: "apps/api/src/handlers/playbooks/run.ts",
+          reason: "Starts the workflow for the playbook run it opened.",
+        },
+        {
+          path: "apps/api/src/handlers/workspaces/cells/retry.ts",
+          reason: "Starts the workflow that re-runs one cell.",
+        },
+        {
+          path: "apps/api/src/handlers/workspaces/workflow/start.ts",
+          reason: "Starts the workflow a caller asked for.",
+        },
+        {
+          path: "apps/api/src/mcp/knowledge-tools.ts",
+          reason: "Starts the workflow an agent tool asked for.",
         },
       ],
     },
@@ -328,6 +388,11 @@ export const OWNERSHIP = [
           path: "apps/api/src/lib/rate-limit/redis-context.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
+        },
+        {
+          path: "apps/api/src/lib/rate-limit/action-admission.ts",
+          reason:
+            "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
         },
         {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
@@ -587,6 +652,43 @@ export const OWNERSHIP = [
     },
   },
   {
+    id: "chat-ref-registry",
+    capability: "Creating chat ref registries for a turn or saved transcript",
+    owner: ["apps/api/src/handlers/chat/send-message.ts"],
+    summary:
+      "A ref such as `ent_1` keeps its target within its chat thread. " +
+      "The send owns minting new refs; readers of saved transcripts rebuild " +
+      "the registry from persisted bindings to resolve or neutralize those " +
+      "refs. Other code returns ids and resolved links instead.",
+    enforcement: {
+      kind: "import",
+      specifiers: ["@/api/lib/chat/ref-registry"],
+      names: ["createChatRefRegistry"],
+      allowed: [
+        {
+          path: "apps/api/scripts/ai-provider-canary-chat-toolsets.ts",
+          reason:
+            "Builds one chat request's toolsets offline to project their schemas for each provider; the registry never leaves that build.",
+        },
+        {
+          path: "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
+          reason:
+            "Rebuilds persisted bindings when expanding saved messages so refs from another turn are rebound or neutralized.",
+        },
+        {
+          path: "apps/api/src/handlers/chat/skill-availability/offered-tools.ts",
+          reason:
+            "Builds a new chat's tool set only to read its tool names for skill availability; no tool runs and the registry never leaves that build.",
+        },
+        {
+          path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
+          reason:
+            "Rebuilds persisted bindings to turn saved transcript refs into durable links before storing memories.",
+        },
+      ],
+    },
+  },
+  {
     id: "chat-composer-status-row",
     capability: "Chat composer status-row assembly and loading state",
     owner: ["apps/web/src/components/chat/chat-composer-dock.tsx"],
@@ -689,6 +791,17 @@ export const OWNERSHIP = [
     enforcement: { kind: "none" },
   },
   {
+    id: "invoice-document",
+    capability:
+      "Invoice, advance, and credit note totals and Czech payment payloads",
+    owner: ["packages/invoicing/"],
+    summary:
+      "The package rounds VAT per line, sums document and rate totals in " +
+      "branded minor units, and returns SPAYD text for payable documents. " +
+      "QR matrix rendering remains with callers.",
+    enforcement: { kind: "none" },
+  },
+  {
     id: "text-folding",
     capability: "Diacritic and ASCII folding for search and slugs",
     owner: ["packages/text-normalize/"],
@@ -696,6 +809,32 @@ export const OWNERSHIP = [
       "Folding decides which strings compare equal, so search, highlighting, " +
       "and slugs have to agree on it. Build slug helpers on the folds exported " +
       "here rather than on a local regex.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "text-mark",
+    capability:
+      "Marking words in running text: search and find hits, reader highlights, verdict underlines",
+    owner: ["packages/ui/src/review/text-mark.tsx"],
+    summary:
+      "One inline mark with a fill or a line, a tone and an active state, so a " +
+      "found word, a note and a finding differ only in hue and line. Render " +
+      "`TextMark`, or take `textMarkClass` for markup that is not a `<mark>`; " +
+      "search hits use `SEARCH_HIT_MARK`. The `no-ad-hoc-text-mark` lint rule " +
+      "rejects a hand-styled `<mark>`.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "charset-misdecoding",
+    capability:
+      "Detecting and undoing text decoded with the wrong character set",
+    owner: ["packages/mojibake/"],
+    summary:
+      "Ingestion guards and corpus checks judge a text against its declared " +
+      "language's CLDR exemplar letters, which covers every language CLDR " +
+      "does and needs no reader of the language. A check that lists letters " +
+      "or byte pairs for one language is a second, narrower detector; extend " +
+      "this one.",
     enforcement: { kind: "none" },
   },
   {
@@ -736,6 +875,21 @@ export const OWNERSHIP = [
       "arithmetic. Elapsed-time math uses the duration constants. The date " +
       "lint rules route callers here and reserve legacy `Date` for named " +
       "library boundaries. See [Temporal conventions](temporal.md).",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "runtime-mode",
+    capability:
+      "Server runtime mode: strict, or open to local development capabilities",
+    owner: ["packages/runtime-mode/"],
+    summary:
+      "`@stll/runtime-mode` is the one reader of `NODE_ENV` and " +
+      "`STELLA_LOCAL_DEV`. A process is open only with a local `NODE_ENV`, " +
+      "`STELLA_LOCAL_DEV=1` and a build that is not a release; an opt-in it " +
+      "cannot honour fails startup. Each app resolves the mode once (the API " +
+      "in `apps/api/src/runtime-mode.ts`) and every local development " +
+      "capability checks it. The `runtime-mode-keys` lint rule keeps the two " +
+      "keys inside this owner.",
     enforcement: { kind: "none" },
   },
   {
@@ -810,6 +964,19 @@ export const OWNERSHIP = [
     summary:
       "One checked-in inclusion list carries complete readiness evidence for each public country. " +
       "The shared parser rejects incomplete or ambiguous rows, and web and API consumers use the resulting country boundary.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "legislation-canonical-source",
+    capability:
+      "Choosing where a legislation version's canonical AST or text is read from",
+    owner: ["apps/api/src/lib/legal-search/legislation-canonical-source.ts"],
+    summary:
+      "The storage mode and the row's object key decide between object storage " +
+      "and the Postgres copy. Readers and projections ask " +
+      "`canonicalLegislationAstSource` or `canonicalLegislationTextSource`; " +
+      "`legislation-canonical-source.test.ts` fails when a new file reads a " +
+      "version's AST columns directly.",
     enforcement: { kind: "none" },
   },
   {
@@ -1153,8 +1320,11 @@ export const validateOwnership = (
   return problems;
 };
 
-const main = (argv: readonly string[]): number => {
-  const rendered = renderOwnershipDocument(OWNERSHIP);
+const main = async (argv: readonly string[]): Promise<number> => {
+  const rendered = await formattedLikeRepository(
+    renderOwnershipDocument(OWNERSHIP),
+    "md",
+  );
   const docFile = path.join(REPO_ROOT, DOC_PATH);
 
   if (argv.includes("--write")) {
@@ -1189,5 +1359,5 @@ const main = (argv: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }

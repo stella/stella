@@ -34,6 +34,7 @@ import { Result, panic } from "better-result";
  */
 
 import { classifyFailure } from "@stll/errors";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { Temporal } from "@stll/time";
 
 import {
@@ -52,6 +53,9 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -451,8 +455,10 @@ const fetchDocumentXhtml = async (
     catch: () => null,
   }).unwrapOr(null);
   const content = isRecord(payload) ? payload["content"] : undefined;
+  // The document states its own charset; read the bytes as that, not as
+  // UTF-8 by assumption.
   return typeof content === "string"
-    ? Buffer.from(content, "base64").toString("utf-8")
+    ? decodeDeclared(Buffer.from(content, "base64"), { contentType: null }).text
     : undefined;
 };
 
@@ -2116,18 +2122,29 @@ export const skUsAdapter = defineSourceAdapter({
   reparseStoredRaw,
 
   /**
-   * Known blind spot: the court's decision search runs on a portal widget
-   * whose search endpoint answers scripted requests with an empty 204 even
-   * when replayed with browser-identical headers and session state, so the
-   * total it shows in a browser cannot be read from here. Coverage for this
-   * source is benchmarked only by what the crawl itself reports.
-   *
-   * Answered statically rather than probed: no request this adapter can make
-   * would answer differently, so there is no failure to distinguish from the
-   * absence.
+   * The DMS search states `numFound` for whatever range it is asked, so one
+   * single-row query over the crawl's whole date span (the first year to the
+   * end of the current one) is the court's own count of the decisions this
+   * adapter walks.
    */
-  async getTotalCount(_signal) {
-    return await Promise.resolve({ type: "no-count-endpoint" });
+  async getTotalCount(signal) {
+    const searched = await executeSearchWithRetry({
+      cursor: null,
+      offset: 0,
+      pageSize: 1,
+      range: {
+        from: `${FIRST_YEAR}-01-01`,
+        to: `${Temporal.Now.plainDateISO().year}-12-31`,
+      },
+      signal,
+    });
+    if (Result.isError(searched)) {
+      return { type: "probe-failed", errorTag: errorTag(searched.error) };
+    }
+    // A 204 carries no count; it is the endpoint declining, not an empty court.
+    return searched.value === null
+      ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
+      : sourceTotalRead(searched.value.numFound);
   },
 
   /**

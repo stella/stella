@@ -1,14 +1,17 @@
-import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 /**
  * Court weight loader with in-memory cache: the seeded per-jurisdiction rank
  * table, compiled once a minute. The cache is per source; the public corpus
  * and the local one each own an instance (`public-case-law-config.ts`,
  * `local-case-law-config.ts`).
  */
+import { panic } from "better-result";
+
+import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { CourtWeightRow } from "@/api/lib/case-law/case-law-config-read";
+import { usCourtRank } from "@/api/lib/case-law/court-ranks";
 import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import { LOWEST_COURT_TIER } from "@/api/lib/legal-search/rerank";
 import { logger } from "@/api/lib/observability/logger";
@@ -267,6 +270,33 @@ export const courtWeightFromMap = (
   return matched === undefined
     ? { weight: DEFAULT_WEIGHT, tier: DEFAULT_TIER }
     : { weight: matched.weight, tier: matched.tier };
+};
+
+type DecisionCourt = {
+  court: string;
+  country: string;
+  /** The directory court id, where the decision's jurisdiction stores one. */
+  courtId: string | null;
+};
+
+/**
+ * Rank a decision's court. A decision that stores a directory court id is
+ * ranked by that court's directory tier, since the id and not the name is its
+ * identity; every other decision is ranked by name through the registry,
+ * exactly as `courtWeightFromMap` ranks it. A stored id the directory does not
+ * accept was never admitted by the write boundary, so it fails rather than
+ * falling back to the default rank.
+ */
+export const decisionCourtWeight = (
+  map: CourtWeightMap,
+  { court, country, courtId }: DecisionCourt,
+): { weight: number; tier: number } => {
+  if (courtId === null) {
+    return courtWeightFromMap(map, court, country);
+  }
+  const rank =
+    usCourtRank(courtId) ?? panic(`Unranked directory court id: ${courtId}`);
+  return { weight: rank.weight, tier: rank.tier };
 };
 
 /**

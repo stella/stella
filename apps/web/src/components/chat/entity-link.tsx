@@ -1,8 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { LandmarkIcon } from "lucide-react";
 
 import { parseChatResourceHref, RESOURCE_TYPE } from "@stll/api-contract";
+import { LandmarkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
@@ -67,7 +67,7 @@ export const EntityLink = ({
         className={cn(
           "inline-flex items-center gap-0.5",
           "text-foreground decoration-foreground-disabled underline",
-          "underline-offset-2 transition-colors",
+          "underline-offset-2",
           "hover:decoration-foreground cursor-pointer",
         )}
         onClick={() =>
@@ -159,7 +159,7 @@ export const EntityLink = ({
       className={cn(
         "inline-flex items-center gap-0.5",
         "text-foreground decoration-foreground-disabled underline",
-        "underline-offset-2 transition-colors",
+        "underline-offset-2",
         "hover:decoration-foreground cursor-pointer",
       )}
       onClick={handleClick}

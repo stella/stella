@@ -10,7 +10,7 @@
     "clean": "git clean -xdf .output .wxt .cache .turbo node_modules",
     "dev": "wxt -b chrome",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/extension",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware --type-check apps/extension",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/extension",
     "postinstall": "wxt prepare",
     "test": "bun run test:unit",
@@ -30,7 +30,7 @@
     "@types/chrome": "0.3.0",
     "bun-types": "catalog:",
     "vite": "catalog:",
-    "web-ext": "10.6.0",
+    "web-ext": "10.7.0",
     "wxt": "0.21.4"
   },
   "crawlPosture": "unserved"

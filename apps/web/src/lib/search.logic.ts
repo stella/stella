@@ -12,7 +12,7 @@ import type { SearchTextQuery } from "@/lib/search-text";
 
 export const normalizeSearchQuery = (query: string): string => query.trim();
 
-export const stripSearchMarkup = (value: string): string =>
+const stripSearchMarkup = (value: string): string =>
   value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
 const SEARCH_HEADLINE_NAMED_ENTITIES: Readonly<Record<string, string>> = {

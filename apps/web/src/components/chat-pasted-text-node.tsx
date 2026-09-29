@@ -2,16 +2,15 @@ import { useState } from "react";
 
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import {
-  ClipboardPasteIcon,
-  CommandIcon,
-  SparklesIcon,
-  WandSparklesIcon,
-  XIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import {
+  ClipboardPasteIcon,
+  CommandIcon,
+  XIcon,
+  SkillIcon,
+} from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
@@ -33,11 +32,10 @@ const CHIP_BASE_CLASS = cn(
 
 const ChipIcon = ({ source }: { source: PastedTextSource }) => {
   const className = "text-muted-foreground size-3 shrink-0";
-  if (source === "skill") {
-    return <WandSparklesIcon className={className} />;
-  }
-  if (source === "prompt") {
-    return <SparklesIcon className={className} />;
+  // Skills and saved prompts are one user-facing concept, so they share the
+  // skill glyph the menus and the sent-message chip draw.
+  if (source === "skill" || source === "prompt") {
+    return <SkillIcon className={className} />;
   }
   if (source === "command") {
     return <CommandIcon className={className} />;
@@ -135,7 +133,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           className={cn(
             CHIP_BASE_CLASS,
             "hover:bg-muted",
-            "focus-visible:ring-ring transition-colors focus-visible:ring-2 focus-visible:outline-none",
+            "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
             "cursor-pointer select-none",
           )}
           contentEditable={false}

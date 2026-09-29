@@ -1,10 +1,16 @@
 import { panic, TaggedError } from "better-result";
 
-import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
+import {
+  cancelPendingChatToolCalls,
+  getAwaitingUserInteractions,
+  isChatPart,
+} from "@/api/handlers/chat/chat-message-parts";
+import type { AwaitingUserInteraction } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessage,
   ChatPart,
   ChatTurnOutcome,
+  PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
@@ -43,11 +49,12 @@ export const CLIENT_ANSWERABLE_TOOL_CALL_STATE = {
 } as const satisfies Record<ToolCallState, boolean>;
 
 /**
- * Which open tool-call states a message may keep once its turn ends that way.
- * A completed turn keeps none. A turn awaiting the user keeps what the user
- * can answer. A turn that stopped early may keep calls whose input or answer
- * never arrived, but never an approved call without its result: that call ran,
- * or runs again on the next turn.
+ * Which open tool-call states a run may leave on its message once its turn
+ * ends that way. A completed turn leaves none. A turn awaiting the user leaves
+ * what the user can answer. A turn that stopped early may leave calls whose
+ * input or answer never arrived, but never an approved call without its
+ * result: that call ran, or runs again on the next turn. What the stored
+ * message keeps is `findUnsettledStoredToolCalls`.
  */
 const OPEN_STATE_ALLOWED = {
   none: {
@@ -81,6 +88,35 @@ const OUTCOME_POLICY = {
   interrupted: "stopped",
 } as const satisfies Record<OutcomeType, OpenCallPolicy>;
 
+/**
+ * Outcomes that cut a run off mid-stream: a dropped connection, a deadline,
+ * or the user's stop. The message keeps the tool input streamed so far, and
+ * its stored form closes every call that can no longer run or be answered
+ * (`closeCutShortCalls`): no later turn runs it or asks about it again.
+ */
+export const CUT_SHORT_OUTCOME = {
+  "awaiting-user": false,
+  cancelled: true,
+  completed: false,
+  failed: false,
+  interrupted: true,
+} as const satisfies Record<OutcomeType, boolean>;
+
+type CutShortOutcomeType = {
+  [TType in OutcomeType]: (typeof CUT_SHORT_OUTCOME)[TType] extends true
+    ? TType
+    : never;
+}[OutcomeType];
+
+export type CutShortOutcome = Extract<
+  ChatTurnOutcome,
+  { type: CutShortOutcomeType }
+>;
+
+export const isCutShortOutcome = (
+  outcome: ChatTurnOutcome,
+): outcome is CutShortOutcome => CUT_SHORT_OUTCOME[outcome.type];
+
 const SETTLED_TOOL_CALL_STATE = {
   "approval-requested": false,
   "approval-responded": false,
@@ -91,11 +127,15 @@ const SETTLED_TOOL_CALL_STATE = {
   "input-streaming": false,
 } as const satisfies Record<ToolCallState, boolean>;
 
+const isDeniedCall = (part: SettlementPart): boolean =>
+  part.type === "tool-call" &&
+  "approval" in part &&
+  part.approval.approved === false;
+
 /** A call is settled once its result or error is stored, or its approval was
  *  denied. */
 const isSettledToolCall = (part: SettlementToolCall): boolean =>
-  SETTLED_TOOL_CALL_STATE[part.state] ||
-  ("approval" in part && part.approval.approved === false);
+  SETTLED_TOOL_CALL_STATE[part.state] || isDeniedCall(part);
 
 export type UnsettledToolCall = {
   state: ToolCallState;
@@ -115,8 +155,9 @@ const findUnsettled = (
   );
 
 /**
- * The tool calls on a turn's terminal assistant message that the way the turn
- * ended does not allow to stay open. Empty for a sound turn.
+ * The tool calls on a turn's terminal assistant message, as the run produced
+ * it, that the way the turn ended does not allow to stay open. Empty for a
+ * sound turn.
  */
 export const findUnsettledToolCallsForOutcome = ({
   outcome,
@@ -125,6 +166,24 @@ export const findUnsettledToolCallsForOutcome = ({
   outcome: OutcomeType;
   parts: readonly SettlementPart[];
 }): UnsettledToolCall[] => findUnsettled(OUTCOME_POLICY[outcome], parts);
+
+/**
+ * The tool calls a stored message holds open that the way its turn ended does
+ * not allow: what `findUnsettledToolCallsForOutcome` allows, less what
+ * settlement closes. A cut-short turn's stored message keeps none. Empty for
+ * a sound stored thread.
+ */
+export const findUnsettledStoredToolCalls = ({
+  outcome,
+  parts,
+}: {
+  outcome: OutcomeType;
+  parts: readonly SettlementPart[];
+}): UnsettledToolCall[] =>
+  findUnsettled(
+    CUT_SHORT_OUTCOME[outcome] ? "none" : OUTCOME_POLICY[outcome],
+    parts,
+  );
 
 /** What the model and the user see for an approved call whose run ended
  *  without storing its result. */
@@ -165,6 +224,76 @@ const unfinishedCall = (part: ToolCallPart): ChatPart => {
     : panic("An unfinished tool call must remain a valid chat part");
 };
 
+/** The stored result that closes a call with an error. */
+export const errorToolResult = (
+  toolCallId: string,
+  error: string,
+): Extract<ChatPart, { type: "tool-result" }> => ({
+  content: JSON.stringify({ error }),
+  error,
+  state: "error",
+  toolCallId,
+  type: "tool-result",
+});
+
+/** What the model sees for a call whose turn ended before a result was
+ *  stored: a cancelled clarification the user typed past, an approval never
+ *  answered, or a client call cut off by a stop. */
+export const UNRESOLVED_CALL_ERROR =
+  "This call never returned a result: its turn ended before one was stored.";
+
+/**
+ * Which open states the engine reads as a call still waiting on the client
+ * once it is handed the call without a result: it then asks the client again
+ * instead of running the model. An approval decision is answered by the
+ * engine itself (a denial) or already closed by `settleOpenToolCallsForOutcome`
+ * (an approval without its result). A call whose input never completed is not
+ * handed to the engine at all.
+ */
+const ENGINE_ASKS_CLIENT_AGAIN = {
+  "approval-requested": true,
+  "approval-responded": false,
+  "awaiting-input": false,
+  complete: false,
+  error: true,
+  "input-complete": true,
+  "input-streaming": false,
+} as const satisfies Record<ToolCallState, boolean>;
+
+/**
+ * Close every call on a message the run does not resume that the engine
+ * would otherwise ask the client about again. Such a call belongs to a turn
+ * that already ended, so nobody can answer it any more.
+ *
+ * Each closing result joins its step's results: before the first stored
+ * result after its call, or at the end of the message. The engine ends a
+ * model message at a result, so a result right after its call would split
+ * the step's calls into two model messages.
+ */
+const closeUnresolvedCallsForEngine = (
+  parts: readonly ChatPart[],
+): ChatPart[] => {
+  const closed: ChatPart[] = [];
+  let stepResults: ChatPart[] = [];
+  for (const part of parts) {
+    if (part.type === "tool-result") {
+      closed.push(...stepResults);
+      stepResults = [];
+    }
+    closed.push(part);
+    if (
+      part.type !== "tool-call" ||
+      hasStoredResult(part, parts) ||
+      !ENGINE_ASKS_CLIENT_AGAIN[part.state]
+    ) {
+      continue;
+    }
+    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));
+  }
+  closed.push(...stepResults);
+  return closed;
+};
+
 /**
  * Close the approved calls a turn left without a result once it ended some
  * way other than waiting on the user. The run may have executed them, so they
@@ -182,27 +311,60 @@ export const settleOpenToolCallsForOutcome = ({
   if (OUTCOME_POLICY[outcome] === "client-answerable") {
     return [...parts];
   }
-  const error = UNFINISHED_APPROVED_CALL_ERROR;
   return parts.flatMap((part): ChatPart[] =>
     part.type === "tool-call" && isApprovedWithoutResult(part, parts)
       ? [
           unfinishedCall(part),
-          {
-            content: JSON.stringify({ error }),
-            error,
-            state: "error",
-            toolCallId: part.id,
-            type: "tool-result",
-          },
+          errorToolResult(part.id, UNFINISHED_APPROVED_CALL_ERROR),
         ]
       : [part],
   );
 };
 
 /**
+ * A cut-short turn's message as stored: a call whose input or answer never
+ * arrived is closed as an error, an approval nobody answered as declined
+ * (`cancelPendingChatToolCalls`), and an approved call without its result as
+ * unfinished.
+ */
+export const closeCutShortCalls = <TMessage extends PersistableChatMessage>(
+  message: TMessage,
+): TMessage => {
+  const closed = cancelPendingChatToolCalls(message);
+  return {
+    ...message,
+    parts: settleOpenToolCallsForOutcome({
+      outcome: "interrupted",
+      parts: closed.parts,
+    }),
+  };
+};
+
+/**
+ * The interaction a run that ended waits on: the first call its message holds
+ * open for the user among the interrupts the run handed out. The engine hands
+ * one out only for a call that needs approval or that no server `execute`
+ * runs, and only once its step is done, so a server call whose input
+ * completed but which never ran, or an approval the run was cut off before
+ * announcing, never waits on the user.
+ */
+export const findHandedOutInteraction = ({
+  interruptToolCallIds,
+  message,
+}: {
+  interruptToolCallIds: ReadonlySet<string>;
+  message: Pick<ChatMessage, "parts" | "role"> | null;
+}): AwaitingUserInteraction | null =>
+  getAwaitingUserInteractions(message).find(({ toolCallId }) =>
+    interruptToolCallIds.has(toolCallId),
+  ) ?? null;
+
+/**
  * The history a run hands the engine. Only the message a continuation resumes
- * may hold approved calls for this run to execute; an approved call without a
- * result anywhere else belongs to a turn that already ended.
+ * may hold open calls for this run to execute or the client to answer; an
+ * open call anywhere else belongs to a turn that already ended. The results
+ * that close those calls exist only for the engine: the client-visible
+ * stream presents every earlier message as stored (`presentStoredHistory`).
  */
 export const settleHistoryForRun = ({
   messages,
@@ -211,17 +373,21 @@ export const settleHistoryForRun = ({
   messages: readonly ChatMessage[];
   resumedMessageId: string | undefined;
 }): ChatMessage[] =>
-  messages.map((message) =>
-    message.role !== "assistant" || message.id === resumedMessageId
-      ? message
-      : {
-          ...message,
-          parts: settleOpenToolCallsForOutcome({
-            outcome: "interrupted",
-            parts: message.parts,
-          }),
-        },
-  );
+  messages.map((message) => {
+    if (message.role !== "assistant" || message.id === resumedMessageId) {
+      return message;
+    }
+    const parts = closeUnresolvedCallsForEngine(
+      settleOpenToolCallsForOutcome({
+        outcome: "interrupted",
+        parts: message.parts,
+      }),
+    );
+    const settled =
+      parts.length !== message.parts.length ||
+      parts.some((part, index) => part !== message.parts[index]);
+    return settled ? { ...message, parts } : message;
+  });
 
 export type DroppedParts = {
   droppedToolCallIds: string[];

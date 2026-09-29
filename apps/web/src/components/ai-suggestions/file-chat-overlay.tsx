@@ -30,7 +30,6 @@ import {
 } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
@@ -66,6 +65,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
+import { LoaderCircleIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -186,6 +186,7 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  CHAT_EDIT_MODE_OPTION_ID,
   type DocxEditSafety,
   docxEditRepresentationForSelection,
   resolveActiveDocxEditModeState,
@@ -202,6 +203,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
+import { fileOverlaySkillDocument } from "@/lib/prompts/chat-skill-availability.logic";
 import {
   matchReservedChatCommand,
   runReservedChatCommand,
@@ -1559,6 +1561,7 @@ const FileChatOverlayInner = ({
     queuedMessages,
     removeQueuedMessage,
     stop,
+    leave,
     isGenerating,
     turnAbandoned,
     alwaysApprovedTools,
@@ -2128,7 +2131,7 @@ const FileChatOverlayInner = ({
       return false;
     }
     newThreadCommitRef.current = true;
-    stop();
+    leave();
     return true;
   };
   const endNewThreadCommit = (next: NewThreadChoiceState) => {
@@ -2644,6 +2647,26 @@ const FileChatOverlayInner = ({
           }}
           onNewThread={newThreadAction}
           reservedCommands={{ hasPersistedThread: hasMessages }}
+          skillChat={{
+            contextMatterIds: contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
+            ...fileOverlaySkillDocument({
+              activeFile,
+              editMode: activeDocxEditModeState,
+              hasActiveDraft: activeDraft !== undefined,
+            }),
+            ...(activeDocxEditModeState.type === "selectable"
+              ? {
+                  onReviewEdits: () => {
+                    setEditModeOptionId(CHAT_EDIT_MODE_OPTION_ID.manual);
+                  },
+                }
+              : {}),
+            threadRef,
+            webSearch: {
+              available: data.webSearchAvailable,
+              enabled: data.webSearchEnabled,
+            },
+          }}
           skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
             <FileChatEmptyPlaceholder

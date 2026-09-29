@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import type { Root } from "hast";
 
+import { SEARCH_HIT_MARK, textMarkClass } from "@stll/ui/text-mark";
+
 import {
   allocateSearchMatchBudgets,
   rehypeSearchMatches,
 } from "@/components/chat/rehype-search-matches";
 
 const TEST_MAX_MATCHES = 200;
+const SEARCH_MATCH_PROPERTIES = {
+  className: textMarkClass(SEARCH_HIT_MARK).split(" "),
+  "data-search-match": "true",
+};
 
 describe("chat search highlighting", () => {
   test("shares one immutable match budget across preview messages", () => {
@@ -46,14 +52,14 @@ describe("chat search highlighting", () => {
           {
             type: "element",
             tagName: "mark",
-            properties: { "data-search-match": "true" },
+            properties: SEARCH_MATCH_PROPERTIES,
             children: [{ type: "text", value: "Odštěpení" }],
           },
           { type: "text", value: " a " },
           {
             type: "element",
             tagName: "mark",
-            properties: { "data-search-match": "true" },
+            properties: SEARCH_MATCH_PROPERTIES,
             children: [{ type: "text", value: "odstepeni" }],
           },
         ],
@@ -115,7 +121,7 @@ describe("chat search highlighting", () => {
       {
         type: "element",
         tagName: "mark",
-        properties: { "data-search-match": "true" },
+        properties: SEARCH_MATCH_PROPERTIES,
         children: [{ type: "text", value: "ΟΣ" }],
       },
     ]);
@@ -154,7 +160,7 @@ describe("chat search highlighting", () => {
           {
             type: "element",
             tagName: "mark",
-            properties: { "data-search-match": "true" },
+            properties: SEARCH_MATCH_PROPERTIES,
             children: [{ type: "text", value: "needle" }],
           },
         ],
@@ -167,7 +173,7 @@ describe("chat search highlighting", () => {
           {
             type: "element",
             tagName: "mark",
-            properties: { "data-search-match": "true" },
+            properties: SEARCH_MATCH_PROPERTIES,
             children: [{ type: "text", value: "needle" }],
           },
         ],

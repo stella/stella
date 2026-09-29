@@ -95,6 +95,7 @@ import {
   resolveEntityVersionFile,
 } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   createBilingualDocxFromScanned,
@@ -376,11 +377,15 @@ const loadPinnedSource = async (
 const createAIContext = async (
   actor: RunActor,
   run: ClaimedRun,
-): Promise<BilingualAIContext> => {
-  const { orgAIConfig, promptCachingEnabled } = await actor.scopedDb(
-    async (tx) => await loadOrgAISettings(tx, actor.organizationId),
+): Promise<Result<BilingualAIContext, HandlerError>> => {
+  const settings = await actor.scopedDb(
+    async (tx) => await loadOrgAISettings(tx, actor),
   );
-  return {
+  if (Result.isError(settings)) {
+    return Result.err(settings.error);
+  }
+  const { orgAIConfig, promptCachingEnabled } = settings.value;
+  return Result.ok({
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig,
@@ -395,7 +400,7 @@ const createAIContext = async (
       userId: actor.userId,
       workspaceId: actor.workspaceId,
     },
-  };
+  });
 };
 
 const setTotal = async (actor: RunActor, total: number): Promise<void> => {
@@ -1068,10 +1073,12 @@ const executeRun = async (
       apiKey.value,
     );
   } else {
-    const context = await Result.tryPromise({
-      try: async () => await createAIContext(actor, run),
-      catch: (cause) => cause,
-    });
+    const context = Result.flatten(
+      await Result.tryPromise({
+        try: async () => await createAIContext(actor, run),
+        catch: (cause) => cause,
+      }),
+    );
     if (Result.isError(context)) {
       return "provider_unavailable";
     }

@@ -14,7 +14,6 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { panic, Result, UnhandledException } from "better-result";
-import { RefreshCwIcon, SearchXIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -38,6 +37,7 @@ import {
 import { Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
@@ -131,7 +131,7 @@ import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-dec
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
-import { getMessageLocale } from "@/i18n/i18n-store";
+import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
@@ -307,6 +307,7 @@ const loadDecisionSearch = async () =>
   await import("@/features/case-law/open-decision-match");
 
 const createCaseLawIndexDescription = (search: CaseLawIndexSearch): string => {
+  const t = getTranslator();
   const range = decisionDateRange(search);
   const scope = [
     search.court,
@@ -317,10 +318,10 @@ const createCaseLawIndexDescription = (search: CaseLawIndexSearch): string => {
     .filter(Boolean)
     .join(", ");
   if (scope) {
-    return `Public case-law database for ${scope}, with indexable court decisions and legal source materials.`;
+    return t("caseLaw.seo.scopedDescription", { scope });
   }
 
-  return "Public case-law database with indexable court decisions and legal source materials.";
+  return t("caseLaw.seo.description");
 };
 
 /**
@@ -536,6 +537,7 @@ export const Route = createFileRoute("/law/cases/")({
       ? ssrStatusHeaders(SEARCH_UNAVAILABLE_STATUS)
       : undefined,
   head: ({ loaderData, match }) => {
+    const t = getTranslator();
     const search = match.search;
     const title = pageTitle("common.caseLaw");
     const description = createCaseLawIndexDescription(search);
@@ -544,7 +546,7 @@ export const Route = createFileRoute("/law/cases/")({
     return createPublicLawHead({
       description,
       jsonLd: createLegalCollectionJsonLd({
-        aboutName: "Case-law decisions",
+        t,
         canonicalUrl: createPublicLawCanonicalUrl(path),
         description,
         kind: "caseLaw",
@@ -768,9 +770,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   // The named decision first, when the entry named one; the same docket at
   // several courts stays several rows the reader chooses between.
   const exact =
-    intent.type === "identifier"
-      ? exactDecisionMatches(intent.value, decisions)
-      : [];
+    intent.type === "identifier" ? exactDecisionMatches(intent, decisions) : [];
   const exactIds = new Set(exact.map((decision) => decision.id));
   const ordered =
     exact.length === 0

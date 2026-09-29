@@ -39,6 +39,33 @@
   "disconnectTab": {
     "message": "قطع اتصال علامة التبويب"
   },
+  "downloadKept": {
+    "message": "تنزيلات اكتملت أثناء تحكّم stella في علامة تبويب فأُبقيت: $COUNT$. تحقّق من مصدرها قبل فتحها.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadStopped": {
+    "message": "تنزيلات أوقفها stella أثناء تحكّمه في علامة تبويب: $COUNT$.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "downloadsStoppedAndKept": {
+    "message": "أثناء تحكّم stella في علامة تبويب: أُوقفت تنزيلات: $STOPPED$. تنزيلات اكتملت فأُبقيت (تحقّق من مصدرها قبل فتحها): $KEPT$.",
+    "placeholders": {
+      "kept": {
+        "content": "$2"
+      },
+      "stopped": {
+        "content": "$1"
+      }
+    }
+  },
   "extensionDescription": {
     "message": "يتيح لـ stella التحكم في علامة تبويب Chrome مخصصة بعد منح الإذن."
   },

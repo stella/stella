@@ -1,10 +1,10 @@
 import { useState } from "react";
 
 import { panic } from "better-result";
-import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PlusIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuGroup,

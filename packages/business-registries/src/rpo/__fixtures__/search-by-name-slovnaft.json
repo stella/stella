@@ -1,0 +1,537 @@
+{
+  "results": [
+    {
+      "id": 297265,
+      "dbModificationDate": "2025-07-07",
+      "identifiers": [
+        {
+          "value": "35681039",
+          "validFrom": "1995-12-19"
+        }
+      ],
+      "fullNames": [
+        {
+          "value": "CONOCO-JET s.r.o.",
+          "validFrom": "1995-12-19",
+          "validTo": "1999-08-22"
+        },
+        {
+          "value": "CONOCO Slovakia, s.r.o.",
+          "validFrom": "1999-08-23",
+          "validTo": "2003-06-10"
+        },
+        {
+          "value": "ConocoPhillips Slovakia, s.r.o.",
+          "validFrom": "2003-06-11",
+          "validTo": "2007-06-18"
+        },
+        {
+          "value": "LUKOIL Bratislava s.r.o.",
+          "validFrom": "2007-06-19",
+          "validTo": "2007-07-31"
+        },
+        {
+          "value": "LUKOIL Slovakia s.r.o.",
+          "validFrom": "2007-08-01",
+          "validTo": "2014-12-01"
+        },
+        {
+          "value": "Normbenz Slovakia s. r. o.",
+          "validFrom": "2014-12-02",
+          "validTo": "2022-06-21"
+        },
+        {
+          "value": "Slovnaft Retail, s.r.o.",
+          "validFrom": "2022-06-22",
+          "validTo": "2023-07-04"
+        }
+      ],
+      "addresses": [
+        {
+          "validFrom": "2022-01-22",
+          "validTo": "2023-07-04",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "buildingNumber": "1",
+          "postalCodes": ["821 07"],
+          "municipality": {
+            "value": "Bratislava - mestská časť Ružinov",
+            "code": "SK0102529320",
+            "codelistCode": "CL000025"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "2015-02-24",
+          "validTo": "2022-01-21",
+          "street": "Einsteinova",
+          "regNumber": 0,
+          "buildingNumber": "24",
+          "postalCodes": ["85101"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "2014-12-16",
+          "validTo": "2015-02-23",
+          "street": "Eisteinova",
+          "regNumber": 0,
+          "buildingNumber": "24",
+          "postalCodes": ["85101"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "2004-07-28",
+          "validTo": "2014-12-15",
+          "street": "Slovnaftská",
+          "regNumber": 0,
+          "buildingNumber": "10",
+          "postalCodes": ["82107"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "2001-01-19",
+          "validTo": "2004-07-27",
+          "street": "Lamačská cesta",
+          "regNumber": 0,
+          "buildingNumber": "3",
+          "postalCodes": ["84104"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "1996-10-23",
+          "validTo": "2001-01-18",
+          "street": "Karpatská",
+          "regNumber": 0,
+          "buildingNumber": "8",
+          "postalCodes": ["82108"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "1995-12-19",
+          "validTo": "1996-10-22",
+          "street": "Miletičova",
+          "regNumber": 0,
+          "buildingNumber": "1",
+          "postalCodes": ["82108"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1995-12-19",
+      "termination": "2023-07-05",
+      "sourceRegister": {
+        "value": {
+          "value": "Obchodný register",
+          "code": "1",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          {
+            "value": "Mestský súd Bratislava III",
+            "validFrom": "1995-12-19"
+          }
+        ],
+        "registrationNumbers": [
+          {
+            "value": "Sro/10146/B",
+            "validFrom": "1995-12-19"
+          }
+        ]
+      }
+    },
+    {
+      "id": 346670,
+      "dbModificationDate": "2025-07-07",
+      "identifiers": [
+        {
+          "value": "31385940",
+          "validFrom": "1994-12-29"
+        }
+      ],
+      "fullNames": [
+        {
+          "value": "SLOVNAFT SERVIS NEVÝROBNÝCH SLUŽIEB spol. s r.o",
+          "validFrom": "1994-12-29",
+          "validTo": "2002-12-15"
+        },
+        {
+          "value": "SENES, spol. s r.o.",
+          "validFrom": "2002-12-16"
+        }
+      ],
+      "addresses": [
+        {
+          "validFrom": "2005-06-03",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "postalCodes": ["82410"],
+          "municipality": {
+            "value": "Bratislava 23"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "1994-12-29",
+          "validTo": "2005-06-02",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "postalCodes": ["82412"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1995-01-01",
+      "sourceRegister": {
+        "value": {
+          "value": "Obchodný register",
+          "code": "1",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          {
+            "value": "Mestský súd Bratislava III",
+            "validFrom": "1994-12-29"
+          }
+        ],
+        "registrationNumbers": [
+          {
+            "value": "Sro/8115/B",
+            "validFrom": "1994-12-29"
+          }
+        ]
+      }
+    },
+    {
+      "id": 999837,
+      "dbModificationDate": "2025-12-06",
+      "identifiers": [
+        {
+          "value": "31385915",
+          "validFrom": "1994-12-22"
+        }
+      ],
+      "fullNames": [
+        {
+          "value": "SLOVNAFT TRANS a.s.",
+          "validFrom": "1994-12-22"
+        }
+      ],
+      "addresses": [
+        {
+          "validFrom": "2024-09-01",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "buildingNumber": "1",
+          "postalCodes": ["82420"],
+          "municipality": {
+            "value": "Bratislava - mestská časť Ružinov",
+            "code": "SK0102529320",
+            "codelistCode": "CL000025"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "2005-06-08",
+          "validTo": "2024-08-31",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "postalCodes": ["82420"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "1994-12-22",
+          "validTo": "2005-06-07",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "postalCodes": ["82412"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1995-01-01",
+      "sourceRegister": {
+        "value": {
+          "value": "Obchodný register",
+          "code": "1",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          {
+            "value": "Mestský súd Bratislava III",
+            "validFrom": "1994-12-22"
+          }
+        ],
+        "registrationNumbers": [
+          {
+            "value": "Sa/774/B",
+            "validFrom": "1994-12-22"
+          }
+        ]
+      }
+    },
+    {
+      "id": 1003617,
+      "dbModificationDate": "2026-07-09",
+      "identifiers": [
+        {
+          "value": "31322832",
+          "validFrom": "1992-04-29"
+        }
+      ],
+      "fullNames": [
+        {
+          "value": "SLOVNAFT a.s.",
+          "validFrom": "1992-04-29",
+          "validTo": "1998-11-29"
+        },
+        {
+          "value": "SLOVNAFT , a.s.",
+          "validFrom": "1998-11-30",
+          "validTo": "2008-05-29"
+        },
+        {
+          "value": "SLOVNAFT, a.s.",
+          "validFrom": "2008-05-30"
+        }
+      ],
+      "addresses": [
+        {
+          "validFrom": "2006-06-16",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "buildingNumber": "1",
+          "postalCodes": ["82412"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        },
+        {
+          "validFrom": "1992-04-29",
+          "validTo": "2006-06-15",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "postalCodes": ["82412"],
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1992-05-01",
+      "sourceRegister": {
+        "value": {
+          "value": "Obchodný register",
+          "code": "1",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          {
+            "value": "Mestský súd Bratislava III",
+            "validFrom": "1992-04-29"
+          }
+        ],
+        "registrationNumbers": [
+          {
+            "value": "Sa/426/B",
+            "validFrom": "1992-04-29"
+          }
+        ]
+      }
+    },
+    {
+      "id": 1013902,
+      "dbModificationDate": "2025-07-07",
+      "identifiers": [
+        {
+          "value": "00684449",
+          "validFrom": "1990-10-04"
+        }
+      ],
+      "fullNames": [
+        {
+          "value": "Garážové družstvo Slovnafť, v likvidácii",
+          "validFrom": "2012-10-25",
+          "validTo": "2022-04-08"
+        },
+        {
+          "value": "Garážové družstvo Slovnafť",
+          "validFrom": "1990-10-04",
+          "validTo": "2012-10-24"
+        }
+      ],
+      "addresses": [
+        {
+          "validFrom": "1990-10-04",
+          "validTo": "2022-04-08",
+          "street": "Vlčie hrdlo",
+          "regNumber": 0,
+          "municipality": {
+            "value": "Bratislava"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1990-10-04",
+      "termination": "2022-04-08",
+      "sourceRegister": {
+        "value": {
+          "value": "Obchodný register",
+          "code": "1",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          {
+            "value": "Okresný súd Bratislava I",
+            "validFrom": "1990-10-04"
+          }
+        ],
+        "registrationNumbers": [
+          {
+            "value": "Dr/464/B",
+            "validFrom": "1990-10-04"
+          }
+        ]
+      }
+    },
+    {
+      "id": 4603330,
+      "dbModificationDate": "2025-07-07",
+      "identifiers": [
+        {
+          "value": "31745334",
+          "validFrom": "1992-01-23"
+        }
+      ],
+      "fullNames": [
+        {
+          "value": "Klub turistov Slovnaft Bratislava",
+          "validFrom": "1992-01-23"
+        }
+      ],
+      "addresses": [
+        {
+          "validFrom": "1992-01-23",
+          "street": "Mamateyova",
+          "regNumber": 6,
+          "postalCodes": ["85104"],
+          "municipality": {
+            "value": "Bratislava - mestská časť Petržalka",
+            "code": "SK0105529460",
+            "codelistCode": "CL000025"
+          },
+          "country": {
+            "value": "Slovenská republika",
+            "code": "703",
+            "codelistCode": "CL000086"
+          }
+        }
+      ],
+      "establishment": "1992-01-23",
+      "sourceRegister": {
+        "value": {
+          "value": "Register občianskych združení",
+          "code": "7",
+          "codelistCode": "CL010112"
+        },
+        "registrationOffices": [
+          {
+            "value": "MV SR",
+            "validFrom": "1992-01-23"
+          }
+        ],
+        "registrationNumbers": [
+          {
+            "value": "VVS/1-900/90-4861",
+            "validFrom": "1992-01-23"
+          }
+        ]
+      }
+    }
+  ],
+  "license": "1. ŠÚ SR ako správca informačného systému RPO uplatňuje na použitie sprístupnených údajov z RPO uvedených v § 7 ods. 2 a § 7a ods. 4 zákona č. 272/2015 Z. z. o registri právnických osôb, podnikateľov a orgánov verejnej moci a o zmene a doplnení niektorých zákonov (ďalej len „zákon o registri právnických osôb“) medzinárodnú verejnú licenciu Creative Commons Attribution License (cc-by) 4.0 (ďalej len „verejná licencia“).\n2. Predmetom verejnej licencie sú sprístupnené údaje z RPO prostredníctvom webového sídla ŠÚ SR v zmysle § 7 ods. 2 a § 7a ods. 4 zákona o registri právnických osôb.\n3. ŠÚ SR udeľuje súhlas na použitie predmetu verejnej licencie a výkon licencovaných práv („licencia“) podľa vyššie citovanej verejnej licencie."
+}

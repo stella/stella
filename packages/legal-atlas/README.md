@@ -12,6 +12,10 @@ Shared definitions for Stella's public legal corpus:
   union over `@stll/legal-ast`.
 - `./provision-citation-grammars`: per-jurisdiction grammars for statute
   provision citations.
+- `./provision-citation-profile`, `./cz-provision-citation-profile`,
+  `./sk-provision-citation-profile`: jurisdiction profiles (citation
+  vocabulary, act aliases and titles with their cited-date windows, anchor
+  schemes).
 
 Source adapters and parsers are not here: the case-law adapters live in
 `apps/api/src/handlers/case-law/ingestion/adapters`.

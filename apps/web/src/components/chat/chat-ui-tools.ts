@@ -219,6 +219,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
+  counterparty_check: "chat.tool.counterparty_check",
   "use-browser": "chat.tool.use-browser",
   review_folder_consistency: "chat.tool.review_folder_consistency",
   "create-document": "chat.tool.create-document",
@@ -330,6 +331,7 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
   boe_get_law_structure: true,
   borme_get_summary: true,
   business_registry_lookup: true,
+  counterparty_check: true,
   infosoud_lookup_case: true,
 } as const satisfies Record<PublicOfficialToolName, true>;
 
@@ -717,7 +719,7 @@ export const isRunningToolPart = (part: unknown): boolean => {
 export const hasRunningToolCallInLatestAssistantMessage = ({
   messages,
 }: {
-  messages: PersistedChatMessage[];
+  messages: readonly PersistedChatMessage[];
 }) => {
   const message = messages.at(-1);
   if (!message || message.role !== "assistant") {
@@ -726,6 +728,57 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 
   return message.parts.some(isRunningToolPart);
 };
+
+type PersistedChatPart = PersistedChatMessage["parts"][number];
+
+const isApprovalRequestPart = (part: PersistedChatPart): boolean =>
+  part.type === "tool-call" && part.state === "approval-requested";
+
+/** A part only the user can answer: an approval request, or a user-input
+ *  card whose questions have fully arrived. */
+const isUserAnswerablePart = (part: PersistedChatPart): boolean =>
+  isApprovalRequestPart(part) ||
+  (part.type === "tool-call" &&
+    part.state === "input-complete" &&
+    Object.hasOwn(USER_INPUT_TOOL_NAMES, part.name));
+
+/**
+ * The latest assistant message, if it holds a part `isAwaitedPart` accepts
+ * and no later user message supersedes its turn: the runtime appends that
+ * message before the new stream starts, and the server cancels the awaited
+ * interaction when it accepts it, so the cards stop being answerable at the
+ * same moment their answers stop being accepted.
+ */
+const findAwaitedAssistantMessageId = (
+  messages: readonly PersistedChatMessage[],
+  isAwaitedPart: (part: PersistedChatPart) => boolean,
+): string | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message === undefined || message.role === "user") {
+      return null;
+    }
+    if (message.role !== "assistant") {
+      continue;
+    }
+    return message.parts.some(isAwaitedPart) ? message.id : null;
+  }
+  return null;
+};
+
+/** The assistant message whose approval cards the conversation still waits
+ *  on, or null. */
+export const getCurrentApprovalPendingMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null =>
+  findAwaitedAssistantMessageId(messages, isApprovalRequestPart);
+
+/** The assistant message the conversation still waits on the user to answer,
+ *  through an approval card or a user-input card, or null. */
+export const getAwaitedAssistantMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null =>
+  findAwaitedAssistantMessageId(messages, isUserAnswerablePart);
 
 /**
  * An unresolved auto-run folio-agents tool-call part (a read tool or
@@ -804,12 +857,7 @@ export const selectUnresolvedFolioAgentDocToolCallParts = (
 // is never that message.
 const INTERRUPTED_TOOL_CALL_STATE = "error" as const;
 
-export type RunningToolCallSanitization = "cancel" | "hydrate";
-
-const toTerminalIfRunningToolPart = (
-  part: ChatPart,
-  mode: RunningToolCallSanitization,
-): ChatPart => {
+const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
   if (part.type !== "tool-call" || !isRunningToolPart(part)) {
     return part;
   }
@@ -817,7 +865,6 @@ const toTerminalIfRunningToolPart = (
   // after hydration. Preserve it so the session effect can return its result
   // instead of turning a recoverable draft into an interrupted tool call.
   if (
-    mode === "hydrate" &&
     part.name === "create-document" &&
     part.state === "input-complete" &&
     isJsonObject(part.input) &&
@@ -835,17 +882,11 @@ const toTerminalIfRunningToolPart = (
  * `hasRunningToolCallInLatestAssistantMessage` / `isGenerating` — so the
  * composer leaves its stop/spinner state instead of wedging there forever.
  *
- * Applied on the two triggers that strand a tool part mid-run with no event
- * that would ever finalize it:
- *
- *  - Hydration from persistence: the server only persists finalized turns
- *    (written at stream end, not mid-stream), so any running tool-call part
- *    in server-loaded messages belongs to a turn whose stream died before
- *    finishing (API restart / deploy / crash mid tool call).
- *  - Explicit stop: TanStack AI's `stop()` aborts the live request but never
- *    rewrites message parts, so a tool part caught mid-input would keep the
- *    turn "generating" forever. The runtime's `stop` applies this right
- *    after aborting.
+ * Applied at hydration from persistence: the server only persists finalized
+ * turns (written at stream end, not mid-stream), so any running tool-call
+ * part in server-loaded messages belongs to a turn whose stream died before
+ * finishing (API restart / deploy / crash mid tool call). A stopped turn is
+ * not rewritten here: the server settles it and the page reloads it.
  *
  * `ask-user` and approval-flow parts are user-owned and excluded by
  * `isRunningToolPart`. A complete `create-document` input is resumable by the
@@ -855,15 +896,12 @@ const toTerminalIfRunningToolPart = (
  */
 export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
-  mode: RunningToolCallSanitization = "hydrate",
 ): PersistedChatMessage[] =>
   messages.map((message) => {
     if (message.role !== "assistant") {
       return message;
     }
-    const parts = message.parts.map((part) =>
-      toTerminalIfRunningToolPart(part, mode),
-    );
+    const parts = message.parts.map(toTerminalIfRunningToolPart);
     const partsChanged = parts.some(
       (part, index) => part !== message.parts[index],
     );

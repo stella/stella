@@ -16,6 +16,7 @@ import {
   listOutgoingDecisionCitations,
 } from "@/api/handlers/case-law/decisions/citations";
 import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-subject";
+import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
 import {
   hasUsableAst,
   omitDerivablePlainText,
@@ -48,7 +49,6 @@ import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
   readCorpusText,
-  parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusTombstoneReaderForTx,
@@ -69,19 +69,25 @@ import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
+export const decisionTextPresenceQuery = (
+  tx: CaseLawPublicReadTransaction,
+  decisionId: SafeId<"caseLawDecision">,
+) =>
+  tx
+    .select({
+      written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+    })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, decisionId))
+    .limit(1);
+
 export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence,
   async (
     tx: CaseLawPublicReadTransaction,
     decisionId: SafeId<"caseLawDecision">,
   ): Promise<boolean | null> => {
-    const [row] = await tx
-      .select({
-        written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-      })
-      .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, decisionId))
-      .limit(1);
+    const [row] = await decisionTextPresenceQuery(tx, decisionId);
     return row?.written ?? null;
   },
 );
@@ -294,13 +300,60 @@ const emptyCitationPage = () => ({
   nextCursor: null,
 });
 
+/** The stored projection read through the transaction that admitted this subject. */
+const readDecisionRecord = async ({
+  id: decisionId,
+  tx,
+}: RedistributableDecisionSubject) =>
+  await tx.query.caseLawDecisions.findFirst({
+    where: { id: { eq: decisionId } },
+    columns: {
+      id: true,
+      caseNumber: true,
+      slug: true,
+      ecli: true,
+      court: true,
+      country: true,
+      language: true,
+      languageGroupKey: true,
+      decisionDate: true,
+      decisionType: true,
+      documentAst: true,
+      sections: true,
+      sourceUrl: true,
+      documentUrl: true,
+      metadata: true,
+      createdAt: true,
+      updatedAt: true,
+      // Object-storage keys: never returned to the client, only used
+      // to fetch canonical payloads when corpus storage is enabled.
+      astS3Key: true,
+      textS3Key: true,
+      contentHash: true,
+      redactedAt: true,
+      // fulltext: only as fallback when no AST
+    },
+    with: {
+      identifiers: {
+        columns: { type: true, value: true },
+      },
+      source: {
+        // descriptor: only for `allowsDerivedAi` below, never returned to
+        // the client. Redistribution was decided when the subject was
+        // resolved.
+        columns: { id: true, name: true, adapterKey: true, descriptor: true },
+      },
+    },
+  });
+
 export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   async ({
     citationsCursor,
     readCourtWeights,
-    subject: { id: decisionId, resolution, tx },
+    subject,
   }: ReadDecisionOptions) => {
+    const { id: decisionId, resolution, tx } = subject;
     // Inside the gated transaction: a cold registry reads on it rather than
     // asking the reader's pool for a second connection.
     const readRegistry =
@@ -310,46 +363,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       return status(400, { message: "Invalid cursor" });
     }
 
-    const decision = await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: {
-        id: true,
-        caseNumber: true,
-        slug: true,
-        ecli: true,
-        court: true,
-        country: true,
-        language: true,
-        languageGroupKey: true,
-        decisionDate: true,
-        decisionType: true,
-        documentAst: true,
-        sections: true,
-        sourceUrl: true,
-        documentUrl: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-        // Object-storage keys: never returned to the client, only used
-        // to fetch canonical payloads when corpus storage is enabled.
-        astS3Key: true,
-        textS3Key: true,
-        contentHash: true,
-        redactedAt: true,
-        // fulltext: only as fallback when no AST
-      },
-      with: {
-        identifiers: {
-          columns: { type: true, value: true },
-        },
-        source: {
-          // descriptor: only for `allowsDerivedAi` below, never returned to
-          // the client. Redistribution was decided when the subject was
-          // resolved.
-          columns: { id: true, name: true, adapterKey: true, descriptor: true },
-        },
-      },
-    });
+    const decision = await readDecisionRecord(subject);
 
     if (!decision) {
       // The subject existed moments ago; a redaction can race the read.
@@ -508,6 +522,9 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       documentAst,
+      projectionDigest:
+        decision.redactedAt === null ? astRead.projectionDigest : null,
+      documentAstSource: decision.redactedAt === null ? astRead.source : null,
       sections: decision.sections,
       sourceUrl: decision.sourceUrl,
       // Where this decision's data is freely available, resolved once here:
@@ -618,21 +635,28 @@ const resolveAst = async ({
   pgAst,
   decisionId,
   readTombstones,
-}: ResolveAstInput): Promise<CorpusReadOutcome<DocumentAst | EmptyAst>> => {
-  if (!corpusReadEnabled() || astS3Key === null || contentHash === null) {
-    return { payload: parsePersistedCorpusAst(pgAst), unavailable: false };
-  }
-  return await containPayloadUnavailable(
+}: ResolveAstInput) => {
+  const read = await containPayloadUnavailable(
     async () =>
-      await readCorpusPayloadOrFallback({
-        documentId: decisionId,
-        key: astS3Key,
-        step: "readDecision.corpusAst",
-        read: async () => await readCorpusAst(astS3Key, { readTombstones }),
-        fallback: () => parsePersistedCorpusAst(pgAst),
+      await readServedDecisionAst({
+        astS3Key,
+        contentHash,
+        pgAst,
+        decisionId,
+        corpusReadEnabled: corpusReadEnabled(),
+        readStore: async () =>
+          astS3Key === null
+            ? null
+            : await readCorpusAst(astS3Key, { readTombstones }),
       }),
     decisionId,
   );
+  return {
+    payload: read.payload?.payload ?? null,
+    source: read.payload?.source ?? null,
+    projectionDigest: read.payload?.projectionDigest ?? null,
+    unavailable: read.unavailable,
+  };
 };
 
 export type ResolveDocumentStateInput = {

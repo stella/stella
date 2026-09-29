@@ -21,16 +21,6 @@ import type {
   RefObject,
 } from "react";
 
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  LoaderCircleIcon,
-  MessageSquareIcon,
-  UserIcon,
-  WandSparklesIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { resolveChatComposerAction } from "@stll/chat/composer";
@@ -48,6 +38,16 @@ import {
   COMPOSER_PLACEHOLDER_CLASS,
 } from "@stll/ui/composer";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  LoaderCircleIcon,
+  MessageSquareIcon,
+  UserIcon,
+  AiActionIcon,
+} from "@stll/ui/icons";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
@@ -75,6 +75,7 @@ import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
@@ -276,6 +277,9 @@ type PromptBarProps = {
   /** The (+) menu's Edit mode submenu; its only home (the dock has none). */
   editMode?: ComposerEditModeMenuProps | undefined;
   skillsOrganizationId?: string | undefined;
+  /** The chat this bar sends in, for the Skills submenu (see
+   *  `ComposerSkillsMenuProps.chat`). */
+  skillChat?: ComposerSkillChatContext | undefined;
   /**
    * Reserved-command availability for this bar's slash menu. Omit on
    * surfaces whose submit path has no reserved-command dispatch.
@@ -388,7 +392,6 @@ export const ChatThreadCard = ({
         "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
         "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
         "hover:bg-popover focus-within:bg-popover",
-        "transition-[background-color,border-color] duration-200 ease-out",
         "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
         "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1 motion-reduce:animate-none",
       )}
@@ -509,6 +512,7 @@ export const PromptBar = (props: PromptBarProps) => {
     onNewThread,
     editMode,
     skillsOrganizationId,
+    skillChat,
     reservedCommands,
     context,
     mcpOrganizationId,
@@ -758,13 +762,13 @@ export const PromptBar = (props: PromptBarProps) => {
             >
               <Button
                 aria-keyshortcuts="Tab"
-                className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium transition-[background-color] duration-150"
+                className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium"
                 onClick={() => submitPreset(preset)}
                 size="sm"
                 type="button"
                 variant="ghost"
               >
-                <WandSparklesIcon aria-hidden="true" className="size-4" />
+                <AiActionIcon aria-hidden="true" className="size-4" />
                 {preset.label}
               </Button>
             </span>
@@ -833,6 +837,7 @@ export const PromptBar = (props: PromptBarProps) => {
                   skillsOrganizationId
                     ? {
                         activeOrganizationId: skillsOrganizationId,
+                        chat: skillChat,
                         editor,
                         reservedCommands,
                       }
@@ -1059,7 +1064,7 @@ export const SuggestionCard = (props: SuggestionCardProps) => {
         onFocus(suggestion.id);
       }}
       className={cn(
-        "border-border/60 bg-background/60 cursor-pointer rounded-lg border px-3 py-2 transition-colors",
+        "border-border/60 bg-background/60 cursor-pointer rounded-lg border px-3 py-2",
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >
@@ -1209,7 +1214,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
   if (filledBy === "ai") {
     return (
       <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
-        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        <AiActionIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.draftedByAi")}
       </span>
     );
@@ -1218,7 +1223,7 @@ const FilledByBadge = ({ filledBy }: FilledByBadgeProps) => {
     return (
       <span className="bg-info/10 text-info text-3xs inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium">
         <UserIcon aria-hidden="true" className="size-3 shrink-0" />
-        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        <AiActionIcon aria-hidden="true" className="size-3 shrink-0" />
         {t("templates.studio.textPlusAi")}
       </span>
     );

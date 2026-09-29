@@ -4,15 +4,15 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
   FilePenLineIcon,
   PrinterIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 

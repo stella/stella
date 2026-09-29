@@ -1,12 +1,12 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRightIcon, CircleHelpIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon, CircleHelpIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
@@ -443,7 +443,7 @@ export const ToolCallCard = ({
         render={
           <div
             className={cn(
-              "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-lg transition-colors duration-150",
+              "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-lg",
               expanded && "bg-muted/25 rounded-b-none",
               hasError &&
                 "bg-destructive/10 text-destructive hover:bg-destructive/15",
@@ -453,7 +453,7 @@ export const ToolCallCard = ({
       >
         <button
           className={cn(
-            "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors duration-150",
+            "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start",
             !hasError &&
               "text-muted-foreground group-hover/tool-step:text-foreground-muted",
             !headerInteractive && "cursor-default",

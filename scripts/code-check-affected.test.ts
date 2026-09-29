@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import path from "node:path";
 
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
@@ -7,6 +14,7 @@ import {
   DEPENDENCY_CACHE_INPUTS,
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
+  planFullCheck,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -121,7 +129,7 @@ describe("affected code-check planning", () => {
         targets: ["apps/landing", "apps/web", "packages/ui"],
       },
       rootLintPaths: [],
-      rootChecks: ["env", "assets", "repo-typecheck"],
+      rootChecks: ["env", "assets", "rule-decisions", "repo-typecheck"],
     });
   });
 
@@ -131,7 +139,7 @@ describe("affected code-check planning", () => {
       lint: { type: "targets", targets: [] },
       typecheck: { type: "targets", targets: [] },
       rootLintPaths: [],
-      rootChecks: ["env", "assets", "repo-typecheck"],
+      rootChecks: ["env", "assets", "rule-decisions", "repo-typecheck"],
     });
   });
 
@@ -176,6 +184,7 @@ describe("affected code-check planning", () => {
 
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
+    expect(oxc).toContain("--type-check");
     expect(oxc?.at(-1)).toBe("scripts/guard.ts");
   });
 
@@ -185,7 +194,13 @@ describe("affected code-check planning", () => {
       lint: { type: "targets", targets: ["packages/ui"] },
       typecheck: { type: "targets", targets: ["packages/ui"] },
       rootLintPaths: [],
-      rootChecks: ["env", "assets", "plugin-registry", "repo-typecheck"],
+      rootChecks: [
+        "env",
+        "assets",
+        "plugin-registry",
+        "rule-decisions",
+        "repo-typecheck",
+      ],
     });
   });
 
@@ -234,6 +249,7 @@ describe("affected code-check planning", () => {
           "env",
           "assets",
           "plugin-registry",
+          "rule-decisions",
           "plugin-fixtures",
           "root-script-lint",
           "repo-typecheck",
@@ -248,7 +264,7 @@ describe("affected code-check planning", () => {
       lint: { type: "all" },
       typecheck: { type: "targets", targets: [] },
       rootLintPaths: [],
-      rootChecks: ["env", "assets", "repo-typecheck"],
+      rootChecks: ["env", "assets", "rule-decisions", "repo-typecheck"],
     });
   });
 
@@ -273,12 +289,16 @@ describe("affected code-check planning", () => {
       }
       expect(planned.lint).toEqual({ type: "targets", targets: [] });
       expect(planned.typecheck).toEqual({ type: "targets", targets: [] });
-      expect(planned.rootChecks).toEqual([
-        "env",
-        "assets",
-        rootCheck,
-        "repo-typecheck",
-      ]);
+      expect(planned.rootChecks).toHaveLength(5);
+      expect(planned.rootChecks).toEqual(
+        expect.arrayContaining([
+          "env",
+          "assets",
+          "rule-decisions",
+          rootCheck,
+          "repo-typecheck",
+        ]),
+      );
     },
   );
 
@@ -354,7 +374,10 @@ describe("affected code-check planning", () => {
       input.slice("$TURBO_ROOT$/".length).replace(/\/\*\*$/u, "/fixture.ts"),
     ),
   )("shared root-script input %s schedules full root lint", (changedPath) => {
-    const planned = plan([changedPath], []);
+    const workspace = [...WORKSPACES].find((workspacePath) =>
+      changedPath.startsWith(`${workspacePath}/`),
+    );
+    const planned = plan([changedPath], workspace ? [workspace] : []);
     expect(planned.type).toBe("scoped");
     if (planned.type !== "scoped") {
       throw new Error("Expected a scoped code-check plan");
@@ -391,6 +414,8 @@ describe("changed lint path selection", () => {
     "scripts/guard.mjs",
     "scripts/worker.mts",
     "packages/ui/vite.config.js",
+    "apps/web/src/client.gen.mts",
+    "apps/api/src/generated/schema.ts",
   ])("includes lintable source %s", (changedPath) => {
     expect(isChangedLintPath(changedPath)).toBe(true);
   });
@@ -398,8 +423,7 @@ describe("changed lint path selection", () => {
   test.each([
     "README.md",
     "apps/web/src/routeTree.gen.ts",
-    "apps/web/src/client.gen.mts",
-    "apps/api/src/generated/schema.ts",
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
     "apps/api/src/not-real.mtsx",
     "packages/ui/node_modules/library/index.js",
   ])("excludes non-source or generated path %s", (changedPath) => {
@@ -457,84 +481,13 @@ describe("Turbo cache input contract", () => {
     );
   });
 
-  test("landing generates Astro types once before type-aware lint", () => {
-    const landingPackage = JSON.parse(
-      readFileSync("apps/landing/package.json", "utf-8"),
-    );
-    expect(landingPackage.scripts.lint).not.toContain("astro sync");
-
-    const turboConfig = readFileSync("turbo.json", "utf-8");
-    const landingLintStart = turboConfig.indexOf('    "@stll/landing#lint":');
-    const lintFixStart = turboConfig.indexOf('    "lint:fix":');
-    expect(landingLintStart).toBeGreaterThan(-1);
-    expect(lintFixStart).toBeGreaterThan(landingLintStart);
-    const landingLintConfig = turboConfig.slice(landingLintStart, lintFixStart);
-    expect(landingLintConfig).toContain('"dependsOn": ["typecheck"]');
-
-    const rootInputs = [
-      ...landingLintConfig.matchAll(/"(\$TURBO_ROOT\$\/[^"\n]+)"/gu),
-    ]
-      .map((match) => match.at(1))
-      .filter((input) => input !== undefined)
-      .toSorted();
-    expect(rootInputs).toEqual(
-      [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].toSorted(),
-    );
-  });
-
-  test("landing's generated types survive a typecheck cache hit", () => {
-    // Ordering alone does not deliver the types: `astro check` writes them,
-    // and a task whose outputs are unrecorded replays its logs on a cache hit
-    // and writes nothing. The dependent lint then reads `astro:content` as
-    // `error` on any checkout that has not run the generator itself.
-    const turboConfig = readFileSync("turbo.json", "utf-8");
-    const landingTypecheckStart = turboConfig.indexOf(
-      '    "@stll/landing#typecheck":',
-    );
-    expect(landingTypecheckStart).toBeGreaterThan(-1);
-    const nextTaskStart = turboConfig.indexOf(
-      '    "lint":',
-      landingTypecheckStart,
-    );
-    expect(nextTaskStart).toBeGreaterThan(landingTypecheckStart);
-    const landingTypecheckConfig = turboConfig.slice(
-      landingTypecheckStart,
-      nextTaskStart,
-    );
-    expect(landingTypecheckConfig).toContain('"outputs": [".astro/**"]');
-  });
-
   test("keeps planner-wide inputs exactly aligned with their Turbo tasks", () => {
-    const turboConfig = readFileSync("turbo.json", "utf-8");
-    const typecheckStart = turboConfig.indexOf('    "typecheck":');
-    const rootTypecheckStart = turboConfig.indexOf('    "//#typecheck:repo":');
-    const lintStart = turboConfig.indexOf('    "lint":');
-    const landingLintStart = turboConfig.indexOf('    "@stll/landing#lint":');
-    const lintFixStart = turboConfig.indexOf('    "lint:fix":');
-    expect(typecheckStart).toBeGreaterThan(-1);
-    expect(rootTypecheckStart).toBeGreaterThan(typecheckStart);
-    expect(lintStart).toBeGreaterThan(rootTypecheckStart);
-    expect(landingLintStart).toBeGreaterThan(lintStart);
-    expect(lintFixStart).toBeGreaterThan(landingLintStart);
-    const typecheckConfig = turboConfig.slice(
-      typecheckStart,
-      rootTypecheckStart,
-    );
-    const rootTypecheckConfig = turboConfig.slice(
-      rootTypecheckStart,
-      lintStart,
-    );
-    const lintConfig = turboConfig.slice(lintStart, landingLintStart);
-    const rootInputs = (taskConfig: string) =>
-      [...taskConfig.matchAll(/"(\$TURBO_ROOT\$\/[^"\n]+)"/gu)]
-        .map((match) => match.at(1))
-        .filter((input) => input !== undefined)
-        .toSorted();
+    const tasks = turboTasks();
 
-    expect(rootInputs(typecheckConfig)).toEqual(
+    expect(taskInputs(tasks, "typecheck").filter(isRootInput)).toEqual(
       [...ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS].toSorted(),
     );
-    expect(rootInputs(rootTypecheckConfig)).toEqual(
+    expect(taskInputs(tasks, "//#typecheck:repo").filter(isRootInput)).toEqual(
       [
         "$TURBO_ROOT$/.claude/mcp/**",
         "$TURBO_ROOT$/.npmrc",
@@ -551,8 +504,193 @@ describe("Turbo cache input contract", () => {
         "$TURBO_ROOT$/types/**",
       ].toSorted(),
     );
-    expect(rootInputs(lintConfig)).toEqual(
+    expect(taskInputs(tasks, "lint").filter(isRootInput)).toEqual(
       [...ALL_WORKSPACE_CACHE_INPUTS, ...LINT_ONLY_CACHE_INPUTS].toSorted(),
     );
   });
 });
+
+describe("full and affected code-check parity", () => {
+  test("the full check lints untracked root source files", () => {
+    const file = `.claude/mcp/code-check-untracked-${process.pid}.ts`;
+    expect(existsSync(file)).toBe(false);
+    writeFileSync(file, "export const untracked = true;\n");
+    try {
+      const result = Bun.spawnSync([
+        "bun",
+        "scripts/code-check-affected.ts",
+        "--all",
+        "--dry-run",
+      ]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toContain(file);
+    } finally {
+      rmSync(file);
+    }
+  });
+
+  // The full check and every affected run reach workspaces through the same
+  // `lint` and `typecheck` tasks, so the workspace scripts are the pass list.
+  test("every workspace lint runs the type-checking Oxlint pass", () => {
+    const missing = workspaceManifests()
+      .filter(({ scripts }) => {
+        const lint = scripts["lint"] ?? "";
+        return !lint.includes("--type-aware") || !lint.includes("--type-check");
+      })
+      .map(({ workspace }) => workspace);
+
+    expect(missing).toEqual([]);
+  });
+
+  test("the full check schedules every root check from the tracked tree", () => {
+    const tracked = Bun.spawnSync(["git", "ls-files", "-z"])
+      .stdout.toString()
+      .split("\0")
+      .filter(Boolean);
+    const workspaces = new Set(
+      workspaceManifests().map(({ workspace }) => workspace),
+    );
+
+    const planned = planFullCheck({
+      files: tracked,
+      workspacePaths: workspaces,
+    });
+
+    expect(planned.rootLintPaths).toContain(".claude/mcp/server.ts");
+    expect(scopedCommands(planned)).toContainEqual([
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--concurrency=2",
+    ]);
+  });
+
+  test("the full check fails loudly when a root check is unreachable", () => {
+    expect(() =>
+      planFullCheck({
+        files: ["package.json"],
+        workspacePaths: WORKSPACES,
+      }),
+    ).toThrow("full code-check skips root checks");
+  });
+
+  // A typecheck that generates declarations before compiling (`wxt prepare`,
+  // `astro check`) leaves a type environment the type-checking lint must see:
+  // lint runs after it, and the generated directory survives a cache hit.
+  test("lint type-checks after any workspace typecheck that generates types", () => {
+    const tasks = turboTasks();
+    const typecheckOutputs = new Set(taskField(tasks, "typecheck", "outputs"));
+    const generating = workspaceManifests().filter(({ scripts }) => {
+      const typecheck = scripts["typecheck"];
+      return (
+        typecheck
+          ?.split("&&")
+          .some((command) => !command.includes(TYPESCRIPT_NATIVE_RUNNER)) ??
+        false
+      );
+    });
+
+    // Non-vacuity: both known generators are detected.
+    expect(generating.map(({ workspace }) => workspace)).toEqual(
+      expect.arrayContaining(["apps/extension", "apps/landing"]),
+    );
+    for (const { name } of generating) {
+      expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual([
+        "typecheck",
+      ]);
+      expect(taskInputs(tasks, `${name}#lint`)).toEqual(
+        taskInputs(tasks, "lint"),
+      );
+      expect(taskInputs(tasks, `${name}#typecheck`)).toEqual(
+        taskInputs(tasks, "typecheck"),
+      );
+      expect(
+        taskField(tasks, `${name}#typecheck`, "outputs").filter(
+          (output) => !typecheckOutputs.has(output),
+        ),
+      ).not.toEqual([]);
+    }
+  });
+
+  test("landing generates Astro types once, in its typecheck", () => {
+    const landing = workspaceManifests().find(
+      ({ workspace }) => workspace === "apps/landing",
+    );
+    expect(landing?.scripts["lint"]).not.toContain("astro sync");
+  });
+});
+
+const TYPESCRIPT_NATIVE_RUNNER = "scripts/src/tsc-native.ts";
+
+type TurboTask = Record<string, unknown>;
+
+const isStringRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const turboTasks = (): Record<string, TurboTask> => {
+  const parsed: unknown = Bun.JSONC.parse(readFileSync("turbo.json", "utf-8"));
+  if (!isStringRecord(parsed) || !isStringRecord(parsed["tasks"])) {
+    throw new Error("turbo.json has no tasks object");
+  }
+  const tasks: Record<string, TurboTask> = {};
+  for (const [name, task] of Object.entries(parsed["tasks"])) {
+    if (!isStringRecord(task)) {
+      throw new Error(`turbo.json task ${name} is not an object`);
+    }
+    tasks[name] = task;
+  }
+  return tasks;
+};
+
+const taskField = (
+  tasks: Record<string, TurboTask>,
+  name: string,
+  field: "dependsOn" | "inputs" | "outputs",
+): string[] => {
+  const value = tasks[name]?.[field];
+  if (
+    !Array.isArray(value) ||
+    !value.every((entry): entry is string => typeof entry === "string")
+  ) {
+    throw new Error(`turbo.json task ${name} has no ${field} list`);
+  }
+  return value;
+};
+
+const taskInputs = (tasks: Record<string, TurboTask>, name: string) =>
+  taskField(tasks, name, "inputs").toSorted();
+
+const isRootInput = (input: string) => input.startsWith("$TURBO_ROOT$/");
+
+type WorkspaceManifest = {
+  workspace: string;
+  name: string;
+  scripts: Record<string, string | undefined>;
+};
+
+const workspaceManifests = (): WorkspaceManifest[] =>
+  ["apps", "packages"].flatMap((parent) =>
+    readdirSync(parent, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          existsSync(path.join(parent, entry.name, "package.json")),
+      )
+      .map((entry) => {
+        const workspace = `${parent}/${entry.name}`;
+        const manifest: {
+          name: string;
+          scripts?: Record<string, string | undefined>;
+        } = JSON.parse(
+          readFileSync(path.join(workspace, "package.json"), "utf-8"),
+        );
+        return {
+          workspace,
+          name: manifest.name,
+          scripts: manifest.scripts ?? {},
+        };
+      }),
+  );

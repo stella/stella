@@ -13,9 +13,33 @@ describe("formatDate", () => {
     );
   });
 
+  test("de, pl, and en long styles localize per document language", () => {
+    expect(formatDate("2028-06-13", { locale: "de", style: "long" })).toBe(
+      "13. Juni 2028",
+    );
+    expect(formatDate("2028-06-13", { locale: "pl", style: "long" })).toBe(
+      "13 czerwca 2028",
+    );
+    expect(formatDate("2028-06-13", { locale: "en", style: "long" })).toBe(
+      "June 13, 2028",
+    );
+  });
+
+  test("medium and short styles use the locale's compact conventions", () => {
+    expect(formatDate("2028-06-13", { locale: "cs", style: "medium" })).toBe(
+      "13. 6. 2028",
+    );
+    expect(formatDate("2028-06-13", { locale: "de", style: "short" })).toBe(
+      "13.06.28",
+    );
+  });
+
   test("returns null for malformed input", () => {
     expect(
       formatDate("not-a-date", { locale: "en", style: "long" }),
+    ).toBeNull();
+    expect(
+      formatDate("13.06.2028", { locale: "cs", style: "long" }),
     ).toBeNull();
   });
 
@@ -23,7 +47,14 @@ describe("formatDate", () => {
     expect(formatDate("2028-02-29", { locale: "en", style: "iso" })).toBe(
       "2028-02-29",
     );
+    expect(formatDate("2028-02-29", { locale: "en", style: "long" })).toBe(
+      "February 29, 2028",
+    );
     expect(formatDate("2028-02-30", { locale: "en", style: "iso" })).toBeNull();
+    // Date would silently roll 2028-02-30 over to March 1.
+    expect(
+      formatDate("2028-02-30", { locale: "cs", style: "long" }),
+    ).toBeNull();
   });
 });
 

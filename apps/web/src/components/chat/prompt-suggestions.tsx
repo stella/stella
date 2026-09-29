@@ -39,7 +39,7 @@ export const PromptSuggestions = ({
       <div className="flex w-full flex-col items-stretch gap-2">
         {prompts.map((prompt) => (
           <button
-            className="border-border hover:border-foreground/20 hover:bg-accent/50 group flex gap-3 rounded-md border px-4 py-3 text-start transition-colors"
+            className="border-border hover:border-foreground/20 hover:bg-accent/50 group flex gap-3 rounded-md border px-4 py-3 text-start"
             key={prompt.id}
             onClick={() => onSelect(prompt)}
             type="button"
@@ -47,7 +47,7 @@ export const PromptSuggestions = ({
             {/* The slash marks a prompt the composer also answers to as a
                 command; a built-in question has none, and keeps the column
                 so the names still line up. */}
-            <span className="text-foreground-muted group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none transition-colors">
+            <span className="text-foreground-muted group-hover:text-muted-foreground mt-0.5 flex size-4 shrink-0 items-center justify-center font-mono text-[13px] leading-none">
               {prompt.command === undefined ? "" : "/"}
             </span>
             <span className="min-w-0 flex-1">

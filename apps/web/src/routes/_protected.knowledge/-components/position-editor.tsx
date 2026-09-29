@@ -8,20 +8,6 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  CopyIcon,
-  FlagIcon,
-  GripVerticalIcon,
-  Link2Icon,
-  MessageSquareIcon,
-  PlusIcon,
-  RepeatIcon,
-  SearchIcon,
-  Trash2Icon,
-  XIcon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -39,6 +25,20 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CopyIcon,
+  FlagIcon,
+  GripVerticalIcon,
+  Link2Icon,
+  MessageSquareIcon,
+  PlusIcon,
+  RepeatIcon,
+  SearchIcon,
+  Trash2Icon,
+  XIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import {
@@ -319,7 +319,7 @@ export const PositionEditor = ({
   return (
     <li
       className={cn(
-        "bg-card overflow-hidden rounded-lg border shadow-xs transition-shadow",
+        "bg-card overflow-hidden rounded-lg border shadow-xs",
         !position.enabled && "opacity-60",
         isDropTarget && "ring-primary ring-2",
       )}

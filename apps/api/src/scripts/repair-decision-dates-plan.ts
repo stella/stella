@@ -25,11 +25,15 @@ import {
 } from "@/api/handlers/case-law/citation-resolution";
 import type { SafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionDate } from "@/api/lib/dates";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
-const OUT_OF_BOUNDS = decisionDateOutOfBoundsSql(sql.raw("d.decision_date"));
+const OUT_OF_BOUNDS = decisionDateOutOfBoundsSql(
+  sql.raw("d.decision_date"),
+  sql.raw("d.country"),
+);
 
 /**
  * How many out-of-bounds dates each source holds, and the range they span.
@@ -234,8 +238,10 @@ export type DecisionDateRepair = {
  * What one corrupt row becomes.
  *
  * Re-derivation runs the row's own metadata date through the same
- * `canonicalDecisionDate` the ingest writes through, so a value this accepts is
- * a value the write path would have stored. Nothing else in the row is
+ * `canonicalDecisionDate` the ingest writes through, under the row's own
+ * country, so a value this accepts is a value the write path would have
+ * stored, and a date inside its jurisdiction's floor is never selected here
+ * at all. Nothing else in the row is
  * consulted: `metadata.publishedDate` is when the court published the document,
  * not when it decided the case, and substituting it would replace a visibly
  * wrong date with a plausibly wrong one.
@@ -247,11 +253,12 @@ export type DecisionDateRepair = {
  * can.
  */
 export const decideDecisionDateRepair = ({
+  country,
   id,
   metadataDate,
 }: CorruptDecisionDateRow): DecisionDateRepair => {
   const rederived =
-    metadataDate === null ? null : canonicalDecisionDate(metadataDate);
+    metadataDate === null ? null : canonicalDecisionDate(metadataDate, country);
   if (rederived === null) {
     return {
       id,
@@ -304,20 +311,9 @@ export const applyDecisionDateRepairsStatement = (
        SET decision_date = v.decision_date
       FROM (VALUES ${sql.join(rows, sql`, `)}) AS v(id, decision_date)
      WHERE d.id = v.id
-       AND ${decisionDateOutOfBoundsSql(sql.raw("d.decision_date"))}
+       AND ${OUT_OF_BOUNDS}
     RETURNING d.id
   `;
-};
-
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-export const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
 };
 
 type CitationGraphTx = Parameters<typeof lockCitationGraph>[0];

@@ -22,7 +22,7 @@ const messages = (diagnostics: readonly ts.Diagnostic[]) =>
     ts.flattenDiagnosticMessageText(messageText, "\n"),
   );
 
-test.each([...TSGO_ONLY_COMPILER_OPTIONS])(
+test.each(TSGO_ONLY_COMPILER_OPTIONS)(
   "%s is still unknown to the JavaScript parser, and is excused",
   (option) => {
     const errors = parseErrors({ [option]: 1 });

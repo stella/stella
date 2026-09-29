@@ -29,6 +29,7 @@ export type LookupRegistryOption = {
 export const LOOKUP_REGISTRY_OPTIONS = [
   { slug: "ares", name: "ARES", label: "Czechia — ARES", country: "CZ" },
   { slug: "orsr", name: "ORSR", label: "Slovakia — ORSR", country: "SK" },
+  { slug: "rpo", name: "RPO", label: "Slovakia — RPO", country: "SK" },
   { slug: "krs", name: "KRS", label: "Poland — KRS", country: "PL" },
   {
     slug: "companies-house",

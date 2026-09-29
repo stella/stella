@@ -84,7 +84,7 @@ export const PromptBarShell = ({
     {...rest}
     className={cn(
       COMPOSER_BOX_CLASS,
-      "group/bar relative flex w-full transition-[box-shadow,border-color]",
+      "group/bar relative flex w-full",
       COMPOSER_COMPACT_ROW_CLASS,
       "shadow-floating-ring",
       DOC_FLOAT_SURFACE_CLASS,

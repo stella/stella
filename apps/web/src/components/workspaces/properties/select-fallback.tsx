@@ -1,6 +1,6 @@
-import { SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { SquareMinusIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

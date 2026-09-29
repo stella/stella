@@ -29,6 +29,7 @@ import {
   RechercheEntreprisesAPIError,
   RechercheEntreprisesRequestError,
 } from "@stll/business-registries/recherche-entreprises";
+import { RpoAPIError, RpoRequestError } from "@stll/business-registries/rpo";
 import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
 
 import {
@@ -151,6 +152,131 @@ describe("executeRegistryLookup — details channel", () => {
       throw new TypeError("expected a mapped HandlerError");
     }
     expect(result.message).not.toContain("sensitive transport detail");
+  });
+});
+
+describe("ORSR lookup detail", () => {
+  // Minimal ORSR payloads: one search row naming the file, and an extract
+  // for the same IČO (reused for the full extract).
+  const SEARCH = {
+    data: [
+      {
+        id: 1,
+        registrationNumber: "31333532",
+        fileReference: { section: "Sro", insertNumber: 3586, court: "B" },
+      },
+    ],
+  };
+  const EXTRACT = {
+    fileReference: { section: "Sro", insertNumber: 3586, court: "B" },
+    legalPerson: {
+      id: [{ identifierType: { item: "IČO" }, identifierValue: "31333532" }],
+      corporateBody: {
+        corporateBodyFullName: [{ current: true, value: "ESET, spol. s r.o." }],
+      },
+    },
+  };
+  const BODY_BY_PATH: Record<string, unknown> = {
+    "/api/legal-person": SEARCH,
+    "/api/legal-person/extract": EXTRACT,
+    "/api/legal-person/extract-full": EXTRACT,
+    "/api/legal-person/documents": [],
+    "/api/legal-person/related": { data: [] },
+  };
+
+  const lookupWith = async (
+    detail: "standard" | "full" | undefined,
+  ): Promise<{ paths: string[]; result: unknown }> => {
+    const paths: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      async (input: URL | Request | string) => {
+        const { pathname } = new URL(
+          typeof input === "string" || input instanceof URL ? input : input.url,
+        );
+        paths.push(pathname);
+        return Response.json(BODY_BY_PATH[pathname]);
+      },
+      { preconnect: original.preconnect },
+    );
+    try {
+      const result = await executeRegistryLookup({
+        handler: BUSINESS_REGISTRY_DISPATCH.orsr,
+        query: "31333532",
+        detail,
+      });
+      return { paths, result };
+    } finally {
+      globalThis.fetch = original;
+    }
+  };
+
+  test("the default lookup reads only the search and the current extract", async () => {
+    for (const detail of [undefined, "standard"] as const) {
+      const { paths, result } = await lookupWith(detail);
+      expect(paths).toEqual(["/api/legal-person", "/api/legal-person/extract"]);
+      expect(result).toMatchObject({
+        hit: { details: { registry: "orsr", detail: "standard" } },
+      });
+    }
+  });
+
+  test("the full lookup also reads history, documents, and related persons", async () => {
+    const { paths, result } = await lookupWith("full");
+
+    expect(paths.toSorted()).toEqual([
+      "/api/legal-person",
+      "/api/legal-person/documents",
+      "/api/legal-person/extract",
+      "/api/legal-person/extract-full",
+      "/api/legal-person/related",
+    ]);
+    expect(result).toMatchObject({
+      hit: {
+        name: "ESET, spol. s r.o.",
+        details: {
+          registry: "orsr",
+          detail: "full",
+          history: { status: "loaded", value: [] },
+          documents: { status: "loaded", value: [] },
+          related: { status: "loaded", value: [] },
+        },
+      },
+    });
+  });
+});
+
+describe("jurisdiction routing", () => {
+  test("every jurisdiction has exactly one primary register", () => {
+    const primaries = new Map<string, string[]>();
+    for (const handler of Object.values(BUSINESS_REGISTRY_DISPATCH)) {
+      const slugs = primaries.get(handler.country) ?? [];
+      if (handler.jurisdictionRole.type === "primary") {
+        slugs.push(handler.slug);
+      }
+      primaries.set(handler.country, slugs);
+    }
+    for (const [country, slugs] of primaries) {
+      expect({ country, primaries: slugs.length }).toEqual({
+        country,
+        primaries: 1,
+      });
+    }
+  });
+
+  test("Slovakia resolves to ORSR; RPO is reached by its slug", () => {
+    expect(getRegistryHandlerByCountry("SK")?.slug).toBe("orsr");
+    expect(BUSINESS_REGISTRY_DISPATCH.rpo).toMatchObject({
+      country: "SK",
+      jurisdictionRole: { type: "supplementary" },
+    });
+  });
+
+  test("RPO treats any eight digits as an IČO, checksum or not", () => {
+    const { isCanonicalId } = BUSINESS_REGISTRY_DISPATCH.rpo;
+    expect(isCanonicalId("11111111")).toBe(true);
+    expect(isCanonicalId("31 333 532")).toBe(true);
+    expect(isCanonicalId("ESET")).toBe(false);
   });
 });
 
@@ -483,6 +609,13 @@ const UPSTREAM_FAILURES = {
     }),
     request: new RechercheEntreprisesRequestError(
       "https://recherche-entreprises.example.invalid",
+      "request failed",
+    ),
+  },
+  rpo: {
+    api: new RpoAPIError({ message: "RPO 503", httpStatus: 503 }),
+    request: new RpoRequestError(
+      "https://rpo.example.invalid",
       "request failed",
     ),
   },

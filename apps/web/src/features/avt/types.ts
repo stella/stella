@@ -5,6 +5,8 @@
  * the investigative-methodology design of the original AVT prototype.
  */
 
+import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
+
 import type { TranslationKey } from "@/i18n/types";
 import type { WebApiRoutes } from "@/lib/eden-client";
 
@@ -149,6 +151,13 @@ export const RUN_STATUS_LABEL_KEYS = {
   completed: "common.verified",
   failed: "common.failed",
 } as const satisfies Record<VerificationRunStatus, TranslationKey>;
+
+export const RUN_STATUS_TONES = {
+  queued: "neutral",
+  running: "neutral",
+  completed: "success",
+  failed: "destructive",
+} as const satisfies Record<VerificationRunStatus, ReviewStatusTone>;
 
 export const RUN_ERROR_KEYS = {
   pin_unresolved: "avt.runs.errors.pinUnresolved",

@@ -1,12 +1,6 @@
 import type { DragEvent, ReactNode } from "react";
 import { useCallback, useState } from "react";
 
-import {
-  MoreHorizontalIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -30,6 +24,12 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  MoreHorizontalIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   DropdownMenu,
@@ -376,7 +376,7 @@ const CategoryMobileFilterButton = ({
     <button
       aria-pressed={active}
       className={cn(
-        "border-input bg-popover text-foreground relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors pointer-coarse:after:absolute pointer-coarse:after:start-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:w-full pointer-coarse:after:-translate-y-1/2",
+        "border-input bg-popover text-foreground relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium pointer-coarse:after:absolute pointer-coarse:after:start-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:w-full pointer-coarse:after:-translate-y-1/2",
         resolvedVariant === "extra" && "border-dashed",
         active
           ? "border-foreground bg-foreground text-background"
@@ -477,7 +477,7 @@ const CategoryNavButton = ({
   return (
     <button
       className={cn(
-        "w-full truncate rounded-md px-3 py-1.5 text-start text-sm transition-colors",
+        "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
         isSelected ? "bg-muted font-medium" : "hover:bg-muted/50",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
@@ -537,7 +537,7 @@ const CategoryRow = ({
   return (
     <div
       className={cn(
-        "group flex items-center rounded-md transition-colors",
+        "group flex items-center rounded-md",
         isSelected ? "bg-muted" : "hover:bg-muted/50",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}

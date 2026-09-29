@@ -67,6 +67,7 @@ describe("memory injection query budget", () => {
     ]);
 
     const result = await buildMemoryPromptParts({
+      hydrateRefs: (text) => text,
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,
       contextMatterIds: [],
@@ -84,6 +85,7 @@ describe("memory injection query budget", () => {
     const db = countingSafeDb([]);
 
     const result = await buildMemoryPromptParts({
+      hydrateRefs: (text) => text,
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,
       contextMatterIds: [],

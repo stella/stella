@@ -132,24 +132,38 @@ const extractDetail = (
   return undefined;
 };
 
+/**
+ * Where a provider without a fixed endpoint is served, which Azure
+ * deployments it must expose, and how the probe reaches it.
+ */
+export type ProbeProviderOptions = {
+  endpoint?: string;
+  apiVersion?: string;
+  expectedAzureDeployments?: readonly string[];
+  timeoutMs?: number;
+  fetchBytes?: ProbeFetch;
+};
+
 export const probeProvider = async (
   provider: ProviderProbeValue,
   apiKey: string,
-  endpoint?: string,
-  apiVersion?: string,
-  expectedAzureDeployments?: readonly string[],
-  timeoutMs: number = DEFAULT_VALIDATION_TIMEOUT_MS,
-  fetchBytes: ProbeFetch = safeOutboundFetchBytes,
+  {
+    endpoint,
+    apiVersion,
+    expectedAzureDeployments,
+    timeoutMs = DEFAULT_VALIDATION_TIMEOUT_MS,
+    fetchBytes = safeOutboundFetchBytes,
+  }: ProbeProviderOptions = {},
 ): Promise<ProviderProbeResult> => {
   if (provider === "azure_foundry") {
-    return await probeAzureFoundry(
+    return await probeAzureFoundry({
       apiKey,
       endpoint,
       apiVersion,
-      expectedAzureDeployments,
+      expectedDeployments: expectedAzureDeployments,
       timeoutMs,
       fetchBytes,
-    );
+    });
   }
 
   if (provider === "huggingface") {
@@ -228,14 +242,21 @@ const probeHuggingFace = async (
   };
 };
 
-const probeAzureFoundry = async (
-  apiKey: string,
-  endpoint: string | undefined,
-  apiVersion: string | undefined,
-  expectedDeployments: readonly string[] | undefined,
-  timeoutMs: number,
-  fetchBytes: ProbeFetch,
-): Promise<ProviderProbeResult> => {
+const probeAzureFoundry = async ({
+  apiKey,
+  endpoint,
+  apiVersion,
+  expectedDeployments,
+  timeoutMs,
+  fetchBytes,
+}: {
+  apiKey: string;
+  endpoint: string | undefined;
+  apiVersion: string | undefined;
+  expectedDeployments: readonly string[] | undefined;
+  timeoutMs: number;
+  fetchBytes: ProbeFetch;
+}): Promise<ProviderProbeResult> => {
   if (!endpoint?.trim()) {
     return {
       valid: false,

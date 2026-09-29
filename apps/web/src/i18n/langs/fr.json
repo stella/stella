@@ -266,6 +266,10 @@
       },
       "evidencePinned": "Vérifié par rapport à {count, plural, one {# fait} other {# faits}} tels qu’ils se présentaient le {checkedAt}. Les modifications ultérieures de la liste ne changent pas cette vérification.",
       "failedTitle": "Échec de la vérification",
+      "history": {
+        "label": "Historique des vérifications",
+        "loadFailed": "Les vérifications précédentes de ce document n’ont pas pu être chargées."
+      },
       "inProgress": "Confrontation des affirmations du document aux faits de la liste…",
       "loadFailed": "Cette vérification n’a pas pu être chargée.",
       "noClaims": "Aucune affirmation n’a été trouvée dans ce document.",
@@ -541,6 +545,11 @@
       "tableNamePlaceholder": "p. ex. Standard 2025"
     },
     "revertToDraft": "Repasser en brouillon",
+    "savedNarratives": {
+      "empty": "Enregistrez une description pour la réutiliser.",
+      "save": "Enregistrer la description",
+      "title": "Descriptions enregistrées"
+    },
     "selectMatter": "Sélectionner un dossier...",
     "selectMatterToStart": "Sélectionnez un dossier pour démarrer",
     "selectedCount": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}",
@@ -790,6 +799,12 @@
       "resultsFor": "Résultats pour : <bdi>{query}</bdi>",
       "searchEveryWord": "Rechercher tous les mots"
     },
+    "seo": {
+      "collectionName": "Jurisprudence stella",
+      "description": "Base de données publique de jurisprudence contenant des décisions de justice et des sources juridiques indexables.",
+      "homeDescription": "Base de données juridique publique : décisions de justice et textes consolidés, avec recherche par identifiant ou par mots.",
+      "scopedDescription": "Base de données publique de jurisprudence pour {scope}, contenant des décisions de justice et des sources juridiques indexables."
+    },
     "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",
@@ -867,6 +882,7 @@
       "apiKey": "Clé API",
       "none": "Aucune configuration"
     },
+    "skillNeedsUnavailableTools": "Non proposée dans les conversations. Elle nécessite un outil qui n'y est pas disponible : {tools}",
     "toolNames": {
       "anonymize": "Anonymiser",
       "createDocx": "Créer un DOCX",
@@ -960,7 +976,15 @@
       "searchFiles": "Rechercher des fichiers",
       "searchMatters": "Rechercher des dossiers",
       "searchMcpServers": "Rechercher des serveurs MCP...",
-      "searchSkills": "Rechercher des compétences"
+      "searchSkills": "Rechercher des compétences",
+      "skillNeeds": {
+        "browserExtension": "Connectez l'extension du navigateur pour utiliser cette compétence",
+        "document": "Ouvrez un document pour utiliser cette compétence",
+        "matter": "Démarrez une conversation dans un dossier pour utiliser cette compétence",
+        "rawSendMode": "Indisponible dans les conversations anonymisées",
+        "reviewEdits": "Passez les modifications en révision manuelle pour utiliser cette compétence",
+        "webSearch": "Activez la recherche web pour utiliser cette compétence"
+      }
     },
     "contextMeter": {
       "attachments": "Documents joints",
@@ -1045,6 +1069,10 @@
       "loadError": "Échec du chargement des éléments"
     },
     "messageTimestampToday": "Aujourd’hui, {time}",
+    "mockModel": {
+      "description": "Réponses prédéfinies du modèle simulé local",
+      "label": "IA simulée"
+    },
     "modelSelector": {
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",
@@ -1134,6 +1162,7 @@
     "sourcePlaceholder": "Discuter de {title}",
     "sourcePlaceholderAction": "Discuter de",
     "sources": "Sources :",
+    "stopFailed": "Impossible d'arrêter la réponse. Réessayez.",
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
     "suggestTitle": "Suggérer un titre",
@@ -1166,6 +1195,7 @@
       "business_registry_lookup": "Recherche dans le registre des entreprises",
       "compare_versions": "Comparaison des versions",
       "configure_template_fields": "Configurer les champs du modèle",
+      "counterparty_check": "Vérification de la contrepartie",
       "create-document": "Préparation du document",
       "create_matter_document": "Création du document",
       "create_reader_annotation": "Ajouter un surlignage ou un commentaire",
@@ -1461,6 +1491,7 @@
     "displayName": "Nom affiché",
     "document": "Document",
     "documentName": "Nom du document",
+    "documentPage": "<bdi>{document}</bdi> · page {page}",
     "documentReference": "Référence du document",
     "documentTitle": "Titre du document",
     "documentation": "Documentation",
@@ -1604,6 +1635,7 @@
     "profile": "Profil",
     "properties": "Propriétés",
     "queued": "En file d'attente",
+    "reason": "Motif",
     "reconnecting": "Reconnexion…",
     "reference": "Référence",
     "refresh": "Actualiser",
@@ -1915,6 +1947,54 @@
       "organization": "Organisation",
       "person": "Personne"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Adresse e-mail du dossier",
+    "assertedOriginal": "En-têtes d’origine (selon l’expéditeur du transfert)",
+    "authResults": {
+      "fail": "Échec",
+      "pass": "Réussie",
+      "unknown": "Indéterminé"
+    },
+    "backToList": "Retour à la correspondance",
+    "createAddress": "Créer une adresse",
+    "deliveredBy": "Distribué par <address>{sender}</address>",
+    "deliveredByAuthenticated": "Distribué par <address>{sender}</address> · authentifié",
+    "deliveryAuthentication": "Authentification de la distribution",
+    "drops": {
+      "authenticationHint": "Demandez à l’administrateur de la messagerie de l’expéditeur de configurer <protocol>SPF</protocol>, <protocol>DKIM</protocol> et <protocol>DMARC</protocol> pour le domaine d’envoi.",
+      "reasons": {
+        "attachmentRejected": "Pièce jointe rejetée",
+        "authenticationFailed": "Échec de l’authentification de la distribution",
+        "malformedMessage": "Impossible de lire le message",
+        "messageTooLarge": "Message trop volumineux",
+        "revokedAddress": "Adresse e-mail révoquée",
+        "unauthorizedSender": "Expéditeur non autorisé",
+        "unknownRecipient": "Destinataire inconnu"
+      },
+      "title": "Messages rejetés"
+    },
+    "empty": "Aucune correspondance pour le moment.",
+    "filers": "Déposants",
+    "forwardedBy": "Transféré par <address>{sender}</address>",
+    "forwardedByAuthenticated": "Transféré par <address>{sender}</address> · authentifié",
+    "inboundNotConfigured": "La réception des e-mails n’est pas configurée. Demandez à votre administrateur de configurer le domaine de réception.",
+    "markHandled": "Marquer comme traité",
+    "markNew": "Marquer comme nouveau",
+    "noAddress": "Aucune adresse e-mail active.",
+    "originalSender": "Expéditeur d’origine",
+    "originalSenderUnverified": "Expéditeur d’origine (déclaré, non vérifié)",
+    "originalSignatureVerified": "Signature d’origine vérifiée (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Reçu",
+    "revokeAddress": "Révoquer l’adresse",
+    "rotateAddress": "Renouveler l’adresse",
+    "sentAt": "Envoyé le",
+    "sharedMailboxFiler": "Boîte partagée {address}, approuvée par {approver}",
+    "states": {
+      "handled": "Traité"
+    },
+    "title": "Correspondance",
+    "unknownApprover": "Approbateur inconnu"
   },
   "docxReview": {
     "acceptAll": "Tout accepter",
@@ -4289,6 +4369,7 @@
     "compareVersionMissing": "La version à comparer ne figure pas dans l'historique de ce texte.",
     "compareWholeAct": "Comparer le texte entier",
     "compareWithVersion": "Comparer avec {version}",
+    "description": "Base de données publique de textes législatifs consolidés, indexables par texte et par version.",
     "diffInserted": "Ajouté :",
     "diffRemoved": "Supprimé :",
     "emptyDocument": "Aucun texte disponible pour cette version.",
@@ -5085,6 +5166,57 @@
       "ocrAlreadyProcessed": "La reconnaissance de texte est déjà terminée",
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
       "ocrQueued": "Reconnaissance de texte ajoutée au prochain lot OCR",
+      "pdfSigning": {
+        "action": "Signer dans l’app de bureau",
+        "cancelledBaseVersionDescription": "Le document a changé pendant la signature. Ouvrez la version la plus récente et signez à nouveau.",
+        "cancelledCertificateDescription": "Le certificat choisi ne peut pas servir à signer. Choisissez-en un qui autorise les signatures numériques.",
+        "cancelledCertifiedDescription": "Ce PDF est certifié et sa certification n’autorise pas d’autres signatures.",
+        "cancelledDescription": "La signature n’a pas abouti.",
+        "cancelledDigestDescription": "La signature ne correspondait pas au document préparé. Réessayez.",
+        "cancelledFailedDescription": "La signature n’a pas pu être ajoutée à ce PDF.",
+        "cancelledPlatformDescription": "La signature avec un certificat du trousseau système fonctionne pour l’instant sur macOS.",
+        "cancelledRevokedDescription": "Le certificat choisi, ou l’un de ceux qui l’ont émis, a été révoqué. Choisissez un certificat valide.",
+        "cancelledSignatureDescription": "La signature de stella desktop ne correspondait pas au certificat choisi. Réessayez.",
+        "cancelledStampNameDescription": "Le nom du titulaire du certificat ne peut pas figurer dans un cachet visible. Signez à nouveau avec une signature invisible.",
+        "cancelledStampOverflowDescription": "Le texte du cachet ne tient pas dans le cadre tracé. Tracez un cachet plus grand, raccourcissez le motif ou le lieu, ou utilisez une signature invisible.",
+        "cancelledTitle": "Signature annulée",
+        "cancelledUserDescription": "La signature a été annulée dans stella desktop.",
+        "cancelledWouldBreakSignaturesDescription": "Signer ce PDF invaliderait les signatures qu’il contient déjà.",
+        "encryptedDescription": "Ce PDF est protégé par mot de passe. Retirez la protection avant de signer.",
+        "expiredDescription": "stella desktop n’a pas terminé la signature à temps. Lancez-le et réessayez.",
+        "expiredTitle": "Délai de signature dépassé",
+        "inProgressDescription": "Ce fichier est déjà en cours de signature. Terminez ou annulez d’abord cette signature dans stella desktop.",
+        "noFileDescription": "Ce document n’a aucun fichier à signer.",
+        "notAPdfDescription": "Seuls les fichiers PDF peuvent être signés.",
+        "placementBox": "Position du cachet",
+        "placementConfirm": "Ouvrir stella desktop",
+        "placementDescription": "Choisissez comment la signature apparaît dans le PDF.",
+        "placementHint": "Faites glisser le cachet pour le déplacer, ou son coin pour le redimensionner. Lorsque le cachet est sélectionné, les flèches le déplacent et Maj avec une flèche le redimensionne.",
+        "placementInvisible": "Signature invisible",
+        "placementInvisibleDescription": "La signature est enregistrée dans le fichier sans aucune marque sur les pages.",
+        "placementPageLabel": "Page du cachet",
+        "placementPageOption": "Page {page, number} sur {count, number}",
+        "placementPreview": "Aperçu de la page {page, number}",
+        "placementPreviewFailed": "L’aperçu de la page n’a pas pu être chargé.",
+        "placementTitle": "Signer le PDF",
+        "placementTooSmall": "Cette page est trop petite pour un cachet. Choisissez une autre page.",
+        "placementVisible": "Cachet visible",
+        "placementVisibleDescription": "Un cadre sur la page indique qui a signé et quand.",
+        "readOnlyDescription": "Ce document est en lecture seule.",
+        "signedDescription": "La signature a été enregistrée comme version {versionNumber, number}.",
+        "signedDescriptionNoVersion": "La signature a été enregistrée comme nouvelle version.",
+        "signedTitle": "PDF signé",
+        "stampLocation": "Lieu",
+        "stampRejectedDescription": "Le cachet ne peut pas être placé à cet endroit. Replacez-le et réessayez.",
+        "stampSignedBy": "Signé numériquement par",
+        "stampTextUnrenderableDescription": "Le motif ou le lieu ne peut pas figurer dans un cachet visible. Modifiez le texte ou utilisez une signature invisible.",
+        "startFailedTitle": "Impossible de signer ce fichier",
+        "statusUnavailableDescription": "Consultez l’historique des versions pour voir si la signature a été enregistrée.",
+        "statusUnavailableTitle": "État de la signature indisponible",
+        "tooLargeDescription": "Ce PDF est trop volumineux pour être signé.",
+        "waitingDescription": "Choisissez un certificat de signature dans stella desktop pour signer ce PDF.",
+        "waitingTitle": "En attente de stella desktop"
+      },
       "rateLimited": "Débit limité; reprise dans {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Que faire de {fileName}",
@@ -5346,6 +5478,7 @@
         },
         "targets": {
           "automation": "automatisation",
+          "correspondence": "correspondance",
           "court": "dossier judiciaire",
           "document": "fichier",
           "documentReview": "révision de document",

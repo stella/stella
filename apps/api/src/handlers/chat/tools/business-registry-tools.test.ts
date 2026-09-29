@@ -109,3 +109,92 @@ describe("createBusinessRegistryTools", () => {
     });
   });
 });
+
+describe("a jurisdiction with more than one register", () => {
+  const recordingHandler = (
+    base: RegistryHandler,
+    calls: string[],
+  ): RegistryHandler => ({
+    ...base,
+    isDeployAvailable: () => true,
+    lookup: async () => {
+      calls.push(base.slug);
+      return null;
+    },
+  });
+
+  const executorFor = (handlers: readonly RegistryHandler[]) => {
+    const tool =
+      createBusinessRegistryTools({ enabledHandlers: handlers })[
+        BUSINESS_REGISTRY_LOOKUP_TOOL_NAME
+      ] ?? panic("Expected a registry tool");
+    return {
+      tool,
+      execute: tool.execute ?? panic("Expected an executable registry tool"),
+    };
+  };
+
+  test("routes to the default register unless another one is named", async () => {
+    const calls: string[] = [];
+    const { execute } = executorFor([
+      recordingHandler(BUSINESS_REGISTRY_DISPATCH.orsr, calls),
+      recordingHandler(BUSINESS_REGISTRY_DISPATCH.rpo, calls),
+    ]);
+    const context = { emitCustomEvent: () => undefined };
+
+    await execute({ jurisdiction: "SK", query: "31333532" }, context);
+    await execute(
+      { jurisdiction: "SK", query: "31333532", registry: "rpo" },
+      context,
+    );
+
+    expect(calls).toEqual(["orsr", "rpo"]);
+  });
+
+  test("uses the only enabled register when the default is off", async () => {
+    const calls: string[] = [];
+    const { execute } = executorFor([
+      recordingHandler(BUSINESS_REGISTRY_DISPATCH.rpo, calls),
+    ]);
+
+    await execute(
+      { jurisdiction: "SK", query: "31333532" },
+      { emitCustomEvent: () => undefined },
+    );
+
+    expect(calls).toEqual(["rpo"]);
+  });
+
+  test("refuses a register that does not cover the jurisdiction", async () => {
+    const calls: string[] = [];
+    const { execute } = executorFor([
+      recordingHandler(BUSINESS_REGISTRY_DISPATCH.ares, calls),
+      recordingHandler(BUSINESS_REGISTRY_DISPATCH.rpo, calls),
+    ]);
+
+    const result = await execute(
+      { jurisdiction: "CZ", query: "27082440", registry: "rpo" },
+      { emitCustomEvent: () => undefined },
+    );
+
+    expect(calls).toEqual([]);
+    expect(result).toEqual({
+      error: "Registry 'rpo' does not cover jurisdiction CZ",
+    });
+  });
+
+  test("lists each jurisdiction once and says what the extra register covers", () => {
+    const { tool } = executorFor([
+      BUSINESS_REGISTRY_DISPATCH.orsr,
+      BUSINESS_REGISTRY_DISPATCH.rpo,
+    ]);
+    const schema: unknown = convertSchemaToJsonSchema(tool.inputSchema);
+    expect(schema).toMatchObject({
+      properties: {
+        jurisdiction: { enum: ["SK"] },
+        registry: { enum: ["orsr", "rpo"] },
+      },
+    });
+    expect(JSON.stringify(schema)).toContain("rpo (SK) covers every Slovak");
+  });
+});

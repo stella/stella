@@ -344,7 +344,9 @@ describe("invoke_capability reads explicit null on plain optional fields as omis
       const result = await invokeValidateOnly(capability, withNull);
       // Asserting validity, not only equality, keeps the case from passing
       // because both calls failed for some unrelated reason.
-      expect(parsePayload(result)).toEqual({ valid: true, capability });
+      expect(parsePayload(result)).toEqual({
+        result: { valid: true, capability },
+      });
       expect(JSON.stringify(result)).toBe(
         JSON.stringify(await invokeValidateOnly(capability, omitted)),
       );
@@ -411,7 +413,9 @@ describe("invoke_capability accepts explicit null on nullable fields", () => {
     test(`${label}: null -> valid (accepted, not coerced away)`, async () => {
       const result = await invokeValidateOnly(capability, input);
       expect(errorEnvelope(result)).toBeNull();
-      expect(parsePayload(result)).toEqual({ valid: true, capability });
+      expect(parsePayload(result)).toEqual({
+        result: { valid: true, capability },
+      });
     });
   }
 });

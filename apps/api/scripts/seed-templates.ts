@@ -38,6 +38,7 @@ import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { ensureTestUsers } from "./seed-test-user";
 import {
@@ -2583,10 +2584,7 @@ export async function seedTemplates(
 // ─── Standalone CLI entry point ─────────────────────────
 
 if (import.meta.main) {
-  if (process.env.NODE_ENV === "production") {
-    console.error("Refusing to run in production.");
-    process.exit(1);
-  }
+  requireLocalDevOpen("Seeding");
 
   console.log("Seeding templates & clauses...\n");
   await ensureTestUsers(DEFAULT_ORG_ID);

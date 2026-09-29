@@ -1,0 +1,4 @@
+{
+  "message": "No parameters specified in search request",
+  "_links": { "self": { "href": "/rpo/v1/search", "templated": false } }
+}

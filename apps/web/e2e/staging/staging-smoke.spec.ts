@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { appShellNavigationLink } from "../helpers/app-shell";
+import {
+  appShellNavigationLink,
+  ROUTE_ERROR_HEADING,
+} from "../helpers/app-shell";
 import { setFixedBrowserTime } from "../helpers/clock";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
 
@@ -58,7 +61,7 @@ test("chat thread page renders for an entitlement-less owner", async ({
 
   // The route error boundary replaces the thread UI wholesale; its
   // title is the canonical signature of a client-side render crash.
-  await expect(page.getByText("This page couldn’t be opened")).toBeHidden();
+  await expect(page.getByText(ROUTE_ERROR_HEADING)).toBeHidden();
 
   await expect(chatReadySurface(page)).toBeVisible();
 });
@@ -195,6 +198,17 @@ test.describe("public hydration", () => {
     // Decision routes seed their inspector tabs without opening the pane.
     // Open it as a reader would so the lazy pane content is exercised too.
     await expect(inspector).toHaveAttribute("data-state", "collapsed");
+    // The smoke user has no AI provider, so the decision's chat composer
+    // opens the modal connect-provider dialog, which hides the rail from the
+    // accessibility tree until it is dismissed.
+    const aiKeyDialog = page.getByRole("dialog").filter({
+      has: page.getByRole("heading", {
+        name: /^(?:connect ai provider|připojit poskytovatele ai)$/iu,
+      }),
+    });
+    await expect(aiKeyDialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(aiKeyDialog).toBeHidden();
     await inspector
       .getByRole("button", { name: /^(?:show pane|zobrazit panel)$/iu })
       .click();

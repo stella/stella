@@ -81,11 +81,11 @@ export const LandingGreeting = ({ icon, children }: LandingGreetingProps) => (
 
 /** A column's heading: an icon and an uppercase label, as a link or a trigger. */
 export const LANDING_SECTION_HEADING_CLASS =
-  "text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2";
+  "text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase outline-none focus-visible:ring-2";
 
 /** A row of a column, as a link or a button. */
 export const LANDING_ROW_CLASS =
-  "group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2";
+  "group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start outline-none focus-visible:ring-2";
 
 type LandingSectionProps = {
   children: ReactNode;
@@ -168,7 +168,7 @@ export const LandingRowIcon = ({
 }: LandingRowIconProps) => (
   <span
     className={cn(
-      "mt-0.5 flex size-4 shrink-0 items-center justify-center transition-colors",
+      "mt-0.5 flex size-4 shrink-0 items-center justify-center",
       tone === "muted" &&
         "text-foreground-muted group-hover:text-muted-foreground",
     )}

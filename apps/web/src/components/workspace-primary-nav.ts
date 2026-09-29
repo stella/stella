@@ -4,10 +4,10 @@ import {
   InboxIcon,
   LibraryBigIcon,
   MessageSquareIcon,
-  BookOpenIcon,
+  CaseLawIcon,
   SearchIcon,
   UsersIcon,
-} from "lucide-react";
+} from "@stll/ui/icons";
 
 import { MattersNavIcon } from "@/components/matter-icon";
 import type { TranslationKey } from "@/i18n/types";
@@ -69,7 +69,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/workspaces",
   },
   {
-    icon: BookOpenIcon,
+    icon: CaseLawIcon,
     id: "caseLaw",
     audience: "public",
     kind: "route",

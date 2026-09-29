@@ -266,6 +266,10 @@
       },
       "evidencePinned": "Ellenőrizve {count, plural, one {# tény} other {# tény}} alapján, ahogyan azok {checkedAt} napon álltak. A lista későbbi módosításai nem változtatják meg ezt az ellenőrzést.",
       "failedTitle": "Az ellenőrzés sikertelen",
+      "history": {
+        "label": "Ellenőrzési előzmények",
+        "loadFailed": "A dokumentum korábbi ellenőrzéseit nem sikerült betölteni."
+      },
       "inProgress": "Az irat állításainak összevetése a lista tényeivel…",
       "loadFailed": "Ezt az ellenőrzést nem sikerült betölteni.",
       "noClaims": "Ebben az iratban nem található állítás.",
@@ -541,6 +545,11 @@
       "tableNamePlaceholder": "pl. Standard 2025"
     },
     "revertToDraft": "Visszaállítás tervezetre",
+    "savedNarratives": {
+      "empty": "Mentse a leírást későbbi használatra.",
+      "save": "Leírás mentése",
+      "title": "Mentett leírások"
+    },
     "selectMatter": "Válasszon ügyet...",
     "selectMatterToStart": "Válasszon ügyet az időmérés indításához",
     "selectedCount": "{count, plural, one {# kijelölve} other {# kijelölve}}",
@@ -790,6 +799,12 @@
       "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
       "searchEveryWord": "Minden szó keresése"
     },
+    "seo": {
+      "collectionName": "Stella ítélkezési gyakorlat",
+      "description": "Nyilvános ítélkezési adatbázis indexelhető bírósági határozatokkal és jogforrásokkal.",
+      "homeDescription": "Nyilvános jogi adatbázis: bírósági határozatok és egységes szerkezetű jogszabályok, azonosító vagy szavak alapján kereshetők.",
+      "scopedDescription": "Nyilvános ítélkezési adatbázis ({scope}), indexelhető bírósági határozatokkal és jogforrásokkal."
+    },
     "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
     "sort": {
       "newest": "Legújabb",
@@ -867,6 +882,7 @@
       "apiKey": "API-kulcs",
       "none": "Nincs beállítás"
     },
+    "skillNeedsUnavailableTools": "A csevegésben nem jelenik meg. Olyan eszközt igényel, amely ott nem érhető el: {tools}",
     "toolNames": {
       "anonymize": "Anonimizálás",
       "createDocx": "DOCX létrehozása",
@@ -960,7 +976,15 @@
       "searchFiles": "Fájlok keresése",
       "searchMatters": "Ügyek keresése",
       "searchMcpServers": "MCP-kiszolgálók keresése...",
-      "searchSkills": "Készségek keresése"
+      "searchSkills": "Készségek keresése",
+      "skillNeeds": {
+        "browserExtension": "A készség használatához csatlakoztassa a böngészőbővítményt",
+        "document": "A készség használatához nyisson meg egy dokumentumot",
+        "matter": "A készség használatához indítson csevegést egy ügyben",
+        "rawSendMode": "Anonimizált csevegésekben nem érhető el",
+        "reviewEdits": "A készség használatához állítsa a szerkesztéseket kézi ellenőrzésre",
+        "webSearch": "A készség használatához kapcsolja be a webes keresést"
+      }
     },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",
@@ -1045,6 +1069,10 @@
       "loadError": "Az elemek betöltése sikertelen"
     },
     "messageTimestampToday": "Ma, {time}",
+    "mockModel": {
+      "description": "Előre megírt válaszok a helyi szimulált modelltől",
+      "label": "Szimulált AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
@@ -1134,6 +1162,7 @@
     "sourcePlaceholder": "Csevegés erről: {title}",
     "sourcePlaceholderAction": "Csevegés erről:",
     "sources": "Források:",
+    "stopFailed": "Nem sikerült leállítani a választ. Próbálja újra.",
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "suggestTitle": "Cím javaslata",
@@ -1166,6 +1195,7 @@
       "business_registry_lookup": "Keresés a cégnyilvántartásban",
       "compare_versions": "Verziók összehasonlítása",
       "configure_template_fields": "Sablonmezők beállítása",
+      "counterparty_check": "Szerződő fél ellenőrzése",
       "create-document": "Dokumentum előkészítése",
       "create_matter_document": "Dokumentum létrehozása",
       "create_reader_annotation": "Kiemelés vagy megjegyzés hozzáadása",
@@ -1461,6 +1491,7 @@
     "displayName": "Megjelenítendő név",
     "document": "Dokumentum",
     "documentName": "Dokumentum neve",
+    "documentPage": "<bdi>{document}</bdi> · {page}. o.",
     "documentReference": "A dokumentum hivatkozási száma",
     "documentTitle": "Dokumentum címe",
     "documentation": "Dokumentáció",
@@ -1604,6 +1635,7 @@
     "profile": "Profil",
     "properties": "Tulajdonságok",
     "queued": "Sorba állítva",
+    "reason": "Ok",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
     "refresh": "Frissítés",
@@ -1915,6 +1947,54 @@
       "organization": "Szervezet",
       "person": "Személy"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Ügy e-mail-címe",
+    "assertedOriginal": "Eredeti fejlécek (a továbbító közlése szerint)",
+    "authResults": {
+      "fail": "Sikertelen",
+      "pass": "Sikeres",
+      "unknown": "Nem megállapított"
+    },
+    "backToList": "Vissza a levelezéshez",
+    "createAddress": "Cím létrehozása",
+    "deliveredBy": "Kézbesítette: <address>{sender}</address>",
+    "deliveredByAuthenticated": "Kézbesítette: <address>{sender}</address> · hitelesítve",
+    "deliveryAuthentication": "Kézbesítés hitelesítése",
+    "drops": {
+      "authenticationHint": "Kérje meg a feladó levelezési rendszergazdáját az <protocol>SPF</protocol>, <protocol>DKIM</protocol> és <protocol>DMARC</protocol> beállítására a küldő domainhez.",
+      "reasons": {
+        "attachmentRejected": "Elutasított melléklet",
+        "authenticationFailed": "A kézbesítés hitelesítése sikertelen",
+        "malformedMessage": "Az üzenet nem olvasható",
+        "messageTooLarge": "Az üzenet túl nagy",
+        "revokedAddress": "Visszavont e-mail-cím",
+        "unauthorizedSender": "Nem jogosult feladó",
+        "unknownRecipient": "Ismeretlen címzett"
+      },
+      "title": "Elutasított kézbesítések"
+    },
+    "empty": "Még nincs levelezés.",
+    "filers": "Benyújtók",
+    "forwardedBy": "Továbbította: <address>{sender}</address>",
+    "forwardedByAuthenticated": "Továbbította: <address>{sender}</address> · hitelesítve",
+    "inboundNotConfigured": "A bejövő levelezés nincs beállítva. Kérje meg a rendszergazdát a bejövő levelek domainjének beállítására.",
+    "markHandled": "Megjelölés elintézettként",
+    "markNew": "Megjelölés újként",
+    "noAddress": "Nincs aktív e-mail-cím.",
+    "originalSender": "Eredeti feladó",
+    "originalSenderUnverified": "Eredeti feladó (közölt, nem ellenőrzött)",
+    "originalSignatureVerified": "Eredeti aláírás ellenőrizve (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Érkezett",
+    "revokeAddress": "Cím visszavonása",
+    "rotateAddress": "Cím cseréje",
+    "sentAt": "Elküldve",
+    "sharedMailboxFiler": "Megosztott postaláda: {address}, jóváhagyta: {approver}",
+    "states": {
+      "handled": "Elintézett"
+    },
+    "title": "Levelezés",
+    "unknownApprover": "Ismeretlen jóváhagyó"
   },
   "docxReview": {
     "acceptAll": "Összes elfogadása",
@@ -4289,6 +4369,7 @@
     "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
     "compareWholeAct": "A teljes jogszabály összehasonlítása",
     "compareWithVersion": "Összehasonlítás ezzel: {version}",
+    "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
     "diffInserted": "Beszúrva:",
     "diffRemoved": "Törölve:",
     "emptyDocument": "Ehhez a változathoz nem érhető el szöveg.",
@@ -5085,6 +5166,57 @@
       "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
       "ocrQueued": "A szövegfelismerés bekerült a következő OCR-kötegbe",
+      "pdfSigning": {
+        "action": "Aláírás az asztali alkalmazásban",
+        "cancelledBaseVersionDescription": "A dokumentum aláírás közben megváltozott. Nyisd meg a legújabb verziót, és írd alá újra.",
+        "cancelledCertificateDescription": "A kiválasztott tanúsítvány nem használható aláírásra. Válassz olyat, amely engedélyezi a digitális aláírást.",
+        "cancelledCertifiedDescription": "Ez a PDF hitelesített, és a hitelesítése nem enged további aláírásokat.",
+        "cancelledDescription": "Az aláírás nem fejeződött be.",
+        "cancelledDigestDescription": "Az aláírás nem illeszkedett az előkészített dokumentumhoz. Próbáld meg újra.",
+        "cancelledFailedDescription": "Az aláírást nem sikerült hozzáadni ehhez a PDF-hez.",
+        "cancelledPlatformDescription": "A rendszer kulcskarikáján tárolt tanúsítvánnyal való aláírás egyelőre macOS rendszeren működik.",
+        "cancelledRevokedDescription": "A kiválasztott tanúsítványt vagy a kiállítóját visszavonták. Válassz érvényes tanúsítványt.",
+        "cancelledSignatureDescription": "A stella desktop aláírása nem egyezett a kiválasztott tanúsítvánnyal. Próbáld meg újra.",
+        "cancelledStampNameDescription": "A tanúsítvány birtokosának neve nem jeleníthető meg látható bélyegzőben. Írd alá újra láthatatlan aláírással.",
+        "cancelledStampOverflowDescription": "A bélyegző szövege nem fér el a megrajzolt keretben. Rajzolj nagyobb bélyegzőt, rövidítsd az okot vagy a helyet, vagy használj láthatatlan aláírást.",
+        "cancelledTitle": "Aláírás megszakítva",
+        "cancelledUserDescription": "Az aláírást megszakították a stella desktop alkalmazásban.",
+        "cancelledWouldBreakSignaturesDescription": "Az aláírás érvénytelenítené a PDF-ben már meglévő aláírásokat.",
+        "encryptedDescription": "Ez a PDF jelszóval védett. Aláírás előtt távolítsd el a védelmet.",
+        "expiredDescription": "A stella desktop nem fejezte be időben az aláírást. Indítsd el, és próbáld újra.",
+        "expiredTitle": "Az aláírás ideje lejárt",
+        "inProgressDescription": "Ezt a fájlt már aláírják. Előbb fejezd be vagy szakítsd meg azt az aláírást a stella desktopban.",
+        "noFileDescription": "Ehhez a dokumentumhoz nem tartozik aláírható fájl.",
+        "notAPdfDescription": "Csak PDF-fájlok írhatók alá.",
+        "placementBox": "A bélyegző helye",
+        "placementConfirm": "stella desktop megnyitása",
+        "placementDescription": "Válaszd ki, hogyan jelenjen meg az aláírás a PDF-ben.",
+        "placementHint": "Húzd a bélyegzőt az áthelyezéshez, vagy a sarkát az átméretezéshez. Ha a bélyegző ki van jelölve, a nyílbillentyűk mozgatják, a Shift és egy nyílbillentyű pedig átméretezi.",
+        "placementInvisible": "Láthatatlan aláírás",
+        "placementInvisibleDescription": "Az aláírás jelölés nélkül kerül a fájlba, egyik oldalon sem látszik.",
+        "placementPageLabel": "A bélyegző oldala",
+        "placementPageOption": "{page, number}. oldal / {count, number}",
+        "placementPreview": "{page, number}. oldal előnézete",
+        "placementPreviewFailed": "Az oldal előnézetét nem sikerült betölteni.",
+        "placementTitle": "PDF aláírása",
+        "placementTooSmall": "Ez az oldal túl kicsi a bélyegzőhöz. Válassz másik oldalt.",
+        "placementVisible": "Látható bélyegző",
+        "placementVisibleDescription": "Egy keret az oldalon mutatja, ki és mikor írta alá.",
+        "readOnlyDescription": "Ez a dokumentum csak olvasható.",
+        "signedDescription": "Az aláírás a(z) {versionNumber, number}. verzióként lett mentve.",
+        "signedDescriptionNoVersion": "Az aláírás új verzióként lett mentve.",
+        "signedTitle": "A PDF alá van írva",
+        "stampLocation": "Hely",
+        "stampRejectedDescription": "A bélyegzőt nem lehet oda elhelyezni. Helyezd el újra, és próbáld meg ismét.",
+        "stampSignedBy": "Digitálisan aláírta",
+        "stampTextUnrenderableDescription": "Az ok vagy a hely nem jeleníthető meg látható bélyegzőben. Módosítsd a szöveget, vagy használj láthatatlan aláírást.",
+        "startFailedTitle": "Ez a fájl nem írható alá",
+        "statusUnavailableDescription": "Nézd meg a verziótörténetben, hogy mentve lett-e az aláírás.",
+        "statusUnavailableTitle": "Az aláírás állapota nem érhető el",
+        "tooLargeDescription": "Ez a PDF túl nagy az aláíráshoz.",
+        "waitingDescription": "Válassz aláíró tanúsítványt a stella desktop alkalmazásban a PDF aláírásához.",
+        "waitingTitle": "Várakozás a stella desktopra"
+      },
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",
       "referencedUpload": {
         "choiceLabel": "Mi történjen a(z) {fileName} fájllal",
@@ -5346,6 +5478,7 @@
         },
         "targets": {
           "automation": "automatizálás",
+          "correspondence": "levelezés",
           "court": "bírósági bejegyzés",
           "document": "dokumentum",
           "documentReview": "dokumentumellenőrzés",

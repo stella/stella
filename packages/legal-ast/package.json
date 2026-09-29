@@ -63,6 +63,10 @@
       "types": "./src/provision-preview.ts",
       "import": "./src/provision-preview.ts"
     },
+    "./projection-digest": {
+      "types": "./src/projection-digest.ts",
+      "import": "./src/projection-digest.ts"
+    },
     "./provision-reference": {
       "types": "./src/provision-reference.ts",
       "import": "./src/provision-reference.ts"
@@ -89,7 +93,7 @@
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware packages/legal-ast",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/legal-ast",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast",
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },

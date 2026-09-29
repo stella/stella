@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { AlertTriangleIcon } from "@stll/ui/icons";
 import { TextSeparator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 

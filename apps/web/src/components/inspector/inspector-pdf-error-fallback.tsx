@@ -1,7 +1,7 @@
-import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { AlertTriangleIcon } from "@stll/ui/icons";
 
 export const InspectorPdfErrorFallback = ({
   onRetry,

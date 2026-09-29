@@ -1,0 +1,195 @@
+import { Result, TaggedError } from "better-result";
+import type { Err, TaggedErrorClass } from "better-result";
+import { Temporal } from "temporal-polyfill/full";
+
+// Entity checks are yes/no screening questions put to an official source
+// ("is this company in insolvency proceedings?"), not company lookups.
+// Every check resolves to exactly one outcome:
+//
+//   clear           the source positively answered and holds nothing adverse
+//   found           the source returned adverse records (typed findings)
+//   not-registered  the source answered but holds no record of the subject
+//                   (for example not a VAT payer); neither clear nor adverse
+//   unavailable     the source could not answer (transport error, timeout,
+//                   outage page, SOAP fault, error code, unparseable body)
+//   not-covered     the source cannot answer for this kind of subject
+//
+// `unavailable` is never collapsed into `clear`: the only path to `clear` is
+// a parser that recognised the source's explicit answer.
+
+/** What the check is asked about. Each check declares which types it answers. */
+export type EntityCheckSubject =
+  | {
+      type: "company-id";
+      /** National business identifier of the check's jurisdiction (IČO). */
+      value: string;
+    }
+  | {
+      type: "tax-id";
+      /** Tax identifier of the check's jurisdiction (DIČ). */
+      value: string;
+    }
+  | {
+      type: "person";
+      firstName: string;
+      lastName: string;
+      /** ISO 8601 calendar date (YYYY-MM-DD). */
+      birthDate: string;
+    };
+
+export const ENTITY_CHECK_SUBJECT_TYPES: readonly [
+  "company-id",
+  "tax-id",
+  "person",
+] = [
+  "company-id",
+  "tax-id",
+  "person",
+] as const satisfies readonly EntityCheckSubject["type"][];
+
+export type EntityCheckSubjectType =
+  (typeof ENTITY_CHECK_SUBJECT_TYPES)[number];
+
+/**
+ * The subject as sent to the source. A tax ID the check derived from a
+ * company ID names that company ID, so a reader can tell it was not given.
+ */
+export type CheckedEntityCheckSubject =
+  | Exclude<EntityCheckSubject, { type: "tax-id" }>
+  | {
+      type: "tax-id";
+      value: string;
+      derivedFrom: { type: "company-id"; value: string } | null;
+    };
+
+/** The official source a check queries, for attribution next to the answer. */
+export type EntityCheckSource = {
+  name: string;
+  authority: string;
+  url: string;
+};
+
+export const ENTITY_CHECK_UNAVAILABLE_REASONS = [
+  "timeout",
+  "network",
+  "http-error",
+  "outage-page",
+  "soap-fault",
+  "malformed-response",
+  "source-error",
+] as const;
+
+export type EntityCheckUnavailableReason =
+  (typeof ENTITY_CHECK_UNAVAILABLE_REASONS)[number];
+
+export const ENTITY_CHECK_NOT_COVERED_REASONS = [
+  "subject-type-not-supported",
+  // A tax ID derived from a company ID matched no record. Only a legal
+  // person's tax ID is derived from its company ID, so the subject may hold a
+  // different tax ID; the check needs that ID rather than reporting absence.
+  "tax-id-required",
+] as const;
+
+type EntityCheckNotCoveredReason =
+  (typeof ENTITY_CHECK_NOT_COVERED_REASONS)[number];
+
+type EntityCheckOutcomeBase<TKind extends string> = {
+  kind: TKind;
+  source: EntityCheckSource;
+  subject: CheckedEntityCheckSubject;
+};
+
+export type EntityCheckOutcome<TKind extends string, TFinding, TRecord> =
+  | (EntityCheckOutcomeBase<TKind> & {
+      status: "clear";
+      /** ISO instant the source was queried. */
+      checkedAt: string;
+      /** When the source last refreshed its data, if it says so. */
+      sourceDataAsOf: string | null;
+      /** What the source holds about the subject beyond the yes/no answer. */
+      record: TRecord;
+    })
+  | (EntityCheckOutcomeBase<TKind> & {
+      status: "found";
+      checkedAt: string;
+      sourceDataAsOf: string | null;
+      findings: [TFinding, ...TFinding[]];
+      /** Matches the source reported, which can exceed the findings returned. */
+      totalMatches: number;
+      record: TRecord;
+    })
+  | (EntityCheckOutcomeBase<TKind> & {
+      status: "not-registered";
+      checkedAt: string;
+      sourceDataAsOf: string | null;
+    })
+  | (EntityCheckOutcomeBase<TKind> & {
+      status: "unavailable";
+      checkedAt: string;
+      reason: EntityCheckUnavailableReason;
+      /** Source-provided error code or HTTP status, never a raw body. */
+      detail: string | null;
+    })
+  | (EntityCheckOutcomeBase<TKind> & {
+      status: "not-covered";
+      reason: EntityCheckNotCoveredReason;
+      supportedSubjectTypes: EntityCheckSubjectType[];
+    });
+
+/** What a source client reports once it has an explicit answer. */
+export type SourceAnswer<TFinding, TRecord> =
+  | { type: "clear"; sourceDataAsOf: string | null; record: TRecord }
+  | {
+      type: "found";
+      sourceDataAsOf: string | null;
+      totalMatches: number;
+      findings: [TFinding, ...TFinding[]];
+      record: TRecord;
+    }
+  | { type: "not-registered"; sourceDataAsOf: string | null };
+
+/**
+ * A failure that makes the source's answer unusable. Source clients return it
+ * as an `Err` and the check boundary turns it into an `unavailable` outcome,
+ * so no parse path can fall through to `clear`.
+ */
+const EntityCheckUnavailableErrorBase: TaggedErrorClass<"EntityCheckUnavailableError"> =
+  TaggedError("EntityCheckUnavailableError");
+
+export class EntityCheckUnavailableError extends EntityCheckUnavailableErrorBase<{
+  message: string;
+  reason: EntityCheckUnavailableReason;
+  /** Source error code or HTTP status; never a raw body. */
+  detail: string | null;
+}> {}
+
+/** The caller aborted the check; not an answer from the source. */
+const EntityCheckCancelledErrorBase: TaggedErrorClass<"EntityCheckCancelledError"> =
+  TaggedError("EntityCheckCancelledError");
+
+export class EntityCheckCancelledError extends EntityCheckCancelledErrorBase<{
+  message: string;
+}> {}
+
+export type EntityCheckSourceError =
+  | EntityCheckUnavailableError
+  | EntityCheckCancelledError;
+
+export const unavailable = ({
+  reason,
+  message,
+  detail,
+}: {
+  reason: EntityCheckUnavailableReason;
+  message: string;
+  detail?: string | null;
+}): Err<never, EntityCheckUnavailableError> =>
+  Result.err(
+    new EntityCheckUnavailableError({
+      message,
+      reason,
+      detail: detail ?? null,
+    }),
+  );
+
+export const nowInstant = (): string => Temporal.Now.instant().toString();

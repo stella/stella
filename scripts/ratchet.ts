@@ -70,8 +70,9 @@ import {
   RESULT_CONVENTION_SOURCE_GLOBS,
 } from "./result-boundary-globs";
 import {
+  countRootConnectionImports,
   countRootConnectionShapes,
-  isRootConnectionModule,
+  countRootConnectionTypeImports,
 } from "./root-connection-shapes";
 import {
   ALL_SOURCE_GLOBS,
@@ -286,11 +287,129 @@ const countAsCasts = (content: string): number => {
   return total;
 };
 
+// `transition` is also an ordinary word and a discriminator value
+// (`kind: "transition"`), so it counts only in a class-list position.
+const BARE_TRANSITION_UTILITY = "transition";
+
 const LEGACY_PAINT_TRANSITION_UTILITIES: ReadonlySet<string> = new Set([
-  "transition",
   "transition-colors",
   "transition-shadow",
 ]);
+
+const CLASS_LIST_HELPERS: ReadonlySet<string> = new Set([
+  "clsx",
+  "cn",
+  "cva",
+  "twMerge",
+]);
+
+// Bindings and attributes such as `className`, `contentClassName`,
+// `CARD_CLASS` or `SIZE_CLASS_NAMES`.
+const CLASS_LIST_NAME = /class(?:_?names?|es)?$/iu;
+
+type StringPosition = "class-list" | "other";
+
+const isClassListBinding = (name: ts.Node): boolean =>
+  (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
+  CLASS_LIST_NAME.test(name.text);
+
+const isClassListHelperCall = (
+  node: ts.Node,
+  helper?: string,
+): node is ts.CallExpression =>
+  ts.isCallExpression(node) &&
+  ts.isIdentifier(node.expression) &&
+  (helper === undefined
+    ? CLASS_LIST_HELPERS.has(node.expression.text)
+    : node.expression.text === helper);
+
+// Operators whose right operand is the expression's value
+// (`open && "transition"`); a comparison's operands are not.
+const VALUE_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
+  ts.SyntaxKind.AmpersandAmpersandToken,
+  ts.SyntaxKind.BarBarToken,
+  ts.SyntaxKind.QuestionQuestionToken,
+]);
+
+const CVA_VARIANTS_KEY = "variants";
+
+// `cva(base, { variants: { size: { sm: "…" } } })`: the option's value.
+const isCvaVariantValue = (option: ts.PropertyAssignment): boolean => {
+  const options = option.parent;
+  const variant = options.parent;
+  if (!ts.isPropertyAssignment(variant)) {
+    return false;
+  }
+  const variants = variant.parent.parent;
+  if (
+    !ts.isPropertyAssignment(variants) ||
+    !ts.isIdentifier(variants.name) ||
+    variants.name.text !== CVA_VARIANTS_KEY
+  ) {
+    return false;
+  }
+  const config = variants.parent;
+  return (
+    isClassListHelperCall(config.parent, "cva") &&
+    config.parent.arguments.some((argument) => argument === config)
+  );
+};
+
+// Whether `node` is a class-list value: a class-helper argument, a class
+// attribute or binding value, or a branch that flows into one unchanged
+// (`&&`/`||`/`??` right operand, ternary branch, array element, clsx object
+// key, cva variant value). A comparison operand, a switch case or an argument
+// to any other call is not.
+const classValuePosition = (node: ts.Node): StringPosition => {
+  const parent = node.parent;
+  if (ts.isSourceFile(parent)) {
+    return "other";
+  }
+  if (ts.isCallExpression(parent)) {
+    return isClassListHelperCall(parent) &&
+      parent.arguments.some((argument) => argument === node)
+      ? "class-list"
+      : "other";
+  }
+  if (ts.isJsxAttribute(parent)) {
+    return CLASS_LIST_NAME.test(parent.name.getText()) ? "class-list" : "other";
+  }
+  if (
+    ts.isJsxExpression(parent) ||
+    ts.isParenthesizedExpression(parent) ||
+    ts.isAsExpression(parent) ||
+    ts.isSatisfiesExpression(parent) ||
+    ts.isArrayLiteralExpression(parent) ||
+    ts.isSpreadElement(parent) ||
+    ts.isTemplateSpan(parent) ||
+    ts.isTemplateExpression(parent)
+  ) {
+    return classValuePosition(parent);
+  }
+  if (ts.isBinaryExpression(parent)) {
+    return parent.right === node &&
+      VALUE_OPERATORS.has(parent.operatorToken.kind)
+      ? classValuePosition(parent)
+      : "other";
+  }
+  if (ts.isConditionalExpression(parent)) {
+    return parent.condition === node ? "other" : classValuePosition(parent);
+  }
+  if (ts.isPropertyAssignment(parent)) {
+    if (parent.name === node) {
+      return classValuePosition(parent.parent);
+    }
+    return isClassListBinding(parent.name) || isCvaVariantValue(parent)
+      ? "class-list"
+      : "other";
+  }
+  if (ts.isVariableDeclaration(parent) || ts.isPropertyDeclaration(parent)) {
+    return parent.initializer === node && isClassListBinding(parent.name)
+      ? "class-list"
+      : "other";
+  }
+  return "other";
+};
 
 const PAINT_TRANSITION_PROPERTIES = [
   "background",
@@ -304,6 +423,7 @@ const PAINT_TRANSITION_PROPERTIES = [
   "fill",
   "filter",
   "outline",
+  "outline-color",
   "stroke",
   "text-decoration-color",
 ] as const;
@@ -312,22 +432,63 @@ const PAINT_TRANSITION_PROPERTY_SET: ReadonlySet<string> = new Set(
   PAINT_TRANSITION_PROPERTIES,
 );
 
-const countLegacyPaintTransitionTokens = (value: string): number => {
+// The utility after its variants: the last `:` outside brackets and
+// parentheses, so `in-[…]:[transition:…]` keeps its arbitrary property.
+const stripVariants = (token: string): string => {
+  let depth = 0;
+  let boundary = -1;
+  for (let index = 0; index < token.length; index += 1) {
+    const char = token.charAt(index);
+    if (char === "[" || char === "(") {
+      depth += 1;
+    } else if (char === "]" || char === ")") {
+      depth -= 1;
+    } else if (char === ":" && depth === 0) {
+      boundary = index;
+    }
+  }
+  return token.slice(boundary + 1);
+};
+
+// `[transition:background-color_1s]` and `[transition-property:color]`:
+// Tailwind arbitrary properties, whose `_` stands for a space.
+const ARBITRARY_TRANSITION_PROPERTY = /^\[transition(?:-property)?:(.*)\]$/u;
+
+const isPaintArbitraryTransition = (utility: string): boolean => {
+  const value = ARBITRARY_TRANSITION_PROPERTY.exec(utility)?.at(1);
+  if (value === undefined) {
+    return false;
+  }
+  return value.split(",").some((segment) => {
+    const property = segment.split("_").at(0) ?? "";
+    return (
+      property.startsWith("--") || PAINT_TRANSITION_PROPERTY_SET.has(property)
+    );
+  });
+};
+
+const countLegacyPaintTransitionTokens = (
+  value: string,
+  position: StringPosition,
+): number => {
   let count = 0;
-  for (const token of value.split(/[\s"'`{}()]+/u)) {
-    const variantBoundary = token.lastIndexOf(":");
-    const bare = token.slice(variantBoundary + 1);
+  for (const token of value.split(/[\s"'`{}]+/u)) {
+    const bare = stripVariants(token);
     const withoutLeadingImportant = bare.startsWith("!") ? bare.slice(1) : bare;
     const utility = withoutLeadingImportant.endsWith("!")
       ? withoutLeadingImportant.slice(0, -1)
       : withoutLeadingImportant;
-    if (LEGACY_PAINT_TRANSITION_UTILITIES.has(utility)) {
-      count += 1;
+    if (utility === BARE_TRANSITION_UTILITY) {
+      count += position === "class-list" ? 1 : 0;
       continue;
     }
     if (
-      utility.startsWith("transition-[") &&
-      PAINT_TRANSITION_PROPERTIES.some((property) => utility.includes(property))
+      LEGACY_PAINT_TRANSITION_UTILITIES.has(utility) ||
+      isPaintArbitraryTransition(utility) ||
+      (utility.startsWith("transition-[") &&
+        PAINT_TRANSITION_PROPERTIES.some((property) =>
+          utility.includes(property),
+        ))
     ) {
       count += 1;
     }
@@ -355,14 +516,10 @@ const countLegacyPaintCssTransitions = (content: string): number => {
   return count;
 };
 
-// The UX convention permits compositable transform/opacity transitions only.
-// The layout-motion lint rule rejects new layout transitions outright; this
-// counter freezes the older paint-property Tailwind utilities per file so
-// their remaining call sites can only shrink.
-const countLegacyPaintTransitions: FileCounter = (content, file) => {
-  if (file.endsWith(".css")) {
-    return countLegacyPaintCssTransitions(content);
-  }
+const countLegacyPaintScriptTransitions = (
+  content: string,
+  file: string,
+): number => {
   const source = ts.createSourceFile(
     file,
     content,
@@ -379,12 +536,176 @@ const countLegacyPaintTransitions: FileCounter = (content, file) => {
       ts.isTemplateMiddle(node) ||
       ts.isTemplateTail(node)
     ) {
-      total += countLegacyPaintTransitionTokens(node.text);
+      // Walking ancestors is only needed when the bare utility can occur.
+      const position = node.text.includes(BARE_TRANSITION_UTILITY)
+        ? classValuePosition(node)
+        : "other";
+      total += countLegacyPaintTransitionTokens(node.text, position);
+    }
+    // clsx object syntax: `{ transition: open }` names the class by its key.
+    if (
+      ts.isIdentifier(node) &&
+      node.text === BARE_TRANSITION_UTILITY &&
+      ts.isPropertyAssignment(node.parent) &&
+      node.parent.name === node &&
+      classValuePosition(node) === "class-list"
+    ) {
+      total += 1;
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
   return total;
+};
+
+// An .astro file mixes TypeScript (frontmatter and <script> blocks), CSS
+// (<style> blocks and style attributes) and template attributes that carry
+// Tailwind class lists (`class`, `class:list`, `contentClass`, ...).
+const ASTRO_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/u;
+// A <script> or <style> element; an end tag may carry whitespace or
+// attributes, as browsers accept.
+const ASTRO_RAW_TEXT_ELEMENT =
+  /<(script|style)\b[^>]*>([\s\S]*?)<\/\1\b[^>]*>/giu;
+const ASTRO_STYLE_ELEMENT = "style";
+const ASTRO_CLASS_LIST_DIRECTIVE = "class:list";
+const ASTRO_STYLE_ATTRIBUTE = "style";
+
+// The value after `name=`: a quoted string, or a brace-balanced expression
+// (returned with its braces).
+const readAstroAttributeValue = (template: string, start: number): string => {
+  const opener = template.charAt(start);
+  if (opener === '"' || opener === "'") {
+    const end = template.indexOf(opener, start + 1);
+    return template.slice(start + 1, end === -1 ? template.length : end);
+  }
+  let depth = 0;
+  for (let index = start; index < template.length; index += 1) {
+    const char = template.charAt(index);
+    if (char === "{") {
+      depth += 1;
+    }
+    if (char === "}") {
+      depth -= 1;
+    }
+    if (depth === 0) {
+      return template.slice(start, index + 1);
+    }
+  }
+  return template.slice(start);
+};
+
+const countLegacyPaintAstroAttributes = (
+  template: string,
+  file: string,
+): number => {
+  const attribute = /(?<![\w:.-])([A-Za-z][\w-]*(?::list)?)\s*=\s*(?=["'{])/gu;
+  let total = 0;
+  for (
+    let match = attribute.exec(template);
+    match !== null;
+    match = attribute.exec(template)
+  ) {
+    const name = match.at(1) ?? "";
+    const value = readAstroAttributeValue(
+      template,
+      match.index + match[0].length,
+    );
+    if (name === ASTRO_STYLE_ATTRIBUTE) {
+      total += countLegacyPaintCssTransitions(value);
+      continue;
+    }
+    if (name !== ASTRO_CLASS_LIST_DIRECTIVE && !CLASS_LIST_NAME.test(name)) {
+      continue;
+    }
+    // An expression goes through the TypeScript counter as a class binding's
+    // value, so only its class-valued branches count.
+    total += value.startsWith("{")
+      ? countLegacyPaintScriptTransitions(
+          `const astroClass = (${value.slice(1, -1)});`,
+          `${file}.ts`,
+        )
+      : countLegacyPaintTransitionTokens(value, "class-list");
+  }
+  return total;
+};
+
+const countLegacyPaintAstroTransitions = (
+  content: string,
+  file: string,
+): number => {
+  const frontmatter = ASTRO_FRONTMATTER.exec(content);
+  const body =
+    frontmatter === null ? content : content.slice(frontmatter[0].length);
+  let total =
+    frontmatter === null
+      ? 0
+      : countLegacyPaintScriptTransitions(
+          frontmatter.at(1) ?? "",
+          `${file}.ts`,
+        );
+  // Each element's text goes to its own counter; the template is what lies
+  // between them, so its attributes are scanned without the element bodies.
+  const templateParts: string[] = [];
+  let templateStart = 0;
+  for (const match of body.matchAll(ASTRO_RAW_TEXT_ELEMENT)) {
+    const text = match.at(2) ?? "";
+    total +=
+      match.at(1)?.toLowerCase() === ASTRO_STYLE_ELEMENT
+        ? countLegacyPaintCssTransitions(text)
+        : countLegacyPaintScriptTransitions(text, `${file}.ts`);
+    templateParts.push(body.slice(templateStart, match.index));
+    templateStart = match.index + match[0].length;
+  }
+  templateParts.push(body.slice(templateStart));
+  return (
+    total + countLegacyPaintAstroAttributes(templateParts.join("\n"), file)
+  );
+};
+
+type PaintTransitionAllowance = { utility: string; reason: string };
+
+// Paint transitions kept on purpose, one reasoned entry per file. Each
+// occurrence of the allowed utility is subtracted from its file's count; an
+// entry whose utility no longer appears panics, so the record cannot go stale.
+const LEGACY_PAINT_TRANSITION_ALLOWANCES: ReadonlyMap<
+  string,
+  PaintTransitionAllowance
+> = new Map([
+  [
+    "packages/ui/src/components/input-control.ts",
+    {
+      utility: "[transition:background-color_5000000s_ease-in-out_0s]",
+      reason:
+        "holds off the browser's autofill background so the control's translucent surface and its has-autofill tint show through; an inset box-shadow fill can only paint an opaque colour",
+    },
+  ],
+]);
+
+// The UX convention permits compositable transform/opacity transitions only.
+// The layout-motion lint rule rejects new layout transitions outright; this
+// counter freezes the older paint-property Tailwind utilities per file so
+// their remaining call sites can only shrink.
+const countLegacyPaintTransitions: FileCounter = (content, file) => {
+  const total = (() => {
+    if (file.endsWith(".css")) {
+      return countLegacyPaintCssTransitions(content);
+    }
+    if (file.endsWith(".astro")) {
+      return countLegacyPaintAstroTransitions(content, file);
+    }
+    return countLegacyPaintScriptTransitions(content, file);
+  })();
+  const allowance = LEGACY_PAINT_TRANSITION_ALLOWANCES.get(file);
+  if (allowance === undefined) {
+    return total;
+  }
+  const allowed = content.split(allowance.utility).length - 1;
+  if (allowed === 0) {
+    return panic(
+      `legacy-paint-transitions allowance for ${file} no longer matches ${allowance.utility}; remove the entry (it was kept because it ${allowance.reason})`,
+    );
+  }
+  return total - allowed;
 };
 
 const NULLISH_ARRAY = /\?\?\s*\[\]/gu;
@@ -693,61 +1014,26 @@ const countDirectAuditLogInserts = (content: string): number => {
   );
 };
 
-// Value imports of the root connection handle, static or dynamic, by alias
-// or relative path. Request handlers are covered by lint; this keeps the
-// remaining sites visible. Type-only imports are not counted.
-const countRootConnectionImportsAs = (
-  content: string,
-  scriptKind: ts.ScriptKind,
-): number => {
-  const sourceFile = ts.createSourceFile(
-    "ratchet-source",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind,
-  );
-  let count = 0;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isImportDeclaration(node) &&
-      isRootConnectionModule(node.moduleSpecifier) &&
-      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
-    ) {
-      const bindingsNode = node.importClause?.namedBindings;
-      if (
-        bindingsNode !== undefined &&
-        ts.isNamedImports(bindingsNode) &&
-        bindingsNode.elements.some(
-          (specifier) =>
-            !specifier.isTypeOnly &&
-            (specifier.propertyName ?? specifier.name).text === "rootDb",
-        )
-      ) {
-        count += 1;
-      }
-      return;
-    }
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      isRootConnectionModule(node.arguments.at(0))
-    ) {
-      count += 1;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return count;
-};
-// The counter sees content, not the file name. Parsing a `.ts` generic arrow
-// as TSX misreads what follows it, so both parses run and the larger count
-// is the one that read the file correctly.
-const countDirectRootConnectionImports = (content: string): number =>
-  Math.max(
-    countRootConnectionImportsAs(content, ts.ScriptKind.TS),
-    countRootConnectionImportsAs(content, ts.ScriptKind.TSX),
-  );
+// Every hand-written API module, not only `src`: a script or eval that reaches
+// an owner-level handle is as much a use of it as a lib module.
+const API_OWNER_HANDLE_GLOBS = [
+  "apps/api/*.{ts,tsx}",
+  "apps/api/contracts/**/*.{ts,tsx}",
+  "apps/api/evals/**/*.{ts,tsx}",
+  "apps/api/scripts/**/*.{ts,tsx}",
+  "apps/api/src/**/*.{ts,tsx}",
+] as const;
+
+const OWNER_HANDLE_ALLOWLIST_REMEDY =
+  "`rootDb` and `rlsDb` (apps/api/src/db/root.ts) run as the table owner, so\n" +
+  "every module that reaches them is listed by name. New code takes the scoped\n" +
+  "handle its caller gives it (`ctx.safeDb` / `ctx.scopedDb`, see\n" +
+  "apps/api/src/db/safe-db.ts and scoped.ts), or calls an owner operation\n" +
+  "behind a door in ROOT_CONNECTION_DOORS (scripts/ownership.ts).\n" +
+  "If owner access is genuinely needed, run\n" +
+  `\`${WRITE_HINT}\`, commit the new line in\n` +
+  `${BASELINE_REL}, and say in the PR why a scoped handle\n` +
+  "cannot do the job: that line is the exception review signs off.";
 
 // The worker hosts and doors that hand the root connection on by design. The
 // lint rule confining each door's importers reads the same rows.
@@ -1954,6 +2240,14 @@ type RatchetMetric =
        * one occurrence cannot fund a new one elsewhere.
        */
       readonly perFile?: true;
+      /**
+       * The baseline is an allowlist of files, and this text tells whoever
+       * trips it what new code does instead and how an exception is justified.
+       * Needs `perFile`. A file below its own entry fails too, until `--write`
+       * shrinks the entry: an allowance must not outlive the use it was
+       * granted for, or the next use in that file would land unseen.
+       */
+      readonly allowlist?: string;
     }
   | {
       readonly scope: "repo";
@@ -2434,9 +2728,10 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "legacy-paint-transitions",
     description:
-      "legacy Tailwind utilities and CSS declarations that transition paint properties instead of transform/opacity; existing per-file debt may only shrink",
+      "Tailwind utilities and CSS declarations (in TS, CSS and .astro sources) that transition paint properties instead of transform/opacity; at 0 — keep it there",
     include: [
       "apps/*/src/**/*.css",
+      "apps/*/src/**/*.astro",
       "apps/desktop/src/**/*.{ts,tsx}",
       "apps/landing/src/**/*.{ts,tsx}",
       "apps/web/src/**/*.{ts,tsx}",
@@ -2571,25 +2866,39 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "direct-root-connection-imports",
     description:
-      "imports of the root database connection (`rootDb`) outside request handlers, which lint already covers; new code takes a scoped or purpose-named handle",
-    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+      "runtime references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed and namespace imports, re-exports, `import = require` and dynamic imports (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, a file naming one more handle, or a type-only import turned into a value import fails even when another file dropped one",
+    include: API_OWNER_HANDLE_GLOBS,
     exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/api/src/db/root.ts" ||
-      file.startsWith("apps/api/src/handlers/"),
-    count: countDirectRootConnectionImports,
+      isExcludedSource(file) || file === "apps/api/src/db/root.ts",
+    count: countRootConnectionImports,
+    perFile: true,
+    allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
+  },
+  {
+    scope: "file",
+    id: "root-connection-type-imports",
+    description:
+      "type-only references to the owner-level database handles (`rootDb`, `rlsDb`) anywhere in the API outside tests, one per handle named: `import type`, `type` specifiers, type-only re-exports and import type queries (scripts/root-connection-shapes.ts). A type taken from a handle is the parameter one is passed into, so these are an allowlist gated per file too, kept apart from runtime references so a module cannot trade one for the other",
+    include: API_OWNER_HANDLE_GLOBS,
+    exclude: (file) =>
+      isExcludedSource(file) || file === "apps/api/src/db/root.ts",
+    count: countRootConnectionTypeImports,
+    perFile: true,
+    allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
   {
     scope: "file",
     id: "implicit-root-connection-shapes",
     description:
-      "places that supply the root database connection (`rootDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, object-literal dependency properties, module-level calls and aliases, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts). Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt; everything else takes its connection as a required dependency",
-    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+      "places that supply an owner-level database handle (`rootDb`, `rlsDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, assignments, object-literal dependency properties, module-level calls, aliases and returned factories, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts), awaited or not. Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt, plus the awaited owner operations listed with their file in ROOT_OPERATION_RESULTS; everything else takes its connection as a required dependency. An allowlist gated per file",
+    include: API_OWNER_HANDLE_GLOBS,
     exclude: (file) =>
       isExcludedSource(file) ||
       file === "apps/api/src/db/root.ts" ||
       ROOT_CONNECTION_DOOR_FILES.has(file),
     count: countRootConnectionShapes,
+    perFile: true,
+    allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
   {
     scope: "file",
@@ -2894,6 +3203,16 @@ const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
   ).map(({ id }) => id),
 );
 
+// How `--check` gates a metric: per file, and whether below-baseline files
+// fail as stale allowlist entries. An allowlist is always gated per file.
+const metricGate = (metric: RatchetMetric): DiffOptions =>
+  metric.scope === "file"
+    ? {
+        perFile: metric.allowlist === undefined ? metric.perFile : true,
+        allowlist: metric.allowlist === undefined ? undefined : true,
+      }
+    : {};
+
 // --- Scanning ---------------------------------------------------------------
 
 type MetricSnapshot = { count: number; files: Record<string, number> };
@@ -3117,7 +3436,9 @@ const writeBaseline = (snapshot: Baseline): void => {
 
 // --- Diffing ----------------------------------------------------------------
 
-type MetricStatus = "ok" | "regressed" | "dropped";
+// `stale`: an allowlist metric fell in some file and its baseline has not
+// shrunk to match yet.
+type MetricStatus = "ok" | "regressed" | "dropped" | "stale";
 
 type RegressedFile = { file: string; from: number; to: number };
 
@@ -3127,6 +3448,8 @@ type MetricDiff = {
   current: number;
   baseline: number;
   regressedFiles: RegressedFile[];
+  /** Files below their baseline entry, for an allowlist metric. */
+  staleFiles: RegressedFile[];
 };
 
 const metricStatus = (current: number, baseline: number): MetricStatus => {
@@ -3139,13 +3462,16 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
   return "ok";
 };
 
-type DiffOptions = { perFile?: true | undefined };
+type DiffOptions = {
+  perFile?: true | undefined;
+  allowlist?: true | undefined;
+};
 
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
-  { perFile }: DiffOptions = {},
+  { perFile, allowlist }: DiffOptions = {},
 ): MetricDiff => {
   const regressedFiles: RegressedFile[] = [];
   for (const [file, to] of Object.entries(current.files)) {
@@ -3156,9 +3482,24 @@ const diffMetric = (
   }
   regressedFiles.sort((a, b) => a.file.localeCompare(b.file));
 
+  const staleFiles: RegressedFile[] = [];
+  if (allowlist === true) {
+    for (const [file, from] of Object.entries(baseline.files)) {
+      const to = current.files[file] ?? 0;
+      if (to < from) {
+        staleFiles.push({ file, from, to });
+      }
+    }
+    staleFiles.sort((a, b) => a.file.localeCompare(b.file));
+  }
+
   const totalStatus = metricStatus(current.count, baseline.count);
-  const status =
-    perFile === true && regressedFiles.length > 0 ? "regressed" : totalStatus;
+  let status = totalStatus;
+  if ((perFile === true || allowlist === true) && regressedFiles.length > 0) {
+    status = "regressed";
+  } else if (staleFiles.length > 0) {
+    status = "stale";
+  }
 
   return {
     id,
@@ -3166,6 +3507,7 @@ const diffMetric = (
     current: current.count,
     baseline: baseline.count,
     regressedFiles,
+    staleFiles,
   };
 };
 
@@ -3223,6 +3565,8 @@ const runCheck = (): number => {
 
   const regressions: MetricDiff[] = [];
   const drops: MetricDiff[] = [];
+  const stale: MetricDiff[] = [];
+  const remedies = new Set<string>();
 
   for (const metric of RATCHET_METRICS) {
     const base = baseline[metric.id] ?? { count: 0, files: {} };
@@ -3230,13 +3574,23 @@ const runCheck = (): number => {
       metric.id,
       requireSnapshot(current, metric.id),
       base,
-      { perFile: metric.scope === "file" ? metric.perFile : undefined },
+      metricGate(metric),
     );
     if (diff.status === "regressed") {
       regressions.push(diff);
     }
     if (diff.status === "dropped") {
       drops.push(diff);
+    }
+    if (diff.status === "stale") {
+      stale.push(diff);
+    }
+    if (
+      diff.status === "regressed" &&
+      metric.scope === "file" &&
+      metric.allowlist !== undefined
+    ) {
+      remedies.add(metric.allowlist);
     }
   }
 
@@ -3246,17 +3600,36 @@ const runCheck = (): number => {
     );
   }
 
-  if (regressions.length === 0) {
+  if (regressions.length === 0 && stale.length === 0) {
     console.log(
       `ratchet --check: OK. ${RATCHET_METRICS.length} metric(s) at or below baseline.`,
     );
     return 0;
   }
 
+  if (stale.length > 0) {
+    console.error(
+      "\nratchet --check: allowlist entries above what the tree uses:\n",
+    );
+    for (const diff of stale) {
+      console.error(`  ${diff.id}:`);
+      for (const { file, from, to } of diff.staleFiles) {
+        console.error(`      ${file}: ${from} -> ${to}`);
+      }
+    }
+    console.error(
+      `\nAn allowlist shrinks with its use: run \`${WRITE_HINT}\` and commit\n` +
+        `${BASELINE_REL}, so the allowance goes with the code it was granted for.`,
+    );
+  }
+  if (regressions.length === 0) {
+    return 1;
+  }
+
   console.error("\nratchet --check: metric(s) rose above baseline:\n");
   for (const diff of regressions) {
     console.error(
-      `  ${diff.id}: ${diff.baseline} -> ${diff.current} (+${diff.current - diff.baseline})`,
+      `  ${diff.id}: ${diff.baseline} -> ${diff.current} (${formatDelta(diff.current - diff.baseline)})`,
     );
     for (const { file, from, to } of diff.regressedFiles) {
       console.error(`      ${file}: ${from} -> ${to}`);
@@ -3267,6 +3640,9 @@ const runCheck = (): number => {
       "\nA per-file metric fails on any file above its own baseline, even when\n" +
         "the total did not rise: move the new occurrence behind the owner instead.",
     );
+  }
+  for (const remedy of remedies) {
+    console.error(`\n${remedy}`);
   }
   console.error(
     "\nThese metrics may only decrease. Remove the new occurrence(s) above, or,\n" +
@@ -3339,7 +3715,26 @@ const SELF_TEST_PACKAGE_AS_CASTS = [
 const EXPECTED_PACKAGE_AS_CASTS = 2;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
-  `const direct = "transition transition-colors";`,
+  `const directClass = "transition transition-colors";`,
+  `const helper = cn("rounded", active && "transition");`,
+  `const Row = () => <div className="px-2 transition" />;`,
+  `const Picker = () => <Popover contentClassName="px-2 transition" />;`,
+  `const toggle = cn(open ? "transition" : "");`,
+  `const keyed = clsx({ transition: on });`,
+  `const motion = cva("", { variants: { motion: { on: "transition", transition: "opacity-100" } }, defaultVariants: { motion: "transition" } });`,
+  `const property = "[transition:background-color_150ms]";`,
+  `const propertyList = "in-[.row]:[transition-property:color,opacity]";`,
+  // Not counted: a bare `transition` outside a class-list value is a word or
+  // a discriminator (a comparison operand, a case, another call's argument,
+  // a cva option name or default), not a utility.
+  `const step = { kind: "transition" };`,
+  `type Variables = { type: "transition"; reason?: string };`,
+  `const label = "transition";`,
+  `const Step = () => <Tour data-kind="transition" />;`,
+  `const gated = cn(state === "transition" && "opacity-0");`,
+  `const nested = cn(describe("transition"));`,
+  `const pick = (kind: string) => { switch (kind) { case "transition": return cn("rounded"); } };`,
+  `const compositableProperty = "[transition:transform_.5s_cubic-bezier(.22,1,.36,1),opacity_.5s]";`,
   `const variant = "hover:transition-shadow";`,
   `const mixed = "transition-[background-color,opacity]";`,
   `const arbitrary = \`transition-[transform,box-shadow]\`;`,
@@ -3349,7 +3744,7 @@ const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const control = "transition-none duration-150 transition-induced";`,
 ] as const;
 const SELF_TEST_LEGACY_PAINT_TRANSITIONS = `${LEGACY_PAINT_TRANSITION_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_LEGACY_PAINT_TRANSITIONS = 6;
+const EXPECTED_LEGACY_PAINT_TRANSITIONS = 14;
 
 const SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS = `
 .paint {
@@ -3358,11 +3753,39 @@ const SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS = `
 }
 .custom { transition: --theme-color 200ms; }
 .shorthands { transition: background 120ms, border 120ms; }
+.focus { transition: outline-color 200ms; }
 .compositable { transition: opacity 100ms, transform 100ms; }
 .timing-variable { transition: opacity 100ms var(--motion-duration); }
 .disabled { transition: none; }
 `;
-const EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS = 4;
+const EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS = 5;
+
+const LEGACY_PAINT_TRANSITION_ASTRO_FIXTURE_LINES = [
+  "---",
+  'const ROW_CLASS = "rounded transition-colors";',
+  'const step = { kind: "transition" };',
+  "---",
+  '<a class="px-2 transition-colors" data-kind="transition">Row</a>',
+  '<div class:list={["rounded", { "transition-shadow": active }]} />',
+  '<div class:list={[state === "transition" && "opacity-0"]} />',
+  '<Popover contentClass="px-2 transition" />',
+  '<span class="transition-opacity" style="transition: color 150ms"></span>',
+  "<p>Theme transition: the background fades.</p>",
+  "<style>",
+  "  .row { transition: background-color 150ms; }",
+  "  .fade { transition: opacity 150ms, transform 150ms; }",
+  "</style>",
+  "<script>",
+  '  button.className = "transition-colors";',
+  "</script>",
+];
+const SELF_TEST_LEGACY_PAINT_TRANSITIONS_ASTRO = `${LEGACY_PAINT_TRANSITION_ASTRO_FIXTURE_LINES.join("\n")}\n`;
+// Expected: ROW_CLASS, the class attribute, the class:list object key, the
+// bare utility in contentClass, the style attribute, the .row block and the
+// script's className. The discriminator, the data attribute, the comparison
+// operand in class:list, the opacity utility, the prose and the .fade block
+// are not counted.
+const EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO = 7;
 
 const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
   // Counted: the shape that stalled the ingestion worker — the leading
@@ -3493,22 +3916,56 @@ const IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES = [
   'import { rootDb } from "@/api/db/root";',
   'import { rootDb as owner } from "../db/root";',
   'import * as root from "@/api/db/root";',
+  'import { rlsDb } from "@/api/db/root";',
   "export const load = async (db = rootDb) => db;",
+  "export const pool = { db: rlsDb };",
   "export const read = ({ database = owner }) => database;",
   "export const pick = (db?: typeof owner) => db ?? root.rootDb;",
   "export const write = async (ok: boolean, fn: () => Promise<void>) =>",
   "  ok ? await rootDb.transaction(fn) : undefined;",
   "export const deps = { db: rootDb };",
   "export const store = createStore(rootDb);",
-  "export const explicit = async () => await notify([], rootDb);",
+  "export const assign = (holder: { db?: unknown }) => {",
+  "  holder.db = rootDb;",
+  "};",
+  "export const factory = () => createStore(owner);",
+  "export const later = async () => await createStore(root.rootDb);",
+  "export const explicit = async () => {",
+  "  await notify([], rootDb);",
+  "};",
   "export const shadowed = (rootDb: unknown) => ({ db: rootDb });",
   'const text = "db = rootDb";',
 ];
 const SELF_TEST_IMPLICIT_ROOT_CONNECTION = `${IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES.join("\n")}\n`;
-// Expected: default, destructured default, namespace fallback, conditional,
-// dependency property, module-level call (6). The explicit argument inside a
-// function, the shadowing parameter and the string are not shapes.
-const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 6;
+// Expected: default, `rlsDb` dependency property, destructured default,
+// namespace fallback, conditional, dependency property, module-level call,
+// assignment, returned factory, awaited returned factory (10). The explicit
+// argument in a statement, the shadowing parameter and the string are not
+// shapes.
+const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 10;
+
+// The owner-handle allowlist: a value import from an eval, a type-only import
+// from a handler (both in scope), and two files it must not list, a test and a
+// module that takes only the shared transaction type.
+const OWNER_HANDLE_RLS_FIXTURE = "apps/api/evals/owner-handle-rls.ts";
+const OWNER_HANDLE_TYPE_FIXTURE = "apps/api/src/handlers/owner-handle-type.ts";
+const OWNER_HANDLE_TEST_FIXTURE =
+  "apps/api/src/lib/case-law/owner-handle.test.ts";
+const OWNER_HANDLE_TRANSACTION_FIXTURE =
+  "apps/api/src/lib/case-law/owner-handle-transaction.ts";
+const OWNER_HANDLE_FIXTURES = [
+  [OWNER_HANDLE_RLS_FIXTURE, 'import { rlsDb } from "@/api/db/root";\n'],
+  [
+    OWNER_HANDLE_TYPE_FIXTURE,
+    'import type { rootDb } from "@/api/db/root";\n' +
+      'export type Reader = Pick<typeof rootDb, "select">;\n',
+  ],
+  [OWNER_HANDLE_TEST_FIXTURE, 'import { rootDb } from "@/api/db/root";\n'],
+  [
+    OWNER_HANDLE_TRANSACTION_FIXTURE,
+    'import type { Transaction } from "@/api/db/root";\n',
+  ],
+] as const;
 // A worker host, whose dependency property is the design, not a leak.
 const IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE =
   "apps/api/src/api-background-workers.ts";
@@ -4308,6 +4765,142 @@ const failureSinkSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const ownerHandleAllowlistSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "direct-root-connection-imports";
+  const typeId = "root-connection-type-imports";
+  const imports = requireSnapshot(snapshot, id);
+  const types = requireSnapshot(snapshot, typeId);
+  for (const [metric, file, expected] of [
+    [id, OWNER_HANDLE_RLS_FIXTURE, 1],
+    [id, OWNER_HANDLE_TYPE_FIXTURE, undefined],
+    [id, OWNER_HANDLE_TEST_FIXTURE, undefined],
+    [id, OWNER_HANDLE_TRANSACTION_FIXTURE, undefined],
+    [typeId, OWNER_HANDLE_RLS_FIXTURE, undefined],
+    [typeId, OWNER_HANDLE_TYPE_FIXTURE, 1],
+    [typeId, OWNER_HANDLE_TEST_FIXTURE, undefined],
+    [typeId, OWNER_HANDLE_TRANSACTION_FIXTURE, undefined],
+  ] as const) {
+    const counted = (metric === id ? imports : types).files[file];
+    if (counted !== expected) {
+      failures.push(
+        `${metric} counted ${String(counted)} in ${file}, expected ${String(expected)}`,
+      );
+    }
+  }
+
+  for (const metricId of [id, typeId, "implicit-root-connection-shapes"]) {
+    const metric = RATCHET_METRICS.find((entry) => entry.id === metricId);
+    if (metric?.scope !== "file" || metric.allowlist === undefined) {
+      failures.push(`${metricId} is not a per-file allowlist`);
+    }
+  }
+  const registered = RATCHET_METRICS.find((entry) => entry.id === id);
+  if (registered === undefined) {
+    return [...failures, `${id} is not registered`];
+  }
+  const gate = metricGate(registered);
+  const snap = (files: Record<string, number>): MetricSnapshot => ({
+    count: Object.values(files).reduce((total, count) => total + count, 0),
+    files,
+  });
+  const listed = "apps/api/src/lib/listed.ts";
+  const other = "apps/api/src/lib/other.ts";
+  const added = "apps/api/src/lib/added.ts";
+
+  // A new file naming `rlsDb` fails, and the report names it.
+  const rls = diffMetric(
+    id,
+    snap({ [listed]: 1, [OWNER_HANDLE_RLS_FIXTURE]: 1 }),
+    snap({ [listed]: 1 }),
+    gate,
+  );
+  if (
+    rls.status !== "regressed" ||
+    rls.regressedFiles.at(0)?.file !== OWNER_HANDLE_RLS_FIXTURE
+  ) {
+    failures.push(`${id} let a new file import rlsDb`);
+  }
+  // A new `rootDb` file fails even when another file dropped its import in
+  // the same change, so the total stays level.
+  if (
+    diffMetric(
+      id,
+      snap({ [listed]: 1, [added]: 1 }),
+      snap({ [listed]: 1, [other]: 1 }),
+      gate,
+    ).status !== "regressed"
+  ) {
+    failures.push(`${id} let one file's removal fund another file's import`);
+  }
+  // A listed file naming one more handle fails.
+  if (
+    diffMetric(id, snap({ [listed]: 2 }), snap({ [listed]: 1 }), gate)
+      .status !== "regressed"
+  ) {
+    failures.push(`${id} let a listed file add a second handle`);
+  }
+  // A type-only import is counted in its own allowlist, so it needs an entry
+  // like any other.
+  const typeMetric = RATCHET_METRICS.find((entry) => entry.id === typeId);
+  const withoutType = Object.fromEntries(
+    Object.entries(types.files).filter(
+      ([file]) => file !== OWNER_HANDLE_TYPE_FIXTURE,
+    ),
+  );
+  if (
+    typeMetric === undefined ||
+    diffMetric(typeId, types, snap(withoutType), metricGate(typeMetric))
+      .status !== "regressed"
+  ) {
+    failures.push(`${typeId} let a new type-only import through`);
+  }
+  // A module listed only for its type-only import that turns it into a value
+  // import rises in the runtime allowlist: the type's allowance does not
+  // cover runtime access.
+  const escalated = OWNER_HANDLE_TYPE_FIXTURE;
+  const valueAfter = countRootConnectionImports(
+    'import { rootDb } from "@/api/db/root";\n',
+  );
+  if (
+    diffMetric(
+      id,
+      snap({ ...imports.files, [escalated]: valueAfter }),
+      imports,
+      gate,
+    ).status !== "regressed"
+  ) {
+    failures.push(`${id} let a type-only import become a value import`);
+  }
+  // Removing a use fails until the baseline shrinks with it; the rewritten
+  // baseline, which is the current snapshot, then passes and lists no file
+  // the tree no longer uses.
+  const removed = diffMetric(
+    id,
+    snap({ [listed]: 1 }),
+    snap({ [listed]: 1, [other]: 1 }),
+    gate,
+  );
+  if (removed.status !== "stale" || removed.staleFiles.at(0)?.file !== other) {
+    failures.push(`${id} kept an allowance after its use was removed`);
+  }
+  const shrunk = snap({ [listed]: 1 });
+  if (diffMetric(id, shrunk, shrunk, gate).status !== "ok") {
+    failures.push(`${id} failed a baseline that matches the tree`);
+  }
+  // A metric that is not an allowlist still passes when it falls.
+  if (
+    diffMetric(
+      "as-casts",
+      snap({ [listed]: 1 }),
+      snap({ [listed]: 1, [other]: 1 }),
+    ).status !== "dropped"
+  ) {
+    failures.push("a metric that is not an allowlist failed when it fell");
+  }
+  return failures;
+};
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -4667,6 +5260,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/landing/src/legacy-paint-transitions.astro",
+      SELF_TEST_LEGACY_PAINT_TRANSITIONS_ASTRO,
+    );
+    writeFixture(
+      root,
       "apps/web/dist/generated.css",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS_CSS,
     );
@@ -4696,6 +5294,9 @@ const runSelfTest = (): number => {
       IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE,
       SELF_TEST_IMPLICIT_ROOT_CONNECTION_DOOR,
     );
+    for (const [rel, content] of OWNER_HANDLE_FIXTURES) {
+      writeFixture(root, rel, content);
+    }
     writeFixture(
       root,
       "apps/web/src/shared-helper-shapes.tsx",
@@ -5030,6 +5631,7 @@ const runSelfTest = (): number => {
 
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
+    failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
     const mockLedgerMetric = requireSnapshot(
       snapshot,
@@ -5102,7 +5704,8 @@ const runSelfTest = (): number => {
       [
         "legacy-paint-transitions",
         EXPECTED_LEGACY_PAINT_TRANSITIONS +
-          EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS,
+          EXPECTED_LEGACY_PAINT_TRANSITIONS_CSS +
+          EXPECTED_LEGACY_PAINT_TRANSITIONS_ASTRO,
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
