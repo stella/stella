@@ -66,7 +66,7 @@ const TopBarCitationsFor = ({
   });
   const label = [
     summary.capped.incoming
-      ? t("caseLaw.citation.citedAtLeast", { count: total })
+      ? t("caseLaw.citation.citedAtLeast", { count: format.number(total) })
       : t("caseLaw.citation.citedSummary", { count: total }),
     !summary.capped.incoming && positive > 0
       ? t("caseLaw.citation.positiveCount", { count: positive })

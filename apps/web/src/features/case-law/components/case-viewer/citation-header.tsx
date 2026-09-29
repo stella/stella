@@ -95,7 +95,7 @@ export const CitationHeader = ({
 
   const summaryText = [
     summary.capped.incoming
-      ? t("caseLaw.citation.citedAtLeast", { count: total })
+      ? t("caseLaw.citation.citedAtLeast", { count: format.number(total) })
       : t("caseLaw.citation.citedSummary", { count: total }),
     !summary.capped.incoming && negative > 0
       ? t("caseLaw.citation.negativeCount", { count: negative })
