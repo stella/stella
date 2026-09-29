@@ -204,6 +204,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.LEGISLATION_SOURCE,
   },
+  legislationWorkName: { type: "non_resource", reason: "projection" },
   legalList: { type: "resource", resourceType: RESOURCE_TYPE.LEGAL_LIST },
   legalListColumn: { type: "non_resource", reason: "subresource" },
   legalListGenerationCandidate: { type: "non_resource", reason: "workflow" },
