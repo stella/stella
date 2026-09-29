@@ -2,18 +2,41 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
-import { readUnListVersion } from "@stll/sanctions";
+import { SANCTIONS_SOURCES, readUnListVersion } from "@stll/sanctions";
+
+import type { safeOutboundFetchStream } from "@/api/lib/safe-outbound-fetch";
 
 import {
   discoverCzCsvUrl,
   discoverEuXmlUrl,
   fetchSanctionsEdition,
+  fetchSanctionsMarker,
 } from "./source-fetch";
 
-const UN_FIXTURE = path.join(
+const FIXTURES = path.join(
   import.meta.dir,
-  "../../../../../../packages/sanctions/src/fixtures/un.xml",
+  "../../../../../../packages/sanctions/src/fixtures",
 );
+const UN_FIXTURE = path.join(FIXTURES, "un.xml");
+const OFAC_SDN_FIXTURE = path.join(FIXTURES, "ofac-sdn.xml");
+const OFAC_NON_SDN_FIXTURE = path.join(FIXTURES, "ofac-non-sdn.xml");
+
+/** Serves a fixture file as a successful stream and records requested URLs. */
+const fixtureStream = (fixture: string) => {
+  const requested: string[] = [];
+  const fetchStreamRequest: typeof safeOutboundFetchStream = async ({
+    url,
+  }) => {
+    requested.push(String(url));
+    return Result.ok({
+      body: Bun.file(fixture).stream(),
+      headers: new Headers(),
+      ok: true,
+      status: 200,
+    });
+  };
+  return { fetchStreamRequest, requested };
+};
 
 const euMetadata = (downloadUrl: string) => ({
   "@graph": [
@@ -140,5 +163,80 @@ describe("streaming list downloads", () => {
       expect(result.error.code).toBe("fetch-failed");
     }
     expect(attempts).toBe(3);
+  });
+});
+
+describe("OFAC list refresh", () => {
+  test("reads the SDN edition from the start of the published export", async () => {
+    const { fetchStreamRequest, requested } = fixtureStream(OFAC_SDN_FIXTURE);
+    const marker = await fetchSanctionsMarker("us-sdn", {
+      signal: new AbortController().signal,
+      fetchStreamRequest,
+    });
+
+    const downloadUrl = SANCTIONS_SOURCES["us-sdn"].download.urls[0];
+    expect(marker.unwrap()).toEqual({
+      source: "us-sdn",
+      version: { source: "us-sdn", publishedAt: "2026-09-23", fileId: null },
+      downloadUrl,
+    });
+    expect(requested).toEqual([downloadUrl]);
+  });
+
+  test("parses the non-SDN export it identified as that source", async () => {
+    const marker = (
+      await fetchSanctionsMarker("us-non-sdn", {
+        signal: new AbortController().signal,
+        fetchStreamRequest:
+          fixtureStream(OFAC_NON_SDN_FIXTURE).fetchStreamRequest,
+      })
+    ).unwrap();
+    expect(marker.downloadUrl).toBe(
+      SANCTIONS_SOURCES["us-non-sdn"].download.urls[0],
+    );
+
+    const edition = await fetchSanctionsEdition(marker, {
+      signal: new AbortController().signal,
+      fetchStreamRequest:
+        fixtureStream(OFAC_NON_SDN_FIXTURE).fetchStreamRequest,
+    });
+
+    const { parsed, contentHash } = edition.unwrap();
+    expect(parsed.version).toEqual(marker.version);
+    expect(parsed.entries.length).toBeGreaterThan(0);
+    expect(
+      parsed.entries.every(
+        (entry) => entry.source === "us-non-sdn" && entry.issuer === "US",
+      ),
+    ).toBe(true);
+    expect(contentHash).toBe(
+      new Bun.CryptoHasher("sha256")
+        .update(await Bun.file(OFAC_NON_SDN_FIXTURE).arrayBuffer())
+        .digest("hex"),
+    );
+  });
+
+  test("reports an export without a publication stamp as a parse failure", async () => {
+    let attempts = 0;
+    const marker = await fetchSanctionsMarker("us-sdn", {
+      signal: new AbortController().signal,
+      fetchStreamRequest: async () => {
+        attempts += 1;
+        return Result.ok({
+          body: new Blob([
+            '<?xml version="1.0"?><sdnList><sdnEntry><uid>1</uid></sdnEntry></sdnList>',
+          ]).stream(),
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        });
+      },
+    });
+
+    expect(marker.isErr()).toBe(true);
+    if (marker.isErr()) {
+      expect(marker.error.code).toBe("parse-failed");
+    }
+    expect(attempts).toBe(1);
   });
 });

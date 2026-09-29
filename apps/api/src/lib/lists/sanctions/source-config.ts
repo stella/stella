@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsSource } from "@stll/sanctions";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -22,6 +23,16 @@ export const SANCTIONS_SOURCE_CONFIG = {
     markerUrl:
       "https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html",
     freshnessMs: 14 * DAY_MS,
+  },
+  "us-sdn": {
+    issuer: "United States",
+    markerUrl: SANCTIONS_SOURCES["us-sdn"].editionMarker.url,
+    freshnessMs: 48 * HOUR_MS,
+  },
+  "us-non-sdn": {
+    issuer: "United States",
+    markerUrl: SANCTIONS_SOURCES["us-non-sdn"].editionMarker.url,
+    freshnessMs: 48 * HOUR_MS,
   },
 } as const satisfies Record<
   SanctionsSource,

@@ -3,14 +3,22 @@ import { load } from "cheerio";
 import { createHash } from "node:crypto";
 
 import {
+  SANCTIONS_SOURCES,
   parseCzList,
   parseEuList,
+  parseOfacList,
   parseUnList,
   readCzListVersion,
   readEuListVersion,
+  readOfacListVersion,
   readUnListVersion,
 } from "@stll/sanctions";
-import type { ListVersion, ParsedList, SanctionsSource } from "@stll/sanctions";
+import type {
+  ListVersion,
+  ParsedList,
+  SanctionsListParseError,
+  SanctionsSource,
+} from "@stll/sanctions";
 
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { SANCTIONS_SOURCE_CONFIG } from "@/api/lib/lists/sanctions/source-config";
@@ -293,6 +301,44 @@ const decodeUtf8 = (
     : Result.err(refreshError(source, "parse-failed"));
 };
 
+type StreamedSource = Exclude<SanctionsSource, "cz">;
+
+type ReadStreamedVersion = (
+  input: AsyncIterable<Uint8Array>,
+) => Promise<Result<ListVersion, SanctionsListParseError>>;
+
+/** Reads the edition stamp at the start of a streamed list and stops there. */
+const loadStreamedMarker = async ({
+  source,
+  downloadUrl,
+  options,
+  readVersion,
+}: {
+  source: StreamedSource;
+  downloadUrl: string;
+  options: FetchOptions;
+  readVersion: ReadStreamedVersion;
+}): Promise<Result<FetchedMarker, SanctionsRefreshError>> => {
+  const response = await fetchStream({
+    fetchStreamRequest: options.fetchStreamRequest,
+    source,
+    url: downloadUrl,
+    signal: options.signal,
+    streamTotalTimeoutMs: options.streamTotalTimeoutMs,
+    userAgent: options.userAgent,
+  });
+  if (response.isErr()) {
+    return response;
+  }
+  const body = trackStreamFailure(response.value);
+  const version = await readVersion(body.chunks);
+  return version.isOk() && !body.failed()
+    ? Result.ok({ source, version: version.value, downloadUrl })
+    : Result.err(
+        refreshError(source, body.failed() ? "fetch-failed" : "parse-failed"),
+      );
+};
+
 const loadMarkerOnce = async (
   source: SanctionsSource,
   options: FetchOptions,
@@ -332,52 +378,30 @@ const loadMarkerOnce = async (
       if (overrideUrl?.protocol !== "https:") {
         return Result.err(refreshError(source, "metadata-invalid"));
       }
-      const response = await fetchStream({
-        fetchStreamRequest: options.fetchStreamRequest,
+      return await loadStreamedMarker({
         source,
-        url: downloadUrl,
-        signal: options.signal,
-        streamTotalTimeoutMs: options.streamTotalTimeoutMs,
-        userAgent: options.userAgent,
+        downloadUrl,
+        options,
+        readVersion: readEuListVersion,
       });
-      if (response.isErr()) {
-        return response;
-      }
-      const body = trackStreamFailure(response.value);
-      const version = await readEuListVersion(body.chunks);
-      return version.isOk() && !body.failed()
-        ? Result.ok({ source, version: version.value, downloadUrl })
-        : Result.err(
-            refreshError(
-              source,
-              body.failed() ? "fetch-failed" : "parse-failed",
-            ),
-          );
     }
-    case "un": {
-      const downloadUrl = SANCTIONS_SOURCE_CONFIG.un.markerUrl;
-      const response = await fetchStream({
-        fetchStreamRequest: options.fetchStreamRequest,
+    case "un":
+      return await loadStreamedMarker({
         source,
-        url: downloadUrl,
-        signal: options.signal,
-        streamTotalTimeoutMs: options.streamTotalTimeoutMs,
-        userAgent: options.userAgent,
+        downloadUrl: SANCTIONS_SOURCE_CONFIG.un.markerUrl,
+        options,
+        readVersion: readUnListVersion,
       });
-      if (response.isErr()) {
-        return response;
-      }
-      const body = trackStreamFailure(response.value);
-      const version = await readUnListVersion(body.chunks);
-      return version.isOk() && !body.failed()
-        ? Result.ok({ source, version: version.value, downloadUrl })
-        : Result.err(
-            refreshError(
-              source,
-              body.failed() ? "fetch-failed" : "parse-failed",
-            ),
-          );
-    }
+    // OFAC stamps the publication date in the XML header, so reading the
+    // start of the export identifies the edition without a full download.
+    case "us-sdn":
+    case "us-non-sdn":
+      return await loadStreamedMarker({
+        source,
+        downloadUrl: SANCTIONS_SOURCES[source].download.urls[0],
+        options,
+        readVersion: async (input) => await readOfacListVersion(source, input),
+      });
     case "cz": {
       const page = await fetchBytes({
         signal: options.signal,
@@ -446,6 +470,25 @@ export const fetchSanctionsMarker = async (
 
 export type FetchedEdition = { parsed: ParsedList; contentHash: string };
 
+const parseStreamedList = async (
+  source: StreamedSource,
+  input: AsyncIterable<Uint8Array>,
+): Promise<Result<ParsedList, SanctionsListParseError>> => {
+  switch (source) {
+    case "eu":
+      return await parseEuList(input);
+    case "un":
+      return await parseUnList(input);
+    case "us-sdn":
+    case "us-non-sdn":
+      return await parseOfacList(source, input);
+    default: {
+      source satisfies never;
+      return panic("Unknown streamed sanctions source");
+    }
+  }
+};
+
 const loadEditionOnce = async (
   marker: FetchedMarker,
   options: FetchOptions,
@@ -498,10 +541,7 @@ const loadEditionOnce = async (
       yield chunk;
     }
   };
-  const parsed =
-    marker.source === "eu"
-      ? await parseEuList(hashed())
-      : await parseUnList(hashed());
+  const parsed = await parseStreamedList(marker.source, hashed());
   return parsed.isOk() && !body.failed()
     ? Result.ok({ parsed: parsed.value, contentHash: hash.digest("hex") })
     : Result.err(

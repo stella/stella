@@ -51,6 +51,7 @@ const list = (publishedAt: string, entries = 1): ParsedList => ({
   version: { source: "cz", publishedAt, fileId: SOURCE_URL },
   entries: Array.from({ length: entries }, (_, index) => ({
     source: "cz",
+    issuer: "CZ",
     sourceId: String(index + 1),
     referenceNumber: null,
     entityType: "person",
