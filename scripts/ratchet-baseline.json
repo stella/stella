@@ -179,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 269,
+    "count": 270,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -240,6 +240,7 @@
       "apps/api/src/handlers/legislation/ingestion.ts": 4,
       "apps/api/src/handlers/legislation/search-index.ts": 2,
       "apps/api/src/handlers/legislation/slug-backfill.ts": 1,
+      "apps/api/src/handlers/legislation/withdrawal.ts": 1,
       "apps/api/src/handlers/lists/generation-candidates/commit-settled-run.ts": 1,
       "apps/api/src/handlers/mcp-connectors/connect.ts": 3,
       "apps/api/src/handlers/mcp-connectors/create-connection.ts": 1,
@@ -984,7 +985,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 112,
+    "count": 114,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1009,6 +1010,7 @@
       "apps/api/src/handlers/fields/column-flag/update.ts": 2,
       "apps/api/src/handlers/fields/kanban-placement/update.ts": 1,
       "apps/api/src/handlers/legislation/ingestion.ts": 1,
+      "apps/api/src/handlers/legislation/withdrawal.ts": 2,
       "apps/api/src/handlers/playbooks/applicable/run.ts": 1,
       "apps/api/src/handlers/reports/report-export-queue.ts": 1,
       "apps/api/src/handlers/search/ai.ts": 1,

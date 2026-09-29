@@ -106,17 +106,16 @@ const withdrawTarget = async (
   const subject = { family: "legislation", entityId: id } as const;
   // The source before the row, in the order every legislation writer takes
   // them.
-  const projectionLock = await lockActiveCorpusProjectionSourceTx(
-    tx,
-    subject,
-  ).catch((error: unknown) => {
+  let projectionLock: Awaited<
+    ReturnType<typeof lockActiveCorpusProjectionSourceTx>
+  >;
+  try {
+    projectionLock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+  } catch (error) {
     if (error instanceof CorpusIndexProjectionSubjectMissingError) {
-      return "missing" as const;
+      return { type: "missing" };
     }
     throw error;
-  });
-  if (projectionLock === "missing") {
-    return { type: "missing" };
   }
   const row = (
     await tx
