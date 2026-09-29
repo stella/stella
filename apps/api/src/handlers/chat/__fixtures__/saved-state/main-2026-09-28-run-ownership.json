@@ -1,7 +1,7 @@
 {
   "release": null,
   "sourceCommit": "5de51c85c9d7015e81a6dba4a9227e0e0429923d",
-  "newestMigration": "20261003120600_chat_turn_run_ownership",
+  "newestMigration": "20261003121500_chat_turn_run_ownership",
   "shape": "Unreleased chat turn ownership: chat_turns.run_id binds each persisted turn to its run.",
   "actors": {
     "organizationId": "1rLSmeo1JMsaEFy8SDmilAg5u1eGk4cP",
