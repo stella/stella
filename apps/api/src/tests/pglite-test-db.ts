@@ -19,6 +19,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteChatRunLogRls,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
@@ -658,6 +659,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteChatRunLogRls(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

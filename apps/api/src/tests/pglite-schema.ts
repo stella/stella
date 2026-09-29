@@ -280,6 +280,40 @@ const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+const CHAT_RUN_LOG_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120200_chat_run_log",
+  "migration.sql",
+);
+
+/** Schema push omits FORCE RLS, so mirror the migration's forced policies. */
+export const installPgliteChatRunLogRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(CHAT_RUN_LOG_MIGRATION_PATH).find(
+    (candidate) =>
+      executableSql(candidate).startsWith(
+        'ALTER TABLE "chat_run_logs" FORCE ROW LEVEL SECURITY',
+      ),
+  );
+  if (statement === undefined) {
+    panic("Chat run log FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+
+  const entriesStatement = readMigrationStatements(
+    CHAT_RUN_LOG_MIGRATION_PATH,
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "chat_run_log_entries" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (entriesStatement === undefined) {
+    panic("Chat run log entries FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(entriesStatement));
+};
+
 const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
   'ALTER TABLE "pdf_signing_sessions"\n  FORCE ROW LEVEL SECURITY',
   "CREATE FUNCTION",

@@ -17,7 +17,10 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
+  reapOwnerlessChatTurnOnTx,
+  settleChatTurnOnTx,
   startChatTurnRun,
+  USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -39,12 +42,20 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const seededThreads: SafeId<"chatThread">[] = [];
 let rawDb: Pick<typeof rootDb, "transaction">;
+let scopedDbA: ScopedDb;
+let scopedDbB: ScopedDb;
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
   rawDb = asTestRaw<Pick<typeof rootDb, "transaction">>(testDb);
+  scopedDbA = asTestRaw<ScopedDb>(
+    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+  );
+  scopedDbB = asTestRaw<ScopedDb>(
+    createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
+  );
 });
 
 afterAll(async () => {
@@ -59,6 +70,7 @@ afterAll(async () => {
 const seedRunningTurn = async (): Promise<{
   execution: ChatTurnExecution;
   runId: string;
+  threadId: SafeId<"chatThread">;
 }> => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
@@ -121,13 +133,14 @@ const seedRunningTurn = async (): Promise<{
     panic("Could not start seeded chat run", started.error);
   }
   expect(started.value).toBe("owned");
-  return { execution, runId };
+  return { execution, runId, threadId };
 };
 
 const logFor = (
   { execution, runId }: { execution: ChatTurnExecution; runId: string },
-  org = ids.orgA,
-) => createChatRunLog({ db: rawDb, execution, organizationId: org, runId });
+  db: ScopedDb = scopedDbA,
+  organizationId = ids.orgA,
+) => createChatRunLog({ db, execution, organizationId, runId });
 
 const chunk = (text: string): StreamChunk => ({
   type: EventType.CUSTOM,
@@ -266,23 +279,118 @@ describe("chat run log database contract", () => {
     expect(entries).toEqual([]);
   });
 
-  test("keeps equal run ids isolated by organization", async () => {
+  test("scopes reads, appends, and closes to the handle organization", async () => {
     const run = await seedRunningTurn();
-    const own = logFor(run, ids.orgA);
+    const own = logFor(run);
     await own.append([chunk("tenant A")]);
-    const foreign = logFor(run, ids.orgB);
+    // The caller supplies the target organization; the scoped handle still denies it.
+    const foreign = logFor(run, scopedDbB, ids.orgA);
     expect(await foreign.snapshot()).toEqual([]);
     await expect(foreign.append([chunk("wrong tenant")])).rejects.toThrow(
       "execution fence lost",
     );
+    await expect(foreign.close()).rejects.toThrow("execution fence lost");
     await own.close();
   });
 
-  test("sweeps only closed logs past the retention window", async () => {
+  test("settlement closes a run log, including a run with no chunks", async () => {
+    const run = await seedRunningTurn();
+    const settled = await scopedDbA((tx) =>
+      settleChatTurnOnTx({
+        assistantMessageId: null,
+        execution: run.execution,
+        outcome: USER_STOP_OUTCOME,
+        tx,
+      }),
+    );
+    expect(settled).toBe("settled");
+    const [header] = await testDb
+      .select({ closedAt: chatRunLogs.closedAt })
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("reaping closes a run log after its execution lease expires", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    await log.append([chunk("before reap")]);
+    await rawDb.transaction(async (tx) => {
+      await tx
+        .update(chatTurns)
+        .set({
+          createdAt: sql`now() - interval '2 minutes'`,
+          leaseExpiresAt: sql`now() - interval '1 minute'`,
+        })
+        .where(eq(chatTurns.id, run.execution.id));
+    });
+    await scopedDbA((tx) =>
+      reapOwnerlessChatTurnOnTx({ threadId: run.threadId, tx }),
+    );
+    const [header] = await testDb
+      .select({ closedAt: chatRunLogs.closedAt })
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("retry after an ambiguous commit matches canonical persisted JSON", async () => {
+    const run = await seedRunningTurn();
+    let injectPostCommitFailure = true;
+    const flakyDb = asTestRaw<ScopedDb>(async (fn) => {
+      const result = await scopedDbA(fn);
+      if (injectPostCommitFailure) {
+        injectPostCommitFailure = false;
+        throw new Error("injected response loss after commit");
+      }
+      return result;
+    });
+    const log = logFor(run, flakyDb);
+    const withUndefined = {
+      type: EventType.CUSTOM,
+      name: "test",
+      value: { omittedByJsonb: undefined, kept: true },
+    } satisfies StreamChunk;
+    await expect(log.append([withUndefined])).rejects.toThrow(
+      "injected response loss after commit",
+    );
+    expect(await log.append([withUndefined])).toEqual(["1"]);
+    await log.close();
+  });
+
+  test("sweep closes an open log whose turn is no longer running", async () => {
+    const run = await seedRunningTurn();
+    const log = logFor(run);
+    await log.append([chunk("abandoned")]);
+    await rawDb.transaction(async (tx) => {
+      await tx
+        .update(chatTurns)
+        .set({
+          executionId: null,
+          interruptionReason: "owner-lost",
+          leaseExpiresAt: null,
+          settledAt: sql`now()`,
+          status: "interrupted",
+        })
+        .where(eq(chatTurns.id, run.execution.id));
+    });
+    const result = await sweepClosedChatRunLogs(rawDb);
+    expect(result.logsClosed).toBeGreaterThanOrEqual(1);
+    const [header] = await testDb
+      .select({ closedAt: chatRunLogs.closedAt })
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("sweep caps entry deletion and drains an expired log across batches", async () => {
     const expiredRun = await seedRunningTurn();
     const recentRun = await seedRunningTurn();
     const expired = logFor(expiredRun);
     const recent = logFor(recentRun);
+    await expired.append(
+      Array.from({ length: 70 }, (_, index) => chunk(`expired ${index}`)),
+    );
     await expired.close();
     await recent.close();
     await rawDb.transaction(async (tx) => {
@@ -291,9 +399,23 @@ describe("chat run log database contract", () => {
         .set({ closedAt: sql`now() - interval '16 minutes'` })
         .where(eq(chatRunLogs.runId, expiredRun.runId));
     });
-    // The sweep is bounded and repeatable; the old row is removed with its entries.
-    expect(await sweepClosedChatRunLogs(rawDb)).toBeGreaterThanOrEqual(1);
+    // Each call removes at most 64 entry rows and leaves the header until empty.
+    const firstBatch = await sweepClosedChatRunLogs(rawDb);
+    expect(firstBatch.entriesDeleted).toBe(64);
     const [expiredHeader] = await testDb
+      .select()
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, expiredRun.runId));
+    expect(expiredHeader).toBeDefined();
+    const remainingEntries = await testDb
+      .select({ seq: chatRunLogEntries.seq })
+      .from(chatRunLogEntries)
+      .where(eq(chatRunLogEntries.runId, expiredRun.runId));
+    expect(remainingEntries).toHaveLength(6);
+    const secondBatch = await sweepClosedChatRunLogs(rawDb);
+    expect(secondBatch.entriesDeleted).toBe(6);
+    expect(secondBatch.logsDeleted).toBe(1);
+    const [deletedHeader] = await testDb
       .select()
       .from(chatRunLogs)
       .where(eq(chatRunLogs.runId, expiredRun.runId));
@@ -301,7 +423,7 @@ describe("chat run log database contract", () => {
       .select()
       .from(chatRunLogs)
       .where(eq(chatRunLogs.runId, recentRun.runId));
-    expect(expiredHeader).toBeUndefined();
+    expect(deletedHeader).toBeUndefined();
     expect(recentHeader).toBeDefined();
   });
 });

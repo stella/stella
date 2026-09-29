@@ -1,11 +1,22 @@
 import type { StreamChunk, StreamDurability } from "@tanstack/ai";
 import { TaggedError } from "better-result";
-import { and, asc, eq, gt, isNotNull, lt, or, sql } from "drizzle-orm";
-import { isDeepStrictEqual } from "node:util";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import type { Transaction, rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { chatRunLogEntries, chatRunLogs, chatTurns } from "@/api/db/schema";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,16 +27,17 @@ const READ_PAGE_SIZE = 256;
 const TAIL_POLL_MS = 250;
 const FIRST_ENTRY_WAIT_MS = 30_000;
 const CLOSED_LOG_RETENTION_MS = 15 * 60 * 1000;
-const RETENTION_BATCH_SIZE = 128;
+const RETENTION_HEADER_BATCH_SIZE = 32;
+export const RETENTION_ENTRY_BATCH_SIZE = 64;
 
-type RunLogDb = Pick<typeof rootDb, "transaction">;
+type SchedulerRunLogDb = Pick<typeof rootDb, "transaction">;
 
 export class ChatRunLogError extends TaggedError("ChatRunLogError")<{
   message: string;
 }> {}
 
 type ChatRunLogOptions = {
-  db: RunLogDb;
+  db: ScopedDb;
   execution: ChatTurnExecution;
   organizationId: SafeId<"organization">;
   resumeOffset?: string | null;
@@ -41,6 +53,18 @@ const offsetSequence = (offset: string): bigint => {
 
 const chunkBytes = (chunk: StreamChunk): number =>
   new TextEncoder().encode(JSON.stringify(chunk)).byteLength;
+
+const canonicalChunk = (chunk: StreamChunk): string =>
+  JSON.stringify(chunk, (_key, value: unknown) => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return value;
+    }
+    return Object.fromEntries(
+      Object.entries(value).toSorted(([left], [right]) =>
+        left < right ? -1 : Number(left > right),
+      ),
+    );
+  });
 
 const logKey = (organizationId: SafeId<"organization">, runId: string) =>
   and(
@@ -65,7 +89,7 @@ const createRunLogReader = ({
   runId,
 }: RunLogReaderOptions): Pick<StreamDurability, "read" | "snapshot"> => {
   const loadPage = async (after: bigint) =>
-    await db.transaction(async (tx) => {
+    await db(async (tx) => {
       const [log] = await tx
         .select({
           closedAt: chatRunLogs.closedAt,
@@ -133,36 +157,47 @@ const createRunLogReader = ({
       }
     },
     snapshot: async () =>
-      await db.transaction(
-        async (tx) => {
-          const result: { offset: string; chunk: StreamChunk }[] = [];
-          let after = 0n;
-          for (;;) {
-            const entries = await tx
-              .select({
-                chunk: chatRunLogEntries.chunk,
-                seq: chatRunLogEntries.seq,
-              })
-              .from(chatRunLogEntries)
-              .where(
-                and(
-                  entryKey(organizationId, runId),
-                  gt(chatRunLogEntries.seq, after),
-                ),
-              )
-              .orderBy(asc(chatRunLogEntries.seq))
-              .limit(READ_PAGE_SIZE);
-            for (const entry of entries) {
-              after = BigInt(entry.seq);
-              result.push({ offset: after.toString(), chunk: entry.chunk });
-            }
-            if (entries.length < READ_PAGE_SIZE) {
-              return result;
-            }
+      await db(async (tx) => {
+        const [log] = await tx
+          .select({ nextSeq: chatRunLogs.nextSeq })
+          .from(chatRunLogs)
+          .where(logKey(organizationId, runId))
+          .limit(1);
+        if (log === undefined) {
+          return [];
+        }
+        const result: { offset: string; chunk: StreamChunk }[] = [];
+        let after = 0n;
+        for (;;) {
+          const entries = await tx
+            .select({
+              chunk: chatRunLogEntries.chunk,
+              seq: chatRunLogEntries.seq,
+            })
+            .from(chatRunLogEntries)
+            .where(
+              and(
+                entryKey(organizationId, runId),
+                gt(chatRunLogEntries.seq, after),
+                lt(chatRunLogEntries.seq, log.nextSeq),
+              ),
+            )
+            .orderBy(asc(chatRunLogEntries.seq))
+            .limit(READ_PAGE_SIZE);
+          for (const entry of entries) {
+            after = BigInt(entry.seq);
+            result.push({ offset: after.toString(), chunk: entry.chunk });
           }
-        },
-        { isolationLevel: "repeatable read", accessMode: "read only" },
-      ),
+          if (entries.length < READ_PAGE_SIZE) {
+            if (after !== BigInt(log.nextSeq) - 1n) {
+              throw new ChatRunLogError({
+                message: "Chat run log changed during snapshot",
+              });
+            }
+            return result;
+          }
+        }
+      }),
   };
 };
 
@@ -174,7 +209,7 @@ export const createChatRunLog = ({
   resumeOffset = null,
   runId,
 }: ChatRunLogOptions): StreamDurability => {
-  let pendingBatch: { id: string; chunks: StreamChunk[] } | null = null;
+  let pendingBatch: { id: string; fingerprint: string } | null = null;
   const reader = createRunLogReader({ db, organizationId, runId });
 
   const assertOwner = async (tx: Transaction) => {
@@ -206,15 +241,13 @@ export const createChatRunLog = ({
       if (chunks.length === 0) {
         return [];
       }
-      if (
-        pendingBatch !== null &&
-        JSON.stringify(pendingBatch.chunks) !== JSON.stringify(chunks)
-      ) {
+      const fingerprint = JSON.stringify(chunks.map(canonicalChunk));
+      if (pendingBatch !== null && pendingBatch.fingerprint !== fingerprint) {
         throw new ChatRunLogError({
           message: "A chat run log append is awaiting retry",
         });
       }
-      pendingBatch ??= { id: Bun.randomUUIDv7(), chunks };
+      pendingBatch ??= { id: Bun.randomUUIDv7(), fingerprint };
       const batch = pendingBatch;
       const bytes = chunks.map(chunkBytes);
       if (bytes.some((size) => size > MAX_CHUNK_BYTES)) {
@@ -222,9 +255,8 @@ export const createChatRunLog = ({
           message: "Chat run log chunk exceeds its size limit",
         });
       }
-      const offsets = await db.transaction(async (tx) => {
+      const offsets = await db(async (tx) => {
         await assertOwner(tx);
-        // audit: skip — transient stream delivery, while turn settlement is audited
         await tx
           .insert(chatRunLogs)
           .values({ organizationId, runId, turnId: execution.id })
@@ -266,9 +298,13 @@ export const createChatRunLog = ({
         if (alreadyStored.length > 0) {
           if (
             alreadyStored.length !== chunks.length ||
-            alreadyStored.some(
-              (row, index) => !isDeepStrictEqual(row.chunk, chunks[index]),
-            )
+            alreadyStored.some((row, index) => {
+              const chunk = chunks.at(index);
+              return (
+                chunk === undefined ||
+                canonicalChunk(row.chunk) !== canonicalChunk(chunk)
+              );
+            })
           ) {
             throw new ChatRunLogError({
               message: "Chat run log retry differs from stored batch",
@@ -285,7 +321,6 @@ export const createChatRunLog = ({
           });
         }
         const first = BigInt(log.nextSeq);
-        // audit: skip — transient stream delivery, while turn settlement is audited
         await tx.insert(chatRunLogEntries).values(
           chunks.map((chunk, index) => ({
             organizationId,
@@ -296,7 +331,6 @@ export const createChatRunLog = ({
             chunk,
           })),
         );
-        // audit: skip — transient stream delivery sequence bookkeeping
         await tx
           .update(chatRunLogs)
           .set({ nextSeq: first + BigInt(chunks.length), bytesUsed: nextBytes })
@@ -309,7 +343,7 @@ export const createChatRunLog = ({
     // Settlement/recovery must close while holding the execution fence; the
     // SDK's later close call may only acknowledge an already-closed log.
     close: async () => {
-      await db.transaction(async (tx) => {
+      await db(async (tx) => {
         const [closed] = await tx
           .select({
             turnId: chatRunLogs.turnId,
@@ -337,7 +371,6 @@ export const createChatRunLog = ({
           .for("update")
           .limit(1);
         if (log === undefined) {
-          // audit: skip — transient stream delivery close marker
           await tx.insert(chatRunLogs).values({
             organizationId,
             runId,
@@ -349,7 +382,6 @@ export const createChatRunLog = ({
             message: "Chat run log belongs to another turn",
           });
         } else if (log.closedAt === null) {
-          // audit: skip — transient stream delivery close marker
           await tx
             .update(chatRunLogs)
             .set({ closedAt: sql`now()` })
@@ -360,9 +392,69 @@ export const createChatRunLog = ({
   };
 };
 
-/** A bounded, repeatable sweep. Cascading turn deletion handles account and org erasure. */
-export const sweepClosedChatRunLogs = async (db: RunLogDb): Promise<number> =>
+/** Close the log in the transaction that removes its turn's execution fence. */
+export const closeChatRunLogOnTx = async ({
+  organizationId,
+  runId,
+  turnId,
+  tx,
+}: {
+  organizationId: SafeId<"organization">;
+  runId: string | null;
+  turnId: SafeId<"chatTurn">;
+  tx: Transaction;
+}): Promise<void> => {
+  if (runId === null) {
+    return;
+  }
+  await tx
+    .insert(chatRunLogs)
+    .values({ organizationId, runId, turnId, closedAt: sql`now()` })
+    .onConflictDoNothing();
+  await tx
+    .update(chatRunLogs)
+    .set({ closedAt: sql`now()` })
+    .where(
+      and(
+        logKey(organizationId, runId),
+        eq(chatRunLogs.turnId, turnId),
+        isNull(chatRunLogs.closedAt),
+      ),
+    );
+};
+
+/** One bounded retention batch; only the scheduler receives the owner connection. */
+export const sweepClosedChatRunLogs = async (db: SchedulerRunLogDb) =>
   await db.transaction(async (tx) => {
+    const abandoned = await tx
+      .select({
+        organizationId: chatRunLogs.organizationId,
+        runId: chatRunLogs.runId,
+      })
+      .from(chatRunLogs)
+      .innerJoin(
+        chatTurns,
+        and(
+          eq(chatTurns.id, chatRunLogs.turnId),
+          eq(chatTurns.organizationId, chatRunLogs.organizationId),
+        ),
+      )
+      .where(and(isNull(chatRunLogs.closedAt), ne(chatTurns.status, "running")))
+      .orderBy(
+        asc(chatRunLogs.createdAt),
+        asc(chatRunLogs.organizationId),
+        asc(chatRunLogs.runId),
+      )
+      .limit(RETENTION_HEADER_BATCH_SIZE)
+      .for("update", { of: chatRunLogs, skipLocked: true });
+    if (abandoned.length > 0) {
+      await tx
+        .update(chatRunLogs)
+        .set({ closedAt: sql`now()` })
+        .where(
+          or(...abandoned.map((row) => logKey(row.organizationId, row.runId))),
+        );
+    }
     const expired = await tx
       .select({
         organizationId: chatRunLogs.organizationId,
@@ -384,15 +476,58 @@ export const sweepClosedChatRunLogs = async (db: RunLogDb): Promise<number> =>
         asc(chatRunLogs.organizationId),
         asc(chatRunLogs.runId),
       )
-      .limit(RETENTION_BATCH_SIZE)
+      .limit(RETENTION_HEADER_BATCH_SIZE)
       .for("update", { skipLocked: true });
-    if (expired.length > 0) {
-      // audit: skip — expired transient delivery rows are removed by retention
+    if (expired.length === 0) {
+      return {
+        entriesDeleted: 0,
+        logsClosed: abandoned.length,
+        logsDeleted: 0,
+      };
+    }
+    const keys = or(
+      ...expired.map((row) => entryKey(row.organizationId, row.runId)),
+    );
+    const entries = await tx
+      .select({
+        organizationId: chatRunLogEntries.organizationId,
+        runId: chatRunLogEntries.runId,
+        seq: chatRunLogEntries.seq,
+      })
+      .from(chatRunLogEntries)
+      .where(keys)
+      .orderBy(
+        asc(chatRunLogEntries.organizationId),
+        asc(chatRunLogEntries.runId),
+        asc(chatRunLogEntries.seq),
+      )
+      .limit(RETENTION_ENTRY_BATCH_SIZE);
+    if (entries.length > 0) {
       await tx
-        .delete(chatRunLogs)
+        .delete(chatRunLogEntries)
         .where(
-          or(...expired.map((row) => logKey(row.organizationId, row.runId))),
+          or(
+            ...entries.map((entry) =>
+              and(
+                entryKey(entry.organizationId, entry.runId),
+                eq(chatRunLogEntries.seq, entry.seq),
+              ),
+            ),
+          ),
         );
     }
-    return expired.length;
+    const deleted = await tx
+      .delete(chatRunLogs)
+      .where(
+        and(
+          or(...expired.map((row) => logKey(row.organizationId, row.runId))),
+          sql`NOT EXISTS (SELECT 1 FROM ${chatRunLogEntries} WHERE ${chatRunLogEntries.organizationId} = ${chatRunLogs.organizationId} AND ${chatRunLogEntries.runId} = ${chatRunLogs.runId})`,
+        ),
+      )
+      .returning({ runId: chatRunLogs.runId });
+    return {
+      entriesDeleted: entries.length,
+      logsClosed: abandoned.length,
+      logsDeleted: deleted.length,
+    };
   });

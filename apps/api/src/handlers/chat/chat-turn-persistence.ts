@@ -44,6 +44,7 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
 /** Maximum time a metered provider call may run before the server aborts it. */
@@ -273,8 +274,19 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       status: "cancelled",
     })
     .where(and(expired, isNotNull(chatTurns.cancelRequestedAt)))
-    .returning({ id: chatTurns.id });
+    .returning({
+      id: chatTurns.id,
+      organizationId: chatTurns.organizationId,
+      runId: chatTurns.runId,
+    });
   if (stopped.length > 0) {
+    const turn = stopped[0];
+    await closeChatRunLogOnTx({
+      organizationId: turn.organizationId,
+      runId: turn.runId,
+      turnId: turn.id,
+      tx,
+    });
     await settleInterruptedContinuationOnTx({
       outcome: USER_STOP_OUTCOME,
       threadId,
@@ -292,8 +304,19 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       status: "interrupted",
     })
     .where(and(expired, isNull(chatTurns.cancelRequestedAt)))
-    .returning({ id: chatTurns.id });
+    .returning({
+      id: chatTurns.id,
+      organizationId: chatTurns.organizationId,
+      runId: chatTurns.runId,
+    });
   if (interrupted.length > 0) {
+    const turn = interrupted[0];
+    await closeChatRunLogOnTx({
+      organizationId: turn.organizationId,
+      runId: turn.runId,
+      turnId: turn.id,
+      tx,
+    });
     await settleInterruptedContinuationOnTx({
       outcome: OWNER_LOST_OUTCOME,
       threadId,
@@ -1322,8 +1345,19 @@ export const settleChatTurnOnTx = async ({
     .update(chatTurns)
     .set(values)
     .where(isUserStop ? owned : and(owned, isNull(chatTurns.cancelRequestedAt)))
-    .returning({ id: chatTurns.id });
+    .returning({
+      id: chatTurns.id,
+      organizationId: chatTurns.organizationId,
+      runId: chatTurns.runId,
+    });
   if (updated.length === 1) {
+    const turn = updated[0];
+    await closeChatRunLogOnTx({
+      organizationId: turn.organizationId,
+      runId: turn.runId,
+      turnId: turn.id,
+      tx,
+    });
     return "settled";
   }
   const stillOwned = await tx

@@ -17,6 +17,11 @@ CREATE INDEX "chat_run_logs_closed_at_idx" ON "chat_run_logs" ("closed_at", "org
 CREATE INDEX "chat_run_logs_turn_id_idx" ON "chat_run_logs" ("turn_id");--> statement-breakpoint
 ALTER TABLE "chat_run_logs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "chat_run_logs" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "chat_run_logs" TO stella;--> statement-breakpoint
+CREATE POLICY "organization_select" ON "chat_run_logs" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_insert" ON "chat_run_logs" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_update" ON "chat_run_logs" AS PERMISSIVE FOR UPDATE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_delete" ON "chat_run_logs" AS PERMISSIVE FOR DELETE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "chat_run_logs_owner_access" ON "chat_run_logs" AS PERMISSIVE FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_logs'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_logs'::regclass));--> statement-breakpoint
@@ -36,6 +41,11 @@ CREATE TABLE "chat_run_log_entries" (
 CREATE UNIQUE INDEX "chat_run_log_entries_batch_uidx" ON "chat_run_log_entries" ("organization_id", "run_id", "batch_id", "batch_index");--> statement-breakpoint
 ALTER TABLE "chat_run_log_entries" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "chat_run_log_entries" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "chat_run_log_entries" TO stella;--> statement-breakpoint
+CREATE POLICY "organization_select" ON "chat_run_log_entries" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_insert" ON "chat_run_log_entries" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_update" ON "chat_run_log_entries" AS PERMISSIVE FOR UPDATE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_delete" ON "chat_run_log_entries" AS PERMISSIVE FOR DELETE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "chat_run_log_entries_owner_access" ON "chat_run_log_entries" AS PERMISSIVE FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_log_entries'::regclass))
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_log_entries'::regclass));

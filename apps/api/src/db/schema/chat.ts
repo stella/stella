@@ -29,6 +29,7 @@ import {
   fileChatThreadPolicies,
   isNotNull,
   jsonb,
+  orgPolicies,
   organization,
   p,
   pUuid,
@@ -597,6 +598,9 @@ export const chatRunLogs = p.pgTable(
       using: chatRunLogOwner,
       withCheck: chatRunLogOwner,
     }),
+    // The owner policy serves the retention scheduler; application access is
+    // pinned to the scoped organization transaction.
+    ...orgPolicies(),
   ],
 );
 
@@ -637,6 +641,7 @@ export const chatRunLogEntries = p.pgTable(
       using: chatRunLogEntryOwner,
       withCheck: chatRunLogEntryOwner,
     }),
+    ...orgPolicies(),
   ],
 );
 
