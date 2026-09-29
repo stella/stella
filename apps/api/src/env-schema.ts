@@ -359,6 +359,7 @@ export const envApiServerSchema = {
   FEATURE_PUBLIC_TOOLS: featureFlagSchema,
   /** Offers the bundled template-pack catalogue; off hides its routes. */
   FEATURE_TEMPLATE_PACKS: featureFlagSchema,
+  FEATURE_PUBLIC_KNOWLEDGE: featureFlagSchema,
   FEATURE_WEB_SEARCH: featureFlagSchema,
   // Delegated Microsoft Graph connection: per-user, read-only SharePoint /
   // OneDrive access for future workspace import. Default-off; a deployment

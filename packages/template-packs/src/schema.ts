@@ -158,6 +158,7 @@ export type GeneratedTemplatePack = {
   description: string;
   license: string;
   licenseUrl: string | null;
+  publicDisplay: boolean;
   source: TemplatePackSource | null;
   authors: readonly TemplatePackAuthor[];
   jurisdictions: readonly TemplatePackJurisdiction[];

@@ -1495,7 +1495,7 @@ export type WebRoutes = {
             200: (Response | {
               fields: Array<T21b00a9f66>;
               conditions: Array<stll_template_conditions_NamedCondition>;
-              structureErrors: Array<T85e6600670>;
+              structureErrors: Array<Te9acc7e185>;
             });
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -1959,12 +1959,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: {
-                paragraphs: Array<T540f9c7521>;
-                charCount: number;
-                structureErrors: Array<T85e6600670>;
-                clauseSlots: Array<string>;
-              };
+              200: Tb26a03bcf4;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -2150,11 +2145,11 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                paragraphs: Array<T540f9c7521>;
+                paragraphs: Array<T2d6eece830>;
                 charCount: number;
                 unmatchedPlaceholders: Array<string>;
                 unusedValues: Array<string>;
-                structureErrors: Array<T85e6600670>;
+                structureErrors: Array<Te9acc7e185>;
                 aiFieldErrors: Array<T6e9118d33d>;
                 conditionDecisions: Array<((T3a5b898b8d & {
                   state: "decided";
@@ -10736,6 +10731,271 @@ export type WebRoutes = {
               500: T9a51b7d2bc;
               502: T9a51b7d2bc;
               503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
+    public: {
+      knowledge: {
+        "template-packs": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            get: {
+              body: unknown;
+              params: {
+                packId: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  templates: Array<Tfd0bde727d>;
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                get: {
+                  body: unknown;
+                  params: T33b1882b1b;
+                  query: unknown;
+                  headers: unknown;
+                  response: {
+                    200: (T1791c676c5 | Tfd0bde727d);
+                    400: T9a51b7d2bc;
+                    401: T9a51b7d2bc;
+                    402: T9a51b7d2bc;
+                    403: T9a51b7d2bc;
+                    404: T9a51b7d2bc;
+                    409: T9a51b7d2bc;
+                    413: T9a51b7d2bc;
+                    422: (T9a51b7d2bc | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: T9a51b7d2bc;
+                    429: T9a51b7d2bc;
+                    500: T9a51b7d2bc;
+                    502: T9a51b7d2bc;
+                    503: T9a51b7d2bc;
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                preview: {
+                  get: {
+                    body: unknown;
+                    params: T33b1882b1b;
+                    query: unknown;
+                    headers: unknown;
+                    response: {
+                      200: (Tb26a03bcf4 | T1791c676c5);
+                      400: T9a51b7d2bc;
+                      401: T9a51b7d2bc;
+                      402: T9a51b7d2bc;
+                      403: T9a51b7d2bc;
+                      404: T9a51b7d2bc;
+                      409: T9a51b7d2bc;
+                      413: T9a51b7d2bc;
+                      422: (T9a51b7d2bc | {
+                        type: "validation";
+                        on: string;
+                        summary?: string;
+                        message?: string;
+                        found?: unknown;
+                        property?: string;
+                        expected?: string;
+                      });
+                      428: T9a51b7d2bc;
+                      429: T9a51b7d2bc;
+                      500: T9a51b7d2bc;
+                      502: T9a51b7d2bc;
+                      503: T9a51b7d2bc;
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          ":id": {
+            get: {
+              body: unknown;
+              params: {
+                id: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  positions: Tc892bdfad5;
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
             };
           };
         };
@@ -34044,6 +34304,10 @@ type T173eec1550 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "property";
 };
 
+type T1791c676c5 = {
+  readonly error: "Not Found";
+};
+
 type T17f9c80581 = {
   readonly value: T1bc07bd9cb;
   readonly issues?: undefined;
@@ -34646,6 +34910,36 @@ type T2d674d595a = {
   kind: "create-document";
   name: string;
   documentTitle: string;
+};
+
+type T2d6eece830 = {
+  text: string;
+  index: number;
+  style?: string;
+  bold?: false | true;
+  fontSize?: number;
+  alignment?: "both" | "center" | "left" | "right";
+  tableRow?: {
+    table: number;
+    kind: "cells";
+    cells: ReadonlyArray<{
+      paragraphs: ReadonlyArray<{
+        text: string;
+        style?: string;
+        bold?: false | true;
+        fontSize?: number;
+        alignment?: "both" | "center" | "left" | "right";
+      }>;
+    }>;
+  } | {
+    table: number;
+    kind: ("delimiter" | "syntheticHeader");
+  };
+} & {
+  source?: "body" | "footer" | "header" | undefined;
+  isDirective?: false | true | undefined;
+  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if" | undefined;
+  directiveExpression?: string | undefined;
 };
 
 type T2df478253f = "approved" | "draft" | "ephemeral";
@@ -35298,6 +35592,11 @@ type T32fdeee18e = {
 };
 
 type T334757ea46 = "document" | "folder" | "link" | "message" | "task";
+
+type T33b1882b1b = {
+  templateId: string;
+  packId: string;
+};
 
 type T34252d475f = {
   viewId: T7e10a0d884;
@@ -36039,36 +36338,6 @@ type T53be3fbe82 = {
 type T53caa211eb = {
   kind: "constraint";
   condition: stll_conditions_ConditionNode;
-};
-
-type T540f9c7521 = {
-  text: string;
-  index: number;
-  style?: string;
-  bold?: false | true;
-  fontSize?: number;
-  alignment?: "both" | "center" | "left" | "right";
-  tableRow?: {
-    table: number;
-    kind: "cells";
-    cells: ReadonlyArray<{
-      paragraphs: ReadonlyArray<{
-        text: string;
-        style?: string;
-        bold?: false | true;
-        fontSize?: number;
-        alignment?: "both" | "center" | "left" | "right";
-      }>;
-    }>;
-  } | {
-    table: number;
-    kind: ("delimiter" | "syntheticHeader");
-  };
-} & {
-  source?: "body" | "footer" | "header" | undefined;
-  isDirective?: false | true | undefined;
-  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if" | undefined;
-  directiveExpression?: string | undefined;
 };
 
 type T54ad5c389f = {
@@ -37195,13 +37464,6 @@ type T84b2a2edb5 = {
 };
 
 type T85c0da56d3 = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
-
-type T85e6600670 = {
-  message: string;
-  paragraphIndex: number;
-  directive: string;
-  source?: "body" | "footer" | "header";
-};
 
 type T85f803b281 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "anonymizationBlacklistEntry";
@@ -38414,6 +38676,13 @@ type Tb23918f1b2 = {
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
+
+type Tb26a03bcf4 = {
+  paragraphs: Array<T2d6eece830>;
+  charCount: number;
+  structureErrors: Array<Te9acc7e185>;
+  clauseSlots: Array<string>;
+};
 
 type Tb28d44fa4d = "busy" | "free" | "out_of_office" | "tentative" | "unknown" | "working_elsewhere" | null;
 
@@ -39887,6 +40156,13 @@ type Te8eee0ded7 = {
 
 type Te8fa9c655e = "accepted" | "dismissed" | "open";
 
+type Te9acc7e185 = {
+  message: string;
+  paragraphIndex: number;
+  directive: string;
+  source?: "body" | "footer" | "header";
+};
+
 type Tea0fd307f9 = {
   success: true;
   fileName: string;
@@ -40339,6 +40615,17 @@ type Tfc8a750351 = string & valibot_Brand<"SafeId"> & {
 type Tfce51d6930 = {
   readonly value: Ta2adf01c0a;
   readonly issues?: undefined;
+};
+
+type Tfd0bde727d = {
+  id: string;
+  title: string;
+  jurisdictions: ReadonlyArray<T61d3076ac0>;
+  languages: ReadonlyArray<string>;
+  legalArea: Tbe0400fa4c;
+  license: string;
+  fields: ReadonlyArray<string>;
+  sha256: string;
 };
 
 type Tfd3441c0df = string & valibot_Brand<"SafeId"> & {

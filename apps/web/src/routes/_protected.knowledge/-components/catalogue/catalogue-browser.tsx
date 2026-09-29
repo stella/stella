@@ -1,58 +1,41 @@
 import { useState } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { EU_MEMBER_STATES } from "@stll/catalogue";
-import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   CheckIcon,
   ChevronDownIcon,
   FileDownIcon,
-  GlobeIcon,
   GraduationCapIcon,
   LoaderIcon,
   PlusIcon,
-  SearchIcon,
-  XIcon,
 } from "@stll/ui/icons";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@stll/ui/input-group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";
 import {
-  ResponsiveActionToolbar,
-  ResponsiveActionToolbarItem,
-} from "@/components/responsive-action-toolbar";
+  memberKnowledgeActions,
+  memberKnowledgeSource,
+} from "@/features/knowledge/member/member-knowledge";
+import {
+  ToolsCatalogueView,
+  type ToolsCatalogueKind,
+} from "@/features/knowledge/views/tools/tools-catalogue-view";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
-import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import { knowledgeKeys } from "@/lib/knowledge/queries";
-import {
-  catalogueKeys,
-  catalogueOptions,
-} from "@/lib/knowledge/queries/catalogue";
 import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
   BlueprintGallerySheet,
@@ -69,15 +52,7 @@ import { useCatalogueRemoval } from "./use-catalogue-removal";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";
 
-const FILTERS = ["all", "skill", "mcp"] as const;
-
-export type CatalogueBrowserFilterKind = (typeof FILTERS)[number];
-
-const KIND_LABEL_KEY = {
-  all: "common.all",
-  skill: "catalogue.filter.skills",
-  mcp: "catalogue.filter.mcps",
-} as const satisfies Record<CatalogueBrowserFilterKind, TranslationKey>;
+export type CatalogueBrowserFilterKind = ToolsCatalogueKind;
 
 type CatalogueBrowserProps = {
   organizationId: string;
@@ -120,6 +95,8 @@ const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
   jurisdictions: entry.jurisdictions,
 });
 
+/** The organization's tools: the shared catalogue view with the member's
+ *  install state, detail inspector, and custom-tool tools in its slots. */
 export const CatalogueBrowser = ({
   organizationId,
   initialKind,
@@ -130,13 +107,9 @@ export const CatalogueBrowser = ({
   practiceJurisdictions,
 }: CatalogueBrowserProps) => {
   const t = useTranslations();
-  const locale = useLocale();
   const navigate = useNavigate();
-  const { data } = useSuspenseQuery(catalogueOptions(organizationId));
-  const [filter, setFilter] = useState<CatalogueBrowserFilterKind>(
-    initialKind ?? "all",
-  );
-  const [query, setQuery] = useState("");
+  const { data } = memberKnowledgeSource.useToolsCatalogue(organizationId);
+  const toolsActions = memberKnowledgeActions.useToolsActions(organizationId);
   const inspector = useInspectorView();
   // Active tool-detail tab in the inspector → focused slug for the
   // row highlight. One source of truth; closing the inspector tab
@@ -151,81 +124,11 @@ export const CatalogueBrowser = ({
     }
     return active.id;
   });
-  // Pre-populate from the user's practice + "EU" when at least one
-  // practice country is an EU-27 member. Mirrors the onboarding
-  // catalogue step.
-  const [jurisdictionFilter, setJurisdictionFilter] = useState<Set<string>>(
-    () => {
-      const initial = new Set<string>();
-      if (!practiceJurisdictions) {
-        return initial;
-      }
-      let touchesEu = false;
-      for (const jurisdiction of practiceJurisdictions) {
-        const code = jurisdiction.countryCode.toUpperCase();
-        initial.add(code);
-        if (EU_MEMBER_STATES.has(code)) {
-          touchesEu = true;
-        }
-      }
-      if (touchesEu) {
-        initial.add("EU");
-      }
-      return initial;
-    },
-  );
-  const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
   const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
   const [importSkillOpen, setImportSkillOpen] = useState(false);
 
   const entries = data.entries;
-
-  const filtered = (() => {
-    const normalised = query.trim().toLowerCase();
-    const localizedName = (entry: CatalogueEntry) => {
-      const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
-      return key ? t(key) : entry.displayName;
-    };
-    const subset = entries.filter((entry) => {
-      if (filter !== "all" && entry.kind !== filter) {
-        return false;
-      }
-      if (
-        jurisdictionFilter.size > 0 &&
-        entry.jurisdictions.length > 0 &&
-        !entry.jurisdictions.some((code) => jurisdictionFilter.has(code))
-      ) {
-        return false;
-      }
-      if (normalised === "") {
-        return true;
-      }
-      return (
-        entry.displayName.toLowerCase().includes(normalised) ||
-        localizedName(entry).toLowerCase().includes(normalised) ||
-        entry.description.toLowerCase().includes(normalised) ||
-        entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
-      );
-    });
-    const compareName = compareByLocale(locale);
-    return [...subset].toSorted((left, right) => {
-      if (left.isRecommendedForOrg !== right.isRecommendedForOrg) {
-        return left.isRecommendedForOrg ? -1 : 1;
-      }
-      return compareName(localizedName(left), localizedName(right));
-    });
-  })();
-
-  const allJurisdictionCodes = (() => {
-    const set = new Set<string>();
-    for (const entry of entries) {
-      for (const code of entry.jurisdictions) {
-        set.add(code);
-      }
-    }
-    return [...set].toSorted();
-  })();
 
   const onRowFocus = (entry: CatalogueEntry) => {
     const tabId = toolDetailTabId(entry.kind, entry.slug);
@@ -255,21 +158,7 @@ export const CatalogueBrowser = ({
     }
   });
 
-  const queryClient = useQueryClient();
-  const onSkillSheetChanged = () => {
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.skills.all(organizationId),
-      }),
-      "catalogue-browser.invalidate",
-    );
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: catalogueKeys.list(organizationId),
-      }),
-      "catalogue-browser.invalidate",
-    );
-  };
+  const onSkillSheetChanged = toolsActions.invalidateSkillsAndCatalogue;
 
   // A blueprint instantiates a disabled draft; drop the user straight into the
   // full-screen editor route to customise and enable it.
@@ -297,347 +186,105 @@ export const CatalogueBrowser = ({
     );
   };
 
-  const recommendedFiltered = filtered.filter(
-    (entry) => entry.isRecommendedForOrg,
-  );
-  const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
-  const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
   const addActions = addCustomActions({
     canManageCustomTools,
     canCreateSkills,
   });
   const showAddCustomMenu = showAddCustom && addActions.length > 0;
-  // On a truly empty MCP catalogue, replace the generic "no entries" + reset
-  // line with a prominent add-MCP call to action. Gated to admins/owners
-  // like the add-custom menu, since members can't create connectors.
-  const showMcpEmptyCta =
-    filter === "mcp" && !hasMcpEntries && canManageCustomTools;
 
   return (
-    <div className="flex flex-col gap-6">
-      <ResponsiveActionToolbar>
-        <ResponsiveActionToolbarItem slot="primary">
-          <InputGroup className="min-h-11 sm:min-h-0">
-            <InputGroupInput
-              className="max-sm:h-11 max-sm:leading-11"
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("onboarding.catalogueSearchPlaceholder")}
-              type="search"
-              value={query}
-            />
-            {query.length > 0 && (
-              <InputGroupAddon align="inline-end">
-                <Button
-                  aria-label={t("onboarding.catalogueClearSearch")}
-                  onClick={() => setQuery("")}
-                  size="icon-xs"
-                  type="button"
-                  variant="ghost"
-                >
-                  <XIcon />
-                </Button>
-              </InputGroupAddon>
-            )}
-          </InputGroup>
-        </ResponsiveActionToolbarItem>
-
-        <ResponsiveActionToolbarItem slot="secondary">
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  className="h-11 w-full justify-start sm:h-8 sm:w-auto"
-                  type="button"
-                  variant="outline"
-                />
-              }
+    <ToolsCatalogueView
+      addAction={
+        showAddCustomMenu ? (
+          <Menu>
+            <MenuTrigger
+              render={<Button className="h-11 sm:h-8" type="button" />}
             >
-              <GlobeIcon className="size-3.5" />
-              <span className="min-w-0 truncate">
-                {jurisdictionFilter.size === 0
-                  ? t("common.all")
-                  : [...jurisdictionFilter].toSorted().join(", ")}
-              </span>
+              <PlusIcon className="size-3.5" />
+              {t("catalogue.addCustom")}
               <ChevronDownIcon className="size-3.5" />
-            </PopoverTrigger>
-            <PopoverPopup align="end" className="w-60" side="bottom">
-              <div className="border-border border-b p-2">
-                <InputGroup>
-                  <InputGroupAddon>
-                    <SearchIcon className="text-muted-foreground" />
-                  </InputGroupAddon>
-                  <InputGroupInput
-                    autoFocus
-                    onChange={(e) => setJurisdictionQuery(e.target.value)}
-                    placeholder={t("common.search")}
-                    size="sm"
-                    value={jurisdictionQuery}
-                  />
-                </InputGroup>
-              </div>
-              <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
-                {jurisdictionQuery.trim() === "" && (
-                  <>
-                    <button
-                      aria-pressed={jurisdictionFilter.size === 0}
-                      className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-                      onClick={() => setJurisdictionFilter(new Set())}
-                      type="button"
-                    >
-                      <span
-                        className={cn(
-                          "border-border flex size-4 items-center justify-center rounded-sm border",
-                          jurisdictionFilter.size === 0 &&
-                            "border-foreground bg-foreground",
-                        )}
-                      >
-                        {jurisdictionFilter.size === 0 && (
-                          <CheckIcon className="text-background size-3" />
-                        )}
-                      </span>
-                      <span className="text-foreground font-medium">
-                        {t("common.all")}
-                      </span>
-                    </button>
-                    <div className="bg-border my-1 h-px" />
-                  </>
-                )}
-                {(() => {
-                  const matches = allJurisdictionCodes.filter((code) =>
-                    code
-                      .toLowerCase()
-                      .includes(jurisdictionQuery.trim().toLowerCase()),
-                  );
-                  if (matches.length === 0) {
+            </MenuTrigger>
+            <MenuPopup align="end" className="w-56">
+              {addActions.map((action) => {
+                switch (action) {
+                  case "mcp":
                     return (
-                      <p className="text-muted-foreground px-2 py-3 text-center text-xs">
-                        {t("common.noResults")}
-                      </p>
-                    );
-                  }
-                  return matches.map((code) => {
-                    const active = jurisdictionFilter.has(code);
-                    return (
-                      <button
-                        aria-pressed={active}
-                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
-                        key={code}
-                        onClick={() =>
-                          setJurisdictionFilter((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(code)) {
-                              next.delete(code);
-                            } else {
-                              next.add(code);
-                            }
-                            return next;
-                          })
-                        }
-                        type="button"
+                      <MenuItem
+                        key={action}
+                        onClick={() => setAddMcpOpen(true)}
                       >
-                        <span
-                          className={cn(
-                            "border-border flex size-4 items-center justify-center rounded-sm border",
-                            active && "border-foreground bg-foreground",
-                          )}
-                        >
-                          {active && (
-                            <CheckIcon className="text-background size-3" />
-                          )}
-                        </span>
-                        <span className="text-foreground">{code}</span>
-                      </button>
+                        <McpIcon className="size-4" />
+                        {t("catalogue.addCustomMcp")}
+                      </MenuItem>
                     );
-                  });
-                })()}
-              </div>
-            </PopoverPopup>
-          </Popover>
-        </ResponsiveActionToolbarItem>
-
-        {showAddCustomMenu && (
-          <ResponsiveActionToolbarItem
-            className="ms-auto sm:ms-0"
-            slot="action"
-          >
-            <Menu>
-              <MenuTrigger
-                render={<Button className="h-11 sm:h-8" type="button" />}
-              >
-                <PlusIcon className="size-3.5" />
-                {t("catalogue.addCustom")}
-                <ChevronDownIcon className="size-3.5" />
-              </MenuTrigger>
-              <MenuPopup align="end" className="w-56">
-                {addActions.map((action) => {
-                  switch (action) {
-                    case "mcp":
-                      return (
-                        <MenuItem
-                          key={action}
-                          onClick={() => setAddMcpOpen(true)}
-                        >
-                          <McpIcon className="size-4" />
-                          {t("catalogue.addCustomMcp")}
-                        </MenuItem>
-                      );
-                    case "skill-blueprint":
-                      return (
-                        <MenuItem
-                          key={action}
-                          onClick={() => setBlueprintGalleryOpen(true)}
-                        >
-                          <GraduationCapIcon className="size-4" />
-                          {t("catalogue.addCustomSkill")}
-                        </MenuItem>
-                      );
-                    case "skill-import":
-                      return (
-                        <MenuItem
-                          key={action}
-                          onClick={() => setImportSkillOpen(true)}
-                        >
-                          <FileDownIcon className="size-4" />
-                          {t("knowledge.agentSkills.importSkill")}
-                        </MenuItem>
-                      );
-                    default: {
-                      action satisfies never;
-                      return panic(`Unhandled add action: ${String(action)}`);
-                    }
+                  case "skill-blueprint":
+                    return (
+                      <MenuItem
+                        key={action}
+                        onClick={() => setBlueprintGalleryOpen(true)}
+                      >
+                        <GraduationCapIcon className="size-4" />
+                        {t("catalogue.addCustomSkill")}
+                      </MenuItem>
+                    );
+                  case "skill-import":
+                    return (
+                      <MenuItem
+                        key={action}
+                        onClick={() => setImportSkillOpen(true)}
+                      >
+                        <FileDownIcon className="size-4" />
+                        {t("knowledge.agentSkills.importSkill")}
+                      </MenuItem>
+                    );
+                  default: {
+                    action satisfies never;
+                    return panic(`Unhandled add action: ${String(action)}`);
                   }
-                })}
-              </MenuPopup>
-            </Menu>
-          </ResponsiveActionToolbarItem>
-        )}
-      </ResponsiveActionToolbar>
-
-      {jurisdictionFilter.size > 0 && (
-        <p className="text-muted-foreground -mt-3 text-xs">
-          {t("catalogue.filterHint", {
-            codes: [...jurisdictionFilter].toSorted().join(", "),
-          })}{" "}
-          <button
-            className="hover:text-foreground underline underline-offset-2"
-            onClick={() => setJurisdictionFilter(new Set())}
-            type="button"
-          >
-            {t("common.showAll")}
-          </button>
-        </p>
-      )}
-
-      <div className="flex items-center gap-1.5">
-        {FILTERS.map((option) => (
-          <button
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs font-medium",
-              filter === option
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted",
-            )}
-            key={option}
-            onClick={() => setFilter(option)}
-            type="button"
-          >
-            {t(KIND_LABEL_KEY[option])}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-2">
-        {filtered.length === 0 && !showMcpEmptyCta && (
-          <p className="text-muted-foreground text-sm">
-            {t("catalogue.empty")}
-          </p>
-        )}
-        {showMcpEmptyCta && (
-          <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-            <McpIcon className="text-muted-foreground size-8" />
-            <Button onClick={() => setAddMcpOpen(true)} type="button">
-              <PlusIcon className="size-4" />
-              {t("catalogue.addCustomMcp")}
-            </Button>
-          </div>
-        )}
-        {recommendedFiltered.length > 0 && (
-          <>
-            <div className="mb-1 flex items-center justify-between gap-3">
-              <h2 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-                {t("catalogue.sectionRecommended")}
-              </h2>
-              {(() => {
-                const installableInView = recommendedFiltered.filter(
-                  (entry) => entry.installState === "available",
-                );
-                if (installableInView.length === 0) {
-                  return null;
                 }
-                return (
-                  <InstallPackButton
-                    entries={installableInView}
-                    organizationId={organizationId}
-                  />
-                );
-              })()}
-            </div>
-            {recommendedFiltered.map((entry) => (
-              <CatalogueEntryRow
-                entry={entry}
-                focused={
-                  focusedTabId === toolDetailTabId(entry.kind, entry.slug)
-                }
-                key={`${entry.kind}-${entry.slug}`}
-                onEditSkill={() => openEditInstalledSkill(entry)}
-                onFocus={() => onRowFocus(entry)}
-                organizationId={organizationId}
-              />
-            ))}
-          </>
-        )}
-        {otherFiltered.length > 0 && (
-          <h2
-            className={cn(
-              "text-muted-foreground mb-1 text-xs font-medium tracking-wider uppercase",
-              recommendedFiltered.length > 0 && "mt-4",
-            )}
-          >
-            {t("catalogue.sectionOthers")}
-          </h2>
-        )}
-        {otherFiltered.map((entry) => (
-          <CatalogueEntryRow
-            entry={entry}
-            focused={focusedTabId === toolDetailTabId(entry.kind, entry.slug)}
-            key={`${entry.kind}-${entry.slug}`}
-            onEditSkill={() => openEditInstalledSkill(entry)}
-            onFocus={() => onRowFocus(entry)}
+              })}
+            </MenuPopup>
+          </Menu>
+        ) : undefined
+      }
+      initialKind={initialKind}
+      // Members can't create connectors, so the empty-connector call to
+      // action is for admins and owners, like the add-custom menu.
+      mcpEmptyAction={
+        canManageCustomTools ? (
+          <Button onClick={() => setAddMcpOpen(true)} type="button">
+            <PlusIcon className="size-4" />
+            {t("catalogue.addCustomMcp")}
+          </Button>
+        ) : undefined
+      }
+      practiceJurisdictions={practiceJurisdictions}
+      recommendedAction={(inView) => {
+        const installableInView = inView.filter(
+          (entry) => entry.installState === "available",
+        );
+        if (installableInView.length === 0) {
+          return null;
+        }
+        return (
+          <InstallPackButton
+            entries={installableInView}
             organizationId={organizationId}
           />
-        ))}
-        {/* Reset-all live at the bottom of the list whenever a
-            filter is hiding entries. Always there, regardless of
-            whether the filtered subset is empty or partial — the
-            user's question is the same: "where's the rest?". */}
-        {entries.length - filtered.length > 0 && !showMcpEmptyCta && (
-          <div className="flex justify-center pt-2">
-            <Button
-              onClick={() => {
-                setQuery("");
-                setJurisdictionFilter(new Set());
-                setFilter("all");
-              }}
-              size="sm"
-              type="button"
-              variant="link"
-            >
-              {t("common.showAll")} ({entries.length - filtered.length})
-            </Button>
-          </div>
-        )}
-      </div>
-
+        );
+      }}
+      renderEntry={(entry) => (
+        <CatalogueEntryRow
+          entry={entry}
+          focused={focusedTabId === toolDetailTabId(entry.kind, entry.slug)}
+          key={`${entry.kind}-${entry.slug}`}
+          onEditSkill={() => openEditInstalledSkill(entry)}
+          onFocus={() => onRowFocus(entry)}
+          organizationId={organizationId}
+        />
+      )}
+      source={{ entries }}
+    >
       <AddMcpServerSheet
         onOpenChange={setAddMcpOpen}
         open={addMcpOpen}
@@ -657,7 +304,7 @@ export const CatalogueBrowser = ({
           open={importSkillOpen}
         />
       )}
-    </div>
+    </ToolsCatalogueView>
   );
 };
 

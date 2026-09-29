@@ -3,57 +3,52 @@
 import { panic } from "better-result";
 import path from "node:path";
 
-type MigrationOrderViolation =
+type MigrationIdentityViolation =
   | { type: "invalid-name"; directory: string }
-  | {
-      type: "not-after-base";
-      directory: string;
-      timestamp: string;
-      previousTimestamp: string;
-    };
+  | { type: "removed-base-migration"; directory: string };
+
+type MigrationChanges = {
+  addedDirectories: readonly string[];
+  removedDirectories: readonly string[];
+};
 
 const MIGRATION_TIMESTAMP = /(?:^|\/)([0-9]{14})_[^/]+$/u;
+const MIGRATION_FILE = /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u;
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
-const timestampFromDirectory = (directory: string): string | null =>
-  MIGRATION_TIMESTAMP.exec(directory)?.at(1) ?? null;
-
-export const findMigrationOrderViolation = ({
-  baseDirectories,
-  newDirectories,
-}: {
-  baseDirectories: readonly string[];
-  newDirectories: readonly string[];
-}): MigrationOrderViolation | null => {
-  const latestBaseTimestamp = baseDirectories
-    .map(timestampFromDirectory)
-    .filter((timestamp) => timestamp !== null)
-    .toSorted()
-    .at(-1);
-  let previousTimestamp = latestBaseTimestamp ?? "";
-
-  for (const directory of newDirectories.toSorted()) {
-    const timestamp = timestampFromDirectory(directory);
-    if (timestamp === null) {
-      return { type: "invalid-name", directory };
-    }
-    if (timestamp <= previousTimestamp) {
-      return {
-        type: "not-after-base",
-        directory,
-        timestamp,
-        previousTimestamp,
-      };
-    }
-    previousTimestamp = timestamp;
+export const findMigrationIdentityViolation = ({
+  addedDirectories,
+  removedDirectories,
+}: MigrationChanges): MigrationIdentityViolation | null => {
+  const directory = removedDirectories.at(0);
+  if (directory !== undefined) {
+    return { type: "removed-base-migration", directory };
   }
-
+  for (const addedDirectory of addedDirectories) {
+    if (!MIGRATION_TIMESTAMP.test(addedDirectory)) {
+      return { type: "invalid-name", directory: addedDirectory };
+    }
+  }
   return null;
 };
 
-const runGit = (arguments_: readonly string[]): string => {
+export const readMigrationChanges = ({
+  baseRef,
+  cwd,
+}: {
+  baseRef: string;
+  cwd: string;
+}): MigrationChanges => {
+  const arguments_ = [
+    "diff",
+    "--no-renames",
+    "--name-status",
+    `${baseRef}...HEAD`,
+    "--",
+    "apps/api/drizzle",
+  ];
   const result = Bun.spawnSync(["git", ...arguments_], {
-    cwd: REPO_ROOT,
+    cwd,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -62,7 +57,22 @@ const runGit = (arguments_: readonly string[]): string => {
       `git ${arguments_.join(" ")} failed (${result.exitCode}): ${result.stderr.toString()}`,
     );
   }
-  return result.stdout.toString();
+
+  const addedDirectories: string[] = [];
+  const removedDirectories: string[] = [];
+  for (const line of result.stdout.toString().split("\n")) {
+    const [status, filename] = line.split("\t");
+    if (filename === undefined || !MIGRATION_FILE.test(filename)) {
+      continue;
+    }
+    const directory = path.posix.dirname(filename);
+    if (status === "A") {
+      addedDirectories.push(directory);
+    } else if (status === "D") {
+      removedDirectories.push(directory);
+    }
+  }
+  return { addedDirectories, removedDirectories };
 };
 
 if (import.meta.main) {
@@ -71,42 +81,20 @@ if (import.meta.main) {
     panic("Usage: bun scripts/check-migration-order.ts <base-ref>");
   }
 
-  const baseDirectories = runGit([
-    "ls-tree",
-    "-d",
-    "--name-only",
-    `${baseRef}:apps/api/drizzle`,
-  ])
-    .split("\n")
-    .filter(Boolean);
-  const newDirectories = runGit([
-    "diff",
-    "--diff-filter=A",
-    "--name-only",
-    `${baseRef}...HEAD`,
-    "--",
-    "apps/api/drizzle",
-  ])
-    .split("\n")
-    .filter((file) => file.endsWith("/migration.sql"))
-    .map((file) => path.posix.dirname(file));
-  const violation = findMigrationOrderViolation({
-    baseDirectories,
-    newDirectories,
-  });
-
+  const violation = findMigrationIdentityViolation(
+    readMigrationChanges({ baseRef, cwd: REPO_ROOT }),
+  );
   if (violation?.type === "invalid-name") {
     panic(
       `New migration directory must start with a 14-digit timestamp: ${violation.directory}`,
     );
   }
-  if (violation?.type === "not-after-base") {
+  if (violation?.type === "removed-base-migration") {
     panic(
-      `New migration ${violation.directory} has timestamp ${violation.timestamp}, ` +
-        `which is not above ${violation.previousTimestamp}. Rename the directory ` +
-        `(and its journal entry) to a timestamp above ${violation.previousTimestamp}: ` +
-        `a database that already recorded ${violation.previousTimestamp} skips this ` +
-        `migration silently, so its DDL never runs and nothing reports an error.`,
+      `Migration directory ${violation.directory} was removed. The folder name is ` +
+        `the migration's identity in the deployed ledger. Renaming a merged ` +
+        `migration makes deployed databases re-run it under the new name; deleting ` +
+        `it removes it from fresh databases. Add a new migration instead.`,
     );
   }
 }

@@ -48,7 +48,10 @@ export type TemplatePackTemplateView = Omit<
   "file" | "readmeFile" | "readme"
 >;
 
-export type TemplatePackView = Omit<GeneratedTemplatePack, "templates"> & {
+export type TemplatePackView = Omit<
+  GeneratedTemplatePack,
+  "templates" | "publicDisplay"
+> & {
   templates: TemplatePackTemplateView[];
   templateCount: number;
   /** True when the pack (or one of its templates) names one of the
