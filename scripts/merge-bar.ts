@@ -971,7 +971,7 @@ const createGhGateway = ({
         if (status === "changed" || status === "copied") {
           if (directory !== null || previousDirectory !== null) {
             unsupportedChanges.push(
-              `${status}: ${previousDirectory ?? directory}`,
+              `${status}: ${String(previousDirectory ?? directory)}`,
             );
           }
           continue;
