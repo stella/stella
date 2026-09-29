@@ -1332,6 +1332,7 @@ test("a scored search projects named stored fields and sorts by score", () => {
       from: 2000,
       size: 1000,
       fields: ["document_id", "chunk_id"],
+      requiredFields: ["document_id"],
     }),
   ).toEqual({
     path: "/api/v1/_elastic/case_law_v5_cs_sk/_search?_source_includes=document_id,chunk_id",
@@ -1350,9 +1351,15 @@ test("a scored search projects named stored fields and sorts by score", () => {
   });
 });
 
-test.each([[[]], [["document_id", "text&x=1"]], [["a,b"]]])(
-  "a scored search refuses the field list %p",
-  (fields) => {
+test.each([
+  [[], []],
+  [["document_id", "text&x=1"], []],
+  [["a,b"], []],
+  // A field every hit must carry has to be one the request projects.
+  [["chunk_id"], ["document_id"]],
+])(
+  "a scored search refuses the field list %p requiring %p",
+  (fields, requiredFields) => {
     expect(() =>
       corpusIndexScoredSearchRequest({
         indexId: "case_law_v5_cs_sk",
@@ -1360,6 +1367,7 @@ test.each([[[]], [["document_id", "text&x=1"]], [["a,b"]]])(
         from: 0,
         size: 10,
         fields,
+        requiredFields,
       }),
     ).toThrow(/scored (corpus )?search/u);
   },
@@ -1367,22 +1375,24 @@ test.each([[[]], [["document_id", "text&x=1"]], [["a,b"]]])(
 
 test("a scored response reads the score from the sort value", () => {
   expect(
-    parseCorpusIndexScoredSearchResponse({
-      hits: {
-        total: { value: 12, relation: "eq" },
-        hits: [
-          { _source: { document_id: "a" }, sort: [9.5] },
-          { _source: { document_id: "b" }, _score: 7.25 },
-          { sort: [1] },
-        ],
+    parseCorpusIndexScoredSearchResponse(
+      {
+        hits: {
+          total: { value: 12, relation: "eq" },
+          hits: [
+            { _source: { document_id: "a", chunk_id: "a:0" }, sort: [9.5] },
+            { _source: { document_id: "b" }, _score: 7.25 },
+          ],
+        },
       },
-    }),
+      ["document_id"],
+    ),
   ).toEqual({
     numHits: 12,
     hits: [
-      { fields: { document_id: "a" }, score: 9.5 },
+      { fields: { document_id: "a", chunk_id: "a:0" }, score: 9.5 },
+      // A passage field is optional: a document-granular index has none.
       { fields: { document_id: "b" }, score: 7.25 },
-      { fields: {}, score: 1 },
     ],
   });
 });
@@ -1392,13 +1402,33 @@ test.each([
   { hits: [] },
   { hits: { total: 3, hits: [] } },
   { hits: { total: { value: -1 }, hits: [] } },
+  // No score.
   { hits: { total: { value: 1 }, hits: [{ _source: { document_id: "a" } }] } },
+  // A `_source` that is not a document.
   {
     hits: {
       total: { value: 1 },
       hits: [{ _source: "document", sort: [1] }],
     },
   },
+  // A `_source` that is missing or null reads as nothing, not as a hit.
+  { hits: { total: { value: 1 }, hits: [{ sort: [1] }] } },
+  { hits: { total: { value: 1 }, hits: [{ _source: null, sort: [1] }] } },
+  // The field the reader identifies a hit by is missing or null.
+  {
+    hits: {
+      total: { value: 1 },
+      hits: [{ _source: { chunk_id: "a:0" }, sort: [1] }],
+    },
+  },
+  {
+    hits: {
+      total: { value: 1 },
+      hits: [{ _source: { document_id: null }, sort: [1] }],
+    },
+  },
 ])("a scored response of another shape is refused", (response) => {
-  expect(parseCorpusIndexScoredSearchResponse(response)).toBeNull();
+  expect(
+    parseCorpusIndexScoredSearchResponse(response, ["document_id"]),
+  ).toBeNull();
 });

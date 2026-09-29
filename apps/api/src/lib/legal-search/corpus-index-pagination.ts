@@ -529,6 +529,9 @@ const readScoredScanRound = async ({
     from,
     size,
     fields: [...new Set([...fields, ...CORPUS_INDEX_SCAN_PASSAGE_FIELDS])],
+    // The caller's id is what the scan reads a hit by; the passage fields are
+    // absent on a document-granular index and stay optional.
+    requiredFields: fields,
   });
   if (result.isErr()) {
     throw corpusIndexSearchFailure(result.error);

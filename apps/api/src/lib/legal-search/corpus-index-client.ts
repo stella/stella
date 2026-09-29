@@ -180,6 +180,12 @@ type CorpusIndexScoredSearchInput = {
   size: number;
   /** Stored fields each hit carries; nothing else of the document is sent. */
   fields: readonly string[];
+  /**
+   * Fields every hit must carry. A hit without one of them is a malformed
+   * response, not a hit to skip: a reader that skipped it would still count it
+   * as read and could answer a short page while the engine reports matches.
+   */
+  requiredFields: readonly string[];
 };
 
 type CorpusIndexScoredHit = {
@@ -211,12 +217,18 @@ export const corpusIndexScoredSearchRequest = ({
   from,
   size,
   fields,
+  requiredFields,
 }: CorpusIndexScoredSearchInput): {
   path: string;
   body: Record<string, unknown>;
 } => {
   if (fields.length === 0) {
     panic("A scored corpus search must name the fields it reads");
+  }
+  for (const field of requiredFields) {
+    if (!fields.includes(field)) {
+      panic(`A scored corpus search requires ${field} without reading it`);
+    }
   }
   for (const field of fields) {
     if (!STORED_FIELD_NAME.test(field)) {
@@ -242,9 +254,13 @@ const scoreOfScoredHit = (hit: Record<string, unknown>): number | null => {
   return typeof score === "number" && Number.isFinite(score) ? score : null;
 };
 
-/** Null when the body is not the shape the endpoint documents. */
+/**
+ * Null when the body is not the shape the endpoint documents, including a hit
+ * whose `_source` is missing or null, or lacks one of `requiredFields`.
+ */
 export const parseCorpusIndexScoredSearchResponse = (
   response: unknown,
+  requiredFields: readonly string[],
 ): CorpusIndexScoredSearchResponse | null => {
   const outer = isRecord(response) ? response["hits"] : undefined;
   if (!isRecord(outer)) {
@@ -263,9 +279,15 @@ export const parseCorpusIndexScoredSearchResponse = (
   }
   const hits: CorpusIndexScoredHit[] = [];
   for (const hit of rawHits) {
-    const source = hit["_source"] ?? {};
+    const source = hit["_source"];
     const score = scoreOfScoredHit(hit);
-    if (!isRecord(source) || score === null) {
+    if (
+      !isRecord(source) ||
+      score === null ||
+      requiredFields.some(
+        (field) => source[field] === undefined || source[field] === null,
+      )
+    ) {
       return null;
     }
     hits.push({ fields: source, score });
@@ -1053,7 +1075,10 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           },
           timeoutMs: SEARCH_TIMEOUT_MS,
         });
-        const parsed = parseCorpusIndexScoredSearchResponse(response);
+        const parsed = parseCorpusIndexScoredSearchResponse(
+          response,
+          input.requiredFields,
+        );
         if (parsed === null) {
           throw new CorpusIndexError({
             message: "corpus index scored search returned an invalid response",

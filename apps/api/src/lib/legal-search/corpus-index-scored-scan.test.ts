@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusIndexScanTransport,
@@ -199,6 +200,8 @@ let active: FixtureCase | null = null;
 let engineRequests: EngineRequest[] = [];
 let scanRequests: { from: number; size: number; endpoint: string }[] = [];
 let highlightRequests: { maxHits: number; clauses: number }[] = [];
+/** Rank whose scored hit arrives without `_source`, when a test wants one. */
+let sourcelessRank: number | null = null;
 
 const clauseValues = (query: string): Set<string> =>
   new Set(
@@ -230,6 +233,7 @@ beforeEach(() => {
   engineRequests = [];
   scanRequests = [];
   highlightRequests = [];
+  sourcelessRank = null;
   const stub = async (
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -250,10 +254,11 @@ beforeEach(() => {
       return json({
         hits: {
           total: { value: passages.length, relation: "eq" },
-          hits: window.map((passage) => ({
-            _source: projected(passage, fields),
-            sort: [passage.score],
-          })),
+          hits: window.map((passage, index) =>
+            from + index === sourcelessRank
+              ? { sort: [passage.score] }
+              : { _source: projected(passage, fields), sort: [passage.score] },
+          ),
         },
       });
     }
@@ -506,6 +511,17 @@ describe("the scored transport", () => {
     const page = await readFixturePage(fixture(), null, NATIVE_SCAN_TRANSPORT);
 
     expect(page.lexicalScores).toBeNull();
+  });
+
+  test("a hit without its stored fields fails the read rather than shortening the page", async () => {
+    sourcelessRank = 3;
+
+    const read = readFixturePage(fixture(), null, SCORED);
+
+    // The same answer as any other malformed engine response: retryable, and
+    // never a page that skipped the hit while still counting it as read.
+    await expect(read).rejects.toBeInstanceOf(HandlerError);
+    await expect(read).rejects.toMatchObject({ status: 503 });
   });
 
   test("a date order cannot be read through it", async () => {
