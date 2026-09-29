@@ -65,6 +65,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AGENT_SANDBOX_IMAGE",
   "AGENT_SANDBOX_MCP_URL",
   "AGENT_SANDBOX_RUNS_ENABLED",
+  "CHAT_RUN_LOG_SHADOW",
   "AI_MODEL_CHAT",
   "AI_MODEL_FAST",
   "AI_MODEL_PDF",
@@ -255,6 +256,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Container-reachable MCP endpoint used by isolated agent runs.",
   AGENT_SANDBOX_RUNS_ENABLED:
     "Enable explicit agent-mode chat requests for this deployment.",
+  CHAT_RUN_LOG_SHADOW:
+    "Record chat stream chunks for measurement. Defaults on in local development/test and off in production.",
   BETTER_AUTH_SECRET:
     "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
   BETTER_AUTH_URL:

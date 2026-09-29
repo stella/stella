@@ -105,13 +105,15 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const tSkills = useTranslations("knowledge.agentSkills");
   const locale = useLocale();
   const queryClient = useQueryClient();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const openSkillResourceTab = useInspectorTabsStore(
     (s) => s.openSkillResourceTab,
   );
   const openChat = useInspectorTabsStore((s) => s.openChat);
 
-  const detail = useQuery(skillDetailOptions(activeOrganizationId, skillId));
+  const detail = useQuery(
+    skillDetailOptions(activeOrganizationId, userId, skillId),
+  );
   // Everyone who can see a skill opens this page; only its managers get the
   // controls the server would accept from them.
   const access = useSkillEditAccess(skillId);
@@ -128,7 +130,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     );
     detached(
       queryClient.invalidateQueries({
-        queryKey: catalogueKeys.list(activeOrganizationId),
+        queryKey: catalogueKeys.all(activeOrganizationId),
       }),
       "skill-editor.invalidate",
     );

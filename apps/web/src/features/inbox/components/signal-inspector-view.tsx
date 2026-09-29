@@ -38,13 +38,15 @@ export const SignalInspectorView = ({
   tab,
 }: InspectorViewRenderProps<InboxSignalViewPayload>) => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const {
     data: signal,
     isError,
     isPending,
     refetch,
-  } = useQuery(inboxSignalOptions(activeOrganizationId, tab.payload.signalId));
+  } = useQuery(
+    inboxSignalOptions(activeOrganizationId, userId, tab.payload.signalId),
+  );
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">

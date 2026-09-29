@@ -219,7 +219,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     refetch: refetchWorkspaces,
   } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
   const { data: inboxCount } = useChromeQuery({
-    ...inboxCountOptions(user.activeOrganizationId),
+    ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
   });
   const openInboxCount = inboxCount?.count ?? 0;
@@ -227,6 +227,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { data: groupedChatThreadPages } = useInfiniteQuery({
     ...groupedChatThreadsOptions({
       activeOrganizationId: user.activeOrganizationId,
+      userId: user.id,
     }),
     enabled: mounted,
   });
@@ -731,6 +732,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   {pinned.map((ws, i) => (
                     <MatterItem
                       activeOrganizationId={user.activeOrganizationId}
+                      userId={user.id}
                       isActive={activeWorkspaceId === ws.id}
                       isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       isPinned
@@ -763,6 +765,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   {recents.map((ws) => (
                     <MatterItem
                       activeOrganizationId={user.activeOrganizationId}
+                      userId={user.id}
                       isActive={activeWorkspaceId === ws.id}
                       isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       key={ws.id}
@@ -970,6 +973,7 @@ type PendingEntityDrop = {
 type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
 type MatterItemProps = {
   activeOrganizationId: string;
+  userId: string;
   workspace: MatterIdentity & {
     reference: string | null;
     client?: { id: string; displayName: string } | null;
@@ -1063,6 +1067,7 @@ const MatterItem = ({
   onEntityDrop,
   onExpandedChange,
   navBadge,
+  userId,
 }: MatterItemProps) => {
   // Read pin state directly from the store so the menu label
   // updates immediately after toggling (the prop may be stale
@@ -1118,7 +1123,7 @@ const MatterItem = ({
   const { data: cachedActivity, status: activityStatus } = useInfiniteQuery({
     ...workspaceActivityOptions({
       activeOrganizationId,
-      key: { workspaceId: ws.id },
+      key: { userId, workspaceId: ws.id },
     }),
     enabled: false,
   });
@@ -1127,6 +1132,7 @@ const MatterItem = ({
   // the cache entry rather than the observer result, so read it from there.
   const queryClient = useQueryClient();
   const activityQueryKey = workspacesKeys.activity(activeOrganizationId, {
+    userId,
     workspaceId: ws.id,
   });
   const activityQueryHash = hashKey(activityQueryKey);
@@ -1524,6 +1530,7 @@ const MatterItem = ({
             <MatterActivityList
               activeOrganizationId={activeOrganizationId}
               id={`matter-recent-${ws.id}`}
+              userId={userId}
               workspaceId={ws.id}
             />
           </div>
@@ -1538,12 +1545,14 @@ const MatterItem = ({
 type MatterActivityListProps = {
   activeOrganizationId: string;
   id: string;
+  userId: string;
   workspaceId: string;
 };
 
 const MatterActivityList = ({
   activeOrganizationId,
   id,
+  userId,
   workspaceId,
 }: MatterActivityListProps) => {
   const t = useTranslations();
@@ -1564,7 +1573,7 @@ const MatterActivityList = ({
   } = useInfiniteQuery({
     ...workspaceActivityOptions({
       activeOrganizationId,
-      key: { workspaceId },
+      key: { userId, workspaceId },
     }),
     enabled: mounted,
   });

@@ -20,6 +20,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { resolveAddToStellaState } from "@/features/knowledge/public/tools/add-to-stella.logic";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { TranslationKey } from "@/i18n/types";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { authClient, type Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
@@ -69,12 +70,15 @@ export const AddToStella = ({
   const organizationId = authStatus.isAuthenticated
     ? authStatus.user.activeOrganizationId
     : "";
+  const userId = authStatus.isAuthenticated
+    ? authStatus.user.id
+    : SIGNED_OUT_QUERY_OWNER;
   const roleQuery = useQuery({
     ...roleOptions,
     enabled: authStatus.isAuthenticated,
   });
   const catalogueQuery = useQuery({
-    ...catalogueOptions(organizationId),
+    ...catalogueOptions(organizationId, userId),
     enabled: authStatus.isAuthenticated,
   });
   const canInstall = resolveInstallPermission({

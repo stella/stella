@@ -13,6 +13,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import {
   catalogueKeys,
@@ -40,6 +41,7 @@ export function MemberToolsPage({
 }) {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const { id: userId } = useAuthenticatedUser();
   const initialKind = toolsRouteApi.useSearch({
     select: (s): CatalogueBrowserFilterKind | undefined => s.kind,
   });
@@ -50,7 +52,7 @@ export function MemberToolsPage({
   // through a plain query, which must already be cached when it mounts.
   const [, { data: settings }, { data: role }] = useSuspenseQueries({
     queries: [
-      catalogueOptions(organizationId),
+      catalogueOptions(organizationId, userId),
       organizationSettingsOptions(organizationId),
       roleOptions,
     ],
@@ -75,7 +77,7 @@ export function MemberToolsPage({
           });
           detached(
             queryClient.invalidateQueries({
-              queryKey: catalogueKeys.list(organizationId),
+              queryKey: catalogueKeys.all(organizationId),
             }),
             "knowledge-tools.invalidate",
           );

@@ -20,22 +20,22 @@ const INBOX_STALE_TIME_MS = 60 * 1000;
 // under the work root because the badge counts due tasks too: every task
 // mutation already invalidates `myWorkKeys.all`.
 export const inboxKeys = {
-  all: (organizationId: string) =>
-    [...myWorkKeys.all, "inbox", organizationId] as const,
-  count: (organizationId: string, asOf: string) =>
-    [...inboxKeys.all(organizationId), "count", asOf] as const,
-  detail: (organizationId: string, signalId: string) =>
-    [...inboxKeys.all(organizationId), "detail", signalId] as const,
+  all: (organizationId: string, userId: string) =>
+    [...myWorkKeys.all, "inbox", organizationId, userId] as const,
+  count: (organizationId: string, userId: string, asOf: string) =>
+    [...inboxKeys.all(organizationId, userId), "count", asOf] as const,
+  detail: (organizationId: string, userId: string, signalId: string) =>
+    [...inboxKeys.all(organizationId, userId), "detail", signalId] as const,
 };
 
 /**
  * Badge count: open signals plus the caller's tasks due on or before their
  * own calendar day. Polled gently, never suspends.
  */
-export const inboxCountOptions = (organizationId: string) => {
+export const inboxCountOptions = (organizationId: string, userId: string) => {
   const asOf = localISODate();
   return queryOptions({
-    queryKey: inboxKeys.count(organizationId, asOf),
+    queryKey: inboxKeys.count(organizationId, userId, asOf),
     queryFn: async ({ signal }) =>
       unwrapEden(
         await api.signals.count.get({ query: { asOf }, fetch: { signal } }),
@@ -45,9 +45,13 @@ export const inboxCountOptions = (organizationId: string) => {
   });
 };
 
-export const inboxSignalOptions = (organizationId: string, signalId: string) =>
+export const inboxSignalOptions = (
+  organizationId: string,
+  userId: string,
+  signalId: string,
+) =>
   queryOptions({
-    queryKey: inboxKeys.detail(organizationId, signalId),
+    queryKey: inboxKeys.detail(organizationId, userId, signalId),
     queryFn: async ({ signal }) =>
       unwrapEden(
         await api

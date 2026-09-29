@@ -23,11 +23,12 @@ export type WorkspaceViewTemplate = {
 
 export type ViewTemplatesKey = {
   organizationId: string;
+  userId: string;
 };
 
 export const viewTemplateKeys = {
-  all: ({ organizationId }: ViewTemplatesKey) =>
-    ["view-templates", organizationId] as const,
+  all: ({ organizationId, userId }: ViewTemplatesKey) =>
+    ["view-templates", organizationId, userId] as const,
 };
 
 export type ViewTemplatesOptionsInput = QueryOptionsInput<

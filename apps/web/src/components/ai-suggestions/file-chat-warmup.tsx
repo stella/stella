@@ -31,12 +31,12 @@ export const FileChatWarmup = ({
   fileFieldId,
   workspaceId,
 }: FileChatWarmupProps) => {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
 
   useQuery(
     fileChatThreadOptions({
       activeOrganizationId,
-      key: { entityId, fieldId: fileFieldId, workspaceId },
+      key: { entityId, fieldId: fileFieldId, userId, workspaceId },
       // The DOCX surface always wires a live editor ref, so the binding seeds
       // the same sibling cache key the overlay will read there.
       hasDocxEditSurface: true,

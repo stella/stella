@@ -11,6 +11,7 @@ import {
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import {
   GLOBAL_MORPHOLOGY_KEY,
   MORPHOLOGY_LANGUAGES,
@@ -66,6 +67,7 @@ const LEGISLATION_INPUT = {
   versionValidFrom: "2014-01-01",
   versionValidTo: null,
   eli: "eli/cz/sb/2012/89",
+  ...EFFECTIVE_CONSOLIDATION,
 } as const satisfies LegislationV2ProjectionInput;
 
 test("case-law title and fingerprint canonicalize identifier order", () => {
@@ -144,6 +146,81 @@ test("legislation uses the open jurisdiction route and exact metadata", () => {
       { ...LEGISLATION_INPUT, status: "repealed" },
     ),
   ).not.toEqual(first);
+});
+
+const legislationFingerprintOf = (input: LegislationV2ProjectionInput) => {
+  const descriptor = deriveCorpusIndexProjectionDescriptor(
+    CORPUS_INDEX_MANIFESTS.legislation_v2,
+    input,
+  );
+  return descriptor.action === "upsert" ? descriptor.fingerprint : null;
+};
+
+/**
+ * The fingerprint of `LEGISLATION_INPUT` computed before versions carried a
+ * classification. Every stored version then was untyped, so it must keep this
+ * value byte for byte or the whole legislation corpus re-projects.
+ */
+const UNTYPED_LEGISLATION_FINGERPRINT =
+  "183e924c4b0e5e7a9a231ff18fbfbb0b901c3c62c62ddd8578b5fcaf1e12bd89";
+
+test("an untyped legislation version keeps the fingerprint it had before classifications", () => {
+  expect(legislationFingerprintOf(LEGISLATION_INPUT)).toBe(
+    UNTYPED_LEGISLATION_FINGERPRINT,
+  );
+  // A work kept as one text is told apart by its dates, which the
+  // fingerprint already covers, so its kind adds nothing.
+  expect(
+    legislationFingerprintOf({
+      ...LEGISLATION_INPUT,
+      expressionKind: "unversioned",
+    }),
+  ).toBe(UNTYPED_LEGISLATION_FINGERPRINT);
+});
+
+test("a withdrawn legislation version erases, whatever its basis", () => {
+  for (const windowDispositionBasis of [
+    "publisher-unlisted",
+    "listed-not-stored",
+    "deferred-promulgated",
+  ] as const) {
+    expect(
+      deriveCorpusIndexProjectionDescriptor(
+        CORPUS_INDEX_MANIFESTS.legislation_v2,
+        {
+          ...LEGISLATION_INPUT,
+          windowDisposition: "withdrawn",
+          windowDispositionBasis,
+        },
+      ),
+    ).toEqual({ action: "erase" });
+  }
+});
+
+test("a typed legislation classification moves the fingerprint, and each one differently", () => {
+  const typed = [
+    { ...LEGISLATION_INPUT, expressionKind: "promulgated" },
+    {
+      ...LEGISLATION_INPUT,
+      windowDisposition: "never-in-force",
+      windowDispositionBasis: "publisher-flag",
+    },
+    {
+      ...LEGISLATION_INPUT,
+      windowDisposition: "never-in-force",
+      windowDispositionBasis: "replaced-same-day",
+    },
+    {
+      ...LEGISLATION_INPUT,
+      windowDisposition: "invalid-window",
+      windowDispositionBasis: "reversed",
+    },
+  ] as const satisfies readonly LegislationV2ProjectionInput[];
+  const fingerprints = typed.map(legislationFingerprintOf);
+
+  expect(fingerprints).not.toContain(null);
+  expect(fingerprints).not.toContain(UNTYPED_LEGISLATION_FINGERPRINT);
+  expect(new Set(fingerprints).size).toBe(typed.length);
 });
 
 test("manifest and projection families cannot be crossed", () => {

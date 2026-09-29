@@ -36,9 +36,9 @@ export const ChatBreadcrumb = ({
   threadId: string;
   workspaceId?: string | undefined;
 }) => {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: groupedThread } = useInfiniteQuery({
-    ...groupedChatThreadsOptions({ activeOrganizationId }),
+    ...groupedChatThreadsOptions({ activeOrganizationId, userId }),
     select: (data) => selectThreadTitleSummary(data.pages, threadId),
   });
 

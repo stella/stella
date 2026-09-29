@@ -72,27 +72,36 @@ export const knowledgeKeys = {
       ...knowledgeKeys.skills.root,
       organizationId,
     ],
-    list: (organizationId: string, { limit }: SkillsPageKey) => [
+    user: (organizationId: string, userId: string) => [
       ...knowledgeKeys.skills.all(organizationId),
+      userId,
+    ],
+    list: (
+      organizationId: string,
+      userId: string,
+      { limit }: SkillsPageKey,
+    ) => [
+      ...knowledgeKeys.skills.user(organizationId, userId),
       "list",
       { limit },
     ],
-    detail: (organizationId: string, skillId: string) => [
-      ...knowledgeKeys.skills.all(organizationId),
+    detail: (organizationId: string, userId: string, skillId: string) => [
+      ...knowledgeKeys.skills.user(organizationId, userId),
       skillId,
       "detail",
     ],
     // Under `all` so every skill change refreshes it with the list.
     chatUnavailable: (
       organizationId: string,
+      userId: string,
       chat?: ChatSkillAvailabilityQuery,
     ) => [
-      ...knowledgeKeys.skills.all(organizationId),
+      ...knowledgeKeys.skills.user(organizationId, userId),
       "chat-unavailable",
       chatSkillAvailabilityKey(chat),
     ],
-    revisions: (organizationId: string, skillId: string) => [
-      ...knowledgeKeys.skills.all(organizationId),
+    revisions: (organizationId: string, userId: string, skillId: string) => [
+      ...knowledgeKeys.skills.user(organizationId, userId),
       skillId,
       "revisions",
     ],
@@ -101,27 +110,29 @@ export const knowledgeKeys = {
     // placeholder id that would collide across skills.
     revision: (
       organizationId: string,
+      userId: string,
       skillId: string,
       revisionId: string | null,
     ) => [
-      ...knowledgeKeys.skills.revisions(organizationId, skillId),
+      ...knowledgeKeys.skills.revisions(organizationId, userId, skillId),
       revisionId,
     ],
-    proposals: (organizationId: string, skillId: string) => [
-      ...knowledgeKeys.skills.all(organizationId),
+    proposals: (organizationId: string, userId: string, skillId: string) => [
+      ...knowledgeKeys.skills.user(organizationId, userId),
       skillId,
       "proposals",
     ],
     proposal: (
       organizationId: string,
+      userId: string,
       skillId: string,
       proposalId: string | null,
     ) => [
-      ...knowledgeKeys.skills.proposals(organizationId, skillId),
+      ...knowledgeKeys.skills.proposals(organizationId, userId, skillId),
       proposalId,
     ],
-    comments: (organizationId: string, skillId: string) => [
-      ...knowledgeKeys.skills.all(organizationId),
+    comments: (organizationId: string, userId: string, skillId: string) => [
+      ...knowledgeKeys.skills.user(organizationId, userId),
       skillId,
       "comments",
     ],
@@ -239,8 +250,13 @@ export const knowledgeKeys = {
       "list",
       { limit },
     ],
-    recent: (organizationId: string, { limit }: PlaybooksPageKey) => [
+    recent: (
+      organizationId: string,
+      userId: string,
+      { limit }: PlaybooksPageKey,
+    ) => [
       ...knowledgeKeys.playbooks.all(organizationId),
+      userId,
       "recent",
       { limit },
     ],
@@ -285,8 +301,9 @@ export const knowledgeKeys = {
       ...knowledgeKeys.mcp.all(organizationId),
       "connectors",
     ],
-    connections: (organizationId: string) => [
+    connections: (organizationId: string, userId: string) => [
       ...knowledgeKeys.mcp.all(organizationId),
+      userId,
       "connections",
     ],
   },
@@ -680,9 +697,12 @@ export const playbooksOptions = (
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const recentPlaybooksOptions = (organizationId: string) =>
+export const recentPlaybooksOptions = (
+  organizationId: string,
+  userId: string,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.playbooks.recent(organizationId, {
+    queryKey: knowledgeKeys.playbooks.recent(organizationId, userId, {
       limit: RECENT_PLAYBOOKS_LIMIT,
     }),
     queryFn: async ({ signal }) => {
@@ -800,9 +820,9 @@ export const flowDetailOptions = (organizationId: string, flowId: string) =>
 
 // ── Skills queries ───────────────────────────────────
 
-export const skillsOptions = (organizationId: string) =>
+export const skillsOptions = (organizationId: string, userId: string) =>
   infiniteQueryOptions({
-    queryKey: knowledgeKeys.skills.list(organizationId, {
+    queryKey: knowledgeKeys.skills.list(organizationId, userId, {
       limit: SKILLS_PAGE_SIZE,
     }),
     queryFn: async ({ pageParam, signal }) => {
@@ -832,10 +852,15 @@ export const skillsOptions = (organizationId: string) =>
  */
 export const chatUnavailableSkillsOptions = (
   organizationId: string,
+  userId: string,
   chat?: ChatSkillAvailabilityQuery,
 ) =>
   queryOptions({
-    queryKey: knowledgeKeys.skills.chatUnavailable(organizationId, chat),
+    queryKey: knowledgeKeys.skills.chatUnavailable(
+      organizationId,
+      userId,
+      chat,
+    ),
     queryFn: async ({ signal }) => {
       const response = await api.chat["skill-availability"].get({
         fetch: { signal },
@@ -846,9 +871,13 @@ export const chatUnavailableSkillsOptions = (
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const skillDetailOptions = (organizationId: string, skillId: string) =>
+export const skillDetailOptions = (
+  organizationId: string,
+  userId: string,
+  skillId: string,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.skills.detail(organizationId, skillId),
+    queryKey: knowledgeKeys.skills.detail(organizationId, userId, skillId),
     queryFn: async ({ signal }) => {
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
@@ -863,10 +892,11 @@ export const skillDetailOptions = (organizationId: string, skillId: string) =>
 // enough.
 export const skillRevisionsOptions = (
   organizationId: string,
+  userId: string,
   skillId: string,
 ) =>
   queryOptions({
-    queryKey: knowledgeKeys.skills.revisions(organizationId, skillId),
+    queryKey: knowledgeKeys.skills.revisions(organizationId, userId, skillId),
     queryFn: async ({ signal }) => {
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
@@ -880,12 +910,14 @@ export const skillRevisionsOptions = (
 // has no selection, which disables the query instead of fetching.
 export const skillRevisionOptions = (
   organizationId: string,
+  userId: string,
   skillId: string,
   revisionId: string | null,
 ) =>
   queryOptions({
     queryKey: knowledgeKeys.skills.revision(
       organizationId,
+      userId,
       skillId,
       revisionId,
     ),
@@ -908,10 +940,11 @@ export const skillRevisionOptions = (
 // from the same list, so a per-status cache entry would only fan out requests.
 export const skillProposalsOptions = (
   organizationId: string,
+  userId: string,
   skillId: string,
 ) =>
   queryOptions({
-    queryKey: knowledgeKeys.skills.proposals(organizationId, skillId),
+    queryKey: knowledgeKeys.skills.proposals(organizationId, userId, skillId),
     queryFn: async ({ signal }) => {
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
@@ -925,12 +958,14 @@ export const skillProposalsOptions = (
 // `proposalId` is null while no proposal is open, which disables the query.
 export const skillProposalOptions = (
   organizationId: string,
+  userId: string,
   skillId: string,
   proposalId: string | null,
 ) =>
   queryOptions({
     queryKey: knowledgeKeys.skills.proposal(
       organizationId,
+      userId,
       skillId,
       proposalId,
     ),
@@ -953,9 +988,13 @@ export const skillProposalOptions = (
 // Every comment anchored to the skill, across its revisions and proposals.
 // No staleTime: the review view is opened to act on comments, so each mount
 // should see the current set.
-export const skillCommentsOptions = (organizationId: string, skillId: string) =>
+export const skillCommentsOptions = (
+  organizationId: string,
+  userId: string,
+  skillId: string,
+) =>
   queryOptions({
-    queryKey: knowledgeKeys.skills.comments(organizationId, skillId),
+    queryKey: knowledgeKeys.skills.comments(organizationId, userId, skillId),
     queryFn: async ({ signal }) => {
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
@@ -976,9 +1015,9 @@ export const mcpConnectorsOptions = (organizationId: string) =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-export const mcpConnectionsOptions = (organizationId: string) =>
+export const mcpConnectionsOptions = (organizationId: string, userId: string) =>
   queryOptions({
-    queryKey: knowledgeKeys.mcp.connections(organizationId),
+    queryKey: knowledgeKeys.mcp.connections(organizationId, userId),
     queryFn: async ({ signal }) => {
       const response = await api.mcp.connections.get({ fetch: { signal } });
       return unwrapEden(response);

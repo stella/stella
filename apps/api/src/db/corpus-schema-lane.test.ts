@@ -163,13 +163,11 @@ test("the exclusive wait runs with the statement timeout off and restores it onc
   expect(restore).toBe("RESET statement_timeout");
 });
 
-// The entrypoint runs at import against a live database, so its lane
-// sequence is pinned at the source: the three statements reach the reserved
-// connection in order, the lane is recorded held between the lock and the
-// restore, and nothing takes the lock any other way.
-test("the migrate entrypoint takes the lane through the timeout-free sequence", () => {
+// The entrypoint delegates to the runner, which owns migration SQL and the
+// lane's session lock. Pin the ordering and ensure release stays in finally.
+test("the migration runner takes the lane before SQL and releases it in finally", () => {
   const source = readFileSync(
-    nodePath.resolve(import.meta.dir, "migrate.ts"),
+    nodePath.resolve(import.meta.dir, "migration-runner.ts"),
     "utf-8",
   );
   const positions = [
@@ -178,7 +176,7 @@ test("the migrate entrypoint takes the lane through the timeout-free sequence", 
     "await connection.unsafe(takeLane);",
     "laneHeld = true;",
     "await connection.unsafe(restoreTimeout);",
-    "await migrate(database",
+    "await pgCoreMigrate(migrations, database",
   ].map((needle) => {
     const at = source.indexOf(needle);
     expect(at, needle).toBeGreaterThan(-1);
@@ -186,4 +184,13 @@ test("the migrate entrypoint takes the lane through the timeout-free sequence", 
   });
   expect(positions).toEqual([...positions].toSorted((a, b) => a - b));
   expect(source).not.toContain("CORPUS_SCHEMA_LANE_LOCK_SQL");
+
+  const migrationAt = source.indexOf(
+    "await pgCoreMigrate(migrations, database",
+  );
+  const finallyAt = source.indexOf("} finally {");
+  expect(finallyAt).toBeGreaterThan(migrationAt);
+  expect(source.slice(finallyAt)).toContain(
+    "await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);",
+  );
 });

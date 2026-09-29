@@ -112,14 +112,17 @@ export const AIPromptInput = ({
   aiEditAction,
   className,
 }: AIPromptInputProps) => {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const {
     data: skillPages,
     fetchNextPage: fetchNextSkillPage,
     hasNextPage: hasNextSkillPage,
     isFetchingNextPage: isFetchingNextSkillPage,
-  } = useInfiniteQuery(skillsOptions(activeOrganizationId));
-  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
+  } = useInfiniteQuery(skillsOptions(activeOrganizationId, userId));
+  const unavailableSkillIds = useChatUnavailableSkillIds(
+    activeOrganizationId,
+    userId,
+  );
   const slashShortcutRows = useMemo(
     () =>
       commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),

@@ -73,7 +73,10 @@ export const loadProtectedContext = async ({
     detached(
       prefetchNonCriticalInfiniteQuery(
         context.queryClient,
-        notificationsOptions({ organizationId: activeOrganizationId }),
+        notificationsOptions({
+          organizationId: activeOrganizationId,
+          userId: authContext.session.userId,
+        }),
         onPrefetchError,
       ),
       "protected-layout.notifications-prefetch",

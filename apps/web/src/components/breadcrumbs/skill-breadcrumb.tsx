@@ -11,7 +11,7 @@ const toolEntryRoute = getRouteApi("/knowledge/tools_/$entry");
 /** The entry's name: a skill's is read for the organization, a published
  *  tool's comes with the page. A tool's slug is never asked for as a skill. */
 export const SkillBreadcrumb = () => {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const entry = toolEntryRoute.useParams({ select: (params) => params.entry });
   const toolName = toolEntryRoute.useMatch({
     select: (match) =>
@@ -21,7 +21,7 @@ export const SkillBreadcrumb = () => {
   });
   const isSkill = classifyToolEntry(entry) === "skill";
   const { data: skill } = useQuery({
-    ...skillDetailOptions(activeOrganizationId, entry),
+    ...skillDetailOptions(activeOrganizationId, userId, entry),
     enabled: isSkill,
   });
 

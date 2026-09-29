@@ -27,13 +27,14 @@ import { toSafeId } from "@/lib/safe-id";
 export const useRenameChatThread = (threadRef: ChatThreadRef) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const workspaceId =
     threadRef.scope === "workspace" ? threadRef.workspaceId : undefined;
   const threadId = threadRef.threadId;
 
   const groupedKey = groupedChatThreadsOptions({
     activeOrganizationId,
+    userId,
   }).queryKey;
   // Only the typed query key is used here; `enabled: false` marks that this
   // options object never runs the query itself.

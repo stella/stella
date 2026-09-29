@@ -193,12 +193,12 @@ const createTextChatMessage = (text: string): ChatUserMessageInput => ({
 
 const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const queryClient = useQueryClient();
   const { data: chatThreadId } = useSuspenseQuery(
     templateChatThreadOptions({
       activeOrganizationId,
-      key: { templateId: props.templateId },
+      key: { templateId: props.templateId, userId },
     }),
   );
   const [pendingPresetSend, setPendingPresetSend] =
@@ -222,7 +222,7 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
     queryClient.setQueryData(
       templateChatThreadOptions({
         activeOrganizationId,
-        key: { templateId: props.templateId },
+        key: { templateId: props.templateId, userId },
       }).queryKey,
       toChatThreadId(rotated.value.threadId),
     );
@@ -1450,7 +1450,7 @@ const TemplateStudioChatInner = ({
                 const currentThreadId = queryClient.getQueryData(
                   templateChatThreadOptions({
                     activeOrganizationId,
-                    key: { templateId },
+                    key: { templateId, userId: user.id },
                   }).queryKey,
                 );
                 if (currentThreadId !== submittingThreadId) {
