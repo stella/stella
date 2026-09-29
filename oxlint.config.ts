@@ -3224,6 +3224,7 @@ export default defineConfig({
         "apps/web/src/**/workspace-table.tsx",
         "apps/web/src/**/workspace-table/**/*.tsx",
         "apps/web/src/**/template-preview.tsx",
+        "apps/web/src/**/template-preview-view.tsx",
         "apps/web/src/**/page-citation.tsx",
         // Generated message types: UI copy may legitimately contain words
         // like "right-click"; these strings are never class names.

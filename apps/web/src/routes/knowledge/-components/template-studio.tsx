@@ -34,6 +34,7 @@ import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -51,10 +52,9 @@ import {
   templateDocxBufferOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { forceReflow } from "@/lib/utils";
 import "@/routes/knowledge/-components/template-studio-inspector";
+import { forceReflow } from "@/lib/utils";
 import { inputTypeValueKind } from "@/lib/value-types";
-import type { BlockGestureKind } from "@/routes/knowledge/-components/directive-kinds";
 import {
   markerConfigRewrites,
   refusesSave,

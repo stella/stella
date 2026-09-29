@@ -2,8 +2,8 @@ import { create } from "zustand";
 
 import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
 
+import type { GroupDirectiveKind } from "@/features/knowledge/views/templates/directive-kinds";
 import type { TemplateRecipeDefinition } from "@/lib/api-contract";
-import type { GroupDirectiveKind } from "@/routes/knowledge/-components/directive-kinds";
 import type { ReplacementSpec } from "@/routes/knowledge/-components/template-studio-suggestions";
 import {
   templateValueSourceTransition,

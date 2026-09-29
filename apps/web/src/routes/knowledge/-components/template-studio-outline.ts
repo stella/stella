@@ -1,7 +1,7 @@
 import type { DirectiveRange } from "@stll/folio-react";
 import { assertNever, isFieldPath } from "@stll/template-conditions";
 
-import type { GroupDirectiveKind } from "@/routes/knowledge/-components/directive-kinds";
+import type { GroupDirectiveKind } from "@/features/knowledge/views/templates/directive-kinds";
 import type {
   OutlineNode,
   StudioField,

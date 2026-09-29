@@ -28,13 +28,13 @@ import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import type { BlockGestureKind } from "@/features/knowledge/views/templates/directive-kinds";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { BoundedMap } from "@/lib/bounded-set";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
-import type { BlockGestureKind } from "@/routes/knowledge/-components/directive-kinds";
 import { reusableConditions } from "@/routes/knowledge/-components/template-studio-condition-source";
 import { isInputType } from "@/routes/knowledge/-components/template-studio-model";
 import {

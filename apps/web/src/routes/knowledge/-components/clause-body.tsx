@@ -1,11 +1,11 @@
 import { cn } from "@stll/ui/utils";
 
-import { CONDITIONAL_KINDS } from "@/routes/knowledge/-components/directive-kinds";
-import type { BlockDirectiveKind } from "@/routes/knowledge/-components/directive-kinds";
+import { CONDITIONAL_KINDS } from "@/features/knowledge/views/templates/directive-kinds";
+import type { BlockDirectiveKind } from "@/features/knowledge/views/templates/directive-kinds";
 import {
   DirectiveLabel,
   HighlightedText,
-} from "@/routes/knowledge/-components/paragraph-rendering";
+} from "@/features/knowledge/views/templates/paragraph-rendering";
 
 // ── Types ────────────────────────────────────────────
 

@@ -4,8 +4,8 @@ import type { NodeViewProps } from "@tiptap/react";
 import { isBlockDirectiveKind } from "@stll/template-conditions";
 import { cn } from "@stll/ui/utils";
 
-import { CONDITIONAL_KINDS } from "@/routes/knowledge/-components/directive-kinds";
-import { DirectiveLabel } from "@/routes/knowledge/-components/paragraph-rendering";
+import { CONDITIONAL_KINDS } from "@/features/knowledge/views/templates/directive-kinds";
+import { DirectiveLabel } from "@/features/knowledge/views/templates/paragraph-rendering";
 
 export const ClauseDirectiveNodeView = ({ node }: NodeViewProps) => {
   const kind = isBlockDirectiveKind(node.attrs["kind"])

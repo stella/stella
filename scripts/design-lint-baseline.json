@@ -207,7 +207,7 @@
     "apps/web/src/routes/knowledge/-components/position-editor.tsx": 19,
     "apps/web/src/routes/knowledge/-components/skill-editor.tsx": 4,
     "apps/web/src/routes/knowledge/-components/template-clauses-tab.tsx": 1,
-    "apps/web/src/routes/knowledge/-components/template-preview.tsx": 6,
+    "apps/web/src/features/knowledge/views/templates/template-preview-view.tsx": 6,
     "apps/web/src/routes/knowledge/-components/template-studio-chat.tsx": 2,
     "apps/web/src/routes/knowledge/-components/template-studio-conditions.tsx": 2,
     "apps/web/src/routes/knowledge/-components/template-studio-fields.tsx": 7,

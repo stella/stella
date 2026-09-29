@@ -5,8 +5,8 @@ import { scanMarkers } from "@stll/template-conditions";
 import { TextMark } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
-import { CONDITIONAL_KINDS } from "@/routes/knowledge/-components/directive-kinds";
-import type { BlockDirectiveKind } from "@/routes/knowledge/-components/directive-kinds";
+import { CONDITIONAL_KINDS } from "@/features/knowledge/views/templates/directive-kinds";
+import type { BlockDirectiveKind } from "@/features/knowledge/views/templates/directive-kinds";
 
 // ── Types ────────────────────────────────────────────
 
