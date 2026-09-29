@@ -32,6 +32,10 @@ import {
   STATUTE_OUTLINE_COLLAPSE_LEVEL,
   statuteOutlineFromHeadings,
 } from "@/components/legal-reader/reader-outline";
+import {
+  StatuteIneligibleVersionNotice,
+  StatuteWindowGapNotice,
+} from "@/features/statutes/components/statute-expression-notice";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import { StatuteVersionMenu } from "@/features/statutes/components/statute-version-menu";
 import {
@@ -43,6 +47,7 @@ import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks"
 import { useMountEffect } from "@/hooks/use-effect";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
+import { statuteVersionRouteParams } from "@/routes/law/-statute-detail.logic";
 import type { PublicStatuteRouteData } from "@/routes/law/-statute-detail.logic";
 
 // The comparison runs Folio's content diff over two whole consolidations;
@@ -58,6 +63,26 @@ type OutlineJumpState = {
   query: string;
   /** Which of the ranked matches the field's selection is on. */
   selectedIndex: number;
+};
+
+/**
+ * The reader's answer for a day no version was in force on: why, when the
+ * publisher's own inconsistent dates are the reason.
+ */
+const NoVersionOnDay = ({
+  windowGap,
+}: Pick<PublicStatuteRouteData, "windowGap">) => {
+  const t = useTranslations();
+
+  return windowGap === null ? (
+    <p className="text-muted-foreground py-16 text-center text-sm">
+      {t("statutes.noVersionInForce")}
+    </p>
+  ) : (
+    <div className="py-16">
+      <StatuteWindowGapNotice versions={windowGap} />
+    </div>
+  );
 };
 
 type PublicStatuteViewerProps = PublicStatuteRouteData & {
@@ -80,6 +105,7 @@ export const PublicStatuteViewer = ({
   requestedJump,
   statute,
   versions,
+  windowGap,
   work,
 }: PublicStatuteViewerProps) => {
   const t = useTranslations();
@@ -128,14 +154,9 @@ export const PublicStatuteViewer = ({
         return;
       }
 
+      // A version that cannot apply opens at its id: no day names it.
       goTo(
-        createStatuteRouteParams({
-          country: next.country,
-          documentId: next.id,
-          eli: next.eli,
-          slug: next.slug,
-          version: next.versionValidFrom,
-        }),
+        statuteVersionRouteParams({ isDefault: next.isDefault, version: next }),
         undefined,
       );
     },
@@ -274,17 +295,18 @@ export const PublicStatuteViewer = ({
         data-slot="reader-document-column"
       >
         {statute === null ? (
-          <p className="text-muted-foreground py-16 text-center text-sm">
-            {t("statutes.noVersionInForce")}
-          </p>
+          <NoVersionOnDay windowGap={windowGap} />
         ) : (
-          <StatuteReaderBody
-            blocks={blocks}
-            masthead={preparedReader.masthead}
-            scrollContainerRef={readerRef}
-            statute={statute}
-            versionCount={versions.length}
-          />
+          <>
+            <StatuteIneligibleVersionNotice version={statute} />
+            <StatuteReaderBody
+              blocks={blocks}
+              masthead={preparedReader.masthead}
+              scrollContainerRef={readerRef}
+              statute={statute}
+              versionCount={versions.length}
+            />
+          </>
         )}
       </div>
     </div>

@@ -2,10 +2,13 @@ import { InfiniteQueryObserver, QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
+
 import {
   citedWorkAtDateKey,
   decisionProvisionsForLinkingOptions,
   decisionProvisionsInfiniteOptions,
+  publisherInconsistentCitedWorks,
   statuteByCitedWork,
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
@@ -23,6 +26,8 @@ const statute = {
   title: "2/1993 Sb., Listina základních práv a svobod",
   versionValidFrom: "1993-01-01",
   versionValidTo: null,
+  expressionKind: "consolidation",
+  windowDisposition: "effective",
 };
 
 afterEach(() => {
@@ -40,7 +45,10 @@ type ResolveRequest = v.InferOutput<typeof resolveRequestSchema>;
  * Stands in for the batched resolve: answers each requested work with the
  * statute `answer` names for its ELI, or null, and records every body sent.
  */
-const mockResolve = (answer: (eli: string) => typeof statute | null) => {
+const mockResolve = (
+  answer: (eli: string) => typeof statute | null,
+  unresolvedReason: (eli: string) => string | null = () => null,
+) => {
   const bodies: ResolveRequest[] = [];
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
@@ -56,6 +64,7 @@ const mockResolve = (answer: (eli: string) => typeof statute | null) => {
             country,
             eli,
             statute: answer(eli),
+            unresolvedReason: unresolvedReason(eli),
           })),
         }),
         { headers: { "Content-Type": "application/json" } },
@@ -127,6 +136,35 @@ describe("cited statute resolution", () => {
       bodies.map((body) => body.works.length).toSorted((a, b) => a - b),
     ).toEqual([1, 200]);
     expect(statuteByCitedWork(resolved).size).toBe(201);
+  });
+
+  test("keeps why a cited work has no in-force reading when the publisher's dates are the reason", async () => {
+    const inconsistentEli = "https://www.e-sbirka.cz/eli/cz/sb/2006/110";
+    mockResolve(
+      (eli) => (eli === LISTINA_ELI ? statute : null),
+      (eli) =>
+        eli === inconsistentEli
+          ? LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT
+          : null,
+    );
+    const works = [LISTINA_ELI, inconsistentEli, "CZ/1900/1"].map((eli) => ({
+      asOf: "2018-06-01",
+      country: "CZE",
+      eli,
+    }));
+
+    const resolved = await newQueryClient().query(
+      statutesResolveOptions(works),
+    );
+
+    expect([...publisherInconsistentCitedWorks(resolved)]).toEqual([
+      citedWorkAtDateKey({
+        asOf: "2018-06-01",
+        country: "CZE",
+        eli: inconsistentEli,
+      }),
+    ]);
+    expect(statuteByCitedWork(resolved).size).toBe(1);
   });
 
   test("names the same set of works by one key, whatever their order", () => {

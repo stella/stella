@@ -19,6 +19,7 @@ import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
   citedWorkAtDateKey,
   decisionProvisionsInfiniteOptions,
+  publisherInconsistentCitedWorks,
   statuteByCitedWork,
   statutesResolveOptions,
   statuteVersionsOptions,
@@ -94,6 +95,7 @@ export const ProvisionsCited = ({
     enabled: open && citedWorkByGroup.size > 0,
   });
   const statuteByWork = statuteByCitedWork(resolved);
+  const inconsistentWorks = publisherInconsistentCitedWorks(resolved);
 
   // Absent is the answer for a decision that applies no provisions. A failed
   // read is not that answer, so it keeps the panel and says so instead of
@@ -144,6 +146,10 @@ export const ProvisionsCited = ({
               <WorkReferences
                 group={group}
                 key={group.key}
+                publisherInconsistent={
+                  citedWork !== undefined &&
+                  inconsistentWorks.has(citedWorkAtDateKey(citedWork))
+                }
                 renderPart={renderPart}
                 statute={
                   citedWork === undefined
@@ -174,14 +180,21 @@ export const ProvisionsCited = ({
 
 const WorkReferences = ({
   group,
+  publisherInconsistent,
   renderPart,
   statute,
 }: {
   group: WorkGroup;
+  /**
+   * Whether the publisher's own inconsistent dates leave the cited date
+   * without an in-force reading: the references stay unlinked, and say why.
+   */
+  publisherInconsistent: boolean;
   renderPart: RenderProvisionPart;
   /** The work's resolved consolidation; absent while unread or unheld. */
   statute: ResolvedCitedStatute | undefined;
 }) => {
+  const t = useTranslations();
   const { data: versions } = useQuery({
     ...statuteVersionsOptions(statute?.id ?? ""),
     enabled:
@@ -231,6 +244,11 @@ const WorkReferences = ({
           </BidiText>
         )}
       </p>
+      {statute === undefined && publisherInconsistent && (
+        <p className="text-muted-foreground text-xs">
+          {t("statutes.publisherWindowInconsistent")}
+        </p>
+      )}
       {/* References flow like prose: a code's thirty sections read on three
           lines, not thirty. A reference showing its passages takes the row. */}
       <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-0.5 p-0">

@@ -4389,7 +4389,13 @@
     "diffRemoved": "Usunięto:",
     "emptyDocument": "Ta wersja nie ma dostępnego tekstu.",
     "emptyState": "Nie znaleziono aktów prawnych.",
+    "expression": {
+      "invalidWindow": "Sprzeczne daty wydawcy",
+      "promulgated": "Tekst ogłoszony",
+      "withdrawn": "Wydawca już go nie publikuje"
+    },
     "inForceSince": "Obowiązuje od {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Orzeczenia wiodące",
     "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
     "openEnded": "nadal",
@@ -4409,18 +4415,22 @@
     "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
+    "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
     "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
     "showInText": "Pokaż w tekście",
+    "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {
       "current": "Obowiązujący",
       "draft": "Projektowany",
       "ended": "Nieobowiązujący",
       "future": "Przyszły",
       "historical": "Zastąpiony",
-      "repealed": "Uchylony"
+      "neverInForce": "Nigdy nie wszedł w życie",
+      "repealed": "Uchylony",
+      "unknown": "Status niejasny"
     },
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}"

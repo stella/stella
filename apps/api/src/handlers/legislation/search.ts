@@ -57,6 +57,11 @@ import {
   publishedLegislationDocument,
   publishedLegislationCountryFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  legislationVersionRef,
+  legislationVersionRefAt,
+  notWithdrawn,
+} from "@/api/lib/legal-search/legislation-validity-window";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
@@ -207,6 +212,7 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
     WHERE ${ftsSearch.predicate}
       AND ${publishedLegislationCountryFor(sql`d.country`)}
       AND sd.retry_after IS NULL
+      AND ${notWithdrawn(legislationVersionRefAt("d"))}
       ${filters}
       ${cursorFilter}
     ORDER BY score DESC, sd.document_id DESC
@@ -329,6 +335,9 @@ export const rehydrateLegislationCandidates = async ({
   // it no longer matches.
   const rehydrationFilters: SQL[] = [
     publishedLegislationDocument,
+    // A withdrawn version stays openable by id, never found by a search,
+    // including while its index entry still waits to be erased.
+    notWithdrawn(legislationVersionRef(legislationDocuments)),
     // Accept only hits this generation currently holds, read from its
     // projection state.
     currentLegislationCorpusProjection(generation),

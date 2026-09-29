@@ -8,7 +8,10 @@
  * matched here rather than assumed away.
  */
 
-export type StatuteVersionWindow = {
+import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
+import type { LegislationExpressionEligibility } from "@stll/api-contract/legislation-expression";
+
+export type StatuteVersionWindow = LegislationExpressionEligibility & {
   /** Opens the window; null for a work kept as a single unversioned text. */
   versionValidFrom: string | null;
   /** Closes it, exclusive; null while the version is the one in force. */
@@ -19,11 +22,17 @@ export type StatuteVersionWindow = {
  * The corpus half-open interval `[from, to)`: a version whose successor opens
  * on a date ends on that date. Dates are ISO date-only, which orders
  * correctly as text.
+ *
+ * Only an eligible version covers any date: one that never took effect, one
+ * whose publisher dates are inconsistent, a withdrawn one or a promulgated
+ * text keeps its stored dates as history, but a citation is never linked to
+ * it as the wording in force.
  */
 export const versionCoversDate = (
   version: StatuteVersionWindow,
   date: string,
 ): boolean =>
+  isEligibleLegislationExpression(version) &&
   (version.versionValidFrom === null || version.versionValidFrom <= date) &&
   (version.versionValidTo === null || version.versionValidTo > date);
 

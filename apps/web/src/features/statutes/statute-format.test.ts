@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createFormatter } from "use-intl/core";
 
-import { formatValidityRange } from "@/features/statutes/statute-format";
+import {
+  formatStatedWindow,
+  formatValidityRange,
+} from "@/features/statutes/statute-format";
 
 const format = createFormatter({ locale: "cs", timeZone: "UTC" });
 
@@ -29,5 +32,28 @@ describe("formatValidityRange", () => {
 
   test("leaves an open-ended window open", () => {
     expect(range("2026-01-01", null).endsWith(OPEN_ENDED)).toBe(true);
+  });
+});
+
+describe("formatStatedWindow", () => {
+  const stated = (validFrom: string | null, validTo: string | null): string =>
+    formatStatedWindow({ format, openEnded: OPEN_ENDED, validFrom, validTo });
+
+  test("shows both stored boundaries as stated, never a stepped-back end", () => {
+    expect(stated("2022-01-01", "2023-01-01")).toBe(
+      `${day("2022-01-01")} – ${day("2023-01-01")}`,
+    );
+  });
+
+  test("keeps a zero-length window on the one day the publisher stated", () => {
+    const window = stated("2022-01-01", "2022-01-01");
+    expect(window).not.toContain(day("2021-12-31"));
+    expect(window).toBe(`${day("2022-01-01")} – ${day("2022-01-01")}`);
+  });
+
+  test("leaves an unstated end open", () => {
+    expect(stated("2022-01-01", null)).toBe(
+      `${day("2022-01-01")} – ${OPEN_ENDED}`,
+    );
   });
 });
