@@ -802,7 +802,10 @@ describe("buildSendRequestBody", () => {
           fileName: "document.docx",
           supportsDocxEdits: undefined,
         }),
-        getActiveSkill: () => ({ skillId: "skill-A", skillName: "Review" }),
+        getActiveSkill: () => ({
+          skillId: undefined,
+          skillName: "Review",
+        }),
         getActiveStatute: () => ({ documentId: "statute-A" }),
         getSendMode: () => CHAT_SEND_MODE.anonymized,
       },
@@ -834,12 +837,13 @@ describe("buildSendRequestBody", () => {
         entityId: "entity-A",
         fileName: "document.docx",
       },
-      activeSkill: { skillId: "skill-A", skillName: "Review" },
+      activeSkill: { skillName: "Review" },
       message: { id: "message-A" },
     });
     expect(body.activeFile).not.toHaveProperty("fileFieldId");
     expect(body.activeFile).not.toHaveProperty("supportsDocxEdits");
     expect(body.activeExternal).not.toHaveProperty("connectorSlug");
+    expect(body.activeSkill).not.toHaveProperty("skillId");
     expect(body.activeFile?.docxEditSnapshot).not.toHaveProperty(
       "canApplyEdits",
     );

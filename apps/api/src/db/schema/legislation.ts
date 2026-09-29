@@ -292,6 +292,22 @@ export const legislationDocuments = p.pgTable(
       .uniqueIndex("legislation_documents_eli_current_lang_idx")
       .on(t.sourceId, t.eli, t.language)
       .where(isNull(t.versionValidFrom)),
+    // `legislation_documents_eli_version_lang_idx` plus the two fields that
+    // decide whether a version may apply, so the listing's per-Work probes of
+    // its eligible dated versions (first opening, wording count, last change)
+    // stay index-only. Trailing keys rather than INCLUDE because the Drizzle
+    // version in use cannot express INCLUDE.
+    p
+      .index("legislation_documents_eli_version_eligibility_idx")
+      .on(
+        t.sourceId,
+        t.eli,
+        t.versionValidFrom,
+        t.language,
+        t.windowDisposition,
+        t.expressionKind,
+      )
+      .where(isNotNull(t.versionValidFrom)),
     p.index("legislation_documents_eli_idx").on(t.eli),
     // The public reader addresses a Work by (country, slug). Not unique: a
     // Work's consolidations all carry the segment, and a title repaired

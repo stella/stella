@@ -30,29 +30,29 @@ type SitemapShardStatutesQuery = Static<typeof sitemapShardStatutesQuerySchema>;
 const getCountryPathSegment = (country: string): string =>
   country.toLowerCase();
 
+export const statuteSitemapIndexQuery = (tx: LegislationReadTransaction) =>
+  tx
+    .select({
+      country: statuteSitemapShards.country,
+      bucket: statuteSitemapShards.bucket,
+      lastmod: statuteSitemapShards.lastmod,
+      total: statuteSitemapShards.total,
+    })
+    .from(statuteSitemapShards)
+    .where(
+      inArray(statuteSitemapShards.country, [...PUBLIC_LEGISLATION_COUNTRIES]),
+    )
+    .orderBy(
+      asc(statuteSitemapShards.country),
+      asc(statuteSitemapShards.bucket),
+    )
+    .limit(LIMITS.statuteSitemapIndexEntryLimit + 1);
+
 export const listStatuteSitemapShardsHandler = async (
   legislationDb: LegislationReadDb,
 ) => {
   const shards = await legislationDb(
-    async (tx) =>
-      await tx
-        .select({
-          country: statuteSitemapShards.country,
-          bucket: statuteSitemapShards.bucket,
-          lastmod: statuteSitemapShards.lastmod,
-          total: statuteSitemapShards.total,
-        })
-        .from(statuteSitemapShards)
-        .where(
-          inArray(statuteSitemapShards.country, [
-            ...PUBLIC_LEGISLATION_COUNTRIES,
-          ]),
-        )
-        .orderBy(
-          asc(statuteSitemapShards.country),
-          asc(statuteSitemapShards.bucket),
-        )
-        .limit(LIMITS.statuteSitemapIndexEntryLimit + 1),
+    async (tx) => await statuteSitemapIndexQuery(tx),
   );
 
   if (shards.length > LIMITS.statuteSitemapIndexEntryLimit) {

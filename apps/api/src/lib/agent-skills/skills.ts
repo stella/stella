@@ -1,8 +1,16 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
-import { readSkillRequiredTools } from "@stll/skills";
+import {
+  listSkillMetadata,
+  loadSkill,
+  readDocumentedChatReads,
+  readExcludedChatTools,
+  readSkillDisplayName,
+  readSkillRequiredTools,
+  readSkillResource,
+} from "@stll/skills";
 import type { SkillMetadata, SkillResource } from "@stll/skills";
 import type { SkillResourceKind } from "@stll/skills/resource-kinds";
 
@@ -19,10 +27,83 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
 
+/**
+ * Where a chat skill comes from: an `agent_skills` row, or a skill shipped
+ * with stella (`@stll/skills`), which every organization has with no row, so
+ * it carries no id, owner, content hash, or revisions.
+ */
+export const CHAT_SKILL_SOURCE = {
+  builtIn: "built-in",
+  installed: "installed",
+} as const;
+
+/** The subject a skill read is audited and reported under. */
+export type ChatSkillRef =
+  | {
+      source: typeof CHAT_SKILL_SOURCE.installed;
+      id: SafeId<"agentSkill">;
+      origin: AgentSkillOrigin;
+    }
+  | { source: typeof CHAT_SKILL_SOURCE.builtIn };
+
+/** The `origin` a served skill reports: its row's, or built-in. */
+export const chatSkillOrigin = (
+  skill: ChatSkillRef,
+): AgentSkillOrigin | typeof CHAT_SKILL_SOURCE.builtIn => {
+  switch (skill.source) {
+    case CHAT_SKILL_SOURCE.installed:
+      return skill.origin;
+    case CHAT_SKILL_SOURCE.builtIn:
+      return CHAT_SKILL_SOURCE.builtIn;
+    default: {
+      skill satisfies never;
+      return panic("chat skill has an unknown source");
+    }
+  }
+};
+
+/** A served skill's row id; `null` for a built-in, which has no row. */
+export const chatSkillId = (
+  skill:
+    | { source: typeof CHAT_SKILL_SOURCE.installed; id: SafeId<"agentSkill"> }
+    | { source: typeof CHAT_SKILL_SOURCE.builtIn },
+): SafeId<"agentSkill"> | null => {
+  switch (skill.source) {
+    case CHAT_SKILL_SOURCE.installed:
+      return skill.id;
+    case CHAT_SKILL_SOURCE.builtIn:
+      return null;
+    default: {
+      skill satisfies never;
+      return panic("chat skill has an unknown source");
+    }
+  }
+};
+
 export type AvailableChatSkill = SkillMetadata & {
   displayName: string;
-  id: SafeId<"agentSkill">;
+} & (
+    | { source: typeof CHAT_SKILL_SOURCE.installed; id: SafeId<"agentSkill"> }
+    | { source: typeof CHAT_SKILL_SOURCE.builtIn }
+  );
+
+/** Shipped skills by name, parsed once from the deployed bytes. */
+let builtInSkillNames: ReadonlySet<string> | undefined;
+
+const isBuiltInSkill = (skillName: string): boolean => {
+  builtInSkillNames ??= new Set(listSkillMetadata().map(({ name }) => name));
+  return builtInSkillNames.has(skillName);
 };
+
+/**
+ * Whether `slug` names a built-in for this caller: an enabled installed row
+ * the caller can use shadows the built-in with the same slug, everywhere a
+ * skill is resolved by name. `enabledInstalledSlugs` holds those rows' slugs.
+ */
+export const resolvesToBuiltInSkill = (
+  slug: string,
+  enabledInstalledSlugs: { has: (slug: string) => boolean },
+): boolean => !enabledInstalledSlugs.has(slug) && isBuiltInSkill(slug);
 
 export const ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS = 30_000;
 
@@ -32,8 +113,12 @@ type ChatSkillContext = {
   userId: SafeId<"user">;
 };
 
+/**
+ * A built-in has no row, so `skillName` alone names it, unless an enabled
+ * installed row with that slug shadows it, as on every other path.
+ */
 type ActiveChatSkillRequest = {
-  skillId: SafeId<"agentSkill">;
+  skillId?: SafeId<"agentSkill"> | undefined;
   skillName: string;
 };
 
@@ -41,21 +126,41 @@ type ChatMemberRole = {
   role: string;
 };
 
-export type ActiveChatSkillContext = {
+/**
+ * The active skill as resolved from its source, before any surface acts on
+ * it. The two frontmatter lists are the declared strings: which names chat
+ * can honour is a chat decision, made once in
+ * `handlers/chat/active-skill-context.ts`, which is the type chat code reads.
+ */
+export type ActiveSkillContext = {
   body: string;
   description: string;
   displayName: string;
-  editable: boolean;
-  id: SafeId<"agentSkill">;
-  origin: AgentSkillOrigin;
+  /** `stella-chat-documented-reads`, as declared. */
+  documentedChatReads: readonly string[];
+  /** `stella-chat-excluded-tools`, as declared. */
+  excludedChatTools: readonly string[];
   /** `stella-required-tools`, as declared. */
   requiredTools: readonly string[];
   resources: SkillResource[];
   toolName: string;
   version: string | null;
-};
+} & (
+  | {
+      source: typeof CHAT_SKILL_SOURCE.installed;
+      editable: boolean;
+      id: SafeId<"agentSkill">;
+      origin: AgentSkillOrigin;
+    }
+  | {
+      source: typeof CHAT_SKILL_SOURCE.builtIn;
+      editable: false;
+      id: null;
+      origin: typeof CHAT_SKILL_SOURCE.builtIn;
+    }
+);
 
-export const resolveActiveChatSkillContext = async ({
+export const resolveActiveSkillContext = async ({
   activeSkill,
   memberRole,
   organizationId,
@@ -65,18 +170,63 @@ export const resolveActiveChatSkillContext = async ({
   activeSkill: ActiveChatSkillRequest | undefined;
   memberRole: ChatMemberRole;
 }): Promise<
-  Result<ActiveChatSkillContext | null, HandlerError<403 | 404> | SafeDbError>
+  Result<ActiveSkillContext | null, HandlerError<403 | 404> | SafeDbError>
 > => {
   if (!activeSkill) {
     return Result.ok(null);
   }
 
-  return await resolveInstalledActiveSkill({
-    activeSkill,
-    memberRole,
+  const { skillId, skillName } = activeSkill;
+  if (skillId !== undefined) {
+    return await resolveInstalledActiveSkill({
+      activeSkill: { skillId, skillName },
+      memberRole,
+      organizationId,
+      safeDb,
+      userId,
+    });
+  }
+
+  const installed = await findInstalledSkills({
     organizationId,
     safeDb,
+    skillNames: [skillName],
     userId,
+  });
+  if (Result.isError(installed)) {
+    return Result.err(installed.error);
+  }
+  if (!resolvesToBuiltInSkill(skillName, installed.value)) {
+    const row = installed.value.get(skillName);
+    if (!row) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Skill not found" }),
+      );
+    }
+    return await resolveInstalledActiveSkill({
+      activeSkill: { skillId: row.id, skillName },
+      memberRole,
+      organizationId,
+      safeDb,
+      userId,
+    });
+  }
+
+  const skill = loadSkill(skillName);
+  return Result.ok({
+    body: skill.body,
+    description: skill.description,
+    displayName: readSkillDisplayName(skill),
+    documentedChatReads: readDocumentedChatReads(skill.metadata),
+    editable: false,
+    excludedChatTools: readExcludedChatTools(skill.metadata),
+    id: null,
+    origin: CHAT_SKILL_SOURCE.builtIn,
+    requiredTools: readSkillRequiredTools(skill.metadata),
+    resources: skill.resources,
+    source: CHAT_SKILL_SOURCE.builtIn,
+    toolName: skill.name,
+    version: skill.version,
   });
 };
 
@@ -87,10 +237,10 @@ const resolveInstalledActiveSkill = async ({
   safeDb,
   userId,
 }: ChatSkillContext & {
-  activeSkill: ActiveChatSkillRequest;
+  activeSkill: { skillId: SafeId<"agentSkill">; skillName: string };
   memberRole: ChatMemberRole;
 }): Promise<
-  Result<ActiveChatSkillContext, HandlerError<403 | 404> | SafeDbError>
+  Result<ActiveSkillContext, HandlerError<403 | 404> | SafeDbError>
 > => {
   const skillRows = await safeDb((tx) =>
     tx
@@ -164,6 +314,7 @@ const resolveInstalledActiveSkill = async ({
     body: skill.body,
     description: skill.description,
     displayName: skill.name,
+    documentedChatReads: readDocumentedChatReads(skill.metadata),
     editable: canEditActiveSkill({
       memberRole,
       origin: skill.origin,
@@ -171,10 +322,12 @@ const resolveInstalledActiveSkill = async ({
       skillUserId: skill.userId,
       userId,
     }),
+    excludedChatTools: readExcludedChatTools(skill.metadata),
     id: skill.id,
     origin: skill.origin,
     requiredTools: readSkillRequiredTools(skill.metadata),
     resources: resources.value,
+    source: CHAT_SKILL_SOURCE.installed,
     toolName: skill.slug,
     version: skill.version,
   });
@@ -282,20 +435,18 @@ export const listAvailableChatSkillMetadata = async ({
   return Result.ok(resolveSkillPrecedence(rows.value));
 };
 
-/** A skill the caller can load right now, with the row it came from. */
+/** A skill the caller can load right now, with the source it came from. */
 export type LoadedChatSkill = {
   body: string;
   compatibility: string | null;
   description: string;
-  id: SafeId<"agentSkill">;
   license: string | null;
   metadata: Record<string, string>;
   /** The skill slug: the name the catalog and the skill tools use. */
   name: string;
-  origin: AgentSkillOrigin;
   resources: { kind: SkillResourceKind; path: string }[];
   version: string | null;
-};
+} & ChatSkillRef;
 
 /**
  * Resolves `skillName` against the caller's skills when the tool runs, not
@@ -315,7 +466,8 @@ export const loadAvailableChatSkill = async ({
 
 /**
  * `loadAvailableChatSkill` for several names in two queries. A name missing
- * from the result is not available to the caller.
+ * from the result is not available to the caller. An enabled row shadows the
+ * built-in with the same slug, as in the catalog.
  */
 export const loadAvailableChatSkills = async ({
   activeSkillId,
@@ -338,8 +490,11 @@ export const loadAvailableChatSkills = async ({
     return Result.err(rowsResult.error);
   }
   const rows = [...rowsResult.value.values()];
+  const builtIns = skillNames
+    .filter((name) => resolvesToBuiltInSkill(name, rowsResult.value))
+    .map((name): [string, LoadedChatSkill] => [name, loadBuiltInSkill(name)]);
   if (rows.length === 0) {
-    return Result.ok(new Map());
+    return Result.ok(new Map(builtIns));
   }
 
   const resources = await safeDb((tx) =>
@@ -364,8 +519,8 @@ export const loadAvailableChatSkills = async ({
   }
 
   return Result.ok(
-    new Map(
-      rows.map((row) => [
+    new Map([
+      ...rows.map((row): [string, LoadedChatSkill] => [
         row.slug,
         {
           body: row.body,
@@ -380,11 +535,28 @@ export const loadAvailableChatSkills = async ({
             .filter(({ skillId }) => skillId === row.id)
             .slice(0, LIMITS.agentSkillResourcesPerSkill)
             .map(({ kind, path }) => ({ kind, path })),
+          source: CHAT_SKILL_SOURCE.installed,
           version: row.version,
         },
       ]),
-    ),
+      ...builtIns,
+    ]),
   );
+};
+
+const loadBuiltInSkill = (skillName: string): LoadedChatSkill => {
+  const skill = loadSkill(skillName);
+  return {
+    body: skill.body,
+    compatibility: skill.compatibility ?? null,
+    description: skill.description,
+    license: skill.license ?? null,
+    metadata: skill.metadata ?? {},
+    name: skill.name,
+    resources: skill.resources,
+    source: CHAT_SKILL_SOURCE.builtIn,
+    version: skill.version,
+  };
 };
 
 export const SKILL_RESOURCE_READ_STATUS = {
@@ -398,12 +570,11 @@ export type AvailableChatSkillResourceRead =
       status: typeof SKILL_RESOURCE_READ_STATUS.found;
       content: string;
       kind: SkillResourceKind;
-      origin: AgentSkillOrigin;
-      skillId: SafeId<"agentSkill">;
+      skill: ChatSkillRef;
     }
   | {
       status: typeof SKILL_RESOURCE_READ_STATUS.resourceNotFound;
-      skillId: SafeId<"agentSkill">;
+      skill: ChatSkillRef;
     }
   | { status: typeof SKILL_RESOURCE_READ_STATUS.skillNotFound };
 
@@ -432,8 +603,13 @@ export const readAvailableChatSkillResource = async ({
 
   const row = rowResult.value.get(skillName);
   if (!row) {
-    return Result.ok({ status: SKILL_RESOURCE_READ_STATUS.skillNotFound });
+    return Result.ok(readBuiltInSkillResource({ path, skillName }));
   }
+  const skill: ChatSkillRef = {
+    source: CHAT_SKILL_SOURCE.installed,
+    id: row.id,
+    origin: row.origin,
+  };
 
   const resources = await safeDb((tx) =>
     tx
@@ -458,7 +634,7 @@ export const readAvailableChatSkillResource = async ({
   if (!resource) {
     return Result.ok({
       status: SKILL_RESOURCE_READ_STATUS.resourceNotFound,
-      skillId: row.id,
+      skill,
     });
   }
 
@@ -466,9 +642,34 @@ export const readAvailableChatSkillResource = async ({
     status: SKILL_RESOURCE_READ_STATUS.found,
     content: resource.content,
     kind: resource.kind,
-    origin: row.origin,
-    skillId: row.id,
+    skill,
   });
+};
+
+const readBuiltInSkillResource = ({
+  path,
+  skillName,
+}: {
+  path: string;
+  skillName: string;
+}): AvailableChatSkillResourceRead => {
+  if (!isBuiltInSkill(skillName)) {
+    return { status: SKILL_RESOURCE_READ_STATUS.skillNotFound };
+  }
+  const skill: ChatSkillRef = { source: CHAT_SKILL_SOURCE.builtIn };
+  const resource = readSkillResource({
+    resourcePath: path,
+    skillId: skillName,
+  });
+  if (resource === null) {
+    return { status: SKILL_RESOURCE_READ_STATUS.resourceNotFound, skill };
+  }
+  return {
+    status: SKILL_RESOURCE_READ_STATUS.found,
+    content: resource.content,
+    kind: resource.kind,
+    skill,
+  };
 };
 
 /** The row each name resolves to for the caller, keyed by slug. */
@@ -560,6 +761,11 @@ type InstalledSkillMetadataRow = {
   version: string | null;
 };
 
+/**
+ * One entry per slug: a private row shadows a team row, and an enabled row
+ * shadows the built-in with the same slug. The row cap bounds installed rows
+ * only, so an organization at the cap still has every shipped skill.
+ */
 const resolveSkillPrecedence = (
   installedRows: readonly InstalledSkillMetadataRow[],
 ): AvailableChatSkill[] => {
@@ -581,7 +787,20 @@ const resolveSkillPrecedence = (
       license: row.license,
       metadata: row.metadata,
       name: row.slug,
+      source: CHAT_SKILL_SOURCE.installed,
       version: row.version,
+    });
+  }
+
+  for (const skill of listSkillMetadata()) {
+    if (seen.has(skill.name)) {
+      continue;
+    }
+    seen.add(skill.name);
+    skills.push({
+      ...skill,
+      displayName: readSkillDisplayName(skill),
+      source: CHAT_SKILL_SOURCE.builtIn,
     });
   }
 

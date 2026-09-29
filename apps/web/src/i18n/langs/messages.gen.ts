@@ -3185,6 +3185,7 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Built-in skills";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";
       "disableSkill": "Disable skill";

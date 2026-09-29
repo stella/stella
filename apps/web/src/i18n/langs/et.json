@@ -3182,6 +3182,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Sisseehitatud oskused",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
       "disableSkill": "Keela oskus",

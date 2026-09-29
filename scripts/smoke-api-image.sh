@@ -104,16 +104,33 @@ printf 'Testing immutable local image %s (%s)\n' "$image_ref" "$image_id"
 psql_smoke < "$repo/docker/postgres/init.sql"
 migrate
 echo 'PASS: fresh database migrations'
-psql_smoke -c 'CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1' >/dev/null
-[[ "$(psql_smoke -tAc 'SELECT count(*) FROM drizzle.__migration_history_smoke_backup')" == 1 ]]
-[[ "$(psql_smoke -tAc "WITH corrupted AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = repeat('0', 64) FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id RETURNING 1) SELECT count(*) FROM corrupted")" == 1 ]]
+psql_smoke -c 'CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT * FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2' >/dev/null
+[[ "$(psql_smoke -tAc 'SELECT count(*) FROM drizzle.__migration_history_smoke_backup')" == 2 ]]
+[[ "$(psql_smoke -tAc "WITH corrupted AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = repeat('0', 64) FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = (SELECT min(id) FROM drizzle.__migration_history_smoke_backup) AND migration.id = backup.id RETURNING 1) SELECT count(*) FROM corrupted")" == 1 ]]
 migration_exit=0
-migrate || migration_exit=$?
+migration_output=$(migrate 2>&1) || migration_exit=$?
+printf '%s\n' "$migration_output"
+[[ "$migration_exit" == 0 && "$migration_output" == *'"event":"migrate.stale_bundle_noop"'* ]] || {
+  echo 'Hash mismatch without pending SQL did not take the approved no-op path.' >&2
+  exit 1
+}
+[[ "$(psql_smoke -tAc "WITH deleted AS (DELETE FROM drizzle.__drizzle_migrations WHERE id = (SELECT max(id) FROM drizzle.__migration_history_smoke_backup) RETURNING 1) SELECT count(*) FROM deleted")" == 1 ]]
+migration_exit=0
+migration_output=$(migrate 2>&1) || migration_exit=$?
+printf '%s\n' "$migration_output"
+[[ "$migration_exit" != 0 && "$migration_output" == *'"event":"migrate.stale_bundle_refused"'* ]] || {
+  echo 'Migration did not refuse inconsistent history with pending SQL.' >&2
+  exit 1
+}
+[[ "$(psql_smoke -tAc "SELECT count(*) FROM drizzle.__drizzle_migrations WHERE id = (SELECT max(id) FROM drizzle.__migration_history_smoke_backup)")" == 0 ]] || {
+  echo 'Migration changed the pending receipt despite refusing the bundle.' >&2
+  exit 1
+}
 [[ "$(psql_smoke -tAc "WITH restored AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id AND migration.hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")" == 1 ]]
+[[ "$(psql_smoke -tAc "WITH restored AS (INSERT INTO drizzle.__drizzle_migrations SELECT * FROM drizzle.__migration_history_smoke_backup WHERE id = (SELECT max(id) FROM drizzle.__migration_history_smoke_backup) RETURNING 1) SELECT count(*) FROM restored")" == 1 ]]
 psql_smoke -c 'DROP TABLE drizzle.__migration_history_smoke_backup' >/dev/null
-[[ "$migration_exit" != 0 ]] || { echo 'Migration accepted corrupted history.' >&2; exit 1; }
 migrate
-echo 'PASS: corrupt history rejected and restored history accepted'
+echo 'PASS: stale bundle refused with pending SQL and restored history accepted'
 
 docker run --detach --name "$api" --label "$owner_label=$run_id" --network "container:$postgres" \
   --env BETTER_AUTH_SECRET=release-smoke-secret-at-least-32-chars \

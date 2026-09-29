@@ -37,6 +37,7 @@ const resolvedSkill = asTestRaw<ResolvedSkillTool>({
   id: toSafeId<"agentSkill">("skill_alpha"),
   name: "alpha",
   exposedName: "skill__alpha",
+  source: "installed",
 });
 
 const loadedSkill = {
@@ -49,6 +50,7 @@ const loadedSkill = {
   name: "alpha",
   origin: "authored",
   resources: [],
+  source: "installed",
   version: "1.2.3",
 } satisfies LoadedChatSkill;
 
@@ -211,7 +213,7 @@ describe("dispatchGatewayToolCall", () => {
           {
             outcome: "success",
             path: null,
-            skillId: resolvedSkill.id,
+            skill: resolvedSkill,
             slug: "alpha",
             surface: "mcp",
           },

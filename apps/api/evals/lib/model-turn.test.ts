@@ -107,6 +107,39 @@ describe("runEvalModelTurn", () => {
     expect(timer.cleared.length).toBe(1);
   });
 
+  test("a turn with tool round trips: usage sums every model step", async () => {
+    const timer = fakeTimer();
+
+    async function* twoSteps() {
+      yield runFinishedChunk({
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+      });
+      yield runFinishedChunk({
+        promptTokens: 30,
+        completionTokens: 2,
+        totalTokens: 32,
+      });
+    }
+
+    const result = await runEvalModelTurn({
+      chat: () => twoSteps(),
+      timeoutMs: 30_000,
+      onChunk: () => {
+        // Only the usage is under test.
+      },
+      setTimer: timer.setTimer,
+      clearTimer: timer.clearTimer,
+    });
+
+    expect(result.usage).toMatchObject({
+      promptTokens: 40,
+      completionTokens: 7,
+      totalTokens: 47,
+    });
+  });
+
   test("a RUN_ERROR chunk: error is set from its message", async () => {
     const timer = fakeTimer();
 

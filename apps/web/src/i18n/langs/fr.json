@@ -3182,6 +3182,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Compétences intégrées",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",
       "disableSkill": "Désactiver la compétence",

@@ -22,6 +22,8 @@ export const publicDecisionRowColumns = () => ({
   slug: caseLawDecisions.slug,
   ecli: caseLawDecisions.ecli,
   court: caseLawDecisions.court,
+  // A directory court is presented by its id's rank, not by its name.
+  courtId: caseLawDecisions.courtId,
   country: caseLawDecisions.country,
   language: caseLawDecisions.language,
   languageGroupKey: caseLawDecisions.languageGroupKey,

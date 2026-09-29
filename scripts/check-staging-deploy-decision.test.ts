@@ -3,10 +3,10 @@ import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-// The staging gate decides, per run, whether to deploy, defer, or escalate.
+// The staging gate decides, per dispatch, whether to deploy or skip.
 // Reading that decision out of the workflow text only proves the words are
-// there, so this runs the real script against a stubbed API instead: the
-// outcome of a push during an outage is exactly what regresses unnoticed.
+// there, so this runs the real script instead: a dispatch while staging is
+// off must stay green without deploying.
 
 const WORKFLOW_URL = new URL(
   "../.github/workflows/deploy-staging.yml",
@@ -18,12 +18,9 @@ const STAGING_SETUP_URL = new URL(
 );
 const TIP_SHA = "a".repeat(40);
 const OTHER_SHA = "b".repeat(40);
-const HOUR_SECONDS = 3600;
 
 const extractDecideScript = (workflow: string) => {
-  const stepStart = workflow.indexOf(
-    "      - name: Decide deploy, defer, or escalate\n",
-  );
+  const stepStart = workflow.indexOf("      - name: Decide deploy or skip\n");
   const jobEnd = workflow.indexOf("\n  build-api:\n", stepStart);
   const runStart = workflow.indexOf("run: |\n", stepStart);
   if (stepStart === -1 || jobEnd === -1 || runStart === -1) {
@@ -69,17 +66,11 @@ const extractStepScript = (
 };
 
 type DecisionCase = {
-  committedHoursAgo?: number;
-  deployedSha?: string;
-  event: "push" | "schedule" | "workflow_dispatch";
-  // Age of the oldest commit staging has not taken. Defaults to the tip's own
-  // age; set it independently to model an outage that outlives its commits.
-  pendingSinceHoursAgo?: number;
-  servedCommit?: string;
+  deployWhenUnreachable?: boolean;
   status: "not_ready" | "ready";
 };
 
-type Decision = { deploy: string; exitCode: number };
+type Decision = { deploy: string; exitCode: number; summary: string };
 
 let workspace = "";
 let scriptPath = "";
@@ -87,38 +78,22 @@ let probeScriptPath = "";
 let currentScriptPath = "";
 
 const runDecision = async ({
-  committedHoursAgo = 1,
-  deployedSha = OTHER_SHA,
-  event,
-  pendingSinceHoursAgo,
-  servedCommit = "",
+  deployWhenUnreachable = false,
   status,
 }: DecisionCase): Promise<Decision> => {
   const outputPath = path.join(workspace, `output-${Bun.randomUUIDv7()}.txt`);
   const summaryPath = path.join(workspace, `summary-${Bun.randomUUIDv7()}.md`);
   await Promise.all([Bun.write(outputPath, ""), Bun.write(summaryPath, "")]);
 
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  const committedEpoch = nowSeconds - committedHoursAgo * HOUR_SECONDS;
-  const pendingSinceEpoch =
-    nowSeconds - (pendingSinceHoursAgo ?? committedHoursAgo) * HOUR_SECONDS;
-
   const result = Bun.spawnSync(["bash", scriptPath], {
     env: {
       ...process.env,
-      DEPLOY_ENVIRONMENT: "staging",
-      GH_TOKEN: "stub",
-      GITHUB_EVENT_NAME: event,
+      DEPLOY_WHEN_UNREACHABLE: String(deployWhenUnreachable),
+      GITHUB_EVENT_NAME: "workflow_dispatch",
       GITHUB_OUTPUT: outputPath,
-      GITHUB_REPOSITORY: "stella/stella",
       GITHUB_SHA: TIP_SHA,
       GITHUB_STEP_SUMMARY: summaryPath,
-      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
-      SERVED_COMMIT: servedCommit,
       STATUS: status,
-      STUB_COMMITTED_EPOCH: String(committedEpoch),
-      STUB_DEPLOYED_SHA: deployedSha,
-      STUB_PENDING_SINCE_EPOCH: String(pendingSinceEpoch),
     },
   });
 
@@ -127,7 +102,11 @@ const runDecision = async ({
     .split("\n")
     .findLast((line) => line.startsWith("deploy="));
 
-  return { deploy: deploy ?? "", exitCode: result.exitCode };
+  return {
+    deploy: deploy ?? "",
+    exitCode: result.exitCode,
+    summary: await Bun.file(summaryPath).text(),
+  };
 };
 
 type ProbeCase = {
@@ -216,14 +195,13 @@ beforeAll(async () => {
   const workflow = await Bun.file(WORKFLOW_URL).text();
   const script = extractDecideScript(workflow);
   expect(script).toContain("set -euo pipefail");
-  expect(script).toContain("readonly MAX_DEFERRAL_HOURS=");
   await Bun.write(scriptPath, script);
   await Bun.write(
     probeScriptPath,
     extractStepScript(
       workflow,
       "Probe staging health",
-      "\n      # Absent staging defers",
+      "\n      # Staging that does not answer",
     ),
   );
   await Bun.write(
@@ -234,9 +212,7 @@ beforeAll(async () => {
       "\n      - name: Check staging deployment target",
     ),
   );
-  // Stands in for the reads the script makes: the last recorded staging
-  // deployment, the oldest commit staging has not taken, and the tip's own
-  // timestamp.
+  // Stands in for the main-tip read the promotion job makes.
   const stub = path.join(workspace, "gh");
   await Bun.write(
     stub,
@@ -244,9 +220,6 @@ beforeAll(async () => {
 for arg in "$@"; do
   case "$arg" in
     *"/git/ref/heads/main"*) echo "\${STUB_CURRENT_SHA:-${TIP_SHA}}"; exit 0 ;;
-    *"/deployments?environment="*) echo "\${STUB_DEPLOYED_SHA}"; exit 0 ;;
-    *"/compare/"*) echo "\${STUB_PENDING_SINCE_EPOCH}"; exit 0 ;;
-    *"/commits/"*) echo "\${STUB_COMMITTED_EPOCH}"; exit 0 ;;
   esac
 done
 exit 0
@@ -295,125 +268,32 @@ afterAll(async () => {
 });
 
 describe("staging deploy decision", () => {
-  test("deploys what a push or dispatch carries once staging answers", async () => {
-    expect(await runDecision({ event: "push", status: "ready" })).toEqual({
+  test("deploys what a dispatch carries once staging answers", async () => {
+    expect(await runDecision({ status: "ready" })).toMatchObject({
       deploy: "deploy=true",
       exitCode: 0,
     });
   });
 
-  test("resumes a deferred deploy when staging serves an older commit", async () => {
-    expect(
-      await runDecision({
-        event: "schedule",
-        servedCommit: OTHER_SHA,
-        status: "ready",
-      }),
-    ).toEqual({ deploy: "deploy=true", exitCode: 0 });
+  test("skips cleanly while staging is off", async () => {
+    const result = await runDecision({ status: "not_ready" });
+
+    expect(result).toMatchObject({ deploy: "deploy=false", exitCode: 0 });
+    expect(result.summary).toContain("Staging is off");
+    expect(result.summary).toContain(TIP_SHA);
   });
 
-  test("leaves staging alone when it already serves the tip", async () => {
+  test("deploys into an unhealthy staging when asked to", async () => {
     expect(
-      await runDecision({
-        event: "schedule",
-        servedCommit: TIP_SHA,
-        status: "ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 0 });
+      await runDecision({ deployWhenUnreachable: true, status: "not_ready" }),
+    ).toMatchObject({ deploy: "deploy=true", exitCode: 0 });
   });
 
-  // An unreadable stamp once meant "staging is behind" forever, which
-  // redeployed staging on every scheduled tick.
-  test.each(["", "dev", TIP_SHA.toUpperCase(), `${TIP_SHA}extra`])(
-    "does not resume on the unresolvable commit stamp %p",
-    async (servedCommit) => {
-      expect(
-        await runDecision({ event: "schedule", servedCommit, status: "ready" }),
-      ).toEqual({ deploy: "deploy=false", exitCode: 0 });
-    },
-  );
+  test("runs only when dispatched", async () => {
+    const workflow = await Bun.file(WORKFLOW_URL).text();
 
-  test("deploys anyway when a dispatch bypasses the gate", async () => {
-    expect(
-      await runDecision({ event: "workflow_dispatch", status: "not_ready" }),
-    ).toEqual({ deploy: "deploy=true", exitCode: 0 });
-  });
-
-  test("defers instead of failing while staging is unreachable", async () => {
-    expect(
-      await runDecision({
-        committedHoursAgo: 11,
-        event: "schedule",
-        status: "not_ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 0 });
-  });
-
-  test("stays green when nothing is waiting on the environment", async () => {
-    expect(
-      await runDecision({
-        committedHoursAgo: 240,
-        deployedSha: TIP_SHA,
-        event: "schedule",
-        status: "not_ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 0 });
-  });
-
-  test("fails once a commit has waited past the deferral budget", async () => {
-    expect(
-      await runDecision({
-        committedHoursAgo: 48,
-        event: "schedule",
-        status: "not_ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 1 });
-  });
-
-  // Measuring the tip would restart the clock on every push made during one
-  // outage, so the alarm would never fire during the longest outages.
-  test("keeps the clock running when a push lands mid-outage", async () => {
-    expect(
-      await runDecision({
-        committedHoursAgo: 1,
-        event: "schedule",
-        pendingSinceHoursAgo: 48,
-        status: "not_ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 1 });
-  });
-
-  test("does not escalate when only the tip is old but delivery is current", async () => {
-    expect(
-      await runDecision({
-        committedHoursAgo: 240,
-        event: "schedule",
-        pendingSinceHoursAgo: 2,
-        status: "not_ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 0 });
-  });
-
-  test("escalates when no deployment has ever been recorded", async () => {
-    expect(
-      await runDecision({
-        committedHoursAgo: 48,
-        deployedSha: "",
-        event: "schedule",
-        status: "not_ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 1 });
-  });
-
-  // A push has just started waiting, whatever its committer date says.
-  test("never escalates on a push", async () => {
-    expect(
-      await runDecision({
-        committedHoursAgo: 240,
-        event: "push",
-        status: "not_ready",
-      }),
-    ).toEqual({ deploy: "deploy=false", exitCode: 0 });
+    expect(workflow).not.toMatch(/^\s+schedule:/mu);
+    expect(workflow).toContain("  workflow_dispatch:\n");
   });
 });
 
