@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 
 import {
   organizationFileObjects,
@@ -10,6 +10,7 @@ import { reconcileOrganizationFileObject } from "@/api/lib/files/organization-fi
 import {
   isTemporaryOrganizationObjectKey,
   reconcileAbsentOrganizationFileObjects,
+  reportOrganizationFileUsageBackfill,
 } from "@/api/scripts/backfill-organization-file-usage.helpers";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -243,5 +244,52 @@ describe("organization file usage backfill", () => {
       .where(eq(organizationFileUsage.organizationId, ids.orgB))
       .then((matches) => matches.at(0));
     expect(usage).toMatchObject({ committedBytes: 2n, reservedBytes: 7n });
+  });
+
+  test("prints the summary while mismatched reservations stay pending", async () => {
+    await testDb
+      .delete(organizationFileObjects)
+      .where(
+        inArray(organizationFileObjects.organizationId, [ids.orgA, ids.orgB]),
+      );
+    const old = new Date("2025-12-01T00:00:00Z");
+    await testDb.insert(organizationFileObjects).values(
+      ["first", "second"].map((name) => ({
+        organizationId: ids.orgA,
+        objectKey: `${ids.orgA}/workspace_1/files/mismatched-${name}`,
+        sizeBytes: 3n,
+        status: "reserved" as const,
+        writeId: `mismatched-${name}`,
+        reservationStartedAt: old,
+      })),
+    );
+    const lines: string[] = [];
+    const counts = {
+      imported: 4,
+      removed: 1,
+      settledReservations: 5,
+      mismatchedReservations: 2,
+    };
+
+    const unexpected = await reportOrganizationFileUsageBackfill({
+      counts,
+      db: ledgerDb(),
+      log: (line) => lines.push(line),
+    });
+
+    expect(unexpected).toBe(0);
+    expect(lines).toEqual([
+      "Reconciled 4 stored objects; removed 1 absent ledger rows; settled 5 reservations; 2 mismatched reservations remain pending; 2 unsettled writes remain.",
+    ]);
+
+    // A pending write the reconciler did not account for still blocks
+    // enablement, but only after the summary has been printed.
+    const blocked = await reportOrganizationFileUsageBackfill({
+      counts: { ...counts, mismatchedReservations: 1 },
+      db: ledgerDb(),
+      log: (line) => lines.push(line),
+    });
+    expect(blocked).toBe(1);
+    expect(lines).toHaveLength(2);
   });
 });

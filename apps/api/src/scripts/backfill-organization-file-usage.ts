@@ -8,16 +8,12 @@
  * replaying a page changes no count for unchanged objects.
  */
 import { panic, Result } from "better-result";
-import { asc, eq, gt, and, isNotNull, or } from "drizzle-orm";
+import { asc, eq, gt, and } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
-import {
-  chatThreads,
-  organizationFileObjects,
-  userFiles,
-} from "@/api/db/schema";
+import { chatThreads, userFiles } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   openMaintenanceDb,
@@ -40,6 +36,7 @@ import {
 import {
   isTemporaryOrganizationObjectKey,
   reconcileAbsentOrganizationFileObjects,
+  reportOrganizationFileUsageBackfill,
 } from "@/api/scripts/backfill-organization-file-usage.helpers";
 
 const PAGE_SIZE = 200;
@@ -227,22 +224,18 @@ while (true) {
       ? null
       : brandPersistedOrganizationId(lastOrganization.id);
 }
-const unsettled = await ledgerDb.transaction(
-  async (tx) =>
-    await tx
-      .select({ objectKey: organizationFileObjects.objectKey })
-      .from(organizationFileObjects)
-      .where(
-        or(
-          eq(organizationFileObjects.status, "reserved"),
-          isNotNull(organizationFileObjects.pendingSizeBytes),
-        ),
-      )
-      .limit(1),
-);
-if (unsettled.length > 0) {
-  panic("File usage backfill left unsettled writes; reconcile before enabling");
+const unexpectedUnsettled = await reportOrganizationFileUsageBackfill({
+  counts: {
+    imported,
+    removed,
+    settledReservations,
+    mismatchedReservations,
+  },
+  db: ledgerDb,
+  log: (line) => console.log(line),
+});
+if (unexpectedUnsettled > 0) {
+  panic(
+    `File usage backfill left ${unexpectedUnsettled} unsettled writes beyond ${mismatchedReservations} mismatched reservations; reconcile before enabling`,
+  );
 }
-console.log(
-  `Reconciled ${imported} stored objects; removed ${removed} absent ledger rows; settled ${settledReservations} reservations; ${mismatchedReservations} mismatched reservations remain pending.`,
-);

@@ -54,7 +54,10 @@ import {
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
-import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import {
+  organizationFileUsageHandlerError,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -944,21 +947,8 @@ const uploadEntityHandler = async function* ({
         // The reservation remains until object-state reconciliation settles it.
         writeOutcomeUncertain =
           organizationFileWrite.error.reason === "storage_unavailable";
-        let responseStatus: 409 | 413 | 503 = 503;
-        if (organizationFileWrite.error.reason === "capacity_exceeded") {
-          responseStatus = 413;
-        } else if (
-          organizationFileWrite.error.reason === "key_conflict" ||
-          organizationFileWrite.error.reason === "reservation_busy"
-        ) {
-          responseStatus = 409;
-        }
         return Result.err(
-          new HandlerError({
-            status: responseStatus,
-            message: organizationFileWrite.error.message,
-            cause: organizationFileWrite.error,
-          }),
+          organizationFileUsageHandlerError(organizationFileWrite.error),
         );
       }
     }

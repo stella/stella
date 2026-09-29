@@ -46,7 +46,10 @@ import {
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
-import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import {
+  organizationFileUsageResponseStatus,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -509,19 +512,12 @@ export const finalizeDesktopEditSessionHandler = async ({
             }),
         });
         if (Result.isError(fileWrite)) {
-          let responseStatus: 409 | 413 | 503 = 503;
-          if (fileWrite.error.reason === "capacity_exceeded") {
-            responseStatus = 413;
-          } else if (
-            fileWrite.error.reason === "key_conflict" ||
-            fileWrite.error.reason === "reservation_busy"
-          ) {
-            responseStatus = 409;
-          }
           return {
             error: {
               message: fileWrite.error.message,
-              statusCode: responseStatus,
+              statusCode: organizationFileUsageResponseStatus(
+                fileWrite.error.reason,
+              ),
             },
           } as const;
         }

@@ -59,7 +59,11 @@ import {
   shouldGenerateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
-import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { putS3ObjectWithSignal } from "@/api/lib/s3";
@@ -88,9 +92,13 @@ type UploadMessageFilesProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
+export type UploadMessageFilesError =
+  | HandlerError<400 | 409 | 413 | 422 | 500 | 503>
+  | SafeDbError;
+
 type UploadMessageFilesReturn = Result<
   UploadedChatMessage,
-  HandlerError<400 | 422 | 500> | SafeDbError
+  UploadMessageFilesError
 >;
 
 export type UploadedChatFile = {
@@ -120,7 +128,7 @@ export const uploadMessageFiles = async ({
   const uploadedFiles: UploadedChatFile[] = [];
   const parts: ChatMessage["parts"] = [];
   const fail = async (
-    error: HandlerError<400 | 422 | 500> | SafeDbError,
+    error: UploadMessageFilesError,
   ): Promise<UploadMessageFilesReturn> => {
     if (uploadedFiles.length === 0) {
       return Result.err(error);
@@ -552,6 +560,7 @@ type ReserveChatObjectCleanupIntent = (options: {
 
 type UploadUserFileDependencies = {
   generateImageThumbnail?: typeof generateImageThumbnail;
+  organizationFileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
   putS3ObjectWithSignal?: typeof putS3ObjectWithSignal;
   reserveChatObjectCleanupIntent?: ReserveChatObjectCleanupIntent;
   settleObjectCleanupIntentsAfterWriter?: typeof settleObjectCleanupIntentsAfterWriter;
@@ -613,6 +622,35 @@ const reserveChatObjectCleanupIntent: ReserveChatObjectCleanupIntent = async (
   });
 };
 
+type OrganizationFileUsageDb = NonNullable<
+  UploadUserFileDependencies["organizationFileUsageDb"]
+>;
+
+type ChatLedgerOptions = {
+  ledgerDeleteOptions: { fileUsageDb?: OrganizationFileUsageDb };
+  ledgerWriteOptions: { db?: OrganizationFileUsageDb };
+};
+
+const chatLedgerOptions = (
+  db: OrganizationFileUsageDb | undefined,
+): ChatLedgerOptions =>
+  db === undefined
+    ? { ledgerDeleteOptions: {}, ledgerWriteOptions: {} }
+    : { ledgerDeleteOptions: { fileUsageDb: db }, ledgerWriteOptions: { db } };
+
+// A ledger refusal keeps its client status; only an unmetered write failure is
+// an internal error.
+const chatAttachmentStoreError = (
+  error: unknown,
+): HandlerError<409 | 413 | 500 | 503> =>
+  error instanceof OrganizationFileUsageError
+    ? organizationFileUsageHandlerError(error)
+    : new HandlerError({
+        status: 500,
+        message: "Failed to store chat attachment",
+        cause: error,
+      });
+
 type UploadUserFileInput = {
   dependencies?: UploadUserFileDependencies;
   file: {
@@ -647,6 +685,9 @@ export const uploadUserFile = async ({
       dependencies?.generateImageThumbnail ?? generateImageThumbnail;
     const putS3Object =
       dependencies?.putS3ObjectWithSignal ?? putS3ObjectWithSignal;
+    const { ledgerDeleteOptions, ledgerWriteOptions } = chatLedgerOptions(
+      dependencies?.organizationFileUsageDb,
+    );
     // Enforce the MIME allowlist at the storage boundary, not only in
     // validateChatFileParts at message-send: user files are later served
     // inline (Content-Disposition without a filename), so a stored
@@ -828,6 +869,7 @@ export const uploadUserFile = async ({
           objectKey: s3Key,
           sizeBytes: file.bytes.byteLength,
           write: writeSource,
+          ...ledgerWriteOptions,
         })
       : await Result.tryPromise({ try: writeSource, catch: (cause) => cause });
     if (Result.isError(writeSourceResult)) {
@@ -836,6 +878,7 @@ export const uploadUserFile = async ({
           await deleteOrganizationFileWithSignal(
             s3Key,
             AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+            ledgerDeleteOptions,
           ),
         catch: (cause) => cause,
       });
@@ -869,13 +912,7 @@ export const uploadUserFile = async ({
           userFileId: id,
         });
       }
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Failed to store chat attachment",
-          cause: writeSourceResult.error,
-        }),
-      );
+      return Result.err(chatAttachmentStoreError(writeSourceResult.error));
     }
 
     if (preparedThumbnail !== null) {
@@ -900,6 +937,7 @@ export const uploadUserFile = async ({
             objectKey: preparedThumbnail.key,
             sizeBytes: preparedThumbnail.bytes.byteLength,
             write: writeThumbnail,
+            ...ledgerWriteOptions,
           })
         : await Result.tryPromise({
             try: writeThumbnail,
@@ -915,6 +953,7 @@ export const uploadUserFile = async ({
             await deleteOrganizationFileWithSignal(
               preparedThumbnail.key,
               AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+              ledgerDeleteOptions,
             ),
           catch: (cause) => cause,
         });
@@ -935,6 +974,7 @@ export const uploadUserFile = async ({
               await deleteOrganizationFileWithSignal(
                 s3Key,
                 AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                ledgerDeleteOptions,
               ),
             catch: (cause) => cause,
           });
@@ -1040,6 +1080,7 @@ export const uploadUserFile = async ({
         await deleteOrganizationFileWithSignal(
           s3Key,
           AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+          ledgerDeleteOptions,
         ),
       catch: (cause) => cause,
     });
@@ -1058,6 +1099,7 @@ export const uploadUserFile = async ({
               await deleteOrganizationFileWithSignal(
                 thumbnailKey,
                 AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
+                ledgerDeleteOptions,
               ),
             catch: (cause) => cause,
           });

@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, count, eq, gt, isNotNull, or } from "drizzle-orm";
 
 import {
   organizationFileObjects,
@@ -164,4 +164,43 @@ export const reconcileAbsentOrganizationFileObjects = async ({
     }
   }
   return removed;
+};
+
+type BackfillCounts = {
+  imported: number;
+  removed: number;
+  settledReservations: number;
+  mismatchedReservations: number;
+};
+
+/**
+ * Print the run summary, then return the unsettled writes beyond the
+ * mismatched reservations that reconciliation deliberately leaves pending.
+ */
+export const reportOrganizationFileUsageBackfill = async ({
+  counts,
+  db,
+  log,
+}: {
+  counts: BackfillCounts;
+  db: Pick<MaintenanceDb, "transaction">;
+  log: (line: string) => void;
+}): Promise<number> => {
+  const unsettled = await db.transaction(
+    async (tx) =>
+      await tx
+        .select({ rows: count() })
+        .from(organizationFileObjects)
+        .where(
+          or(
+            eq(organizationFileObjects.status, "reserved"),
+            isNotNull(organizationFileObjects.pendingSizeBytes),
+          ),
+        )
+        .then((rows) => rows.at(0)?.rows ?? 0),
+  );
+  log(
+    `Reconciled ${counts.imported} stored objects; removed ${counts.removed} absent ledger rows; settled ${counts.settledReservations} reservations; ${counts.mismatchedReservations} mismatched reservations remain pending; ${unsettled} unsettled writes remain.`,
+  );
+  return Math.max(0, unsettled - counts.mismatchedReservations);
 };

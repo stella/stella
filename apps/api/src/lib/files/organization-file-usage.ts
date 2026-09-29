@@ -41,6 +41,33 @@ export class OrganizationFileUsageError extends HandlerError<409 | 503> {
   }
 }
 
+/** Client status for a ledger outcome: full capacity is 413, contention 409. */
+export const organizationFileUsageResponseStatus = (
+  reason: OrganizationFileUsageError["reason"],
+): 409 | 413 | 503 => {
+  switch (reason) {
+    case "capacity_exceeded":
+      return 413;
+    case "key_conflict":
+    case "reservation_busy":
+      return 409;
+    case "storage_unavailable":
+      return 503;
+    default:
+      reason satisfies never;
+      return panic("Unhandled organization file usage reason");
+  }
+};
+
+export const organizationFileUsageHandlerError = (
+  error: OrganizationFileUsageError,
+): HandlerError<409 | 413 | 503> =>
+  new HandlerError({
+    status: organizationFileUsageResponseStatus(error.reason),
+    message: error.message,
+    cause: error,
+  });
+
 const positiveDifference = (next: bigint, current: bigint): bigint =>
   next > current ? next - current : 0n;
 

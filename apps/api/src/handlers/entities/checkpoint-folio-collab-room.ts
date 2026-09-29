@@ -36,7 +36,10 @@ import { materializeYjsOverScannedDocx } from "@/api/lib/file-scan/document-pars
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
-import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import {
+  organizationFileUsageHandlerError,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
@@ -84,6 +87,52 @@ export const matchesFolioCollabSnapshotCut = ({
   current.snapshotRevision === materialized.snapshotRevision &&
   current.snapshotUpdatedAt?.getTime() ===
     materialized.snapshotUpdatedAt?.getTime();
+
+/**
+ * Store a checkpoint object. A ledger refusal keeps its client status; only an
+ * unmetered write failure is an unhandled error.
+ */
+export const writeFolioCollabCheckpointObject = async ({
+  checkpointBytes,
+  checkpointKey,
+  fileUsageDb,
+  organizationId,
+}: {
+  checkpointBytes: Uint8Array;
+  checkpointKey: string;
+  fileUsageDb?: Parameters<typeof writeOrganizationFile>[0]["db"];
+  organizationId: SafeId<"organization">;
+}): Promise<
+  Result<
+    S3ObjectWriteCertainty,
+    HandlerError<409 | 413 | 503> | UnhandledException
+  >
+> =>
+  !env.FEATURE_FILE_USAGE_LIMITS
+    ? await Result.tryPromise({
+        try: async () =>
+          await writeS3ObjectWithRetry({
+            contentType: DOCX_MIME_TYPE,
+            data: checkpointBytes,
+            key: checkpointKey,
+          }),
+        catch: (cause) => new UnhandledException({ cause }),
+      })
+    : Result.mapError(
+        await writeOrganizationFile({
+          organizationId,
+          objectKey: checkpointKey,
+          sizeBytes: checkpointBytes.byteLength,
+          write: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: DOCX_MIME_TYPE,
+              data: checkpointBytes,
+              key: checkpointKey,
+            }),
+          ...(fileUsageDb ? { db: fileUsageDb } : {}),
+        }),
+        organizationFileUsageHandlerError,
+      );
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
@@ -312,30 +361,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
         });
       }
     };
-    const written = !env.FEATURE_FILE_USAGE_LIMITS
-      ? await Result.tryPromise({
-          try: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: DOCX_MIME_TYPE,
-              data: checkpointBytes,
-              key: checkpointKey,
-            }),
-          catch: (cause) => new UnhandledException({ cause }),
-        })
-      : Result.mapError(
-          await writeOrganizationFile({
-            organizationId: session.activeOrganizationId,
-            objectKey: checkpointKey,
-            sizeBytes: checkpointBytes.byteLength,
-            write: async () =>
-              await writeS3ObjectWithRetry({
-                contentType: DOCX_MIME_TYPE,
-                data: checkpointBytes,
-                key: checkpointKey,
-              }),
-          }),
-          (cause) => new UnhandledException({ cause }),
-        );
+    const written = await writeFolioCollabCheckpointObject({
+      checkpointBytes,
+      checkpointKey,
+      organizationId: session.activeOrganizationId,
+    });
     if (Result.isError(written)) {
       await discardCheckpoint(S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN);
       return Result.err(written.error);
