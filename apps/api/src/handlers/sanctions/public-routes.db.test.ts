@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
@@ -23,7 +23,6 @@ import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/ent
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
-import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import {
   SANCTIONS_MATCH_LIMIT,
   screenSanctionsSubject,
@@ -212,14 +211,12 @@ type NameSubject = Extract<
 type ParityOptions = {
   subject: NameSubject;
   now?: Date;
-  indexCache?: SanctionsIndexCache;
 };
 
-const assertParity = async ({
-  subject,
-  now = FRESH_NOW,
-  indexCache = createSanctionsIndexCache(),
-}: ParityOptions) => {
+const assertParity = async ({ subject, now = FRESH_NOW }: ParityOptions) => {
+  // Separate caches ensure both access boundaries load the corpus themselves.
+  const productCache = createSanctionsIndexCache();
+  const publicCache = createSanctionsIndexCache();
   const inProduct = (
     await runEntityCheckShared({
       check: "sanctions",
@@ -231,7 +228,11 @@ const assertParity = async ({
         ),
         loadPracticeJurisdictions: async () => ["CZ"],
         screen: async (props) =>
-          await screenSanctionsSubject({ ...props, now, indexCache }),
+          await screenSanctionsSubject({
+            ...props,
+            now,
+            indexCache: productCache,
+          }),
       },
     })
   ).unwrap();
@@ -245,7 +246,7 @@ const assertParity = async ({
   const route = createPublicSanctionsRoute({
     db: publicDb,
     now,
-    indexCache,
+    indexCache: publicCache,
     rateLimitOptions: {
       context,
       generator: scopedGenerator("parity-test"),
@@ -305,24 +306,81 @@ const clearSubject = {
 
 describe("public sanctions search parity", () => {
   test(
-    "runs under a read-only role without tenant, write or source-configuration grants",
+    "runs under a read-only role with no privileges outside the sanctions corpus",
     async () => {
+      const corpusTables = [
+        sanctionsSources,
+        sanctionsEditions,
+        sanctionsEntryPayloads,
+        sanctionsEditionEntries,
+      ].map(getTableName);
       const permissions = await publicDb(
         async (tx) =>
-          await tx.execute(sql`
+          await asTestRaw<Pick<typeof db, "execute">>(tx).execute(sql`
+      WITH corpus(relation) AS (
+        VALUES ${sql.join(
+          corpusTables.map((table) => sql`(${table}::text)`),
+          sql.raw(","),
+        )}
+      )
       SELECT current_user AS role,
         current_setting('transaction_read_only') AS read_only,
-        has_table_privilege(current_user, 'contacts', 'SELECT') AS tenant_read,
         has_column_privilege(current_user, 'sanctions_sources', 'marker_url', 'SELECT') AS config_read,
-        has_table_privilege(current_user, 'sanctions_entry_payloads', 'INSERT') AS can_write
+        EXISTS (
+          SELECT 1 FROM pg_attribute AS columns
+          INNER JOIN pg_class AS tables ON tables.oid = columns.attrelid
+          INNER JOIN pg_namespace AS schemas ON schemas.oid = tables.relnamespace
+          LEFT JOIN corpus ON schemas.nspname = 'public' AND corpus.relation = tables.relname
+          WHERE schemas.nspname <> 'information_schema' AND schemas.nspname !~ '^pg_'
+            AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
+            AND columns.attnum > 0 AND NOT columns.attisdropped
+            AND corpus.relation IS NULL
+            AND has_column_privilege(current_user, columns.attrelid, columns.attnum, 'SELECT')
+        ) AS other_read,
+        EXISTS (
+          SELECT 1 FROM pg_class AS tables
+          INNER JOIN pg_namespace AS schemas ON schemas.oid = tables.relnamespace
+          WHERE schemas.nspname <> 'information_schema' AND schemas.nspname !~ '^pg_'
+            AND tables.relkind IN ('r', 'p', 'v', 'm', 'f')
+            AND (has_table_privilege(current_user, tables.oid, 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+              OR EXISTS (
+                SELECT 1 FROM pg_attribute AS columns
+                WHERE columns.attrelid = tables.oid AND columns.attnum > 0 AND NOT columns.attisdropped
+                  AND has_column_privilege(current_user, columns.attrelid, columns.attnum, 'INSERT,UPDATE,REFERENCES')
+              ))
+        ) AS can_write,
+        EXISTS (
+          SELECT 1 FROM pg_class AS sequences
+          INNER JOIN pg_namespace AS schemas ON schemas.oid = sequences.relnamespace
+          WHERE schemas.nspname <> 'information_schema' AND schemas.nspname !~ '^pg_'
+            AND sequences.relkind = 'S'
+            AND has_sequence_privilege(current_user, sequences.oid, 'USAGE,SELECT,UPDATE')
+        ) AS can_use_sequence,
+        has_database_privilege(current_user, current_database(), 'CREATE') OR EXISTS (
+          SELECT 1 FROM pg_namespace AS schemas
+          WHERE schemas.nspname <> 'information_schema' AND schemas.nspname !~ '^pg_'
+            AND has_schema_privilege(current_user, schemas.oid, 'CREATE')
+        ) AS can_create,
+        EXISTS (
+          SELECT 1 FROM pg_roles AS roles WHERE roles.rolname <> current_user
+            AND (pg_has_role(current_user, roles.oid, 'SET')
+              OR pg_has_role(current_user, roles.oid, 'USAGE')
+              OR pg_has_role(current_user, roles.oid, 'MEMBER'))
+        ) AS other_role,
+        (SELECT rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls
+          FROM pg_roles WHERE rolname = current_user) AS privileged_attributes
     `),
       );
-      expect(permissions.at(0)).toMatchObject({
+      expect(permissions.rows.at(0)).toMatchObject({
         role: "stella_public_sanctions_reader",
         read_only: "on",
-        tenant_read: false,
+        other_read: false,
         config_read: false,
         can_write: false,
+        can_use_sequence: false,
+        can_create: false,
+        other_role: false,
+        privileged_attributes: false,
       });
     },
     DB_TEST_TIMEOUT_MS,

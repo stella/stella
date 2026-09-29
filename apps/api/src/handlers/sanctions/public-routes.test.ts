@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { SanctionsSubjectError } from "@/api/lib/lists/sanctions/screening-service";
 import type { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
@@ -15,6 +16,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // @ts-expect-error The anonymous boundary must not accept a tenant-scoped handle.
 const scopedHandleIsPublic: ScopedDb extends SanctionsPublicReadDb
@@ -35,8 +37,22 @@ const request = (subject: unknown) =>
     body: JSON.stringify({ subject }),
   });
 
-const appWith = (screen: typeof screenSanctionsSubject) => {
+const testDb = (
+  validateRole: SanctionsPublicReadDb["validateRole"] = async () =>
+    Result.ok(undefined),
+) =>
+  asTestRaw<SanctionsPublicReadDb>(
+    Object.assign(
+      async () => {
+        throw new TypeError("Unexpected database read in route test");
+      },
+      { validateRole },
+    ),
+  );
+
+const appWith = (screen: typeof screenSanctionsSubject, db = testDb()) => {
   const route = createPublicSanctionsRoute({
+    db,
     screen,
     rateLimitOptions: {
       context: new InMemoryRateLimitContext(),
@@ -166,6 +182,35 @@ describe("anonymous sanctions search", () => {
     ).toBe(200);
   });
 
+  test("rejects oversized identity input without returning it in validation errors", async () => {
+    const screen = clearScreen();
+    const { app } = appWith(screen);
+    const marker = "Private Validation Sentinel";
+    const name = marker.padEnd(600, "x");
+    expect(name.length).toBeGreaterThan(512);
+    const response = await app.handle(request({ type: "organization", name }));
+    expect(response.status).toBe(422);
+    expect(await response.text()).not.toContain(marker);
+    expect(screen.mock.calls).toHaveLength(0);
+  });
+
+  test("reports failed role validation before any screening", async () => {
+    const screen = clearScreen();
+    const marker = "Private Role Failure Sentinel";
+    const { app } = appWith(
+      screen,
+      testDb(async () => 
+        Result.err(new SanctionsPublicRoleError({ message: marker }))
+      ),
+    );
+    const response = await app.handle(
+      request({ type: "organization", name: "Example" }),
+    );
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain(marker);
+    expect(screen.mock.calls).toHaveLength(0);
+  });
+
   test("never sends identity input or the original failure to telemetry, even in debug mode", async () => {
     const analytics = installRecordingAnalytics();
     const logger = installRecordingLogger();
@@ -211,8 +256,9 @@ describe("anonymous sanctions search", () => {
         (path) => path.includes("analytics") || path.includes("failure-sink"),
       ),
     ).toBe(false);
-    expect(source).not.toMatch(/console\.|logger\.|observeFailure\(/u);
-    expect(source).not.toMatch(/cause\s*[,}:]/u);
+    const code = new Bun.Transpiler({ loader: "ts" }).transformSync(source);
+    expect(code).not.toMatch(/console\.|logger\.|observeFailure\(/u);
+    expect(code).not.toMatch(/cause\s*[,}:]/u);
     expect(source).toContain("createSafePublicHandler");
   });
 });

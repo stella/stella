@@ -5,7 +5,7 @@ import nodePath from "node:path";
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const BOOTSTRAP_MIGRATION = "20260510140000_document_rls_role_bootstrap";
 
-// Deployed migrations contain these six reviewed dynamic grants. New grants
+// These migrations contain reviewed dynamic grants. New grants
 // must be literal SQL so the privilege parser below can classify their target;
 // an exact site allowlist prevents EXECUTE format(...) from becoming a bypass.
 const AUDITED_DYNAMIC_GRANT_SITES = new Set([
@@ -15,6 +15,7 @@ const AUDITED_DYNAMIC_GRANT_SITES = new Set([
   "20260516000000_case_law_ingestion_role: EXECUTE format( 'GRANT USAGE, SELECT ON SEQUENCE %s TO stella_ingestion', target_sequence )",
   "20260516000000_case_law_ingestion_role: EXECUTE format('GRANT stella_ingestion TO %I', CURRENT_USER)",
   "20260808014000_legal_lists: EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO stella', table_name)",
+  "20261003122400_public_sanctions_reader: EXECUTE format('GRANT stella_public_sanctions_reader TO %I', CURRENT_USER)",
 ]);
 
 // These migrations were already in the tree when the bootstrap migration
@@ -613,6 +614,22 @@ const collectRlsGrantState = () => {
 };
 
 describe("RLS table grants", () => {
+  test("the public sanctions reader can be assumed by the application connection", () => {
+    const migration = readFileSync(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261003122400_public_sanctions_reader/migration.sql",
+      ),
+      "utf-8",
+    );
+    expect(migration).toContain(
+      "NOT pg_has_role(CURRENT_USER, 'stella_public_sanctions_reader', 'member')",
+    );
+    expect(migration).toContain(
+      "EXECUTE format('GRANT stella_public_sanctions_reader TO %I', CURRENT_USER)",
+    );
+  });
+
   test("rejects dynamic grants outside the exact deployed allowlist", () => {
     expect(
       dynamicGrantSites({

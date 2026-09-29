@@ -8,6 +8,7 @@ import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { personDateOfBirth } from "@/api/lib/business-registries/entity-checks";
+import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
@@ -57,13 +58,13 @@ const screeningSubject = ({
 }: PublicSanctionsBody): Result<SanctionsScreeningSubject, HandlerError> => {
   switch (subject.type) {
     case "organization": {
-      const companyId = subject.companyId?.trim();
-      return Result.ok({
-        type: "organization",
-        name: subject.name.trim(),
-        identifiers:
-          companyId === undefined || companyId === "" ? [] : [companyId],
-      });
+      return Result.ok(
+        resolveSanctionsNameSubject({
+          type: "organization",
+          name: subject.name,
+          companyId: subject.companyId === undefined ? null : subject.companyId,
+        }).subject,
+      );
     }
     case "person": {
       const codes =
@@ -77,19 +78,16 @@ const screeningSubject = ({
       return personDateOfBirth({
         birthDate: undefined,
         dateOfBirth: subject.dateOfBirth,
-      }).map((date) => ({
-        type: "person",
-        name: `${subject.firstName.trim()} ${subject.lastName.trim()}`,
-        birthDate:
-          date === null
-            ? null
-            : {
-                year: date.year,
-                ...(date.precision !== "year" && { month: date.month }),
-                ...(date.precision === "day" && { day: date.day }),
-              },
-        nationalityCodes: [...new Set(nationalityCodes)],
-      }));
+      }).map(
+        (dateOfBirth) =>
+          resolveSanctionsNameSubject({
+            type: "person",
+            firstName: subject.firstName,
+            lastName: subject.lastName,
+            dateOfBirth,
+            nationalityCodes,
+          }).subject,
+      );
     }
     default: {
       subject satisfies never;
@@ -105,6 +103,13 @@ export type PublicSanctionsSearchOptions = {
   indexCache?: SanctionsIndexCache;
 };
 
+const screeningUnavailable = () =>
+  new HandlerError({
+    status: 500,
+    code: "internal_server_error",
+    message: "Could not screen the sanctions lists",
+  });
+
 /** Anonymous name screening: no practice jurisdictions, so every list is informational. */
 export const createPublicSanctionsSearchHandler = ({
   db = sanctionsPublicReadDb,
@@ -119,23 +124,26 @@ export const createPublicSanctionsSearchHandler = ({
     },
     async function* ({ body }) {
       const subject = yield* screeningSubject(body);
+      const role = yield* Result.await(
+        Result.tryPromise({
+          try: async () => await db.validateRole(),
+          catch: screeningUnavailable,
+        }),
+      );
+      yield* role.mapError(screeningUnavailable);
       // Never retain the rejected operation's cause: it may contain identity input.
       const result = yield* Result.await(
         Result.tryPromise({
-          try: async () =>
+          try: async () => 
             await screen({
               db,
               subject,
               practiceJurisdictions: [],
               now,
               indexCache,
-            }),
-          catch: () =>
-            new HandlerError({
-              status: 500,
-              code: "internal_server_error",
-              message: "Could not screen the sanctions lists",
-            }),
+            })
+          ,
+          catch: screeningUnavailable,
         }),
       );
       return result.mapError(

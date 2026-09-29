@@ -589,7 +589,7 @@ export const installPglitePublicSanctionsGrants = async (
 ): Promise<void> => {
   const migration = nodePath.join(
     DRIZZLE_DIR,
-    "20261003122300_public_sanctions_reader",
+    "20261003122400_public_sanctions_reader",
     "migration.sql",
   );
   for (const statement of readMigrationStatements(migration)) {

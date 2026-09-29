@@ -190,25 +190,18 @@ const resolveCompanyName = async ({
   });
 };
 
-const resolveSubject = async (
-  subject: SanctionsCheckSubject,
-  dependencies: SanctionsCheckDependencies,
-): Promise<Result<ResolvedName, HandlerError>> => {
+/** Normalize a name subject identically for public and in-product screening. */
+export const resolveSanctionsNameSubject = (
+  subject: Exclude<SanctionsCheckSubject, { type: "company-id" }>,
+): Extract<ResolvedName, { type: "resolved" }> => {
   switch (subject.type) {
-    case "company-id": {
-      return await resolveCompanyName({
-        value: subject.value,
-        country: subject.country,
-        dependencies,
-      });
-    }
     case "organization": {
       const name = subject.name.trim();
       const identifiers =
         subject.companyId === null || subject.companyId.trim() === ""
           ? []
           : [subject.companyId.trim()];
-      return Result.ok({
+      return {
         type: "resolved",
         subject: { type: "organization", name, identifiers },
         checked: {
@@ -217,13 +210,13 @@ const resolveSubject = async (
           identifiers,
           resolvedFrom: null,
         },
-      });
+      };
     }
     case "person": {
       const name = `${subject.firstName.trim()} ${subject.lastName.trim()}`;
       const { dateOfBirth } = subject;
       const nationalityCodes = [...new Set(subject.nationalityCodes)];
-      return Result.ok({
+      return {
         type: "resolved",
         subject: {
           type: "person",
@@ -243,7 +236,30 @@ const resolveSubject = async (
           nationalityCodes,
         },
         checked: { type: "person", name, dateOfBirth, nationalityCodes },
+      };
+    }
+    default: {
+      subject satisfies never;
+      return panic("Unhandled sanctions subject");
+    }
+  }
+};
+
+const resolveSubject = async (
+  subject: SanctionsCheckSubject,
+  dependencies: SanctionsCheckDependencies,
+): Promise<Result<ResolvedName, HandlerError>> => {
+  switch (subject.type) {
+    case "company-id": {
+      return await resolveCompanyName({
+        value: subject.value,
+        country: subject.country,
+        dependencies,
       });
+    }
+    case "organization":
+    case "person": {
+      return Result.ok(resolveSanctionsNameSubject(subject));
     }
     default: {
       subject satisfies never;
