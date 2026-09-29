@@ -241,7 +241,10 @@ export const runDocumentDeadlineScout = async ({
   // from the instance provider without a key of its own cannot observe.
   const observed = Result.flatten(
     await Result.tryPromise(async () => {
-      const orgAIConfigResult = await loadOrgAIConfig(db, run.organizationId);
+      const orgAIConfigResult = await loadOrgAIConfig(db, {
+        organizationId: run.organizationId,
+        userId: actorUserId,
+      });
       if (Result.isError(orgAIConfigResult)) {
         return Result.err(orgAIConfigResult.error);
       }

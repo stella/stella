@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getLaneCounterMicroUnits } from "@/api/lib/usage/lane-budget";
+import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 
 export type UsageLaneDecision =
@@ -25,16 +26,18 @@ export type UsageLaneDecision =
   | { lane: "pool" };
 
 /**
- * Budget verdict only: which lane the user's budgets admit. Whether a
- * fallback verdict is actually servable (a fallback model exists on
- * this deployment) is the pre-flight's composition concern.
+ * Budget verdict only: which lane the user's budgets admit, or
+ * `unassigned` when the organization admits only members holding a seat
+ * assignment to AI work and this user holds none. Whether a fallback
+ * verdict is actually servable (a fallback model exists on this
+ * deployment) is the pre-flight's composition concern.
  */
-export type LaneBudgetVerdict = UsageLaneDecision["lane"];
+export type LaneBudgetVerdict = UsageLaneDecision["lane"] | "unassigned";
 
 type DecideChatUsageLaneInput = {
   tx: Transaction;
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
   asOf?: Date;
 };
 
@@ -42,7 +45,8 @@ type DecideChatUsageLaneInput = {
  * Decide which budget a chat turn draws from. `pool` reproduces the
  * pre-lane behavior exactly and is the answer whenever the org's
  * policy declares no budgets, so deployments that never seed them are
- * untouched.
+ * untouched. A member the organization does not admit to AI work (see
+ * `memberMayUseAI`) never falls back to the pool.
  */
 export const decideChatUsageLane = async ({
   tx,
@@ -50,6 +54,10 @@ export const decideChatUsageLane = async ({
   userId,
   asOf = new Date(),
 }: DecideChatUsageLaneInput): Promise<LaneBudgetVerdict> => {
+  if (!(await memberMayUseAI(tx, organizationId, userId))) {
+    return "unassigned";
+  }
+
   const rows = await tx
     .select({
       status: usageEntitlements.status,
@@ -75,9 +83,10 @@ export const decideChatUsageLane = async ({
     return "pool";
   }
 
-  // Per-user budgets belong to assigned members only; everyone else
-  // keeps the shared-pool path (never a hard block — the pool check
-  // still runs downstream exactly as before budgets existed).
+  // Per-user budgets belong to assigned members only. Where assignment
+  // is not required for AI access, everyone else keeps the shared-pool
+  // path (the pool check still runs downstream exactly as before
+  // budgets existed).
   const assignment = await tx
     .select({ id: usageSeatAssignments.id })
     .from(usageSeatAssignments)
