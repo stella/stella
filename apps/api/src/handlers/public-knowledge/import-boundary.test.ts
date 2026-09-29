@@ -41,6 +41,7 @@ const allowedExternal = new Set([
   "@stll/api-contract",
   "@stll/collation",
   "@stll/docx-utils",
+  "@stll/folio-core/server",
   "@stll/template-conditions",
   "@stll/template-packs",
   "@stll/text-normalize",
