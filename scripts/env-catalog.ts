@@ -429,7 +429,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   TYPESAFE_MODEL:
     'System One model id sent to TypeSafe. Defaults to "jev-latest"; pin a versioned id to hold calibrated thresholds.',
   USE_MOCK_AI:
-    "Return canned AI responses in local development and tests. Deployed runtimes reject this setting.",
+    'Return canned AI responses in local development and tests. An organization\'s own AI key still answers for real; "force" mocks those requests too. Deployed runtimes reject this setting.',
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
   VITE_BROWSER_API_URL:
     "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
@@ -850,9 +850,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  "RELAY_EVENT",
+  "RELAY_HEAD_SHA",
+  "RELAY_PULL_REQUESTS",
   "RELEASE_REF",
   "REPO",
   "RETRY_ATTEMPTS",
+  "REVIEW_GATE_BASE",
   "RETRY_DELAYS_SECONDS",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
@@ -867,6 +871,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
   "STELLA_PORT_OFFSET",
+  "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",

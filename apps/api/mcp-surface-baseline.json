@@ -6,12 +6,12 @@
         "name": 1149,
         "title": 1184,
         "description": 28620,
-        "inputSchema": 80866,
-        "outputSchema": 53720,
+        "inputSchema": 81086,
+        "outputSchema": 53854,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 178913,
+      "payloadUtf8Bytes": 179267,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -57,11 +57,11 @@
         "title": 496,
         "description": 12893,
         "inputSchema": 26219,
-        "outputSchema": 30621,
+        "outputSchema": 30755,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 75956,
+      "payloadUtf8Bytes": 76090,
       "largestDescription": {
         "tool": "read_case_law_citations",
         "chars": 802

@@ -18,6 +18,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// With its extension: oxlint.config.ts loads this file under Node's resolver.
+import { formattedLikeRepository } from "./generated-artifacts.ts";
+
 // A file the rule accepts besides the owner itself. `path` is a
 // repo-relative file path, or a directory prefix ending in "/".
 export type AllowedFile = {
@@ -673,6 +676,11 @@ export const OWNERSHIP = [
             "Rebuilds persisted bindings when expanding saved messages so refs from another turn are rebound or neutralized.",
         },
         {
+          path: "apps/api/src/handlers/chat/skill-availability/offered-tools.ts",
+          reason:
+            "Builds a new chat's tool set only to read its tool names for skill availability; no tool runs and the registry never leaves that build.",
+        },
+        {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
           reason:
             "Rebuilds persisted bindings to turn saved transcript refs into durable links before storing memories.",
@@ -1312,8 +1320,11 @@ export const validateOwnership = (
   return problems;
 };
 
-const main = (argv: readonly string[]): number => {
-  const rendered = renderOwnershipDocument(OWNERSHIP);
+const main = async (argv: readonly string[]): Promise<number> => {
+  const rendered = await formattedLikeRepository(
+    renderOwnershipDocument(OWNERSHIP),
+    "md",
+  );
   const docFile = path.join(REPO_ROOT, DOC_PATH);
 
   if (argv.includes("--write")) {
@@ -1348,5 +1359,5 @@ const main = (argv: readonly string[]): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main(process.argv.slice(2)));
+  process.exit(await main(process.argv.slice(2)));
 }

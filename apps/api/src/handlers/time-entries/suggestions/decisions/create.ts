@@ -24,6 +24,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
@@ -45,6 +46,7 @@ const acceptDecisionSchema = t.Object({
     maxLength: 10_000,
     description: "Description of the work",
   }),
+  narrativeLanguage: t.Optional(narrativeLanguageSchema),
   billable: t.Optional(
     t.Boolean({ description: "Whether the entry is billable to the client" }),
   ),
@@ -132,6 +134,7 @@ const acceptSuggestion = async function* ({
       timezoneId: body.timezoneId,
       durationMinutes: body.decision.durationMinutes,
       narrative: body.decision.narrative,
+      narrativeLanguage: body.decision.narrativeLanguage,
       billable: body.decision.billable,
       taskCode: body.decision.taskCode,
       activityCode: body.decision.activityCode,

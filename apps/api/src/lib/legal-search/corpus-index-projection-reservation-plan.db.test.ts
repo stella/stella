@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import { enrolledCorpusIndexGroupContracts } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -219,6 +220,10 @@ const explainReservation = async (): Promise<ReservationPlan> =>
       eligibilityAt: ELIGIBILITY_AT,
       scopedEntityIds: null,
       scopedIndexId: null,
+      // The shape a generation takes before its enrolled groups are attested.
+      excludedIndexIds: enrolledCorpusIndexGroupContracts(
+        CORPUS_INDEX_MANIFESTS[GENERATION],
+      ).map(({ indexId }) => indexId),
     });
     const lines = planLines(
       await tx.execute(

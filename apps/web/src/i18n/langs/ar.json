@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "مثال: قياسي 2025"
     },
     "revertToDraft": "الإعادة إلى مسودة",
+    "savedNarratives": {
+      "empty": "احفظ وصفًا لاستخدامه مرة أخرى.",
+      "save": "حفظ الوصف",
+      "title": "الأوصاف المحفوظة"
+    },
     "selectMatter": "اختر ملفًا قانونيًا...",
     "selectMatterToStart": "اختر ملفًا قانونيًا لبدء توقيت الوقت",
     "selectedCount": "{count, plural, zero {لا شيء محدد} one {محدد واحد} two {محددان} few {# محددة} many {# محددًا} other {# محدد}}",
@@ -884,6 +889,7 @@
       "apiKey": "مفتاح API",
       "none": "بدون إعداد"
     },
+    "skillNeedsUnavailableTools": "غير معروضة في الدردشة. تحتاج إلى أداة غير متوفرة هناك: {tools}",
     "toolNames": {
       "anonymize": "إخفاء الهوية",
       "createDocx": "إنشاء DOCX",
@@ -977,7 +983,15 @@
       "searchFiles": "البحث في المستندات",
       "searchMatters": "البحث في الملفات القانونية",
       "searchMcpServers": "البحث في خوادم MCP...",
-      "searchSkills": "البحث في المهارات"
+      "searchSkills": "البحث في المهارات",
+      "skillNeeds": {
+        "browserExtension": "صِل إضافة المتصفح لاستخدام هذه المهارة",
+        "document": "افتح مستندًا لاستخدام هذه المهارة",
+        "matter": "ابدأ دردشة في ملف قانوني لاستخدام هذه المهارة",
+        "rawSendMode": "غير متاحة في الدردشات المجهّلة",
+        "reviewEdits": "حوّل التعديلات إلى المراجعة اليدوية لاستخدام هذه المهارة",
+        "webSearch": "شغّل البحث على الويب لاستخدام هذه المهارة"
+      }
     },
     "contextMeter": {
       "attachments": "المستندات المرفقة",
@@ -1062,6 +1076,10 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "mockModel": {
+      "description": "ردود ثابتة من نموذج المحاكاة المحلي",
+      "label": "ذكاء اصطناعي مُحاكى"
+    },
     "modelSelector": {
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",

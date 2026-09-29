@@ -132,7 +132,13 @@ export const GENERATORS = [
   {
     id: "module-ownership",
     outputs: ["docs/module-ownership.md"],
-    inputs: ["scripts/ownership.ts", "apps/**", "packages/**"],
+    inputs: [
+      "scripts/ownership.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
+      "apps/**",
+      "packages/**",
+    ],
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
     checkedBy: "Module ownership",
@@ -157,6 +163,8 @@ export const GENERATORS = [
     inputs: [
       "packages/ui/src/styles/theme.css",
       "scripts/design-tokens-doc.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
     ],
     write: ["bun", "scripts/design-tokens-doc.ts", "--write"],
     check: null,
@@ -388,6 +396,8 @@ export const GENERATORS = [
     inputs: [
       "scripts/selfhost-contract.ts",
       "scripts/selfhost-tool.ts",
+      "scripts/generated-artifacts.ts",
+      ".oxfmtrc.json",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
       "apps/api/src/env*.ts",
@@ -477,6 +487,20 @@ export const GENERATORS = [
     ],
     write: ["bun", "scripts/generate-us-courts.ts", "--write"],
     check: ["bun", "scripts/generate-us-courts.ts", "--check"],
+    autofix: false,
+    after: [],
+  },
+  {
+    id: "us-reporters",
+    outputs: [
+      "packages/api-contract/src/us-reporter-editions.generated.ts",
+      "packages/api-contract/src/us-reporters.LICENSE",
+    ],
+    inputs: ["scripts/generate-us-reporters.ts"],
+    write: ["bun", "scripts/generate-us-reporters.ts", "--write"],
+    check: null,
+    unchecked:
+      "Fetched from a pinned upstream commit over the network; a manual upgrade tool outside CI",
     autofix: false,
     after: [],
   },

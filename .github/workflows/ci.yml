@@ -64,6 +64,7 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.changed-files.outputs.marketing_screenshots_required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
@@ -209,6 +210,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
               echo "legal_atlas_image_required=true"
+              echo "lockfile_ages_required=false"
               echo "marketing_screenshots_required=true"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
@@ -242,6 +244,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
+              echo "lockfile_ages_required=false"
               echo "marketing_screenshots_required=false"
               echo "migration_rehearsal_required=false"
               echo "mobile_build_required=false"
@@ -286,6 +289,7 @@ jobs:
           collab_redis_required=false
           landing_build_required=false
           legal_atlas_image_required=false
+          lockfile_ages_required=false
           migration_rehearsal_required=false
           mobile_build_required=false
           model_catalog_drift_required=false
@@ -385,6 +389,14 @@ jobs:
                 legal_atlas_image_required=true
                 ;;
             esac
+            # New pins in any tracked lockfile, root or standalone, must have
+            # cleared the release-age quarantine: a frozen install never
+            # checks. Also runs when the check itself changes.
+            case "$file" in
+              bun.lock|*/bun.lock|scripts/check-lockfile-release-ages.ts|scripts/check-lockfile-release-ages.test.ts|scripts/check-stll-quarantine-excludes.ts|scripts/bun-lock-text.ts)
+                lockfile_ages_required=true
+                ;;
+            esac
             case "$file" in
               packages/scripts/*|package.json|bun.lock|.github/workflows/ci.yml)
                 windows_scripts_required=true
@@ -473,6 +485,7 @@ jobs:
             echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
+            echo "lockfile_ages_required=$lockfile_ages_required"
             echo "marketing_screenshots_required=$marketing_screenshots_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
             echo "mobile_build_required=$mobile_build_required"
@@ -688,6 +701,32 @@ jobs:
       - name: Validate AI skills
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun .ai/shared/scripts/validate-skills.ts .agents/skills
+
+      - name: Standalone lockfile guard
+        # Bun reads only the installing directory's bunfig.toml, so a lockfile
+        # outside the root workspace skips the root's release-age quarantine,
+        # and an npm, Yarn or pnpm lockfile skips it entirely. Needs no
+        # dependency install.
+        run: |
+          bun test scripts/check-standalone-lockfiles.test.ts
+          bun scripts/check-standalone-lockfiles.ts
+
+      - name: Lockfile release-age guard
+        # Bun applies the release-age quarantine only while it resolves
+        # versions; a frozen install takes whatever bun.lock pins. This looks
+        # up the publish time of each pin new against the merge base, in every
+        # tracked lockfile, and fails one the governing bunfig.toml would not
+        # yet admit (its excludes honoured). A registry failure fails it too.
+        # Runs before the install, so a quarantined pin never executes here,
+        # and again on the queued tree, whose base may govern it differently.
+        if: >-
+          github.event_name != 'workflow_dispatch'
+          && needs.ci-plan.outputs.lockfile_ages_required == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          bun test scripts/check-lockfile-release-ages.test.ts
+          bun scripts/check-lockfile-release-ages.ts --base "$BASE_SHA"
 
       # Must follow Setup Bun so the shims land ahead of the real binary. This
       # job installs the whole workspace from the lockfile, so a malicious
@@ -1400,7 +1439,6 @@ jobs:
           bun scripts/check-published-exports.ts packages/start-runtime
           bun scripts/check-published-exports.ts packages/ui
           bun scripts/check-published-exports.ts packages/money
-          bun scripts/check-published-exports.ts packages/invoicing
           bun scripts/check-published-exports.ts packages/calculations
           bun scripts/check-published-exports.ts packages/workspace-model
           bun scripts/check-published-exports.ts packages/workspace-ui
@@ -1503,12 +1541,15 @@ jobs:
       # and a merge gate that reads an empty check list as green merges
       # unverified code. Neither test ran in CI before.
       # Both scripts import `better-result`, so they need the dependency
-      # install above, which is itself conditional.
+      # install above, which is itself conditional. The review gate's
+      # evaluator decides whether a reviewed pull request may enter the
+      # queue, and fails open the same way if its verdict logic breaks.
       - name: Test migration ordering and merge gate logic
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bun test scripts/check-migration-order.test.ts
           bun test scripts/merge-bar.test.ts
+          bun test scripts/review-gate.test.ts scripts/review-gate-github.test.ts scripts/review-gate-workflows.test.ts
 
       # The live ordering check, against the branch this run merges into. In a
       # merge group that is main as it stands at merge time, so a migration

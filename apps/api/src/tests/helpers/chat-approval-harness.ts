@@ -5,7 +5,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
@@ -205,6 +205,7 @@ const statusResponse = (answer: unknown): Response => {
 export type HarnessModel = Pick<
   ReturnType<typeof installScriptedProvider>,
   | "modelOptionsOf"
+  | "promptLedgerOf"
   | "promptsOf"
   | "restore"
   | "script"
@@ -711,6 +712,10 @@ export const createApprovalHarness = ({
   const crashDuring = async (body: SendBody): Promise<Response> => {
     const threadId = body.threadId;
     const stalled = provider.stalled(threadId);
+    // What the dying process sent the model and never stored is gone: the
+    // thread's next request cannot repeat it.
+    const prompts = provider.promptLedgerOf(threadId);
+    const beforeCrash = prompts.mark();
     // The dying process never sees the page go away, so no signal reaches it.
     const result = await handle(contextFromBody(body));
     if (!(result instanceof Response && result.ok)) {
@@ -719,6 +724,7 @@ export const createApprovalHarness = ({
     // Reading the stream is what runs the turn; it stops at the stall.
     void drainResponse(result);
     await stalled;
+    prompts.loseSince(beforeCrash);
     // The earliest lease the row allows: just after the turn was created.
     await testDb
       .update(chatTurns)
@@ -921,6 +927,9 @@ export const createApprovalHarness = ({
       };
     }
     const endRecord = beginRecord(raw);
+    if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
+      provider.promptLedgerOf(raw.threadId).replacesTail();
+    }
     if (crashingThreads.delete(raw.threadId)) {
       try {
         const refused = await crashDuring(raw);
@@ -1090,6 +1099,10 @@ export const createApprovalHarness = ({
         ...unconsumedScripts.map((script) => ({ unconsumed: script })),
         ...unscriptedCalls.map((call) => ({ unscripted: call })),
       ]),
+      ...violationsOf(
+        CHAT_ORACLE.providerPrefixStable,
+        provider.promptLedgerOf(threadId).takeBreaks(),
+      ),
       ...findTranscriptViolations(provider.takeRequests(threadId)),
       ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
       ...violationsOf(CHAT_ORACLE.clientNoErrors, [

@@ -218,6 +218,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Now carries rate-card create/update/delete capabilities, so it reuses the
   // billing write bucket rather than the read scope its resolution tool used.
   rates: "stella:billing_write",
+  "saved-time-narratives": "stella:billing_write",
   // Report export creates workspace artifacts (entities / template records), so
   // it stays on the workspace write bucket. Unlike chat (which got its own
   // stella:chat scope because thread reads/renames should not demand a
@@ -455,6 +456,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
   rates: "FEATURE_TIME_BILLING",
+  "saved-time-narratives": "FEATURE_TIME_BILLING",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",

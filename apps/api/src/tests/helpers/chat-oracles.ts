@@ -49,6 +49,9 @@ export const CHAT_ORACLE = {
   liveEqualsReload: "chat.live.equals-reload",
   /** (d) Every tool call and result appears exactly once, live and reloaded. */
   liveToolPartsOnce: "chat.live.tool-parts-once",
+  /** The skills the composer offers in a chat are exactly the ones a send
+   *  from that chat runs rather than names unavailable. */
+  skillsMenuMatchesSend: "chat.skills.menu-matches-send",
   /** The route accepts every request the web client builds for its own
    *  thread. */
   clientRequestsAccepted: "chat.client.requests-accepted",
@@ -62,10 +65,11 @@ export const CHAT_ORACLE = {
    *  the message holding the calls it was produced with. */
   providerTranscriptSettled: "chat.provider.transcript-settled",
   /** Every model request of a thread begins with the whole prompt of the
-   *  one before it, so the provider's prompt cache holds. */
+   *  one before it: its tools, system prompt and messages, in cache order
+   *  (`chat-prompt-prefix.ts`), so the provider's prompt cache holds. */
   providerPrefixStable: "chat.provider.prefix-stable",
   /** Once a turn is over, every later model call of the thread is handed
-   *  each of its tool results the same way (up to key order): a request
+   *  each of its tool results in the same text: a request
    *  reads the earlier turns as stored, as the next one will. */
   providerResultsStable: "chat.provider.results-stable",
   /** The cards on screen and the interactions stored are exactly the ones the
@@ -78,6 +82,10 @@ export const CHAT_ORACLE = {
   /** Every action the page offers on the live view is one the conversation
    *  model's commands may take there. */
   modelCoversPageActions: "chat.model.covers-page-actions",
+  /** A code-mode script that calls a direct tool gets back that tool's name
+   *  and the instruction to call it outside the script, never a bare
+   *  "not defined" the model reads as a missing tool. */
+  codeModeMisplacedCallExplained: "chat.code-mode.misplaced-call-explained",
   // Reported by the web app's rendered replay of recorded conversations
   // (`apps/web/src/components/chat/recorded-conversations.dom.test.tsx`).
   /** The rendered page shows what the stored thread says: open cards,

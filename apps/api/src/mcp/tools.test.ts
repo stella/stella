@@ -1106,7 +1106,7 @@ describe("OpenAI-compatible MCP tools", () => {
             "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
           // Derived from the engine cursor codec's own maximum times the query
           // cap, so the tool takes back the longest cursor it can emit.
-          maxLength: 1330,
+          maxLength: 1623,
           // An empty string is not a page boundary this tool ever issued, and
           // rejecting it is what makes the factory read it as absent.
           minLength: 1,
@@ -7305,6 +7305,7 @@ describe("OpenAI-compatible MCP tools", () => {
             rateAtEntry: 25_000,
             currency: "EUR",
             narrative: "Call with John Smith",
+            narrativeLanguage: null,
             invoiceNarrative: null,
             billable: true,
             noCharge: false,
@@ -7336,6 +7337,7 @@ describe("OpenAI-compatible MCP tools", () => {
           rateAtEntry: 25_000,
           currency: "EUR",
           narrative: "Call with [PERSON_1]",
+          narrativeLanguage: null,
           invoiceNarrative: null,
           billable: true,
           noCharge: false,

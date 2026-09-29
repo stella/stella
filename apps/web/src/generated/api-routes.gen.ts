@@ -2,7 +2,7 @@
 // WebApiContract in apps/api/src/eden-contract.ts. Do not edit.
 // Regenerate: bun --filter @stll/api gen:web-api-types
 import type { toolApprovalCapability as __symbol0 } from "../../node_modules/@tanstack/ai/dist/esm/activities/chat/tools/tool-definition.js";
-import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
+import type { AgendaItemWireFields as stll_api_contract_AgendaItemWireFields, ChatSkillContextNeed as stll_api_contract_ChatSkillContextNeed, ChatThreadOrigin as stll_api_contract_ChatThreadOrigin, ContactImportIssueCode as stll_api_contract_ContactImportIssueCode, DocumentReferenceMatch as stll_api_contract_DocumentReferenceMatch, EmailAttachmentDescriptor as stll_api_contract_EmailAttachmentDescriptor, EmailCitationBlock as stll_api_contract_EmailCitationBlock, SafeId as stll_api_contract_SafeId, SavedSearchCriteria as stll_api_contract_SavedSearchCriteria, SearchTotal as stll_api_contract_SearchTotal, TemplateRecipeDefinition as stll_api_contract_TemplateRecipeDefinition } from "@stll/api-contract";
 import type { CompareNode as stll_conditions_CompareNode, ConditionNode as stll_conditions_ConditionNode, GroupNode as stll_conditions_GroupNode, PredicateNode as stll_conditions_PredicateNode } from "@stll/conditions";
 import type { FolioAgentApplyOperationsSummary as stll_folio_agents_FolioAgentApplyOperationsSummary, FolioAgentBlock as stll_folio_agents_FolioAgentBlock, FolioAgentChange as stll_folio_agents_FolioAgentChange, FolioAgentComment as stll_folio_agents_FolioAgentComment, FolioAgentDocumentOutline as stll_folio_agents_FolioAgentDocumentOutline, FolioAgentScopedFindTextResult as stll_folio_agents_FolioAgentScopedFindTextResult, FolioAgentSectionRead as stll_folio_agents_FolioAgentSectionRead } from "@stll/folio-agents";
 import type { CompareChange as stll_folio_core_CompareChange, CompareCompatibility as stll_folio_core_CompareCompatibility, CompareUnsupportedPart as stll_folio_core_CompareUnsupportedPart, CompareVerification as stll_folio_core_CompareVerification } from "@stll/folio-core";
@@ -7611,6 +7611,59 @@ export type WebRoutes = {
                 value: string;
               }>;
               defaultValue: Tbe0400fa4c;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      "skill-availability": {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: {
+            anonymized?: false | true;
+            document?: "template" | "file" | "draft";
+            workspaceId?: T9e07a7d6cd;
+            documentId?: Tf742ada503;
+            fileFieldId?: T6993bee61f;
+            contextMatterIds?: Array<T9e07a7d6cd>;
+            editApplyMode?: "auto" | "manual";
+            browserExtension?: false | true;
+            webSearch?: false | true;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: {
+              unavailable: Array<{
+                missingTools: ReadonlyArray<string>;
+                skillId: string;
+              }>;
+              unavailableHere: Array<{
+                missingTools: ReadonlyArray<string>;
+                needs: ReadonlyArray<stll_api_contract_ChatSkillContextNeed>;
+                skillId: string;
+              }>;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -17441,6 +17494,7 @@ export type WebRoutes = {
               orgConfigured: Tfddd645dc8;
               available: Tfddd645dc8;
               deferredServiceTierAvailable: Tfddd645dc8;
+              mockAnswers: Tfddd645dc8;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -18741,6 +18795,152 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {};
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    };
+    "saved-time-narratives": {
+      get: {
+        body: Record<never, never>;
+        params: T5e3ac29766;
+        query: {
+          cursor?: string;
+          limit?: number;
+        };
+        headers: Record<never, never>;
+        response: {
+          200: {
+            items: Array<T653f0c375b>;
+            nextCursor: Tbe0400fa4c;
+            limit: number;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      post: {
+        body: {
+          narrativeLanguage?: null | string;
+          name: string;
+          narrative: string;
+        };
+        params: T5e3ac29766;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: T653f0c375b;
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      ":id": {
+        patch: {
+          body: {
+            name?: string;
+            narrative?: string;
+            narrativeLanguage?: null | string;
+          };
+          params: T0604484dde;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T653f0c375b;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":id": {
+        delete: {
+          body: Record<never, never>;
+          params: T0604484dde;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: T1fc3209762;
+            };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
             402: T9a51b7d2bc;
@@ -20959,7 +21159,7 @@ export type WebRoutes = {
                     });
                   }>;
                   totalDecisions: T588d0ee653;
-                  totalEvents: number;
+                  estimatedTotalEvents: number;
                   failures24h: number;
                 };
                 400: T9a51b7d2bc;
@@ -32838,6 +33038,10 @@ type T05cba4d570 = {
   errors?: undefined | Array<Te1f90e1fdd>;
 };
 
+type T0604484dde = {
+  id: T1fc3209762;
+};
+
 type T06588da39f = "reference" | "tiers";
 
 type T066db31a61 = {
@@ -33459,6 +33663,10 @@ type T1fb4a2d60d = {
   entityVersionId: string;
   fileFieldId: string;
   blockId: string;
+};
+
+type T1fc3209762 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "savedTimeNarrative";
 };
 
 type T213cf195f4 = {
@@ -35403,6 +35611,15 @@ type T64f82fc86d = {
   numberingFormat: T9c3d54ef16;
   indentLeftPt: number;
   hangingPt: number;
+};
+
+type T653f0c375b = {
+  id: string;
+  name: string;
+  narrative: string;
+  narrativeLanguage: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type T658a00d740 = {

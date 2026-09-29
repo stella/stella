@@ -3,6 +3,10 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
+  describeMissingSkillTools,
+  SKILL_TOOL_AVAILABILITY_STATUS,
+} from "@/api/lib/agent-skills/required-tools";
+import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
   SKILL_READ_SURFACE,
@@ -32,8 +36,10 @@ import type {
   ResolvedSkillTool,
   SkillToolRead,
 } from "@/api/mcp/gateway/skills";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import type { InternalToolResult } from "@/api/mcp/tool-types";
 import {
+  oauthScopeRecoveryHint,
   structuredErrorResult,
   toolDataResult,
   validationErrorResult,
@@ -61,6 +67,55 @@ const unknownToolResult = (toolName: string) =>
     message: `Unknown tool: ${toolName}`,
     hint: "Call tools/list for the tools available to this session.",
   });
+
+/**
+ * A skill this session does not list because it lacks a tool the skill
+ * requires. The instructions are not served: a client that ran them would
+ * reach a step it cannot take. When a missing scope is the reason, the hint
+ * is the OAuth recovery; otherwise the skill needs the stella app.
+ */
+const unavailableSkillResult = ({
+  grantedScopes,
+  missingTools,
+  skillName,
+}: {
+  grantedScopes: readonly string[];
+  missingTools: readonly string[];
+  skillName: string;
+}): InternalToolResult => {
+  const message = `The skill "${skillName}" cannot run in this session. ${describeMissingSkillTools(missingTools)}`;
+  const missingScopes = [
+    ...new Set(
+      missingTools.flatMap((name) => {
+        const definition = getStaticMcpToolDefinition(name);
+        if (definition === undefined) {
+          return [];
+        }
+        const { additionalScopes = [], scope } = definition;
+        return [scope, ...additionalScopes].filter(
+          (required) => !grantedScopes.includes(required),
+        );
+      }),
+    ),
+  ];
+  const missingScope = missingScopes.at(0);
+  if (missingScope !== undefined) {
+    return structuredErrorResult({
+      code: "missing_scope",
+      message,
+      hint: oauthScopeRecoveryHint({
+        grantedScopes,
+        missingScope,
+        requiredScopes: [...missingScopes, "stella:skills"],
+      }),
+    });
+  }
+  return structuredErrorResult({
+    code: "feature_disabled",
+    message,
+    hint: "Run this skill from a stella chat that offers those tools, or continue the task without it.",
+  });
+};
 
 export type GatewayDispatchResult =
   | { type: "external_mcp"; result: CallToolResult }
@@ -111,6 +166,18 @@ export const dispatchGatewayToolCall = async ({
   }
   if (resolved === null) {
     return { type: "internal", result: unknownToolResult(toolName) };
+  }
+  if (
+    resolved.availability.status === SKILL_TOOL_AVAILABILITY_STATUS.unavailable
+  ) {
+    return {
+      type: "internal",
+      result: unavailableSkillResult({
+        grantedScopes: context.grantedScopes,
+        missingTools: resolved.availability.missingTools,
+        skillName: resolved.name,
+      }),
+    };
   }
 
   const skill = resolved;

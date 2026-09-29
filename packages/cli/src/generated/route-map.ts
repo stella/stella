@@ -552,7 +552,7 @@ export const generatedRouteMap: RouteNode = {
                 cursor: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 1330,
+                  maxLength: 1623,
                   description:
                     "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
                 },
@@ -6795,6 +6795,15 @@ export const generatedRouteMap: RouteNode = {
                 required: false,
               },
               {
+                flag: "--narrative-language",
+                prop: "narrative_language",
+                kind: "nullable-string",
+                repeatable: false,
+                description:
+                  "BCP-47 language tag for the narrative; pass null to clear",
+                required: false,
+              },
+              {
                 flag: "--invoice-narrative",
                 prop: "invoice_narrative",
                 kind: "nullable-string",
@@ -6898,6 +6907,21 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 10000,
                   description:
                     "Description of the work; required when creating",
+                },
+                narrative_language: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 2,
+                      maxLength: 64,
+                      pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "BCP-47 language tag for the narrative; pass null to clear",
                 },
                 invoice_narrative: {
                   anyOf: [
@@ -8619,7 +8643,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "case-law", "ingestion-get"],
                 capabilityId: "case-law.ingestion.get",
                 description:
-                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). Requires organization audit-log access.",
+                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). The fleet event total is an estimate from database statistics and may lag recent writes. Requires organization audit-log access.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -31201,7 +31225,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "organization-settings.ai-availability.get",
                 description:
-                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, and whether the reduced-cost deferred service tier can be used. Booleans only, so any member may read it.",
+                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, whether the reduced-cost deferred service tier can be used, and whether a local development stack answers with canned replies instead of a model. Booleans only, so any member may read it.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -38718,6 +38742,277 @@ export const generatedRouteMap: RouteNode = {
                       required: ["matterId"],
                       properties: {
                         matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        "saved-time-narratives": {
+          kind: "route",
+          children: {
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "create"],
+                capabilityId: "saved-time-narratives.create",
+                description:
+                  "Save a personal named time narrative for reuse across matters in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--narrative",
+                    prop: "narrative",
+                    required: true,
+                    part: "body",
+                    partPath: "narrative",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["name", "narrative"],
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        narrative: {
+                          minLength: 1,
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            delete: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "delete"],
+                capabilityId: "saved-time-narratives.delete",
+                description:
+                  "Delete a personal saved time narrative in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "list"],
+                capabilityId: "saved-time-narratives.list",
+                description:
+                  "List the signed-in user's saved time narratives in the active organization, ordered by name with cursor pagination.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "saved-time-narratives", "update"],
+                capabilityId: "saved-time-narratives.update",
+                description:
+                  "Update a personal saved time narrative in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--id",
+                    prop: "id",
+                    required: true,
+                    part: "params",
+                    partPath: "id",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--narrative",
+                    prop: "narrative",
+                    required: false,
+                    part: "body",
+                    partPath: "narrative",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        narrative: {
+                          minLength: 1,
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["id"],
+                      properties: {
+                        id: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -48481,6 +48776,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "narrative",
                   },
                   {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                  {
                     kind: "boolean",
                     repeatable: false,
                     description: "Whether the entry is billable to the client",
@@ -48566,6 +48870,22 @@ export const generatedRouteMap: RouteNode = {
                           maxLength: 10000,
                           description: "Description of the work",
                           type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         billable: {
                           description:
@@ -49351,6 +49671,23 @@ export const generatedRouteMap: RouteNode = {
                                   description: "Description of the work",
                                   type: "string",
                                 },
+                                narrativeLanguage: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      minLength: 2,
+                                      maxLength: 64,
+                                      pattern:
+                                        "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                                      description:
+                                        "BCP-47 language tag, or null when unspecified",
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
                                 billable: {
                                   description:
                                     "Whether the entry is billable to the client",
@@ -49785,6 +50122,15 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "nullable-string",
                     repeatable: false,
+                    flag: "--narrative-language",
+                    prop: "narrativeLanguage",
+                    required: false,
+                    part: "body",
+                    partPath: "narrativeLanguage",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
                     flag: "--invoice-narrative",
                     prop: "invoiceNarrative",
                     required: false,
@@ -49873,6 +50219,22 @@ export const generatedRouteMap: RouteNode = {
                           minLength: 0,
                           maxLength: 10000,
                           type: "string",
+                        },
+                        narrativeLanguage: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 2,
+                              maxLength: 64,
+                              pattern: "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$",
+                              description:
+                                "BCP-47 language tag, or null when unspecified",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
                         },
                         invoiceNarrative: {
                           nullable: true,

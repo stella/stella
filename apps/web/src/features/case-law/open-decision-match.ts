@@ -32,6 +32,11 @@ type ReadDecisionIntentOptions = {
   readonly jurisdiction?: string | undefined;
 };
 
+const docketGrammarFor = (jurisdiction: string | undefined) =>
+  jurisdiction === undefined
+    ? undefined
+    : decisionDocketGrammarForJurisdiction(jurisdiction);
+
 export const readDecisionIntent = (
   q: string | undefined,
   { jurisdiction }: ReadDecisionIntentOptions = {},
@@ -39,11 +44,7 @@ export const readDecisionIntent = (
   if (q === undefined) {
     return { type: "empty" };
   }
-  const grammar =
-    jurisdiction === undefined
-      ? undefined
-      : decisionDocketGrammarForJurisdiction(jurisdiction);
-  return parseDecisionQuery(q, { grammar });
+  return parseDecisionQuery(q, { grammar: docketGrammarFor(jurisdiction) });
 };
 
 /** The text a query intent hands the search endpoint, if any. */
@@ -144,9 +145,8 @@ export const openDecisionMatch = async ({
   search,
   uiLocale,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
-  const intent = readDecisionIntent(search.q, {
-    jurisdiction: caseLawCountryScope(search.country),
-  });
+  const jurisdiction = caseLawCountryScope(search.country);
+  const intent = readDecisionIntent(search.q, { jurisdiction });
   if (intent.type !== "identifier") {
     return false;
   }

@@ -546,7 +546,7 @@
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
       },
-      "oracle": "chat.provider.results-stable"
+      "oracle": "chat.provider.transcript-settled"
     },
     {
       "id": "superseding-turn-opens-with-stored-message",
@@ -885,6 +885,62 @@
       "oracle": "chat.persisted.past-release-loads"
     },
     {
+      "id": "prompt-prefix-system-stable",
+      "fix": "#4007",
+      "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    ...systemPromptsPatch({ caching, model, system: baseSystem }),",
+      "replace": "    ...systemPromptsPatch({ caching, model, system: `${baseSystem}\\nRequest time: ${String(performance.now())}` }),",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "prompt-prefix-tools-stable-on-the-wire",
+      "fix": "#4007",
+      "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }),",
+      "replace": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }).toSorted(() => Math.random() - 0.5),",
+      "scenario": {
+        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
+        "test": "anthropic: a tool call reaches its card, runs once approved, and the answer reloads"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-json-keys-sorted",
+      "fix": "#4007",
+      "behaviour": "A tool call's arguments and a tool result reach the model with their JSON keys in one order, so the call and result rebuilt from the stored thread on its next request repeat them byte for byte.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "        patch.messages = sortedToolJson;",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-arguments-canonical-spacing",
+      "fix": "#4007",
+      "behaviour": "A tool call's arguments reach the model as compact JSON with sorted keys however the model spaced them, as the stored input is written back on every later request.",
+      "status": "active",
+      "file": "src/handlers/chat/tool-json-key-order.ts",
+      "search": "    const args = toolArgumentsWithSortedKeys(call.function.arguments);",
+      "replace": "    const args = withSortedJsonKeys(call.function.arguments);",
+      "scenario": {
+        "file": "src/handlers/chat/tool-json-key-order.test.ts",
+        "test": "of a call's arguments reach the model alike however the model spaced them"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
       "id": "snapshot-reasoning-keeps-its-step",
       "fix": "#4017",
       "behaviour": "The page takes each reasoning message of an interrupt snapshot as a thinking part with its own step, so the run that continues the answer adds its reasoning beside the earlier step's instead of overwriting it.",
@@ -967,6 +1023,48 @@
         "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
       },
       "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "skill-menu-follows-edit-mode",
+      "fix": "#4086",
+      "behaviour": "The composer's skill availability decides over the chat's own edit mode, as a send does, instead of assuming an open document always queues edits for review.",
+      "status": "active",
+      "file": "src/handlers/chat/skill-availability/offered-tools.ts",
+      "search": "    editApplyMode: chatContext.editApplyMode,",
+      "replace": "    editApplyMode: CHAT_EDIT_APPLY_MODE.manual,",
+      "scenario": {
+        "file": "src/handlers/chat/skill-availability/send-parity.integration.test.ts",
+        "test": "an anonymized global chat over a file, in the default edit mode"
+      },
+      "oracle": "chat.skills.menu-matches-send"
+    },
+    {
+      "id": "stored-result-content-stable",
+      "fix": "#4007",
+      "behaviour": "The result that closes a call of a turn that already ended exists only for the model and is rebuilt on every request, so it reads the same each time instead of changing an earlier turn's result.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "replace": "    stepResults.push(errorToolResult(part.id, `${UNRESOLVED_CALL_ERROR} ${String(performance.now())}`));",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an ask-user card that still waits"
+      },
+      "oracle": "chat.provider.results-stable"
+    },
+    {
+      "id": "code-mode-misplaced-call-explained",
+      "fix": "#4083",
+      "behaviour": "A code-mode script that calls a direct tool gets back the tool's name and the instruction to call it outside the script, instead of a bare ReferenceError.",
+      "status": "active",
+      "file": "src/handlers/chat/tools/execute/chat-code-mode.ts",
+      "search": "      nameGuide: (bindingNames) =>\n        buildScriptCallGuide(\n          chatScriptCallCatalog({ bindingNames, turnTools: scriptCallTools() }),\n        ),\n",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/code-mode-misplaced-call.integration.test.ts",
+        "test": "is told to call it directly, and the turn completes with the direct call"
+      },
+      "oracle": "chat.code-mode.misplaced-call-explained"
     }
   ]
 }

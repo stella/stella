@@ -259,7 +259,7 @@ test("every recording answers the prompt the recorder sends today", () => {
   ).toEqual([]);
 });
 let upstream: ProviderWireReplay;
-let previousMockAI: boolean;
+let previousMockAI: typeof env.USE_MOCK_AI;
 
 const recordAndReplay = async (
   provider: ProviderWireProvider,

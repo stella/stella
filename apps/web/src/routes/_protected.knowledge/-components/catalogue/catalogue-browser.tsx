@@ -53,6 +53,7 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
+import { useChatUnavailableSkills } from "@/lib/prompts/use-chat-unavailable-skills";
 import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
@@ -704,6 +705,11 @@ const CatalogueEntryRow = ({
 }: CatalogueEntryRowProps) => {
   const t = useTranslations();
   const install = useInstallEntry(organizationId);
+  const chatUnavailableSkills = useChatUnavailableSkills(organizationId);
+  const chatMissingTools =
+    entry.kind === "skill" && entry.chatSkillId !== null
+      ? chatUnavailableSkills?.get(entry.chatSkillId)
+      : undefined;
   const uninstall = useUninstallEntry(entry, organizationId);
   const { removal, requestRemoval, confirmDialog } = useCatalogueRemoval({
     entry,
@@ -805,6 +811,13 @@ const CatalogueEntryRow = ({
         contextActions={contextActions}
         display={toRowDisplay(entry)}
         focused={focused}
+        notice={
+          chatMissingTools === undefined
+            ? undefined
+            : t("catalogue.skillNeedsUnavailableTools", {
+                tools: chatMissingTools.join(", "),
+              })
+        }
         onFocus={onFocus}
       />
       {confirmDialog}

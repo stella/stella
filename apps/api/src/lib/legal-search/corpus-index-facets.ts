@@ -3,13 +3,10 @@ import { Result } from "better-result";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
-  readServingCorpusIndexGenerationTx,
-  type ServingCorpusIndexGeneration,
-} from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  corpusIndexRoute,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+  type CorpusIndexGroupNotReadyError,
+  readServingCorpusIndexTargetTx,
+  type ServingCorpusIndexTarget,
+} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
   corpusExcludedSourcesClause,
@@ -182,15 +179,30 @@ const parseTermsBuckets = (
 };
 
 type CorpusIndexBrowseFacetsDependencies = {
-  readServingGeneration: () => Promise<ServingCorpusIndexGeneration>;
+  /**
+   * The serving generation and the indexes a read of it reaches, refusing a
+   * scoped read of an unready group (`readServingCorpusIndexTargetTx`).
+   */
+  readServingTarget: (
+    jurisdiction: string | undefined,
+  ) => Promise<
+    Result<
+      Pick<ServingCorpusIndexTarget, "serving" | "route">,
+      CorpusIndexGroupNotReadyError
+    >
+  >;
 };
 
 const defaultCorpusIndexBrowseFacetsDependencies = {
-  readServingGeneration: async () => {
+  readServingTarget: async (jurisdiction) => {
     const { caseLawPublicReadDb } =
       await import("@/api/lib/case-law-public-read-db");
     return await caseLawPublicReadDb(
-      async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+      async (tx) =>
+        await readServingCorpusIndexTargetTx(tx, {
+          family: "case_law",
+          jurisdiction,
+        }),
     );
   },
 } satisfies CorpusIndexBrowseFacetsDependencies;
@@ -200,16 +212,22 @@ export const corpusIndexBrowseFacets = async (
   dependencies: CorpusIndexBrowseFacetsDependencies = defaultCorpusIndexBrowseFacetsDependencies,
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const family = query.documentFamily ?? "case_law";
-  const serving = await dependencies.readServingGeneration();
+  const target = await dependencies.readServingTarget(query.jurisdiction);
+  if (Result.isError(target)) {
+    return Result.err(
+      new LegalBrowseFacetsError({
+        message: target.error.message,
+        cause: target.error,
+      }),
+    );
+  }
+  const { serving, route } = target.value;
   const generation = serving.generation;
   const readContract = corpusIndexReadContract(family, generation);
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
-  // that index holds other jurisdictions; unscoped → the generation glob (one
-  // multi-index aggregation across every index of the generation).
-  const { indexId, jurisdictionClause } = corpusIndexRoute(
-    requireCorpusIndexManifest(family, generation),
-    query.jurisdiction,
-  );
+  // that index holds other jurisdictions; unscoped → one multi-index
+  // aggregation across every index of the generation a read may reach.
+  const { indexId, jurisdictionClause } = route;
 
   const aggregated = await getCorpusIndexClient(serving.cluster).aggregate({
     indexId,

@@ -12,7 +12,7 @@ import {
   ConfigurationError,
   SchedulerJobTimeoutError,
 } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
@@ -688,7 +688,7 @@ const resolveRunOutcome = async ({
     "scheduler.run_id": runId,
     "scheduler.runner_id": runnerId,
     "scheduler.task": job.task,
-    "error.type": errorTag(raceError),
+    ...errorSystemFields(raceError),
   });
   await finishRunFailure({
     db,

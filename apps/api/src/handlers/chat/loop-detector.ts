@@ -85,6 +85,9 @@ export const shouldSurfaceFinalContentLoop = (
   detection: ModelLoopDetection,
 ): detection is ContentLoopDetection => detection.type === "content-loop";
 
+/** Opens the section a loop-recovery prompt appends to the base prompt. */
+export const LOOP_RECOVERY_HEADING = "Potential loop detected.";
+
 export const createLoopRecoverySystemPrompt = ({
   baseSystem,
   detection,
@@ -95,7 +98,7 @@ export const createLoopRecoverySystemPrompt = ({
   [
     baseSystem,
     "",
-    "Potential loop detected.",
+    LOOP_RECOVERY_HEADING,
     `Signal: ${describeLoopDetection(detection)}.`,
     "Take a step back before continuing. Confirm what has changed, choose a different approach, or ask the user a focused clarification if you are blocked. Do not repeat the same tool call or response without new information.",
   ].join("\n");

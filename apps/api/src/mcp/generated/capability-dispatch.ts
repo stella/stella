@@ -784,6 +784,21 @@ export const CAPABILITY_DISPATCH = {
   "reports.views.export": {
     load: async () => await import("@/api/handlers/reports/views/export"),
   },
+  "saved-time-narratives.create": {
+    load: async () =>
+      await import("@/api/handlers/saved-time-narratives/create"),
+  },
+  "saved-time-narratives.delete": {
+    load: async () =>
+      await import("@/api/handlers/saved-time-narratives/delete"),
+  },
+  "saved-time-narratives.list": {
+    load: async () => await import("@/api/handlers/saved-time-narratives/list"),
+  },
+  "saved-time-narratives.update": {
+    load: async () =>
+      await import("@/api/handlers/saved-time-narratives/update"),
+  },
   "seller-profiles.archive": {
     load: async () => await import("@/api/handlers/seller-profiles/archive"),
   },
