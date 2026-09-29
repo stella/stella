@@ -151,8 +151,8 @@ const suggestChangesTools = {
 } satisfies ChatToolMap;
 /** A client tool with a field that holds `null` and one that refuses it. */
 const noteTools = {
-  set_note: {
-    name: "set_note",
+  mcp__external__set_note: {
+    name: "mcp__external__set_note",
     description: "Set a note",
     inputSchema: toTanStackToolSchema(
       v.strictObject({
@@ -1477,7 +1477,7 @@ describe("validateMessage", () => {
             {
               type: "tool-call",
               id: callId,
-              name: "set_note",
+              name: "mcp__external__set_note",
               arguments: JSON.stringify(canonicalInput),
               input: canonicalInput,
               state: "input-complete",
@@ -1493,7 +1493,7 @@ describe("validateMessage", () => {
             {
               type: "tool-call",
               id: callId,
-              name: "set_note",
+              name: "mcp__external__set_note",
               arguments: JSON.stringify(echoedInput),
               input: echoedInput,
               output,
