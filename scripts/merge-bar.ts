@@ -516,11 +516,13 @@ type GitHubGateway = {
   // GitHub did: enabled auto-merge, or added the pull request to the queue.
   merge: (input: { expectedHeadSha: string }) => string;
   armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
-  // Adds the pull request at the front of the queue; returns its position.
+  // Asks GitHub to add the pull request at the front of the queue; returns
+  // the position the mutation reported, which `readMergeQueue` must confirm.
   enqueueWithJump: (input: {
     pullRequestId: string;
     expectedHeadSha: string;
   }) => number;
+  readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -586,12 +588,17 @@ export const isReleasePullRequest = (
   !pullRequest.isCrossRepository;
 
 export type MergeWhenReadyAction =
-  // `jumpDeferred`: a jump was wanted, but the queue accepts one only once
-  // every required check has succeeded, so auto-merge is armed instead.
-  | { kind: "arm"; jumpDeferred: boolean }
+  | { kind: "arm" }
   | { kind: "enqueue-jump" }
-  | { kind: "already-armed"; enabledAt: string; jumpDeferred: boolean }
-  | { kind: "already-queued"; entryId: string };
+  // A jump was wanted, but the queue accepts one only once every required
+  // check has succeeded. Nothing is armed: auto-merge would enqueue at the
+  // back, which is the opposite of a jump. `armedSince` is set when an
+  // auto-merge armed earlier will do exactly that.
+  | { kind: "jump-waits-for-checks"; armedSince: string | null }
+  | { kind: "already-armed"; enabledAt: string }
+  // `verifyFront`: a jump was wanted, so the place it already holds must be
+  // the front of the queue.
+  | { kind: "already-queued"; entryId: string; verifyFront: boolean };
 
 /**
  * What a passing merge bar does on a merge-queue branch. A jump enqueues
@@ -609,21 +616,66 @@ export const mergeWhenReadyAction = ({
   checksSucceeded: boolean;
 }): MergeWhenReadyAction => {
   if (handoff.status === "queued") {
-    return { kind: "already-queued", entryId: handoff.entryId };
-  }
-  if (jump && checksSucceeded) {
-    return { kind: "enqueue-jump" };
-  }
-  const jumpDeferred = jump;
-  if (handoff.status === "armed") {
     return {
-      kind: "already-armed",
-      enabledAt: handoff.enabledAt,
-      jumpDeferred,
+      kind: "already-queued",
+      entryId: handoff.entryId,
+      verifyFront: jump,
     };
   }
-  return { kind: "arm", jumpDeferred };
+  if (jump) {
+    return checksSucceeded
+      ? { kind: "enqueue-jump" }
+      : {
+          kind: "jump-waits-for-checks",
+          armedSince: handoff.status === "armed" ? handoff.enabledAt : null,
+        };
+  }
+  if (handoff.status === "armed") {
+    return { kind: "already-armed", enabledAt: handoff.enabledAt };
+  }
+  return { kind: "arm" };
 };
+
+export type MergeQueueEntrySnapshot = { pullNumber: number; position: number };
+
+export type QueuePlacement =
+  | { status: "front"; position: number }
+  | { status: "absent"; queueLength: number }
+  | { status: "behind"; position: number; ahead: readonly number[] };
+
+/**
+ * Where a pull request actually sits, from a queue read taken after the
+ * enqueue. The enqueue response alone is not evidence: GitHub can accept a
+ * jump request and still place the entry behind others.
+ */
+export const evaluateQueuePlacement = ({
+  entries,
+  pullNumber,
+}: {
+  entries: readonly MergeQueueEntrySnapshot[];
+  pullNumber: number;
+}): QueuePlacement => {
+  const own = entries.find((entry) => entry.pullNumber === pullNumber);
+  if (own === undefined) {
+    return { status: "absent", queueLength: entries.length };
+  }
+  const ahead = entries
+    .filter((entry) => entry.position < own.position)
+    .toSorted((left, right) => left.position - right.position)
+    .map((entry) => entry.pullNumber);
+  return ahead.length === 0
+    ? { status: "front", position: own.position }
+    : { status: "behind", position: own.position, ahead };
+};
+
+export const formatQueuePlacementFailure = (
+  placement: Exclude<QueuePlacement, { status: "front" }>,
+): string =>
+  placement.status === "absent"
+    ? `it is not among the ${placement.queueLength} merge queue entries`
+    : `it is at position ${placement.position}, behind ${placement.ahead
+        .map((number) => `#${number}`)
+        .join(", ")}`;
 
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
   const value = record[key];
@@ -1012,6 +1064,65 @@ const createGhGateway = ({
       }
       return position;
     },
+
+    readMergeQueue: (branch) => {
+      const response = readRecord(
+        runGhJson([
+          "api",
+          "graphql",
+          "-f",
+          `query=query($owner:String!, $name:String!, $branch:String!) {
+            repository(owner:$owner, name:$name) {
+              mergeQueue(branch:$branch) {
+                entries(first:100) {
+                  totalCount
+                  nodes { position pullRequest { number } }
+                }
+              }
+            }
+          }`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-f",
+          `branch=${branch}`,
+        ]),
+        "merge queue response",
+      );
+      const entries = readRecord(
+        readRecord(
+          readRecord(
+            readRecord(response["data"], "data")["repository"],
+            "repository",
+          )["mergeQueue"],
+          "mergeQueue",
+        )["entries"],
+        "entries",
+      );
+      const nodes = entries["nodes"];
+      if (!Array.isArray(nodes)) {
+        return panic("Expected merge queue entry nodes");
+      }
+      // A partial listing could hide entries ahead of this one.
+      if (entries["totalCount"] !== nodes.length) {
+        return panic(
+          `Merge queue listing is partial (${nodes.length} of ${String(entries["totalCount"])} entries)`,
+        );
+      }
+      return nodes.map((node: unknown) => {
+        const record = readRecord(node, "merge queue entry");
+        const position = record["position"];
+        const entryNumber = readRecord(
+          record["pullRequest"],
+          "merge queue pull request",
+        )["number"];
+        if (typeof position !== "number" || typeof entryNumber !== "number") {
+          return panic("Expected numeric merge queue position and number");
+        }
+        return { pullNumber: entryNumber, position };
+      });
+    },
   };
 };
 
@@ -1117,10 +1228,40 @@ if (import.meta.main) {
     options.repo,
     pullRequest.baseRefName,
   );
+  const jump = options.jump || isReleasePullRequest(pullRequest);
+  // A jump is only done once a fresh queue read shows the pull request first;
+  // anything else exits non-zero, because the entries ahead of it merge
+  // before it does.
+  const requireFrontOfQueue = (context: string): void => {
+    const placement = evaluateQueuePlacement({
+      entries: gateway.readMergeQueue(pullRequest.baseRefName),
+      pullNumber: pullRequest.number,
+    });
+    if (placement.status === "front") {
+      console.log(
+        `\nverdict: QUEUED AT THE FRONT — ${context}; verified first in the queue (position ${placement.position})${
+          options.jump ? "" : " (release pull request)"
+        }`,
+      );
+      return;
+    }
+    console.error(
+      `\nverdict: NOT AT THE FRONT — ${context}, but ${formatQueuePlacementFailure(placement)}. ` +
+        "The entries ahead of it merge first. Dequeue it, then run the bar " +
+        "again to jump.",
+    );
+    process.exit(1);
+  };
   if (
     policy.landing === "merge-when-ready" &&
     pullRequest.handoff.status === "queued"
   ) {
+    if (jump) {
+      requireFrontOfQueue(
+        `${options.repo}#${options.pullNumber} is already in the merge queue`,
+      );
+      process.exit(0);
+    }
     console.log(
       `verdict: QUEUED — ${options.repo}#${options.pullNumber} is already in the merge queue; nothing changed.`,
     );
@@ -1162,7 +1303,6 @@ if (import.meta.main) {
       break;
     }
     case "merge-when-ready": {
-      const jump = options.jump || isReleasePullRequest(pullRequest);
       const action = mergeWhenReadyAction({
         handoff: pullRequest.handoff,
         jump,
@@ -1171,34 +1311,42 @@ if (import.meta.main) {
           requiredCheckRuns: snapshot.requiredCheckRuns,
         }),
       });
-      const deferredNote =
-        "; required checks are still running, so it is armed rather than " +
-        "moved to the front: run the bar again once they pass to jump";
       switch (action.kind) {
         case "already-queued":
-          console.log(
-            `\nverdict: QUEUED — ${action.entryId}${
-              jump
-                ? "; it keeps its place (dequeue it first to move it to the front)"
-                : ""
-            }`,
-          );
+          if (action.verifyFront) {
+            requireFrontOfQueue(`${action.entryId} is already queued`);
+            break;
+          }
+          console.log(`\nverdict: QUEUED — ${action.entryId}`);
           break;
         case "already-armed":
           console.log(
-            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}${action.jumpDeferred ? deferredNote : ""}`,
+            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}`,
           );
           break;
+        case "jump-waits-for-checks": {
+          const armed =
+            action.armedSince === null
+              ? "Nothing was armed."
+              : `Auto-merge has been on since ${action.armedSince} and will ` +
+                "enqueue it at the BACK when they pass; disable it to keep " +
+                "the jump.";
+          console.error(
+            "\nverdict: NOT JUMPED — required checks are still running, and " +
+              `the queue accepts a jump only once they pass. ${armed} ` +
+              "Run the bar again once the checks pass.",
+          );
+          process.exit(1);
+          break;
+        }
         case "enqueue-jump": {
-          const position = gateway.enqueueWithJump({
+          const reported = gateway.enqueueWithJump({
             pullRequestId: pullRequest.id,
             expectedHeadSha: snapshot.headShaBeforeMerge,
           });
-          console.log(
-            `\nverdict: QUEUED AT THE FRONT — ${snapshot.headShaBeforeMerge} ` +
-              `is at position ${position}${
-                options.jump ? "" : " (release pull request)"
-              }`,
+          requireFrontOfQueue(
+            `${snapshot.headShaBeforeMerge} was enqueued with a jump ` +
+              `(GitHub reported position ${reported})`,
           );
           break;
         }
@@ -1207,7 +1355,7 @@ if (import.meta.main) {
             expectedHeadSha: snapshot.headShaBeforeMerge,
           });
           console.log(
-            `\nverdict: ARMED — ${outcome}; the queue merges ${snapshot.headShaBeforeMerge} once its checks pass${action.jumpDeferred ? deferredNote : ""}`,
+            `\nverdict: ARMED — ${outcome}; the queue merges ${snapshot.headShaBeforeMerge} once its checks pass`,
           );
           break;
         }

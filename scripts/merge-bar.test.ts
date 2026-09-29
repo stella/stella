@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   evaluateMergeBar,
+  evaluateQueuePlacement,
+  formatQueuePlacementFailure,
   isReleasePullRequest,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
@@ -154,6 +156,98 @@ esac
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  // The enqueue mutation reported a front position while the release pull
+  // request actually sat behind other entries. Only the queue read after the
+  // enqueue decides, and anything but first fails the run.
+  test.each([
+    { queuedAt: 3, exitCode: 1, output: "behind #4101, #4102" },
+    { queuedAt: 1, exitCode: 0, output: "verified first in the queue" },
+  ])(
+    "a release jump is verified against the queue read after enqueueing: position $queuedAt",
+    ({ queuedAt, exitCode, output }) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-jump-"));
+      const executable = path.join(directory, "gh");
+      const pullRequest = JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              id: "PR_fixture",
+              number: 123,
+              title: "chore: release v0.9.42",
+              isCrossRepository: false,
+              state: "OPEN",
+              isDraft: false,
+              mergeable: "MERGEABLE",
+              headRefOid: HEAD_SHA,
+              baseRefName: "main",
+              autoMergeRequest: null,
+              mergeQueueEntry: null,
+            },
+          },
+        },
+      });
+      const others = [4101, 4102].map((number, index) => ({
+        position: index < queuedAt - 1 ? index + 1 : index + 2,
+        pullRequest: { number },
+      }));
+      const queue = JSON.stringify({
+        data: {
+          repository: {
+            mergeQueue: {
+              entries: {
+                totalCount: 3,
+                nodes: [
+                  ...others,
+                  { position: queuedAt, pullRequest: { number: 123 } },
+                ],
+              },
+            },
+          },
+        },
+      });
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+case "$*" in
+  *enqueuePullRequest*) printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"position":1}}}}';;
+  *'mergeQueue(branch'*) printf '%s\\n' '${queue}';;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
+  *headRefOid*)
+    if [ "$1" = api ]; then printf '%s\\n' '${pullRequest}';
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
+  *) exit 99;;
+esac
+`,
+      );
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+            "--repo",
+            PRIVATE_REPO,
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(exitCode);
+        expect(
+          `${result.stdout.toString()}${result.stderr.toString()}`,
+        ).toContain(output);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   test.each([null, { enabledAt: "2026-09-08T07:00:00Z" }])(
     "recognizes queue membership independently of auto-merge: %j",
@@ -707,14 +801,16 @@ describe("release pull requests jump the merge queue", () => {
     ).toEqual({ kind: "enqueue-jump" });
   });
 
-  test("a jump waits for the checks: auto-merge is armed and the jump deferred", () => {
+  // Arming auto-merge would enqueue the pull request at the back once its
+  // checks pass, the opposite of a jump, so nothing is armed.
+  test("a jump waits for the checks without arming auto-merge", () => {
     expect(
       mergeWhenReadyAction({
         handoff: { status: "pending" },
         jump: true,
         checksSucceeded: false,
       }),
-    ).toEqual({ kind: "arm", jumpDeferred: true });
+    ).toEqual({ kind: "jump-waits-for-checks", armedSince: null });
     expect(
       mergeWhenReadyAction({
         handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
@@ -722,20 +818,26 @@ describe("release pull requests jump the merge queue", () => {
         checksSucceeded: false,
       }),
     ).toEqual({
-      kind: "already-armed",
-      enabledAt: "2026-09-28T09:00:00Z",
-      jumpDeferred: true,
+      kind: "jump-waits-for-checks",
+      armedSince: "2026-09-28T09:00:00Z",
     });
   });
 
-  test("a queued pull request keeps its place", () => {
+  test("a queued pull request keeps its place, which a jump must verify", () => {
     expect(
       mergeWhenReadyAction({
         handoff: { status: "queued", entryId: "MQE_1" },
         jump: true,
         checksSucceeded: true,
       }),
-    ).toEqual({ kind: "already-queued", entryId: "MQE_1" });
+    ).toEqual({ kind: "already-queued", entryId: "MQE_1", verifyFront: true });
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "queued", entryId: "MQE_1" },
+        jump: false,
+        checksSucceeded: true,
+      }),
+    ).toEqual({ kind: "already-queued", entryId: "MQE_1", verifyFront: false });
   });
 
   test("without a jump, arming is unchanged", () => {
@@ -745,18 +847,58 @@ describe("release pull requests jump the merge queue", () => {
         jump: false,
         checksSucceeded: true,
       }),
-    ).toEqual({ kind: "arm", jumpDeferred: false });
+    ).toEqual({ kind: "arm" });
     expect(
       mergeWhenReadyAction({
         handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
         jump: false,
         checksSucceeded: false,
       }),
-    ).toEqual({
-      kind: "already-armed",
-      enabledAt: "2026-09-28T09:00:00Z",
-      jumpDeferred: false,
-    });
+    ).toEqual({ kind: "already-armed", enabledAt: "2026-09-28T09:00:00Z" });
+  });
+
+  test("a pull request first in the queue is at the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [
+          { pullNumber: 4112, position: 1 },
+          { pullNumber: 4100, position: 2 },
+        ],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "front", position: 1 });
+  });
+
+  // A jump the enqueue response reports as done can still leave the entry
+  // behind others; only the queue read decides.
+  test("a pull request behind other entries is not at the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [
+          { pullNumber: 4101, position: 1 },
+          { pullNumber: 4112, position: 3 },
+          { pullNumber: 4102, position: 2 },
+          { pullNumber: 4103, position: 4 },
+        ],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "behind", position: 3, ahead: [4101, 4102] });
+    expect(
+      formatQueuePlacementFailure({
+        status: "behind",
+        position: 3,
+        ahead: [4101, 4102],
+      }),
+    ).toBe("it is at position 3, behind #4101, #4102");
+  });
+
+  test("a pull request missing from the queue is not at the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [{ pullNumber: 4101, position: 1 }],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "absent", queueLength: 1 });
   });
 
   test("required checks succeed only when every one completed successfully", () => {
