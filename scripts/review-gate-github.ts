@@ -315,7 +315,7 @@ export type Gateway = {
   dequeue: (id: string) => void;
 };
 
-const parsePullRequest = (
+export const parsePullRequest = (
   pr: unknown,
   read: Pick<
     PullRequestRead,
@@ -325,13 +325,16 @@ const parsePullRequest = (
   const files = field(pr, "files");
   const fileNodes = list(files, "nodes");
   const readyEvent = list(pr, "timelineItems", "nodes").at(0);
-  const contexts = list(
+  const rollup = field(
     list(pr, "commits", "nodes").at(0),
     "commit",
     "statusCheckRollup",
-    "contexts",
-    "nodes",
   );
+  // GitHub returns null before a new head has any checks or statuses.
+  const contexts =
+    rollup === null || rollup === undefined
+      ? []
+      : list(rollup, "contexts", "nodes");
   return {
     ...read,
     id: text(pr, "id"),

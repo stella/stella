@@ -21,6 +21,7 @@ import {
   evaluateGroupTarget,
   evaluatePullRequestTarget,
   guardedPullRequest,
+  parsePullRequest,
   publish,
   type Gateway,
   type PullRequestRead,
@@ -130,6 +131,58 @@ const dequeued = (calls: readonly Call[]) =>
 
 beforeEach(() => {
   spyOn(console, "log").mockImplementation(() => undefined);
+});
+
+describe("a head's check rollup", () => {
+  const parse = (commit: unknown) =>
+    parsePullRequest(
+      {
+        id: "PR_1",
+        headRefOid: headOf(1),
+        baseRefName: "main",
+        isDraft: false,
+        author: { login: "pr-author" },
+        mergeQueueEntry: null,
+        createdAt: OPENED,
+        files: { totalCount: 0, nodes: [] },
+        timelineItems: { nodes: [] },
+        commits: { nodes: [{ commit }] },
+        reviews: { nodes: [] },
+        reactions: { nodes: [] },
+        comments: { nodes: [] },
+      },
+      {
+        number: 1,
+        threads: { complete: true, unresolved: [] },
+        headClockStartedAt: null,
+        readAt: OPENED,
+      },
+    );
+
+  test("a new head with a null, missing, or empty rollup has no checks yet", () => {
+    for (const commit of [
+      { statusCheckRollup: null },
+      {},
+      { statusCheckRollup: { contexts: { nodes: [] } } },
+    ]) {
+      const result = parse(commit);
+      expect(result.statuses).toEqual([]);
+      expect(result.checkRuns).toEqual([]);
+      expect(result.headSha).toBe(headOf(1));
+    }
+  });
+
+  test("malformed commits and non-null rollups still fail the read", () => {
+    for (const commit of [
+      null,
+      { statusCheckRollup: false },
+      { statusCheckRollup: {} },
+      { statusCheckRollup: { contexts: { nodes: null } } },
+      { statusCheckRollup: { contexts: { nodes: {} } } },
+    ]) {
+      expect(() => parse(commit)).toThrow(/Expected (object|list) at/u);
+    }
+  });
 });
 
 describe("dequeue of a queued pull request", () => {
@@ -286,6 +339,53 @@ describe("publishing races", () => {
     title: "Reviews complete, no unresolved threads",
     summary: "- ✅",
   };
+
+  test("replaying an unchanged observation performs no write", () => {
+    const { gateway, calls } = fakeGateway({
+      pullRequests: [],
+      runReads: [[run(1, OPENED, success)]],
+    });
+    publish(
+      createRun(gateway, config("shadow"), {
+        baseBranch: "main",
+        dryRun: false,
+      }),
+      headOf(1),
+      success,
+      { kind: "pr", pullRequest: 1, observedAt: OPENED },
+    );
+    expect(calls).toEqual([]);
+  });
+
+  test("a changed verdict performs one write", () => {
+    for (const output of [
+      { ...success, conclusion: "failure" },
+      { ...success, title: "Changed title" },
+      { ...success, summary: "Changed summary" },
+    ] satisfies GateOutput[]) {
+      const { gateway, calls } = fakeGateway({
+        pullRequests: [],
+        runReads: [[run(1, OPENED, success)]],
+      });
+      const identity = {
+        kind: "pr",
+        pullRequest: 1,
+        observedAt: "2026-09-28T10:01:00Z",
+      } as const;
+      publish(
+        createRun(gateway, config("shadow"), {
+          baseBranch: "main",
+          dryRun: false,
+        }),
+        headOf(1),
+        output,
+        identity,
+      );
+      expect(calls).toEqual([
+        { kind: "write", sha: headOf(1), output, identity },
+      ]);
+    }
+  });
 
   test("a newer verdict overtaken by an older write is re-posted after the write", () => {
     const { gateway, calls } = fakeGateway({
