@@ -101,6 +101,9 @@ export const MAX_SLUG_LENGTH = 64;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
+/** Names of pages beside the entries, which an entry's page cannot take. */
+const RESERVED_CATALOGUE_SLUGS: readonly string[] = ["contribute"];
+
 /**
  * A catalogue entry's slug. It shares the `/knowledge/tools/<name>` space with
  * organizations' skills, whose ids are UUIDs, so a UUID-shaped slug is
@@ -112,6 +115,10 @@ export const catalogueSlugSchema = v.pipe(
   v.maxLength(MAX_SLUG_LENGTH),
   v.regex(SLUG_PATTERN, "slug must be kebab-case"),
   v.check((value) => !UUID_PATTERN.test(value), "slug must not be a UUID"),
+  v.check(
+    (value) => !RESERVED_CATALOGUE_SLUGS.includes(value),
+    "slug is reserved",
+  ),
 );
 
 const slug = catalogueSlugSchema;

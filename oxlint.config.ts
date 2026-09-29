@@ -3108,6 +3108,8 @@ export default defineConfig({
         "apps/web/src/components/sidebar.tsx",
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/routes/tools/**/*.{ts,tsx}",
+        "apps/web/src/routes/knowledge/-public/**/*.{ts,tsx}",
+        "apps/web/src/routes/knowledge/tools_.*.{ts,tsx}",
       ],
       rules: {
         ...publicSsrAmbientStateRules,

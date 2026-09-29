@@ -60,6 +60,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './route
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as KnowledgeTemplatesCatalogueRouteImport } from './routes/knowledge/templates_.catalogue'
 import { Route as KnowledgeToolsEntryRouteImport } from './routes/knowledge/tools_.$entry'
+import { Route as KnowledgeToolsContributeRouteImport } from './routes/knowledge/tools_.contribute'
 import { Route as LawCasesIndexRouteImport } from './routes/law/cases/index'
 import { Route as SitemapsLawStatutesChar123countryChar125DotxmlRouteImport } from './routes/sitemaps/law-statutes/{$country}[.]xml'
 import { Route as ToolsSlugDownloadRouteImport } from './routes/tools/$slug_.download'
@@ -86,6 +87,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdListsRouteImport } from './route
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
 import { Route as KnowledgeCompanyFormatsRegistryCompanyIdRouteImport } from './routes/knowledge/company-formats.$registry.$companyId'
+import { Route as KnowledgeToolsEntryDownloadRouteImport } from './routes/knowledge/tools_.$entry_.download'
 import { Route as LawCountryStatutesIndexRouteImport } from './routes/law/$country/statutes/index'
 import { Route as LawCasesResearchIndexRouteImport } from './routes/law/cases/research/index'
 import { Route as LawCasesResearchTableIdRouteImport } from './routes/law/cases/research/$tableId'
@@ -366,6 +368,12 @@ const KnowledgeToolsEntryRoute = KnowledgeToolsEntryRouteImport.update({
   path: '/tools/$entry',
   getParentRoute: () => KnowledgeRouteRoute,
 } as any)
+const KnowledgeToolsContributeRoute =
+  KnowledgeToolsContributeRouteImport.update({
+    id: '/tools_/contribute',
+    path: '/tools/contribute',
+    getParentRoute: () => KnowledgeRouteRoute,
+  } as any)
 const LawCasesIndexRoute = LawCasesIndexRouteImport.update({
   id: '/cases/',
   path: '/cases/',
@@ -518,6 +526,12 @@ const KnowledgeCompanyFormatsRegistryCompanyIdRoute =
   KnowledgeCompanyFormatsRegistryCompanyIdRouteImport.update({
     id: '/company-formats/$registry/$companyId',
     path: '/company-formats/$registry/$companyId',
+    getParentRoute: () => KnowledgeRouteRoute,
+  } as any)
+const KnowledgeToolsEntryDownloadRoute =
+  KnowledgeToolsEntryDownloadRouteImport.update({
+    id: '/tools_/$entry_/download',
+    path: '/tools/$entry/download',
     getParentRoute: () => KnowledgeRouteRoute,
   } as any)
 const LawCountryStatutesIndexRoute = LawCountryStatutesIndexRouteImport.update({
@@ -674,6 +688,7 @@ export interface FileRoutesByFullPath {
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools/$entry': typeof KnowledgeToolsEntryRoute
+  '/knowledge/tools/contribute': typeof KnowledgeToolsContributeRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat/': typeof ProtectedChatIndexRoute
@@ -703,6 +718,7 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/knowledge/company-formats/$registry/$companyId': typeof KnowledgeCompanyFormatsRegistryCompanyIdRoute
+  '/knowledge/tools/$entry/download': typeof KnowledgeToolsEntryDownloadRoute
   '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
@@ -762,6 +778,7 @@ export interface FileRoutesByTo {
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools/$entry': typeof KnowledgeToolsEntryRoute
+  '/knowledge/tools/contribute': typeof KnowledgeToolsContributeRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat': typeof ProtectedChatIndexRoute
@@ -790,6 +807,7 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/knowledge/company-formats/$registry/$companyId': typeof KnowledgeCompanyFormatsRegistryCompanyIdRoute
+  '/knowledge/tools/$entry/download': typeof KnowledgeToolsEntryDownloadRoute
   '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationIndexRoute
@@ -859,6 +877,7 @@ export interface FileRoutesById {
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates_/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools_/$entry': typeof KnowledgeToolsEntryRoute
+  '/knowledge/tools_/contribute': typeof KnowledgeToolsContributeRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug_/download': typeof ToolsSlugDownloadRoute
   '/_protected/chat/': typeof ProtectedChatIndexRoute
@@ -888,6 +907,7 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/_protected/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/knowledge/company-formats/$registry/$companyId': typeof KnowledgeCompanyFormatsRegistryCompanyIdRoute
+  '/knowledge/tools_/$entry_/download': typeof KnowledgeToolsEntryDownloadRoute
   '/law/cases/research/$tableId': typeof LawCasesResearchTableIdRoute
   '/sitemaps/law-statutes/$country/{$bucket}.xml': typeof SitemapsLawStatutesCountryChar123bucketChar125DotxmlRoute
   '/_protected/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
@@ -957,6 +977,7 @@ export interface FileRouteTypes {
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates/catalogue'
     | '/knowledge/tools/$entry'
+    | '/knowledge/tools/contribute'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug/download'
     | '/chat/'
@@ -986,6 +1007,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
     | '/knowledge/company-formats/$registry/$companyId'
+    | '/knowledge/tools/$entry/download'
     | '/law/cases/research/$tableId'
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/settings/organization/'
@@ -1045,6 +1067,7 @@ export interface FileRouteTypes {
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates/catalogue'
     | '/knowledge/tools/$entry'
+    | '/knowledge/tools/contribute'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug/download'
     | '/chat'
@@ -1073,6 +1096,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
     | '/knowledge/company-formats/$registry/$companyId'
+    | '/knowledge/tools/$entry/download'
     | '/law/cases/research/$tableId'
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/settings/organization'
@@ -1141,6 +1165,7 @@ export interface FileRouteTypes {
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates_/catalogue'
     | '/knowledge/tools_/$entry'
+    | '/knowledge/tools_/contribute'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug_/download'
     | '/_protected/chat/'
@@ -1170,6 +1195,7 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/timesheets'
     | '/_protected/workspaces/$workspaceId/workflows'
     | '/knowledge/company-formats/$registry/$companyId'
+    | '/knowledge/tools_/$entry_/download'
     | '/law/cases/research/$tableId'
     | '/sitemaps/law-statutes/$country/{$bucket}.xml'
     | '/_protected/settings/organization/'
@@ -1573,6 +1599,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KnowledgeToolsEntryRouteImport
       parentRoute: typeof KnowledgeRouteRoute
     }
+    '/knowledge/tools_/contribute': {
+      id: '/knowledge/tools_/contribute'
+      path: '/tools/contribute'
+      fullPath: '/knowledge/tools/contribute'
+      preLoaderRoute: typeof KnowledgeToolsContributeRouteImport
+      parentRoute: typeof KnowledgeRouteRoute
+    }
     '/law/cases/': {
       id: '/law/cases/'
       path: '/cases'
@@ -1755,6 +1788,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KnowledgeCompanyFormatsRegistryCompanyIdRouteImport
       parentRoute: typeof KnowledgeRouteRoute
     }
+    '/knowledge/tools_/$entry_/download': {
+      id: '/knowledge/tools_/$entry_/download'
+      path: '/tools/$entry/download'
+      fullPath: '/knowledge/tools/$entry/download'
+      preLoaderRoute: typeof KnowledgeToolsEntryDownloadRouteImport
+      parentRoute: typeof KnowledgeRouteRoute
+    }
     '/law/$country/statutes/': {
       id: '/law/$country/statutes/'
       path: '/$country/statutes'
@@ -1931,7 +1971,9 @@ interface KnowledgeRouteRouteChildren {
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
   KnowledgeTemplatesCatalogueRoute: typeof KnowledgeTemplatesCatalogueRouteWithChildren
   KnowledgeToolsEntryRoute: typeof KnowledgeToolsEntryRoute
+  KnowledgeToolsContributeRoute: typeof KnowledgeToolsContributeRoute
   KnowledgeCompanyFormatsRegistryCompanyIdRoute: typeof KnowledgeCompanyFormatsRegistryCompanyIdRoute
+  KnowledgeToolsEntryDownloadRoute: typeof KnowledgeToolsEntryDownloadRoute
 }
 
 const KnowledgeRouteRouteChildren: KnowledgeRouteRouteChildren = {
@@ -1945,8 +1987,10 @@ const KnowledgeRouteRouteChildren: KnowledgeRouteRouteChildren = {
   KnowledgeTemplatesCatalogueRoute:
     KnowledgeTemplatesCatalogueRouteWithChildren,
   KnowledgeToolsEntryRoute: KnowledgeToolsEntryRoute,
+  KnowledgeToolsContributeRoute: KnowledgeToolsContributeRoute,
   KnowledgeCompanyFormatsRegistryCompanyIdRoute:
     KnowledgeCompanyFormatsRegistryCompanyIdRoute,
+  KnowledgeToolsEntryDownloadRoute: KnowledgeToolsEntryDownloadRoute,
 }
 
 const KnowledgeRouteRouteWithChildren = KnowledgeRouteRoute._addFileChildren(

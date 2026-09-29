@@ -28,6 +28,7 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
+import { publicToolInstallPath } from "@/lib/public-tools-path";
 import {
   agentSkillsQueryRoot,
   mcpQueryRoot,
@@ -144,7 +145,7 @@ export function AddToStella({
     if (state.type !== "sign-in") {
       return;
     }
-    setAuthRedirectTo(`/tools/${entry.slug}?install=1`);
+    setAuthRedirectTo(publicToolInstallPath(entry.slug));
   };
 
   // Confirm, then clear the `install` intent from the URL (replace:true) so

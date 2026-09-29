@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { pageTitle } from "@/lib/page-title";
+import { publicToolsBasePath } from "@/lib/public-tools-path";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import {
   TOOLS_KIND_FILTERS,
@@ -19,6 +20,7 @@ const searchSchema = v.object({
   kind: v.fallback(v.optional(v.picklist(TOOLS_KIND_FILTERS), "all"), "all"),
 });
 
+// Goes once the Knowledge flag is permanent (see ./route.tsx).
 export const Route = createFileRoute("/tools/")({
   validateSearch: searchSchema,
   search: {
@@ -28,7 +30,7 @@ export const Route = createFileRoute("/tools/")({
     const t = getTranslator();
     return createPublicToolsHead({
       description: t("publicTools.metaDescription"),
-      path: "/tools",
+      path: publicToolsBasePath(),
       title: pageTitle("knowledge.sections.tools.title"),
       type: "website",
     });

@@ -1,11 +1,13 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
-import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
+import { legacyToolsRoutesServed } from "@/lib/public-tools-path";
 import { PublicToolsShell } from "@/routes/tools/-components/public-tools-shell";
 
+// The older top-level tools pages. They answer only while Knowledge needs an
+// account, and go once the Knowledge flag is permanent.
 export const Route = createFileRoute("/tools")({
   beforeLoad: () => {
-    if (!isPublicToolsRouteEnabled()) {
+    if (!legacyToolsRoutesServed()) {
       throw notFound();
     }
   },

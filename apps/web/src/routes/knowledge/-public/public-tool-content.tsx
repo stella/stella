@@ -9,11 +9,11 @@ import {
 } from "@stll/catalogue";
 import { Button } from "@stll/ui/button";
 
+import { publicToolDownloadPath } from "@/lib/public-tools-path";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
-  toolDownloadPath,
 } from "@/routes/tools/-components/tool-detail.logic";
 
 const ToolMarkdown = lazy(async () => ({
@@ -46,7 +46,7 @@ export function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
         render={
           <a
             aria-label={t("common.download")}
-            href={sanitizeHref(toolDownloadPath(entry.slug))}
+            href={sanitizeHref(publicToolDownloadPath(entry.slug))}
           />
         }
         variant="outline"

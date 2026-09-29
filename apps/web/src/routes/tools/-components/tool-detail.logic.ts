@@ -20,10 +20,6 @@ export const CATALOGUE_ENTRIES_URL = `${STELLA_REPO_URL}/tree/main/packages/cata
  * abusive upstream, so we degrade to metadata rather than stream it.
  */
 
-/** Server download route for an in-tree skill's zip bundle. */
-export const toolDownloadPath = (slug: string): `/${string}` =>
-  `/tools/${slug}/download`;
-
 type GithubSkillLocator = {
   repo: string;
   rev: string;

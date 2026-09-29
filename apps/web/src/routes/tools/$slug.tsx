@@ -21,6 +21,7 @@ import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon"
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { pageTitleLiteral } from "@/lib/page-title";
+import { publicToolPath } from "@/lib/public-tools-path";
 import {
   createPublicToolsCanonicalUrl,
   createPublicToolsHead,
@@ -47,6 +48,7 @@ const searchSchema = v.object({
   install: v.fallback(v.optional(v.literal("1")), undefined),
 });
 
+// Goes once the Knowledge flag is permanent (see ./route.tsx).
 export const Route = createFileRoute("/tools/$slug")({
   validateSearch: searchSchema,
   loader: async ({ params }) => {
@@ -62,7 +64,7 @@ export const Route = createFileRoute("/tools/$slug")({
       return {};
     }
     const { entry } = loaderData;
-    const path = `/tools/${entry.slug}` as const;
+    const path = publicToolPath(entry.slug);
     return createPublicToolsHead({
       description: entry.description,
       jsonLd: createToolEntryJsonLd({

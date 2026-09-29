@@ -14,6 +14,11 @@ const SSR_ENTRY_MODULES = [
   "apps/web/src/routes/tools/index.tsx",
   "apps/web/src/routes/tools/$slug.tsx",
   "apps/web/src/routes/tools/contribute.tsx",
+  "apps/web/src/routes/tools/$slug_.download.ts",
+  "apps/web/src/routes/knowledge/tools_.$entry.tsx",
+  "apps/web/src/routes/knowledge/tools_.$entry_.download.ts",
+  "apps/web/src/routes/knowledge/tools_.contribute.tsx",
+  "apps/web/src/routes/knowledge/-public/public-tools-catalogue.tsx",
   "apps/web/src/lib/public-tools-data.ts",
   "apps/web/src/lib/public-tools-github-content.ts",
   "apps/web/src/lib/public-tools-sitemap.ts",
@@ -175,22 +180,25 @@ describe("public tools security invariants", () => {
     ).toEqual([]);
   });
 
-  test("the install affordance is a client-only lazy import, never static", async () => {
-    const source = readFileSync(
-      nodePath.resolve(repoRoot, "apps/web/src/routes/tools/$slug.tsx"),
-      "utf-8",
-    );
+  test.each([
+    "apps/web/src/routes/tools/$slug.tsx",
+    "apps/web/src/routes/knowledge/-public/public-tool-detail.tsx",
+  ])(
+    "the install affordance in %s is a client-only lazy import, never static",
+    (path) => {
+      const source = readFileSync(nodePath.resolve(repoRoot, path), "utf-8");
 
-    // Loaded via dynamic import() so its auth/install deps never enter
-    // the SSR-reachable module graph.
-    expect(source).toContain(
-      'import("@/routes/tools/-components/add-to-stella")',
-    );
-    expect(source).toContain("<ClientOnly");
-    expect(source).not.toContain(
-      'from "@/routes/tools/-components/add-to-stella"',
-    );
-  });
+      // Loaded via dynamic import() so its auth/install deps never enter
+      // the SSR-reachable module graph.
+      expect(source).toContain(
+        'import("@/routes/tools/-components/add-to-stella")',
+      );
+      expect(source).toContain("<ClientOnly");
+      expect(source).not.toContain(
+        'from "@/routes/tools/-components/add-to-stella"',
+      );
+    },
+  );
 
   test("unknown tool slugs use the route-specific not-found boundary", () => {
     const source = readFileSync(
@@ -225,8 +233,23 @@ describe("public tools security invariants", () => {
       "utf-8",
     );
 
-    expect(source).toContain("isPublicToolsRouteEnabled");
-    expect(source).toContain("return notFound()");
+    expect(source).toContain("legacyToolsRoutesServed()");
+    expect(source).toContain("return publicToolNotFoundResponse()");
+    expect(source).not.toContain("-queries");
+  });
+
+  test("the Knowledge download serves catalogue slugs only, behind its flag", () => {
+    const source = readFileSync(
+      nodePath.resolve(
+        repoRoot,
+        "apps/web/src/routes/knowledge/tools_.$entry_.download.ts",
+      ),
+      "utf-8",
+    );
+
+    expect(source).toContain("isPublicKnowledgeEnabled()");
+    expect(source).toContain('classifyToolEntry(params.entry) !== "catalogue"');
+    expect(source).toContain("return publicToolNotFoundResponse()");
     expect(source).not.toContain("-queries");
   });
 });

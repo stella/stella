@@ -33,6 +33,7 @@ import {
   isPublicToolsCrawlAllowed,
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
+import { publicToolsBasePath } from "@/lib/public-tools-path";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
@@ -426,7 +427,7 @@ Disallow: /
     ? [...PUBLIC_CRAWL_PATH_PREFIXES]
     : [];
   if (publicToolsCrawlAllowed) {
-    crawlPrefixes.push("/tools");
+    crawlPrefixes.push(publicToolsBasePath());
   }
   const allowLines = crawlPrefixes.flatMap((prefix) =>
     prefix.includes(".")

@@ -4,14 +4,9 @@ import { spdxLicenseUrl } from "@/lib/spdx-license";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
-  toolDownloadPath,
 } from "@/routes/tools/-components/tool-detail.logic";
 
 describe("tool-detail.logic", () => {
-  test("download path targets the un-nested server route", () => {
-    expect(toolDownloadPath("my-skill")).toBe("/tools/my-skill/download");
-  });
-
   test("spdx url points at the canonical license page", () => {
     expect(spdxLicenseUrl("MIT")).toBe("https://spdx.org/licenses/MIT.html");
   });

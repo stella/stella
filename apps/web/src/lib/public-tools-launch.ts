@@ -1,5 +1,9 @@
 import { env } from "@/env";
 import { betaFeaturesHostDefaultEnabled } from "@/lib/beta-features";
+import {
+  isPublicKnowledgeEnabled,
+  isPublicKnowledgeSitemapEnabled,
+} from "@/lib/public-knowledge-launch";
 
 // Beta hosts always serve the /tools routes; the env flag governs
 // production. The gate must resolve identically on server and client
@@ -14,9 +18,12 @@ export const isPublicToolsRouteEnabled = (): boolean =>
 // once the public-tools surface is indexing-ready. This is independent of
 // whether the deployment is allowed to be crawled, so deployments that
 // should not be crawled can still serve sitemaps for verification while
-// staying non-indexable.
+// staying non-indexable. Where the tools live under Knowledge, Knowledge's
+// indexing switch governs them.
 export const isPublicToolsSitemapEnabled = (): boolean =>
-  env.VITE_PUBLIC_TOOLS_ENABLED && env.VITE_PUBLIC_TOOLS_INDEXING_ENABLED;
+  isPublicKnowledgeEnabled()
+    ? isPublicKnowledgeSitemapEnabled()
+    : env.VITE_PUBLIC_TOOLS_ENABLED && env.VITE_PUBLIC_TOOLS_INDEXING_ENABLED;
 
 // Crawl permission additionally requires the deployment to be marked
 // indexable. This gates the meta robots directive and the robots.txt

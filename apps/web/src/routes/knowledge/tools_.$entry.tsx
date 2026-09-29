@@ -14,6 +14,7 @@ import {
   isPublicKnowledgeCrawlAllowed,
   isPublicKnowledgeEnabled,
 } from "@/lib/public-knowledge-launch";
+import { publicToolPath } from "@/lib/public-tools-path";
 import {
   createPublicToolsCanonicalUrl,
   createPublicToolsHead,
@@ -74,7 +75,7 @@ export const Route = createFileRoute("/knowledge/tools_/$entry")({
       return {};
     }
     const { entry } = loaderData;
-    const path = `/knowledge/tools/${entry.slug}` as const;
+    const path = publicToolPath(entry.slug);
     return createPublicToolsHead({
       crawlAllowed: isPublicKnowledgeCrawlAllowed(),
       description: entry.description,

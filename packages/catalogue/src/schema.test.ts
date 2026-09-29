@@ -25,6 +25,10 @@ describe("catalogue slugs", () => {
     }
   });
 
+  test("refuse the names of pages beside the entries", () => {
+    expect(v.safeParse(catalogueSlugSchema, "contribute").success).toBe(false);
+  });
+
   test("every bundled entry has a slug the schema accepts", () => {
     const refused = loadCatalogue()
       .map(({ slug }) => slug)
