@@ -1,7 +1,7 @@
 /**
- * Shared template-creation recipe: derive the manifest from the DOCX buffer's
- * markers, upload the bytes to S3, and insert the template + first version
- * rows under an advisory lock that enforces the per-org limit.
+ * Shared template-creation recipe: derive the manifest from the scanned DOCX's
+ * markers, store its bytes, and insert the template + first version rows
+ * under an advisory lock that enforces the per-org limit.
  *
  * The document is the template, so creation configures nothing: whatever its
  * markers declare is what the new template has, and `configure_template_fields`
@@ -30,10 +30,12 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
@@ -52,7 +54,9 @@ export type CreateStoredTemplateOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  buffer: Buffer;
+  /** The document, scanned: an upload, or server-built bytes scanned before
+   *  they got here. */
+  file: ScannedFile;
   name: string;
   fileName: string;
   categoryId?: SafeId<"templateCategory"> | undefined;
@@ -70,7 +74,7 @@ export const createStoredTemplate = async function* ({
   safeDb,
   organizationId,
   userId,
-  buffer,
+  file,
   name,
   fileName,
   categoryId,
@@ -100,32 +104,26 @@ export const createStoredTemplate = async function* ({
   // Language detection is best-effort metadata: it guesses the document
   // languages from the text so bilingual templates are tagged from day
   // one; users can correct the result via the update endpoint.
-  const detectedLanguages = await detectTemplateLanguagesFromDocx(buffer);
+  const detectedLanguages = await detectTemplateLanguagesFromDocx(file);
 
-  const resolvedManifest = await deriveManifestFromDocx(buffer);
+  const resolvedManifest = await deriveManifestFromDocx(file);
   const fieldCount = resolvedManifest.fields.length;
 
   // Pre-generate the ID so the S3 key and DB row stay in sync.
   const templateId = createSafeId<"template">();
   const s3Key = buildTemplateS3Key(organizationId, templateId);
-
   const writeObject = async () =>
-    await writeS3ObjectWithRetry({
-      data: new Uint8Array(buffer),
-      key: s3Key,
-    });
-  if (env.FEATURE_FILE_USAGE_LIMITS) {
-    yield* Result.await(
-      writeOrganizationFile({
-        organizationId,
-        objectKey: s3Key,
-        sizeBytes: buffer.byteLength,
-        write: writeObject,
-      }),
-    );
-  } else {
-    await writeObject();
-  }
+    await writeScannedObject({ file, key: s3Key });
+  const { object: stored } = env.FEATURE_FILE_USAGE_LIMITS
+    ? yield* Result.await(
+        writeOrganizationFile({
+          organizationId,
+          objectKey: s3Key,
+          sizeBytes: file.bytes.byteLength,
+          write: writeObject,
+        }),
+      )
+    : await writeObject();
 
   const versionId = createSafeId<"templateVersion">();
 
@@ -174,7 +172,8 @@ export const createStoredTemplate = async function* ({
           kind,
           fileName: sanitizeFilename(fileName),
           s3Key,
-          sizeBytes: buffer.byteLength,
+          scanState: stored.scanState,
+          sizeBytes: file.bytes.byteLength,
           manifest: resolvedManifest,
           fieldCount,
           currentVersion: 1,
@@ -198,6 +197,7 @@ export const createStoredTemplate = async function* ({
         templateId,
         version: 1,
         s3Key,
+        scanState: stored.scanState,
         manifest: resolvedManifest,
         fieldCount,
         createdBy: userId,

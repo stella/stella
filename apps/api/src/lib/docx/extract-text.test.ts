@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { extractDocxDocument, extractTextForPreview } from "./extract-text";
 
-/** Build a minimal DOCX buffer with the given document.xml. */
+/** Build a minimal DOCX file with the given document.xml. */
 const makeDocx = async (
   documentXml: string,
   numberingXml?: string,
-): Promise<Buffer> => {
+): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   if (numberingXml !== undefined) {
@@ -20,8 +23,7 @@ const makeDocx = async (
   <Default Extension="xml" ContentType="application/xml"/>
 </Types>`,
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const WRAP = (body: string) =>
@@ -35,8 +37,8 @@ describe("extractDocxDocument", () => {
       `<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>
        <w:p><w:r><w:t>Second paragraph</w:t></w:r></w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs).toHaveLength(2);
     expect(result.paragraphs[0]).toEqual({
@@ -61,8 +63,8 @@ describe("extractDocxDocument", () => {
         <w:r><w:t>Title</w:t></w:r>
       </w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]?.style).toBe("Heading1");
   });
@@ -74,8 +76,8 @@ describe("extractDocxDocument", () => {
         <w:r><w:t>world</w:t></w:r>
       </w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]?.text).toBe("Hello world");
   });
@@ -89,8 +91,8 @@ describe("extractDocxDocument", () => {
         </w:del>
       </w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]?.text).toBe("Keep this");
   });
@@ -101,8 +103,8 @@ describe("extractDocxDocument", () => {
        <w:p></w:p>
        <w:p><w:r><w:t>Third</w:t></w:r></w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs).toHaveLength(3);
     expect(result.paragraphs[1]).toEqual({
@@ -115,8 +117,8 @@ describe("extractDocxDocument", () => {
   test("handles missing document.xml", async () => {
     const zip = new JSZip();
     zip.file("other.xml", "<root/>");
-    const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
-    const result = await extractDocxDocument(buf);
+    const docx = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs).toEqual([]);
     expect(result.charCount).toBe(0);
@@ -130,8 +132,8 @@ describe("extractDocxDocument", () => {
        <w:p><w:r><w:t>Content</w:t></w:r></w:p>
        <w:p><w:r><w:t>{% endif %}</w:t></w:r></w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
@@ -162,8 +164,8 @@ describe("extractDocxDocument", () => {
        <w:p><w:r><w:t>{{ item.name }}</w:t></w:r></w:p>
        <w:p><w:r><w:t>{% endfor %}</w:t></w:r></w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
@@ -189,8 +191,8 @@ describe("extractDocxDocument", () => {
         <w:p><w:r><w:t>{% for field in fields %}</w:t></w:r></w:p>
       </w:tc></w:tr></w:tbl>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[2]).toEqual({
       index: 2,
@@ -220,8 +222,8 @@ describe("extractDocxDocument", () => {
         </w:tc>
       </w:tr></w:tbl>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractTextForPreview(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractTextForPreview(docx);
 
     expect(result.paragraphs).toEqual([
       {
@@ -264,8 +266,8 @@ describe("extractDocxDocument", () => {
         </w:p>
       </w:tc></w:tr></w:tbl>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractTextForPreview(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractTextForPreview(docx);
 
     expect(result.paragraphs).toEqual([
       {
@@ -290,8 +292,8 @@ describe("extractDocxDocument", () => {
        <w:p><w:r><w:t>C</w:t></w:r></w:p>
        <w:p><w:r><w:t>{% endif %}</w:t></w:r></w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[2]).toEqual({
       index: 2,
@@ -316,8 +318,8 @@ describe("extractDocxDocument", () => {
       `<w:p><w:r><w:t>{% if status == "active" and count > 0 %}</w:t></w:r></w:p>
        <w:p><w:r><w:t>{% endif %}</w:t></w:r></w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
@@ -334,8 +336,8 @@ describe("extractDocxDocument", () => {
       `<w:p><w:r><w:t>{{clientName}}</w:t></w:r></w:p>
        <w:p><w:r><w:t>Hello {{name}}, welcome.</w:t></w:r></w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
@@ -356,8 +358,8 @@ describe("extractDocxDocument", () => {
         <w:r><w:t>{% if show %}</w:t></w:r>
       </w:p>`,
     );
-    const buf = await makeDocx(xml);
-    const result = await extractDocxDocument(buf);
+    const docx = await makeDocx(xml);
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs[0]).toEqual({
       index: 0,
@@ -373,9 +375,8 @@ describe("extractDocxDocument", () => {
   test("works on the SPA fixture", async () => {
     const fixture = new URL("fixtures/spa-template.docx", import.meta.url)
       .pathname;
-    const file = Bun.file(fixture);
-    const buf = Buffer.from(await file.arrayBuffer());
-    const result = await extractDocxDocument(buf);
+    const docx = testDocxFile(await Bun.file(fixture).arrayBuffer());
+    const result = await extractDocxDocument(docx);
 
     expect(result.paragraphs.length).toBeGreaterThan(10);
     expect(result.charCount).toBeGreaterThan(100);
