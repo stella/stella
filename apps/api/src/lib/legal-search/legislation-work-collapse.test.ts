@@ -3,7 +3,12 @@ import { describe, expect, test } from "bun:test";
 
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
-import { collapseLegislationHitsByWork } from "@/api/lib/legal-search/legislation-work-collapse";
+import {
+  collapseLegislationHitsByWork,
+  legislationWorkToken,
+  pinnedLegislationWorks,
+  shownLegislationVersionId,
+} from "@/api/lib/legal-search/legislation-work-collapse";
 import type { LegislationWorkRepresentative } from "@/api/lib/legal-search/legislation-work-collapse";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
 
@@ -94,10 +99,7 @@ describe("collapseLegislationHitsByWork", () => {
       hit("a-2020", 0.4),
     ]);
     const pageOne = firstScan.slice(0, 1);
-    const cursor = pageOne.at(-1);
-    if (cursor === undefined) {
-      return panic("page one is empty");
-    }
+    const cursor = pageOne.at(-1) ?? panic("page one is empty");
 
     // Page two replays the window further; the scan skips the cursor's own
     // document and finds more of A, which must not come back.
@@ -123,5 +125,51 @@ describe("collapseLegislationHitsByWork", () => {
     const ranked = [hit("b-2005", 0.5), hit("a-2020", 0.5), hit("c-only", 0.5)];
 
     expect(collapse(ranked)).toEqual(collapse(ranked.toReversed()));
+  });
+
+  test("works an earlier window showed stay off the page, named or not", () => {
+    const { ranked, workTokens } = collapseLegislationHitsByWork({
+      ranked: [hit("a-2014", 0.9), hit("c-only", 0.7), hit("b-2001", 0.6)],
+      workOf: WORK_OF,
+      representatives: REPRESENTATIVES,
+      namedWorks: ["C", "N"],
+      namedScoreFloor: 10,
+      excludedWork: null,
+      excludedWorkTokens: new Set([
+        legislationWorkToken("A"),
+        legislationWorkToken("N"),
+      ]),
+    });
+
+    expect(ranked.map(({ id }) => id)).toEqual(["c-only", "b-2001"]);
+    // The pin keeps its slot, so C scores as it did before N was shown.
+    expect(ranked[0]?.score).toBe(12);
+    expect(workTokens.toSorted()).toEqual(
+      [legislationWorkToken("B"), legislationWorkToken("C")].toSorted(),
+    );
+  });
+});
+
+describe("the rules both search paths share", () => {
+  test("a work is shown as its current version, else as the version it matched", () => {
+    expect(
+      shownLegislationVersionId("a-2014", { id: "a-current", isCurrent: true }),
+    ).toBe("a-current");
+    expect(
+      shownLegislationVersionId("b-2001", { id: "b-2005", isCurrent: false }),
+    ).toBe("b-2001");
+    expect(shownLegislationVersionId("x-1", undefined)).toBe("x-1");
+  });
+
+  test("named works in force are pinned, else every named work with a version", () => {
+    expect(pinnedLegislationWorks(["B", "A", "Z"], REPRESENTATIVES)).toEqual([
+      "A",
+    ]);
+    expect(pinnedLegislationWorks(["B", "Z"], REPRESENTATIVES)).toEqual(["B"]);
+  });
+
+  test("a token is fixed-width and differs between works", () => {
+    expect(legislationWorkToken("A")).toMatch(/^[A-Za-z0-9_-]{6}$/u);
+    expect(legislationWorkToken("A")).not.toBe(legislationWorkToken("B"));
   });
 });

@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -8,9 +9,13 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
   legislationDocuments,
+  legislationSearchDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
+import {
+  rehydrateLegislationCandidates,
+  searchLegislationHandler,
+} from "@/api/handlers/legislation/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -25,7 +30,11 @@ import {
   isCurrentVersionOfWork,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
+import { legislationWorkToken } from "@/api/lib/legal-search/legislation-work-collapse";
+import {
+  legislationWorkRefKey,
+  syncLegislationWorkNamesTx,
+} from "@/api/lib/legal-search/legislation-work-names";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -163,6 +172,22 @@ beforeAll(
         contentHash: `hash-${String(index)}`,
       })),
     );
+    // The excerpt configuration the Postgres path highlights with.
+    await db.execute(
+      sql`CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)`,
+    );
+    // The Postgres path's index: every version but the code's current one
+    // matches "smlouva", so that act is found only by its older versions.
+    await db.insert(legislationSearchDocuments).values(
+      VERSIONS.filter((seed) => seed.id !== codeCurrent.id).map((seed) => ({
+        documentId: seed.id,
+        title: seed.title,
+        searchableText: `${seed.title} smlouva`,
+        language: "cs",
+        regconfig: "simple",
+        tsv: sql`to_tsvector('simple', ${`${seed.title} smlouva`})`,
+      })),
+    );
     await db.transaction(
       async (tx) =>
         await syncLegislationWorkNamesTx(
@@ -292,11 +317,8 @@ describe("one hit per act", () => {
       [codeCurrent, 0.3],
     ];
     const pageOne = (await rehydrate("smlouva", scan)).ranked.slice(0, 1);
-    const cursor = pageOne.at(-1);
-    expect(cursor?.id).toBe(String(codeCurrent.id));
-    if (cursor === undefined) {
-      return;
-    }
+    const cursor = pageOne.at(-1) ?? panic("page one is empty");
+    expect(cursor.id).toBe(String(codeCurrent.id));
 
     // The next request replays the window without the cursor's own document.
     const replay = await rehydrate(
@@ -345,5 +367,110 @@ describe("acts the query names come first", () => {
 
     expect(ids(result)).toEqual([String(vatAmendment.id), String(vat.id)]);
     expect(result.ranked[0]?.score).toBeCloseTo(0.9);
+  });
+});
+
+describe("acts an earlier scan window showed", () => {
+  test("stay off the page when the cursor carries them", async () => {
+    const codeToken = legislationWorkToken(
+      legislationWorkRefKey({ sourceId, eli: code2014.eli, language: "cs" }),
+    );
+    const scan = candidates([code2014, 0.9], [old1964, 0.5]);
+
+    const shown = await rehydrateLegislationCandidates({
+      body: { query: "smlouva", jurisdiction: "CZE" },
+      candidates: scan,
+      generation: GENERATION,
+      legislationDb,
+    });
+    const carried = await rehydrateLegislationCandidates({
+      body: { query: "smlouva", jurisdiction: "CZE" },
+      candidates: scan,
+      generation: GENERATION,
+      legislationDb,
+      excludedWorkTokens: [codeToken],
+    });
+
+    expect(shown.groups).toContain(codeToken);
+    expect(ids(carried)).toEqual([String(old1964.id)]);
+  });
+});
+
+describe("the Postgres search path", () => {
+  const searchDependencies = {
+    loadSearchConfigs: async () =>
+      await Promise.resolve([
+        {
+          regconfig: "simple",
+          useUnaccent: false,
+          includeDefault: true,
+          languages: [],
+        },
+      ]),
+  } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[2]>;
+
+  /** Every page of a query, `limit` hits at a time. */
+  const allPages = async (query: string, limit: number) => {
+    const pages: { documentId: string; headline: string | null }[][] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 10; page += 1) {
+      // db-await-in-loop: one keyset page per iteration, as a reader pages
+      const response = await searchLegislationHandler(
+        {
+          query,
+          jurisdiction: "CZE",
+          limit,
+          ...(cursor === undefined ? {} : { cursor }),
+        },
+        legislationDb,
+        searchDependencies,
+      );
+      if (!("items" in response)) {
+        return panic("the search refused a page it issued the cursor for");
+      }
+      pages.push(response.items);
+      if (response.nextCursor === null) {
+        return pages;
+      }
+      cursor = response.nextCursor;
+    }
+    return panic("the search never reached its last page");
+  };
+
+  test("shows each act once, as its current version, across pages", async () => {
+    const pages = await allPages("smlouva", 2);
+    const shown = pages.flat().map((hit) => hit.documentId);
+
+    // Five acts match, each on exactly one page, and the code is shown as
+    // the version in force although only its older versions matched.
+    expect(shown.toSorted()).toEqual(
+      [codeCurrent, old1990, amendment, vat, vatAmendment]
+        .map((seed) => String(seed.id))
+        .toSorted(),
+    );
+    expect(pages.length).toBe(3);
+    // Another version's excerpt is not shown under the current one.
+    expect(
+      pages.flat().find((hit) => hit.documentId === String(codeCurrent.id))
+        ?.headline,
+    ).toBeNull();
+  });
+
+  test("places the act a query names first and never shows it again", async () => {
+    const pages = await allPages("zákon o dani z přidané hodnoty", 1);
+    const shown = pages.flat().map((hit) => hit.documentId);
+
+    expect(shown[0]).toBe(String(vat.id));
+    expect(shown.filter((id) => id === String(vat.id))).toHaveLength(1);
+    expect(shown).toContain(String(vatAmendment.id));
+    expect(new Set(shown).size).toBe(shown.length);
+  });
+
+  test("a topical query pins nothing", async () => {
+    const [firstPage] = await allPages("smlouva přidané hodnoty", 10);
+
+    expect((firstPage ?? []).map((hit) => hit.documentId).toSorted()).toEqual(
+      [String(vat.id), String(vatAmendment.id)].toSorted(),
+    );
   });
 });

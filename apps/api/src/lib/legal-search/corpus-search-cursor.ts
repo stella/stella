@@ -29,6 +29,17 @@
  * A cursor without a target was built against groups under their manifests'
  * contracts only, so it cannot continue a read whose target has one.
  *
+ * A continuation that moved past a capped scan window of a ranker that folds
+ * hits into groups also carries the groups earlier windows showed
+ * (`SearchCursor.excludedGroups`), as one segment right before the id: `x`
+ * followed by fixed-width group tokens, none when there are none:
+ *
+ *     base64("<score>:<windowStart>:<dictionary>:<sort>[:<target>]:x<tokens>:<id>")
+ *
+ * The `x` cannot open a target (lowercase hex), so the two optional segments
+ * never read as each other. A replica that predates the segment refuses such a
+ * cursor as malformed rather than misreading it.
+ *
  * `windowStart` is a decimal rank, `dictionary` is a payload's sha256 hex or
  * `none`, `sort` is one of `SEARCH_SORTS`, and `id` is one segment — the
  * corpus addresses documents by uuid, so the grammar is fixed-width in its
@@ -53,6 +64,8 @@
  * One metadata segment therefore means a window rank and nothing else.
  */
 
+import { panic } from "better-result";
+
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   DEFAULT_SEARCH_SORT,
@@ -66,6 +79,7 @@ import {
   sameExpansionDictionary,
   serializeExpansionDictionaryIdentity,
 } from "@/api/lib/legal-search/morphology/dictionary";
+import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 
 /**
@@ -99,6 +113,54 @@ const READ_TARGET_PATTERN = new RegExp(
  * is not a rank this service issued.
  */
 const WINDOW_RANK_PATTERN = /^\d{1,10}$/u;
+
+/** Characters of one excluded-group token: base64url, fixed width. */
+export const CORPUS_CURSOR_GROUP_TOKEN_CHARS = 6;
+const GROUP_TOKEN_PATTERN = new RegExp(
+  `^[A-Za-z0-9_-]{${String(CORPUS_CURSOR_GROUP_TOKEN_CHARS)}}$`,
+  "u",
+);
+const GROUPS_SEGMENT_PREFIX = "x";
+
+/** The excluded-groups segment, or null when there is nothing to carry. */
+const serializeExcludedGroups = (
+  groups: readonly string[] | undefined,
+): string | null => {
+  if (groups === undefined || groups.length === 0) {
+    return null;
+  }
+  for (const group of groups) {
+    if (!GROUP_TOKEN_PATTERN.test(group)) {
+      return panic("An excluded group is not a cursor group token");
+    }
+  }
+  return `${GROUPS_SEGMENT_PREFIX}${groups.join("")}`;
+};
+
+/** The groups a segment carries, or null for one this service did not issue. */
+const parseExcludedGroups = (value: string): string[] | null => {
+  if (!value.startsWith(GROUPS_SEGMENT_PREFIX)) {
+    return null;
+  }
+  const tokens = value.slice(GROUPS_SEGMENT_PREFIX.length);
+  const count = tokens.length / CORPUS_CURSOR_GROUP_TOKEN_CHARS;
+  if (
+    count < 1 ||
+    !Number.isInteger(count) ||
+    count > LIMITS.corpusIndexSearchMaxExcludedGroups
+  ) {
+    return null;
+  }
+  const groups = Array.from({ length: count }, (_, index) =>
+    tokens.slice(
+      index * CORPUS_CURSOR_GROUP_TOKEN_CHARS,
+      (index + 1) * CORPUS_CURSOR_GROUP_TOKEN_CHARS,
+    ),
+  );
+  return groups.every((group) => GROUP_TOKEN_PATTERN.test(group))
+    ? groups
+    : null;
+};
 
 const parseWindowStart = (value: string): number | null =>
   WINDOW_RANK_PATTERN.test(value) ? Number(value) : null;
@@ -139,18 +201,102 @@ export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
     DECISION_ID_MAX_CHARS,
 );
 
+/**
+ * The longest cursor that carries excluded groups: the form above plus the
+ * groups segment at its bound. Only a search whose ranker folds hits into
+ * groups can issue one, so only such a search's cursor input declares it.
+ */
+export const CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH = base64Length(
+  SCORE_MAX_CHARS +
+    1 +
+    WINDOW_RANK_MAX_CHARS +
+    1 +
+    DICTIONARY_IDENTITY_MAX_CHARS +
+    1 +
+    SORT_MAX_CHARS +
+    1 +
+    CORPUS_READ_TARGET_IDENTITY_LENGTH +
+    1 +
+    GROUPS_SEGMENT_PREFIX.length +
+    LIMITS.corpusIndexSearchMaxExcludedGroups *
+      CORPUS_CURSOR_GROUP_TOKEN_CHARS +
+    1 +
+    DECISION_ID_MAX_CHARS,
+);
+
 export const encodeCorpusSearchCursor = ({
   dictionary,
+  excludedGroups,
   id,
   score,
   sort,
   target,
   windowStart,
-}: CorpusSearchCursor): string =>
-  encodeCursor(
+}: CorpusSearchCursor): string => {
+  const groups = serializeExcludedGroups(excludedGroups);
+  return encodeCursor(
     score,
-    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${id}`,
+    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${id}`,
   );
+};
+
+/** What the segments before the id say about the ranking a page came from. */
+type CursorRanking = {
+  dictionary: ExpansionDictionaryIdentity;
+  windowStart: number;
+  sort: SearchSort;
+  target?: string | null;
+  excludedGroups?: readonly string[];
+};
+
+type OptionalSegments = {
+  target: string | null;
+  excludedGroups: readonly string[];
+};
+
+/**
+ * The optional segments after the sort, in order: a read target, the groups
+ * segment, both, or neither. Null for anything else.
+ */
+const parseOptionalSegments = (
+  segments: readonly string[],
+): OptionalSegments | null => {
+  const [first, second, ...rest] = segments;
+  if (first === undefined) {
+    return { target: null, excludedGroups: [] };
+  }
+  if (rest.length > 0) {
+    return null;
+  }
+  const target = READ_TARGET_PATTERN.test(first) ? first : null;
+  if (target !== null && second === undefined) {
+    return { target, excludedGroups: [] };
+  }
+  if (target === null && second !== undefined) {
+    return null;
+  }
+  const excludedGroups = parseExcludedGroups(second ?? first);
+  return excludedGroups === null ? null : { target, excludedGroups };
+};
+
+/** `<windowStart>:<dictionary>:<sort>[:<target>][:x<groups>]`. */
+const parseCurrentForm = (
+  segments: readonly string[],
+): CursorRanking | null => {
+  const windowStart = parseWindowStart(segments.at(0) ?? "");
+  const dictionary = parseExpansionDictionaryIdentity(segments.at(1) ?? "");
+  const sort = parseSearchSort(segments.at(2) ?? "");
+  const optional = parseOptionalSegments(segments.slice(3));
+  if (
+    windowStart === null ||
+    dictionary === null ||
+    sort === null ||
+    optional === null
+  ) {
+    return null;
+  }
+  return { dictionary, windowStart, sort, ...optional };
+};
 
 export const decodeCorpusSearchCursor = (
   cursor: string,
@@ -164,35 +310,37 @@ export const decodeCorpusSearchCursor = (
   if (id === undefined || id.length === 0) {
     return null;
   }
-  const cursorOf = (
-    dictionary: ExpansionDictionaryIdentity,
-    windowStart: number,
-    sort: SearchSort,
-    target: string | null = null,
-  ): CorpusSearchCursor => ({
-    dictionary,
+  const cursorOf = ({
+    excludedGroups = [],
+    target = null,
+    ...ranking
+  }: CursorRanking): CorpusSearchCursor => ({
+    ...ranking,
     id,
     score: decoded.score,
-    sort,
     target,
-    windowStart,
+    ...(excludedGroups.length === 0 ? {} : { excludedGroups }),
   });
 
   switch (segments.length) {
     // legacy: `<score>:<id>`.
     case 1: {
-      return cursorOf(NO_EXPANSION_DICTIONARY_IDENTITY, 0, DEFAULT_SEARCH_SORT);
+      return cursorOf({
+        dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+        windowStart: 0,
+        sort: DEFAULT_SEARCH_SORT,
+      });
     }
     // legacy: `<score>:<windowStart>:<id>`.
     case 2: {
       const windowStart = parseWindowStart(segments.at(0) ?? "");
       return windowStart === null
         ? null
-        : cursorOf(
-            NO_EXPANSION_DICTIONARY_IDENTITY,
+        : cursorOf({
+            dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
             windowStart,
-            DEFAULT_SEARCH_SORT,
-          );
+            sort: DEFAULT_SEARCH_SORT,
+          });
     }
     // legacy: `<score>:<windowStart>:<dictionary>:<id>`.
     case 3: {
@@ -201,31 +349,14 @@ export const decodeCorpusSearchCursor = (
       if (windowStart === null || dictionary === null) {
         return null;
       }
-      return cursorOf(dictionary, windowStart, DEFAULT_SEARCH_SORT);
+      return cursorOf({ dictionary, windowStart, sort: DEFAULT_SEARCH_SORT });
     }
-    case 4: {
-      const windowStart = parseWindowStart(segments.at(0) ?? "");
-      const dictionary = parseExpansionDictionaryIdentity(segments.at(1) ?? "");
-      const sort = parseSearchSort(segments.at(2) ?? "");
-      if (windowStart === null || dictionary === null || sort === null) {
-        return null;
-      }
-      return cursorOf(dictionary, windowStart, sort);
-    }
-    case 5: {
-      const windowStart = parseWindowStart(segments.at(0) ?? "");
-      const dictionary = parseExpansionDictionaryIdentity(segments.at(1) ?? "");
-      const sort = parseSearchSort(segments.at(2) ?? "");
-      const target = segments.at(3) ?? "";
-      if (
-        windowStart === null ||
-        dictionary === null ||
-        sort === null ||
-        !READ_TARGET_PATTERN.test(target)
-      ) {
-        return null;
-      }
-      return cursorOf(dictionary, windowStart, sort, target);
+    // The current form, with a read target, a groups segment, both or neither.
+    case 4:
+    case 5:
+    case 6: {
+      const ranking = parseCurrentForm(segments.slice(0, -1));
+      return ranking === null ? null : cursorOf(ranking);
     }
     // An id carrying a colon is not a cursor this service issued: the grammar
     // above spends every segment it defines, so a longer payload is malformed
