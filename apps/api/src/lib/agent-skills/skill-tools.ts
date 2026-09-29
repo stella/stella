@@ -19,7 +19,10 @@ import {
 import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
+  type ActiveSkillContext,
+  type ChatSkillRef,
+  chatSkillId,
+  chatSkillOrigin,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
   SKILL_RESOURCE_READ_STATUS,
@@ -41,7 +44,7 @@ import {
 } from "./content-hash";
 
 type CreateSkillToolsProps = {
-  activeSkillContext?: ActiveChatSkillContext | null | undefined;
+  activeSkillContext?: ActiveSkillContext | null | undefined;
   organizationId: SafeId<"organization">;
   /**
    * A `validation` set registers the catalog tools whatever `skills` holds:
@@ -76,7 +79,7 @@ export const createSkillTools = ({
   const auditRead = async (read: {
     outcome: SkillReadOutcome;
     path: string | null;
-    skillId: SafeId<"agentSkill">;
+    skill: ChatSkillRef;
     slug: string;
   }) => {
     if (recordReadAuditEvent === undefined) {
@@ -91,7 +94,7 @@ export const createSkillTools = ({
   const availableSkillIds = new Set(
     skills === undefined ? undefined : skills.map((skill) => skill.name),
   );
-  const activeSkillId = activeSkillContext?.id;
+  const activeSkillId = activeSkillContext?.id ?? undefined;
   const activeEditableSkillContext =
     toActiveEditableSkillContext(activeSkillContext);
   const currentSkillEditTools =
@@ -148,7 +151,7 @@ export const createSkillTools = ({
       await auditRead({
         outcome: SKILL_READ_OUTCOME.success,
         path: null,
-        skillId: skill.id,
+        skill,
         slug: skill.name,
       });
       return {
@@ -202,7 +205,7 @@ export const createSkillTools = ({
           await auditRead({
             outcome: SKILL_READ_OUTCOME.error,
             path,
-            skillId: read.skillId,
+            skill: read.skill,
             slug: skillName,
           });
           throw new ChatToolError({
@@ -213,7 +216,7 @@ export const createSkillTools = ({
           await auditRead({
             outcome: SKILL_READ_OUTCOME.success,
             path,
-            skillId: read.skillId,
+            skill: read.skill,
             slug: skillName,
           });
           return {
@@ -221,8 +224,8 @@ export const createSkillTools = ({
             path,
             mimeType: inferSkillResourceMimeType(path),
             content: read.content,
-            skillId: read.skillId,
-            origin: read.origin,
+            skillId: chatSkillId(read.skill),
+            origin: chatSkillOrigin(read.skill),
           };
         default: {
           read satisfies never;
@@ -243,12 +246,12 @@ const skillNameSchema = v.pipe(
   v.description("Skill name exactly as listed in the chat skill catalog."),
 );
 
-type ActiveEditableSkillContext = ActiveChatSkillContext & {
+type ActiveEditableSkillContext = ActiveSkillContext & {
   editable: true;
 };
 
 const toActiveEditableSkillContext = (
-  activeSkillContext: ActiveChatSkillContext | null | undefined,
+  activeSkillContext: ActiveSkillContext | null | undefined,
 ): ActiveEditableSkillContext | null => {
   if (
     activeSkillContext?.editable === true &&

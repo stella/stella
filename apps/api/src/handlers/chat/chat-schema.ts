@@ -1,4 +1,8 @@
-import { isStandardSchema, parseWithStandardSchema } from "@tanstack/ai";
+import {
+  convertSchemaToJsonSchema,
+  isStandardSchema,
+  parseWithStandardSchema,
+} from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import type { Static } from "elysia";
@@ -56,6 +60,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 import { withNullsOmitted } from "@/api/lib/json-value";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 import {
@@ -216,7 +221,8 @@ export const resolveBrowserClientCapability = (
     : undefined;
 
 export const activeSkillSchema = activeContextSchema({
-  skillId: tSafeId("agentSkill"),
+  // A built-in skill has no row: `skillName` alone names it.
+  skillId: t.Optional(tSafeId("agentSkill")),
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });
 
@@ -551,10 +557,19 @@ const withValidatedToolPayload = ({
   part: ChatToolCallPart;
   payload: ValidatedToolPayload;
 }): ChatToolCallPart => {
+  // The validated input is the persisted call's one spelling; the provider
+  // text is re-derived from it so no reader of `arguments` sees a strict
+  // schema's null-widened optionals (`validateCanonicalToolInput`).
+  const argumentsText = JSON.stringify(payload.input);
   const candidate: unknown =
     payload.type === "input-only"
-      ? { ...part, input: payload.input }
-      : { ...part, input: payload.input, output: payload.output };
+      ? { ...part, arguments: argumentsText, input: payload.input }
+      : {
+          ...part,
+          arguments: argumentsText,
+          input: payload.input,
+          output: payload.output,
+        };
   if (!isChatPart(candidate) || candidate.type !== "tool-call") {
     panic("Validated chat tool payload violates the tool-call contract");
   }
@@ -575,6 +590,7 @@ export const validateMessage = async ({
       message,
       persistedMessage,
       resume,
+      tools,
     });
     if (Result.isError(partsResult)) {
       return Result.err(partsResult.error);
@@ -707,10 +723,12 @@ const validateIncomingChatParts = ({
   message,
   persistedMessage,
   resume,
+  tools,
 }: {
   message: RawIncomingMessage;
   persistedMessage: ValidateMessageInput["persistedMessage"];
   resume: AgUiResume | undefined;
+  tools: ChatToolMap;
 }): Result<ValidatedIncomingChatParts, HandlerError<400>> => {
   const validatedParts: ChatPart[] = [];
   for (const part of message.parts) {
@@ -745,6 +763,7 @@ const validateIncomingChatParts = ({
       incomingParts: validatedParts,
       persistedParts,
       resume,
+      tools,
     });
     if (Result.isError(continuationResult)) {
       return Result.err(continuationResult.error);
@@ -848,10 +867,12 @@ const validateContinuationToolCallIntegrity = ({
   incomingParts,
   persistedParts,
   resume,
+  tools,
 }: {
   incomingParts: readonly ChatPart[];
   persistedParts: readonly ChatPart[];
   resume: AgUiResume | undefined;
+  tools: ChatToolMap;
 }): Result<
   ReadonlyMap<string, ValidatedContinuationToolCall>,
   HandlerError<400>
@@ -877,6 +898,7 @@ const validateContinuationToolCallIntegrity = ({
     const validatedCallResult = validateContinuationToolCallTransition({
       canonicalCall,
       incomingCall,
+      tool: tools[canonicalCall.name],
     });
     if (Result.isError(validatedCallResult)) {
       return Result.err(validatedCallResult.error);
@@ -1040,12 +1062,28 @@ const canonicalToolCallBase = (
   };
 };
 
+/**
+ * The continuation's input compared under the placeholder rule of the tool's
+ * own schema, so a `null` a nullable field admits is a value, not absence.
+ * A call with no known schema (a tool this request does not register, or one
+ * without an input schema) keeps the schema-blind fold of every `null`.
+ */
+const withContinuationInputFolded = (
+  tool: ChatTool | undefined,
+  value: unknown,
+): unknown =>
+  tool?.inputSchema === undefined
+    ? withNullsOmitted(value)
+    : withToolInputPlaceholdersOmitted(tool.inputSchema, value);
+
 const validateContinuationToolCallTransition = ({
   canonicalCall,
   incomingCall,
+  tool,
 }: {
   canonicalCall: ChatToolCallPart;
   incomingCall: ChatToolCallPart;
+  tool: ChatTool | undefined;
 }): Result<ValidatedContinuationToolCall, HandlerError<400>> => {
   if (incomingCall.state === canonicalCall.state) {
     return Result.ok({
@@ -1056,8 +1094,8 @@ const validateContinuationToolCallTransition = ({
   if (
     incomingCall.name !== canonicalCall.name ||
     !deepEquals(
-      withNullsOmitted(incomingCall.input),
-      withNullsOmitted(canonicalCall.input),
+      withContinuationInputFolded(tool, incomingCall.input),
+      withContinuationInputFolded(tool, canonicalCall.input),
     )
   ) {
     return invalidContinuationToolCall();
@@ -1482,10 +1520,11 @@ const validateToolCallPart = ({
     });
   }
 
-  const validatedArgumentsResult = validateToolCallInput({ part, tool });
-  if (Result.isError(validatedArgumentsResult)) {
-    return Result.err(validatedArgumentsResult.error);
+  const validatedInputResult = validateToolCallInput({ part, tool });
+  if (Result.isError(validatedInputResult)) {
+    return Result.err(validatedInputResult.error);
   }
+  const validatedInput = validatedInputResult.value;
 
   if (part.output === undefined) {
     return Result.ok({
@@ -1494,7 +1533,7 @@ const validateToolCallPart = ({
       output: { type: "absent" },
       part: withValidatedToolPayload({
         part,
-        payload: { type: "input-only", input: validatedArgumentsResult.value },
+        payload: { type: "input-only", input: validatedInput },
       }),
     });
   }
@@ -1516,14 +1555,15 @@ const validateToolCallPart = ({
       part,
       payload: {
         type: "input-output",
-        input: validatedArgumentsResult.value,
+        input: validatedInput,
         output: outputResult.value,
       },
     }),
   });
 };
 
-/** A call's input in the form its tool's schema gives it, or why not. */
+/** A call's input in the form its tool's schema gives it, or why not
+ *  (`validateCanonicalToolInput`). */
 const validateToolCallInput = ({
   part,
   tool,
@@ -1535,37 +1575,11 @@ const validateToolCallInput = ({
   if (Result.isError(argumentsResult)) {
     return Result.err(argumentsResult.error);
   }
-
-  const validatedArgumentsResult = validateToolPayload({
-    payload: argumentsResult.value,
-    payloadName: "arguments",
+  return validateCanonicalToolInput({
+    parsedArguments: argumentsResult.value,
+    part,
     schema: tool.inputSchema,
-    toolName: part.name,
   });
-  if (Result.isError(validatedArgumentsResult)) {
-    return Result.err(validatedArgumentsResult.error);
-  }
-
-  if (part.input !== undefined) {
-    const inputResult = validateToolPayload({
-      payload: part.input,
-      payloadName: "input",
-      schema: tool.inputSchema,
-      toolName: part.name,
-    });
-    if (Result.isError(inputResult)) {
-      return Result.err(inputResult.error);
-    }
-    if (!deepEquals(inputResult.value, validatedArgumentsResult.value)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Chat tool input does not match arguments for ${part.name}`,
-        }),
-      );
-    }
-  }
-  return Result.ok(validatedArgumentsResult.value);
 };
 
 /**
@@ -1825,6 +1839,74 @@ const parseToolResultContent = (
 };
 
 const parseJsonUnknown = (value: string): unknown => JSON.parse(value);
+
+/**
+ * The one copy of a tool call's input that is validated against the tool
+ * schema and persisted.
+ *
+ * A strict provider schema widens every optional field to nullable, so the raw
+ * `arguments` text spells an absent optional as `null`. Chat's provider stream
+ * folds that back before it attaches `input` to the call
+ * (`withModelPlaceholdersOmitted`), but the text keeps the provider's
+ * spelling, and the tool schema's `optional` fields admit absence, not
+ * `null`. So `input` is the canonical copy: the text must agree with it once
+ * both are folded by that same rule, and only `input` meets the schema. A part
+ * with no `input` (rebuilt by a client, or persisted before adapters attached
+ * one) has only the text, which is folded the same way and then is the input,
+ * so a call has one canonical spelling whichever copy arrived. The rule reads
+ * the schema, so a `null` the schema admits (a nullable field) stays.
+ */
+/**
+ * A model's tool input under the placeholder rule chat's provider stream
+ * applies (`withDeclaredToolInput`), read off the JSON Schema the provider
+ * was handed for the tool.
+ */
+const withToolInputPlaceholdersOmitted = (
+  schema: unknown,
+  value: unknown,
+): unknown =>
+  withModelPlaceholdersOmitted(
+    isStandardSchema(schema) ? convertSchemaToJsonSchema(schema) : schema,
+    value,
+  );
+
+const validateCanonicalToolInput = ({
+  parsedArguments,
+  part,
+  schema,
+}: {
+  parsedArguments: unknown;
+  part: ChatToolCallPart;
+  schema: unknown;
+}): Result<unknown, HandlerError<400>> => {
+  if (part.input === undefined) {
+    return validateToolPayload({
+      payload: withToolInputPlaceholdersOmitted(schema, parsedArguments),
+      payloadName: "arguments",
+      schema,
+      toolName: part.name,
+    });
+  }
+  if (
+    !deepEquals(
+      withToolInputPlaceholdersOmitted(schema, parsedArguments),
+      withToolInputPlaceholdersOmitted(schema, part.input),
+    )
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Chat tool input does not match arguments for ${part.name}`,
+      }),
+    );
+  }
+  return validateToolPayload({
+    payload: part.input,
+    payloadName: "input",
+    schema,
+    toolName: part.name,
+  });
+};
 
 const validateToolPayload = ({
   payload,

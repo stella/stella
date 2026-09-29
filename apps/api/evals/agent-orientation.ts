@@ -537,6 +537,7 @@ const skillFixtureRow = ({
   license: null,
   metadata: {},
   name: slug,
+  source: "installed",
   version: "1.0.0",
 });
 
