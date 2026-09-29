@@ -1,10 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
-import type { DataTag } from "@tanstack/react-query";
 import { isRedirect } from "@tanstack/react-router";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { sessionOptions } from "@/lib/auth-queries";
+import { rootKeys } from "@/lib/auth-queries";
 import {
   afterOnboardingNavigation,
   afterSignInNavigation,
@@ -25,11 +24,6 @@ const DESTINATION = "/knowledge/templates?intent=use&slug=nda";
 
 type Account = { signedIn: boolean; organizationId: string | null };
 
-type SessionData =
-  typeof sessionOptions.queryKey extends DataTag<unknown, infer TData>
-    ? TData
-    : never;
-
 const sessionFor = (account: Account) =>
   account.signedIn
     ? {
@@ -46,11 +40,9 @@ const queryClientFor = (account: Account) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  // The stub carries only the fields the route guards read.
-  queryClient.setQueryData(
-    sessionOptions.queryKey,
-    sessionFor(account) as unknown as SessionData,
-  );
+  // The stub carries only the fields the route guards read; the untagged key
+  // takes the stub's own type.
+  queryClient.setQueryData([...rootKeys.session], sessionFor(account));
   return queryClient;
 };
 
@@ -75,10 +67,18 @@ const runBeforeLoad = async (
     return null;
   }
   if (!isRedirect(outcome)) {
-    throw outcome;
+    throw outcome instanceof Error
+      ? outcome
+      : new Error("beforeLoad failed", { cause: outcome });
   }
   return outcome.options;
 };
+
+const isSearchSchema = (value: unknown): value is v.GenericSchema =>
+  typeof value === "object" &&
+  value !== null &&
+  "kind" in value &&
+  value.kind === "schema";
 
 /** Parses a search object with a route's real search schema. */
 const validateSearch = (
@@ -86,7 +86,10 @@ const validateSearch = (
   search: Record<string, unknown>,
 ): Record<string, unknown> => {
   const schema = route.options.validateSearch;
-  const parsed: unknown = v.parse(schema as unknown as v.GenericSchema, search);
+  if (!isSearchSchema(schema)) {
+    throw new TypeError("route has no search schema");
+  }
+  const parsed: unknown = v.parse(schema, search);
   if (typeof parsed !== "object" || parsed === null) {
     throw new TypeError("search schema returned a non-object");
   }
