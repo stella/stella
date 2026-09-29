@@ -196,8 +196,10 @@ describe("the stored CourtListener raw", () => {
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       ...override,
     });
+    const rejected: string | false =
+      Result.isError(decoded) && decoded.error.reason;
 
-    expect(Result.isError(decoded) && decoded.error.reason).toBe(reason);
+    expect(rejected).toBe(reason);
   });
 
   test("rejects a contract part of another version", () => {
