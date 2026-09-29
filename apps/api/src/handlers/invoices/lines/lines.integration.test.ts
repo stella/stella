@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { Elysia } from "elysia";
 
 import { calculateDocumentTotals } from "@stll/invoicing";
 
@@ -414,6 +415,27 @@ describe("invoice lines", () => {
     expect(invoice?.totalAmount).toBe(cents(legacy.totalAmount + 1100));
   });
 
+  test("a line patch that omits the VAT treatment keeps it", async () => {
+    const invoiceId = await seedInvoice();
+    const lineId = await expectCreated(invoiceId, {
+      ...manual({ quantity: "1", unitPriceMinor: 1000 }, 0),
+      vatTreatment: "reverse_charge",
+    });
+
+    // Through Elysia's own validation, which fills absent fields it coerces.
+    const body = await parseUpdateBody({ description: "Revised advice" });
+    expect(body).toEqual({ description: "Revised advice" });
+    await runUpdate(invoiceId, lineId, body);
+
+    expect(readLines(await runGet(invoiceId))).toMatchObject([
+      {
+        id: lineId,
+        description: "Revised advice",
+        vatTreatment: "reverse_charge",
+      },
+    ]);
+  });
+
   test("row-level security keeps another organization's lines out of reach", async () => {
     const invoiceId = await seedInvoice();
     await expectCreated(
@@ -513,6 +535,30 @@ const runDelete = async (
     contextFor({ params: { workspaceId: ids.wsA1, invoiceId, lineId } }),
   );
 
+/** The body the handler receives after Elysia validates the request. */
+const parseUpdateBody = async (
+  body: Record<string, unknown>,
+): Promise<UpdateBody> => {
+  let parsed: unknown = null;
+  const app = new Elysia().patch(
+    "/line",
+    ({ body: received }) => {
+      parsed = received;
+      return "ok";
+    },
+    { body: updateInvoiceLine.config.body },
+  );
+  const response = await app.handle(
+    new Request("http://localhost/line", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+  expect(response.status).toBe(200);
+  return asTestRaw<UpdateBody>(parsed);
+};
+
 const runGet = async (invoiceId: SafeId<"invoice">) =>
   await readInvoiceById.handler(
     contextFor({ params: { workspaceId: ids.wsA1, invoiceId } }),
@@ -550,6 +596,8 @@ const expectCreated = async (invoiceId: SafeId<"invoice">, body: LineBody) =>
 type ReadLine = {
   id: string;
   position: number;
+  description: string;
+  vatTreatment: string;
   source: string;
   quantity: string;
   netAmount: number;

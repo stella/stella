@@ -48,7 +48,12 @@ export const tVatRateBps = t.Integer({
   description: "VAT rate in basis points: 2100 is 21 %",
 });
 
-export const tVatTreatment = t.UnionEnum(VAT_TREATMENTS);
+// A literal union, not `t.UnionEnum`: Elysia coerces an absent optional
+// UnionEnum field to its first member, so a line patch that omits the
+// treatment would reset it to `domestic_vat`.
+export const tVatTreatment = t.Union(
+  VAT_TREATMENTS.map((treatment) => t.Literal(treatment)),
+);
 
 export const tLineDescription = t.String({
   minLength: 1,
