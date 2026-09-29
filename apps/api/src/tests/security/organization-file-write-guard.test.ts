@@ -62,7 +62,6 @@ const exemptions = {
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:1": "fixture",
   "src/handlers/uploads/update.ts:copyObject:0": "reservation_flow",
   "src/handlers/uploads/update.ts:writeS3ObjectWithRetry:0": "reservation_flow",
-  "src/handlers/chat/fork/create.ts:copyObject:1": "flag_off",
 } as const satisfies Record<
   string,
   | "export"
