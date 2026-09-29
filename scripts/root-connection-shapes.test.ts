@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   countRootConnectionImports,
+  countRootConnectionTypeImports,
   findRootConnectionShapes,
   findStaleRootOperations,
   ROOT_CONNECTION_SHAPE,
@@ -547,6 +548,8 @@ describe("explicit uses are not shapes", () => {
 describe("modules that reach an owner-level handle", () => {
   const importsOf = (...lines: readonly string[]): number =>
     countRootConnectionImports(`${lines.join("\n")}\n`);
+  const typesOf = (...lines: readonly string[]): number =>
+    countRootConnectionTypeImports(`${lines.join("\n")}\n`);
 
   test("one per handle a named import names, renamed or by path", () => {
     expect(importsOf(ROOT_IMPORT)).toBe(1);
@@ -559,39 +562,52 @@ describe("modules that reach an owner-level handle", () => {
     expect(importsOf('import { rootDb } from "@/api/db/root.ts";')).toBe(1);
   });
 
-  test("type-only imports count: a parameter typed from a handle takes it", () => {
-    expect(importsOf('import type { rootDb } from "@/api/db/root";')).toBe(1);
-    expect(
-      importsOf(
-        'import { type rlsDb, type Transaction } from "@/api/db/root";',
-      ),
-    ).toBe(1);
-    expect(
-      importsOf(
+  test("type-only references count apart: a parameter typed from a handle takes it", () => {
+    const typeOnly = [
+      ['import type { rootDb } from "@/api/db/root";', 1],
+      ['import { type rlsDb, type Transaction } from "@/api/db/root";', 1],
+      [
         'import type { rootDb as rootDatabase, Transaction } from "@/api/db/root";',
-      ),
-    ).toBe(1);
-    expect(
-      importsOf('export type Db = typeof import("@/api/db/root").rootDb;'),
-    ).toBe(1);
-    expect(
-      importsOf('export type Root = typeof import("@/api/db/root");'),
-    ).toBe(2);
+        1,
+      ],
+      ['import type * as root from "@/api/db/root";', 2],
+      ['export type { rootDb } from "@/api/db/root";', 1],
+      ['export { type rlsDb } from "@/api/db/root";', 1],
+      ['export type * from "@/api/db/root";', 2],
+      ['import type root = require("@/api/db/root");', 2],
+      ['export type Db = typeof import("@/api/db/root").rootDb;', 1],
+      ['export type Root = typeof import("@/api/db/root");', 2],
+    ] as const;
+    for (const [line, expected] of typeOnly) {
+      expect([line, typesOf(line), importsOf(line)]).toEqual([
+        line,
+        expected,
+        0,
+      ]);
+    }
+  });
+
+  test("a type-only import turned into a value import moves to the runtime count", () => {
+    const before = 'import type { rootDb } from "@/api/db/root";';
+    const after = 'import { rootDb } from "@/api/db/root";';
+    expect([importsOf(before), typesOf(before)]).toEqual([0, 1]);
+    expect([importsOf(after), typesOf(after)]).toEqual([1, 0]);
+    const mixed = 'import { rootDb, type rlsDb } from "@/api/db/root";';
+    expect([importsOf(mixed), typesOf(mixed)]).toEqual([1, 1]);
   });
 
   test("the shared transaction type alone does not count", () => {
-    expect(importsOf('import type { Transaction } from "@/api/db/root";')).toBe(
-      0,
-    );
-    expect(
-      importsOf('export type Tx = import("@/api/db/root").Transaction;'),
-    ).toBe(0);
+    for (const line of [
+      'import type { Transaction } from "@/api/db/root";',
+      'export type Tx = import("@/api/db/root").Transaction;',
+    ]) {
+      expect([importsOf(line), typesOf(line)]).toEqual([0, 0]);
+    }
   });
 
   test("re-exports count like imports", () => {
     expect(importsOf('export { rootDb } from "@/api/db/root";')).toBe(1);
     expect(importsOf('export { rlsDb as pool } from "../db/root";')).toBe(1);
-    expect(importsOf('export type { rootDb } from "@/api/db/root";')).toBe(1);
     expect(importsOf('export * from "@/api/db/root";')).toBe(2);
     expect(importsOf('export * as root from "@/api/db/root";')).toBe(2);
     expect(importsOf('export { Transaction } from "@/api/db/root";')).toBe(0);
@@ -599,7 +615,6 @@ describe("modules that reach an owner-level handle", () => {
 
   test("a namespace, require or undestructured dynamic import counts both", () => {
     expect(importsOf('import * as root from "@/api/db/root";')).toBe(2);
-    expect(importsOf('import type * as root from "@/api/db/root";')).toBe(2);
     expect(importsOf('import root = require("@/api/db/root");')).toBe(2);
     expect(
       importsOf(

@@ -616,17 +616,26 @@ export const countRootConnectionShapes = (
 // `import = require(...)`, a dynamic import that is not destructured, and a
 // bare `typeof import(...)`.
 //
-// Type-only forms count the same as value forms. A type taken from a handle
-// (`db: Pick<typeof rootDb, "select">`) grants nothing by itself, but it is
-// the parameter an owner handle is passed into: the module that declares it
-// runs owner-level queries on whatever it is handed, so it is listed with the
-// modules that import the value. `Transaction`, the transaction type scoped
-// handles share, is not a handle and does not count.
+// Runtime and type-only references are counted apart, each gated per file, so
+// a module that turns `import type { rootDb }` into a value import rises in
+// the runtime count instead of spending the allowance its type had. A type
+// taken from a handle (`db: Pick<typeof rootDb, "select">`) grants nothing by
+// itself, but it is the parameter an owner handle is passed into, so it is
+// listed too. `Transaction`, the transaction type scoped handles share, is not
+// a handle and does not count.
 const HANDLES_PER_MODULE = ROOT_CONNECTION_EXPORTS.length;
 
-const countNamedHandles = (
-  names: readonly (ts.Identifier | ts.StringLiteral)[],
-): number => names.filter((name) => isRootConnectionExport(name.text)).length;
+type RootConnectionReferences = {
+  /** References that bind a handle at runtime. */
+  readonly value: number;
+  /** References erased at compile time: type-only imports and type queries. */
+  readonly type: number;
+};
+
+type NamedReference = {
+  readonly name: ts.Identifier | ts.StringLiteral;
+  readonly isTypeOnly: boolean;
+};
 
 // The handles a dynamic import's result is destructured into, or every
 // handle when the module object itself escapes.
@@ -642,22 +651,34 @@ const dynamicImportHandles = (call: ts.CallExpression): number => {
       (element) => element.dotDotDotToken === undefined,
     )
   ) {
-    return countNamedHandles(
-      holder.name.elements.flatMap((element) => {
-        const imported = element.propertyName ?? element.name;
-        return ts.isIdentifier(imported) || ts.isStringLiteral(imported)
-          ? [imported]
-          : [];
-      }),
-    );
+    return holder.name.elements.filter((element) => {
+      const imported = element.propertyName ?? element.name;
+      return (
+        (ts.isIdentifier(imported) || ts.isStringLiteral(imported)) &&
+        isRootConnectionExport(imported.text)
+      );
+    }).length;
   }
   return HANDLES_PER_MODULE;
 };
 
-const countRootConnectionImportsAs = (
+// The handles an import type names: its qualifier's first name, or the whole
+// module when it names none.
+const importTypeHandles = (node: ts.ImportTypeNode): number => {
+  let head = node.qualifier;
+  while (head !== undefined && ts.isQualifiedName(head)) {
+    head = head.left;
+  }
+  if (head !== undefined) {
+    return isRootConnectionExport(head.text) ? 1 : 0;
+  }
+  return HANDLES_PER_MODULE;
+};
+
+const countRootConnectionReferencesAs = (
   content: string,
   scriptKind: ts.ScriptKind,
-): number => {
+): RootConnectionReferences => {
   const sourceFile = ts.createSourceFile(
     "root-connection-imports",
     content,
@@ -665,20 +686,38 @@ const countRootConnectionImportsAs = (
     true,
     scriptKind,
   );
-  let count = 0;
+  let value = 0;
+  let type = 0;
+  const add = (count: number, isTypeOnly: boolean): void => {
+    if (isTypeOnly) {
+      type += count;
+    } else {
+      value += count;
+    }
+  };
+  const addNamed = (names: readonly NamedReference[]): void => {
+    for (const { name, isTypeOnly } of names) {
+      if (isRootConnectionExport(name.text)) {
+        add(1, isTypeOnly);
+      }
+    }
+  };
   const visit = (node: ts.Node): void => {
     if (
       ts.isImportDeclaration(node) &&
       isRootConnectionModule(node.moduleSpecifier)
     ) {
+      const clauseIsTypeOnly =
+        node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword;
       const bindings = node.importClause?.namedBindings;
       if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-        count += HANDLES_PER_MODULE;
+        add(HANDLES_PER_MODULE, clauseIsTypeOnly);
       } else if (bindings !== undefined) {
-        count += countNamedHandles(
-          bindings.elements.map(
-            (specifier) => specifier.propertyName ?? specifier.name,
-          ),
+        addNamed(
+          bindings.elements.map((specifier) => ({
+            name: specifier.propertyName ?? specifier.name,
+            isTypeOnly: clauseIsTypeOnly || specifier.isTypeOnly,
+          })),
         );
       }
       return;
@@ -688,14 +727,16 @@ const countRootConnectionImportsAs = (
       isRootConnectionModule(node.moduleSpecifier)
     ) {
       const clause = node.exportClause;
-      count +=
-        clause === undefined || ts.isNamespaceExport(clause)
-          ? HANDLES_PER_MODULE
-          : countNamedHandles(
-              clause.elements.map(
-                (specifier) => specifier.propertyName ?? specifier.name,
-              ),
-            );
+      if (clause === undefined || ts.isNamespaceExport(clause)) {
+        add(HANDLES_PER_MODULE, node.isTypeOnly);
+      } else {
+        addNamed(
+          clause.elements.map((specifier) => ({
+            name: specifier.propertyName ?? specifier.name,
+            isTypeOnly: node.isTypeOnly || specifier.isTypeOnly,
+          })),
+        );
+      }
       return;
     }
     if (
@@ -703,7 +744,7 @@ const countRootConnectionImportsAs = (
       ts.isExternalModuleReference(node.moduleReference) &&
       isRootConnectionModule(node.moduleReference.expression)
     ) {
-      count += HANDLES_PER_MODULE;
+      add(HANDLES_PER_MODULE, node.isTypeOnly);
       return;
     }
     if (
@@ -711,31 +752,36 @@ const countRootConnectionImportsAs = (
       node.expression.kind === ts.SyntaxKind.ImportKeyword &&
       isRootConnectionModule(node.arguments.at(0))
     ) {
-      count += dynamicImportHandles(node);
+      value += dynamicImportHandles(node);
     }
     if (
       ts.isImportTypeNode(node) &&
       ts.isLiteralTypeNode(node.argument) &&
       isRootConnectionModule(node.argument.literal)
     ) {
-      let head = node.qualifier;
-      while (head !== undefined && ts.isQualifiedName(head)) {
-        head = head.left;
-      }
-      count +=
-        head === undefined ? HANDLES_PER_MODULE : countNamedHandles([head]);
+      type += importTypeHandles(node);
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  return count;
+  return { value, type };
 };
 
 // The counter sees content, not the file name. Parsing a `.ts` generic arrow
-// as TSX misreads what follows it, so both parses run and the larger count
-// is the one that read the file correctly.
+// as TSX misreads what follows it, so both parses run and the one that found
+// more is the one that read the file correctly.
+const countRootConnectionReferences = (
+  content: string,
+): RootConnectionReferences => {
+  const asTs = countRootConnectionReferencesAs(content, ts.ScriptKind.TS);
+  const asTsx = countRootConnectionReferencesAs(content, ts.ScriptKind.TSX);
+  return asTsx.value + asTsx.type > asTs.value + asTs.type ? asTsx : asTs;
+};
+
+/** Runtime references to the owner-level handles. */
 export const countRootConnectionImports = (content: string): number =>
-  Math.max(
-    countRootConnectionImportsAs(content, ts.ScriptKind.TS),
-    countRootConnectionImportsAs(content, ts.ScriptKind.TSX),
-  );
+  countRootConnectionReferences(content).value;
+
+/** Type-only references to the owner-level handles. */
+export const countRootConnectionTypeImports = (content: string): number =>
+  countRootConnectionReferences(content).type;

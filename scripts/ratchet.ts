@@ -72,6 +72,7 @@ import {
 import {
   countRootConnectionImports,
   countRootConnectionShapes,
+  countRootConnectionTypeImports,
 } from "./root-connection-shapes";
 import {
   ALL_SOURCE_GLOBS,
@@ -2865,11 +2866,23 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "direct-root-connection-imports",
     description:
-      "references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed, type-only and namespace imports, re-exports, `import = require`, dynamic imports and import type queries (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, or a file naming one more handle, fails even when another file dropped one",
+      "runtime references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed and namespace imports, re-exports, `import = require` and dynamic imports (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, a file naming one more handle, or a type-only import turned into a value import fails even when another file dropped one",
     include: API_OWNER_HANDLE_GLOBS,
     exclude: (file) =>
       isExcludedSource(file) || file === "apps/api/src/db/root.ts",
     count: countRootConnectionImports,
+    perFile: true,
+    allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
+  },
+  {
+    scope: "file",
+    id: "root-connection-type-imports",
+    description:
+      "type-only references to the owner-level database handles (`rootDb`, `rlsDb`) anywhere in the API outside tests, one per handle named: `import type`, `type` specifiers, type-only re-exports and import type queries (scripts/root-connection-shapes.ts). A type taken from a handle is the parameter one is passed into, so these are an allowlist gated per file too, kept apart from runtime references so a module cannot trade one for the other",
+    include: API_OWNER_HANDLE_GLOBS,
+    exclude: (file) =>
+      isExcludedSource(file) || file === "apps/api/src/db/root.ts",
+    count: countRootConnectionTypeImports,
     perFile: true,
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
@@ -4755,21 +4768,28 @@ const failureSinkSelfTestFailures = (snapshot: Baseline): string[] => {
 const ownerHandleAllowlistSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   const id = "direct-root-connection-imports";
+  const typeId = "root-connection-type-imports";
   const imports = requireSnapshot(snapshot, id);
-  for (const [file, expected] of [
-    [OWNER_HANDLE_RLS_FIXTURE, 1],
-    [OWNER_HANDLE_TYPE_FIXTURE, 1],
-    [OWNER_HANDLE_TEST_FIXTURE, undefined],
-    [OWNER_HANDLE_TRANSACTION_FIXTURE, undefined],
+  const types = requireSnapshot(snapshot, typeId);
+  for (const [metric, file, expected] of [
+    [id, OWNER_HANDLE_RLS_FIXTURE, 1],
+    [id, OWNER_HANDLE_TYPE_FIXTURE, undefined],
+    [id, OWNER_HANDLE_TEST_FIXTURE, undefined],
+    [id, OWNER_HANDLE_TRANSACTION_FIXTURE, undefined],
+    [typeId, OWNER_HANDLE_RLS_FIXTURE, undefined],
+    [typeId, OWNER_HANDLE_TYPE_FIXTURE, 1],
+    [typeId, OWNER_HANDLE_TEST_FIXTURE, undefined],
+    [typeId, OWNER_HANDLE_TRANSACTION_FIXTURE, undefined],
   ] as const) {
-    if (imports.files[file] !== expected) {
+    const counted = (metric === id ? imports : types).files[file];
+    if (counted !== expected) {
       failures.push(
-        `${id} counted ${String(imports.files[file])} in ${file}, expected ${String(expected)}`,
+        `${metric} counted ${String(counted)} in ${file}, expected ${String(expected)}`,
       );
     }
   }
 
-  for (const metricId of [id, "implicit-root-connection-shapes"]) {
+  for (const metricId of [id, typeId, "implicit-root-connection-shapes"]) {
     const metric = RATCHET_METRICS.find((entry) => entry.id === metricId);
     if (metric?.scope !== "file" || metric.allowlist === undefined) {
       failures.push(`${metricId} is not a per-file allowlist`);
@@ -4820,14 +4840,37 @@ const ownerHandleAllowlistSelfTestFailures = (snapshot: Baseline): string[] => {
   ) {
     failures.push(`${id} let a listed file add a second handle`);
   }
-  // A type-only import is counted above, so it needs an entry like any other.
+  // A type-only import is counted in its own allowlist, so it needs an entry
+  // like any other.
+  const typeMetric = RATCHET_METRICS.find((entry) => entry.id === typeId);
   const withoutType = Object.fromEntries(
-    Object.entries(imports.files).filter(
+    Object.entries(types.files).filter(
       ([file]) => file !== OWNER_HANDLE_TYPE_FIXTURE,
     ),
   );
-  if (diffMetric(id, imports, snap(withoutType), gate).status !== "regressed") {
-    failures.push(`${id} let a new type-only import through`);
+  if (
+    typeMetric === undefined ||
+    diffMetric(typeId, types, snap(withoutType), metricGate(typeMetric))
+      .status !== "regressed"
+  ) {
+    failures.push(`${typeId} let a new type-only import through`);
+  }
+  // A module listed only for its type-only import that turns it into a value
+  // import rises in the runtime allowlist: the type's allowance does not
+  // cover runtime access.
+  const escalated = OWNER_HANDLE_TYPE_FIXTURE;
+  const valueAfter = countRootConnectionImports(
+    'import { rootDb } from "@/api/db/root";\n',
+  );
+  if (
+    diffMetric(
+      id,
+      snap({ ...imports.files, [escalated]: valueAfter }),
+      imports,
+      gate,
+    ).status !== "regressed"
+  ) {
+    failures.push(`${id} let a type-only import become a value import`);
   }
   // Removing a use fails until the baseline shrinks with it; the rewritten
   // baseline, which is the current snapshot, then passes and lists no file
