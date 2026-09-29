@@ -333,13 +333,51 @@ describe("invoice lines", () => {
     ]);
   });
 
-  test("editing a draft from before invoice lines keeps its attached entries in the total", async () => {
+  test("reading an invoice from before invoice lines totals its attached entries", async () => {
     const legacy = await seedLegacyDraft();
-    // A read never writes: the legacy draft shows no lines until an edit.
-    expect(await runGet(legacy.invoiceId)).toMatchObject({
+    const legacyTotals = {
       lines: [],
       totalAmount: legacy.totalAmount,
+      netAmount: legacy.totalAmount,
+      vatAmount: 0,
+      totals: {
+        netAmountMinor: legacy.totalAmount,
+        vatAmountMinor: 0,
+        grossAmountMinor: legacy.totalAmount,
+      },
+    };
+
+    // A read never writes: no lines appear, but the totals count the entries.
+    expect(await runGet(legacy.invoiceId)).toMatchObject(legacyTotals);
+    await setStatus(legacy.invoiceId, INVOICE_STATUS.FINALIZED);
+    expect(await runGet(legacy.invoiceId)).toMatchObject(legacyTotals);
+    expect(await readStoredAmounts(legacy.invoiceId)).toEqual({
+      netAmount: null,
+      vatAmount: null,
     });
+  });
+
+  test("a voided invoice from before invoice lines reads its stored total", async () => {
+    const invoiceId = await seedInvoice();
+    await testDb
+      .update(invoices)
+      .set({ totalAmount: cents(5000), status: INVOICE_STATUS.VOID })
+      .where(eq(invoices.id, invoiceId));
+
+    expect(await runGet(invoiceId)).toMatchObject({
+      lines: [],
+      netAmount: 5000,
+      vatAmount: 0,
+      totals: {
+        netAmountMinor: 5000,
+        vatAmountMinor: 0,
+        grossAmountMinor: 5000,
+      },
+    });
+  });
+
+  test("editing a draft from before invoice lines keeps its attached entries in the total", async () => {
+    const legacy = await seedLegacyDraft();
 
     // 1000 net at 21 % is 1210 gross.
     const created = await runCreate(
@@ -352,6 +390,11 @@ describe("invoice lines", () => {
 
     const detail = await runGet(legacy.invoiceId);
     expect(detail).toMatchObject({ totalAmount: legacy.totalAmount + 1210 });
+    // The recalculation stores the amounts a legacy invoice lacked.
+    expect(await readStoredAmounts(legacy.invoiceId)).toEqual({
+      netAmount: cents(legacy.totalAmount + 1000),
+      vatAmount: cents(210),
+    });
     expect(
       readLines(detail).map((line) => [
         line.position,
@@ -605,6 +648,12 @@ const parseUpdateBody = async (
   return asTestRaw<UpdateBody>(parsed);
 };
 
+const readStoredAmounts = async (invoiceId: SafeId<"invoice">) =>
+  await testDb.query.invoices.findFirst({
+    where: { id: { eq: invoiceId } },
+    columns: { netAmount: true, vatAmount: true },
+  });
+
 const runGet = async (invoiceId: SafeId<"invoice">) =>
   await readInvoiceById.handler(
     contextFor({ params: { workspaceId: ids.wsA1, invoiceId } }),
@@ -739,8 +788,8 @@ const seedExpense = async ({
 
 /**
  * A draft as the code before invoice lines left it: entries attached and
- * billed, no lines, and the total their billed amounts summed to, which the
- * lines migration copied into `net_amount`.
+ * billed, no lines, the total their billed amounts summed to, and no stored
+ * net or VAT amount.
  */
 const seedLegacyDraft = async () => {
   const invoiceId = await seedInvoice();
@@ -760,7 +809,7 @@ const seedLegacyDraft = async () => {
   const totalAmount = 20_000 + 3333 + 11_000;
   await testDb
     .update(invoices)
-    .set({ totalAmount: cents(totalAmount), netAmount: cents(totalAmount) })
+    .set({ totalAmount: cents(totalAmount) })
     .where(eq(invoices.id, invoiceId));
   // Lines materialise in a stable order: entries by date, then id.
   const timeEntryLines = [

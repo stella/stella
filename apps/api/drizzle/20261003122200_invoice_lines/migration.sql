@@ -1,8 +1,10 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '10s';--> statement-breakpoint
 
--- Invoice details. Every new column is nullable or has a constant default, so
--- adding them does not rewrite existing rows.
+-- Invoice details. Every new column is nullable, so adding them does not
+-- rewrite existing rows. A NULL net_amount marks an invoice whose totals were
+-- written before invoice lines; the next totals recalculation fills both
+-- amounts, and reads derive them until then.
 ALTER TABLE "invoices"
   ADD COLUMN "taxable_supply_date" date,
   ADD COLUMN "seller_profile_id" uuid,
@@ -14,16 +16,11 @@ ALTER TABLE "invoices"
   ADD COLUMN "buyer_city" varchar(256),
   ADD COLUMN "buyer_postal_code" varchar(32),
   ADD COLUMN "buyer_country" varchar(128),
-  ADD COLUMN "net_amount" bigint DEFAULT 0 NOT NULL,
-  ADD COLUMN "vat_amount" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
+  ADD COLUMN "net_amount" bigint,
+  ADD COLUMN "vat_amount" bigint;--> statement-breakpoint
 
--- The column was added above and holds only NULL, so validation reads no
--- reference.
+-- Validated by the following migration, outside this DDL transaction.
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_seller_profile_id_seller_profiles_id_fk" FOREIGN KEY ("seller_profile_id") REFERENCES "public"."seller_profiles"("id") ON DELETE no action ON UPDATE no action NOT VALID;--> statement-breakpoint
-ALTER TABLE "invoices" VALIDATE CONSTRAINT "invoices_seller_profile_id_seller_profiles_id_fk";--> statement-breakpoint
-
--- Totals written before this change carry no VAT: their total is the net.
-UPDATE "invoices" SET "net_amount" = "total_amount" WHERE "total_amount" <> 0;--> statement-breakpoint
 
 CREATE TABLE "invoice_lines" (
   "id" uuid PRIMARY KEY NOT NULL,

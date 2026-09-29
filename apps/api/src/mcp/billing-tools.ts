@@ -8,7 +8,7 @@ import { roles } from "@stll/permissions";
 import { member, user } from "@/api/db/auth-schema";
 import { invoices, timeEntries } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { invoiceTotals } from "@/api/handlers/invoices/invoice-lines";
+import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { deleteTimeEntryHandler } from "@/api/handlers/time-entries/delete";
 import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
@@ -1272,7 +1272,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     if (!invoiceRow) {
       return notFoundResult("Invoice not found or not accessible");
     }
-    const totals = invoiceTotals(invoiceRow.lines);
+    const totals = readInvoiceTotals(invoiceRow);
     if (totals.isErr()) {
       return internalFailureResult(totals.error);
     }

@@ -454,11 +454,12 @@ export const invoices = p.pgTable(
     buyerPostalCode: p.varchar("buyer_postal_code", { length: 32 }),
     buyerCountry: p.varchar("buyer_country", { length: 128 }),
     // Totals over the invoice lines, from `calculateDocumentTotals`
-    // (`@stll/invoicing`); `totalAmount` is the gross.
-    // SAFETY: literal zero is a valid minor-unit integer default.
-    netAmount: centsColumn("net_amount").notNull().default(unsafeCents(0)),
-    // SAFETY: literal zero is a valid minor-unit integer default.
-    vatAmount: centsColumn("vat_amount").notNull().default(unsafeCents(0)),
+    // (`@stll/invoicing`); `totalAmount` is the gross. NULL on an invoice
+    // whose total was written before invoice lines existed: reads derive the
+    // amounts (`readInvoiceTotals`) and the next `recalculateInvoiceTotals`
+    // stores them.
+    netAmount: centsColumn("net_amount"),
+    vatAmount: centsColumn("vat_amount"),
     // SAFETY: literal zero is a valid minor-unit integer default.
     totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { invoiceTotals } from "@/api/handlers/invoices/invoice-lines";
+import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -14,7 +14,9 @@ const readInvoiceById = createSafeHandler(
       "Read one invoice with its full detail: its lines in order with " +
       "quantity, unit price, VAT, and amounts; totals with the VAT breakdown " +
       "by rate; seller profile, buyer, dates, currency, and status; and every " +
-      "attached time entry and expense with its work item. Use " +
+      "attached time entry and expense with its work item. An invoice from " +
+      "before invoice lines lists no lines for its attached entries until " +
+      "its first line edit; its totals still count them. Use " +
       "invoices.list for a paginated summary without lines.",
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_invoices" },
@@ -40,16 +42,18 @@ const readInvoiceById = createSafeHandler(
       );
     }
 
-    // Totals over stored lines only; a read never writes. A draft from before
-    // invoice lines has none until its first line edit materialises them
-    // (`lockDraftInvoiceForLines`); its stored totalAmount still holds the sum.
-    const totals = invoiceTotals(invoice.lines);
+    // A read never writes: an invoice from before invoice lines lists no lines
+    // for its attached entries until its first line edit materialises them
+    // (`lockDraftInvoiceForLines`), and its totals count them in memory.
+    const totals = readInvoiceTotals(invoice);
     if (totals.isErr()) {
       return Result.err(totals.error);
     }
 
     return Result.ok({
       ...invoice,
+      netAmount: totals.value.netAmountMinor,
+      vatAmount: totals.value.vatAmountMinor,
       lines: invoice.lines.map((line) => ({
         ...line,
         releasedAt: line.releasedAt?.toISOString() ?? null,

@@ -468,9 +468,10 @@ const materialiseAttachedEntryLines = async (
  * that changes a draft's lines locks through here; returns `undefined` when
  * the invoice is missing or not a draft.
  *
- * Reads do not call this: a read never writes, so a legacy draft reads with
- * no lines and line totals of zero while its stored `totalAmount` keeps the
- * entries' sum, until its first line edit materialises the lines.
+ * Reads do not call this: a read never writes, so a legacy draft lists no
+ * lines for its attached entries until its first line edit materialises
+ * them, and its read totals count those entries in memory
+ * (`readInvoiceTotals`).
  */
 export const lockDraftInvoiceForLines = async (
   tx: Transaction,
@@ -487,7 +488,7 @@ export const lockDraftInvoiceForLines = async (
   return invoice;
 };
 
-/** Invoice totals and VAT breakdown over stored lines. */
+/** Invoice totals and VAT breakdown over the given lines. */
 export const invoiceTotals = (
   lines: readonly LineAmountInput[],
 ): Result<InvoiceTotals, HandlerError> => {
@@ -501,6 +502,66 @@ export const invoiceTotals = (
     );
   }
   return Result.ok(calculated.value.totals);
+};
+
+type InvoiceForReadTotals = {
+  /** NULL marks totals written before invoice lines existed. */
+  netAmount: CentsAmount | null;
+  totalAmount: CentsAmount;
+  lines: readonly (LineAmountInput & {
+    timeEntryId: SafeId<"timeEntry"> | null;
+    expenseId: SafeId<"expense"> | null;
+    releasedAt: Date | null;
+  })[];
+  timeEntries: readonly TimeEntryForLine[];
+  expenses: readonly ExpenseForLine[];
+};
+
+/**
+ * Totals for an invoice read, which never writes. An invoice with stored
+ * totals (`netAmount` set) sums its stored lines. One from before invoice
+ * lines (`netAmount` NULL) also counts, in memory, the line each attached
+ * entry without one would get (the drafts `materialiseAttachedEntryLines`
+ * writes on the next line edit); a voided one of those has released its
+ * entries, so its stored total stands as a net at 0 % VAT, which is how
+ * totals were written before lines.
+ */
+export const readInvoiceTotals = (
+  invoice: InvoiceForReadTotals,
+): Result<InvoiceTotals, HandlerError> => {
+  if (invoice.netAmount !== null) {
+    return invoiceTotals(invoice.lines);
+  }
+  const linedTimeEntries = new Set<string>();
+  const linedExpenses = new Set<string>();
+  for (const line of invoice.lines) {
+    if (line.releasedAt !== null) {
+      continue;
+    }
+    if (line.timeEntryId !== null) {
+      linedTimeEntries.add(line.timeEntryId);
+    }
+    if (line.expenseId !== null) {
+      linedExpenses.add(line.expenseId);
+    }
+  }
+  const lines: LineAmountInput[] = [
+    ...invoice.lines,
+    ...invoice.timeEntries
+      .filter((entry) => !linedTimeEntries.has(entry.id))
+      .map((entry) => timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT)),
+    ...invoice.expenses
+      .filter((expense) => !linedExpenses.has(expense.id))
+      .map((expense) => expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT)),
+  ];
+  if (lines.length === 0 && invoice.totalAmount > 0) {
+    lines.push({
+      description: "-",
+      netAmount: invoice.totalAmount,
+      ...ATTACHED_ENTRY_LINE_VAT,
+    });
+  }
+  return invoiceTotals(lines);
 };
 
 /**
