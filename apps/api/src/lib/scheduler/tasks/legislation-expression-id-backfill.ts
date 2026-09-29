@@ -1,16 +1,5 @@
 import { panic } from "better-result";
-import {
-  and,
-  asc,
-  eq,
-  exists,
-  gt,
-  inArray,
-  isNull,
-  lte,
-  not,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, exists, gt, isNull, lte, not, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { Temporal } from "@stll/time";
@@ -106,6 +95,139 @@ const SKIP_SUMMARY_KEYS = {
 /** Document ids one skip log line names; the count is always complete. */
 const LOGGED_SKIP_IDS = 20;
 
+/** The rows after the cursor, when there is one. */
+const afterCursor = (cursor: ExpressionIdCursor) =>
+  cursor === null ? undefined : gt(legislationDocuments.id, cursor);
+
+/** The next page's ids, in id order: a primary-key walk stopped by the limit. */
+export const expressionIdPageQuery = (
+  tx: Transaction,
+  cursor: ExpressionIdCursor,
+  pageRows: number,
+) =>
+  tx
+    .select({ id: legislationDocuments.id })
+    .from(legislationDocuments)
+    .where(afterCursor(cursor))
+    .orderBy(asc(legislationDocuments.id))
+    .limit(pageRows);
+
+/**
+ * The id the outer `legislation_documents` row would claim, and whether
+ * another row of its work already carries it.
+ */
+const expressionIdTerms = (tx: Transaction) => {
+  // Parenthesised: `->>` and `||` share one precedence level.
+  const versionIri = sql<string>`(${legislationDocuments.metadata}->>'versionIri')`;
+  // One primary-key read of a table that holds a row per publisher.
+  const namespace = sql<string | null>`(
+    SELECT ${legislationSources.expressionNamespace}
+    FROM ${legislationSources}
+    WHERE ${legislationSources.id} = ${legislationDocuments.sourceId}
+  )`;
+  const publisherId = sql<string>`${namespace} || ':' || ${versionIri}`;
+  const sibling = alias(legislationDocuments, "sibling");
+  // Another row of the work already carries the id. A scalar probe rather
+  // than EXISTS: in the claim's WHERE an EXISTS becomes an anti-join, which
+  // may hash the whole table; a scalar subquery stays a per-row index seek.
+  const claimedSibling = sql<boolean>`coalesce((${tx
+    .select({ found: sql<boolean>`true` })
+    .from(sibling)
+    .where(
+      and(
+        eq(sibling.sourceId, legislationDocuments.sourceId),
+        eq(sibling.eli, legislationDocuments.eli),
+        eq(sibling.language, legislationDocuments.language),
+        sql`${sibling.publisherExpressionId} = ${publisherId}`,
+      ),
+    )
+    .limit(1)}), false)`;
+  return { versionIri, namespace, publisherId, claimedSibling };
+};
+
+/**
+ * The page's rows still without an id, each with the reason it cannot be
+ * given one, or null when it can.
+ */
+export const unclaimedExpressionIdRowsQuery = (
+  tx: Transaction,
+  cursor: ExpressionIdCursor,
+  last: SafeId<"legislationDocument">,
+) => {
+  const { versionIri, namespace, publisherId, claimedSibling } =
+    expressionIdTerms(tx);
+  const twin = alias(legislationDocuments, "twin");
+  // Two unclaimed rows of one work naming the same version: which one it is
+  // cannot be told here, so neither is claimed.
+  const unclaimedTwin = exists(
+    tx
+      .select({ id: twin.id })
+      .from(twin)
+      .where(
+        and(
+          eq(twin.sourceId, legislationDocuments.sourceId),
+          eq(twin.eli, legislationDocuments.eli),
+          eq(twin.language, legislationDocuments.language),
+          sql`${twin.id} <> ${legislationDocuments.id}`,
+          isNull(twin.publisherExpressionId),
+          sql`(${twin.metadata}->>'versionIri') = ${versionIri}`,
+        ),
+      ),
+  );
+  // An id that does not fit the column would fail the whole page, and every
+  // later run with it.
+  const skipReason = sql<string | null>`CASE
+    WHEN ${namespace} IS NULL THEN 'no-namespace'
+    WHEN coalesce(${versionIri}, '') = '' THEN 'no-version-iri'
+    WHEN length(${publisherId}) > ${PUBLISHER_ID_MAX_LENGTH} THEN 'oversized-id'
+    WHEN ${unclaimedTwin} OR ${claimedSibling} THEN 'ambiguous-id'
+  END`;
+  return tx
+    .select({ id: legislationDocuments.id, skipReason })
+    .from(legislationDocuments)
+    .where(
+      and(
+        afterCursor(cursor),
+        lte(legislationDocuments.id, last),
+        isNull(legislationDocuments.publisherExpressionId),
+      ),
+    );
+};
+
+/** Attach the page's claimable rows' ids; returns the rows it claimed. */
+export const claimExpressionIdsQuery = (
+  tx: Transaction,
+  claimable: readonly SafeId<"legislationDocument">[],
+) => {
+  const { publisherId, claimedSibling } = expressionIdTerms(tx);
+  // Joined to the ids rather than filtered by an `IN` list: the planner may
+  // match an `IN` list against any index that holds the id, even one it has
+  // to read whole, while a join to the ids seeks each on the primary key.
+  const ids = sql.join(
+    claimable.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  return (
+    tx
+      .update(legislationDocuments)
+      // An identity attachment, not an edit: `updated_at` keeps its value.
+      .set({
+        publisherExpressionId: publisherId,
+        updatedAt: sql`${legislationDocuments.updatedAt}`,
+      })
+      .where(
+        and(
+          sql`${legislationDocuments.id} = claim.id`,
+          isNull(legislationDocuments.publisherExpressionId),
+          // Re-checked in the write: a writer may have stored the id since.
+          not(claimedSibling),
+        ),
+      )
+      .from(sql`unnest(ARRAY[${ids}]::uuid[]) AS claim(id)`)
+      .returning({ id: legislationDocuments.id })
+  );
+};
+
 /**
  * Give every row of one id-ordered page that has no publisher expression id
  * the one its stored version IRI proves: `<source namespace>:<versionIri>`,
@@ -124,78 +246,13 @@ const claimExpressionIdPageTx = async (
   cursor: ExpressionIdCursor,
   pageRows: number = DEFAULT_BOUNDS.pageRows,
 ): Promise<ExpressionIdPage> => {
-  const page = await tx
-    .select({ id: legislationDocuments.id })
-    .from(legislationDocuments)
-    .where(cursor === null ? undefined : gt(legislationDocuments.id, cursor))
-    .orderBy(asc(legislationDocuments.id))
-    .limit(pageRows);
+  const page = await expressionIdPageQuery(tx, cursor, pageRows);
   const last = page.at(-1)?.id;
   if (last === undefined) {
     return { type: "cycle-complete" };
   }
 
-  // Parenthesised: `->>` and `||` share one precedence level.
-  const versionIri = sql<string>`(${legislationDocuments.metadata}->>'versionIri')`;
-  // One primary-key read of a table that holds a row per publisher.
-  const namespace = sql<string | null>`(
-    SELECT ${legislationSources.expressionNamespace}
-    FROM ${legislationSources}
-    WHERE ${legislationSources.id} = ${legislationDocuments.sourceId}
-  )`;
-  const publisherId = sql<string>`${namespace} || ':' || ${versionIri}`;
-  const twin = alias(legislationDocuments, "twin");
-  const sibling = alias(legislationDocuments, "sibling");
-  // Two unclaimed rows of one work naming the same version: which one it is
-  // cannot be told here, so neither is claimed.
-  const unclaimedTwin = exists(
-    tx
-      .select({ id: twin.id })
-      .from(twin)
-      .where(
-        and(
-          eq(twin.sourceId, legislationDocuments.sourceId),
-          eq(twin.eli, legislationDocuments.eli),
-          eq(twin.language, legislationDocuments.language),
-          sql`${twin.id} <> ${legislationDocuments.id}`,
-          isNull(twin.publisherExpressionId),
-          sql`(${twin.metadata}->>'versionIri') = ${versionIri}`,
-        ),
-      ),
-  );
-  // Another row of the work already carries the id.
-  const claimedSibling = exists(
-    tx
-      .select({ id: sibling.id })
-      .from(sibling)
-      .where(
-        and(
-          eq(sibling.sourceId, legislationDocuments.sourceId),
-          eq(sibling.eli, legislationDocuments.eli),
-          eq(sibling.language, legislationDocuments.language),
-          sql`${sibling.publisherExpressionId} = ${publisherId}`,
-        ),
-      ),
-  );
-  // An id that does not fit the column would fail the whole page, and every
-  // later run with it.
-  const skipReason = sql<string | null>`CASE
-    WHEN ${namespace} IS NULL THEN 'no-namespace'
-    WHEN coalesce(${versionIri}, '') = '' THEN 'no-version-iri'
-    WHEN length(${publisherId}) > ${PUBLISHER_ID_MAX_LENGTH} THEN 'oversized-id'
-    WHEN ${unclaimedTwin} OR ${claimedSibling} THEN 'ambiguous-id'
-  END`;
-
-  const unclaimed = await tx
-    .select({ id: legislationDocuments.id, skipReason })
-    .from(legislationDocuments)
-    .where(
-      and(
-        cursor === null ? undefined : gt(legislationDocuments.id, cursor),
-        lte(legislationDocuments.id, last),
-        isNull(legislationDocuments.publisherExpressionId),
-      ),
-    );
+  const unclaimed = await unclaimedExpressionIdRowsQuery(tx, cursor, last);
   const skipped = unclaimed.flatMap(({ id, skipReason: reason }) =>
     reason === null
       ? []
@@ -213,24 +270,7 @@ const claimExpressionIdPageTx = async (
     .map(({ id }) => id);
 
   const claimed =
-    claimable.length === 0
-      ? []
-      : await tx
-          .update(legislationDocuments)
-          // An identity attachment, not an edit: `updated_at` keeps its value.
-          .set({
-            publisherExpressionId: publisherId,
-            updatedAt: sql`${legislationDocuments.updatedAt}`,
-          })
-          .where(
-            and(
-              inArray(legislationDocuments.id, claimable),
-              isNull(legislationDocuments.publisherExpressionId),
-              // Re-checked in the write: a writer may have stored the id since.
-              not(claimedSibling),
-            ),
-          )
-          .returning({ id: legislationDocuments.id });
+    claimable.length === 0 ? [] : await claimExpressionIdsQuery(tx, claimable);
   return { type: "page", last, claimed: claimed.length, skipped };
 };
 

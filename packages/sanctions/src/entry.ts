@@ -2,7 +2,14 @@ import { TaggedError } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
 
-export type SanctionsSource = "eu" | "un" | "cz" | "us-sdn" | "us-non-sdn";
+export type SanctionsSource =
+  | "eu"
+  | "un"
+  | "cz"
+  | "us-sdn"
+  | "us-non-sdn"
+  | "uk"
+  | "ch";
 
 export type SanctionsIssuer = "EU" | "UN" | "CZ" | "US" | "GB" | "CH" | "UA";
 
@@ -44,6 +51,7 @@ export type BirthDate =
       circa: boolean;
     }
   | { precision: "month"; year: number; month: number; circa: boolean }
+  | { precision: "month-day"; month: number; day: number; circa: boolean }
   | { precision: "year"; year: number; circa: boolean }
   | {
       precision: "year-range";

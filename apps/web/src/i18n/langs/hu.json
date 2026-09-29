@@ -4389,7 +4389,13 @@
     "diffRemoved": "Törölve:",
     "emptyDocument": "Ehhez a változathoz nem érhető el szöveg.",
     "emptyState": "Nem található jogszabály.",
+    "expression": {
+      "invalidWindow": "A kiadó dátumai ellentmondásosak",
+      "promulgated": "Kihirdetett szöveg",
+      "withdrawn": "A kiadó már nem közli"
+    },
     "inForceSince": "Hatályos {date} óta",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Irányadó határozatok",
     "noVersionInForce": "A kiválasztott napon a jogszabály egyetlen változata sem volt hatályban.",
     "openEnded": "jelenleg is",
@@ -4409,18 +4415,22 @@
     "provisionHistoryUnavailable": "A rendelkezés története nem tölthető be.",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
     "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
     "showInText": "Megjelenítés a szövegben",
+    "statedWindow": "A kiadó által megadott dátumok: {range}",
     "status": {
       "current": "Hatályos",
       "draft": "Tervezetben",
       "ended": "Már nem hatályos",
       "future": "Jövőbeli",
       "historical": "Felváltott",
-      "repealed": "Hatályon kívül helyezett"
+      "neverInForce": "Soha nem lépett hatályba",
+      "repealed": "Hatályon kívül helyezett",
+      "unknown": "Állapota nem egyértelmű"
     },
     "title": "Jogszabályok",
     "validity": "Hatályos {from} és {to} között"

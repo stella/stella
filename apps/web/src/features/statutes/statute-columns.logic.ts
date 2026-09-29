@@ -64,10 +64,14 @@ export const STATUTE_COLUMN_LABEL_KEYS = {
  * Whether a listed Work still applies. In force reads as the statute
  * reader's own "in force"; a Work whose last wording closed reads as no
  * longer in force, because the corpus cannot tell a repeal from an expiry.
+ * A Work the publisher states never took effect says so; one whose versions
+ * cannot establish any period in force reads as unclear, never as in force.
  */
 export const STATUTE_VALIDITY_LABEL_KEYS = {
   "in-force": "statutes.status.current",
   ended: "statutes.status.ended",
+  "never-in-force": "statutes.status.neverInForce",
+  unknown: "statutes.status.unknown",
 } as const satisfies Record<LegislationListValidity, TranslationKey>;
 
 export type StatuteTableLayout = PublicLawTableLayout;

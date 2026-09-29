@@ -1,37 +1,44 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 
-import {
-  resolveUsCourt,
-  US_COURTS,
-  US_WRITABLE_COURT_IDS,
-} from "@stll/api-contract/us-courts";
+import { resolveUsCourt } from "@stll/api-contract/us-courts";
 
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
-import { usCourtRank } from "@/api/lib/case-law/court-ranks";
 import {
+  UNRANKED_COURT_RANK,
+  usCourtRank,
+  usCourtRankSql,
+} from "@/api/lib/case-law/court-ranks";
+import {
+  citingCourtWeight,
+  courtTierLabelFromMap,
   courtWeightFromMap,
   decisionCourtWeight,
 } from "@/api/lib/case-law/court-weights";
+import { logger } from "@/api/lib/observability/logger";
 
 const map = courtWeightMapFromSeed();
 
-test("a directory court ranks by id exactly as its seeded row ranks it by name", () => {
-  // Every court the seed names, SCOTUS included: the directory rank and the
-  // registry row are two readings of one tier, and a decision stored with an
-  // id must rank where the same decision ranked by name.
-  const writable = US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id));
-  expect(writable.map(({ id }) => id)).toContain("scotus");
-  for (const court of writable) {
-    const byName = courtWeightFromMap(map, court.canonicalName, "USA");
-    expect([
-      court.id,
-      decisionCourtWeight(map, {
-        court: court.canonicalName,
-        country: "USA",
-        courtId: court.id,
-      }),
-    ]).toEqual([court.id, byName]);
+const SCOTUS = "Supreme Court of the United States";
+
+test("a directory decision ranks by its court id, whatever its name says", () => {
+  const circuit = resolveUsCourt("ca1");
+  if (circuit.type !== "accepted") {
+    throw new Error("ca1 is not an accepted court");
   }
+  expect(circuit.court.tier).toBe("appellate");
+  // The registry keeps a name row for the Supreme Court; an id that names
+  // the First Circuit still ranks as the First Circuit.
+  expect(courtWeightFromMap(map, SCOTUS, "USA")).toEqual({
+    tier: 3,
+    weight: 8,
+  });
+  expect(
+    decisionCourtWeight(map, { court: SCOTUS, country: "USA", courtId: "ca1" }),
+  ).toEqual({ type: "ranked", tier: 2, weight: 5 });
+  expect(
+    citingCourtWeight(map, { court: SCOTUS, country: "USA", courtId: "ca1" }),
+  ).toBe(5);
   expect(usCourtRank("scotus")).toEqual({
     tier: 3,
     tierLabel: "supreme",
@@ -39,29 +46,67 @@ test("a directory court ranks by id exactly as its seeded row ranks it by name",
   });
 });
 
-test("a directory court the seed does not name still ranks at its directory tier", () => {
-  const circuit = resolveUsCourt("ca1");
-  if (circuit.type !== "accepted" || US_WRITABLE_COURT_IDS.has("ca1")) {
-    throw new Error("ca1 is not an accepted, unseeded court");
+test("a directory decision without an accepted court id is unranked and reported, never ranked by name", () => {
+  const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  try {
+    const malformed = [null, "test", "Scotus", "unknown-court"];
+    for (const courtId of malformed) {
+      // By name the registry would rank this court supreme.
+      const decision = { court: SCOTUS, country: "USA", courtId };
+      expect(decisionCourtWeight(map, decision)).toEqual({
+        type: "invalid-directory-identity",
+        ...UNRANKED_COURT_RANK,
+      });
+      expect(citingCourtWeight(map, decision)).toBe(UNRANKED_COURT_RANK.weight);
+    }
+    expect(courtTierLabelFromMap(map, "Supreme Court of Nowhere", "USA")).toBe(
+      "other",
+    );
+    expect(
+      warn.mock.calls.map(([message, fields]) => [message, fields]),
+    ).toEqual([
+      ...malformed.flatMap((courtId) =>
+        Array.from({ length: 2 }, () => [
+          "case_law.court_rank.invalid_directory_identity",
+          {
+            country: "USA",
+            lookup: "court_id",
+            "court.identity": courtId ?? "none",
+            effect: "unranked",
+          },
+        ]),
+      ),
+      [
+        "case_law.court_rank.invalid_directory_identity",
+        {
+          country: "USA",
+          lookup: "court_name",
+          "court.identity": "Supreme Court of Nowhere",
+          effect: "unranked",
+        },
+      ],
+    ]);
+  } finally {
+    warn.mockRestore();
   }
-  expect(circuit.court.tier).toBe("appellate");
-  // By name it falls to the default rank; by id it holds its tier.
-  expect(courtWeightFromMap(map, circuit.court.canonicalName, "USA")).toEqual({
-    tier: 1,
-    weight: 1,
-  });
-  expect(
-    decisionCourtWeight(map, {
-      court: circuit.court.canonicalName,
-      country: "USA",
-      courtId: "ca1",
-    }),
-  ).toEqual({ tier: 2, weight: 5 });
-  expect(() =>
-    decisionCourtWeight(map, {
-      court: "Test court",
-      country: "USA",
-      courtId: "test",
-    }),
-  ).toThrow("Unranked directory court id: test");
+});
+
+test("the directory rank SQL uses a keyed lookup without directory-size parameters", () => {
+  const dialect = new PgDialect();
+  const weight = dialect.sqlToQuery(usCourtRankSql("d.court_id", "weight"));
+  const tier = dialect.sqlToQuery(usCourtRankSql("d.court_id", "tier"));
+  for (const [field, rendered] of [
+    ["weight", weight],
+    ["tier", tier],
+  ] as const) {
+    expect(rendered.params).toEqual([]);
+    expect(rendered.sql).toContain("case_law_court_directory_ranks");
+    expect(rendered.sql).toContain("r.country = 'USA'");
+    expect(rendered.sql).toContain("r.court_id = d.court_id");
+    expect(rendered.sql).toContain(`r.${field}`);
+    expect(rendered.sql).not.toContain("scotus");
+    expect(rendered.sql.length).toBeLessThan(400);
+  }
+  expect(weight.sql).toEndWith(`, ${UNRANKED_COURT_RANK.weight})`);
+  expect(tier.sql).toEndWith(`, ${UNRANKED_COURT_RANK.tier})`);
 });

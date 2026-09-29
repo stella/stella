@@ -1,23 +1,53 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import nodePath from "node:path";
 
-import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
+import {
+  US_COURT_NAMES,
+  US_COURTS,
+  type UsCourt,
+} from "@stll/api-contract/us-courts";
 
-import { caseLawCourtWeights } from "@/api/db/schema";
+import { authRelationsPart } from "@/api/db/auth-schema";
+import {
+  caseLawCitations,
+  caseLawCourtDirectoryRanks,
+  caseLawCourtWeights,
+  caseLawDecisions,
+  caseLawSources,
+  relations,
+} from "@/api/db/schema";
+import { readCitationGraphFacts } from "@/api/handlers/case-law/analysis/significance";
+import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import {
   COURT_WEIGHT_SEED,
   courtWeightMapFromSeed,
+  seededCourtWeightEntries,
 } from "@/api/handlers/case-law/court-weight-seed";
+import { selectShelfCourts } from "@/api/handlers/case-law/decisions/shelf-courts";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import {
+  UNRANKED_COURT_RANK,
+  US_TIER_RANK,
+  usCourtDirectoryRankRows,
+} from "@/api/lib/case-law/court-ranks";
+import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
+import {
+  citingCourtWeight,
+  courtTierLabelFromMap,
   courtTierSqlFromMap,
-  courtWeightFromMap,
+  type CourtWeightMap,
   decisionCourtWeight,
   flattenCourtWeightEntries,
 } from "@/api/lib/case-law/court-weights";
+import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
+import { requireCourtPartitionIdentity } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { logger } from "@/api/lib/observability/logger";
+import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const migrationPath = (directory: string) =>
@@ -185,109 +215,223 @@ test("the USA seed writes no row of another jurisdiction", async () => {
   await client.close();
 }, 60_000);
 
-// The rank lookup runs in TypeScript on the corpus-index path and as a SQL
-// CASE on the Postgres paths. The United States rows are rendered from the
-// directory's writable courts, so the two regex engines are held equal over
-// every one of those names, as stored.
-test("Postgres ranks every writable United States court as TypeScript does", async () => {
+/** The court directory's rank for each accepted court: the oracle below. */
+const directoryRankOf = (court: UsCourt) => US_TIER_RANK[court.tier];
+
+/** Every rank SQL path over `d`, the columns the Postgres paths read. */
+const rankSql = (map: CourtWeightMap) => ({
+  tier: courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map,
+  }),
+  weight: courtWeightSql({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    entries: flattenCourtWeightEntries(map),
+  }),
+});
+
+// The admission invariant. A USA decision is identified by its court id, and
+// every path that ranks one must read that id's directory tier: the Postgres
+// search tier and citing-court weight, the corpus search's rerank, the court
+// chip and facet a reader is shown, the significance read, and the projection
+// that files the decision under its court. Run over every court the directory
+// accepts, so any accepted court can be admitted to writing without a path
+// that ranks it by name, or at a default, behind it.
+test("every accepted United States court ranks by its id alike in every path", async () => {
   const client = await createTestPglite();
   const db = drizzle({ client });
   await applyMigration(db, FULL_SEED);
   await applyMigration(db, USA_SEED);
-  const rows = await db.select().from(caseLawCourtWeights);
+  await db
+    .insert(caseLawCourtDirectoryRanks)
+    .values(usCourtDirectoryRankRows());
   const map = courtWeightMapFromSeed();
-  expect(rows.filter((row) => row.country === "USA")).toHaveLength(
-    USA_ROWS.length,
+
+  // Not vacuous: courts that share a source name hold different ids and
+  // different ranks, so no reading of the name could rank both correctly.
+  const bySourceName = Map.groupBy(US_COURTS, ({ sourceName }) =>
+    sourceName.toLowerCase(),
+  );
+  const sharedNameRanks = [...bySourceName.values()]
+    .filter((courts) => courts.length > 1)
+    .map((courts) => new Set(courts.map((court) => directoryRankOf(court))));
+  expect(sharedNameRanks.some((ranks) => ranks.size > 1)).toBe(true);
+  expect(new Set(US_COURT_NAMES).size).toBe(US_COURTS.length);
+
+  const sourceId = createSafeId<"caseLawSource">();
+  const subjectId = createSafeId<"caseLawDecision">();
+  const citing = US_COURTS.map((court) => ({
+    court,
+    id: createSafeId<"caseLawDecision">(),
+  }));
+  await db.insert(caseLawSources).values(caseLawSourceRow({ id: sourceId }));
+  await db.insert(caseLawDecisions).values([
+    {
+      id: subjectId,
+      sourceId,
+      caseNumber: "usa-subject",
+      court: "Supreme Court of the United States",
+      courtId: "scotus",
+      country: "USA",
+      language: "en",
+      decisionDate: "2000-01-01",
+    },
+    ...citing.map(({ court, id }) => ({
+      id,
+      sourceId,
+      caseNumber: `usa-${court.id}`,
+      court: court.canonicalName,
+      courtId: court.id,
+      country: "USA",
+      language: "en",
+      decisionDate: "2020-01-01",
+    })),
+  ]);
+  await db.insert(caseLawCitations).values(
+    citing.map(({ court, id }) => ({
+      citingDecisionId: id,
+      citedDecisionId: subjectId,
+      citationText: `usa-${court.id}`,
+      kind: CITATION_KIND.PRECEDENT,
+    })),
   );
 
-  const tierSql = sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      map,
-    }),
-  );
-  const names = US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id)).map(
-    ({ canonicalName }) => canonicalName,
-  );
-  expect(names).toHaveLength(US_WRITABLE_COURT_IDS.size);
-  const values = sql.join(
-    names.map((name) => sql`(${name}, 'USA')`),
-    sql`, `,
-  );
-  const ranked = await db.execute<{ court: string; tier: number }>(
-    sql`SELECT d.court, (${tierSql})::int AS tier FROM (VALUES ${values}) AS d(court, country)`,
-  );
-  const inPostgres = new Map(
-    ranked.rows.map(({ court, tier }) => [court, tier]),
-  );
-  const differing = names.filter(
-    (name) =>
-      inPostgres.get(name) !== courtWeightFromMap(map, name, "USA").tier,
-  );
-  expect(inPostgres.size).toBe(names.length);
-  expect(differing).toEqual([]);
-  // Ranked by a seeded row, not by the default every unranked court gets.
-  expect(
-    names.filter((name) =>
-      rows.some(
-        (row) =>
-          row.country === "USA" &&
-          new RegExp(row.courtPattern, "iu").test(name),
-      ),
-    ),
-  ).toEqual(names);
-  await client.close();
-}, 60_000);
-
-// The admission invariant. A decision stored with a court id ranks by that
-// id's directory tier in the corpus search, while the Postgres rank paths
-// (the search tier and the citing-court weight) and the significance read
-// still rank it by name through the seed. A court may be writable only while
-// every path gives it one rank, so this runs over the whole writable set: the
-// set cannot grow past a court whose seeded row disagrees with its tier.
-test("every writable United States court ranks the same by id and by name in every path", async () => {
-  const client = await createTestPglite();
-  const db = drizzle({ client });
-  await applyMigration(db, FULL_SEED);
-  await applyMigration(db, USA_SEED);
-  const map = courtWeightMapFromSeed();
-  const writable = US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id));
-  expect(writable.length).toBe(US_WRITABLE_COURT_IDS.size);
-
-  const values = sql.join(
-    writable.map(({ canonicalName }) => sql`(${canonicalName}, 'USA')`),
-    sql`, `,
-  );
-  const ranked = await db.execute<{
-    court: string;
+  // One statement ranks every court, as stored.
+  const { tier, weight } = rankSql(map);
+  const executed = await db.execute<{
+    court_id: string;
     tier: number;
     weight: number;
   }>(
-    sql`SELECT d.court,
-               (${sql.raw(courtTierSqlFromMap({ countryColumn: "d.country", courtColumn: "d.court", map }))})::int AS tier,
-               (${sql.raw(courtWeightSql("d.court", flattenCourtWeightEntries(map)))})::int AS weight
-          FROM (VALUES ${values}) AS d(court, country)`,
+    sql`SELECT d.court_id, (${tier})::int AS tier, (${weight})::int AS weight
+          FROM case_law_decisions d
+         WHERE d.source_id = ${sourceId} AND d.id <> ${subjectId}`,
   );
-  const byName = new Map(
-    ranked.rows.map(({ court, tier, weight }) => [court, { tier, weight }]),
+  const inPostgres = new Map(
+    executed.rows.map((row) => [
+      row.court_id,
+      { tier: row.tier, weight: row.weight },
+    ]),
   );
-  const disagreeing = writable.flatMap(({ id, canonicalName }) => {
-    const byId = decisionCourtWeight(map, {
-      court: canonicalName,
+  expect(inPostgres.size).toBe(US_COURTS.length);
+
+  const disagreeing = US_COURTS.flatMap((court) => {
+    const rank = directoryRankOf(court);
+    const decision = {
+      court: court.canonicalName,
       country: "USA",
-      courtId: id,
-    });
-    const paths = {
-      sql: byName.get(canonicalName),
-      significance: courtWeightFromMap(map, canonicalName, "USA"),
+      courtId: court.id,
     };
-    return Object.entries(paths).flatMap(([path, rank]) =>
-      rank?.tier === byId.tier && rank.weight === byId.weight
-        ? []
-        : [{ id, path, byId, byName: rank }],
-    );
+    const observed = {
+      sql: inPostgres.get(court.id),
+      rerank: decisionCourtWeight(map, decision),
+      citing: citingCourtWeight(map, decision),
+      presented: courtPresentation(map, { ...decision, ecli: null }).courtTier,
+      facet: courtTierLabelFromMap(map, court.canonicalName, "USA"),
+      projected: requireCourtPartitionIdentity(decision),
+    };
+    const expected = {
+      sql: { tier: rank.tier, weight: rank.weight },
+      rerank: { type: "ranked", tier: rank.tier, weight: rank.weight },
+      citing: rank.weight,
+      presented: courtTierLabel(rank.tier),
+      facet: courtTierLabel(rank.tier),
+      projected: { courtId: court.id, courtPartition: court.courtPartition },
+    };
+    return Bun.deepEquals(observed, expected)
+      ? []
+      : [{ id: court.id, observed, expected }];
   });
   expect(disagreeing).toEqual([]);
+
+  // The apex shelf lists exactly the courts the directory ranks supreme.
+  const shelved = selectShelfCourts({
+    counts: US_COURTS.map(({ canonicalName }) => ({
+      court: canonicalName,
+      count: 0,
+    })),
+    country: "USA",
+    entries: seededCourtWeightEntries("USA"),
+    limit: US_COURTS.length,
+  });
+  expect(shelved.map(({ court }) => court).toSorted()).toEqual(
+    US_COURTS.filter((court) => court.tier === "supreme")
+      .map(({ canonicalName }) => canonicalName)
+      .toSorted(),
+  );
+
+  // The significance read ranks the same citing courts from the database.
+  resetPublicCaseLawConfigForTesting();
+  const readDb = drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+  });
+  const facts = await readCitationGraphFacts({
+    decisionId: subjectId,
+    // SAFETY: the owner handle has the read surface the public reader has.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- PGlite owner handle stands in for the public read transaction
+    tx: readDb as unknown as CaseLawPublicReadTransaction,
+  });
+  resetPublicCaseLawConfigForTesting();
+  const countsByTier = Map.groupBy(
+    US_COURTS,
+    (court) => directoryRankOf(court).tier,
+  );
+  expect(facts?.countsByCourtTier).toEqual(
+    [...countsByTier]
+      .map(([rankTier, courts]) => ({ tier: rankTier, count: courts.length }))
+      .toSorted((left, right) => left.tier - right.tier),
+  );
+  await client.close();
+}, 60_000);
+
+// A USA row always stores an accepted id: the table CHECK requires one and the
+// write boundary admits no other. A row that holds none anyway takes the
+// unranked rank in SQL and fails in TypeScript; neither reads its name, even a
+// name the registry still ranks.
+test("a USA row without an accepted court id never ranks by its name", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  const map = courtWeightMapFromSeed();
+  const scotus = "Supreme Court of the United States";
+  const malformed = [null, "test", "Scotus", "no-such-court"];
+  const { tier, weight } = rankSql(map);
+  const values = sql.join(
+    [
+      ...malformed.map((courtId) => sql`('USA', ${scotus}, ${courtId}::text)`),
+      // The control: the same name in a jurisdiction ranked by name.
+      sql`('XNM', ${scotus}, NULL::text)`,
+    ],
+    sql`, `,
+  );
+  const executed = await db.execute<{ tier: number; weight: number }>(
+    sql`SELECT (${tier})::int AS tier, (${weight})::int AS weight
+          FROM (VALUES ${values}) AS d(country, court, court_id)`,
+  );
+  expect(executed.rows).toEqual([
+    ...malformed.map(() => ({ ...UNRANKED_COURT_RANK })),
+    { tier: 3, weight: 8 },
+  ]);
+  // TypeScript gives the same rows the same rank, and marks them.
+  const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  try {
+    expect(
+      malformed.map((courtId) =>
+        decisionCourtWeight(map, { court: scotus, country: "USA", courtId }),
+      ),
+    ).toEqual(
+      malformed.map(() => ({
+        type: "invalid-directory-identity",
+        ...UNRANKED_COURT_RANK,
+      })),
+    );
+    expect(warn).toHaveBeenCalledTimes(malformed.length);
+  } finally {
+    warn.mockRestore();
+  }
   await client.close();
 }, 60_000);

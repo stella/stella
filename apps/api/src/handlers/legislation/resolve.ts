@@ -2,6 +2,7 @@ import { inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import { legislationDocuments } from "@/api/db/schema";
@@ -39,11 +40,18 @@ const resolvedStatuteColumns = {
   language: legislationDocuments.language,
   versionValidFrom: legislationDocuments.versionValidFrom,
   versionValidTo: legislationDocuments.versionValidTo,
+  expressionKind: legislationDocuments.expressionKind,
+  windowDisposition: legislationDocuments.windowDisposition,
 };
 
 /**
  * Many point-in-time reads at once: for each Work plus date, the consolidation
  * in force then, or null when the corpus holds none.
+ *
+ * A null answer says why when the corpus knows: `unresolvedReason` is
+ * `publisher-data-inconsistent` when the publisher's own dates leave that
+ * date without an in-force reading, so a citator can show the reason rather
+ * than silence. It is null otherwise.
  *
  * A reader linking a decision's citations asks about every act the text
  * names; answering them together keeps that one request however many acts
@@ -71,32 +79,41 @@ export const resolveStatutesHandler = async (
     }
   }
 
-  const { idByKey, statutes } = await legislationDb(async (tx) => {
-    const resolved = await resolveWorksAtDate(tx, requests);
-    const ids = [...new Set(resolved.values())];
+  const { idByKey, inconsistentKeys, statutes } = await legislationDb(
+    async (tx) => {
+      const resolved = await resolveWorksAtDate(tx, requests);
+      const ids = [...new Set(resolved.idByKey.values())];
 
-    return {
-      idByKey: resolved,
-      statutes:
-        ids.length === 0
-          ? []
-          : await tx
-              .select(resolvedStatuteColumns)
-              .from(legislationDocuments)
-              .where(inArray(legislationDocuments.id, ids)),
-    };
-  });
+      return {
+        idByKey: resolved.idByKey,
+        inconsistentKeys: resolved.inconsistentKeys,
+        statutes:
+          ids.length === 0
+            ? []
+            : await tx
+                .select(resolvedStatuteColumns)
+                .from(legislationDocuments)
+                .where(inArray(legislationDocuments.id, ids)),
+      };
+    },
+  );
 
   const statuteById = new Map(statutes.map((row) => [row.id, row]));
 
   return {
     items: body.works.map((work, index) => {
-      const id = idByKey.get(String(index));
+      const key = String(index);
+      const id = idByKey.get(key);
+      const statute = id === undefined ? null : (statuteById.get(id) ?? null);
       return {
         country: work.country,
         eli: work.eli,
         asOf: work.asOf,
-        statute: id === undefined ? null : (statuteById.get(id) ?? null),
+        statute,
+        unresolvedReason:
+          statute === null && inconsistentKeys.has(key)
+            ? LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT
+            : null,
       };
     }),
   };

@@ -13,6 +13,7 @@ import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
+import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -704,6 +705,8 @@ export const createApprovalHarness = ({
 
   /** Threads whose next web request is served by a process that then dies. */
   const crashingThreads = new Set<string>();
+  /** Reads of the responses a dying process left behind, still running. */
+  const abandonedReads = new Set<Promise<string>>();
 
   /**
    * Serves `body` until the run reaches a stalling model call, then lets the
@@ -723,8 +726,9 @@ export const createApprovalHarness = ({
     if (!(result instanceof Response && result.ok)) {
       return statusResponse(result);
     }
-    // Reading the stream is what runs the turn; it stops at the stall.
-    void drainResponse(result);
+    // Reading the stream is what runs the turn; it stops at the stall. In
+    // this process the run lives on, stalled, until `close` ends it.
+    abandonedReads.add(drainResponse(result));
     await stalled;
     prompts.loseSince(beforeCrash);
     // The earliest lease the row allows: just after the turn was created.
@@ -1226,10 +1230,20 @@ export const createApprovalHarness = ({
         }),
       );
     },
-    /** Restores the model seam and `fetch`; call once the test is done. */
-    close: () => {
-      globalThis.fetch = originalFetch;
-      provider.restore();
+    /**
+     * Ends what the test left running, then restores the model seam and
+     * `fetch`; call once the test is done, before its database closes. A run
+     * a simulated crash left stalled would otherwise keep beating on its
+     * turn after that database is gone.
+     */
+    close: async () => {
+      try {
+        await relinquishChatTurnRuns();
+        await Promise.all(abandonedReads);
+      } finally {
+        globalThis.fetch = originalFetch;
+        provider.restore();
+      }
     },
     /** Drops the connection of `threadId`'s response still streaming. */
     dropConnection: (threadId: SafeId<"chatThread">) => {

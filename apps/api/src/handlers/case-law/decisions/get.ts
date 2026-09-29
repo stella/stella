@@ -314,6 +314,7 @@ const readDecisionRecord = async ({
       slug: true,
       ecli: true,
       court: true,
+      courtId: true,
       country: true,
       language: true,
       languageGroupKey: true,
@@ -495,6 +496,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const presentation = courtPresentation(courtWeights, {
       country: decision.country,
       court: decision.court,
+      courtId: decision.courtId,
       ecli: decision.ecli,
     });
 

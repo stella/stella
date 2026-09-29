@@ -75,6 +75,11 @@ const PROVISION_READER_GRANTS_MIGRATION_PATH = nodePath.join(
   "20261003120300_case_law_provision_reader_grants",
   "migration.sql",
 );
+const PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260929180100_case_law_provision_scope_transition_keyset",
+  "migration.sql",
+);
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260731190000_case_law_observation_legacy_fence",
@@ -290,6 +295,40 @@ const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+const CHAT_RUN_LOG_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003121600_chat_run_log",
+  "migration.sql",
+);
+
+/** Schema push omits FORCE RLS, so mirror the migration's forced policies. */
+export const installPgliteChatRunLogRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(CHAT_RUN_LOG_MIGRATION_PATH).find(
+    (candidate) =>
+      executableSql(candidate).startsWith(
+        'ALTER TABLE "chat_run_logs" FORCE ROW LEVEL SECURITY',
+      ),
+  );
+  if (statement === undefined) {
+    panic("Chat run log FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+
+  const entriesStatement = readMigrationStatements(
+    CHAT_RUN_LOG_MIGRATION_PATH,
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "chat_run_log_entries" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (entriesStatement === undefined) {
+    panic("Chat run log entries FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(entriesStatement));
+};
+
 const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
   'ALTER TABLE "pdf_signing_sessions"\n  FORCE ROW LEVEL SECURITY',
   "CREATE FUNCTION",
@@ -389,6 +428,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_BACKFILL_MIGRATION_PATH,
     PROVISION_READ_STATUS_MIGRATION_PATH,
     PROVISION_READER_GRANTS_MIGRATION_PATH,
+    PROVISION_SCOPE_TRANSITION_KEYSET_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>

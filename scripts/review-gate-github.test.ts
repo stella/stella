@@ -65,7 +65,7 @@ const pullRequest = (
   reviews: [],
   reactions: [],
   comments: [],
-  statuses: [{ context: "PerPush", state: "SUCCESS" }],
+  statuses: [{ context: "PerPush", state: "SUCCESS", description: null }],
   checkRuns: [],
   threads: { complete: true, unresolved: [] },
   headClockStartedAt: OPENED,
@@ -455,5 +455,26 @@ describe("overlapping publishers for one commit", () => {
     // One read before it and arriving after it is stale outright.
     publish(publisher(), SHA, verdict("failure"), identity(1));
     expect(latest()?.status).toBe("in_progress");
+  });
+
+  // Merge group evaluations for one commit no longer queue behind each other
+  // (the relay's, the sweep's): whichever lands last, the newest read wins.
+  test("merge group: an older evaluation landing last never overwrites the newer verdict", () => {
+    const { publisher, latest } = github();
+    const group = (minutes: number): RunIdentity => ({
+      kind: "group",
+      members: [1, 2],
+      observedAt: at(minutes),
+    });
+    const newer = () =>
+      publish(publisher(), GROUP_SHA, verdict("failure"), group(2));
+    // The sweep read the group first, then the relay's newer read landed
+    // before the sweep's write.
+    publish(publisher({ 1: newer }), GROUP_SHA, verdict("success"), group(1));
+    expect(latest()?.conclusion).toBe("failure");
+    expect(latest()?.identity).toEqual(group(2));
+    // An even older read arriving afterwards is stale outright.
+    publish(publisher(), GROUP_SHA, verdict("success"), group(0));
+    expect(latest()?.identity).toEqual(group(2));
   });
 });

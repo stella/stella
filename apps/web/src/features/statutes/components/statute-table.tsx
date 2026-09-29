@@ -338,6 +338,8 @@ const StatuteActCell = ({ statute }: { statute: StatuteListItem }) => {
 const VALIDITY_PILL_CLASS = {
   "in-force": "bg-success/15 text-success",
   ended: "bg-muted text-muted-foreground",
+  "never-in-force": "bg-muted text-muted-foreground",
+  unknown: "bg-warning/15 text-warning-foreground",
 } as const satisfies Record<LegislationListValidity, string>;
 
 const StatuteValidityPill = ({

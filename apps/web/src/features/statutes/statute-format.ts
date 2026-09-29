@@ -78,6 +78,22 @@ const lastDayInForce = (validTo: string | null): Date | null => {
   return end === null ? null : new Date(end.getTime() - DAY_IN_MS);
 };
 
+/**
+ * The dates a publisher stated for a version, each stored boundary formatted
+ * as it is. Unlike `formatValidityRange`, the end is never stepped back to a
+ * last day in force: a stated window is shown as stated, even one that closes
+ * on the day it opens.
+ */
+export const formatStatedWindow = ({
+  format,
+  openEnded,
+  validFrom,
+  validTo,
+}: FormatValidityRangeOptions): string =>
+  `${formatValidityDate(validFrom, format) ?? EM_DASH} – ${
+    formatValidityDate(validTo, format) ?? openEnded
+  }`;
+
 /** Compact temporal-version label for chrome and version pickers. */
 export const formatValidityRange = ({
   format,

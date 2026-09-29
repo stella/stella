@@ -51,6 +51,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/me/**/*.ts",
   "apps/api/src/handlers/memories/**/*.ts",
   "apps/api/src/handlers/notifications/**/*.ts",
+  "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
@@ -172,6 +173,10 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack invokes these server-tool callbacks and turns thrown
   // ChatToolError values into tool failures; it cannot consume Result.err.
   "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
+  // Handed to TanStack AI as its StreamDurability adapter: the SDK reads an
+  // append/read/close failure only from a rejection, and the throw is what
+  // rolls back the fenced write transaction.
+  "apps/api/src/lib/chat/run-log.ts",
   "apps/api/src/lib/workflow-queue.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",

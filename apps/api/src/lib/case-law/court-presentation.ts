@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
 
@@ -6,9 +6,10 @@ import {
   courtAbbreviation,
   type CourtAbbreviationInput,
 } from "@/api/lib/case-law/court-abbreviations";
+import { courtTierLabel } from "@/api/lib/case-law/court-tiers";
 import {
-  courtTierLabelFromMap,
   type CourtWeightMap,
+  decisionCourtWeight,
 } from "@/api/lib/case-law/court-weights";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -41,9 +42,38 @@ export type CourtRegistry = CourtWeightMap | null;
  */
 const UNRANKED_TIER: CourtTierLabel = "other";
 
+type PresentedDecision = CourtAbbreviationInput & {
+  /** The directory court id, where the decision's jurisdiction stores one. */
+  courtId: string | null;
+};
+
+/**
+ * A court the registry could be read for. A directory court whose stored id
+ * the directory does not resolve gets no chip, as with no registry: the rank
+ * read has already reported it, and its peers are drawn as usual.
+ */
+const rankedPresentation = (
+  courtWeights: CourtWeightMap,
+  decision: PresentedDecision,
+): CourtPresentation => {
+  const rank = decisionCourtWeight(courtWeights, decision);
+  switch (rank.type) {
+    case "ranked":
+      return {
+        courtAbbreviation: courtAbbreviation(decision) ?? null,
+        courtTier: courtTierLabel(rank.tier),
+      };
+    case "invalid-directory-identity":
+      return { courtAbbreviation: null, courtTier: UNRANKED_TIER };
+    default:
+      rank satisfies never;
+      return panic(`Unhandled court rank: ${JSON.stringify(rank)}`);
+  }
+};
+
 export const courtPresentation = (
   courtWeights: CourtRegistry,
-  decision: CourtAbbreviationInput,
+  decision: PresentedDecision,
 ): CourtPresentation =>
   // No registry, no chip. The alternative is a badge drawn at the bottom of a
   // scale nobody could read, which would show the Supreme Court as a district
@@ -51,14 +81,7 @@ export const courtPresentation = (
   // name is beside it either way.
   courtWeights === null
     ? { courtAbbreviation: null, courtTier: UNRANKED_TIER }
-    : {
-        courtAbbreviation: courtAbbreviation(decision) ?? null,
-        courtTier: courtTierLabelFromMap(
-          courtWeights,
-          decision.court,
-          decision.country,
-        ),
-      };
+    : rankedPresentation(courtWeights, decision);
 
 /**
  * How long a public read waits for the registry before drawing no chip.

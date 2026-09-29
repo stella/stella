@@ -13,7 +13,10 @@ import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
+  eligibleExpression,
   inForceToday,
+  legislationVersionRef,
+  legislationVersionRefAt,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
@@ -88,9 +91,15 @@ const shelfColumns = {
   versionValidFrom: legislationDocuments.versionValidFrom,
 };
 
+const documentRef = legislationVersionRef(legislationDocuments);
+const earlierRef = legislationVersionRefAt("earlier");
+
 /**
- * The earliest window of a work that has not opened yet: no other future
- * window of the same `(source, eli, language)` opens before this one.
+ * The earliest eligible window of a work that has not opened yet: no other
+ * future eligible window of the same `(source, eli, language)` opens before
+ * this one. A version that will never apply (never in force, an inconsistent
+ * window, a promulgated text) neither enters the shelf nor hides one that
+ * will.
  */
 const isNextVersionOfWork = sql`NOT EXISTS (
   SELECT 1
@@ -99,8 +108,9 @@ const isNextVersionOfWork = sql`NOT EXISTS (
     AND earlier.eli = ${legislationDocuments.eli}
     AND earlier.language = ${legislationDocuments.language}
     AND earlier.id <> ${legislationDocuments.id}
-    AND ${versionSortKey(sql`earlier.version_valid_from`)} > CURRENT_DATE
-    AND (${versionSortKey(sql`earlier.version_valid_from`)}, earlier.id)
+    AND ${eligibleExpression(earlierRef)}
+    AND ${versionSortKey(earlierRef.validFrom)} > CURRENT_DATE
+    AND (${versionSortKey(earlierRef.validFrom)}, earlier.id)
       < (${validFromKey}, ${legislationDocuments.id})
 )`;
 
@@ -125,10 +135,7 @@ export const readLegislationShelf = async ({
         and(
           publishedLegislationDocument,
           eq(legislationDocuments.country, country),
-          inForceToday(
-            legislationDocuments.versionValidFrom,
-            legislationDocuments.versionValidTo,
-          ),
+          inForceToday(documentRef),
           isCurrentVersionOfWork,
           sql`${validFromKey} >= CURRENT_DATE - ${windowDays}`,
         ),
@@ -147,6 +154,7 @@ export const readLegislationShelf = async ({
         and(
           publishedLegislationDocument,
           eq(legislationDocuments.country, country),
+          eligibleExpression(documentRef),
           sql`${validFromKey} > CURRENT_DATE`,
           sql`${validFromKey} <= CURRENT_DATE + ${windowDays}`,
           isNextVersionOfWork,
