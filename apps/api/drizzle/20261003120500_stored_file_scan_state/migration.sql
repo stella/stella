@@ -7,7 +7,8 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- Writers record `scanned` themselves; the default keeps any row without that
 -- record on the scanning path. A constant default is a catalog-only change,
 -- so no table is rewritten. The value list is STORED_FILE_SCAN_STATES.
--- Every statement is guarded, so a retried deployment can run the file again.
+-- Every statement can run again, so a retried deployment re-enters the same
+-- state.
 
 ALTER TABLE "templates"
   ADD COLUMN IF NOT EXISTS "scan_state" text NOT NULL DEFAULT 'unscanned';
@@ -21,43 +22,31 @@ ALTER TABLE "style_sets"
   ADD COLUMN IF NOT EXISTS "scan_state" text NOT NULL DEFAULT 'unscanned';
 --> statement-breakpoint
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_catalog.pg_constraint
-     WHERE conname = 'templates_scan_state_check'
-       AND conrelid = '"templates"'::regclass
-  ) THEN
-    ALTER TABLE "templates"
-      ADD CONSTRAINT "templates_scan_state_check"
-      CHECK ("scan_state" IN ('scanned', 'unscanned')) NOT VALID;
-  END IF;
-END $$;
+-- stella-migration-safety: reviewed drop-constraint - Drops only the
+-- constraint the next statement re-adds, so a retried migration re-enters the
+-- same state; no other constraint and no data is touched.
+ALTER TABLE "templates"
+  DROP CONSTRAINT IF EXISTS "templates_scan_state_check";--> statement-breakpoint
+ALTER TABLE "templates"
+  ADD CONSTRAINT "templates_scan_state_check"
+  CHECK ("scan_state" IN ('scanned', 'unscanned')) NOT VALID;
 --> statement-breakpoint
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_catalog.pg_constraint
-     WHERE conname = 'template_versions_scan_state_check'
-       AND conrelid = '"template_versions"'::regclass
-  ) THEN
-    ALTER TABLE "template_versions"
-      ADD CONSTRAINT "template_versions_scan_state_check"
-      CHECK ("scan_state" IN ('scanned', 'unscanned')) NOT VALID;
-  END IF;
-END $$;
+-- stella-migration-safety: reviewed drop-constraint - Drops only the
+-- constraint the next statement re-adds, so a retried migration re-enters the
+-- same state; no other constraint and no data is touched.
+ALTER TABLE "template_versions"
+  DROP CONSTRAINT IF EXISTS "template_versions_scan_state_check";--> statement-breakpoint
+ALTER TABLE "template_versions"
+  ADD CONSTRAINT "template_versions_scan_state_check"
+  CHECK ("scan_state" IN ('scanned', 'unscanned')) NOT VALID;
 --> statement-breakpoint
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_catalog.pg_constraint
-     WHERE conname = 'style_sets_scan_state_check'
-       AND conrelid = '"style_sets"'::regclass
-  ) THEN
-    ALTER TABLE "style_sets"
-      ADD CONSTRAINT "style_sets_scan_state_check"
-      CHECK ("scan_state" IN ('scanned', 'unscanned')) NOT VALID;
-  END IF;
-END $$;
+-- stella-migration-safety: reviewed drop-constraint - Drops only the
+-- constraint the next statement re-adds, so a retried migration re-enters the
+-- same state; no other constraint and no data is touched.
+ALTER TABLE "style_sets"
+  DROP CONSTRAINT IF EXISTS "style_sets_scan_state_check";--> statement-breakpoint
+ALTER TABLE "style_sets"
+  ADD CONSTRAINT "style_sets_scan_state_check"
+  CHECK ("scan_state" IN ('scanned', 'unscanned')) NOT VALID;
