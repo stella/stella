@@ -103,9 +103,17 @@ type ChatTurnRunOptions = {
   ownership?: ChatTurnOwnership | undefined;
 };
 
+/** A run's heartbeat: stopped at once, idle once its last beat is over. */
+type ChatTurnRunHeartbeatHandle = {
+  /** Resolves once no beat is reading the turn any more. */
+  idle: () => Promise<void>;
+  /** No beat starts from now on. */
+  stop: () => void;
+};
+
 type ChatTurnRunState =
   | { status: "handed-over" }
-  | { status: "producing"; stopHeartbeat: () => void }
+  | { status: "producing"; heartbeat: ChatTurnRunHeartbeatHandle }
   | { status: "settled" };
 
 /** Whether a run stored the turn's outcome (its own, or its failure). */
@@ -259,7 +267,7 @@ export class ChatTurnRun {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
-    this.state = { status: "producing", stopHeartbeat: this.startHeartbeat() };
+    this.state = { status: "producing", heartbeat: this.startHeartbeat() };
     // Building the response starts its pump, which pulls the stream first.
     const response = withSseHeartbeat(
       toServerSentEventsResponse(output, {
@@ -280,7 +288,7 @@ export class ChatTurnRun {
     }
     // Settling ends the run's hold on the turn: from here a beat would find
     // the turn no longer running and cut the response's last chunks.
-    this.state.stopHeartbeat();
+    this.state.heartbeat.stop();
     try {
       await persist();
       this.stored = true;
@@ -382,7 +390,7 @@ export class ChatTurnRun {
    * the lease every few beats. A run that finds its turn no longer its own
    * stops producing: another owner, or the reaper, settles it.
    */
-  private startHeartbeat(): () => void {
+  private startHeartbeat(): ChatTurnRunHeartbeatHandle {
     const { heartbeat = CHAT_TURN_RUN_HEARTBEAT, owner } = this.options;
     let beats = 0;
     let stopped = false;
@@ -421,18 +429,17 @@ export class ChatTurnRun {
           panic(`Unhandled standing: ${String(standing.value)}`);
       }
     };
-    let beating = false;
+    /** The beat still reading the turn, settled either way. */
+    let beating: Promise<unknown> | undefined;
     const interval = setInterval(() => {
-      if (beating) {
+      if (beating !== undefined) {
         return;
       }
-      beating = true;
-      detached(
-        beat().finally(() => {
-          beating = false;
-        }),
-        "chat-turn-run.heartbeat",
-      );
+      const current = beat();
+      detached(current, "chat-turn-run.heartbeat");
+      beating = Promise.allSettled([current]).finally(() => {
+        beating = undefined;
+      });
     }, heartbeat.intervalMs);
     interval.unref();
     const stop = () => {
@@ -442,16 +449,30 @@ export class ChatTurnRun {
     this.control.abortController.signal.addEventListener("abort", stop, {
       once: true,
     });
-    return stop;
+    return {
+      idle: async () => {
+        await beating;
+      },
+      stop,
+    };
   }
 
+  /**
+   * End the run: it is no longer owned, and it is over (`settled` resolves)
+   * once a beat still reading its turn is done, so nothing of it touches the
+   * database after that. Its response does not wait for the beat.
+   */
   private release(): void {
-    if (this.state.status === "producing") {
-      this.state.stopHeartbeat();
-    }
+    const { state } = this;
     this.state = { status: "settled" };
     this.ownership.release(this);
-    this.settledResolvers.resolve(this.stored ? "stored" : "unstored");
+    const end: ChatTurnRunEnd = this.stored ? "stored" : "unstored";
+    if (state.status !== "producing") {
+      this.settledResolvers.resolve(end);
+      return;
+    }
+    state.heartbeat.stop();
+    this.settledResolvers.resolve(state.heartbeat.idle().then(() => end));
   }
 }
 
