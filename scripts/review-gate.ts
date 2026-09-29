@@ -888,35 +888,7 @@ export const outputStatus = ({
     ? { status: "in_progress", conclusion: null }
     : { status: "completed", conclusion };
 
-export type PublishDecision = "write" | "unchanged" | "stale";
-
-/**
- * Publishers race: two events for one commit can finish in either order.
- * A verdict built from state read before the latest published one is stale
- * and never overwrites it; an identical verdict is not written twice.
- */
-export const decidePublish = (
-  latest: PublishedRun | undefined,
-  output: GateOutput,
-  observedAt: string,
-): PublishDecision => {
-  if (latest === undefined) {
-    return "write";
-  }
-  if (
-    latest.identity !== null &&
-    Date.parse(latest.identity.observedAt) > Date.parse(observedAt)
-  ) {
-    return "stale";
-  }
-  const next = outputStatus(output);
-  const same =
-    latest.status === next.status &&
-    latest.conclusion === next.conclusion &&
-    latest.title === output.title &&
-    latest.summary === output.summary;
-  return same ? "unchanged" : "write";
-};
+export type PublishDecision = "write" | "restamp" | "unchanged" | "stale";
 
 /** The latest run this gate published on a commit, by start time. */
 export const latestRun = (
@@ -929,11 +901,44 @@ const observedTime = (run: PublishedRun): number =>
     : Date.parse(run.identity.observedAt);
 
 /**
- * Two publishers can both read the same latest run, both decide to write,
- * and land in the reverse order of what they observed. After every write the
- * publisher re-reads, and when the newest run no longer carries the newest
- * observation, re-posts the run that does. The last writer always settles
- * last, so the latest run ends up carrying the newest observation.
+ * Publishers race: events for one commit can finish in any order. A verdict
+ * built from state read before any published observation is stale and never
+ * overwrites it, whichever run carries that observation. A newer read of the
+ * verdict already published is not written twice; it re-stamps the latest
+ * run instead, so an older, different verdict landing later is still stale.
+ */
+export const decidePublish = (
+  runs: readonly PublishedRun[],
+  output: GateOutput,
+  observedAt: string,
+): PublishDecision => {
+  const latest = latestRun(runs);
+  if (latest === undefined) {
+    return "write";
+  }
+  const observed = Date.parse(observedAt);
+  if (runs.some((run) => observedTime(run) > observed)) {
+    return "stale";
+  }
+  const next = outputStatus(output);
+  const same =
+    latest.status === next.status &&
+    latest.conclusion === next.conclusion &&
+    latest.title === output.title &&
+    latest.summary === output.summary;
+  if (!same || latest.identity === null) {
+    return "write";
+  }
+  return observedTime(latest) < observed ? "restamp" : "unchanged";
+};
+
+/**
+ * Publishers can both decide to write and land in the reverse order of what
+ * they observed, and a re-post can itself land after a newer write. After
+ * every write the publisher re-reads, and while the newest run does not
+ * carry the newest observation, re-posts the run that does. Whoever writes
+ * last re-reads after it, so the latest run ends up carrying the newest
+ * observation.
  */
 export const runToRepost = (
   runs: readonly PublishedRun[],
