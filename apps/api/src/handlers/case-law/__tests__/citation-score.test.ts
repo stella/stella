@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   citationScore,
   courtWeight,
-  courtWeightSql,
+  courtNameWeightSql,
   polarityWeightSql,
   recencyFactor,
   weightedCitationSum,
@@ -99,6 +99,8 @@ describe("weightedCitationSum", () => {
       [
         {
           citingCourt: "Nejvyšší soud",
+          citingCountry: "CZE",
+          citingCourtId: null,
           citingDate: "2025-01-01",
         },
       ],
@@ -114,10 +116,14 @@ describe("weightedCitationSum", () => {
       [
         {
           citingCourt: "Nejvyšší soud",
+          citingCountry: "CZE",
+          citingCourtId: null,
           citingDate: "2025-01-01",
         },
         {
           citingCourt: "Krajský soud v Brně",
+          citingCountry: "CZE",
+          citingCourtId: null,
           citingDate: "2024-01-01",
         },
       ],
@@ -141,6 +147,8 @@ describe("citationScore", () => {
       [
         {
           citingCourt: "Nejvyšší soud",
+          citingCountry: "CZE",
+          citingCourtId: null,
           citingDate: "2024-06-01",
         },
       ],
@@ -154,6 +162,8 @@ describe("citationScore", () => {
     const makeCitations = (n: number) =>
       Array.from({ length: n }, () => ({
         citingCourt: "Krajský soud v Brně",
+        citingCountry: "CZE",
+        citingCourtId: null,
         citingDate: "2024-06-01",
       }));
 
@@ -171,6 +181,8 @@ describe("citationScore", () => {
     const stillCited = citationScore(
       Array.from({ length: 5 }, () => ({
         citingCourt: "Nejvyšší soud",
+        citingCountry: "CZE",
+        citingCourtId: null,
         citingDate: "2024-11-01",
       })),
       now,
@@ -180,6 +192,8 @@ describe("citationScore", () => {
     const stale = citationScore(
       Array.from({ length: 20 }, () => ({
         citingCourt: "Okresní soud v Ostravě",
+        citingCountry: "CZE",
+        citingCourtId: null,
         citingDate: "2005-01-01",
       })),
       now,
@@ -194,12 +208,16 @@ describe("citationScore", () => {
     const landmarkCitations = Array.from({ length: 20 }, (_, year) =>
       Array.from({ length: 10 }, () => ({
         citingCourt: "Okresní soud v Ostravě",
+        citingCountry: "CZE",
+        citingCourtId: null,
         citingDate: `${2006 + year}-01-01`,
       })),
     ).flat();
     // 8 citations, all from today, on a decision two years old.
     const recentCitations = Array.from({ length: 8 }, () => ({
       citingCourt: "Okresní soud v Ostravě",
+      citingCountry: "CZE",
+      citingCourtId: null,
       citingDate: "2025-01-01",
     }));
 
@@ -263,6 +281,8 @@ describe("polarity weighting", () => {
   const now = new Date("2025-01-01");
   const citation = {
     citingCourt: "Nejvyšší soud",
+    citingCountry: "CZE",
+    citingCourtId: null,
     citingDate: "2024-01-01",
   };
 
@@ -343,10 +363,10 @@ describe("polarityWeightSql", () => {
 // an equivalent (not broken) representation. Assertions below stick to
 // ASCII-safe fragments (weights, structure) rather than matching the
 // escaped accented text verbatim.
-describe("courtWeightSql", () => {
+describe("courtNameWeightSql", () => {
   test("renders one branch per seeded entry, highest tier first", () => {
     const entries = flattenCourtWeightEntries(SEED_MAP);
-    const generated = courtWeightSql("citing_d.court", entries);
+    const generated = courtNameWeightSql("citing_d.court", entries);
     expect(generated.match(/WHEN citing_d\.court ~\*/gu)).toHaveLength(
       entries.length,
     );
@@ -357,7 +377,7 @@ describe("courtWeightSql", () => {
   });
 
   test("generates from the given entries alone", () => {
-    const generated = courtWeightSql("citing_d.court", [
+    const generated = courtNameWeightSql("citing_d.court", [
       {
         country: "AUT",
         pattern: /verfassungsgerichtshof/iu,
@@ -388,7 +408,7 @@ describe("courtWeightSql", () => {
     // An unmigrated table: nothing to rank by, and nothing to fall back to.
     // A branchless `CASE` is a syntax error, so the weight stands alone and
     // the statement still runs; `authority-sql.test.ts` executes it.
-    const generated = courtWeightSql("citing_d.court", []);
+    const generated = courtNameWeightSql("citing_d.court", []);
     expect(generated).toBe("1");
   });
 });

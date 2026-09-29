@@ -1,0 +1,85 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
+"COALESCE(
+      CASE WHEN d.country = 'AUT' AND d.court ~* 'verfassungsgerichtshof|^vfgh$' THEN 4
+      WHEN d.country = 'CZE' AND d.court ~* 'ústavní soud' THEN 4
+      WHEN d.country = 'EU' AND d.court ~* 'court of justice' THEN 4
+      WHEN d.country = 'HUN' AND d.court ~* 'alkotmánybíróság' THEN 4
+      WHEN d.country = 'POL' AND d.court ~* 'trybunał konstytucyjny' THEN 4
+      WHEN d.country = 'SVK' AND d.court ~* 'ústavný súd' THEN 4
+      WHEN d.country = 'AUT' AND d.court ~* 'oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$' THEN 3
+      WHEN d.country = 'CZE' AND d.court ~* 'nejvyšší' THEN 3
+      WHEN d.country = 'EU' AND d.court ~* 'general court' THEN 3
+      WHEN d.country = 'HUN' AND d.court ~* 'kúria|legfelsőbb bíróság' THEN 3
+      WHEN d.country = 'POL' AND d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 3
+      WHEN d.country = 'SVK' AND d.court ~* 'najvyšší' THEN 3
+      WHEN d.country = 'USA' AND d.court ~* '^supreme court of the united states$' THEN 3
+      WHEN d.country = 'AUT' AND d.court ~* 'oberlandesgericht|landesgericht' THEN 2
+      WHEN d.country = 'CZE' AND d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 2
+      WHEN d.country = 'HUN' AND d.court ~* 'törvényszék|megyei bíróság|fővárosi bíróság' THEN 2
+      WHEN d.country = 'HUN' AND d.court ~* 'ítélőtábla' THEN 2
+      WHEN d.country = 'POL' AND d.court ~* 'sąd apelacyjny|wojewódzki sąd administracyjny' THEN 2
+      WHEN d.country = 'POL' AND d.court ~* 'sąd okręgowy' THEN 2
+      WHEN d.country = 'SVK' AND d.court ~* 'krajský súd' THEN 2
+      WHEN d.country = 'HUN' AND d.court ~* 'járásbíróság|kerületi bíróság|városi bíróság' THEN 1
+      WHEN d.country = 'HUN' AND d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 1
+      WHEN d.country = 'POL' AND d.court ~* 'krajowa izba odwoławcza' THEN 1
+      WHEN d.country = 'POL' AND d.court ~* 'sąd rejonowy' THEN 1
+      ELSE NULL END,
+      CASE WHEN d.court ~* 'verfassungsgerichtshof|^vfgh$' THEN 4
+      WHEN d.court ~* 'ústavní soud' THEN 4
+      WHEN d.court ~* 'court of justice' THEN 4
+      WHEN d.court ~* 'alkotmánybíróság' THEN 4
+      WHEN d.court ~* 'trybunał konstytucyjny' THEN 4
+      WHEN d.court ~* 'ústavný súd' THEN 4
+      WHEN d.court ~* 'oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$' THEN 3
+      WHEN d.court ~* 'nejvyšší' THEN 3
+      WHEN d.court ~* 'general court' THEN 3
+      WHEN d.court ~* 'kúria|legfelsőbb bíróság' THEN 3
+      WHEN d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 3
+      WHEN d.court ~* 'najvyšší' THEN 3
+      WHEN d.court ~* '^supreme court of the united states$' THEN 3
+      WHEN d.court ~* 'oberlandesgericht|landesgericht' THEN 2
+      WHEN d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 2
+      WHEN d.court ~* 'törvényszék|megyei bíróság|fővárosi bíróság' THEN 2
+      WHEN d.court ~* 'ítélőtábla' THEN 2
+      WHEN d.court ~* 'sąd apelacyjny|wojewódzki sąd administracyjny' THEN 2
+      WHEN d.court ~* 'sąd okręgowy' THEN 2
+      WHEN d.court ~* 'krajský súd' THEN 2
+      WHEN d.court ~* 'járásbíróság|kerületi bíróság|városi bíróság' THEN 1
+      WHEN d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 1
+      WHEN d.court ~* 'krajowa izba odwoławcza' THEN 1
+      WHEN d.court ~* 'sąd rejonowy' THEN 1
+      ELSE NULL END,
+      1
+    )"
+`;
+
+exports[`the name rank SQL renders byte for byte as before: weight 1`] = `
+"CASE WHEN citing_d.court ~* 'verfassungsgerichtshof|^vfgh$' THEN 10
+      WHEN citing_d.court ~* 'ústavní soud' THEN 10
+      WHEN citing_d.court ~* 'court of justice' THEN 10
+      WHEN citing_d.court ~* 'alkotmánybíróság' THEN 10
+      WHEN citing_d.court ~* 'trybunał konstytucyjny' THEN 10
+      WHEN citing_d.court ~* 'ústavný súd' THEN 10
+      WHEN citing_d.court ~* 'oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$' THEN 8
+      WHEN citing_d.court ~* 'nejvyšší' THEN 8
+      WHEN citing_d.court ~* 'general court' THEN 8
+      WHEN citing_d.court ~* 'kúria|legfelsőbb bíróság' THEN 8
+      WHEN citing_d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 8
+      WHEN citing_d.court ~* 'najvyšší' THEN 8
+      WHEN citing_d.court ~* '^supreme court of the united states$' THEN 8
+      WHEN citing_d.court ~* 'oberlandesgericht|landesgericht' THEN 4
+      WHEN citing_d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 4
+      WHEN citing_d.court ~* 'törvényszék|megyei bíróság|fővárosi bíróság' THEN 4
+      WHEN citing_d.court ~* 'ítélőtábla' THEN 5
+      WHEN citing_d.court ~* 'sąd apelacyjny|wojewódzki sąd administracyjny' THEN 5
+      WHEN citing_d.court ~* 'sąd okręgowy' THEN 4
+      WHEN citing_d.court ~* 'krajský súd' THEN 4
+      WHEN citing_d.court ~* 'járásbíróság|kerületi bíróság|városi bíróság' THEN 2
+      WHEN citing_d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 3
+      WHEN citing_d.court ~* 'krajowa izba odwoławcza' THEN 3
+      WHEN citing_d.court ~* 'sąd rejonowy' THEN 2
+      ELSE 1 END"
+`;

@@ -95,8 +95,14 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
   {
     modules: ["apps/api/src/lib/case-law/court-weights"],
     name: "courtTierSqlFromMap",
-    sqlArguments: [{ index: 0, properties: ["courtColumn", "countryColumn"] }],
-    reason: "A CASE over the court registry's patterns; reads no relation.",
+    sqlArguments: [
+      {
+        index: 0,
+        properties: ["courtColumn", "countryColumn", "courtIdColumn"],
+      },
+    ],
+    reason:
+      "A CASE over the court registry's patterns and the court directory's ids; reads no relation.",
   },
   {
     modules: ["apps/api/src/lib/case-law/published-decisions"],
@@ -122,8 +128,14 @@ export const REVIEWED_SQL_PRODUCERS: readonly {
   {
     modules: ["apps/api/src/handlers/case-law/citation-score"],
     name: "courtWeightSql",
-    sqlArguments: [0],
-    reason: "A CASE over the registry's patterns and a court column.",
+    sqlArguments: [
+      {
+        index: 0,
+        properties: ["courtColumn", "countryColumn", "courtIdColumn"],
+      },
+    ],
+    reason:
+      "A CASE over the registry's patterns, the court directory's ids and a decision's court columns.",
   },
 ];
 
