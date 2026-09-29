@@ -29,8 +29,12 @@ const reachesHash = ({
   const pending = [entry.newHash];
   while (pending.length > 0) {
     const hash = pending.pop();
-    if (hash === bundledHash) {return true;}
-    if (hash === undefined || seen.has(hash)) {continue;}
+    if (hash === bundledHash) {
+      return true;
+    }
+    if (hash === undefined || seen.has(hash)) {
+      continue;
+    }
     seen.add(hash);
     pending.push(
       ...inventory
