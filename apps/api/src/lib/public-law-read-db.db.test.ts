@@ -117,11 +117,17 @@ test("a cancelled statement keeps its original error if its transaction rejects 
       throw new Error("transaction is aborted");
     },
   };
-  await expect(
-    withSharedStatementTimeout(transaction, 3000, async () => {
+  const rejection: unknown = await withSharedStatementTimeout(
+    transaction,
+    3000,
+    async () => {
       throw timeout;
-    }),
-  ).rejects.toBe(timeout);
+    },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBe(timeout);
   expect(executions).toBe(3);
 });
 
