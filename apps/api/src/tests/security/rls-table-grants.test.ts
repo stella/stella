@@ -52,6 +52,10 @@ const BOOTSTRAP_COVERED_RLS_MIGRATIONS = new Set([
 // tables and derived preview passages are maintained by privileged background
 // writers, so the request role correctly receives SELECT only, not full DML.
 const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
+  // File usage is written through the owner transaction; scoped requests may
+  // read only their organization's counter and object records.
+  "organization_file_usage",
+  "organization_file_objects",
   // History written only by the record_agent_skill_revision trigger.
   "agent_skill_revisions",
   "search_document_preview_passages",

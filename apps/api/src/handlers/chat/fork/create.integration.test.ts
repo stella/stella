@@ -8,19 +8,35 @@ import {
   mock,
   test,
 } from "bun:test";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads, userFiles } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreads,
+  organizationFileObjects,
+  organizationFileUsage,
+  usageEntitlements,
+  usagePolicies,
+  usageSeatAssignments,
+  userFiles,
+} from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
   createChatAttachmentPart,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import {
+  type copyOrganizationFile,
+  releaseOrganizationFileBytes,
+  removeOrganizationFilesBytes,
+} from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -886,6 +902,392 @@ test("a source attachment whose storage object is gone is skipped, not fatal", a
     toUserFileUrl(attachment.fileId),
   );
 });
+
+test("a metered fork reports capacity refusal without creating a copy", async () => {
+  const source = await seedThread({
+    texts: ["See the exhibit", "Reviewed"],
+    withAttachment: true,
+  });
+  const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(newThreadId);
+  const policyId = createSafeId<"usagePolicy">();
+  const entitlementId = createSafeId<"usageEntitlement">();
+  const assignmentId = createSafeId<"usageSeatAssignment">();
+  await testDb.insert(usagePolicies).values({
+    id: policyId,
+    policyKey: `chat-fork-${policyId}`.slice(0, 64),
+    displayName: "Chat fork capacity fixture",
+    monthlyUsageUnits: 0,
+    storageBytesPerAssignment: 1n,
+  });
+  await testDb.insert(usageEntitlements).values({
+    id: entitlementId,
+    organizationId: ids.orgA,
+    usagePolicyId: policyId,
+    status: "active",
+    seats: 1,
+    currentPeriodStart: new Date(Date.now() - 60_000),
+    currentPeriodEnd: new Date(Date.now() + 60_000),
+    source: "manual",
+  });
+  await testDb.insert(usageSeatAssignments).values({
+    id: assignmentId,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
+  const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+  const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+  env.FEATURE_FILE_USAGE_LIMITS = true;
+  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+  try {
+    const meteredFork = createForkThread({
+      fileUsageDb:
+        asTestRaw<
+          NonNullable<Parameters<typeof copyOrganizationFile>[0]["db"]>
+        >(testDb),
+      indexChatThread: indexChatThreadMock,
+    });
+    const refused = await meteredFork.handler(
+      forkContext({
+        newThreadId,
+        threadId: source.threadId,
+        upToMessageId: messageAt(source, 1),
+      }),
+    );
+    expect(refused).toMatchObject({ code: 409 });
+    expect(await readFork(newThreadId)).toBeUndefined();
+    expect(
+      await testDb
+        .select({ id: userFiles.id })
+        .from(userFiles)
+        .where(eq(userFiles.threadId, newThreadId)),
+    ).toHaveLength(0);
+  } finally {
+    env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+    await testDb
+      .delete(usageSeatAssignments)
+      .where(eq(usageSeatAssignments.id, assignmentId));
+    await testDb
+      .delete(usageEntitlements)
+      .where(eq(usageEntitlements.id, entitlementId));
+    await testDb.delete(usagePolicies).where(eq(usagePolicies.id, policyId));
+  }
+});
+
+test.each(["available", "inaccessible"])(
+  "a metered fork skips a missing source object when its thumbnail is %s",
+  async (thumbnailState) => {
+    const source = await seedThread({
+      texts: ["See the exhibit", "Reviewed"],
+      withAttachment: true,
+    });
+    const attachment = source.attachment;
+    if (attachment === null) {
+      throw new TypeError("expected a seeded attachment");
+    }
+    fakeS3.objects.delete(`${BUCKET}/${attachment.s3Key}`);
+    if (thumbnailState === "inaccessible") {
+      fakeS3.failNext({
+        method: "HEAD",
+        key: attachment.thumbnailKey,
+        code: "AccessDenied",
+        status: 403,
+      });
+    }
+    const newThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(newThreadId);
+    const previousKeys = new Set(
+      (
+        await testDb
+          .select({ objectKey: organizationFileObjects.objectKey })
+          .from(organizationFileObjects)
+          .where(eq(organizationFileObjects.organizationId, ids.orgA))
+      ).map((row) => row.objectKey),
+    );
+    const fileUsageDb =
+      asTestRaw<NonNullable<Parameters<typeof copyOrganizationFile>[0]["db"]>>(
+        testDb,
+      );
+    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+    const priorWorkerFlag =
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+    env.FEATURE_FILE_USAGE_LIMITS = true;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+    try {
+      const meteredFork = createForkThread({
+        fileUsageDb,
+        indexChatThread: indexChatThreadMock,
+      });
+      await expectForked(
+        meteredFork.handler(
+          forkContext({
+            newThreadId,
+            threadId: source.threadId,
+            upToMessageId: messageAt(source, 1),
+          }),
+        ),
+      );
+      expect(
+        await testDb
+          .select({ id: userFiles.id })
+          .from(userFiles)
+          .where(eq(userFiles.threadId, newThreadId)),
+      ).toHaveLength(0);
+      const copiedMessages = await readMessages(newThreadId);
+      expect(JSON.stringify(copiedMessages.at(0)?.content)).toContain(
+        toUserFileUrl(attachment.fileId),
+      );
+      const remainingKeys = (
+        await testDb
+          .select({ objectKey: organizationFileObjects.objectKey })
+          .from(organizationFileObjects)
+          .where(eq(organizationFileObjects.organizationId, ids.orgA))
+      ).map((row) => row.objectKey);
+      expect(new Set(remainingKeys)).toEqual(previousKeys);
+      expect(
+        fakeS3.requests.filter(({ key }) => key === attachment.thumbnailKey),
+      ).toHaveLength(0);
+      expect(
+        fakeS3.requests.filter(({ method }) => method === "COPY"),
+      ).toHaveLength(0);
+    } finally {
+      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+      const pending = await testDb
+        .select({
+          objectKey: organizationFileObjects.objectKey,
+          writeId: organizationFileObjects.writeId,
+        })
+        .from(organizationFileObjects)
+        .where(
+          and(
+            eq(organizationFileObjects.organizationId, ids.orgA),
+            eq(organizationFileObjects.status, "reserved"),
+          ),
+        );
+      for (const row of pending) {
+        if (previousKeys.has(row.objectKey) || row.writeId === null) {
+          continue;
+        }
+        await releaseOrganizationFileBytes(
+          {
+            status: "reserved",
+            organizationId: ids.orgA,
+            objectKey: row.objectKey,
+            writeId: row.writeId,
+          },
+          fileUsageDb,
+        );
+      }
+    }
+  },
+);
+
+test.each([true, false])(
+  "a missing main with an inaccessible thumbnail preserves later fork rounds (metered: %s)",
+  async (metered) => {
+    const source = await seedThread({
+      texts: ["See the exhibits", "Reviewed"],
+      withAttachment: true,
+    });
+    if (source.attachment === null) {
+      throw new TypeError("expected a seeded attachment");
+    }
+    const attachments = [source.attachment];
+    for (let index = 1; index < 130; index += 1) {
+      attachments.push(
+        await seedAttachment({ threadId: source.threadId, userId: ids.userA1 }),
+      );
+    }
+    expect(attachments.length).toBeGreaterThan(128);
+    const first = attachments.at(0);
+    const last = attachments.at(-1);
+    if (!first || !last) {
+      throw new TypeError("expected first and final round attachments");
+    }
+    await testDb
+      .update(userFiles)
+      .set({ fileName: "last-round-exhibit.png" })
+      .where(eq(userFiles.id, last.fileId));
+    await testDb
+      .update(chatMessages)
+      .set({
+        content: toPersistedChatMessageContentV3({
+          data: [
+            { content: "See the exhibits", type: "text" },
+            ...attachments.map((attachment) =>
+              createChatAttachmentPart({
+                filename: "exhibit.png",
+                mimeType: IMAGE_MIME_TYPE,
+                url: toUserFileUrl(attachment.fileId),
+              }),
+            ),
+          ],
+        }),
+      })
+      .where(eq(chatMessages.id, messageAt(source, 0)));
+    // The main exists for its metered HEAD, then its COPY reports missing.
+    // The ignored thumbnail failure must never stop unrelated later rounds.
+    fakeS3.failNext({
+      method: "COPY",
+      copySourceKey: first.s3Key,
+      code: "NoSuchKey",
+      status: 404,
+    });
+    fakeS3.failNext({
+      method: "COPY",
+      copySourceKey: first.thumbnailKey,
+      code: "AccessDenied",
+      status: 403,
+    });
+    const previousObjects = await testDb
+      .select()
+      .from(organizationFileObjects)
+      .where(eq(organizationFileObjects.organizationId, ids.orgA));
+    const previousKeys = new Set(previousObjects.map((row) => row.objectKey));
+    const previousUsage = (
+      await testDb
+        .select()
+        .from(organizationFileUsage)
+        .where(eq(organizationFileUsage.organizationId, ids.orgA))
+    ).at(0);
+    const fileUsageDb =
+      asTestRaw<NonNullable<Parameters<typeof copyOrganizationFile>[0]["db"]>>(
+        testDb,
+      );
+    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+    const priorWorkerFlag =
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+    env.FEATURE_FILE_USAGE_LIMITS = metered;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = metered;
+    const newThreadId = createSafeId<"chatThread">();
+    seededThreadIds.push(newThreadId);
+    try {
+      const fork = createForkThread({
+        fileUsageDb,
+        indexChatThread: indexChatThreadMock,
+      });
+      const pending = fork.handler(
+        forkContext({
+          newThreadId,
+          threadId: source.threadId,
+          upToMessageId: messageAt(source, 1),
+        }),
+      );
+      await pending;
+      expect(
+        fakeS3.requests.filter(
+          ({ method, copySourceKey }) =>
+            method === "COPY" && copySourceKey === first.s3Key,
+        ),
+      ).toHaveLength(1);
+      if (metered) {
+        expect(
+          fakeS3.requests.filter(
+            ({ method, key }) => method === "HEAD" && key === first.s3Key,
+          ),
+        ).toHaveLength(1);
+      }
+      await expectForked(pending);
+      const copiedFiles = await testDb
+        .select()
+        .from(userFiles)
+        .where(eq(userFiles.threadId, newThreadId));
+      expect(copiedFiles).toHaveLength(129);
+      expect(
+        copiedFiles.find((file) => file.fileName === "last-round-exhibit.png"),
+      ).toBeDefined();
+      expect(
+        fakeS3.requests.filter(
+          ({ method, copySourceKey }) =>
+            method === "COPY" && copySourceKey === first.s3Key,
+        ),
+      ).toHaveLength(1);
+      expect(
+        fakeS3.requests.filter(
+          ({ method, copySourceKey }) =>
+            method === "COPY" && copySourceKey === last.s3Key,
+        ),
+      ).toHaveLength(1);
+      expect(
+        fakeS3.requests.filter(
+          ({ key, copySourceKey }) =>
+            key === first.thumbnailKey || copySourceKey === first.thumbnailKey,
+        ),
+      ).toHaveLength(0);
+      for (const file of copiedFiles) {
+        expect(fakeS3.objects.has(`${BUCKET}/${file.s3Key}`)).toBe(true);
+        expect(file.thumbnailFileId).not.toBeNull();
+        expect(
+          fakeS3.objects.has(
+            `${BUCKET}/${createUserFileKey({ fileId: file.thumbnailFileId ?? "", mimeType: THUMBNAIL_MIME_TYPE, userId: ids.userA1 })}`,
+          ),
+        ).toBe(true);
+      }
+      const copiedMessages = await readMessages(newThreadId);
+      expect(JSON.stringify(copiedMessages.at(0)?.content)).toContain(
+        toUserFileUrl(first.fileId),
+      );
+      expect(JSON.stringify(copiedMessages.at(0)?.content)).not.toContain(
+        toUserFileUrl(last.fileId),
+      );
+      const objects = await testDb
+        .select()
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.organizationId, ids.orgA));
+      const added = objects.filter((row) => !previousKeys.has(row.objectKey));
+      expect(added).toHaveLength(metered ? 258 : 0);
+      expect(
+        added.every(
+          (row) => row.status === "committed" && row.writeId === null,
+        ),
+      ).toBe(true);
+      const usage = (
+        await testDb
+          .select()
+          .from(organizationFileUsage)
+          .where(eq(organizationFileUsage.organizationId, ids.orgA))
+      ).at(0);
+      expect(
+        (usage?.committedBytes ?? 0n) - (previousUsage?.committedBytes ?? 0n),
+      ).toBe(metered ? 2967n : 0n);
+      expect(usage?.reservedBytes ?? 0n).toBe(
+        previousUsage?.reservedBytes ?? 0n,
+      );
+    } finally {
+      // Settle test-owned identities before restoring the flag; uncertain
+      // reservation retention remains part of the production helper contract.
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+      const added = (
+        await testDb
+          .select()
+          .from(organizationFileObjects)
+          .where(eq(organizationFileObjects.organizationId, ids.orgA))
+      ).filter((row) => !previousKeys.has(row.objectKey));
+      for (const row of added) {
+        if (row.writeId === null) {
+          continue;
+        }
+        await releaseOrganizationFileBytes(
+          {
+            status: "reserved",
+            organizationId: ids.orgA,
+            objectKey: row.objectKey,
+            writeId: row.writeId,
+          },
+          fileUsageDb,
+        );
+      }
+      await removeOrganizationFilesBytes(
+        added.map((row) => row.objectKey),
+        fileUsageDb,
+      );
+      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+    }
+  },
+);
 
 test("a missing thumbnail copies the attachment without one", async () => {
   const source = await seedThread({

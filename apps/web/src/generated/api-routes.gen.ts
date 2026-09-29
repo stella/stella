@@ -14800,7 +14800,10 @@ export type WebRoutes = {
                 readonly message: "Desktop edit session is already closed.";
               } | {
                 readonly message: "Desktop edit session file type changed while checkpointing.";
+              } | {
+                readonly message: string;
               };
+              413: T04724ee5f4;
               422: {
                 readonly message: `File validation failed: ${string}`;
               } | {
@@ -14816,6 +14819,7 @@ export type WebRoutes = {
                 property?: string;
                 expected?: string;
               };
+              503: T04724ee5f4;
             };
           };
         };
@@ -14861,20 +14865,18 @@ export type WebRoutes = {
               404: {
                 readonly message: "Desktop edit session not found.";
               } | {
-                readonly message: T2e1b9ec514;
+                readonly message: string;
                 readonly code?: "desktop_edit_session_taken_over";
               };
               409: {
                 readonly code: "desktop_edit_session_taken_over";
                 readonly message: "Desktop editing moved to another device. This local copy is preserved.";
               } | {
-                readonly message: T2e1b9ec514;
+                readonly message: string;
                 readonly code?: "desktop_edit_session_taken_over";
               };
-              422: {
-                readonly message: T2e1b9ec514;
-                readonly code?: "desktop_edit_session_taken_over";
-              } | {
+              413: T85d205c577;
+              422: (T85d205c577 | {
                 type: "validation";
                 on: string;
                 summary?: string;
@@ -14882,7 +14884,8 @@ export type WebRoutes = {
                 found?: unknown;
                 property?: string;
                 expected?: string;
-              };
+              });
+              503: T85d205c577;
             };
           };
         };
@@ -34103,6 +34106,10 @@ type T03c381f302 = {
   url: string;
 };
 
+type T04724ee5f4 = {
+  readonly message: string;
+};
+
 type T0487b0001f = {
   text: string;
   id: string;
@@ -35419,8 +35426,6 @@ type T2d6eece830 = {
 };
 
 type T2df478253f = "approved" | "draft" | "ephemeral";
-
-type T2e1b9ec514 = `File validation failed: ${string}` | "Base entity version not found." | "Desktop edit session file type changed while finalizing." | "Desktop edit session is already closed." | "Desktop edit session not found." | "Desktop edit session source file is no longer available." | "Desktop editing moved to another device. This local copy is preserved." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Workspace is not active";
 
 type T2e2021adee = {
   readonly input: Taeaa3ad44e;
@@ -37938,6 +37943,11 @@ type T84b2a2edb5 = {
 };
 
 type T85c0da56d3 = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
+
+type T85d205c577 = {
+  readonly message: string;
+  readonly code?: "desktop_edit_session_taken_over";
+};
 
 type T85f803b281 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "anonymizationBlacklistEntry";

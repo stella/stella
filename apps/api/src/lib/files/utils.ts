@@ -7,8 +7,7 @@ import {
   createUserFileKey,
   getFileExtension,
 } from "@/api/lib/file-key";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
-import { withTimeout } from "@/api/lib/with-timeout";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 
 export {
   createFileKey,
@@ -72,14 +71,6 @@ export const resolveUploadMime = ({
   );
 };
 
-/**
- * Concurrency limit for individual S3 delete calls. Bun's
- * S3Client has no batch-delete API, so we chunk to avoid
- * overwhelming the endpoint with concurrent HTTP requests.
- */
-const S3_DELETE_CONCURRENCY = 50;
-const S3_DELETE_TIMEOUT_MS = 30 * 1000;
-
 type DeleteS3ObjectsProps = {
   fileRows: { fileId: string; mimeType: string }[];
   organizationId: SafeId<"organization">;
@@ -112,38 +103,17 @@ export const deleteS3Objects = async ({
 
 export const deleteS3Keys = async (
   keys: string[],
+  signal = new AbortController().signal,
 ): Promise<Result<void, S3Error>> => {
-  const dedupedKeys = keys.filter((key, index) => keys.indexOf(key) === index);
-
-  for (let i = 0; i < dedupedKeys.length; i += S3_DELETE_CONCURRENCY) {
-    const chunk = dedupedKeys.slice(i, i + S3_DELETE_CONCURRENCY);
-
-    const result = await Result.tryPromise(
-      async () =>
-        await Promise.all(
-          chunk.map(
-            async (key) =>
-              await withTimeout(
-                async (signal) => await deleteS3ObjectWithSignal(key, signal),
-                {
-                  label: "s3-object-delete",
-                  timeoutMs: S3_DELETE_TIMEOUT_MS,
-                },
-              ),
-          ),
-        ),
+  const deleted = await deleteOrganizationFilesWithSignal(keys, signal);
+  if (Result.isError(deleted)) {
+    return Result.err(
+      new S3Error({
+        message: "Failed to delete S3 objects",
+        key: keys.at(0),
+        cause: deleted.error,
+      }),
     );
-
-    if (Result.isError(result)) {
-      return Result.err(
-        new S3Error({
-          message: `Failed to delete S3 objects (${chunk.length} keys in chunk)`,
-          key: chunk.at(0),
-          cause: result.error,
-        }),
-      );
-    }
   }
-
   return Result.ok();
 };

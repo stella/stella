@@ -385,6 +385,7 @@ test("a reclaimed upload cannot publish after its writer ownership expires", asy
           limit: 100,
           async deleteObject(key) {
             f.objects.delete(key);
+            return undefined;
           },
         });
         return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
