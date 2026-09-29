@@ -1539,6 +1539,7 @@ export default defineConfig({
         "apps/api/src/lib/legal-search/legislation-ingestion-types.ts",
         "apps/api/src/lib/legal-search/legislation-expression-label.ts",
         "packages/api-contract/src/legislation-expression.ts",
+        "apps/web/src/features/statutes/components/statute-expression-notice.tsx",
       ],
       rules: {
         "legislation-window/legislation-window-hint-display-only": "off",

@@ -4373,7 +4373,13 @@
     "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versión no tiene texto disponible.",
     "emptyState": "No se han encontrado normas.",
+    "expression": {
+      "invalidWindow": "Fechas del editor incoherentes",
+      "promulgated": "Texto promulgado",
+      "withdrawn": "El editor ya no lo publica"
+    },
     "inForceSince": "En vigor desde el {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Sentencias de referencia",
     "noVersionInForce": "Ninguna versión de esta norma estaba vigente en la fecha elegida.",
     "openEnded": "actualidad",
@@ -4393,18 +4399,22 @@
     "provisionHistoryUnavailable": "No se ha podido cargar el historial de este precepto.",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
     "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
     "showInText": "Ver en el texto",
+    "statedWindow": "Fechas indicadas por el editor: {range}",
     "status": {
       "current": "En vigor",
       "draft": "En proyecto",
       "ended": "Ya no está en vigor",
       "future": "Futura",
       "historical": "Sustituida",
-      "repealed": "Derogada"
+      "neverInForce": "Nunca entró en vigor",
+      "repealed": "Derogada",
+      "unknown": "Estado incierto"
     },
     "title": "Legislación",
     "validity": "Vigente del {from} al {to}"

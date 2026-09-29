@@ -4373,7 +4373,13 @@
     "diffRemoved": "Gestrichen:",
     "emptyDocument": "Für diese Fassung ist kein Text verfügbar.",
     "emptyState": "Keine Rechtsvorschriften gefunden.",
+    "expression": {
+      "invalidWindow": "Widersprüchliche Daten des Herausgebers",
+      "promulgated": "Verkündete Fassung",
+      "withdrawn": "Vom Herausgeber nicht mehr geführt"
+    },
     "inForceSince": "In Kraft seit {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Leitentscheidungen",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
@@ -4393,18 +4399,22 @@
     "provisionHistoryUnavailable": "Der Verlauf dieser Vorschrift konnte nicht geladen werden.",
     "provisionPromptSubject": "{provision} von {statute} ({eli}) in der seit {date} geltenden Fassung",
     "provisionPromptSubjectUndated": "{provision} von {statute} ({eli})",
+    "publisherWindowInconsistent": "Für dieses Datum lässt sich keine geltende Fassung bestimmen: Die Angaben des Herausgebers sind widersprüchlich.",
     "resolvedAlias": "Erkannt als {label}",
     "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
     "showInText": "Im Text anzeigen",
+    "statedWindow": "Vom Herausgeber angegebene Daten: {range}",
     "status": {
       "current": "In Kraft",
       "draft": "Im Entwurf",
       "ended": "Nicht mehr in Kraft",
       "future": "Zukünftig",
       "historical": "Überholt",
-      "repealed": "Aufgehoben"
+      "neverInForce": "Nie in Kraft getreten",
+      "repealed": "Aufgehoben",
+      "unknown": "Status unklar"
     },
     "title": "Rechtsvorschriften",
     "validity": "Gültig von {from} bis {to}"

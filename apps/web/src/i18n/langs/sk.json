@@ -4373,7 +4373,13 @@
     "diffRemoved": "Vypustené:",
     "emptyDocument": "Toto znenie nemá dostupný text.",
     "emptyState": "Nenašli sa žiadne predpisy.",
+    "expression": {
+      "invalidWindow": "Vydavateľ uvádza rozporné dátumy",
+      "promulgated": "Vyhlásené znenie",
+      "withdrawn": "Vydavateľ už neuvádza"
+    },
     "inForceSince": "Účinné od {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Kľúčové rozhodnutia",
     "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
@@ -4393,18 +4399,22 @@
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showInText": "Zobraziť v texte",
+    "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
       "current": "Účinné",
       "draft": "Navrhované",
       "ended": "Neúčinné",
       "future": "Budúce",
       "historical": "Nahradené",
-      "repealed": "Zrušené"
+      "neverInForce": "Nenadobudlo účinnosť",
+      "repealed": "Zrušené",
+      "unknown": "Stav nejasný"
     },
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}"

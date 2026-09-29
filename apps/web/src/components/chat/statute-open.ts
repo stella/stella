@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { useIsMobile } from "@stll/ui/use-mobile";
 
@@ -13,6 +14,7 @@ import {
   publicStatuteOptions,
   statuteBySlugOptions,
 } from "@/features/statutes/queries/statutes";
+import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { resolveStatuteRoute } from "@/features/statutes/statute-route-resolution";
 import { createStatuteLinkTarget } from "@/lib/statute-route";
 
@@ -30,7 +32,7 @@ export const useOpenStatuteLink = () => {
   const inspectorAvailable = !useIsMobile();
 
   const resolveLink = async ({ asOf, params }: StatuteLink) => {
-    const resolution = await resolveStatuteRoute(
+    const resolution = await resolveStatuteRoute<PublicStatute>(
       { ...params, asOf: asOf ?? undefined },
       {
         byId: async (documentId) =>
@@ -39,9 +41,20 @@ export const useOpenStatuteLink = () => {
           await queryClient.query(statuteBySlugOptions(key)),
       },
     );
-    return resolution.type === "found"
-      ? (resolution.statute ?? resolution.work)
-      : null;
+    switch (resolution.type) {
+      case "found":
+        return resolution.statute ?? resolution.work;
+      // A day the publisher's dates leave unanswered opens the act, as a day
+      // nothing covers does; the act's page says why.
+      case "window-gap":
+        return resolution.work;
+      case "missing":
+      case "unserved":
+        return null;
+      default:
+        resolution satisfies never;
+        return panic(`Unhandled resolution: ${String(resolution)}`);
+    }
   };
 
   return async (link: StatuteLink) =>

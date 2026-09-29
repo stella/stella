@@ -4373,7 +4373,13 @@
     "diffRemoved": "Svītrots:",
     "emptyDocument": "Šai redakcijai nav pieejams teksts.",
     "emptyState": "Tiesību akti nav atrasti.",
+    "expression": {
+      "invalidWindow": "Izdevēja datumi ir pretrunīgi",
+      "promulgated": "Izsludinātais teksts",
+      "withdrawn": "Izdevējs to vairs nepublicē"
+    },
     "inForceSince": "Spēkā no {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Vadošie nolēmumi",
     "noVersionInForce": "Izvēlētajā dienā neviena šā akta redakcija nebija spēkā.",
     "openEnded": "šobrīd",
@@ -4393,18 +4399,22 @@
     "provisionHistoryUnavailable": "Neizdevās ielādēt šīs normas vēsturi.",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redakcijā, kas ir spēkā kopš {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "publisherWindowInconsistent": "Šai dienai spēkā esošo redakciju nevar noteikt: izdevēja dati ir pretrunīgi.",
     "resolvedAlias": "Atpazīts kā {label}",
     "searchAskPrompt": "{query} ({country} tiesību akti)",
     "searchLabel": "Meklēt tiesību aktos",
     "searchPlaceholder": "Numurs, nosaukums vai virsraksts, piem. 89/2012 Sb.",
     "showInText": "Rādīt tekstā",
+    "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {
       "current": "Spēkā",
       "draft": "Projektā",
       "ended": "Vairs nav spēkā",
       "future": "Nākotnes",
       "historical": "Aizstāts",
-      "repealed": "Zaudējis spēku"
+      "neverInForce": "Nekad nav stājies spēkā",
+      "repealed": "Zaudējis spēku",
+      "unknown": "Statuss neskaidrs"
     },
     "title": "Tiesību akti",
     "validity": "Spēkā no {from} līdz {to}"

@@ -148,6 +148,7 @@ export const ProvisionInspectorView = ({
               {selectedVersion !== undefined && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <StatuteValidityIndicator
+                    expression={selectedVersion}
                     status={selectedVersion.status}
                     validFrom={selectedVersion.versionValidFrom}
                     validTo={selectedVersion.versionValidTo}

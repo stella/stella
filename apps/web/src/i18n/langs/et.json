@@ -4373,7 +4373,13 @@
     "diffRemoved": "Välja jäetud:",
     "emptyDocument": "Sellel redaktsioonil puudub tekst.",
     "emptyState": "Õigusakte ei leitud.",
+    "expression": {
+      "invalidWindow": "Väljaandja kuupäevad on vastuolulised",
+      "promulgated": "Välja kuulutatud tekst",
+      "withdrawn": "Väljaandja seda enam ei avalda"
+    },
     "inForceSince": "Kehtib alates {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Juhtivad lahendid",
     "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
     "openEnded": "praeguseni",
@@ -4393,18 +4399,22 @@
     "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
     "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
     "resolvedAlias": "Tuvastatud kui {label}",
     "searchAskPrompt": "{query} ({country} õigusaktid)",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
     "showInText": "Näita tekstis",
+    "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
     "status": {
       "current": "Kehtiv",
       "draft": "Eelnõus",
       "ended": "Enam ei kehti",
       "future": "Tulevane",
       "historical": "Asendatud",
-      "repealed": "Kehtetu"
+      "neverInForce": "Ei jõustunud kunagi",
+      "repealed": "Kehtetu",
+      "unknown": "Olek ebaselge"
     },
     "title": "Õigusaktid",
     "validity": "Kehtib {from} kuni {to}"
