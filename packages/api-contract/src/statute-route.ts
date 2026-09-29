@@ -51,7 +51,42 @@ const ELI_CITATION_REGEX = /\/([a-z0-9]{1,32})\/(\d{4})\/(\d{1,6})$/u;
  * The SQL twin is `legislationTitleName` in the API schema; both drop the
  * same prefix so a slug and a title search agree on what the act is called.
  */
-const TITLE_CITATION_PREFIX_REGEX = /^[0-9]+\/[0-9]{4} [^,]*, /u;
+const TITLE_CITATION_SHAPE = String.raw`[0-9]+\/[0-9]{4} [^,]*`;
+const TITLE_CITATION_PREFIX_REGEX = new RegExp(
+  String.raw`^${TITLE_CITATION_SHAPE}, `,
+  "u",
+);
+
+/**
+ * A citation in the shape an official title opens with, wherever it stands
+ * in a title, and the name the title writes after it (`… č. 89/2012 Sb.,
+ * občanský zákoník, …`): group 1 the citation, group 2 the name. Global:
+ * callers walk every match. The name is read ahead rather than consumed, so a
+ * name running into the next citation does not hide it.
+ */
+export const statuteTitleCitationMentionRegex = (): RegExp =>
+  new RegExp(
+    String.raw`(?<![\p{N}/])(${TITLE_CITATION_SHAPE})\s*,\s*(?=([^,;]+))`,
+    "gu",
+  );
+
+/**
+ * An official title split into the citation it opens with and the rest, by
+ * the same prefix the slug and the title search drop. A title that opens
+ * with no citation has none, and its rest is the whole title.
+ */
+export const splitStatuteTitleCitation = (
+  title: string,
+): { citation: string | null; rest: string } => {
+  const match = TITLE_CITATION_PREFIX_REGEX.exec(title);
+  if (match === null) {
+    return { citation: null, rest: title };
+  }
+  return {
+    citation: match[0].slice(0, -", ".length).trim(),
+    rest: title.slice(match[0].length),
+  };
+};
 
 /** The ELI's citation as a slug segment (`89-2012-sb`), null without one. */
 const statuteEliCitation = (eli: string | null): string | null => {

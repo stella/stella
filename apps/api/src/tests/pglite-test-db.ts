@@ -489,6 +489,15 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT INSERT ON TABLE "legislation_work_changes" TO stella_ingestion
   `,
+  // Written by legislation ingestion beside each version, read by the
+  // public-law reader through the column map below.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "legislation_work_names" FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
+    TO stella_ingestion
+  `,
   // Written only by the owner-run sitemap refresh; the public-law reader's
   // column grants come from the public-law map below.
   `

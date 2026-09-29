@@ -403,6 +403,113 @@ export const legislationDocuments = p.pgTable(
   ],
 );
 
+/**
+ * How a name in `legislation_work_names` was derived from stored titles. The
+ * publisher's own title is not one of them: it is stored in its own column,
+ * and a derived name can never land there (see the pairing CHECK).
+ *
+ * - `derived_title_segment`: the name part of a work's own title, the
+ *   citation it opens with set aside and cut at the first comma;
+ * - `derived_parenthetical`: a parenthesis inside such a name;
+ * - `derived_title_citation`: the citation a work's own title opens with.
+ *   It resolves citations other titles make and never names a work to a
+ *   query by itself;
+ * - `derived_from_citation`: the name another stored title gives a work
+ *   beside its citation. The work is resolved at read time through
+ *   `cited_key`, so a citing act stored before the cited one still counts.
+ */
+export const LEGISLATION_WORK_NAME_DERIVATIONS = [
+  "derived_title_segment",
+  "derived_parenthetical",
+  "derived_title_citation",
+  "derived_from_citation",
+] as const;
+
+export type LegislationWorkNameDerivation =
+  (typeof LEGISLATION_WORK_NAME_DERIVATIONS)[number];
+
+/** Longest match key stored; a longer name is kept unmatched. */
+export const LEGISLATION_WORK_NAME_KEY_MAX_CHARS = 512;
+
+/**
+ * The names each stored legislation version's title states, for recognising
+ * a query that names an act. Rebuilt per version from its title alone
+ * (`syncLegislationWorkNamesTx`), so it is display-side search data: nothing
+ * here feeds an applicability read, and no legislation row is changed by it.
+ *
+ * Every row is either the publisher's title as stored (`official_title`) or
+ * a derived name (`derived_name` + `derivation`), never both.
+ */
+export const legislationWorkNames = p.pgTable(
+  "legislation_work_names",
+  {
+    id: pUuid<"legislationWorkName">().primaryKey(),
+    /** The version whose stored title states the name. */
+    documentId: safeUuid<"legislationDocument">("document_id")
+      .notNull()
+      .references(() => legislationDocuments.id, { onDelete: "cascade" }),
+    country: p.varchar({ length: 3 }).notNull(),
+    /** The title exactly as the publisher states it. */
+    officialTitle: p.text("official_title"),
+    /** A name derived from stored titles; see `derivation`. */
+    derivedName: p.text("derived_name"),
+    derivation: p.varchar("derivation", {
+      length: 32,
+      enum: LEGISLATION_WORK_NAME_DERIVATIONS,
+    }),
+    /**
+     * For `derived_from_citation`: the match key of the citation the name was
+     * written beside, resolved against `derived_title_citation` rows.
+     */
+    citedKey: p.varchar("cited_key", {
+      length: LEGISLATION_WORK_NAME_KEY_MAX_CHARS,
+    }),
+    /**
+     * The name as a query is compared with it: case-folded word tokens joined
+     * by one space (`legislationNameMatchKey`). Null for a name too long to
+     * be typed.
+     */
+    matchKey: p.varchar("match_key", {
+      length: LEGISLATION_WORK_NAME_KEY_MAX_CHARS,
+    }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.check(
+      "legislation_work_names_official_or_derived",
+      sql`(${t.officialTitle} IS NOT NULL AND ${t.derivedName} IS NULL AND ${t.derivation} IS NULL) OR (${t.officialTitle} IS NULL AND ${t.derivedName} IS NOT NULL AND ${t.derivation} IS NOT NULL AND ${t.matchKey} IS NOT NULL)`,
+    ),
+    p.check(
+      "legislation_work_names_derivation_values",
+      sql`${t.derivation} IS NULL OR ${t.derivation} IN (${sqlValues(LEGISLATION_WORK_NAME_DERIVATIONS)})`,
+    ),
+    p.check(
+      "legislation_work_names_cited_key_pairing",
+      sql`(${t.derivation} IS NOT DISTINCT FROM 'derived_from_citation') = (${t.citedKey} IS NOT NULL)`,
+    ),
+    // One row per form a version states; also the per-version access path
+    // the sync and the cascade read.
+    p
+      .unique("legislation_work_names_form_key")
+      .on(t.documentId, t.derivation, t.citedKey, t.matchKey)
+      .nullsNotDistinct(),
+    // The name lookup and the citation resolution: equality on the key,
+    // narrowed by country, answered from the index alone.
+    p
+      .index("legislation_work_names_match_key_idx")
+      .on(t.matchKey, t.country, t.derivation, t.citedKey, t.documentId)
+      .where(isNotNull(t.matchKey)),
+    p.pgPolicy("legislation_work_name_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
 /** Public statute sitemap index, replaced as one snapshot by the scheduler. */
 export const statuteSitemapShards = p.pgTable(
   "statute_sitemap_shards",
