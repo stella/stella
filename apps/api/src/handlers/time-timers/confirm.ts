@@ -40,7 +40,7 @@ import {
 const transactionHandle =
   (tx: Transaction): SafeDb =>
   async (run) =>
-    Result.tryPromise(() => run(tx));
+    Result.tryPromise(async () => await run(tx));
 
 type ReadConfirmationOptions = {
   tx: Transaction;
