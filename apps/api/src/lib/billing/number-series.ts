@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { renderMatterReference } from "@stll/api-contract";
-import type { InvoiceDocumentType } from "@stll/api-contract";
+import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import {
