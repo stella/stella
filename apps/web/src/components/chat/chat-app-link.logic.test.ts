@@ -206,10 +206,7 @@ describe("a statute link on a day the publisher's dates leave unanswered", () =>
       const opening = await openingFor(href, gapReads);
 
       expect(opening).toEqual({ type: "day", asOf: day, work: WORK });
-      if (opening?.type !== "day") {
-        return panic("Expected the act's page on a day");
-      }
-      expect(createStatuteDayTarget(opening.work, opening.asOf)).toEqual({
+      expect(createStatuteDayTarget(WORK, day)).toEqual({
         params: { country: "cze", slug: WORK.slug },
         search: { asOf: day },
         to: "/law/$country/statutes/$slug",
