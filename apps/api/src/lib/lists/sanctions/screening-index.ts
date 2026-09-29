@@ -290,9 +290,12 @@ export const createSanctionsIndexCache = ({
       if (cached === undefined || cached.editionId === props.edition.id) {
         return;
       }
-      // A failed rebuild is reported and remembered like any other; the next
-      // screening answers from the memo or tries again.
-      await start(props);
+      const rebuilt = await start(props);
+      if (rebuilt.isErr()) {
+        // A failed rebuild is reported and remembered like any other; the
+        // next screening answers from the memo or tries again.
+        return;
+      }
     },
   };
 };
