@@ -462,6 +462,8 @@ const isLoopExit = (statement: ts.Statement, loop: ts.Node): boolean =>
 // (a retry) or finally (which can replace the exit).
 const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
   let statement: ts.Node = site;
+  // `if (done) return await flush();` exits from inside the `if`.
+  let exitsOnTheWay = false;
   while (
     statement.parent !== loop &&
     !ts.isBlock(statement.parent) &&
@@ -472,6 +474,8 @@ const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
     if (isFunctionBoundary(statement)) {
       return false;
     }
+    exitsOnTheWay ||=
+      ts.isReturnStatement(statement) || ts.isThrowStatement(statement);
   }
   // An exit inside a callback that runs in place (a `Result.tryPromise`
   // body) leaves the callback, not the loop. Inside a `try` with a `catch`, a
@@ -487,7 +491,7 @@ const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
       return false;
     }
   }
-  if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) {
+  if (exitsOnTheWay) {
     return true;
   }
   const owner = statement.parent;
