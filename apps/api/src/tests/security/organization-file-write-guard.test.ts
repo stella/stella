@@ -6,6 +6,7 @@ const root = path.resolve(import.meta.dir, "../../../../..");
 const writeHelpers = new Set([
   "writeTenantS3Object",
   "writeS3ObjectWithRetry",
+  "writeScannedObject",
   "putS3ObjectWithSignal",
   "putS3Object",
   "copyObject",
@@ -56,8 +57,8 @@ const exemptions = {
   "src/mcp/file-comparison-links-tool.ts:putPresignedUpload:0": "temporary",
   "src/mcp/document-file-upload.ts:putPresignedUpload:0": "temporary",
   "scripts/seed-email-viewer-demo.ts:writeS3ObjectWithRetry:0": "fixture",
-  "scripts/seed-templates.ts:writeS3ObjectWithRetry:0": "fixture",
-  "scripts/seed-templates.ts:writeS3ObjectWithRetry:1": "fixture",
+  "scripts/seed-templates.ts:writeScannedObject:0": "fixture",
+  "scripts/seed-templates.ts:writeScannedObject:1": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:0": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:1": "fixture",
   "src/handlers/uploads/update.ts:copyObject:0": "reservation_flow",
@@ -95,6 +96,7 @@ const expectedWriteCounts = {
   "src/lib/folio-collab-rooms.ts": 2,
   "src/lib/legal-search/raw-source-storage.ts": 5,
   "src/lib/templates/create-template.ts": 1,
+  "src/lib/templates/write-template.ts": 1,
   "src/mcp/document-file-upload.ts": 1,
   "src/mcp/file-comparison-links-tool.ts": 1,
 } as const satisfies Record<string, number>;
@@ -310,6 +312,13 @@ describe("durable organization file writes", () => {
       "const save = async () => await writeOrganizationFile({ objectKey, organizationId, sizeBytes, write: async () => await writeS3ObjectWithRetry({ key, data }) });",
     );
     expect(reserved).toMatchObject([{ ledgerBound: true }]);
+
+    expect(
+      scan(
+        "src/example.ts",
+        "const save = async () => await writeScannedObject({ file, key }); await writeOrganizationFile({ objectKey, organizationId, sizeBytes, write: save });",
+      ),
+    ).toMatchObject([{ ledgerBound: true }]);
 
     const native = scan(
       "src/example.ts",

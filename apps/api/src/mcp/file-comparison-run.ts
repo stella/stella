@@ -67,9 +67,12 @@ export const UPLOADS_OUTPUT_MODES = ["preview", "download"] as const;
 
 type UploadsOutputMode = (typeof UPLOADS_OUTPUT_MODES)[number];
 
-type DeleteObject =
-  | typeof deleteOrganizationFileWithSignal
-  | ((key: string, signal: AbortSignal) => Promise<void>);
+type DeleteObject = (
+  key: string,
+  signal: AbortSignal,
+) => Promise<
+  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+>;
 
 export type FileComparisonRunDependencies = {
   compareDocxBuffers: typeof compareDocxBuffers;

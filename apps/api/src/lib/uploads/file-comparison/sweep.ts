@@ -14,9 +14,12 @@ export const FILE_COMPARISON_SWEEP_LIMIT = 50;
 
 const FILE_COMPARISON_DELETE_TIMEOUT_MS = 30 * 1000;
 
-type DeleteObject =
-  | typeof deleteOrganizationFileWithSignal
-  | ((key: string, signal: AbortSignal) => Promise<void>);
+type DeleteObject = (
+  key: string,
+  signal: AbortSignal,
+) => Promise<
+  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+>;
 
 type SweepOptions = {
   deleteObject?: DeleteObject;

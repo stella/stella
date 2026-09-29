@@ -23,9 +23,12 @@ import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-type DeleteObject =
-  | typeof deleteOrganizationFileWithSignal
-  | ((key: string, signal: AbortSignal) => Promise<void>);
+type DeleteObject = (
+  key: string,
+  signal: AbortSignal,
+) => Promise<
+  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+>;
 
 export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
