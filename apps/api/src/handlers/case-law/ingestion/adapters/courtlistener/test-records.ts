@@ -162,4 +162,9 @@ export const recordedClusters = () =>
     .toString("utf-8")
     .split("\n")
     .filter((line) => line !== "")
-    .map((line) => admitCourtListenerRecord(JSON.parse(line)).unwrap().record);
+    .map(
+      (line) =>
+        admitCourtListenerRecord(JSON.parse(line)).unwrap(
+          "the committed fixture holds only admissible records",
+        ).record,
+    );
