@@ -1,3 +1,9 @@
+import {
+  LEGISLATION_APPLICABLE_EXPRESSION_KINDS,
+  LEGISLATION_APPLICABLE_WINDOW_DISPOSITION,
+  type LegislationExpressionKind,
+} from "@stll/api-contract/legislation-expression";
+
 import type { McpToolName } from "@/api/lib/api-handlers";
 import { PROVISION_READ_STATUSES } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { LIMITS } from "@/api/lib/limits";
@@ -62,6 +68,13 @@ const {
   searchLegislation: SEARCH_LEGISLATION,
 } = TOOL;
 
+/** The kinds whose window can answer a date, rendered from the one policy. */
+const APPLICABLE_KINDS = LEGISLATION_APPLICABLE_EXPRESSION_KINDS.map(
+  (kind) => `\`${kind}\``,
+).join(" or ");
+
+const PROMULGATED = "promulgated" as const satisfies LegislationExpressionKind;
+
 type ReferenceSection = {
   /** Short label shown as the step or fact heading. */
   title: string;
@@ -89,15 +102,24 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       "the consolidation in force on that day; omit it for the text in " +
       "force today. There is no as-of filter on the search, so a " +
       "point-in-time question is answered here. The reply carries the " +
-      "consolidation's `versionValidFrom`/`versionValidTo`, `versions` " +
-      `(up to ${LIMITS.legislationVersionsPageSizeDefault} of the work's ` +
-      "consolidations, newest window first), `outline` (its heading " +
+      "text's `versionValidFrom`/`versionValidTo`, `versions` (up to " +
+      `${LIMITS.legislationVersionsPageSizeDefault} of the work's ` +
+      "versions, newest window first), `outline` (its heading " +
       `anchors, at most ${LIMITS.legislationOutlineHeadingsMax} of them ` +
       "with `outlineTruncated` when there are more) and the plain `text` " +
       "in windows: pass the returned `nextCursor` back as `cursor` to keep " +
-      "reading. An ELI the corpus does not hold and a date no " +
-      "consolidation covers are different answers, and each names its own " +
-      "next call.",
+      "reading. The text and every `versions` entry carry " +
+      "`expressionKind` and `windowDisposition`; a version applied in its " +
+      "window only when both hold: " +
+      `\`windowDisposition\` is \`${LEGISLATION_APPLICABLE_WINDOW_DISPOSITION}\` ` +
+      `and \`expressionKind\` is ${APPLICABLE_KINDS}, however the dates ` +
+      `read. A \`${PROMULGATED}\` entry is the text as first published, ` +
+      "kept as history: it never applied, even when " +
+      `\`${LEGISLATION_APPLICABLE_WINDOW_DISPOSITION}\`. ` +
+      "An ELI the corpus does not hold, a date no " +
+      "consolidation covers, and a date the publisher's own inconsistent " +
+      "dates leave without an in-force reading are different answers, and " +
+      "each names its own next call.",
   },
   {
     title: "Read the provisions you need, batched",

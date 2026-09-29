@@ -20,6 +20,7 @@ type Workflow = {
     {
       if?: string;
       permissions?: unknown;
+      concurrency?: unknown;
       steps: readonly {
         uses?: string;
         run?: string;
@@ -52,6 +53,15 @@ const readWorkflow = (file: string): Workflow => {
 
 const permissionLevels = (permissions: unknown): readonly unknown[] =>
   isRecord(permissions) ? Object.values(permissions) : [];
+
+const config = parseReviewGateConfig(
+  Bun.YAML.parse(
+    readFileSync(
+      path.join(import.meta.dirname, "..", ".github", "review-gate.yml"),
+      "utf-8",
+    ),
+  ),
+);
 
 const publisher = readWorkflow("review-gate.yml");
 const relay = readWorkflow("review-gate-signal.yml");
@@ -110,14 +120,7 @@ describe("the publisher", () => {
   // (a merge-queue write, like enqueuing) needs contents and pull-requests
   // write, and shadow mode, which never dequeues, holds neither.
   test("holds exactly the permissions its configured mode needs", () => {
-    const { mode } = parseReviewGateConfig(
-      Bun.YAML.parse(
-        readFileSync(
-          path.join(import.meta.dirname, "..", ".github", "review-gate.yml"),
-          "utf-8",
-        ),
-      ),
-    );
+    const { mode } = config;
     const access = mode === "enforce" ? "write" : "read";
     expect(publisher.permissions).toEqual({});
     for (const job of Object.values(publisher.jobs)) {
@@ -135,20 +138,80 @@ describe("the publisher", () => {
       types: ["requested"],
     });
   });
+});
 
-  // Its pull_request_target run is listed among the pull request's checks,
-  // so another event for the same head cancelling it reads as failed CI.
-  test("never lets another run cancel a pull request event's run", () => {
-    const { concurrency } = publisher;
-    const group = isRecord(concurrency) ? concurrency["group"] : undefined;
-    // The first alternative wins; any later one could be shared.
-    const [first] =
-      typeof group === "string"
-        ? group.replaceAll(/\s+/gu, " ").split("||")
-        : [];
-    expect(first?.trim()).toEndWith(
-      "github.event_name == 'pull_request_target' && format('run-{0}', github.run_id)",
-    );
+// Concurrency and the event filter decide which evaluations can drop one
+// another. A run whose job is skipped must never enter a group, and a merge
+// group's evaluation must never be replaced by anything: until the next
+// sweep, nothing else evaluates that commit.
+describe("the publisher's concurrency", () => {
+  const [job] = Object.values(publisher.jobs);
+  // Workflow-level, as every pull request workflow's is
+  // (scripts/workflow-concurrency.test.ts): a run joins it before the job's
+  // `if:` is read, so each alternative must hold for every event, including
+  // the ones the job then skips.
+  const concurrency = isRecord(publisher.concurrency)
+    ? publisher.concurrency
+    : {};
+  const group = concurrency["group"];
+  // In order: the first alternative that holds wins, and `&&` binds tighter
+  // than `||`, so each alternative is one condition and its key.
+  const alternatives =
+    typeof group === "string"
+      ? group
+          .replaceAll(/\s+/gu, " ")
+          .replace(/^review-gate-\$\{\{ /u, "")
+          .replace(/ \}\}$/u, "")
+          .split("||")
+          .map((part) => part.trim())
+      : [];
+  const OWN_GROUP = "format('run-{0}', github.run_id)";
+
+  test("is set on the workflow, never on the job", () => {
+    expect(typeof group).toBe("string");
+    expect(concurrency["cancel-in-progress"]).toBe(true);
+    expect(job?.concurrency).toBeUndefined();
+  });
+
+  // GitHub replaces even a pending run when another joins its group, whatever
+  // cancel-in-progress says, so only a group of its own keeps a run. The own
+  // groups come first, ahead of every key another event could share.
+  test("gives every run that must finish a group of its own", () => {
+    expect(alternatives.slice(0, 4)).toEqual([
+      // Listed among the pull request's checks, where cancelled reads as failed.
+      `github.event_name == 'pull_request_target' && ${OWN_GROUP}`,
+      // The group commit's only evaluation until the next sweep.
+      `github.event.workflow_run.event == 'merge_group' && ${OWN_GROUP}`,
+      // Every app's statuses and check runs arrive, and only the script can
+      // tell a reviewer's from the rest: a no-op must never replace a run.
+      `contains(fromJSON('["status","check_run"]'), github.event_name) && ${OWN_GROUP}`,
+      // The sweep, the fallback for every group, never cut short mid-pass.
+      `github.event_name == 'schedule' && ${OWN_GROUP}`,
+    ]);
+  });
+
+  test("shares a group only between runs that re-read what they replace", () => {
+    expect(alternatives.slice(4)).toEqual([
+      "github.event.workflow_run.head_sha",
+      "github.event.issue.number",
+      "inputs.pr",
+      OWN_GROUP,
+    ]);
+  });
+
+  // Reviewer names live only in .github/review-gate.yml: the workflow must
+  // not keep a copy that could drift from it.
+  test("names no reviewer, leaving the choice to the script and its config", () => {
+    const workflow = JSON.stringify(job ?? {});
+    for (const reviewer of config.reviewers) {
+      const { commitStatus, checkRun } = reviewer.done;
+      if (commitStatus !== null) {
+        expect(workflow).not.toContain(commitStatus.context);
+      }
+      if (checkRun !== null) {
+        expect(workflow).not.toContain(checkRun.name);
+      }
+    }
   });
 });
 

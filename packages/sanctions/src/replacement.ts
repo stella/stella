@@ -29,6 +29,8 @@ const REPLACEMENT_POLICIES = {
   cz: { minimumEntries: 1, maximumShrink: 0.5 },
   "us-sdn": { minimumEntries: 10_000, maximumShrink: 0.1 },
   "us-non-sdn": { minimumEntries: 250, maximumShrink: 0.1 },
+  uk: { minimumEntries: 3000, maximumShrink: 0.1 },
+  ch: { minimumEntries: 3500, maximumShrink: 0.1 },
 } as const satisfies Record<SanctionsSource, ReplacementPolicy>;
 
 export class ListReplacementError extends TaggedError("ListReplacementError")<{

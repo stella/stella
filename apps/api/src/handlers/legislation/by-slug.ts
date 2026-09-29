@@ -2,6 +2,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
   isStatuteSlug,
@@ -9,6 +10,7 @@ import {
 } from "@stll/api-contract/statute-route";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { publisherWindowInconsistentBody } from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import {
   selectDefaultVersionId,
@@ -17,8 +19,10 @@ import {
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
+  legislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -114,28 +118,36 @@ export const readStatuteBySlugHandler = async ({
         : ({ type: "expression", id: defaultId } as const);
     }
 
-    const conditions = workKeyConditions(work);
-    conditions.push(
-      inForceOn(
-        legislationDocuments.versionValidFrom,
-        legislationDocuments.versionValidTo,
-        sql`${asOf}::date`,
-      ),
-    );
-
+    const asOfDate = sql`${asOf}::date`;
     const [expression] = await tx
       .select({ id: legislationDocuments.id })
       .from(legislationDocuments)
-      .where(and(...conditions))
+      .where(
+        and(
+          ...workKeyConditions(work),
+          inForceOn(legislationVersionRef(legislationDocuments), asOfDate),
+        ),
+      )
       .orderBy(
         desc(versionSortKey(legislationDocuments.versionValidFrom)),
         desc(legislationDocuments.id),
       )
       .limit(1);
 
-    return expression === undefined
-      ? ({ type: "uncovered-date" } as const)
-      : ({ type: "expression", id: expression.id } as const);
+    if (expression !== undefined) {
+      return { type: "expression", id: expression.id } as const;
+    }
+
+    const inconsistent = await selectInconsistentWindowVersions(tx, {
+      conditions: workKeyConditions(work),
+      asOf: asOfDate,
+    });
+    return inconsistent.length > 0
+      ? ({
+          type: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
+          versions: inconsistent,
+        } as const)
+      : ({ type: "uncovered-date" } as const);
   });
 
   if (resolved.type === "unknown-work") {
@@ -148,6 +160,10 @@ export const readStatuteBySlugHandler = async ({
     return status(404, {
       message: "No version of this legislation was in force on the given date",
     });
+  }
+
+  if (resolved.type === LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT) {
+    return status(404, publisherWindowInconsistentBody(resolved.versions));
   }
 
   return await readPublicLegislationHandler(resolved.id, legislationDb);

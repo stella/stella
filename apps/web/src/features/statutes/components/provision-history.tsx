@@ -22,9 +22,11 @@ import {
 import { provisionHistoryOptions } from "@/features/statutes/queries/provision-history";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { diffMarkRanges } from "@/features/statutes/statute-diff-marks";
+import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import {
   EM_DASH,
   formatValidityDate,
+  formatValidityRange,
 } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -124,6 +126,22 @@ export const ProvisionHistory = ({
   const compareFrom = compareWith?.versionValidFrom ?? null;
   const label = (validFrom: string | null): string =>
     formatValidityDate(validFrom, format) ?? EM_DASH;
+  // A wording that cannot apply was never in force from its start date: it
+  // is named for what it is, beside the dates its publisher stated.
+  const versionLabel = (version: (typeof versions)[number]): string => {
+    const ineligibleLabel = ineligibleExpressionLabelKey(version);
+    return ineligibleLabel === null
+      ? t("statutes.inForceSince", { date: label(version.versionValidFrom) })
+      : t("statutes.ineligibleVersion", {
+          label: t(ineligibleLabel),
+          range: formatValidityRange({
+            format,
+            openEnded: t("statutes.openEnded"),
+            validFrom: version.versionValidFrom,
+            validTo: version.versionValidTo,
+          }),
+        });
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -143,9 +161,7 @@ export const ProvisionHistory = ({
               }}
               variant="ghost"
             >
-              {t("statutes.inForceSince", {
-                date: label(version.versionValidFrom),
-              })}
+              {versionLabel(version)}
             </Button>
           </li>
         ))}

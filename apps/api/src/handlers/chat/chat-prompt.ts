@@ -33,6 +33,11 @@ import type {
   ReaderAnnotationTargetType,
   ReaderAnnotationVisibility,
 } from "@stll/api-contract/legal-reader-annotations";
+import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
+import type {
+  LegislationExpressionKind,
+  LegislationWindowDisposition,
+} from "@stll/api-contract/legislation-expression";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { describeSuggestChangesCapabilities } from "@stll/folio-agents";
 import { isFolioAIContentBlock } from "@stll/folio-core/server";
@@ -2117,7 +2122,54 @@ type BuildActiveStatutePromptProps = {
   title: string;
   versionValidFrom: string | null;
   versionValidTo: string | null;
+  expressionKind: LegislationExpressionKind;
+  windowDisposition: LegislationWindowDisposition;
 };
+
+/** Why a version that is not eligible has no period in which it applied. */
+const INELIGIBLE_WINDOW_LINES = {
+  "never-in-force":
+    "This wording never took effect: the publisher states it was never in force.",
+  "invalid-window":
+    "The publisher's dates for this wording are inconsistent, so no period in which it applied can be stated.",
+  withdrawn:
+    "The publisher no longer lists this wording; do not treat it as applicable on any date.",
+  effective:
+    "This is the text as first promulgated, not a consolidation; it does not say which wording applied on any date.",
+} as const satisfies Record<LegislationWindowDisposition, string>;
+
+/**
+ * What the open version's stored dates mean. Only an eligible version's
+ * window is a period the wording applied in; any other window is reported as
+ * what it is, so the model never tells the user a text applied from a date on
+ * which it never did.
+ */
+const describeStatuteWindow = ({
+  expressionKind,
+  versionValidFrom,
+  versionValidTo,
+  windowDisposition,
+}: Pick<
+  BuildActiveStatutePromptProps,
+  "expressionKind" | "versionValidFrom" | "versionValidTo" | "windowDisposition"
+>): string[] =>
+  isEligibleLegislationExpression({ expressionKind, windowDisposition })
+    ? [
+        // The version the reader has open, not today's law: an answer about a
+        // repealed or future wording is wrong unless it says which one it is.
+        versionValidFrom
+          ? `This wording applies from: ${versionValidFrom}`
+          : "This wording's start date is not recorded.",
+        versionValidTo
+          ? `This wording applies until: ${versionValidTo}`
+          : "This wording has no recorded end date.",
+      ]
+    : [
+        // An effective window of a kind that cannot apply is a promulgated
+        // text; every other disposition names itself.
+        INELIGIBLE_WINDOW_LINES[windowDisposition],
+        `The publisher states this window: ${versionValidFrom ?? "no start"} to ${versionValidTo ?? "no end"}.`,
+      ];
 
 const describeStatuteCoverage = (
   { omittedProvisionCount, partial, provisions }: StatuteProvisionSelection,
@@ -2146,6 +2198,8 @@ export const buildActiveStatutePrompt = ({
   title,
   versionValidFrom,
   versionValidTo,
+  expressionKind,
+  windowDisposition,
 }: BuildActiveStatutePromptProps): string =>
   [
     `The user is currently reading the act "${sanitizePromptLine({
@@ -2161,14 +2215,12 @@ export const buildActiveStatutePrompt = ({
         ? `Act type: ${sanitizePromptLine({ maxLength: 128, text: documentType })}`
         : null,
       `Consolidation status: ${sanitizePromptLine({ maxLength: 32, text: status })}`,
-      // The version the reader has open, not today's law: an answer about a
-      // repealed or future wording is wrong unless it says which one it is.
-      versionValidFrom
-        ? `This wording applies from: ${versionValidFrom}`
-        : "This wording's start date is not recorded.",
-      versionValidTo
-        ? `This wording applies until: ${versionValidTo}`
-        : "This wording has no recorded end date.",
+      ...describeStatuteWindow({
+        expressionKind,
+        versionValidFrom,
+        versionValidTo,
+        windowDisposition,
+      }),
     ]
       .filter(Boolean)
       .join("\n"),
@@ -2293,6 +2345,8 @@ export const buildActiveStatuteSection = async ({
                   title: legislationDocuments.title,
                   versionValidFrom: legislationDocuments.versionValidFrom,
                   versionValidTo: legislationDocuments.versionValidTo,
+                  expressionKind: legislationDocuments.expressionKind,
+                  windowDisposition: legislationDocuments.windowDisposition,
                   ...versionAstColumns,
                 })
                 .from(legislationDocuments)
@@ -2434,6 +2488,8 @@ export const buildActiveStatuteSection = async ({
       title: version.title,
       versionValidFrom: version.versionValidFrom,
       versionValidTo: version.versionValidTo,
+      expressionKind: version.expressionKind,
+      windowDisposition: version.windowDisposition,
     });
 
     if (annotationRows.length === 0) {

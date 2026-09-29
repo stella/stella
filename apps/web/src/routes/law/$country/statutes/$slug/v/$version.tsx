@@ -32,7 +32,7 @@ export const Route = createFileRoute("/law/$country/statutes/$slug/v/$version")(
 );
 
 function PublicStatuteVersionRoute() {
-  const { statute, versions, work } = Route.useLoaderData();
+  const { statute, versions, windowGap, work } = Route.useLoaderData();
   const requestedJump = Route.useSearch({ select: (search) => search.jump });
   const compare = Route.useSearch({ select: (search) => search.compare });
   const provision = Route.useSearch({ select: (search) => search.provision });
@@ -45,6 +45,7 @@ function PublicStatuteVersionRoute() {
       requestedJump={requestedJump}
       statute={statute}
       versions={versions}
+      windowGap={windowGap}
       work={work}
     />
   );
