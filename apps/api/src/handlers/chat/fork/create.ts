@@ -266,7 +266,6 @@ const stageUserFileCopies = (
 
 const prepareUserFileCopy = async (
   copy: ReturnType<typeof stageUserFileCopies>[number],
-  userId: SafeId<"user">,
 ) => {
   const mainHead = env.FEATURE_FILE_USAGE_LIMITS
     ? await headObject(copy.source.s3Key)
@@ -286,6 +285,13 @@ const prepareUserFileCopy = async (
       }),
     );
   }
+  return Result.ok({ status: "ready" as const, ...copy });
+};
+
+const prepareUserFileThumbnail = async (
+  copy: ReturnType<typeof stageUserFileCopies>[number],
+  userId: SafeId<"user">,
+) => {
   const thumbnailSource =
     copy.source.thumbnailFileId === null
       ? null
@@ -298,16 +304,7 @@ const prepareUserFileCopy = async (
     thumbnailSource !== null && env.FEATURE_FILE_USAGE_LIMITS
       ? await headObject(thumbnailSource)
       : undefined;
-  return Result.ok({
-    status: "ready" as const,
-    ...copy,
-    thumbnailSource,
-    thumbnailHead,
-    thumbnailSize:
-      thumbnailHead !== undefined && Result.isOk(thumbnailHead)
-        ? thumbnailHead.value.contentLength
-        : copy.source.sizeBytes,
-  });
+  return { ...copy, thumbnailSource, thumbnailHead };
 };
 
 const copyUserFiles = async ({
@@ -330,7 +327,7 @@ const copyUserFiles = async ({
       ...(await Promise.all(
         staged
           .slice(start, start + FORK_COPY_CONCURRENCY)
-          .map(async (copy) => await prepareUserFileCopy(copy, userId)),
+          .map(async (copy) => await prepareUserFileCopy(copy)),
       )),
     );
   }
@@ -339,26 +336,13 @@ const copyUserFiles = async ({
     return Result.err(ready.error);
   }
   const available = ready.value.filter((copy) => copy.status === "ready");
-  const inputs = available.flatMap((copy) => {
-    const objects = [
-      {
-        sourceKey: copy.source.s3Key,
-        destinationKey: copy.copiedS3Key,
-        sizeBytes: copy.source.sizeBytes,
-      },
-    ];
-    if (
-      copy.thumbnailSource !== null &&
-      copy.thumbnailKey !== null &&
-      (copy.thumbnailHead === undefined || Result.isOk(copy.thumbnailHead))
-    ) {
-      objects.push({
-        sourceKey: copy.thumbnailSource,
-        destinationKey: copy.thumbnailKey,
-        sizeBytes: copy.thumbnailSize,
-      });
-    }
-    return objects.map(({ sourceKey, destinationKey, sizeBytes }) => {
+  const mainObjects = available.map((copy) => ({
+    sourceKey: copy.source.s3Key,
+    destinationKey: copy.copiedS3Key,
+    sizeBytes: copy.source.sizeBytes,
+  }));
+  const copyObjects = async (objects: typeof mainObjects) => {
+    const inputs = objects.map(({ sourceKey, destinationKey, sizeBytes }) => {
       copiedS3Keys.push(destinationKey);
       return {
         organizationId,
@@ -374,69 +358,121 @@ const copyUserFiles = async ({
           isMissingS3ObjectError(error.cause),
       };
     });
-  });
-  const copied = await copyOrganizationFiles({
-    inputs,
-    concurrency: FORK_COPY_CONCURRENCY,
-    db: fileUsageDb,
-  });
-  if (Result.isError(copied)) {
-    return Result.err(copied.error);
+    const copied = await copyOrganizationFiles({
+      inputs,
+      concurrency: FORK_COPY_CONCURRENCY,
+      db: fileUsageDb,
+    });
+    return copied.map(
+      (results) =>
+        new Map(
+          inputs.map((input, index) => {
+            const result = results.at(index);
+            if (!result) {
+              panic("Chat attachment copy must have a storage result");
+            }
+            return [input.objectKey, result] as const;
+          }),
+        ),
+    );
+  };
+  const copyFailure = (error: S3PresignError | OrganizationFileUsageError) =>
+    error instanceof OrganizationFileUsageError
+      ? error
+      : new HandlerError({
+          status: 500,
+          message: "Failed to copy chat attachment storage object",
+          cause: error.cause,
+        });
+  // A confirmed-missing main is a skipped attachment. Its thumbnail must not
+  // open a reservation or stop later rounds with an otherwise ignored error.
+  const mains = await copyObjects(mainObjects);
+  if (Result.isError(mains)) {
+    return Result.err(mains.error);
   }
-  const byKey = new Map(
-    inputs.map((input, index) => {
-      const result = copied.value.at(index);
-      if (!result) {
-        panic("Chat attachment copy must have a storage result");
-      }
-      return [input.objectKey, result] as const;
-    }),
-  );
   const outcomes: UserFileCopyOutcome[] = ready.value.flatMap((copy) =>
     copy.status === "source-missing"
       ? [{ kind: "source-object-missing" as const, fileId: copy.fileId }]
       : [],
   );
-  const unusedThumbnailKeys: string[] = [];
-  let failure: HandlerError<409 | 500 | 503> | undefined;
+  const successful: ReturnType<typeof stageUserFileCopies> = [];
   for (const copy of available) {
-    const main = byKey.get(copy.copiedS3Key);
+    const main = mains.value.get(copy.copiedS3Key);
     if (!main) {
       panic("Chat attachment copy must have a main storage result");
     }
-    const thumbnail =
-      copy.thumbnailKey === null ? undefined : byKey.get(copy.thumbnailKey);
-    if (
-      Result.isError(main) &&
-      !(main.error instanceof OrganizationFileUsageError) &&
-      isMissingS3ObjectError(main.error.cause)
-    ) {
-      if (thumbnail !== undefined && copy.thumbnailKey !== null) {
-        unusedThumbnailKeys.push(copy.thumbnailKey);
+    if (Result.isError(main)) {
+      if (
+        !(main.error instanceof OrganizationFileUsageError) &&
+        isMissingS3ObjectError(main.error.cause)
+      ) {
+        outcomes.push({
+          kind: "source-object-missing",
+          fileId: copy.source.id,
+        });
+        continue;
       }
-      outcomes.push({ kind: "source-object-missing", fileId: copy.source.id });
+      return Result.err(copyFailure(main.error));
+    }
+    successful.push(copy);
+  }
+  const inspected: Awaited<ReturnType<typeof prepareUserFileThumbnail>>[] = [];
+  for (
+    let start = 0;
+    start < successful.length;
+    start += FORK_COPY_CONCURRENCY
+  ) {
+    inspected.push(
+      ...(await Promise.all(
+        successful
+          .slice(start, start + FORK_COPY_CONCURRENCY)
+          .map(async (copy) => await prepareUserFileThumbnail(copy, userId)),
+      )),
+    );
+  }
+  const thumbnailObjects: typeof mainObjects = [];
+  const missingThumbnails = new Set<string>();
+  for (const copy of inspected) {
+    if (copy.thumbnailSource === null || copy.thumbnailKey === null) {
       continue;
     }
-    for (const result of [main, thumbnail, copy.thumbnailHead]) {
+    const head = copy.thumbnailHead;
+    if (head !== undefined && Result.isError(head)) {
+      if (!isMissingS3ObjectError(head.error.cause)) {
+        return Result.err(copyFailure(head.error));
+      }
+      missingThumbnails.add(copy.thumbnailKey);
+      continue;
+    }
+    thumbnailObjects.push({
+      sourceKey: copy.thumbnailSource,
+      destinationKey: copy.thumbnailKey,
+      sizeBytes:
+        head === undefined ? copy.source.sizeBytes : head.value.contentLength,
+    });
+  }
+  const thumbnails = await copyObjects(thumbnailObjects);
+  if (Result.isError(thumbnails)) {
+    return Result.err(thumbnails.error);
+  }
+  for (const copy of inspected) {
+    const thumbnail =
+      copy.thumbnailKey === null
+        ? undefined
+        : thumbnails.value.get(copy.thumbnailKey);
+    if (thumbnail !== undefined && Result.isError(thumbnail)) {
       if (
-        result?.status === "error" &&
-        (result.error instanceof OrganizationFileUsageError ||
-          !isMissingS3ObjectError(result.error.cause))
+        thumbnail.error instanceof OrganizationFileUsageError ||
+        !isMissingS3ObjectError(thumbnail.error.cause)
       ) {
-        failure ??=
-          result.error instanceof OrganizationFileUsageError
-            ? result.error
-            : new HandlerError({
-                status: 500,
-                message: "Failed to copy chat attachment storage object",
-                cause: result.error.cause,
-              });
+        return Result.err(copyFailure(thumbnail.error));
+      }
+      if (copy.thumbnailKey !== null) {
+        missingThumbnails.add(copy.thumbnailKey);
       }
     }
     const missingThumbnail =
-      (copy.thumbnailHead !== undefined &&
-        Result.isError(copy.thumbnailHead)) ||
-      (thumbnail !== undefined && Result.isError(thumbnail));
+      copy.thumbnailKey !== null && missingThumbnails.has(copy.thumbnailKey);
     outcomes.push({
       kind: "copied",
       copy: {
@@ -449,12 +485,6 @@ const copyUserFiles = async ({
       },
       missingThumbnail,
     });
-  }
-  if (failure !== undefined) {
-    return Result.err(failure);
-  }
-  if (unusedThumbnailKeys.length > 0) {
-    await rollbackCopiedS3Keys(unusedThumbnailKeys, fileUsageDb);
   }
   return Result.ok(outcomes);
 };

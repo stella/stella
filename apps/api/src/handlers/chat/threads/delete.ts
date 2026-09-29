@@ -77,10 +77,12 @@ const deleteThread = createSafeRootHandler(
     // whole file set into memory; each round is bounded by the batch size and
     // the loop still deletes every file before falling through to the thread delete.
     const cleanupFilePage = async (
-      files: Pick<
-        typeof userFiles.$inferSelect,
-        "id" | "s3Key" | "thumbnailFileId" | "userId"
-      >[],
+      files: {
+        id: SafeId<"userFile">;
+        s3Key: string;
+        thumbnailFileId: string | null;
+        userId: string;
+      }[],
     ) => {
       const s3Keys = files.flatMap((file) =>
         file.thumbnailFileId
@@ -104,9 +106,9 @@ const deleteThread = createSafeRootHandler(
           }),
         );
       }
-      const removed = await safeDb((tx) =>
+      const removed = await safeDb(async (tx) => {
         // audit: skip — file-row cleanup belongs to the CHAT_THREAD delete audit below
-        tx.delete(userFiles).where(
+        await tx.delete(userFiles).where(
           and(
             eq(userFiles.userId, user.id),
             eq(userFiles.threadId, params.threadId),
@@ -115,8 +117,8 @@ const deleteThread = createSafeRootHandler(
               files.map((file) => file.id),
             ),
           ),
-        ),
-      );
+        );
+      });
       return removed.mapError(
         (cause) =>
           new HandlerError({

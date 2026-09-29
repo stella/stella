@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -16,12 +15,19 @@ import {
   storeFolioCollabSnapshot,
 } from "@/api/lib/folio-collab-rooms";
 import { resolveFolioCollabServiceRoom } from "@/api/lib/folio-collab-service-room";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   permissiveBodySchema,
   validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
 
 import { authorizeFolioCollabService } from "./service-credentials";
+
+const SNAPSHOT_STORE_FAILURE_SINK = failureSink({
+  event: "folio_collab.snapshot_store",
+  expected: [],
+});
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -88,7 +94,13 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
           organizationFileUsageHandlerError(storedResult.error),
         );
       }
-      captureError(storedResult.error, { roomId });
+      observeFailure(storedResult.error, {
+        sink: SNAPSHOT_STORE_FAILURE_SINK,
+        ctx: {
+          organizationId: value.organizationId,
+          workspaceId: value.workspaceId,
+        },
+      });
       return Result.err(
         new HandlerError({
           status: 500,

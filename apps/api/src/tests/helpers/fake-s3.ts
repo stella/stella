@@ -47,6 +47,8 @@ export type FakeS3Failure = {
   readonly status: number;
   /** Restrict to one key; every key when omitted. */
   readonly key?: string;
+  /** Restrict a copy failure to this source object. */
+  readonly copySourceKey?: string;
   /** Restrict to keys containing this. */
   readonly keyIncludes?: string;
   /** How many matching requests fail; one when omitted. */
@@ -274,11 +276,14 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
   const takeFailure = (
     method: FakeS3Method,
     key: string,
+    copySourceKey: string | null,
   ): FakeS3Failure | null => {
     const index = failures.findIndex(
       ({ failure }) =>
         failure.method === method &&
         (failure.key === undefined || failure.key === key) &&
+        (failure.copySourceKey === undefined ||
+          failure.copySourceKey === copySourceKey) &&
         (failure.keyIncludes === undefined ||
           key.includes(failure.keyIncludes)),
     );
@@ -330,7 +335,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       ifNoneMatch,
     });
 
-    const failure = takeFailure(method, key);
+    const failure = takeFailure(method, key, copySourceKey);
     if (failure !== null) {
       return errorResponse(failure.code, failure.status, key);
     }
