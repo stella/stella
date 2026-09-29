@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 2.2.5
+
+### Patch Changes
+
+- [#4030](https://github.com/stella/stella/pull/4030) [`86ad6e9`](https://github.com/stella/stella/commit/86ad6e90709141536d821970b69f649b23411834) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the personal day time-entry list in the CLI capability catalog.
+
 ## 2.2.4
 
 ### Patch Changes
