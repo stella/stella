@@ -32242,6 +32242,467 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "number-series": {
+          kind: "route",
+          children: {
+            archive: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "archive"],
+                capabilityId: "number-series.archive",
+                description:
+                  "Archive a number series so it cannot allocate another number.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "create"],
+                capabilityId: "number-series.create",
+                description:
+                  "Create a document number series in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--pattern",
+                    prop: "pattern",
+                    required: true,
+                    part: "body",
+                    partPath: "pattern",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 6,
+                    repeatable: false,
+                    flag: "--padding",
+                    prop: "padding",
+                    required: true,
+                    part: "body",
+                    partPath: "padding",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--seller-profile-id",
+                    prop: "sellerProfileId",
+                    required: false,
+                    part: "body",
+                    partPath: "sellerProfileId",
+                  },
+                ],
+                inputOnly: ["body.documentType"],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["documentType", "name", "pattern", "padding"],
+                      properties: {
+                        documentType: {
+                          anyOf: [
+                            {
+                              const: "invoice",
+                              type: "string",
+                            },
+                            {
+                              const: "advance",
+                              type: "string",
+                            },
+                            {
+                              const: "credit_note",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        pattern: {
+                          minLength: 5,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        padding: {
+                          minimum: 1,
+                          maximum: 6,
+                          type: "integer",
+                        },
+                        sellerProfileId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "default-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "default-update"],
+                capabilityId: "number-series.default.update",
+                description:
+                  "Set the default active series for its document type.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            get: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "get"],
+                capabilityId: "number-series.get",
+                description: "Read one active document number series.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "list"],
+                capabilityId: "number-series.list",
+                description:
+                  "List active document number series in the active organization.",
+                access: "read",
+                flags: [],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            preview: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "preview"],
+                capabilityId: "number-series.preview",
+                description:
+                  "Preview the next number for a date without reserving it. A concurrent issue can change the result.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--issue-date",
+                    prop: "issueDate",
+                    required: true,
+                    part: "query",
+                    partPath: "issueDate",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      required: ["issueDate"],
+                      properties: {
+                        issueDate: {
+                          format: "date",
+                          minLength: 10,
+                          maxLength: 10,
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "number-series", "update"],
+                capabilityId: "number-series.update",
+                description:
+                  "Update an active number series. Pattern and padding lock after first allocation.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--number-series-id",
+                    prop: "numberSeriesId",
+                    required: true,
+                    part: "params",
+                    partPath: "numberSeriesId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--pattern",
+                    prop: "pattern",
+                    required: false,
+                    part: "body",
+                    partPath: "pattern",
+                  },
+                  {
+                    kind: "int",
+                    min: 1,
+                    max: 6,
+                    repeatable: false,
+                    flag: "--padding",
+                    prop: "padding",
+                    required: false,
+                    part: "body",
+                    partPath: "padding",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--seller-profile-id",
+                    prop: "sellerProfileId",
+                    required: false,
+                    part: "body",
+                    partPath: "sellerProfileId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        pattern: {
+                          minLength: 5,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        padding: {
+                          minimum: 1,
+                          maximum: 6,
+                          type: "integer",
+                        },
+                        sellerProfileId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["numberSeriesId"],
+                      properties: {
+                        numberSeriesId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "organization-settings": {
           kind: "route",
           children: {

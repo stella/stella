@@ -163,6 +163,8 @@ export const LIMITS = {
   styleSetsPageSizeMax: 100,
   sellerProfilesPageSizeDefault: 50,
   sellerProfilesPageSizeMax: 100,
+  numberSeriesPageSizeDefault: 50,
+  numberSeriesPageSizeMax: 100,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
   templateRecipesCount: 100,
