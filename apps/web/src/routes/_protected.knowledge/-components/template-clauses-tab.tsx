@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -40,6 +39,7 @@ import type {
 } from "@/components/versions/version-list";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -81,14 +81,10 @@ type TemplateClausesTabProps = {
 
 // ── Component ────────────────────────────────────────
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [linkOpen, setLinkOpen] = useState(false);
   const [syncingAll, setSyncingAll] = useState(false);
 

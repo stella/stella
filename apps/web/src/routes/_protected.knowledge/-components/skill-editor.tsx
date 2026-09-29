@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { SKILL_RESOURCE_PATH_PATTERN } from "@stll/api-contract";
@@ -48,6 +47,7 @@ import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
@@ -96,8 +96,6 @@ type SelectedFile =
   | { type: "body" }
   | { type: "resource"; resourceId: string; path: string };
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 type SkillEditorProps = {
   skillId: string;
 };
@@ -107,9 +105,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const tSkills = useTranslations("knowledge.agentSkills");
   const locale = useLocale();
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const openSkillResourceTab = useInspectorTabsStore(
     (s) => s.openSkillResourceTab,
   );

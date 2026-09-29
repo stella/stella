@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import type { PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -41,6 +41,7 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -49,7 +50,6 @@ import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
-const protectedRouteApi = getRouteApi("/_protected");
 const UNEXPECTED_ERROR_TRANSLATION_KEY = "common.unexpectedError";
 
 type StyleSetListResponse = Awaited<
@@ -65,9 +65,7 @@ const StyleSetsPage = () => {
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const organizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data, isLoading, isError } = useQuery(
     styleSetsOptions(organizationId),
   );

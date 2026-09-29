@@ -41,6 +41,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { TemplateRecipeDefinition } from "@/lib/api-contract";
 import { optionalArray } from "@/lib/arrays";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -71,7 +72,6 @@ import {
 } from "@/routes/_protected.knowledge/-components/template-markers";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import {
-  protectedRouteApi,
   TEMPLATE_STUDIO_VIEW,
   TEMPLATES_ROUTE_ID,
   templateStudioTabId,
@@ -296,9 +296,7 @@ export const TemplateStudioPage = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const editorRef = useRef<DocxEditorRef>(null);
   const editorViewRef = useRef<EditorView | null>(null);
   const { containerRef, fitZoom } = useFitToWidth();

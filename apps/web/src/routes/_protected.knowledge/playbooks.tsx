@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -15,6 +15,7 @@ import {
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
@@ -58,13 +59,9 @@ export const Route = createFileRoute("/_protected/knowledge/playbooks")({
   component: RouteComponent,
 });
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 function RouteComponent() {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [view, setView] = useState<View>({ kind: "list" });
 
   // Extra playbooks from cursor-based pagination. nextCursor is three-state:

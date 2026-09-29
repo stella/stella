@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -8,6 +7,7 @@ import { TextSeparator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
 import { optionalArray } from "@/lib/arrays";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { templatePreviewOptions } from "@/lib/knowledge/queries";
 import { BLOCK_DIRECTIVE_LAYOUT } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import type {
@@ -294,13 +294,9 @@ const SectionDivider = ({ label }: { label: string }) => (
 
 // ── Main component ───────────────────────────────────────
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const { data, isLoading, isError } = useQuery(
     templatePreviewOptions(activeOrganizationId, templateId),

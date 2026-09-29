@@ -2,7 +2,6 @@ import type { ComponentProps } from "react";
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -30,6 +29,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -68,8 +68,6 @@ const SLOT_VALUE_PREFIX = "slot:";
 
 // ── Component ────────────────────────────────────────
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const LinkClauseDialog = ({
   open,
   onOpenChange,
@@ -79,9 +77,7 @@ export const LinkClauseDialog = ({
   reservedSlotNames,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [selectedCategory, setSelectedCategory] = useState("");
   const [search, setSearch] = useState("");
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null);

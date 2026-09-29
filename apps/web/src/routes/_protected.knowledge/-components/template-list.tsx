@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
@@ -65,6 +64,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -103,8 +103,6 @@ type TemplateListProps = {
   onSelect: (template: KnowledgeTemplate) => void;
   onDeleted: () => void;
 };
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 /** The organization's template library: the shared list view with the member
  *  category tools, upload, and row actions in its slots. */
@@ -929,8 +927,6 @@ const useAssignTemplateCategory = () => {
 // ── Member template writes ───────────────────────────
 
 const useMemberTemplateActions = () => {
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   return memberKnowledgeActions.useTemplateActions(activeOrganizationId);
 };

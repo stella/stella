@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
@@ -77,8 +78,6 @@ export const Route = createFileRoute("/_protected/knowledge/clauses")({
   component: RouteComponent,
 });
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 const SIDEBAR_CATEGORY_KEYS = ["a", "b", "c", "d", "e"];
 const CLAUSE_ROW_KEYS = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
@@ -129,9 +128,7 @@ function ClausesPageSkeleton() {
 function RouteComponent() {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [view, setView] = useState<View>({ kind: "list" });
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

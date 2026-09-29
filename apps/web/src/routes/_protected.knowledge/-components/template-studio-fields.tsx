@@ -56,6 +56,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { knowledgeKeys, templateClausesOptions } from "@/lib/knowledge/queries";
@@ -73,7 +74,6 @@ import {
   ConditionBuilder,
   LoopBoundsInputs,
 } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
-import { protectedRouteApi } from "@/routes/_protected.knowledge/-components/template-studio-constants";
 import {
   buildRecipeDefinition,
   fieldHasLoopBounds,
@@ -109,9 +109,7 @@ export const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const templateId = useTemplateStudioStore((s) => s.templateId);
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const queryClient = useQueryClient();
   const [linkOpen, setLinkOpen] = useState(false);
   const clausesOptions = templateClausesOptions(
@@ -1581,9 +1579,7 @@ const SaveRecipeDialog = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const outline = useTemplateStudioStore((s) => s.outline);
   const fields = useTemplateStudioStore((s) => s.fields);
   const [name, setName] = useState("");

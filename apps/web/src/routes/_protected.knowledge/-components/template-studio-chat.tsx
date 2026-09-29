@@ -16,7 +16,6 @@ import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
@@ -136,8 +135,6 @@ const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
 /** Snapshot handed to folio when the Studio editor has not produced one yet. */
 const EMPTY_EDIT_SNAPSHOT: FolioAIEditSnapshot = { blocks: [], anchors: {} };
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 const capturePromptSubmitError = (error: unknown): void => {
   getAnalytics().captureError(error);
 };
@@ -196,9 +193,7 @@ const createTextChatMessage = (text: string): ChatUserMessageInput => ({
 
 const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const queryClient = useQueryClient();
   const { data: chatThreadId } = useSuspenseQuery(
     templateChatThreadOptions({
@@ -293,9 +288,7 @@ const TemplateStudioChatInner = ({
   const user = useAuthenticatedUser();
   const author = user.preferredName ?? user.name ?? user.email;
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const userContext = useChatUserContext();
   const getUserContext = useLatestCallback(() => userContext);
   const showToolCallDetails = false;

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
@@ -12,6 +12,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
@@ -42,8 +43,6 @@ export const Route = createFileRoute("/_protected/knowledge/workflows")({
   },
   component: RouteComponent,
 });
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
 
@@ -106,9 +105,7 @@ function WorkflowsPageSkeleton() {
 function RouteComponent() {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const organizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const [view, setView] = useState<View>({ kind: "list" });
   const [togglingId, setTogglingId] = useState<string | null>(null);
 

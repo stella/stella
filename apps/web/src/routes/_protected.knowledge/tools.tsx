@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -19,6 +19,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import {
   catalogueKeys,
@@ -155,14 +156,10 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
   pendingComponent: ToolsPagePending,
 });
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 function ToolsPage() {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const organizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const initialKind = Route.useSearch({
     select: (s): CatalogueBrowserFilterKind | undefined => s.kind,
   });

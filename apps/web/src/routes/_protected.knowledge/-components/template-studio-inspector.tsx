@@ -69,6 +69,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray, optionalReadonlyArray } from "@/lib/arrays";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { BoundedMap } from "@/lib/bounded-set";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -96,7 +97,6 @@ import {
   LoopFace,
 } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
 import {
-  protectedRouteApi,
   TEMPLATE_STUDIO_VIEW,
   TEMPLATES_ROUTE_ID,
   templateStudioTabId,
@@ -146,9 +146,7 @@ export function TemplateStudioInspectorView({
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
 
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const lang = useI18nStore((s) => s.lang);
   // Languages sit in the tab header (next to the name) so the template's identity
   // reads at a glance; useQuery (not suspense) keeps a cache miss from blocking
@@ -325,9 +323,7 @@ export function TemplateStudioInspectorView({
 export const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const organizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data } = useQuery(templateCheckOptions(organizationId, templateId));
 
   // Nothing to show until the first result lands; keeps the row from flashing
@@ -404,9 +400,7 @@ export const TemplateFillFacet = ({
   onEditField: (path: string) => void;
 }) => {
   const fillSaveTarget = useFillToMatterSaveTarget();
-  const facetOrgId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const facetOrgId = useAuthenticatedUser().activeOrganizationId;
   const { data: clausePreview } = useQuery({
     ...templateClausePreviewOptions(facetOrgId, templateId),
   });
@@ -417,9 +411,7 @@ export const TemplateFillFacet = ({
     useTemplateStudioStore.getState().actions?.setFillPreview(null);
   });
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
   const { data: detailData } = useQuery(detailOptions);
   const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
@@ -947,9 +939,7 @@ export const StudioInsertRow = () => {
     r.fromSlot,
     r.slotName,
   ]);
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   // Linked clauses feed the Insert > Clause slot submenu so the user picks a
   // real clause instead of typing a slot name into a bare clause marker.
   const { data: clausesData } = useQuery({
@@ -1265,9 +1255,7 @@ export const StudioOverviewSummary = ({
   templateId: string;
 }) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const clausesOptions = templateClausesOptions(
     activeOrganizationId,
     templateId,
@@ -1395,9 +1383,7 @@ export const TemplateGuidanceFacet = ({
   templateId: string;
 }) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: detailData } = useQuery(
     templateDetailOptions(activeOrganizationId, templateId),
   );

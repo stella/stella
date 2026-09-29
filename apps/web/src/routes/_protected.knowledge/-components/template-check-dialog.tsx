@@ -2,7 +2,6 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -25,9 +24,8 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import type { TranslationKey } from "@/i18n/types";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { templateCheckOptions } from "@/lib/knowledge/queries";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 type TemplateCheckDialogProps = {
   templateId: string;
@@ -50,9 +48,7 @@ export const TemplateCheckDialog = ({
 }: TemplateCheckDialogProps) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const { data, isLoading, isError } = useQuery({
     ...templateCheckOptions(activeOrganizationId, templateId),

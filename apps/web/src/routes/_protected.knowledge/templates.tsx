@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
@@ -14,6 +14,7 @@ import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dia
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -32,13 +33,9 @@ export const Route = createFileRoute("/_protected/knowledge/templates")({
   component: RouteComponent,
 });
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 function RouteComponent() {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   // The open template lives in the URL, so a reload lands back in its Studio.
   const openTemplateId = Route.useSearch({ select: (s) => s.template });
   const navigate = Route.useNavigate();
@@ -248,9 +245,7 @@ const TemplateDetail = ({
   const setNavOpen = useTemplateNavStore((s) => s.setOpen);
   const clearNav = useTemplateNavStore((s) => s.clear);
 
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const {
     data: detailData,

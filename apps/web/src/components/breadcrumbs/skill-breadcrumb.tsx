@@ -2,15 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillDetailOptions } from "@/lib/knowledge/queries";
 
-const protectedRoute = getRouteApi("/_protected");
 const skillRoute = getRouteApi("/_protected/knowledge/tools_/$skillId");
 
 export const SkillBreadcrumb = () => {
-  const activeOrganizationId = protectedRoute.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const skillId = skillRoute.useParams({ select: (params) => params.skillId });
   const { data: skill } = useQuery(
     skillDetailOptions(activeOrganizationId, skillId),

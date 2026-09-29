@@ -1,5 +1,4 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -9,6 +8,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -24,15 +24,11 @@ type TemplateVersionsTabProps = {
 
 // ── Component ────────────────────────────────────────
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const TemplateVersionsTab = ({
   templateId,
 }: TemplateVersionsTabProps) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const {
     data,
