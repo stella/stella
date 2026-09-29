@@ -153,7 +153,15 @@ const resolveCompanyName = async ({
   const registry = SANCTIONS_COMPANY_REGISTRY_BY_COUNTRY[country];
   const label = COMPANY_ID_LABELS[country];
   const companyId = value.trim();
-  if (!BUSINESS_REGISTRY_DISPATCH[registry].isCanonicalId(companyId)) {
+  // The adapter validates through a native checksum binding; a throw there is
+  // a register fault like any adapter error, not a malformed ID.
+  const canonical = Result.try(() =>
+    BUSINESS_REGISTRY_DISPATCH[registry].isCanonicalId(companyId),
+  );
+  if (canonical.isErr()) {
+    return Result.ok({ type: "unresolved", reason: "registry-unavailable" });
+  }
+  if (!canonical.value) {
     return invalidSubject(
       `Company ID must be a valid ${label} IČO (8 digits)`,
       "Pass the company's name as an organization subject if its ID is not known.",
