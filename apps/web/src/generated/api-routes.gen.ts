@@ -3585,7 +3585,7 @@ export type WebRoutes = {
                   name: string;
                   samples: Array<string>;
                   sourceIndex: number;
-                  targetField: ("address_line_1" | "address_line_2" | "city" | "country" | "custom_field" | "display_name" | "first_name" | "ignore" | "last_name" | "middle_name" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type");
+                  targetField: ("address_line_1" | "address_line_2" | "city" | "country" | "custom_field" | "date_of_birth" | "display_name" | "first_name" | "ignore" | "last_name" | "middle_name" | "nationality_codes" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type");
                 }>;
                 readonly defaultType: T1dacb02040;
                 readonly delimiter: ("comma" | "labeled" | "semicolon" | "tab");
@@ -3693,6 +3693,20 @@ export type WebRoutes = {
                   type: T1d719fd945;
                   isPrimary: Tfddd645dc8;
                 }>;
+                dateOfBirth?: {
+                  precision: "year";
+                  year: number;
+                } | {
+                  precision: "month";
+                  year: number;
+                  month: number;
+                } | {
+                  precision: "day";
+                  year: number;
+                  month: number;
+                  day: number;
+                };
+                nationalityCodes?: Array<string>;
                 registrationNumber?: string;
                 taxId?: string;
                 notes?: string;
@@ -3784,6 +3798,20 @@ export type WebRoutes = {
             type: T1d719fd945;
             isPrimary: Tfddd645dc8;
           }>;
+          dateOfBirth?: {
+            precision: "year";
+            year: number;
+          } | {
+            precision: "month";
+            year: number;
+            month: number;
+          } | {
+            precision: "day";
+            year: number;
+            month: number;
+            day: number;
+          };
+          nationalityCodes?: Array<string>;
           registrationNumber?: string;
           taxId?: string;
           currency?: string;
@@ -3844,6 +3872,7 @@ export type WebRoutes = {
             organizationName: Tbe0400fa4c;
             emails: Ta92a4cb146;
             phones: Tf879a89ce3;
+            nationalityCodes: Array<string>;
             registrationNumber: Tbe0400fa4c;
             taxId: Tbe0400fa4c;
             currency: Tbe0400fa4c;
@@ -3853,6 +3882,9 @@ export type WebRoutes = {
             prefix: Tbe0400fa4c;
             middleName: Tbe0400fa4c;
             suffix: Tbe0400fa4c;
+            dateOfBirthYear: T588d0ee653;
+            dateOfBirthMonth: T588d0ee653;
+            dateOfBirthDay: T588d0ee653;
             addresses: T6124e792aa;
             bankAccounts: Tcd94cef1c0;
             billingAddress: T3b4d67e019;
@@ -3912,6 +3944,20 @@ export type WebRoutes = {
                 type: T1d719fd945;
                 isPrimary: Tfddd645dc8;
               }>;
+              dateOfBirth?: {
+                precision: "year";
+                year: number;
+              } | {
+                precision: "month";
+                year: number;
+                month: number;
+              } | {
+                precision: "day";
+                year: number;
+                month: number;
+                day: number;
+              };
+              nationalityCodes?: Array<string>;
               registrationNumber?: string;
               taxId?: string;
               notes?: string;
@@ -4075,6 +4121,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
+              dateOfBirth: (T87d6a3582a | T4390c87707 | T667bb98824 | null);
               clientMatterCount: number;
               clientMatters: Array<{
                 name: string;
@@ -4103,6 +4150,7 @@ export type WebRoutes = {
               organizationName: Tbe0400fa4c;
               emails: Ta92a4cb146;
               phones: Tf879a89ce3;
+              nationalityCodes: Array<string>;
               registrationNumber: Tbe0400fa4c;
               taxId: Tbe0400fa4c;
               currency: Tbe0400fa4c;
@@ -4188,6 +4236,20 @@ export type WebRoutes = {
               type: T1d719fd945;
               isPrimary: Tfddd645dc8;
             }> | null;
+            dateOfBirth?: {
+              precision: "year";
+              year: number;
+            } | {
+              precision: "month";
+              year: number;
+              month: number;
+            } | {
+              precision: "day";
+              year: number;
+              month: number;
+              day: number;
+            } | null;
+            nationalityCodes?: Array<string> | null;
             registrationNumber?: string | null;
             taxId?: string | null;
             currency?: string | null;
@@ -35278,6 +35340,12 @@ type T42b0ce8576 = {
   error: string;
 };
 
+type T4390c87707 = {
+  precision: "month";
+  year: number;
+  month: number;
+};
+
 type T43a95a3581 = {
   type: "tool-call";
   id: string;
@@ -35676,7 +35744,7 @@ type T539e1e5c66 = {
 
 type T53be3fbe82 = {
   code: stll_api_contract_ContactImportIssueCode;
-  field: ("address_line_1" | "address_line_2" | "city" | "country" | "display_name" | "first_name" | "last_name" | "middle_name" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type" | null);
+  field: ("address_line_1" | "address_line_2" | "city" | "country" | "date_of_birth" | "display_name" | "first_name" | "last_name" | "middle_name" | "nationality_codes" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type" | null);
   rowNumber: number;
 };
 
@@ -36128,6 +36196,13 @@ type T658a00d740 = {
 
 type T65bedee18b = "free" | "paid" | null;
 
+type T667bb98824 = {
+  precision: "day";
+  year: number;
+  month: number;
+  day: number;
+};
+
 type T6685765ee4 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawCitation";
 };
@@ -36403,6 +36478,8 @@ type T71f8c17907 = {
   tags?: Array<string> | undefined;
   registrationNumber?: string | undefined;
   taxId?: string | undefined;
+  dateOfBirth?: T87d6a3582a | T4390c87707 | T667bb98824 | undefined;
+  nationalityCodes?: Array<string> | undefined;
   metadata?: Ta716eb8a48 | undefined;
 };
 
@@ -36872,6 +36949,11 @@ type T870458a513 = "matters" | "organization";
 type T8723d9d642 = {
   code?: string;
   message: string;
+};
+
+type T87d6a3582a = {
+  precision: "year";
+  year: number;
 };
 
 type T87debc7a12 = {
