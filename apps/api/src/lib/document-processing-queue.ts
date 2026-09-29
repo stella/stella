@@ -142,6 +142,16 @@ const SEARCH_INDEX_REPLAY_CONCURRENCY = 2;
 const SEARCH_INDEX_REPLAY_BATCH_SIZE = SEARCH_INDEX_REPLAY_CONCURRENCY * 2;
 const SEARCH_INDEX_REPLAY_STATE_TRANSITION_TIMEOUT_MS = 5000;
 const REPAIR_SETTLE_DELAY_MS = 5 * 60 * 1000;
+/**
+ * How long the repair sweep rests after a pass reaches the end of the
+ * table before this process starts the next one. The sweep is a safety net
+ * for runs an upload path failed to persist, not a feed: a full pass per
+ * six hours bounds how long such a gap can go unnoticed, while scanning
+ * again on the very next tick only re-reads fields it just cleared and,
+ * on a table larger than one page, keeps the phase reporting work behind
+ * on every tick, so a batch worker would never see reconciliation drained.
+ */
+export const REPAIR_PASS_REST_MS = 6 * 60 * 60 * 1000;
 // Single compare-and-set slot for the repair sweep's resume position, so the
 // sweep is its own colocation unit. Declared unbounded in redis-keys.ts: the
 // CAS script below deliberately writes it without an expiry.
@@ -1646,14 +1656,41 @@ type ReconciliationPhaseResult = {
   hasMore: boolean;
 };
 
+/**
+ * When this process's repair sweep last finished a pass. In-process on
+ * purpose: the cursor that says where a pass stands is durable in Redis,
+ * so a pass an exit cut short resumes on the next start, while the rest
+ * after a finished pass is only this process's own pacing. A fresh process
+ * therefore always begins or resumes a pass, and each worker's phase set
+ * owns its memo, so no two workers share a rest.
+ */
+export type RepairPassMemo = {
+  /** Epoch milliseconds of the latest finished pass, or null if none. */
+  completedAt: () => number | null;
+  recordCompleted: (completedAt: number) => void;
+};
+
+export const createRepairPassMemo = (): RepairPassMemo => {
+  let completedAt: number | null = null;
+  return {
+    completedAt: () => completedAt,
+    recordCompleted: (at) => {
+      completedAt = at;
+    },
+  };
+};
+
 export type DocumentProcessingReconciliationDependencies = {
   broadcastWorkspaceResourceUpdated: typeof broadcastWorkspaceResourceUpdated;
   database: typeof rootDb;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   enqueueDocumentDeadlineScout: typeof enqueueDocumentDeadlineScout;
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
+  /** Epoch milliseconds, for the repair sweep's rest between passes. */
+  now: () => number;
   readRepairScanCursor: () => Promise<SafeId<"field"> | null>;
   readyRepairCursor: () => Promise<unknown>;
+  repairPassMemo: RepairPassMemo;
   writeRepairScanCursor: (input: {
     expectedCursor: SafeId<"field"> | null;
     nextCursor: SafeId<"field"> | null;
@@ -1836,6 +1873,10 @@ type RepairScanPage = ReconciliationPhaseResult & {
  * a full page means the scan stopped at the cap, so the next tick resumes
  * after the last scanned field; a short page means it reached the end of
  * the table, so the cursor resets and this phase has nothing more to take.
+ * A pass that ends here is finished, not restarted: the sweep then rests
+ * for `REPAIR_PASS_REST_MS` before this process scans from the start
+ * again, so a drained table reads as drained instead of as a fresh first
+ * page on the very next tick.
  * The runs the page created are not part of it: they are due input for the
  * reindex and delivery phases, which run later in the same tick, and their
  * own signals answer for them. Derived together so cursor and signal
@@ -1866,6 +1907,17 @@ export const resolveRepairScanPage = ({
 const recoverMissingNativeExtractionRuns = async (
   dependencies: DocumentProcessingReconciliationDependencies,
 ) => {
+  const now = dependencies.now();
+  // A rest after a finished pass touches neither store: there is nothing
+  // this phase would take from them until the rest is over, so it reports
+  // drained and leaves the idle sampler free to see the rest of the tick.
+  const lastPassCompletedAt = dependencies.repairPassMemo.completedAt();
+  if (
+    lastPassCompletedAt !== null &&
+    now - lastPassCompletedAt < REPAIR_PASS_REST_MS
+  ) {
+    return { count: 0, hasMore: false };
+  }
   // Take the connection before the cursor commands rather than inside
   // them: their deadlines bound command latency and are far shorter than a
   // cold-start retry ladder. A connect that fails here fails this phase,
@@ -1936,6 +1988,9 @@ const recoverMissingNativeExtractionRuns = async (
         nextCursor: null,
       });
     }
+    // Recorded only once the reset above returned, so a pass whose reset
+    // threw is retried on the next tick rather than rested on.
+    dependencies.repairPassMemo.recordCompleted(now);
     return { count: 0, hasMore: false };
   }
 
@@ -1960,6 +2015,9 @@ const recoverMissingNativeExtractionRuns = async (
     expectedCursor: cursor,
     nextCursor: page.nextCursor,
   });
+  if (!page.hasMore) {
+    dependencies.repairPassMemo.recordCompleted(now);
+  }
   return { count: page.count, hasMore: page.hasMore };
 };
 
@@ -2692,13 +2750,17 @@ const DEFAULT_RECONCILIATION_DEPENDENCIES = {
   enqueueDocumentProcessingRun,
   indexEntity: async (entityId: SafeId<"entity">) =>
     await getSearchMaintenance().indexEntity(entityId),
+  now: () => Temporal.Now.instant().epochMilliseconds,
   readRepairScanCursor: async () => await readRepairScanCursor(),
   readyRepairCursor: async () => await reconciliationRedis.ready(),
   writeRepairScanCursor: async (input: {
     expectedCursor: SafeId<"field"> | null;
     nextCursor: SafeId<"field"> | null;
   }) => await writeRepairScanCursor(input),
-} satisfies Omit<DocumentProcessingReconciliationDependencies, "database">;
+} satisfies Omit<
+  DocumentProcessingReconciliationDependencies,
+  "database" | "repairPassMemo"
+>;
 
 /** Total by type: a declared phase cannot exist without a producer. */
 const createReconciliationPhaseRunners = (
@@ -2790,13 +2852,18 @@ export const createDocumentProcessingReconciliationPhases = (
   }));
 };
 
-/** The phases the worker runs, over the connection its host hands it. */
+/**
+ * The phases the worker runs, over the connection its host hands it. The
+ * repair memo is created here rather than shared from the defaults, so
+ * each worker's phase set paces its own sweep.
+ */
 export const createWorkerReconciliationPhases = (
   database: typeof rootDb,
 ): readonly ReconciliationPhase[] =>
   createDocumentProcessingReconciliationPhases({
     ...DEFAULT_RECONCILIATION_DEPENDENCIES,
     database,
+    repairPassMemo: createRepairPassMemo(),
   });
 
 /**
@@ -2807,10 +2874,16 @@ export const createWorkerReconciliationPhases = (
  */
 export const reconciliationLeftWorkBehind = (
   results: ReconciliationResults,
-): boolean =>
-  RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].hasMore);
+): boolean => reconciliationUnfinishedPhases(results).length > 0;
 
-const reconciliationProgress = createReconciliationProgress();
+/** The phases behind that answer, in declaration order. */
+export const reconciliationUnfinishedPhases = (
+  results: ReconciliationResults,
+): ReconciliationPhaseName[] =>
+  RECONCILIATION_PHASE_NAMES.filter((phase) => results[phase].hasMore);
+
+const reconciliationProgress =
+  createReconciliationProgress<ReconciliationPhaseName>();
 
 /**
  * Whether the latest reconciliation tick left work behind, waiting for a
@@ -2828,6 +2901,16 @@ export const isDocumentProcessingReconciliationInFlight =
 
 export const documentProcessingReconciliationGeneration =
   reconciliationProgress.tickGeneration;
+
+/**
+ * Which phases the latest finished tick reported as holding work, or that
+ * it never reported. Read synchronously by the batch worker when it logs
+ * why reconciliation is holding its exit, so a phase that never settles is
+ * named in the logs instead of showing up only as a worker that never
+ * stops.
+ */
+export const documentProcessingUnfinishedReconciliationPhases =
+  reconciliationProgress.latestTickReport;
 
 export const runDocumentProcessingReconciliationPhases = async ({
   onPhaseError,
@@ -2935,7 +3018,7 @@ const reconcileDocumentProcessing = async ({
           retriedCount: String(results[RECONCILIATION_PHASE.RETRY].count),
         });
       }
-      return reconciliationLeftWorkBehind(results);
+      return reconciliationUnfinishedPhases(results);
     });
   } catch (error) {
     // The tick never reported, so the backlog stays unknown and
