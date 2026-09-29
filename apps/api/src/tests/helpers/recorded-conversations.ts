@@ -760,11 +760,9 @@ return { id: document.entityId, name: document.name };`;
 
   describe("recorded conversations", () => {
     for (const [scenario, run] of Object.entries(SCENARIOS[suite])) {
-      test(
-        `the committed recording of ${scenario} matches the server`,
-        () => checkRecording(scenario, run),
-        60_000,
-      );
+      test(`the committed recording of ${scenario} matches the server`, async () => {
+        await checkRecording(scenario, run);
+      }, 60_000);
     }
 
     test("every committed recording belongs to a scenario", () => {
