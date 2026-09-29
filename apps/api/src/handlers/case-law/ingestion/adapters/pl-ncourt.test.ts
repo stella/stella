@@ -802,7 +802,9 @@ describe("the document", () => {
     ).toContain("MISSING_WORDS");
 
     const events: string[] = [];
-    setLogSinkForTesting(({ message }) => events.push(message));
+    setLogSinkForTesting(({ message }) => {
+      events.push(message);
+    });
     const result = (() => {
       try {
         return validatePlNcourtDocument(
