@@ -158,12 +158,15 @@ const cutShortOutcome = (reason: unknown): ChatTurnOutcome =>
 const produceUntilCut = ({
   execution,
   heartbeat,
+  ownerDb = safeDb,
   ownership = new ChatTurnOwnership(),
   persist,
   threadId,
 }: {
   execution: ChatTurnExecution;
   heartbeat: { intervalMs: number; renewEvery: number };
+  /** The database the run's heartbeat reads its turn through. */
+  ownerDb?: SafeDb;
   ownership?: ChatTurnOwnership;
   /** Stores the cut; the turn's own settlement by default. */
   persist?: () => Promise<void>;
@@ -178,7 +181,7 @@ const produceUntilCut = ({
       execution,
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
-      safeDb,
+      safeDb: ownerDb,
       threadId,
       userId: ids.userA1,
       workspaceId: ids.wsA1,
@@ -378,6 +381,143 @@ describe("a producing run", () => {
       interruptionReason: "owner-lost",
       status: "interrupted",
     });
+    await response.body?.cancel();
+  });
+
+  test("is over only once a beat still reading its turn is done", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
+    const beatStarted = Promise.withResolvers<undefined>();
+    const beatMayFinish = Promise.withResolvers<undefined>();
+    // The heartbeat's reads wait here: a beat is in flight until let go.
+    const heldDb: SafeDb = async (callback, retry) => {
+      beatStarted.resolve(undefined);
+      await beatMayFinish.promise;
+      return await safeDb(callback, retry);
+    };
+    const { response, run } = produceUntilCut({
+      execution,
+      heartbeat: { intervalMs: 1, renewEvery: 1000 },
+      ownerDb: heldDb,
+      ownership,
+      threadId,
+    });
+    await beatStarted.promise;
+
+    const relinquished = ownership.relinquish();
+    let over = false;
+    const settled = run.settled.then((end) => {
+      over = true;
+      return end;
+    });
+    // The run stored its outcome, but a beat still reads its turn.
+    for (let poll = 0; poll < 40; poll += 1) {
+      await Bun.sleep(1);
+    }
+    expect((await readTurn(execution.id)).status).toBe("interrupted");
+    expect(over).toBe(false);
+
+    beatMayFinish.resolve(undefined);
+    expect(await settled).toBe("stored");
+    expect(await relinquished).toBe("stored");
+    await response.body?.cancel();
+  });
+
+  test("gives up its turns only once a run that settled on its own is done reading its turn", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
+    const beatStarted = Promise.withResolvers<undefined>();
+    const beatMayFinish = Promise.withResolvers<undefined>();
+    const heldDb: SafeDb = async (callback, retry) => {
+      beatStarted.resolve(undefined);
+      await beatMayFinish.promise;
+      return await safeDb(callback, retry);
+    };
+    const run = new ChatTurnRun({
+      connectors: undefined,
+      deadlineMs: 60_000,
+      heartbeat: { intervalMs: 1, renewEvery: 1000 },
+      ownership,
+      owner: {
+        execution,
+        owningAssistantMessage: undefined,
+        recordAuditEvent: noAudit,
+        safeDb: heldDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      },
+    });
+    // The run settles on its own while a beat is still reading its turn.
+    const output = async function* (): AsyncGenerator<StreamChunk> {
+      await beatStarted.promise;
+      await run.settle(async () => {
+        unwrap(
+          await safeDb(
+            async (tx) =>
+              await settleChatTurnOnTx({
+                assistantMessageId: null,
+                execution,
+                outcome: { reason: "client-disconnected", type: "interrupted" },
+                tx,
+              }),
+          ),
+        );
+      });
+      yield* [];
+    };
+    await run.produce(output()).text();
+    expect(ownership.run(execution.executionId)).toBeUndefined();
+
+    // Giving up the process's turns from here still waits for that beat.
+    let relinquishedWith: string | undefined;
+    const relinquished = ownership.relinquish().then((end) => {
+      relinquishedWith = end;
+      return end;
+    });
+    for (let poll = 0; poll < 40; poll += 1) {
+      await Bun.sleep(1);
+    }
+    expect(relinquishedWith).toBeUndefined();
+
+    beatMayFinish.resolve(undefined);
+    expect(await relinquished).toBe("stored");
+    expect(await run.settled).toBe("stored");
+  });
+
+  test("gives up its turns only once the work they left running is done", async () => {
+    const { execution, threadId } = await seedRunningTurn();
+    const ownership = new ChatTurnOwnership();
+    const { response, run } = produceUntilCut({
+      execution,
+      heartbeat: { intervalMs: 60_000, renewEvery: 4 },
+      ownership,
+      threadId,
+    });
+    const followUpMayFinish = Promise.withResolvers<undefined>();
+    let followUpDone = false;
+    const followUp = run.followUp(
+      followUpMayFinish.promise.finally(() => {
+        followUpDone = true;
+      }),
+    );
+
+    let relinquishedWith: string | undefined;
+    const relinquished = ownership.relinquish().then((end) => {
+      relinquishedWith = end;
+      return end;
+    });
+    expect(await run.settled).toBe("stored");
+    for (let poll = 0; poll < 40; poll += 1) {
+      await Bun.sleep(1);
+    }
+    expect(relinquishedWith).toBeUndefined();
+
+    followUpMayFinish.resolve(undefined);
+    await relinquished;
+    expect(followUpDone).toBe(true);
+    await followUp;
+    expect(relinquishedWith).toBe("stored");
     await response.body?.cancel();
   });
 

@@ -1,6 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -24,32 +25,57 @@ export const SKILL_READ_OUTCOME = {
 export type SkillReadOutcome =
   (typeof SKILL_READ_OUTCOME)[keyof typeof SKILL_READ_OUTCOME];
 
+/** The skill a read names: its row, or a built-in, which has none. */
+type SkillReadSubject =
+  | { source: typeof CHAT_SKILL_SOURCE.installed; id: SafeId<"agentSkill"> }
+  | { source: typeof CHAT_SKILL_SOURCE.builtIn };
+
 type SkillReadAuditEventOptions = {
   outcome: SkillReadOutcome;
   /** The resource file read, or `null` for the skill's instructions. */
   path: string | null;
-  skillId: SafeId<"agentSkill">;
+  skill: SkillReadSubject;
   slug: string;
   surface: SkillReadSurface;
 };
 
 /**
- * The one audit event for an agent reading a stored skill, whichever surface
- * served it. It names the skill and the file, never the content.
+ * The one audit event for an agent reading a skill, whichever surface served
+ * it. It names the skill and the file, never the content. A built-in has no
+ * row, so its slug is the resource id; `skillSource` says which.
  */
 const skillReadAuditEvent = ({
   outcome,
   path,
-  skillId,
+  skill,
   slug,
   surface,
 }: SkillReadAuditEventOptions): AuditEvent => ({
   action: AUDIT_ACTION.ACCESS,
   resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL,
-  resourceId: skillId,
+  resourceId: skillReadResourceId({ skill, slug }),
   workspaceId: null,
-  metadata: { outcome, path, slug, surface },
+  metadata: { outcome, path, skillSource: skill.source, slug, surface },
 });
+
+const skillReadResourceId = ({
+  skill,
+  slug,
+}: {
+  skill: SkillReadSubject;
+  slug: string;
+}): string => {
+  switch (skill.source) {
+    case CHAT_SKILL_SOURCE.installed:
+      return skill.id;
+    case CHAT_SKILL_SOURCE.builtIn:
+      return slug;
+    default: {
+      skill satisfies never;
+      return panic("skill read has an unknown source");
+    }
+  }
+};
 
 type RecordSkillReadAuditOptions = {
   reads: readonly SkillReadAuditEventOptions[];

@@ -54,7 +54,7 @@ beforeAll(async () => {
 afterAll(async () => {
   // Each harness restores what the previous one installed: undo in reverse.
   for (const harness of openHarnesses.toReversed()) {
-    harness.close();
+    await harness.close();
   }
   if (seededThreadIds.length > 0) {
     await testDb

@@ -251,6 +251,7 @@ describe("explicit skill references in a user message", () => {
         metadata: {
           outcome: "success",
           path: null,
+          skillSource: "installed",
           slug: PICKED_SLUG,
           surface: "chat",
         },

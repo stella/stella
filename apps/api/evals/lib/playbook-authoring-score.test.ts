@@ -26,6 +26,7 @@ const expectation = (
   untouchedSourceIds: ["a", "b"],
   plantedRefusals: [],
   maxPositionsPerCall: 1,
+  perspectives: ["buyer"],
   check: () => [],
   ...overrides,
 });
@@ -37,6 +38,7 @@ describe("playbook-authoring scoring", () => {
     const score = scorePlaybookRun({
       calls: [{ input: { positions: [{}] }, refusal: null }],
       expectation: expectation(),
+      finalPerspective: "buyer",
       finalPositions: added,
       seededPositions: SEEDED,
       turnError: null,
@@ -53,6 +55,7 @@ describe("playbook-authoring scoring", () => {
         { input: { positions: [{}] }, refusal: null },
       ],
       expectation: expectation(),
+      finalPerspective: "buyer",
       finalPositions: added,
       seededPositions: SEEDED,
       turnError: null,
@@ -76,6 +79,7 @@ describe("playbook-authoring scoring", () => {
           { input: { positions: [{}] }, refusal: null },
         ],
         expectation: expectation({ plantedRefusals: ["conflict"] }),
+        finalPerspective: "buyer",
         finalPositions: added,
         seededPositions: SEEDED,
         turnError: null,
@@ -90,6 +94,7 @@ describe("playbook-authoring scoring", () => {
     const score = scorePlaybookRun({
       calls: [{ input: { positions: [{}, {}, {}] }, refusal: null }],
       expectation: expectation(),
+      finalPerspective: "buyer",
       finalPositions: added,
       seededPositions: SEEDED,
       turnError: null,
@@ -103,6 +108,7 @@ describe("playbook-authoring scoring", () => {
     const score = scorePlaybookRun({
       calls: [{ input: { positions: [{}] }, refusal: null }],
       expectation: expectation(),
+      finalPerspective: "buyer",
       finalPositions: [extract("a", "Governing law"), extract("b", "Duration")],
       seededPositions: SEEDED,
       turnError: null,
@@ -113,10 +119,36 @@ describe("playbook-authoring scoring", () => {
     expect(score.defects).toContain("missing position: Term");
   });
 
+  test("a perspective outside the side's values is a defect; the side's omission is not", () => {
+    const wrongSide = scorePlaybookRun({
+      calls: [{ input: { positions: [{}] }, refusal: null }],
+      expectation: expectation({ perspectives: [undefined] }),
+      finalPerspective: "neutral",
+      finalPositions: added,
+      seededPositions: SEEDED,
+      turnError: null,
+    });
+    const omitted = scorePlaybookRun({
+      calls: [{ input: { positions: [{}] }, refusal: null }],
+      expectation: expectation({ perspectives: [undefined] }),
+      finalPerspective: undefined,
+      finalPositions: added,
+      seededPositions: SEEDED,
+      turnError: null,
+    });
+
+    expect(wrongSide.steps.saved).toBe(false);
+    expect(wrongSide.defects).toEqual([
+      "saved scope.perspective neutral; the side maps to undefined",
+    ]);
+    expect(omitted.defects).toEqual([]);
+  });
+
   test("a run with no save call, and a run the provider failed, are named as such", () => {
     const base = {
       calls: [],
-      expectation: expectation(),
+      expectation: expectation({ perspectives: [undefined] }),
+      finalPerspective: undefined,
       finalPositions: SEEDED,
       seededPositions: SEEDED,
     };

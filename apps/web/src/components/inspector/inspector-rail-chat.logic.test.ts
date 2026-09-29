@@ -58,4 +58,18 @@ describe("what the rail's new-chat button opens", () => {
       label: "Redline",
     });
   });
+
+  test("labels a skill chat with the skill's title, not its slug", () => {
+    const activeSkill = {
+      skillDisplayName: "Build a playbook",
+      skillName: "playbook-builder",
+    };
+    expect(railChatOpenArgs({ activeSkill })).toEqual({
+      activeSkill,
+      label: "Build a playbook",
+    });
+    expect(
+      railChatOpenArgs({ activeSkill: { skillName: "playbook-builder" } }),
+    ).toMatchObject({ label: "playbook-builder" });
+  });
 });

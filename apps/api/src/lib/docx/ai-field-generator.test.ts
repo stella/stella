@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
 import type { Fetcher } from "@stll/fetch";
+import { listSkillMetadata, readSkillRequiredTools } from "@stll/skills";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -178,8 +179,8 @@ beforeEach(() => {
 const orgAIConfig = {} as OrgAIConfig;
 const organizationId = toSafeId<"organization">("org_test");
 const userId = toSafeId<"user">("user_test");
-// SAFETY: every query answers with no rows, so the skill catalog is empty and
-// no skill tool is ever built or run.
+// SAFETY: every query answers with no rows, so only built-in skills are in
+// the catalog, and no scripted run calls a skill tool.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const safeDb = (async () => Result.ok([])) as unknown as SafeDb;
 const skillContext = { organizationId, safeDb, userId };
@@ -221,7 +222,7 @@ const buildTestAiOccurrenceAdapter = (
 ) => buildAiOccurrenceAdapter({ resolveTextModel, ...options });
 
 describe("buildAiFieldGenerator skill-tool wiring", () => {
-  test("does not advertise skill tools for a ref when the catalog is empty", async () => {
+  test("does not advertise skill tools for a ref to no available skill", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
       organizationId,
@@ -239,6 +240,31 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
     // skill tools were wired" looks like at the provider boundary.
     expect(lastRequest().toolNames).toEqual([]);
   });
+
+  // A one-shot generator offers no tool besides the skill reads, so a
+  // built-in is wired only when it requires no other tool.
+  test.each(listSkillMetadata().map((skill) => [skill.name, skill] as const))(
+    "wires skill tools for a ref to the built-in %s only when it needs no other tool",
+    async (_name, builtIn) => {
+      const generate = buildTestAiFieldGenerator({
+        orgAIConfig,
+        organizationId,
+        skillContext,
+        tenantWorkspaceIds: [],
+      });
+      await generate?.({
+        prompt: `Draft this clause [${builtIn.name}](#stella-skill-ref=${builtIn.name}).`,
+        fieldPath: "scope",
+        values: {},
+      });
+
+      expect(lastRequest().toolNames).toEqual(
+        readSkillRequiredTools(builtIn.metadata).length === 0
+          ? ["load-skill", "read-skill-resource"]
+          : [],
+      );
+    },
+  );
 
   test("passes no tools when the prompt has no skill reference", async () => {
     const generate = buildTestAiFieldGenerator({
@@ -318,7 +344,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
 describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   const occurrences = [{ context: "see {{scope}} herein" }];
 
-  test("does not advertise skill tools for a ref when the catalog is empty", async () => {
+  test("does not advertise skill tools for a ref to no available skill", async () => {
     const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
       organizationId,

@@ -10,6 +10,7 @@ import {
 } from "@/api/lib/agent-skills/required-tools";
 import type { SkillToolAvailability } from "@/api/lib/agent-skills/required-tools";
 import {
+  CHAT_SKILL_SOURCE,
   listAvailableChatSkillMetadata,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
@@ -17,6 +18,7 @@ import {
 } from "@/api/lib/agent-skills/skills";
 import type {
   AvailableChatSkill,
+  ChatSkillRef,
   LoadedChatSkill,
 } from "@/api/lib/agent-skills/skills";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -180,7 +182,7 @@ export const readSkillTool = async ({
 
   if (resourcePath === undefined) {
     const loaded = throwOnLoadFault(await loadAvailableChatSkill(scope));
-    return loaded === null || loaded.id !== skill.id
+    return loaded === null || !isResolvedSkill({ read: loaded, skill })
       ? null
       : { type: SKILL_TOOL_READ_TYPE.skill, skill: loaded };
   }
@@ -192,7 +194,7 @@ export const readSkillTool = async ({
     case SKILL_RESOURCE_READ_STATUS.skillNotFound:
       return null;
     case SKILL_RESOURCE_READ_STATUS.resourceNotFound:
-      return read.skillId === skill.id
+      return isResolvedSkill({ read: read.skill, skill })
         ? {
             type: SKILL_TOOL_READ_TYPE.resourceNotFound,
             path: resourcePath,
@@ -200,7 +202,7 @@ export const readSkillTool = async ({
           }
         : null;
     case SKILL_RESOURCE_READ_STATUS.found:
-      return read.skillId === skill.id
+      return isResolvedSkill({ read: read.skill, skill })
         ? {
             type: SKILL_TOOL_READ_TYPE.resource,
             content: read.content,
@@ -212,6 +214,31 @@ export const readSkillTool = async ({
     default: {
       read satisfies never;
       return panic("skill resource read returned an unknown status");
+    }
+  }
+};
+
+/**
+ * Whether a read came from the skill the call resolved to: the same row for an
+ * installed skill; for a built-in, no row having appeared for its slug since.
+ */
+const isResolvedSkill = ({
+  read,
+  skill,
+}: {
+  read: ChatSkillRef;
+  skill: ResolvedSkillTool;
+}): boolean => {
+  switch (skill.source) {
+    case CHAT_SKILL_SOURCE.installed:
+      return (
+        read.source === CHAT_SKILL_SOURCE.installed && read.id === skill.id
+      );
+    case CHAT_SKILL_SOURCE.builtIn:
+      return read.source === CHAT_SKILL_SOURCE.builtIn;
+    default: {
+      skill satisfies never;
+      return panic("skill tool has an unknown source");
     }
   }
 };
