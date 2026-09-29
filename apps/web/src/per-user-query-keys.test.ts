@@ -3,10 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
-import { sessionsOptions } from "@/lib/account/queries";
+import {
+  linkedAccountsOptions,
+  pendingDeletionTasksOptions,
+  sessionsOptions,
+} from "@/lib/account/queries";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import {
   chatUnavailableSkillsOptions,
@@ -18,6 +23,7 @@ import {
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { searchPreviewOptions } from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import {
@@ -28,14 +34,21 @@ import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-e
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
+import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
+import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
+import { savedTimeNarrativesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/saved-time-narratives";
 
 // API reads that answer for the signed-in user are cached under a key that
-// names that user. The manifest below lists every such read: a new handler
-// that filters by the caller fails here until it is classified, and a web
-// module that starts calling a listed read fails until it is listed (and its
-// key checked) too.
+// names that user. The manifests below list every such read:
+// - a new read endpoint (a GET route, a read POST, or a read-named handler)
+//   that refers to the caller fails here until it is classified, and so does a
+//   new auth-client list/get call;
+// - a web module that starts calling a listed read fails until it is listed;
+// - every query in a listed module that reaches a listed read must name the
+//   user in its key, and the listed key factories are run to prove it.
 const WEB_SOURCE = import.meta.dirname;
-const API_HANDLERS = nodePath.join(WEB_SOURCE, "../../api/src/handlers");
+const API_SOURCE = nodePath.join(WEB_SOURCE, "../../api/src");
+const API_HANDLERS = nodePath.join(API_SOURCE, "handlers");
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.tsx?$/u;
 
 const ORG = "org-probe";
@@ -44,12 +57,23 @@ const WORKSPACE = "workspace-probe";
 
 type PerUserRead =
   // Cached by the web under a key checked here to carry the user id.
-  | { kind: "keyed"; calls: string[]; files: string[]; keys: () => QueryKey[] }
-  // Cached under a key built in a module this test cannot import: the listed
-  // source must keep the user id in it.
-  | { kind: "keyed-in-file"; calls: string[]; files: string[]; key: string }
+  | {
+      kind: "keyed";
+      calls: string[];
+      files: string[];
+      keys: () => QueryKey[];
+      // Key expressions that carry the user inside an argument the source
+      // scan cannot see into, each checked by one of `keys` above.
+      opaqueKeys?: Record<string, string>;
+    }
   // Cached under an id that only its owner can read.
   | { kind: "owned-id"; reason: string }
+  // The session or role itself; the cache is dropped when it changes.
+  | { kind: "session"; reason: string }
+  // Rows shared by every member, with the caller's own marked (an open edit
+  // session, say). Kept under the shared key; the whole cache is dropped when
+  // the signed-in user changes.
+  | { kind: "caller-marker"; reason: string }
   // Not called by the web today.
   | { kind: "no-web-caller"; calls: string[] }
   // Matched by the scan but not a per-user read.
@@ -59,10 +83,15 @@ const OWNED_THREAD = "cached under the thread id; threads are owner-filtered";
 const OWNED_FILE = "served by URL, not cached; files are owner-filtered";
 const WRITE = "a write, not cached";
 const JOINS_NAMES = "joins member names; not filtered by the caller";
+const USAGE_ONLY = "the caller is recorded for usage only";
+const DOWNLOAD = "a file download, not cached";
+const OAUTH_REDIRECT = "an OAuth redirect, not cached";
+const OWN_EDIT_SESSION = "marks the caller's own open edit session";
+const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
-// Keys are handler paths under apps/api/src/handlers, or `better-auth:*` for
-// reads served by the auth client.
+// Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "catalogue/list.ts": {
     kind: "keyed",
     calls: ["api.catalogue.get"],
@@ -86,6 +115,9 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         workspaceId: WORKSPACE,
       }),
     ],
+    opaqueKeys: {
+      "chatKeys.fileThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
   },
   "chat/resolve-file-thread.ts": {
     kind: "keyed",
@@ -99,6 +131,9 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         workspaceId: WORKSPACE,
       }),
     ],
+    opaqueKeys: {
+      "chatKeys.fileThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
   },
   "chat/resolve-template-thread.ts": {
     kind: "keyed",
@@ -107,6 +142,9 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [
       chatKeys.templateThread(ORG, { templateId: "template", userId: USER }),
     ],
+    opaqueKeys: {
+      "chatKeys.templateThread(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
   },
   "chat/skill-availability/list.ts": {
     kind: "keyed",
@@ -122,7 +160,29 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       chatKeys.groupedThreads({ activeOrganizationId: ORG, userId: USER }),
     ],
   },
+  "document-reviews/parties.ts": { kind: "not-per-user", reason: USAGE_ONLY },
+  "document-reviews/propose-positions-stream.ts": {
+    kind: "not-per-user",
+    reason: USAGE_ONLY,
+  },
+  "document-reviews/propose-positions.ts": {
+    kind: "not-per-user",
+    reason: USAGE_ONLY,
+  },
   "docx-suggestions/resolve.ts": { kind: "not-per-user", reason: WRITE },
+  "entities/filesystem-tree/get.ts": {
+    kind: "caller-marker",
+    reason: OWN_EDIT_SESSION,
+  },
+  "entities/list.ts": { kind: "caller-marker", reason: OWN_EDIT_SESSION },
+  "entities/read-kanban-group.ts": {
+    kind: "caller-marker",
+    reason: OWN_EDIT_SESSION,
+  },
+  "entities/window/list.ts": {
+    kind: "caller-marker",
+    reason: OWN_EDIT_SESSION,
+  },
   "entity-views/list.ts": {
     kind: "keyed",
     calls: ['api["entity-views"].get'],
@@ -148,6 +208,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         userId: USER,
       }),
     ],
+    opaqueKeys: { "readerAnnotationKeys.forTarget(key)": KEY_TYPE_HAS_USER },
   },
   "lists/items/activity/list.ts": {
     kind: "not-per-user",
@@ -159,26 +220,33 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [mcpConnectionsOptions(ORG, USER).queryKey],
   },
+  "mcp-connectors/oauth-callback.ts": {
+    kind: "not-per-user",
+    reason: OAUTH_REDIRECT,
+  },
   "me/list-oauth-connections.ts": {
-    kind: "keyed-in-file",
+    kind: "keyed",
     calls: ['api.me["oauth-connections"].get'],
     files: ["routes/_protected.settings/-queries/connections.ts"],
-    key: "list:(userId:string)=>[...connectedAppsKeys.all,userId]",
+    keys: () => [connectedAppsOptions(USER).queryKey],
   },
   "me/pending-tasks.ts": {
-    kind: "keyed-in-file",
+    kind: "keyed",
     calls: ['api.me.delete["pending-tasks"].get'],
-    files: ["routes/_protected.settings/account.profile.tsx"],
-    key: 'queryKey:["me","delete","pending-tasks",authenticatedUser.id]',
+    files: ["lib/account/queries.ts"],
+    keys: () => [pendingDeletionTasksOptions(USER).queryKey],
   },
+  // Filtered by row-level security rather than in the handler.
   "memories/list.ts": {
-    kind: "keyed-in-file",
+    kind: "keyed",
     calls: ["memoriesApi.get", "fetchMemoriesPage"],
     files: [
       "lib/memory-api.ts",
       "routes/_protected.settings/-queries/memories.ts",
     ],
-    key: '...memoriesKeys.all(key.activeOrganizationId),key.userId,"list"',
+    keys: () => [
+      memoriesKeys.list({ activeOrganizationId: ORG, userId: USER }),
+    ],
   },
   "notifications/list.ts": {
     kind: "keyed",
@@ -211,6 +279,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         workspaceId: WORKSPACE,
       }),
     ],
+    opaqueKeys: { "reportExportsKeys.detail(key)": KEY_TYPE_HAS_USER },
   },
   "reports/exports/list.ts": {
     kind: "keyed",
@@ -223,6 +292,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         workspaceId: WORKSPACE,
       }),
     ],
+    opaqueKeys: { "reportExportsKeys.history(key)": KEY_TYPE_HAS_USER },
   },
   "saved-searches/list.ts": {
     kind: "keyed",
@@ -231,16 +301,39 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [savedSearchKeys.list({ organizationId: ORG, userId: USER })],
   },
   "saved-time-narratives/list.ts": {
-    kind: "keyed-in-file",
+    kind: "keyed",
     calls: ['api["saved-time-narratives"].get'],
     files: [
       "routes/_protected.workspaces/$workspaceId/-components/billing/saved-time-narratives.tsx",
     ],
-    key: 'list:(organizationId:string,userId:string)=>["saved-time-narratives",organizationId,userId]',
+    keys: () => [savedTimeNarrativesKeys.list(ORG, USER)],
+  },
+  "search/preview.ts": {
+    kind: "keyed",
+    calls: ["api.search.preview.post"],
+    files: ["lib/search.ts"],
+    keys: () => [
+      searchPreviewOptions({
+        organizationId: ORG,
+        query: "query",
+        resultId: "result",
+        type: "matter",
+        updatedAt: "2026-01-01T00:00:00Z",
+        userId: USER,
+      }).queryKey,
+    ],
   },
   "sharepoint/list-drive-root.ts": {
     kind: "no-web-caller",
     calls: ["api.sharepoint.drive.root.get"],
+  },
+  "sharepoint/oauth-callback.ts": {
+    kind: "not-per-user",
+    reason: OAUTH_REDIRECT,
+  },
+  "sharepoint/status.ts": {
+    kind: "no-web-caller",
+    calls: ["api.sharepoint.connection.get"],
   },
   "signals/count.ts": {
     kind: "keyed",
@@ -269,11 +362,19 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
   },
+  "templates/fills/preview.ts": { kind: "not-per-user", reason: USAGE_ONLY },
+  "templates/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "templates/lookup-formats/list.ts": {
-    kind: "keyed-in-file",
+    kind: "keyed",
     calls: ['api.templates["lookup-formats"].get'],
     files: ["components/company-format-library.tsx"],
-    key: '["company-output-formats",organizationId,userId,registry]',
+    keys: () => [
+      companyFormatKeys.list({
+        organizationId: ORG,
+        registry: "ares",
+        userId: USER,
+      }),
+    ],
   },
   "time-entries/get.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "time-entries/list.ts": {
@@ -281,7 +382,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ["fetchTimeEntries"],
     files: ["lib/workspaces/queries/time-entries.ts"],
     keys: () => [
-      timeEntriesKeys.personalList(WORKSPACE, USER, { scope: "me" }),
+      timeEntriesKeys.list(WORKSPACE, USER, {}),
       timeEntriesKeys.activeTimer(WORKSPACE, USER),
     ],
   },
@@ -325,11 +426,14 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api["view-templates"]().get'],
     files: ["lib/workspaces/queries/view-templates.ts"],
     keys: () => [viewTemplateKeys.all({ organizationId: ORG, userId: USER })],
+    opaqueKeys: { "viewTemplateKeys.all(key)": KEY_TYPE_HAS_USER },
   },
+  "views/table/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "work-obligations/queues/list.ts": {
     kind: "no-web-caller",
     calls: ['api["my-work"].get'],
   },
+  "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "workspaces/read-active.ts": {
     kind: "no-web-caller",
     calls: ["api.workspaces.active.get"],
@@ -341,14 +445,51 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [
       workspacesKeys.activity(ORG, { userId: USER, workspaceId: WORKSPACE }),
     ],
+    opaqueKeys: {
+      "workspacesKeys.activity(activeOrganizationId, key)": KEY_TYPE_HAS_USER,
+    },
   },
-  "better-auth:list-sessions": {
+  "workspaces/read-overview-activity-actors.query.ts": {
+    kind: "not-per-user",
+    reason: JOINS_NAMES,
+  },
+};
+
+// Keyed by the auth client call; every `authClient` list/get call is here.
+const AUTH_CLIENT_READS: Record<string, PerUserRead> = {
+  "authClient.getLastUsedLoginMethod": {
+    kind: "not-per-user",
+    reason: "read from this browser, not the server",
+  },
+  "authClient.getSession": {
+    kind: "session",
+    reason: "the session itself",
+  },
+  "authClient.listAccounts": {
+    kind: "keyed",
+    calls: ["authClient.listAccounts"],
+    files: ["lib/account/queries.ts"],
+    keys: () => [linkedAccountsOptions(USER).queryKey],
+  },
+  "authClient.listSessions": {
     kind: "keyed",
     calls: ["authClient.listSessions", "listAuthSessions"],
     files: ["lib/auth-client.ts", "lib/account/queries.ts"],
     keys: () => [sessionsOptions(USER).queryKey],
   },
-  "better-auth:list-organizations": {
+  "authClient.organization.getActiveMemberRole": {
+    kind: "session",
+    reason: "the signed-in member's role",
+  },
+  "authClient.organization.getFullOrganization": {
+    kind: "not-per-user",
+    reason: "the organization and its members, the same for every member",
+  },
+  "authClient.organization.getInvitation": {
+    kind: "owned-id",
+    reason: "loaded by invitation id in a route loader, not cached",
+  },
+  "authClient.organization.list": {
     kind: "keyed",
     calls: ["authClient.organization.list"],
     files: [
@@ -360,11 +501,19 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   },
 };
 
-// A read handler (by file name) that filters rows by the caller.
+const ALL_READS = { ...PER_USER_READS, ...AUTH_CLIENT_READS };
+
+// A handler named like a read, for reads registered outside the route table.
 const READ_HANDLER_NAME =
   /\/(?:list|get|read|count|resolve|summary|pending)[^/]*\.ts$/u;
-const FILTERS_BY_CALLER =
-  /(?:userId|requestedBy|ownerUserId|createdBy)[^\n]{0,20}(?:ctx\.)?user\.id|userId:\s*(?:ctx\.)?user\.id|currentUserId:\s*user\.id/u;
+// Any reference to the caller: `user.id`, `ctx.user.id`, `currentUser.id`,
+// `currentUserId`, or a `…ForUser(` helper.
+const REFERS_TO_CALLER =
+  /\b(?:ctx\.|current)?[uU]ser\.id\b|\bcurrentUserId\b|ForUser\(/u;
+const ROUTE_REGISTRATION =
+  /\.(get|post)\(\s*(?:"[^"]*"|`[^`]*`),\s*([A-Za-z_$][\w$]*)\.handler\b/gu;
+const HANDLER_IMPORT =
+  /import ([A-Za-z_$][\w$]*) from "@\/api\/handlers\/([^"]+)"/gu;
 
 const listFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -379,12 +528,44 @@ const listFiles = (directory: string): string[] =>
 
 const readSource = (path: string) => readFileSync(path, "utf-8");
 
-/** Whitespace-free source, so a key reads the same however it is wrapped. */
-const compact = (source: string) =>
-  source
-    .replaceAll(/\s+/gu, " ")
-    .replaceAll(/ ?([.,:;()[\]{}=>]) ?/gu, "$1")
-    .replaceAll(/,([)\]}])/gu, "$1");
+/**
+ * Handlers (relative to handlers/) that serve reads: every GET route, every
+ * POST route whose handler declares `access: "read"`, and every read-named
+ * handler file.
+ */
+const readHandlers = () => {
+  const reads = new Set<string>();
+  for (const path of listFiles(API_SOURCE)) {
+    const source = readSource(path);
+    const imports = new Map(
+      [...source.matchAll(HANDLER_IMPORT)].map(([, name, file]) => [
+        name,
+        `${file ?? ""}.ts`,
+      ]),
+    );
+    for (const [, method, name] of source.matchAll(ROUTE_REGISTRATION)) {
+      const handler = imports.get(name ?? "");
+      if (handler === undefined) {
+        continue;
+      }
+      if (
+        method === "get" ||
+        readSource(nodePath.join(API_HANDLERS, handler)).includes(
+          'access: "read"',
+        )
+      ) {
+        reads.add(handler);
+      }
+    }
+  }
+  for (const path of listFiles(API_HANDLERS)) {
+    const handler = nodePath.relative(API_HANDLERS, path);
+    if (READ_HANDLER_NAME.test(`/${handler}`)) {
+      reads.add(handler);
+    }
+  }
+  return reads;
+};
 
 const IDENTIFIER = /[A-Za-z_$][\w$]*/uy;
 const BRACKETED = /\[\s*"([^"]+)"\s*\]/uy;
@@ -455,12 +636,138 @@ const callChains = (source: string, roots: readonly string[]) => {
 const callsOf = (read: PerUserRead): readonly string[] =>
   "calls" in read ? read.calls : [];
 
+const rootsOf = (calls: readonly string[]) => [
+  ...new Set(calls.map((call) => call.split(/[.[(]/u)[0] ?? call)),
+];
+
+const reaches = (
+  source: string,
+  calls: readonly string[],
+  helpers: ReadonlySet<string>,
+) =>
+  callChains(source, rootsOf(calls)).some((chain) =>
+    calls.some((call) => chain.startsWith(`${call}()`)),
+  ) ||
+  [...helpers].some((name) => new RegExp(`\\b${name}\\b`, "u").test(source));
+
+/** Top-level declarations by name, each with the text up to the next one. */
+const topLevelDeclarations = (source: string) => {
+  const starts = [
+    ...source.matchAll(
+      /^(?:export )?(?:const|(?:async )?function) ([A-Za-z_$][\w$]*)/gmu,
+    ),
+  ];
+  return starts.map((start, index) => ({
+    name: start[1] ?? "",
+    text: source.slice(start.index, starts[index + 1]?.index ?? source.length),
+  }));
+};
+
+/** Top-level helpers in `source` that end up calling one of `calls`. */
+const helpersReaching = (source: string, calls: readonly string[]) => {
+  const declarations = topLevelDeclarations(source);
+  const helpers = new Set<string>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const { name, text } of declarations) {
+      if (!helpers.has(name) && reaches(text, calls, helpers)) {
+        helpers.add(name);
+        grew = true;
+      }
+    }
+  }
+  return helpers;
+};
+
+const OPENERS = "([{";
+const CLOSERS = ")]}";
+
+/** The bracketed span around `index`, bounds inclusive. */
+const enclosingObject = (source: string, index: number) => {
+  let depth = 0;
+  let start = index;
+  for (; start >= 0; start -= 1) {
+    const char = source[start] ?? "";
+    if (CLOSERS.includes(char)) {
+      depth += 1;
+    } else if (OPENERS.includes(char)) {
+      if (depth === 0) {
+        break;
+      }
+      depth -= 1;
+    }
+  }
+  depth = 0;
+  for (let end = start; end < source.length; end += 1) {
+    const char = source[end] ?? "";
+    if (OPENERS.includes(char)) {
+      depth += 1;
+    } else if (CLOSERS.includes(char)) {
+      depth -= 1;
+      if (depth === 0) {
+        return { start, end };
+      }
+    }
+  }
+  return { start, end: source.length - 1 };
+};
+
+/** The expression after `queryKey:` up to the next top-level comma. */
+const keyExpression = (source: string, from: number, end: number) => {
+  let depth = 0;
+  for (let index = from; index < end; index += 1) {
+    const char = source[index] ?? "";
+    if (OPENERS.includes(char)) {
+      depth += 1;
+    } else if (CLOSERS.includes(char)) {
+      depth -= 1;
+    } else if (char === "," && depth === 0) {
+      return source.slice(from, index).trim();
+    }
+  }
+  return source.slice(from, end).trim();
+};
+
+const NAMES_A_USER = /[uU]ser(?:Id\b|\.id\b)/u;
+
+/**
+ * Query keys, in `source`, of queries that reach one of `calls` without
+ * naming a user. A key held in a local `const` is read from its declaration.
+ */
+const unkeyedQueries = (source: string, calls: readonly string[]) => {
+  const helpers = helpersReaching(source, calls);
+  const unkeyed: string[] = [];
+  for (const match of source.matchAll(/(?<![\w$.])queryKey\b(?=\s*[:,}])/gu)) {
+    const object = enclosingObject(source, match.index);
+    // A parameter or type named `queryKey` is not a query's key.
+    if (source[object.start] !== "{") {
+      continue;
+    }
+    const text = source.slice(object.start, object.end + 1);
+    if (!reaches(text, calls, helpers)) {
+      continue;
+    }
+    const after = match.index + match[0].length;
+    const colon = /^\s*:/u.exec(source.slice(after));
+    const expression =
+      colon === null
+        ? "queryKey"
+        : keyExpression(source, after + colon[0].length, object.end);
+    const declared = /^[A-Za-z_$][\w$]*$/u.test(expression)
+      ? new RegExp(`const ${expression} =([^;]*);`, "u").exec(source)?.[1]
+      : undefined;
+    if (!NAMES_A_USER.test(declared ?? expression)) {
+      unkeyed.push(expression.replaceAll(/\s+/gu, " "));
+    }
+  }
+  return unkeyed;
+};
+
 /** Web files calling each listed read, relative to src/. */
 const webCallers = () => {
-  const calls = Object.values(PER_USER_READS).flatMap(callsOf);
-  const roots = [
-    ...new Set(calls.map((call) => call.split(/[.[(]/u)[0] ?? call)),
-  ];
+  const calls = Object.values(ALL_READS).flatMap(callsOf);
+  const roots = rootsOf(calls);
   const callers = new Map<string, string[]>();
   for (const path of listFiles(WEB_SOURCE)) {
     const chains = callChains(readSource(path), roots);
@@ -491,30 +798,44 @@ const containsValue = (value: unknown, wanted: string): boolean => {
   return false;
 };
 
+const refersToCaller = (handler: string) =>
+  REFERS_TO_CALLER.test(readSource(nodePath.join(API_HANDLERS, handler)));
+
 describe("per-user reads", () => {
-  test("every read handler that filters by the caller is classified", () => {
-    const unclassified = listFiles(API_HANDLERS)
-      .map((path) => nodePath.relative(API_HANDLERS, path))
-      .filter((path) => READ_HANDLER_NAME.test(`/${path}`))
-      .filter((path) =>
-        FILTERS_BY_CALLER.test(readSource(nodePath.join(API_HANDLERS, path))),
-      )
-      .filter((path) => !(path in PER_USER_READS));
+  test("every read endpoint that refers to the caller is classified", () => {
+    const unclassified = [...readHandlers()]
+      .filter((handler) => refersToCaller(handler))
+      .filter((handler) => !(handler in PER_USER_READS))
+      .toSorted();
 
     expect(unclassified).toEqual([]);
   });
 
   test("every classified handler still exists", () => {
-    const missing = Object.keys(PER_USER_READS)
-      .filter((path) => !path.startsWith("better-auth:"))
-      .filter((path) => !existsSync(nodePath.join(API_HANDLERS, path)));
+    const missing = Object.keys(PER_USER_READS).filter(
+      (handler) => !existsSync(nodePath.join(API_HANDLERS, handler)),
+    );
 
     expect(missing).toEqual([]);
   });
 
+  test("every auth client list or get call is classified", () => {
+    const found = new Set(
+      listFiles(WEB_SOURCE).flatMap((path) =>
+        callChains(readSource(path), ["authClient"])
+          .map((chain) => chain.split("(")[0] ?? chain)
+          .filter((chain) => /\.(?:list|get)[A-Za-z]*$/u.test(chain)),
+      ),
+    );
+
+    expect([...found].toSorted()).toEqual(
+      Object.keys(AUTH_CLIENT_READS).toSorted(),
+    );
+  });
+
   test("cached per-user reads are called only from the listed modules", () => {
     const callers = webCallers();
-    for (const [handler, read] of Object.entries(PER_USER_READS)) {
+    for (const [handler, read] of Object.entries(ALL_READS)) {
       const calledFrom = [
         ...new Set(callsOf(read).flatMap((call) => callers.get(call) ?? [])),
       ].toSorted();
@@ -524,8 +845,8 @@ describe("per-user reads", () => {
     }
   });
 
-  test("their query keys carry the user id", () => {
-    for (const [handler, read] of Object.entries(PER_USER_READS)) {
+  test("their key factories put the user id in the key", () => {
+    for (const [handler, read] of Object.entries(ALL_READS)) {
       if (read.kind === "keyed") {
         for (const key of read.keys()) {
           expect({ handler, keyed: containsValue(key, USER) }).toEqual({
@@ -534,16 +855,85 @@ describe("per-user reads", () => {
           });
         }
       }
-      if (read.kind === "keyed-in-file") {
-        const sources = read.files.map((file) =>
-          compact(readSource(nodePath.join(WEB_SOURCE, file))),
-        );
-
-        expect({
-          handler,
-          keyed: sources.some((source) => source.includes(read.key)),
-        }).toEqual({ handler, keyed: true });
-      }
     }
+  });
+
+  test("every query reaching them names the user in its key", () => {
+    const unkeyed = Object.entries(ALL_READS).flatMap(([handler, read]) =>
+      read.kind === "keyed"
+        ? read.files
+            .flatMap((file) =>
+              unkeyedQueries(
+                readSource(nodePath.join(WEB_SOURCE, file)),
+                read.calls,
+              ),
+            )
+            .filter((expression) => !(expression in (read.opaqueKeys ?? {})))
+            .map((expression) => `${handler}: ${expression}`)
+        : [],
+    );
+
+    expect(unkeyed).toEqual([]);
+  });
+});
+
+describe("the per-user read scan", () => {
+  test("sees the caller however a handler refers to it", () => {
+    for (const reference of [
+      "eq(timeEntries.userId, currentUser.id)",
+      "eq(entityViews.userId, ctx.user.id)",
+      "where: { userId: user.id }",
+      "listOAuthConnectionsForUser(tx, ctx.user.id)",
+      "currentUserId,",
+    ]) {
+      expect({ reference, seen: REFERS_TO_CALLER.test(reference) }).toEqual({
+        reference,
+        seen: true,
+      });
+    }
+  });
+
+  test("finds the my-day read among the read endpoints", () => {
+    expect(readHandlers().has("time-entries/me/list.ts")).toBe(true);
+    expect(refersToCaller("time-entries/me/list.ts")).toBe(true);
+  });
+
+  test("flags a my-day query keyed by organization and date only", () => {
+    const source = `
+export const myTimeEntriesInfiniteOptions = (organizationId: string, date: string) =>
+  infiniteQueryOptions({
+    queryKey: myTimeEntriesKeys.day(organizationId, date),
+    queryFn: async ({ signal }) =>
+      unwrapEden(await myTimeEntriesApi.get({ query: { date }, fetch: { signal } })),
+  });
+`;
+
+    expect(unkeyedQueries(source, ["myTimeEntriesApi.get"])).toEqual([
+      "myTimeEntriesKeys.day(organizationId, date)",
+    ]);
+    expect(
+      unkeyedQueries(
+        source.replace(
+          "(organizationId, date)",
+          "(organizationId, userId, date)",
+        ),
+        ["myTimeEntriesApi.get"],
+      ),
+    ).toEqual([]);
+  });
+
+  test("follows a local helper and a key held in a const", () => {
+    const source = `
+const fetchPage = async () => await api.notifications.get({});
+
+export const useNotifications = (organizationId: string) => {
+  const queryKey = ["notifications", organizationId];
+  return useQuery({ queryKey, queryFn: fetchPage });
+};
+`;
+
+    expect(unkeyedQueries(source, ["api.notifications.get"])).toEqual([
+      "queryKey",
+    ]);
   });
 });
