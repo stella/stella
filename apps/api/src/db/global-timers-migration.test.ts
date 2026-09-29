@@ -1,5 +1,16 @@
 import { PGlite } from "@electric-sql/pglite";
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
+
+const expectRejected = async (operation: Promise<unknown>, message: RegExp) => {
+  const outcome = await Result.tryPromise(() => operation);
+  expect(outcome.isErr()).toBe(true);
+  if (outcome.isErr()) {
+    expect(outcome.error.cause).toMatchObject({
+      message: expect.stringMatching(message),
+    });
+  }
+};
 
 const createDatabase = async () => {
   const db = await PGlite.create();
@@ -76,29 +87,34 @@ test("migration preserves active clocks and original drafts", async () => {
 
 test("database permits paused timers and one running timer per organization and owner", async () => {
   await using db = await createDatabase();
-  await expect(insertTimer(db, "org-a", "user-a")).rejects.toThrow(
+  await expectRejected(
+    insertTimer(db, "org-a", "user-a"),
     /time_timers_one_running_owner_idx/u,
   );
   await insertTimer(db, "org-a", "user-a", "paused");
   await insertTimer(db, "org-a", "user-a", "paused");
   await insertTimer(db, "org-a", "user-b");
   await insertTimer(db, "org-b", "user-a");
-  await expect(
+  await expectRejected(
     db.exec(
       "UPDATE time_timers SET state = 'running', last_resumed_at = now() WHERE state = 'paused'",
     ),
-  ).rejects.toThrow(/time_timers_one_running_owner_idx/u);
-  await expect(
+    /time_timers_one_running_owner_idx/u,
+  );
+  await expectRejected(
     db.exec("UPDATE time_timers SET state = 'unknown', last_resumed_at = NULL"),
-  ).rejects.toThrow(/time_timers_state_check/u);
-  await expect(
+    /time_timers_state_check/u,
+  );
+  await expectRejected(
     db.exec("UPDATE time_timers SET accumulated_seconds = -1"),
-  ).rejects.toThrow(/time_timers_accumulated_seconds_check/u);
-  await expect(
+    /time_timers_accumulated_seconds_check/u,
+  );
+  await expectRejected(
     db.exec(
       "UPDATE time_timers SET last_resumed_at = NULL WHERE state = 'running'",
     ),
-  ).rejects.toThrow(/time_timers_resume_state_check/u);
+    /time_timers_resume_state_check/u,
+  );
 });
 
 test("owner-only timer and receipt policies protect reads and mutations", async () => {
@@ -114,12 +130,14 @@ test("owner-only timer and receipt policies protect reads and mutations", async 
     expect(
       (await db.query(`SELECT user_id, organization_id FROM ${table}`)).rows,
     ).toEqual([{ user_id: "user-a", organization_id: "org-a" }]);
-    await expect(
+    await expectRejected(
       db.exec(`UPDATE ${table} SET user_id = 'user-b'`),
-    ).rejects.toThrow(/row-level security/u);
-    await expect(
+      /row-level security/u,
+    );
+    await expectRejected(
       db.exec(`UPDATE ${table} SET organization_id = 'org-b'`),
-    ).rejects.toThrow(/row-level security/u);
+      /row-level security/u,
+    );
     expect(
       (
         await db.query(
@@ -128,17 +146,20 @@ test("owner-only timer and receipt policies protect reads and mutations", async 
       ).rows,
     ).toEqual([]);
   }
-  await expect(insertTimer(db, "org-a", "user-b", "paused")).rejects.toThrow(
+  await expectRejected(
+    insertTimer(db, "org-a", "user-b", "paused"),
     /row-level security/u,
   );
-  await expect(insertTimer(db, "org-b", "user-a", "paused")).rejects.toThrow(
+  await expectRejected(
+    insertTimer(db, "org-b", "user-a", "paused"),
     /row-level security/u,
   );
-  await expect(
+  await expectRejected(
     db.exec(
       `INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id) VALUES (gen_random_uuid(), 'org-a', 'user-b')`,
     ),
-  ).rejects.toThrow(/row-level security/u);
+    /row-level security/u,
+  );
   await db.exec("RESET ROLE");
   expect(
     (
@@ -158,10 +179,11 @@ test("receipts survive timer and entry deletion and reject duplicate identities"
   expect(
     (await db.query("SELECT time_entry_id FROM time_timer_confirmations")).rows,
   ).toEqual([{ time_entry_id: null }]);
-  await expect(
+  await expectRejected(
     db.exec(`INSERT INTO time_timer_confirmations (timer_id, organization_id, user_id)
     VALUES ('00000000-0000-4000-8000-000000000002', 'org-a', 'user-a')`),
-  ).rejects.toThrow(/time_timer_confirmations_pkey/u);
+    /time_timer_confirmations_pkey/u,
+  );
 });
 
 test("removed membership denies timer reads, start, resume and discard", async () => {
@@ -174,7 +196,8 @@ test("removed membership denies timer reads, start, resume and discard", async (
     SET app.user_id = 'user-a';
   `);
   expect((await db.query("SELECT id FROM time_timers")).rows).toEqual([]);
-  await expect(insertTimer(db, "org-a", "user-a")).rejects.toThrow(
+  await expectRejected(
+    insertTimer(db, "org-a", "user-a"),
     /row-level security/u,
   );
   expect(
