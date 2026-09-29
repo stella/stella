@@ -219,16 +219,25 @@ const readSplitSuccessors = async (id: SafeId<"timeEntry">) =>
 
 // ── Handler contexts ───────────────────────────────────
 
-const contextFor = (name: ActorName, recordAuditEvent = noopAuditRecorder) => {
+type ActorContextOptions = {
+  recordAuditEvent?: AuditRecorder;
+  workspaceIds?: SafeId<"workspace">[];
+};
+const contextFor = (
+  name: ActorName,
+  {
+    recordAuditEvent = noopAuditRecorder,
+    workspaceIds = [workspaceId],
+  }: ActorContextOptions = {},
+) => {
   const actor = actors[name];
-  const workspaceIds = [workspaceId];
   return {
     createAuditRecorder: () => recordAuditEvent,
     getActiveWorkspaceIds: async () => workspaceIds,
     getAccessibleWorkspaces: async () =>
       workspaceIds.map((id) => ({ id, status: "active" as const })),
     getWorkspaceAccess: async (targetWorkspaceId: SafeId<"workspace">) =>
-      targetWorkspaceId === workspaceId
+      workspaceIds.includes(targetWorkspaceId)
         ? { id: targetWorkspaceId, status: "active" as const }
         : null,
     memberRole: { role: actor.role },
@@ -543,12 +552,12 @@ const stopAs = async ({
 }) =>
   await adminStopTimer.handler(
     asTestRaw<AdminStopCtx>({
-      ...contextFor(
-        actor,
-        actor === "admin" || actor === "owner"
-          ? adminRecorder(actor)
-          : noopAuditRecorder,
-      ),
+      ...contextFor(actor, {
+        recordAuditEvent:
+          actor === "admin" || actor === "owner"
+            ? adminRecorder(actor)
+            : noopAuditRecorder,
+      }),
       params: { id },
       body: { narrative },
     }),
@@ -898,99 +907,111 @@ describe("admin ending a member's timer", () => {
 
   test("admin listing hides an unstaffed clientless matter identifier", async () => {
     const hiddenMatterId = createSafeId<"workspace">();
-    await testDb.insert(workspaces).values({
-      id: hiddenMatterId,
-      organizationId,
-      name: "Private matter",
-      reference: `PRIVATE-${hiddenMatterId}`,
-      status: "active",
-    });
-    await testDb.insert(workspaceMembers).values({
-      id: createSafeId<"workspaceMember">(),
-      workspaceId: hiddenMatterId,
-      userId: actors.timekeeper.userId,
-    });
-    const id = await seedTimer({ matterId: hiddenMatterId });
-    const result = await adminListTimers.handler(
-      asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
-        ...contextFor("admin"),
-        query: {},
-      }),
-    );
-    if (!("items" in result)) {
-      throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
+    try {
+      await testDb.insert(workspaces).values({
+        id: hiddenMatterId,
+        organizationId,
+        name: "Private matter",
+        reference: `PRIVATE-${hiddenMatterId}`,
+        status: "active",
+      });
+      await testDb.insert(workspaceMembers).values({
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: hiddenMatterId,
+        userId: actors.timekeeper.userId,
+      });
+      const id = await seedTimer({ matterId: hiddenMatterId });
+      const result = await adminListTimers.handler(
+        asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
+          ...contextFor("admin"),
+          query: {},
+        }),
+      );
+      if (!("items" in result)) {
+        throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
+      }
+      expect(result.items.find((item) => item.id === id)).toMatchObject({
+        id,
+        ownerId: actors.timekeeper.userId,
+        matterId: null,
+      });
+    } finally {
+      await testDb
+        .delete(timeTimers)
+        .where(eq(timeTimers.workspaceId, hiddenMatterId));
+      await testDb.delete(workspaces).where(eq(workspaces.id, hiddenMatterId));
     }
-    expect(result.items.find((item) => item.id === id)).toMatchObject({
-      id,
-      ownerId: actors.timekeeper.userId,
-      matterId: null,
-    });
-    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
-    await testDb.delete(workspaces).where(eq(workspaces.id, hiddenMatterId));
   });
 
   test("admin listing exposes a client matter through firm-admin access without staffing", async () => {
     const clientId = createSafeId<"contact">();
     const clientMatterId = createSafeId<"workspace">();
-    await testDb.insert(contacts).values({
-      id: clientId,
-      organizationId,
-      type: "organization",
-      displayName: "Client",
-      organizationName: "Client",
-    });
-    await testDb.insert(workspaces).values({
-      id: clientMatterId,
-      organizationId,
-      clientId,
-      name: "Client matter",
-      reference: `CLIENT-${clientMatterId}`,
-      status: "active",
-    });
-    await testDb.insert(workspaceMembers).values({
-      id: createSafeId<"workspaceMember">(),
-      workspaceId: clientMatterId,
-      userId: actors.timekeeper.userId,
-    });
-    const id = await seedTimer({ matterId: clientMatterId });
-    const result = await adminListTimers.handler(
-      asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
-        ...contextFor("admin"),
-        query: {},
-      }),
-    );
-    if (!("items" in result)) {
-      throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
+    try {
+      await testDb.insert(contacts).values({
+        id: clientId,
+        organizationId,
+        type: "organization",
+        displayName: "Client",
+        organizationName: "Client",
+      });
+      await testDb.insert(workspaces).values({
+        id: clientMatterId,
+        organizationId,
+        clientId,
+        name: "Client matter",
+        reference: `CLIENT-${clientMatterId}`,
+        status: "active",
+      });
+      await testDb.insert(workspaceMembers).values({
+        id: createSafeId<"workspaceMember">(),
+        workspaceId: clientMatterId,
+        userId: actors.timekeeper.userId,
+      });
+      const id = await seedTimer({ matterId: clientMatterId });
+      const result = await adminListTimers.handler(
+        asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
+          ...contextFor("admin", {
+            workspaceIds: [workspaceId, clientMatterId],
+          }),
+          query: {},
+        }),
+      );
+      if (!("items" in result)) {
+        throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
+      }
+      expect(result.items.find((item) => item.id === id)).toMatchObject({
+        id,
+        ownerId: actors.timekeeper.userId,
+        matterId: clientMatterId,
+      });
+    } finally {
+      await testDb
+        .delete(timeTimers)
+        .where(eq(timeTimers.workspaceId, clientMatterId));
+      await testDb.delete(workspaces).where(eq(workspaces.id, clientMatterId));
+      await testDb.delete(contacts).where(eq(contacts.id, clientId));
     }
-    expect(result.items.find((item) => item.id === id)).toMatchObject({
-      id,
-      ownerId: actors.timekeeper.userId,
-      matterId: clientMatterId,
-    });
-    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
-    await testDb.delete(workspaces).where(eq(workspaces.id, clientMatterId));
-    await testDb.delete(contacts).where(eq(contacts.id, clientId));
   });
 
   test("admin end uses the owner's timezone across the monthly lock boundary", async () => {
-    setSystemTime(new Date("2026-10-01T01:00:00Z"));
-    await testDb
-      .update(user)
-      .set({ timezoneId: "Pacific/Honolulu" })
-      .where(eq(user.id, actors.timekeeper.userId));
-    const id = await seedTimer();
-    await testDb
-      .update(timeTimers)
-      .set({
-        startedAt: new Date("2026-10-01T00:30:00Z"),
-        lastResumedAt: new Date("2026-10-01T00:30:00Z"),
-      })
-      .where(eq(timeTimers.id, id));
-    await testDb
-      .update(organizationSettings)
-      .set({ timeLockedThroughMonth: "2026-09-30" })
-      .where(eq(organizationSettings.organizationId, organizationId));
     try {
+      setSystemTime(new Date("2026-10-01T01:00:00Z"));
+      await testDb
+        .update(user)
+        .set({ timezoneId: "Pacific/Honolulu" })
+        .where(eq(user.id, actors.timekeeper.userId));
+      const id = await seedTimer();
+      await testDb
+        .update(timeTimers)
+        .set({
+          startedAt: new Date("2026-10-01T00:30:00Z"),
+          lastResumedAt: new Date("2026-10-01T00:30:00Z"),
+        })
+        .where(eq(timeTimers.id, id));
+      await testDb
+        .update(organizationSettings)
+        .set({ timeLockedThroughMonth: "2026-09-30" })
+        .where(eq(organizationSettings.organizationId, organizationId));
       const before = await readTimer(id);
       const refused = await stopAs({ actor: "admin", id });
       expect(refused).toMatchObject({
@@ -1022,27 +1043,34 @@ describe("admin ending a member's timer", () => {
         .update(user)
         .set({ timezoneId: "UTC" })
         .where(eq(user.id, actors.timekeeper.userId));
-      await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+      await testDb
+        .delete(timeTimers)
+        .where(
+          and(
+            eq(timeTimers.organizationId, organizationId),
+            eq(timeTimers.userId, actors.timekeeper.userId),
+          ),
+        );
       setSystemTime();
     }
   });
 
   test("admin end rolls back the draft, receipt and audit if the timer cannot be deleted", async () => {
-    const id = await seedTimer({
-      description: "Test refuse admin timer deletion",
-    });
-    const before = await readTimer(id);
-    const entriesBefore = await testDb
-      .select()
-      .from(timeEntries)
-      .where(eq(timeEntries.organizationId, organizationId));
-    await testDb.execute(
-      sql`CREATE FUNCTION test_refuse_admin_timer_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$`,
-    );
-    await testDb.execute(
-      sql`CREATE TRIGGER test_refuse_admin_timer_delete BEFORE DELETE ON time_timers FOR EACH ROW WHEN (OLD.description = 'Test refuse admin timer deletion') EXECUTE FUNCTION test_refuse_admin_timer_delete()`,
-    );
     try {
+      const id = await seedTimer({
+        description: "Test refuse admin timer deletion",
+      });
+      const before = await readTimer(id);
+      const entriesBefore = await testDb
+        .select()
+        .from(timeEntries)
+        .where(eq(timeEntries.organizationId, organizationId));
+      await testDb.execute(
+        sql`CREATE FUNCTION test_refuse_admin_timer_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$`,
+      );
+      await testDb.execute(
+        sql`CREATE TRIGGER test_refuse_admin_timer_delete BEFORE DELETE ON time_timers FOR EACH ROW WHEN (OLD.description = 'Test refuse admin timer deletion') EXECUTE FUNCTION test_refuse_admin_timer_delete()`,
+      );
       expect(await stopAs({ actor: "admin", id })).toMatchObject({ code: 409 });
       expect(await readTimer(id)).toEqual(before);
       expect(
@@ -1065,10 +1093,19 @@ describe("admin ending a member's timer", () => {
       ).toHaveLength(0);
     } finally {
       await testDb.execute(
-        sql`DROP TRIGGER test_refuse_admin_timer_delete ON time_timers`,
+        sql`DROP TRIGGER IF EXISTS test_refuse_admin_timer_delete ON time_timers`,
       );
-      await testDb.execute(sql`DROP FUNCTION test_refuse_admin_timer_delete()`);
-      await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+      await testDb.execute(
+        sql`DROP FUNCTION IF EXISTS test_refuse_admin_timer_delete()`,
+      );
+      await testDb
+        .delete(timeTimers)
+        .where(
+          and(
+            eq(timeTimers.organizationId, organizationId),
+            eq(timeTimers.description, "Test refuse admin timer deletion"),
+          ),
+        );
     }
   });
 
