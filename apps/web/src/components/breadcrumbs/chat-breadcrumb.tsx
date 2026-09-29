@@ -41,8 +41,11 @@ export const ChatBreadcrumb = ({
   const activeOrganizationId = protectedRoute.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = protectedRoute.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
   const { data: groupedThread } = useInfiniteQuery({
-    ...groupedChatThreadsOptions({ activeOrganizationId }),
+    ...groupedChatThreadsOptions({ activeOrganizationId, userId }),
     select: (data) => selectThreadTitleSummary(data.pages, threadId),
   });
 

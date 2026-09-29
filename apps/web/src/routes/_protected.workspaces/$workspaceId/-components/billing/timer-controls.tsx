@@ -9,6 +9,7 @@ import { PlayIcon, SquareIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { activeTimerOptions } from "@/lib/workspaces/queries/time-entries";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import {
@@ -34,7 +35,10 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
   const [workItemId, setWorkItemId] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
-  const { data: activeTimer } = useQuery(activeTimerOptions(workspaceId));
+  const userId = useAuthenticatedUser().id;
+  const { data: activeTimer } = useQuery(
+    activeTimerOptions(workspaceId, userId),
+  );
 
   const startTimer = useStartTimer();
   const stopTimer = useStopTimer();

@@ -1391,7 +1391,7 @@ describe("MCP anonymization canary corpus", () => {
   );
 
   invoicesCanary(
-    "list_invoices detail anonymizes authored text in nested entries and expenses",
+    "list_invoices detail anonymizes authored text in buyer details, lines, entries, and expenses",
     async (tool) => {
       const referenceSeed = mkSeed(tool, 1);
       const notesSeed = mkSeed(tool, 2);
@@ -1401,6 +1401,18 @@ describe("MCP anonymization canary corpus", () => {
       const exDescriptionSeed = mkSeed(tool, 6);
       const exInvoiceDescriptionSeed = mkSeed(tool, 7);
       const exEntityNameSeed = mkSeed(tool, 8);
+      const lineDescriptionSeed = mkSeed(tool, 9);
+      const lineUnitSeed = mkSeed(tool, 10);
+      const buyerSeeds = {
+        buyerName: mkSeed(tool, 11),
+        buyerRegistrationId: mkSeed(tool, 12),
+        buyerVatId: mkSeed(tool, 13),
+        buyerAddressLine1: mkSeed(tool, 14),
+        buyerAddressLine2: mkSeed(tool, 15),
+        buyerCity: mkSeed(tool, 16),
+        buyerPostalCode: mkSeed(tool, 17),
+        buyerCountry: mkSeed(tool, 18),
+      };
       const tx = {
         query: {
           invoices: {
@@ -1414,7 +1426,12 @@ describe("MCP anonymization canary corpus", () => {
               dueDate: "2026-02-01",
               currency: "EUR",
               totalAmount: 2000,
+              netAmount: 100,
+              vatAmount: 21,
               notes: notesSeed,
+              taxableSupplyDate: "2026-01-01",
+              sellerProfileId: null,
+              ...buyerSeeds,
               paidAt: null,
               createdAt: new Date("2026-01-01"),
               updatedAt: new Date("2026-01-01"),
@@ -1450,6 +1467,25 @@ describe("MCP anonymization canary corpus", () => {
                   matter: { id: "entity_2", name: exEntityNameSeed },
                 },
               ],
+              lines: [
+                {
+                  id: "line_1",
+                  position: 0,
+                  description: lineDescriptionSeed,
+                  quantity: "1.0000",
+                  unit: lineUnitSeed,
+                  unitPrice: 100,
+                  vatRateBps: 2100,
+                  vatTreatment: "domestic_vat",
+                  netAmount: 100,
+                  vatAmount: 21,
+                  grossAmount: 121,
+                  source: "manual",
+                  timeEntryId: null,
+                  expenseId: null,
+                  releasedAt: null,
+                },
+              ],
             }),
           },
         },
@@ -1471,6 +1507,9 @@ describe("MCP anonymization canary corpus", () => {
         exDescriptionSeed,
         exInvoiceDescriptionSeed,
         exEntityNameSeed,
+        lineDescriptionSeed,
+        lineUnitSeed,
+        ...Object.values(buyerSeeds),
       ];
       expectNoSeedLeak(result, seeds);
       expectSeedsQueuedForAnonymization(seeds);

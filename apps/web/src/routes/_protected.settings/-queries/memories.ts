@@ -17,6 +17,7 @@ type MemoriesPageKey = {
   activeOrganizationId: string;
   scope?: MemoryScope | undefined;
   status?: MemoryStatus | undefined;
+  userId: string;
   workspaceId?: string | undefined;
 };
 
@@ -25,6 +26,7 @@ export const memoriesKeys = {
     ["memories", activeOrganizationId] as const,
   list: (key: MemoriesPageKey) => [
     ...memoriesKeys.all(key.activeOrganizationId),
+    key.userId,
     "list",
     key.scope ?? "any-scope",
     key.status ?? "any-status",
@@ -38,6 +40,7 @@ export const memoriesOptions = ({
   activeOrganizationId,
   scope,
   status,
+  userId,
   workspaceId,
 }: MemoriesOptionsInput) =>
   infiniteQueryOptions({
@@ -45,6 +48,7 @@ export const memoriesOptions = ({
       activeOrganizationId,
       scope,
       status,
+      userId,
       workspaceId,
     }),
     queryFn: async ({ pageParam, signal }) =>

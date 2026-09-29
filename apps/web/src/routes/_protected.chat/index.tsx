@@ -119,12 +119,15 @@ export const Route = createFileRoute("/_protected/chat/")({
         ),
         prefetchNonCriticalInfiniteQuery(
           context.queryClient,
-          groupedChatThreadsOptions({ activeOrganizationId }),
+          groupedChatThreadsOptions({
+            activeOrganizationId,
+            userId: context.user.id,
+          }),
           onPrefetchError,
         ),
         prefetchNonCriticalInfiniteQuery(
           context.queryClient,
-          skillsOptions(activeOrganizationId),
+          skillsOptions(activeOrganizationId, context.user.id),
           onPrefetchError,
         ),
       ]),
@@ -165,12 +168,15 @@ function ChatIndex() {
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
   const { data: workspacesData } = useQuery(
     workspacesNavigationOptions(activeOrganizationId),
   );
   const workspaces = workspacesData?.workspaces;
   const { data: groupedThreadPages } = useInfiniteQuery(
-    groupedChatThreadsOptions({ activeOrganizationId }),
+    groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
   const groupedThreads = useMemo(
     () => mergeGroupedChatThreadPages(groupedThreadPages?.pages),

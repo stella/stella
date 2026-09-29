@@ -193,6 +193,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   folder: { type: "alias", resourceType: RESOURCE_TYPE.ENTITY },
   infoSoudTrackedCase: { type: "non_resource", reason: "workflow" },
   invoice: { type: "resource", resourceType: RESOURCE_TYPE.INVOICE },
+  invoiceLine: { type: "non_resource", reason: "subresource" },
   justification: { type: "non_resource", reason: "subresource" },
   legislationDocument: {
     type: "resource",

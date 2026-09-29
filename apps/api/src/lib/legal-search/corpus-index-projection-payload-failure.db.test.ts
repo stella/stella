@@ -43,6 +43,7 @@ import {
   reserveCorpusProjectionIntentsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { CORPUS_TRANSFER_MAX_BYTES } from "@/api/lib/legal-search/corpus-storage";
+import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -139,6 +140,7 @@ beforeAll(
             versionValidTo: row.versionValidTo,
             eli: row.eli,
             sourceDescriptor: null,
+            ...EFFECTIVE_CONSOLIDATION,
           }),
         );
         if (descriptor.action !== "upsert") {
@@ -229,6 +231,7 @@ test("a planner-rejected cap-plus-one revision is persisted as blocked", async (
       versionValidTo: row.versionValidTo,
       eli: row.eli,
       sourceDescriptor: null,
+      ...EFFECTIVE_CONSOLIDATION,
     }),
   );
   if (descriptor.action !== "upsert") {

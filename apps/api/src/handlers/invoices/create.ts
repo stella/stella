@@ -2,8 +2,6 @@ import { Result } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
-import { prorateHourlyCents } from "@stll/money";
-
 import { abortableTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -11,12 +9,18 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import {
+  ATTACHED_ENTRY_LINE_VAT,
+  insertInvoiceLines,
+  recalculateInvoiceTotals,
+  timeEntryLineDraft,
+} from "@/api/handlers/invoices/invoice-lines";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 import {
@@ -37,6 +41,21 @@ const createInvoiceBodySchema = t.Object({
     maxItems: 500,
   }),
 });
+
+/** Each attached entry moves from approved to billed on this invoice. */
+const billedEntryEvents = (
+  entries: readonly { id: SafeId<"timeEntry"> }[],
+  invoiceId: SafeId<"invoice">,
+) =>
+  entries.map((entry) => ({
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+    resourceId: entry.id,
+    changes: {
+      status: { old: BILLING_STATUS.APPROVED, new: BILLING_STATUS.BILLED },
+      invoiceId: { old: null, new: invoiceId },
+    },
+  }));
 
 const createInvoice = createSafeHandler(
   {
@@ -72,8 +91,6 @@ const createInvoice = createSafeHandler(
         tx
           .select({
             id: timeEntries.id,
-            billedMinutes: timeEntries.billedMinutes,
-            rateAtEntry: timeEntries.rateAtEntry,
             status: timeEntries.status,
             billable: timeEntries.billable,
             currency: timeEntries.currency,
@@ -127,14 +144,6 @@ const createInvoice = createSafeHandler(
       );
     }
 
-    let totalAmount = 0;
-    for (const entry of entries) {
-      totalAmount += prorateHourlyCents({
-        billedMinutes: entry.billedMinutes,
-        hourlyRateCents: entry.rateAtEntry,
-      });
-    }
-
     const now = new Date();
     const expectedCount = entries.length;
 
@@ -149,7 +158,6 @@ const createInvoice = createSafeHandler(
           dueDate: body.dueDate ?? null,
           reference: body.reference ?? null,
           currency: body.currency,
-          totalAmount: cents(totalAmount),
           notes: body.notes ?? null,
           status: INVOICE_STATUS.DRAFT,
         })
@@ -185,13 +193,20 @@ const createInvoice = createSafeHandler(
             eq(timeEntries.currency, body.currency),
           ),
         )
-        .returning({ id: timeEntries.id });
+        .returning({
+          id: timeEntries.id,
+          billedMinutes: timeEntries.billedMinutes,
+          rateAtEntry: timeEntries.rateAtEntry,
+          narrative: timeEntries.narrative,
+          invoiceNarrative: timeEntries.invoiceNarrative,
+        });
 
       const linkedCount = updated.length;
       if (linkedCount !== expectedCount) {
         throw new InvoiceEntriesModifiedConcurrentlyError();
       }
 
+      // The lines and totals written below record their own invoice events.
       await recordAuditEvent(tx, [
         {
           action: AUDIT_ACTION.CREATE,
@@ -204,26 +219,31 @@ const createInvoice = createSafeHandler(
                 invoiceNumber: created.invoiceNumber,
                 invoiceDate: body.invoiceDate,
                 currency: body.currency,
-                totalAmount,
                 entryCount: linkedCount,
                 status: INVOICE_STATUS.DRAFT,
               },
             },
           },
         },
-        ...updated.map((entry) => ({
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-          resourceId: entry.id,
-          changes: {
-            status: {
-              old: BILLING_STATUS.APPROVED,
-              new: BILLING_STATUS.BILLED,
-            },
-            invoiceId: { old: null, new: created.id },
-          },
-        })),
+        ...billedEntryEvents(updated, created.id),
       ]);
+
+      const scope = { invoiceId: created.id, workspaceId };
+      await insertInvoiceLines(
+        tx,
+        { ...scope, organizationId: session.activeOrganizationId },
+        updated.map((entry) =>
+          timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
+        ),
+        { recordAuditEvent },
+      );
+      const totals = await recalculateInvoiceTotals(
+        tx,
+        scope,
+        now,
+        recordAuditEvent,
+      );
+      const totalAmount = totals.grossAmountMinor;
 
       return {
         id: created.id,

@@ -210,7 +210,10 @@ export const Route = createFileRoute("/_protected")({
       detached(
         prefetchNonCriticalInfiniteQuery(
           context.queryClient,
-          notificationsOptions({ organizationId: activeOrganizationId }),
+          notificationsOptions({
+            organizationId: activeOrganizationId,
+            userId: authContext.session.userId,
+          }),
           onPrefetchError,
         ),
         "protected-layout.notifications-prefetch",

@@ -40,7 +40,7 @@ import { stringCursorSeed } from "@/lib/infinite-query";
 
 const PAGE_SIZE = 25;
 const NAME_MAX_LENGTH = 128;
-const savedTimeNarrativesKeys = {
+export const savedTimeNarrativesKeys = {
   list: (organizationId: string, userId: string) => [
     "saved-time-narratives",
     organizationId,

@@ -15,7 +15,7 @@ import { skillEditAccess } from "./skill-history.logic";
 export const useSkillEditAccess = (skillId: string): SkillEditAccess => {
   const user = useAuthenticatedUser();
   const detail = useQuery(
-    skillDetailOptions(user.activeOrganizationId, skillId),
+    skillDetailOptions(user.activeOrganizationId, user.id, skillId),
   );
   const role = useQuery(roleOptions);
 

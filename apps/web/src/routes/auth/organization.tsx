@@ -109,7 +109,7 @@ export const Route = createFileRoute("/auth/organization")({
       throw redirect({ to: search.redirectTo ?? "/", replace: true });
     }
 
-    return { isOauthPostLoginFromSearch };
+    return { isOauthPostLoginFromSearch, userId: context.session.userId };
   },
   component: Organization,
 });
@@ -155,7 +155,10 @@ const OrganizationSkeleton = () => (
 );
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
-  const { data: organizations, isPending } = useQuery(organizationListOptions);
+  const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
+  const { data: organizations, isPending } = useQuery(
+    organizationListOptions(userId),
+  );
   const redirectTo = Route.useSearch({ select: (search) => search.redirectTo });
   const hasOrganizations = (organizations?.length ?? 0) > 0;
   const isOauthPostLoginFromSearch = Route.useRouteContext({
