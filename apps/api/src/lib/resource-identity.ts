@@ -266,6 +266,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     type: "resource",
     resourceType: RESOURCE_TYPE.SELLER_PROFILE,
   },
+  vatRate: { type: "resource", resourceType: RESOURCE_TYPE.VAT_RATE },
   numberSeries: {
     type: "resource",
     resourceType: RESOURCE_TYPE.NUMBER_SERIES,

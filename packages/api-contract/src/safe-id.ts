@@ -139,6 +139,7 @@ export type SafeIdType =
   | "rateTable"
   | "sanctionsEdition"
   | "savedSearch"
+  | "vatRate"
   | "sellerProfile"
   | "numberSeries"
   | "reportExport"

@@ -39,6 +39,7 @@ import {
   savedSearches,
   sellerProfiles,
   signals,
+  vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
@@ -103,6 +104,8 @@ import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
+import listVatRates from "@/api/handlers/vat-rates/list";
+import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -187,6 +190,7 @@ const savedTimeNarrativeB = toSafeId<"savedTimeNarrative">(
 const numberSeriesB = toSafeId<"numberSeries">(
   "22222222-2222-4222-8222-222222222259",
 );
+const vatRateB = toSafeId<"vatRate">("22222222-2222-4222-8222-222222222260");
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
 );
@@ -786,6 +790,30 @@ const isolationCases: IsolationCase[] = [
       await runHandler(listNumberSeries, workspaceB, { query: {} }),
     expectDenied: (result) => expectPageExcludesId(result, numberSeriesB),
     expectPositive: (result) => expectPageContainsId(result, numberSeriesB),
+  },
+  {
+    name: "VAT rate list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listVatRates, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listVatRates, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, vatRateB),
+    expectPositive: (result) => expectPageContainsId(result, vatRateB),
+  },
+  {
+    name: "VAT rate update",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(updateVatRate, workspaceA, {
+        params: { vatRateId: vatRateB },
+        body: { name: "Updated VAT rate B" },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(updateVatRate, workspaceB, {
+        params: { vatRateId: vatRateB },
+        body: { name: "Updated VAT rate B" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
   },
   {
     name: "time entry read by id",
@@ -1584,6 +1612,14 @@ beforeAll(async () => {
     pattern: "INV-{YYYY}-{SEQ}",
     padding: 5,
     isDefault: true,
+  });
+  await testDb.insert(vatRates).values({
+    id: vatRateB,
+    organizationId: ids.orgB,
+    code: "standard",
+    name: "VAT rate B",
+    rateBps: 2100,
+    validFrom: "2026-01-01",
   });
   await testDb.insert(entityVersions).values({
     id: compareTargetVersionB,
