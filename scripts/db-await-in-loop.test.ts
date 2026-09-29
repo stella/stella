@@ -62,6 +62,7 @@ const SIZE = 8;
 const SIZES = { batch: 4 } as const;
 const tuple = [1, 2, 3] as const;
 const registry = { first: 1, second: 2 } as const;
+const readonlyRegistry: { readonly first: number; readonly second: number } = { first: 1, second: 2 };
 const alias = batches;
 export const accepted = async () => {
   for (const group of chunked(ids, SIZE)) { await rootDb.select().from(items); }
@@ -77,7 +78,7 @@ export const accepted = async () => {
   for (const kind of tuple.values()) { await rootDb.select().from(items); }
   for (const kind of [1, 2, 3]) { await rootDb.select().from(items); }
   for (const kind of Object.values(registry)) { await rootDb.select().from(items); }
-  for (const kind of Object.keys(registry)) { await rootDb.select().from(items); }
+  for (const kind of Object.keys(readonlyRegistry)) { await rootDb.select().from(items); }
   for (const kind of Object.entries(registry)) { await rootDb.select().from(items); }
   for (let i = 0; i < 16; i++) { await rootDb.select().from(items); }
   for (let i = 0; i <= 3; i += 1) { await rootDb.select().from(items); }
@@ -92,6 +93,10 @@ export async function* yieldedFanOut(tx: Transaction) {
   }
 }
 export const rejected = async (size: number, narrowSize: 8, cursor: string | null, tx: Transaction) => {
+  const mutableView: { first: number; second: number } = registry;
+  for (const kind of Object.values(mutableView)) {
+    await rootDb.select().from(items); // expect: query
+  }
   for (const id of ids) {
     await rootDb.select().from(items); // expect: query
   }
@@ -163,6 +168,37 @@ export const rejected = async (size: number, narrowSize: 8, cursor: string | nul
     await rootDb.select().from(items); // expect: query
   }
   for (const kind of [1, ...ids]) {
+    await rootDb.select().from(items); // expect: query
+  }
+  let mutableTuple: [number, number] = [1, 2];
+  for (const kind of mutableTuple) {
+    mutableTuple.push(kind);
+    await rootDb.select().from(items); // expect: query
+  }
+  const mutableConstTuple: [number, number] = [1, 2];
+  for (const kind of mutableConstTuple) {
+    mutableConstTuple.push(kind);
+    await rootDb.select().from(items); // expect: query
+  }
+  let mutableTupleWithoutPush: [number, number] = [1, 2];
+  for (const kind of mutableTupleWithoutPush) {
+    await rootDb.select().from(items); // expect: query
+  }
+  const mutableRegistry: { first: number; second: number } = { first: 1, second: 2 };
+  for (const kind of Object.values(mutableRegistry)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of Object.keys(mutableRegistry)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of Object.entries(mutableRegistry)) {
+    await rootDb.select().from(items); // expect: query
+  }
+  for (const kind of Object.values({ first: 1, second: 2 })) {
+    await rootDb.select().from(items); // expect: query
+  }
+  let readonlyRegistry = { first: 1, second: 2 } as const;
+  for (const kind of Object.values(readonlyRegistry)) {
     await rootDb.select().from(items); // expect: query
   }
   while (cursor) {

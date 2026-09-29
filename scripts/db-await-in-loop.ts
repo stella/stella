@@ -892,6 +892,61 @@ export const scanDbAwaitInLoop = ({
     );
   };
 
+  const isReadonlyObject = (
+    expression: ts.Expression,
+    seen = new Set<ts.Symbol>(),
+  ): boolean => {
+    if (!isConstObject(expression)) {
+      return false;
+    }
+    const properties = checker.getTypeAtLocation(expression).getProperties();
+    if (
+      properties.length > 0 &&
+      properties.every((property) =>
+        (property.declarations ?? []).some(
+          (declaration) =>
+            ts.canHaveModifiers(declaration) &&
+            ts
+              .getModifiers(declaration)
+              ?.some(
+                (modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword,
+              ),
+        ),
+      )
+    ) {
+      return true;
+    }
+    let value = expression;
+    while (
+      ts.isParenthesizedExpression(value) ||
+      ts.isSatisfiesExpression(value) ||
+      ts.isAsExpression(value) ||
+      ts.isTypeAssertionExpression(value)
+    ) {
+      if (
+        (ts.isAsExpression(value) || ts.isTypeAssertionExpression(value)) &&
+        ts.isTypeReferenceNode(value.type) &&
+        ts.isIdentifier(value.type.typeName) &&
+        value.type.typeName.text === "const"
+      ) {
+        return true;
+      }
+      value = value.expression;
+    }
+    const symbol = symbolOf(value);
+    if (symbol === undefined || seen.has(symbol)) {
+      return false;
+    }
+    seen.add(symbol);
+    return (symbol.declarations ?? []).some(
+      (declaration) =>
+        isConstDeclaration(declaration) &&
+        declaration.type === undefined &&
+        declaration.initializer !== undefined &&
+        isReadonlyObject(declaration.initializer, seen),
+    );
+  };
+
   const fixedSetLength = (expression: ts.Expression): number | null => {
     const value = unwrap(expression);
     if (ts.isArrayLiteralExpression(value)) {
@@ -916,7 +971,7 @@ export const scanDbAwaitInLoop = ({
         member.expression.text !== "Object" ||
         value.arguments.length !== 1 ||
         object === undefined ||
-        !isConstObject(object)
+        !isReadonlyObject(object)
       ) {
         return null;
       }
@@ -926,7 +981,14 @@ export const scanDbAwaitInLoop = ({
         : null;
     }
     const type = checker.getTypeAtLocation(value);
-    if (!checker.isTupleType(type)) {
+    if (
+      !checker.isTupleType(type) ||
+      !("target" in type) ||
+      typeof type.target !== "object" ||
+      type.target === null ||
+      !("readonly" in type.target) ||
+      type.target.readonly !== true
+    ) {
       return null;
     }
     const length = type.getProperty("length");

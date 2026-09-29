@@ -984,7 +984,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 113,
+    "count": 112,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1020,7 +1020,6 @@
       "apps/api/src/lib/email/inbound/persistence.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/files/copy-organization-files.ts": 3,
-      "apps/api/src/lib/files/delete-organization-file.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
       "apps/api/src/lib/flows/flow-run-worker.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-executor.ts": 3,
