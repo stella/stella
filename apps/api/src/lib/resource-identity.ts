@@ -268,6 +268,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.SELLER_PROFILE,
   },
   schedulerJobRun: { type: "non_resource", reason: "job" },
+  sanctionsEdition: { type: "non_resource", reason: "projection" },
   sharepointConnection: { type: "non_resource", reason: "credential" },
   sharepointOAuthState: { type: "non_resource", reason: "credential" },
   styleSet: { type: "resource", resourceType: RESOURCE_TYPE.STYLE_SET },

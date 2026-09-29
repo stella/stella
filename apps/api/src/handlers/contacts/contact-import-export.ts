@@ -5,6 +5,7 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
+import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 
 type PortableContactSource = {
   type: ContactType;
@@ -22,6 +23,10 @@ type PortableContactSource = {
   tags: string[] | null;
   registrationNumber: string | null;
   taxId: string | null;
+  dateOfBirthYear?: number | null;
+  dateOfBirthMonth?: number | null;
+  dateOfBirthDay?: number | null;
+  nationalityCodes?: string[];
 };
 
 const primary = <T extends { isPrimary?: boolean }>(
@@ -60,5 +65,28 @@ export const contactToPortableImport = (
     tags: contact.tags ? JSON.stringify(contact.tags) : "",
     registration_number: contact.registrationNumber ?? "",
     tax_id: contact.taxId ?? "",
+    date_of_birth: (() => {
+      const date = dateOfBirthFromColumns({
+        dateOfBirthYear: contact.dateOfBirthYear ?? null,
+        dateOfBirthMonth: contact.dateOfBirthMonth ?? null,
+        dateOfBirthDay: contact.dateOfBirthDay ?? null,
+      });
+      if (date === null) {
+        return "";
+      }
+      const year = String(date.year).padStart(4, "0");
+      if (date.precision === "year") {
+        return year;
+      }
+      const month = String(date.month).padStart(2, "0");
+      if (date.precision === "month") {
+        return `${year}-${month}`;
+      }
+      return `${year}-${month}-${String(date.day).padStart(2, "0")}`;
+    })(),
+    nationality_codes:
+      (contact.nationalityCodes?.length ?? 0) > 0
+        ? JSON.stringify(contact.nationalityCodes)
+        : "",
   };
 };

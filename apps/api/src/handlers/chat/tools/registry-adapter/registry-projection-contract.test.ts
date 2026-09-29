@@ -10,6 +10,7 @@ import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { contacts } from "@/api/db/schema";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -28,6 +29,7 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -595,23 +597,35 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         query: {
           contacts: {
-            findFirst: async () => ({
-              id: uid(13),
-              type: "person",
-              displayName: "Jan Novák",
-              firstName: "Jan",
-              lastName: "Novák",
-              organizationName: null,
-              // Production-shaped jsonb (`contactEmailSchema`/
-              // `contactPhoneSchema`): the strict projection parse refuses a
-              // thinned stand-in.
-              emails: [
-                { type: "work", address: "jan@example.test", isPrimary: true },
-              ],
-              phones: [
-                { type: "mobile", number: "+420123456789", isPrimary: true },
-              ],
-            }),
+            findFirst: async () =>
+              ({
+                id: toSafeId<"contact">(uid(13)),
+                type: "person",
+                displayName: "Jan Novák",
+                firstName: "Jan",
+                lastName: "Novák",
+                organizationName: null,
+                // Production-shaped jsonb (`contactEmailSchema`/
+                // `contactPhoneSchema`): the strict projection parse refuses a
+                // thinned stand-in.
+                emails: [
+                  {
+                    type: "work",
+                    address: "jan@example.test",
+                    isPrimary: true,
+                  },
+                ],
+                phones: [
+                  { type: "mobile", number: "+420123456789", isPrimary: true },
+                ],
+                dateOfBirthYear: null,
+                dateOfBirthMonth: null,
+                dateOfBirthDay: null,
+                nationalityCodes: [],
+              }) satisfies Pick<
+                typeof contacts.$inferSelect,
+                keyof typeof READ_CONTACT_COLUMNS
+              >,
           },
         },
       }),

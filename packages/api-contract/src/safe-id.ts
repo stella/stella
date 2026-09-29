@@ -138,6 +138,7 @@ export type SafeIdType =
   | "propertyDependency"
   | "rateEntry"
   | "rateTable"
+  | "sanctionsEdition"
   | "savedSearch"
   | "sellerProfile"
   | "reportExport"

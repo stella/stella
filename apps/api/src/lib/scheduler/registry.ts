@@ -39,6 +39,7 @@ import {
   CHAT_THREAD_COMPACTOR_TASK,
   compactChatThreads,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
+import { REAP_OWNERLESS_CHAT_TURNS_TASK } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import {
   BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
   backfillCorpusIndexJobDetail,
@@ -104,6 +105,10 @@ import {
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
+  REFRESH_SANCTIONS_SOURCES_TASK,
+  refreshSanctionsSourcesTask,
+} from "@/api/lib/scheduler/tasks/sanctions-refresh";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -148,6 +153,7 @@ const SCHEDULER_TASKS = {
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
+  [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [FLOW_RUN_TASK]: runScheduledFlow,
@@ -187,15 +193,24 @@ const SCHEDULER_TASKS = {
   [RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK]: recoverDocumentDeadlineScouts,
 } as const satisfies Record<string, SchedulerTask>;
 
-export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
+const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+  ...SCHEDULER_TASKS,
+  [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
+});
+
+export type RegisteredSchedulerTaskName = keyof ReturnType<
+  typeof schedulerTasks
+>;
 
 /**
  * Every task name this build can execute, as data: job registration retires
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(SCHEDULER_TASKS),
+  Object.keys(schedulerTasks(noopTask)),
 );
 
-export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
-  new Map<string, SchedulerTask>(Object.entries(SCHEDULER_TASKS));
+export const createSchedulerTaskRegistry = (
+  reapOwnerlessChatTurns: SchedulerTask,
+): SchedulerTaskRegistry =>
+  new Map(Object.entries(schedulerTasks(reapOwnerlessChatTurns)));

@@ -107,6 +107,10 @@ const exportContacts = createSafeRootHandler(
             tags: contacts.tags,
             registrationNumber: contacts.registrationNumber,
             taxId: contacts.taxId,
+            dateOfBirthYear: contacts.dateOfBirthYear,
+            dateOfBirthMonth: contacts.dateOfBirthMonth,
+            dateOfBirthDay: contacts.dateOfBirthDay,
+            nationalityCodes: contacts.nationalityCodes,
           })
           .from(contacts)
           .where(eq(contacts.organizationId, session.activeOrganizationId))

@@ -190,6 +190,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "legislation_documents_country_slug_idx",
     tableName: "legislation_documents",
   },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "chat_turns_org_run_id_uidx" ON public."chat_turns" USING btree ("organization_id", "run_id") WHERE "run_id" IS NOT NULL',
+    definitionBody:
+      "ON public.chat_turns USING btree (organization_id, run_id) WHERE (run_id IS NOT NULL)",
+    isUnique: true,
+    name: "chat_turns_org_run_id_uidx",
+    tableName: "chat_turns",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 

@@ -16,6 +16,7 @@ import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
+import { resolveFeedbackChannel } from "@/components/feedback-dialog.logic";
 import { FeedbackSidebarItem } from "@/components/feedback-sidebar-item";
 import { PublicInspectorRail } from "@/components/public-inspector-rail";
 import { PublicSignInRequestContext } from "@/components/public-sign-in-request";
@@ -28,12 +29,15 @@ import {
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
+  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
   SidebarProvider,
   SidebarToggleHotkey,
   useSidebar,
+  useSidebarLayout,
 } from "@/components/sidebar";
 import { StellaWordmark } from "@/components/stella-wordmark";
+import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
@@ -198,8 +202,10 @@ const PublicSidebar = ({
   const currentHref = useRouterState({
     select: (state) => state.location.href,
   });
-  const { state, toggleSidebar } = useSidebar();
-  const isCollapsed = state === "collapsed";
+  const { toggleSidebar } = useSidebar();
+  const sidebarLayout = useSidebarLayout();
+  const isCollapsed = sidebarLayout === "rail";
+  const feedbackChannel = resolveFeedbackChannel(authStatus.status);
   const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const searchHotkeyLabel = formatHotkeyForPlatform(
     HOTKEYS.SEARCH,
@@ -342,22 +348,34 @@ const PublicSidebar = ({
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          {authStatus.isAuthenticated && <FeedbackSidebarItem />}
-          {authStatus.status === "anonymous" && (
+          {feedbackChannel !== null && (
+            <FeedbackSidebarItem channel={feedbackChannel} />
+          )}
+          {/* Signing in is also how an unreadable session recovers. */}
+          {(authStatus.status === "anonymous" ||
+            authStatus.status === "unavailable") && (
             <SidebarMenuItem>
-              <SidebarMenuButton
-                aria-label={t("auth.signIn")}
-                className="h-auto gap-2 p-2"
-                onClick={() => requestAuth(currentHref)}
-                tooltip={t("auth.signIn")}
+              <Tooltip
+                content={isCollapsed ? t("auth.signIn") : null}
+                render={
+                  <button
+                    aria-label={t("auth.signIn")}
+                    className={cn(
+                      sidebarIdentityTriggerClassName(sidebarLayout),
+                    )}
+                    onClick={() => requestAuth(currentHref)}
+                    type="button"
+                  />
+                }
+                side="right"
               >
                 <Avatar className="size-7 rounded-full">
                   <AvatarFallback>
                     <CircleUserRoundIcon className="size-4" />
                   </AvatarFallback>
                 </Avatar>
-                <span>{t("auth.signIn")}</span>
-              </SidebarMenuButton>
+                {!isCollapsed && <span>{t("auth.signIn")}</span>}
+              </Tooltip>
             </SidebarMenuItem>
           )}
           {authStatus.isAuthenticated && (
