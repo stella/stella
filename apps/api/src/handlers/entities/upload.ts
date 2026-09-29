@@ -47,7 +47,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -63,7 +63,7 @@ import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -278,29 +278,22 @@ const cleanupUploadedS3Keys = async ({
   fileId,
   workspaceId,
 }: CleanupUploadedS3KeysOptions): Promise<void> => {
-  const results = await Promise.allSettled(
-    keys.map(async (key) => {
-      if (env.FEATURE_FILE_USAGE_LIMITS) {
-        return await deleteOrganizationFileWithSignal(
-          key,
+  const cleanup = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await deleteOrganizationFilesWithSignal(
+          keys,
           AbortSignal.timeout(10_000),
-        );
-      }
-      await getS3().delete(key);
-      return Result.ok(undefined);
+        ),
+      catch: (cause) => cause,
     }),
   );
-
-  for (const result of results) {
-    const cleanup =
-      result.status === "rejected" ? Result.err(result.reason) : result.value;
-    if (Result.isError(cleanup)) {
-      captureError(cleanup.error, {
-        operation: "upload-s3-cleanup",
-        fileId,
-        workspaceId,
-      });
-    }
+  if (Result.isError(cleanup)) {
+    captureError(cleanup.error, {
+      operation: "upload-s3-cleanup",
+      fileId,
+      workspaceId,
+    });
   }
 };
 

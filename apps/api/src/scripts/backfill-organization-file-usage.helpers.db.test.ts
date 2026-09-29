@@ -104,7 +104,9 @@ describe("organization file usage backfill", () => {
     };
     expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(2);
     expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(0);
-    expect(checked).toEqual([absentKey, absentKey, presentKey, presentKey]);
+    expect(checked.filter((key) => key === absentKey)).toHaveLength(2);
+    expect(checked.filter((key) => key === presentKey)).toHaveLength(2);
+    expect(checked).not.toContain(temporaryKey);
     const rows = await testDb
       .select({ objectKey: organizationFileObjects.objectKey })
       .from(organizationFileObjects)
@@ -295,5 +297,41 @@ describe("organization file usage backfill", () => {
     });
     expect(blocked).toBe(1);
     expect(lines).toHaveLength(2);
+  });
+
+  test("deleting a full page preserves the next keyset page and converges", async () => {
+    const objects = Array.from({ length: 206 }, (_, index) => ({
+      organizationId: ids.orgB,
+      objectKey: `${ids.orgB}/page-boundary/${String(index).padStart(3, "0")}`,
+      sizeBytes: 1n,
+      status: "committed" as const,
+    }));
+    await testDb.insert(organizationFileObjects).values(objects);
+    await testDb
+      .update(organizationFileUsage)
+      .set({ committedBytes: 206n, reservedBytes: 0n })
+      .where(eq(organizationFileUsage.organizationId, ids.orgB));
+    const options = {
+      db: ledgerDb(),
+      organizationId: ids.orgB,
+      objectExists: async (key: string) => Number(key.split("/").at(-1)) >= 200,
+      staleBefore: new Date("2026-01-01T00:00:00Z"),
+    };
+    expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(200);
+    expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(0);
+    const remaining = await testDb
+      .select({ objectKey: organizationFileObjects.objectKey })
+      .from(organizationFileObjects)
+      .where(eq(organizationFileObjects.organizationId, ids.orgB))
+      .orderBy(asc(organizationFileObjects.objectKey));
+    expect(remaining.map(({ objectKey }) => objectKey)).toEqual(
+      objects.slice(200).map(({ objectKey }) => objectKey),
+    );
+    const counter = await testDb
+      .select({ committedBytes: organizationFileUsage.committedBytes })
+      .from(organizationFileUsage)
+      .where(eq(organizationFileUsage.organizationId, ids.orgB))
+      .then((rows) => rows.at(0));
+    expect(counter?.committedBytes).toBe(6n);
   });
 });

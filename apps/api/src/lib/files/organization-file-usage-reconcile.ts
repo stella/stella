@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   chatThreads,
   desktopEditSessions,
@@ -20,12 +19,13 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
-  commitOrganizationFileBytes,
+  commitOrganizationFilesBytes,
   FILE_RESERVATION_ABANDON_DELAY_MS,
   OrganizationFileUsageError,
-  releaseOrganizationFileBytes,
+  releaseOrganizationFilesBytes,
 } from "@/api/lib/files/organization-file-usage";
 import type { HeadObjectResult } from "@/api/lib/s3-presign";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT = 50;
 const RETRY_DELAY_MS = 5 * 60_000;
@@ -48,11 +48,10 @@ type ReconcileOptions = {
 };
 
 /** A row is durable only when the key, or its exact minted object ID, is named by a persisted owner. */
-const isDurablyReferenced = async (
-  tx: Transaction,
+const durableReferenceExpression = (
   organizationId: SafeId<"organization">,
   objectKey: string,
-): Promise<boolean> => {
+) => {
   const parts = objectKey.split("/");
   const fileName = parts.at(-1) ?? "";
   const extensionAt = fileName.lastIndexOf(".");
@@ -74,59 +73,50 @@ const isDurablyReferenced = async (
       ? uuidFileId
       : null;
   const thumbnailUserId = parts.length === 2 ? parts[0] : null;
-  const rows = await tx
-    .select({
-      referenced: sql<boolean>`
+  return sql<boolean>`
     COALESCE(
       (SELECT TRUE FROM ${userFiles}
-        INNER JOIN ${chatThreads} ON ${chatThreads}.${chatThreads.id} = ${userFiles}.${userFiles.threadId}
-        WHERE ${chatThreads}.${chatThreads.organizationId} = ${organizationId}
-          AND ${userFiles}.${userFiles.s3Key} = ${objectKey} LIMIT 1),
+        INNER JOIN ${chatThreads} ON ${chatThreads.id} = ${userFiles.threadId}
+        WHERE ${chatThreads.organizationId} = ${organizationId}
+          AND ${userFiles.s3Key} = ${objectKey} LIMIT 1),
       (SELECT TRUE FROM ${templates} WHERE ${templates.organizationId} = ${organizationId} AND ${templates.s3Key} = ${objectKey} LIMIT 1),
       (SELECT TRUE FROM ${templateVersions} WHERE ${templateVersions.organizationId} = ${organizationId} AND ${templateVersions.s3Key} = ${objectKey} LIMIT 1),
       (SELECT TRUE FROM ${styleSets} WHERE ${styleSets.organizationId} = ${organizationId} AND ${styleSets.s3Key} = ${objectKey} AND ${styleSets.deletedAt} IS NULL LIMIT 1),
       (SELECT TRUE FROM ${reportExports}
-        INNER JOIN ${workspaces} ON ${workspaces}.${workspaces.id} = ${reportExports}.${reportExports.workspaceId}
-        WHERE ${workspaces}.${workspaces.organizationId} = ${organizationId}
-          AND ${reportExports}.${reportExports.resultS3Key} = ${objectKey} LIMIT 1),
+        INNER JOIN ${workspaces} ON ${workspaces.id} = ${reportExports.workspaceId}
+        WHERE ${workspaces.organizationId} = ${organizationId}
+          AND ${reportExports.resultS3Key} = ${objectKey} LIMIT 1),
       (SELECT TRUE FROM ${userFiles}
-        INNER JOIN ${chatThreads} ON ${chatThreads}.${chatThreads.id} = ${userFiles}.${userFiles.threadId}
-        WHERE ${chatThreads}.${chatThreads.organizationId} = ${organizationId}
-          AND ${userFiles}.${userFiles.userId} = ${thumbnailUserId}
-          AND ${userFiles}.${userFiles.thumbnailFileId} = ${fileId} LIMIT 1),
+        INNER JOIN ${chatThreads} ON ${chatThreads.id} = ${userFiles.threadId}
+        WHERE ${chatThreads.organizationId} = ${organizationId}
+          AND ${userFiles.userId} = ${thumbnailUserId}
+          AND ${userFiles.thumbnailFileId} = ${fileId} LIMIT 1),
       (SELECT TRUE FROM ${fields}
-        INNER JOIN ${workspaces} ON ${workspaces}.${workspaces.id} = ${fields}.${fields.workspaceId}
-        WHERE ${fields}.${fields.workspaceId} = ${workspaceId}::uuid
-          AND ${workspaces}.${workspaces.organizationId} = ${organizationId}
-          AND ${fields}.${fields.content}->>'type' = 'file'
-          AND (${fields}.${fields.content}->>'id' = ${uuidFileId}
-            OR ${fields}.${fields.content}->>'pdfFileId' = ${uuidFileId}
-            OR ${fields}.${fields.content}->>'thumbnailFileId' = ${uuidFileId}) LIMIT 1),
+        INNER JOIN ${workspaces} ON ${workspaces.id} = ${fields.workspaceId}
+        WHERE ${fields.workspaceId} = ${workspaceId}::uuid
+          AND ${workspaces.organizationId} = ${organizationId}
+          AND ${fields.content}->>'type' = 'file'
+          AND (${fields.content}->>'id' = ${uuidFileId}
+            OR ${fields.content}->>'pdfFileId' = ${uuidFileId}
+            OR ${fields.content}->>'thumbnailFileId' = ${uuidFileId}) LIMIT 1),
       (SELECT TRUE FROM ${desktopEditSessions}
-        INNER JOIN ${workspaces} ON ${workspaces}.${workspaces.id} = ${desktopEditSessions}.${desktopEditSessions.workspaceId}
-        WHERE ${desktopEditSessions}.${desktopEditSessions.workspaceId} = ${workspaceId}::uuid
-          AND ${workspaces}.${workspaces.organizationId} = ${organizationId}
-          AND ${desktopEditSessions}.${desktopEditSessions.checkpointFileId} = ${uuidFileId}::uuid
-          AND ${desktopEditSessions}.${desktopEditSessions.checkpointSizeBytes} IS NOT NULL LIMIT 1),
+        INNER JOIN ${workspaces} ON ${workspaces.id} = ${desktopEditSessions.workspaceId}
+        WHERE ${desktopEditSessions.workspaceId} = ${workspaceId}::uuid
+          AND ${workspaces.organizationId} = ${organizationId}
+          AND ${desktopEditSessions.checkpointFileId} = ${uuidFileId}::uuid
+          AND ${desktopEditSessions.checkpointSizeBytes} IS NOT NULL LIMIT 1),
       (SELECT TRUE FROM ${folioCollabRooms}
-        INNER JOIN ${workspaces} ON ${workspaces}.${workspaces.id} = ${folioCollabRooms}.${folioCollabRooms.workspaceId}
-        WHERE ${folioCollabRooms}.${folioCollabRooms.workspaceId} = ${workspaceId}::uuid
-          AND ${workspaces}.${workspaces.organizationId} = ${organizationId}
-          AND ((${folioCollabRooms}.${folioCollabRooms.yjsSnapshotFileId} = ${uuidFileId}::uuid AND ${folioCollabRooms}.${folioCollabRooms.yjsSnapshotSizeBytes} IS NOT NULL)
-            OR (${folioCollabRooms}.${folioCollabRooms.docxCheckpointFileId} = ${uuidFileId}::uuid AND ${folioCollabRooms}.${folioCollabRooms.docxCheckpointSizeBytes} IS NOT NULL)) LIMIT 1),
+        INNER JOIN ${workspaces} ON ${workspaces.id} = ${folioCollabRooms.workspaceId}
+        WHERE ${folioCollabRooms.workspaceId} = ${workspaceId}::uuid
+          AND ${workspaces.organizationId} = ${organizationId}
+          AND ((${folioCollabRooms.yjsSnapshotFileId} = ${uuidFileId}::uuid AND ${folioCollabRooms.yjsSnapshotSizeBytes} IS NOT NULL)
+            OR (${folioCollabRooms.docxCheckpointFileId} = ${uuidFileId}::uuid AND ${folioCollabRooms.docxCheckpointSizeBytes} IS NOT NULL)) LIMIT 1),
       (SELECT TRUE FROM ${documentProcessingRuns}
         WHERE ${documentProcessingRuns.organizationId} = ${organizationId}
           AND ${documentProcessingRuns.id} = ${ocrRunId}::uuid LIMIT 1),
       FALSE
     )
-  `,
-    })
-    .from(organizationFileUsage)
-    .where(eq(organizationFileUsage.organizationId, organizationId))
-    .limit(1);
-  return (
-    rows.at(0)?.referenced ?? panic("File reference lookup returned no row")
-  );
+  `;
 };
 
 type ReferencedReservationMatchOptions = {
@@ -241,72 +231,97 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           .limit(limit),
     );
     const { headObject } = await import("@/api/lib/s3-presign");
-    const { isMissingS3ObjectError } = await import("@/api/lib/s3");
-    const { deleteOrganizationFileWithSignal } =
-      await import("@/api/lib/files/delete-organization-file");
+    const { deleteS3ObjectWithSignal, isMissingS3ObjectError } =
+      await import("@/api/lib/s3");
+    const recoveryWriteId = Bun.randomUUIDv7();
+    const claims =
+      candidates.length === 0
+        ? []
+        : await db.transaction(async (tx) => {
+            await tx
+              .select({ organizationId: organizationFileUsage.organizationId })
+              .from(organizationFileUsage)
+              .where(
+                inArray(organizationFileUsage.organizationId, [
+                  ...new Set(
+                    candidates.map((candidate) => candidate.organizationId),
+                  ),
+                ]),
+              )
+              .orderBy(asc(organizationFileUsage.organizationId))
+              .limit(candidates.length)
+              .for("update");
+            const current = await tx
+              .select({
+                objectKey: organizationFileObjects.objectKey,
+                organizationId: organizationFileObjects.organizationId,
+                status: organizationFileObjects.status,
+                sizeBytes: organizationFileObjects.sizeBytes,
+                pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
+                expectedSha256Hex: organizationFileObjects.expectedSha256Hex,
+                reservationStartedAt:
+                  organizationFileObjects.reservationStartedAt,
+                referenced: sql<boolean>`${sqlCaseFragment({
+                  branches: candidates.map(
+                    (candidate) =>
+                      sql`WHEN ${organizationFileObjects.objectKey} = ${candidate.objectKey} THEN ${durableReferenceExpression(candidate.organizationId, candidate.objectKey)}`,
+                  ),
+                  fallback: sql`FALSE`,
+                })}`,
+              })
+              .from(organizationFileObjects)
+              .where(
+                and(
+                  unsettledObject,
+                  or(
+                    ...candidates.map((candidate) =>
+                      and(
+                        eq(
+                          organizationFileObjects.objectKey,
+                          candidate.objectKey,
+                        ),
+                        eq(
+                          organizationFileObjects.writeId,
+                          candidate.writeId ?? "",
+                        ),
+                      ),
+                    ),
+                  ),
+                  lte(
+                    organizationFileObjects.reservationStartedAt,
+                    sql`${staleBefore}::timestamptz`,
+                  ),
+                  lte(
+                    organizationFileObjects.updatedAt,
+                    sql`${retryBefore}::timestamptz`,
+                  ),
+                ),
+              );
+            if (current.length !== 0) {
+              await tx
+                .update(organizationFileObjects)
+                .set({ writeId: recoveryWriteId, updatedAt: now })
+                .where(
+                  inArray(
+                    organizationFileObjects.objectKey,
+                    current.map((row) => row.objectKey),
+                  ),
+                );
+            }
+            return current;
+          });
+    const toCommit = [];
+    const toRelease = [];
     let committed = 0;
     let deleted = 0;
     let released = 0;
     let mismatched = 0;
-    for (const candidate of candidates) {
+    for (const claim of claims) {
       signal?.throwIfAborted();
-      const recoveryWriteId = Bun.randomUUIDv7();
-      const claim = await db.transaction(async (tx) => {
-        await tx
-          .select({ organizationId: organizationFileUsage.organizationId })
-          .from(organizationFileUsage)
-          .where(
-            eq(organizationFileUsage.organizationId, candidate.organizationId),
-          )
-          .for("update");
-        const current = await tx
-          .select({
-            status: organizationFileObjects.status,
-            sizeBytes: organizationFileObjects.sizeBytes,
-            pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
-            expectedSha256Hex: organizationFileObjects.expectedSha256Hex,
-            reservationStartedAt: organizationFileObjects.reservationStartedAt,
-          })
-          .from(organizationFileObjects)
-          .where(
-            and(
-              eq(organizationFileObjects.objectKey, candidate.objectKey),
-              unsettledObject,
-              eq(organizationFileObjects.writeId, candidate.writeId ?? ""),
-              lte(
-                organizationFileObjects.reservationStartedAt,
-                sql`${staleBefore}::timestamptz`,
-              ),
-              lte(
-                organizationFileObjects.updatedAt,
-                sql`${retryBefore}::timestamptz`,
-              ),
-            ),
-          )
-          .limit(1)
-          .then((rows) => rows.at(0));
-        if (!current || !current.reservationStartedAt) {
-          return null;
-        }
-        await tx
-          .update(organizationFileObjects)
-          .set({ writeId: recoveryWriteId, updatedAt: now })
-          .where(eq(organizationFileObjects.objectKey, candidate.objectKey));
-        return {
-          ...current,
-          reservationStartedAt: current.reservationStartedAt,
-          referenced:
-            current.status === "committed" ||
-            (await isDurablyReferenced(
-              tx,
-              candidate.organizationId,
-              candidate.objectKey,
-            )),
-        };
-      });
-      if (!claim) {
-        continue;
+      if (!claim.reservationStartedAt) {
+        panic("Claimed reservation has no start time");
       }
+      const candidate = claim;
       const reservation = {
         status: "reserved" as const,
         organizationId: candidate.organizationId,
@@ -318,12 +333,11 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         if (!isMissingS3ObjectError(head.error.cause)) {
           return yield* Result.err(head.error);
         }
-        const settled = await releaseOrganizationFileBytes(reservation, db);
-        yield* settled;
+        toRelease.push(reservation);
         released += 1;
         continue;
       }
-      if (claim.referenced) {
+      if (claim.status === "committed" || claim.referenced) {
         const matches = await matchesReferencedReservation({
           expectedSha256Hex: claim.expectedSha256Hex,
           head: head.value,
@@ -337,21 +351,19 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           mismatched += 1;
           continue;
         }
-        const settled = await commitOrganizationFileBytes(reservation, db);
-        yield* settled;
+        toCommit.push(reservation);
         committed += 1;
         continue;
       }
-      const deletedObject = await deleteOrganizationFileWithSignal(
+      await deleteS3ObjectWithSignal(
         candidate.objectKey,
         signal ?? AbortSignal.timeout(30_000),
-        { fileUsageDb: db },
       );
-      yield* deletedObject;
-      const settled = await releaseOrganizationFileBytes(reservation, db);
-      yield* settled;
+      toRelease.push(reservation);
       deleted += 1;
     }
+    yield* await commitOrganizationFilesBytes(toCommit, db);
+    yield* await releaseOrganizationFilesBytes(toRelease, db);
     return Result.ok({
       scanned: candidates.length,
       committed,

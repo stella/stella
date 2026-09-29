@@ -1,5 +1,16 @@
 import { panic, Result } from "better-result";
-import { and, asc, count, eq, gt, isNotNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import {
   organizationFileObjects,
@@ -7,7 +18,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { releaseOrganizationFileBytes } from "@/api/lib/files/organization-file-usage";
+import { releaseOrganizationFilesBytes } from "@/api/lib/files/organization-file-usage";
 
 const PAGE_SIZE = 200;
 
@@ -40,8 +51,8 @@ export const reconcileAbsentOrganizationFileObjects = async ({
 }: ReconcileAbsentOptions): Promise<number> => {
   let cursor: string | null = null;
   let removed = 0;
-  const readPage = async (afterKey: string | null) =>
-    await db.transaction(
+  const reconcilePage = async (afterKey: string | null) => {
+    const rows = await db.transaction(
       async (tx) =>
         await tx
           .select({
@@ -63,11 +74,8 @@ export const reconcileAbsentOrganizationFileObjects = async ({
           .orderBy(asc(organizationFileObjects.objectKey))
           .limit(PAGE_SIZE),
     );
-  for (;;) {
-    const rows = await readPage(cursor);
-    if (rows.length === 0) {
-      break;
-    }
+    const toRelease = [];
+    const absentKeys: string[] = [];
     for (const row of rows) {
       const { objectKey } = row;
       if (row.status === "reserved" || row.pendingSizeBytes !== null) {
@@ -79,18 +87,12 @@ export const reconcileAbsentOrganizationFileObjects = async ({
         ) {
           continue;
         }
-        const released = await releaseOrganizationFileBytes(
-          {
-            status: "reserved",
-            organizationId,
-            objectKey,
-            writeId: row.writeId,
-          },
-          db,
-        );
-        if (Result.isError(released)) {
-          throw released.error;
-        }
+        toRelease.push({
+          status: "reserved" as const,
+          organizationId,
+          objectKey,
+          writeId: row.writeId,
+        });
         continue;
       }
       if (
@@ -99,61 +101,81 @@ export const reconcileAbsentOrganizationFileObjects = async ({
       ) {
         continue;
       }
-      const deleted = await db.transaction(async (tx) => {
-        const counter = await tx
-          .select({ committedBytes: organizationFileUsage.committedBytes })
-          .from(organizationFileUsage)
-          .where(eq(organizationFileUsage.organizationId, organizationId))
-          .for("update")
-          .then((current) => current.at(0));
-        const current = await tx
-          .select({
-            sizeBytes: organizationFileObjects.sizeBytes,
-            status: organizationFileObjects.status,
-            pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
-            writeId: organizationFileObjects.writeId,
-          })
-          .from(organizationFileObjects)
-          .where(
-            and(
-              eq(organizationFileObjects.organizationId, organizationId),
-              eq(organizationFileObjects.objectKey, objectKey),
-            ),
-          )
-          .then((matches) => matches.at(0));
-        if (!counter) {
-          return panic("Organization file counter disappeared during backfill");
-        }
-        if (
-          current?.status !== "committed" ||
-          current.pendingSizeBytes !== null ||
-          current.writeId !== null
-        ) {
-          return false;
-        }
-        // Writers take the same counter lock before writing S3. A second HEAD
-        // under that lock closes the gap after the first absence check.
-        if (
-          !isTemporaryOrganizationObjectKey(organizationId, objectKey) &&
-          (await objectExists(objectKey))
-        ) {
-          return false;
-        }
-        await tx
-          .delete(organizationFileObjects)
-          .where(eq(organizationFileObjects.objectKey, objectKey));
-        await tx
-          .update(organizationFileUsage)
-          .set({
-            committedBytes: counter.committedBytes - current.sizeBytes,
-            updatedAt: new Date(),
-          })
-          .where(eq(organizationFileUsage.organizationId, organizationId));
-        return true;
-      });
-      if (deleted) {
-        removed += 1;
-      }
+      absentKeys.push(objectKey);
+    }
+    const released = await releaseOrganizationFilesBytes(toRelease, db);
+    if (Result.isError(released)) {
+      throw released.error;
+    }
+    const deleted =
+      absentKeys.length === 0
+        ? 0
+        : await db.transaction(async (tx) => {
+            const counter = await tx
+              .select({ organizationId: organizationFileUsage.organizationId })
+              .from(organizationFileUsage)
+              .where(eq(organizationFileUsage.organizationId, organizationId))
+              .for("update")
+              .then((current) => current.at(0));
+            if (!counter) {
+              return panic(
+                "Organization file counter disappeared during backfill",
+              );
+            }
+            const current = await tx
+              .select({
+                objectKey: organizationFileObjects.objectKey,
+              })
+              .from(organizationFileObjects)
+              .where(
+                and(
+                  eq(organizationFileObjects.organizationId, organizationId),
+                  inArray(organizationFileObjects.objectKey, absentKeys),
+                  eq(organizationFileObjects.status, "committed"),
+                  isNull(organizationFileObjects.pendingSizeBytes),
+                  isNull(organizationFileObjects.writeId),
+                ),
+              );
+            const confirmedKeys: string[] = [];
+            for (const row of current) {
+              // Writers take the same counter lock before writing S3. Rechecking
+              // absence under that lock closes the gap after the first HEAD.
+              if (
+                !isTemporaryOrganizationObjectKey(
+                  organizationId,
+                  row.objectKey,
+                ) &&
+                (await objectExists(row.objectKey))
+              ) {
+                continue;
+              }
+              confirmedKeys.push(row.objectKey);
+            }
+            if (confirmedKeys.length === 0) {
+              return 0;
+            }
+            await tx.execute(sql`
+              WITH removed AS (
+                DELETE FROM ${organizationFileObjects}
+                WHERE ${organizationFileObjects.organizationId} = ${organizationId}
+                  AND ${inArray(organizationFileObjects.objectKey, confirmedKeys)}
+                RETURNING size_bytes
+              )
+              UPDATE ${organizationFileUsage}
+              SET committed_bytes = committed_bytes - COALESCE((SELECT SUM(size_bytes) FROM removed), 0),
+                  updated_at = ${new Date()}::timestamptz
+              WHERE ${organizationFileUsage.organizationId} = ${organizationId}
+            `);
+            return confirmedKeys.length;
+          });
+    return { rows, deleted };
+  };
+  for (;;) {
+    // db-await-in-loop: sequential cursor page walk
+    const { rows, deleted } = await reconcilePage(cursor);
+    removed += deleted;
+    if (rows.length === 0) {
+      break;
     }
     cursor = rows.at(-1)?.objectKey ?? null;
     if (cursor === null) {

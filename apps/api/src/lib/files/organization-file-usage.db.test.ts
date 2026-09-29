@@ -13,15 +13,23 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId } from "@/api/lib/branded-types";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  deleteOrganizationFilesWithSignal,
+  deleteOrganizationFileWithSignal,
+} from "@/api/lib/files/delete-organization-file";
 import {
   commitOrganizationFileBytes,
+  commitOrganizationFilesBytes,
   copyOrganizationFile,
   reconcileOrganizationFileObject,
   releaseOrganizationFileBytes,
+  releaseOrganizationFilesBytes,
   removeOrganizationFileBytes,
+  removeOrganizationFilesBytes,
   reserveOrganizationFileBytes,
+  reserveOrganizationFilesBytes,
   writeOrganizationFile,
+  writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -532,6 +540,162 @@ describe("organization file usage", () => {
     }
     expect((await counter())?.committedBytes).toBe(7n);
     await removeOrganizationFileBytes(object.objectKey, db());
+  });
+
+  test("batch deletion settles confirmed objects and retains failed objects", async () => {
+    const fake = startFakeS3();
+    const confirmedKey = "fixture/batch-delete-confirmed";
+    const failedKey = "fixture/batch-delete-failed";
+    const emptyKeys = Array.from(
+      { length: 55 },
+      (_, index) => `fixture/batch-delete-empty-${index}`,
+    );
+    try {
+      for (const key of emptyKeys) {
+        fake.put(envBase.S3_BUCKET, key, "");
+      }
+      const emptyReservations = await reserveOrganizationFilesBytes(
+        emptyKeys.map((key) => input(key, 0)),
+        db(),
+      );
+      expect(Result.isOk(emptyReservations)).toBe(true);
+      if (Result.isError(emptyReservations)) {
+        return;
+      }
+      await commitOrganizationFilesBytes(emptyReservations.value, db());
+      fake.put(envBase.S3_BUCKET, confirmedKey, "stored");
+      fake.put(envBase.S3_BUCKET, failedKey, "stored");
+      await reconcileOrganizationFileObject(input(confirmedKey, 6), db());
+      await reconcileOrganizationFileObject(input(failedKey, 6), db());
+      fake.failNext({
+        method: "DELETE",
+        key: failedKey,
+        code: "AccessDenied",
+        status: 403,
+      });
+      const deleted = await deleteOrganizationFilesWithSignal(
+        [confirmedKey, failedKey, ...emptyKeys],
+        AbortSignal.timeout(10_000),
+        { fileUsageDb: db() },
+      );
+      expect(Result.isError(deleted)).toBe(true);
+      expect(fake.objects.has(`${envBase.S3_BUCKET}/${confirmedKey}`)).toBe(
+        false,
+      );
+      expect(fake.objects.has(`${envBase.S3_BUCKET}/${failedKey}`)).toBe(true);
+      expect((await counter())?.committedBytes).toBe(6n);
+      const retried = await deleteOrganizationFilesWithSignal(
+        [confirmedKey, failedKey, ...emptyKeys],
+        AbortSignal.timeout(10_000),
+        { fileUsageDb: db() },
+      );
+      expect(Result.isOk(retried)).toBe(true);
+      expect((await counter())?.committedBytes).toBe(0n);
+    } finally {
+      fake.stop();
+    }
+  });
+
+  test("batch capacity is atomic and competing batches cannot overbook", async () => {
+    const overCap = await reserveOrganizationFilesBytes(
+      [input("fixture/batch-over-a", 17), input("fixture/batch-over-b", 17)],
+      db(),
+    );
+    expect(overCap).toMatchObject({ error: { reason: "capacity_exceeded" } });
+    expect((await counter())?.reservedBytes).toBe(0n);
+    const attempts = await Promise.all([
+      reserveOrganizationFilesBytes(
+        [input("fixture/batch-race-a", 9), input("fixture/batch-race-b", 8)],
+        db(),
+      ),
+      reserveOrganizationFilesBytes(
+        [input("fixture/batch-race-c", 9), input("fixture/batch-race-d", 8)],
+        db(),
+      ),
+    ]);
+    expect(attempts.filter(Result.isOk)).toHaveLength(1);
+    const accepted = attempts.find(Result.isOk);
+    if (!accepted) {
+      return;
+    }
+    expect((await counter())?.reservedBytes).toBe(17n);
+    expect(
+      Result.isOk(await releaseOrganizationFilesBytes(accepted.value, db())),
+    ).toBe(true);
+    expect(
+      Result.isOk(await releaseOrganizationFilesBytes(accepted.value, db())),
+    ).toBe(true);
+    expect((await counter())?.reservedBytes).toBe(0n);
+  });
+
+  test("batch settlement preserves replacements and stale identities cannot settle newer writes", async () => {
+    const original = await reserveOrganizationFilesBytes(
+      [input("fixture/batch-settle-a", 7), input("fixture/batch-settle-b", 5)],
+      db(),
+    );
+    expect(Result.isOk(original)).toBe(true);
+    if (Result.isError(original)) {
+      return;
+    }
+    expect(
+      Result.isOk(await commitOrganizationFilesBytes(original.value, db())),
+    ).toBe(true);
+    expect((await counter())?.committedBytes).toBe(12n);
+    const replacements = await reserveOrganizationFilesBytes(
+      [input("fixture/batch-settle-a", 9), input("fixture/batch-settle-b", 3)],
+      db(),
+    );
+    expect(Result.isOk(replacements)).toBe(true);
+    if (Result.isError(replacements)) {
+      return;
+    }
+    expect((await counter())?.reservedBytes).toBe(2n);
+    expect(
+      Result.isError(await commitOrganizationFilesBytes(original.value, db())),
+    ).toBe(true);
+    expect(
+      Result.isOk(await releaseOrganizationFilesBytes(original.value, db())),
+    ).toBe(true);
+    expect((await counter())?.reservedBytes).toBe(2n);
+    expect(
+      Result.isOk(await commitOrganizationFilesBytes(replacements.value, db())),
+    ).toBe(true);
+    expect((await counter())?.committedBytes).toBe(12n);
+    expect((await counter())?.reservedBytes).toBe(0n);
+    const keys = ["fixture/batch-settle-a", "fixture/batch-settle-b"];
+    expect(Result.isOk(await removeOrganizationFilesBytes(keys, db()))).toBe(
+      true,
+    );
+    expect(Result.isOk(await removeOrganizationFilesBytes(keys, db()))).toBe(
+      true,
+    );
+    expect((await counter())?.committedBytes).toBe(0n);
+  });
+
+  test("batch writes commit confirmed successes while uncertain siblings stay reserved", async () => {
+    const written = await writeOrganizationFiles(
+      [
+        { ...input("fixture/batch-success", 4), write: async () => "stored" },
+        {
+          ...input("fixture/batch-uncertain", 6),
+          write: async () => {
+            throw new Error("provider timeout");
+          },
+        },
+      ],
+      db(),
+    );
+    expect(Result.isError(written)).toBe(true);
+    expect((await counter())?.committedBytes).toBe(4n);
+    expect((await counter())?.reservedBytes).toBe(6n);
+    await removeOrganizationFilesBytes(
+      ["fixture/batch-success", "fixture/batch-uncertain"],
+      db(),
+    );
+    expect((await counter())?.committedBytes).toBe(0n);
+    expect((await counter())?.reservedBytes).toBe(6n);
+    await releaseConfirmedAbsentReservation("fixture/batch-uncertain");
+    expect((await counter())?.reservedBytes).toBe(0n);
   });
 
   test("flag off does not call the database", async () => {

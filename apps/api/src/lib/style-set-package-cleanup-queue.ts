@@ -22,7 +22,10 @@ import type {
 } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { errorTag } from "@/api/lib/errors/utils";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  deleteOrganizationFileWithSignal,
+  deleteOrganizationFilesWithSignal,
+} from "@/api/lib/files/delete-organization-file";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
@@ -268,20 +271,12 @@ export const deleteQueuedStyleSetPackages = async (
   const s3Keys = jobs
     .filter((job) => job.data.styleSetId === styleSetId)
     .map((job) => job.data.s3Key);
-  await Promise.all(
-    s3Keys.map(async (s3Key) => {
-      if (env.FEATURE_FILE_USAGE_LIMITS) {
-        const deleted = await deleteOrganizationFileWithSignal(
-          s3Key,
-          AbortSignal.timeout(10_000),
-        );
-        deleted.unwrap(
-          "Queued style set package deletion must succeed before cleanup completes",
-        );
-        return;
-      }
-      await getS3().delete(s3Key);
-    }),
+  const deleted = await deleteOrganizationFilesWithSignal(
+    s3Keys,
+    AbortSignal.timeout(10_000),
+  );
+  deleted.unwrap(
+    "Queued style set package deletion must succeed before cleanup completes",
   );
 };
 

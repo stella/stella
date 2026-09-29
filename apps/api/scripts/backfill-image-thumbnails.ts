@@ -19,7 +19,7 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, inArray, isNull, sql } from "drizzle-orm";
 
 import { userFiles } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -31,8 +31,8 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
-  removeOrganizationFileBytes,
-  writeOrganizationFile,
+  removeOrganizationFilesBytes,
+  writeOrganizationFiles,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import {
@@ -47,6 +47,7 @@ import {
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 import { buildChatThumbnailQuery } from "./backfill-image-thumbnails.helpers";
 
@@ -67,23 +68,24 @@ type EntityFieldRow = {
 /** Bounds the cleanup delete; a stuck socket must not stall the backfill. */
 const THUMBNAIL_CLEANUP_TIMEOUT_MS = 15_000;
 
-const deleteThumbnailBestEffort = async (thumbnailKey: string) => {
-  const cleanup = await Result.tryPromise({
-    // Through the module helper rather than the client handle: a full backfill
-    // outlives the task role's credentials, and the helper carries the refresh
-    // and the one replay that a rotation mid-run needs.
-    try: async () =>
-      await deleteS3ObjectWithSignal(
-        thumbnailKey,
-        AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
-      ),
-    catch: (cause) => cause,
-  });
-  if (Result.isError(cleanup)) {
-    console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
-    return;
+const deleteThumbnailsBestEffort = async (thumbnailKeys: string[]) => {
+  const deletedKeys: string[] = [];
+  for (const thumbnailKey of thumbnailKeys) {
+    const cleanup = await Result.tryPromise({
+      try: async () =>
+        await deleteS3ObjectWithSignal(
+          thumbnailKey,
+          AbortSignal.timeout(THUMBNAIL_CLEANUP_TIMEOUT_MS),
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(cleanup)) {
+      console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
+      continue;
+    }
+    deletedKeys.push(thumbnailKey);
   }
-  const removed = await removeOrganizationFileBytes(thumbnailKey);
+  const removed = await removeOrganizationFilesBytes(deletedKeys);
   if (Result.isError(removed)) {
     throw removed.error;
   }
@@ -159,105 +161,158 @@ const readChatFilePage = async (cursor: SafeId<"userFile"> | null) =>
       await buildChatThumbnailQuery(tx, cursor, env.FEATURE_FILE_USAGE_LIMITS),
   );
 
+type PreparedThumbnail = {
+  rowId: SafeId<"userFile">;
+  thumbnailFileId: string;
+  thumbnailKey: string;
+  webp: Uint8Array;
+  placeholder: string;
+  organizationId: SafeId<"organization"> | null;
+};
+
+const backfillChatFilePage = async (
+  rows: Awaited<ReturnType<typeof readChatFilePage>>,
+): Promise<number> => {
+  const prepared: PreparedThumbnail[] = [];
+  for (const row of rows) {
+    const source = await Result.tryPromise({
+      try: async () => new Uint8Array(await readS3ArrayBuffer(row.s3Key)),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(source)) {
+      console.warn(`  chat: skip ${row.id} (source read failed)`);
+      continue;
+    }
+    const thumbnail = await generateImageThumbnail(source.value);
+    if (Result.isError(thumbnail)) {
+      console.warn(`  chat: skip ${row.id} (generate failed)`);
+      continue;
+    }
+    const thumbnailFileId = Bun.randomUUIDv7();
+    const thumbnailKey = createUserFileKey({
+      fileId: thumbnailFileId,
+      mimeType: THUMBNAIL_MIME_TYPE,
+      userId: brandPersistedUserId(row.userId),
+    });
+    let organizationId: SafeId<"organization"> | null = null;
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
+      if (
+        !("organizationId" in row) ||
+        typeof row.organizationId !== "string"
+      ) {
+        return panic("Tracked chat thumbnail query omitted organization id");
+      }
+      organizationId = brandPersistedOrganizationId(row.organizationId);
+    }
+    prepared.push({
+      rowId: row.id,
+      thumbnailFileId,
+      thumbnailKey,
+      webp: thumbnail.value.webp,
+      placeholder: thumbnail.value.placeholder,
+      organizationId,
+    });
+  }
+  if (prepared.length === 0) {
+    return 0;
+  }
+  const write = async (thumbnail: PreparedThumbnail) =>
+    await writeS3ObjectWithRetry({
+      contentType: THUMBNAIL_MIME_TYPE,
+      data: thumbnail.webp,
+      key: thumbnail.thumbnailKey,
+    });
+  const written = await (async () => {
+    if (env.FEATURE_FILE_USAGE_LIMITS) {
+      return await writeOrganizationFiles(
+        prepared.map((thumbnail) => ({
+          organizationId:
+            thumbnail.organizationId ??
+            panic("Tracked thumbnail has no organization"),
+          objectKey: thumbnail.thumbnailKey,
+          sizeBytes: thumbnail.webp.byteLength,
+          write: async () => await write(thumbnail),
+        })),
+      );
+    }
+    return await Result.tryPromise({
+      try: async () => {
+        for (const thumbnail of prepared) {
+          await write(thumbnail);
+        }
+      },
+      catch: (cause) => cause,
+    });
+  })();
+  if (Result.isError(written)) {
+    await deleteThumbnailsBestEffort(
+      prepared.map((thumbnail) => thumbnail.thumbnailKey),
+    );
+    throw written.error;
+  }
+  const updated = await Result.tryPromise({
+    try: async () =>
+      await db.transaction(
+        async (tx) =>
+          await tx
+            .update(userFiles)
+            .set({
+              thumbnailFileId: sqlCaseFragment({
+                operand: sql`${userFiles.id}`,
+                branches: prepared.map(
+                  (thumbnail) =>
+                    sql`WHEN ${thumbnail.rowId}::uuid THEN ${thumbnail.thumbnailFileId}::text`,
+                ),
+                fallback: sql`${userFiles.thumbnailFileId}`,
+              }),
+              placeholder: sqlCaseFragment({
+                operand: sql`${userFiles.id}`,
+                branches: prepared.map(
+                  (thumbnail) =>
+                    sql`WHEN ${thumbnail.rowId}::uuid THEN ${thumbnail.placeholder}::text`,
+                ),
+                fallback: sql`${userFiles.placeholder}`,
+              }),
+            })
+            .where(
+              and(
+                inArray(
+                  userFiles.id,
+                  prepared.map((thumbnail) => thumbnail.rowId),
+                ),
+                isNull(userFiles.thumbnailFileId),
+              ),
+            )
+            .returning({ id: userFiles.id }),
+      ),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(updated)) {
+    await deleteThumbnailsBestEffort(
+      prepared.map((thumbnail) => thumbnail.thumbnailKey),
+    );
+    throw updated.error;
+  }
+  const updatedIds = new Set(updated.value.map((row) => row.id));
+  await deleteThumbnailsBestEffort(
+    prepared
+      .filter((thumbnail) => !updatedIds.has(thumbnail.rowId))
+      .map((thumbnail) => thumbnail.thumbnailKey),
+  );
+  return updated.value.length;
+};
+
 const backfillChatFiles = async (): Promise<number> => {
   let cursor: SafeId<"userFile"> | null = null;
   let generated = 0;
-
   for (;;) {
     // db-await-in-loop: keyset page per iteration; the page is the batch
     const rows = await readChatFilePage(cursor);
-
     if (rows.length === 0) {
       break;
     }
-
-    for (const row of rows) {
-      const source = await Result.tryPromise({
-        try: async () => new Uint8Array(await readS3ArrayBuffer(row.s3Key)),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(source)) {
-        console.warn(`  chat: skip ${row.id} (source read failed)`);
-        continue;
-      }
-
-      const thumbnail = await generateImageThumbnail(source.value);
-      if (Result.isError(thumbnail)) {
-        console.warn(`  chat: skip ${row.id} (generate failed)`);
-        continue;
-      }
-
-      const thumbnailFileId = Bun.randomUUIDv7();
-      const thumbnailKey = createUserFileKey({
-        fileId: thumbnailFileId,
-        mimeType: THUMBNAIL_MIME_TYPE,
-        userId: brandPersistedUserId(row.userId),
-      });
-      let written;
-      if (env.FEATURE_FILE_USAGE_LIMITS) {
-        if (
-          !("organizationId" in row) ||
-          typeof row.organizationId !== "string"
-        ) {
-          return panic("Tracked chat thumbnail query omitted organization id");
-        }
-        written = await writeOrganizationFile({
-          organizationId: brandPersistedOrganizationId(row.organizationId),
-          objectKey: thumbnailKey,
-          sizeBytes: thumbnail.value.webp.byteLength,
-          write: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: THUMBNAIL_MIME_TYPE,
-              data: thumbnail.value.webp,
-              key: thumbnailKey,
-            }),
-        });
-      } else {
-        written = await Result.tryPromise({
-          try: async () =>
-            await writeS3ObjectWithRetry({
-              contentType: THUMBNAIL_MIME_TYPE,
-              data: thumbnail.value.webp,
-              key: thumbnailKey,
-            }),
-          catch: (cause) => cause,
-        });
-      }
-      if (Result.isError(written)) {
-        throw written.error;
-      }
-      const updatedRows = await Result.tryPromise({
-        try: async () =>
-          // db-await-in-loop: one write per generated thumbnail so progress survives a stop
-          await db.transaction(
-            async (tx) =>
-              await tx
-                .update(userFiles)
-                .set({
-                  thumbnailFileId,
-                  placeholder: thumbnail.value.placeholder,
-                })
-                .where(
-                  and(
-                    eq(userFiles.id, row.id),
-                    isNull(userFiles.thumbnailFileId),
-                  ),
-                )
-                .returning({ id: userFiles.id }),
-          ),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(updatedRows)) {
-        await deleteThumbnailBestEffort(thumbnailKey);
-        throw updatedRows.error;
-      }
-      if (updatedRows.value.length === 0) {
-        await deleteThumbnailBestEffort(thumbnailKey);
-        continue;
-      }
-      generated += 1;
-    }
-
+    // db-await-in-loop: one bounded thumbnail page; reserve, settle, and publish progress in batches
+    generated += await backfillChatFilePage(rows);
     const lastRow = rows.at(-1);
     if (!lastRow) {
       break;
@@ -265,7 +320,6 @@ const backfillChatFiles = async (): Promise<number> => {
     cursor = lastRow.id;
     console.log(`  chat: ${generated} thumbnail(s) generated so far...`);
   }
-
   return generated;
 };
 

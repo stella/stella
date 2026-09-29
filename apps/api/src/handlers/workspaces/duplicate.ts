@@ -40,9 +40,9 @@ import {
 import type { EntityVersionValues } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
+import { deleteOrganizationFilesWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { copyOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -54,7 +54,6 @@ import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { getS3 } from "@/api/lib/s3";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
@@ -331,55 +330,6 @@ const orderEntitiesForDuplicate = <
   return ordered;
 };
 
-const copyWorkspaceFile = async ({
-  copiedS3Keys,
-  copy,
-  organizationId,
-  sourceWorkspaceId,
-  targetWorkspaceId,
-}: {
-  copiedS3Keys: string[];
-  copy: FileCopy;
-  organizationId: SafeId<"organization">;
-  sourceWorkspaceId: SafeId<"workspace">;
-  targetWorkspaceId: SafeId<"workspace">;
-}) => {
-  const sourceKey = createFileKey({
-    organizationId,
-    workspaceId: sourceWorkspaceId,
-    fileId: copy.sourceFileId,
-    mimeType: copy.mimeType,
-  });
-  const targetKey = createFileKey({
-    organizationId,
-    workspaceId: targetWorkspaceId,
-    fileId: copy.targetFileId,
-    mimeType: copy.mimeType,
-  });
-  // Reserve the deterministic destination before starting the copy. A timed-out
-  // request may still have completed in S3, so rollback must delete this key even
-  // when the client never observes a successful response.
-  copiedS3Keys.push(targetKey);
-  const copied = await (async () => {
-    if (!env.FEATURE_FILE_USAGE_LIMITS) {
-      return await copyObject(sourceKey, targetKey);
-    }
-    const source = await headObject(sourceKey);
-    if (Result.isError(source)) {
-      return Result.err(source.error);
-    }
-    return await copyOrganizationFile({
-      organizationId,
-      objectKey: targetKey,
-      sizeBytes: source.value.contentLength,
-      copy: async () => await copyObject(sourceKey, targetKey),
-    });
-  })();
-  if (Result.isError(copied)) {
-    throw copied.error;
-  }
-};
-
 const copyWorkspaceFiles = async ({
   copiedS3Keys,
   copies,
@@ -393,36 +343,55 @@ const copyWorkspaceFiles = async ({
   sourceWorkspaceId: SafeId<"workspace">;
   targetWorkspaceId: SafeId<"workspace">;
 }) => {
-  let nextIndex = 0;
-
-  const copyNext = async () => {
-    while (nextIndex < copies.length) {
-      const copy = copies[nextIndex];
-      nextIndex++;
-      if (!copy) {
-        return;
-      }
-
-      await copyWorkspaceFile({
-        copiedS3Keys,
-        copy,
-        organizationId,
-        sourceWorkspaceId,
-        targetWorkspaceId,
-      });
+  const prepareFile = async (copy: FileCopy) => {
+    const sourceKey = createFileKey({
+      organizationId,
+      workspaceId: sourceWorkspaceId,
+      fileId: copy.sourceFileId,
+      mimeType: copy.mimeType,
+    });
+    const targetKey = createFileKey({
+      organizationId,
+      workspaceId: targetWorkspaceId,
+      fileId: copy.targetFileId,
+      mimeType: copy.mimeType,
+    });
+    copiedS3Keys.push(targetKey);
+    const source = env.FEATURE_FILE_USAGE_LIMITS
+      ? await headObject(sourceKey)
+      : Result.ok({ contentLength: 0 });
+    if (Result.isError(source)) {
+      return Result.err(source.error);
     }
+    return Result.ok({
+      organizationId,
+      objectKey: targetKey,
+      sizeBytes: source.value.contentLength,
+      copy: async () => await copyObject(sourceKey, targetKey),
+    });
   };
-
-  const copyResults = await Promise.allSettled(
-    Array.from(
-      { length: Math.min(FILE_COPY_CONCURRENCY, copies.length) },
-      copyNext,
-    ),
-  );
-  const failedCopy = copyResults.find((result) => result.status === "rejected");
-
-  if (failedCopy) {
-    throw failedCopy.reason;
+  const prepared: Awaited<ReturnType<typeof prepareFile>>[] = [];
+  for (let start = 0; start < copies.length; start += FILE_COPY_CONCURRENCY) {
+    prepared.push(
+      ...(await Promise.all(
+        copies.slice(start, start + FILE_COPY_CONCURRENCY).map(prepareFile),
+      )),
+    );
+  }
+  const inputs = Result.all(prepared);
+  if (Result.isError(inputs)) {
+    throw inputs.error;
+  }
+  const copied = await copyOrganizationFiles({
+    inputs: inputs.value,
+    concurrency: FILE_COPY_CONCURRENCY,
+  });
+  if (Result.isError(copied)) {
+    throw copied.error;
+  }
+  const completed = Result.all(copied.value);
+  if (Result.isError(completed)) {
+    throw completed.error;
   }
 };
 
@@ -438,21 +407,13 @@ const cleanupCopiedS3Keys = async ({
   }
 
   const cleanupResult = Result.flatten(
-    await Result.tryPromise(async () => {
-      const results = await Promise.all(
-        copiedS3Keys.map(async (key) => {
-          if (env.FEATURE_FILE_USAGE_LIMITS) {
-            return await deleteOrganizationFileWithSignal(
-              key,
-              AbortSignal.timeout(10_000),
-            );
-          }
-          await getS3().delete(key);
-          return Result.ok(undefined);
-        }),
-      );
-      return Result.all(results);
-    }),
+    await Result.tryPromise(
+      async () =>
+        await deleteOrganizationFilesWithSignal(
+          copiedS3Keys,
+          AbortSignal.timeout(10_000),
+        ),
+    ),
   );
 
   if (Result.isError(cleanupResult)) {
