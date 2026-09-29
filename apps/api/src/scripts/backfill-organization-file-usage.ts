@@ -8,7 +8,7 @@
  * replaying a page changes no count for unchanged objects.
  */
 import { panic, Result } from "better-result";
-import { asc, eq, gt, and } from "drizzle-orm";
+import { asc, eq, gt } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
@@ -96,30 +96,20 @@ const readOrganizationPage = async (cursor: SafeId<"organization"> | null) =>
         .limit(PAGE_SIZE),
   );
 
-const readUserFilePage = async ({
-  cursor,
-  organizationId,
-}: {
-  cursor: SafeId<"userFile"> | null;
-  organizationId: SafeId<"organization">;
-}) =>
+const readUserFilePage = async (cursor: SafeId<"userFile"> | null) =>
   await db.transaction(
     async (tx) =>
       await tx
         .select({
           id: userFiles.id,
+          organizationId: chatThreads.organizationId,
           s3Key: userFiles.s3Key,
           thumbnailFileId: userFiles.thumbnailFileId,
           userId: userFiles.userId,
         })
         .from(userFiles)
         .innerJoin(chatThreads, eq(userFiles.threadId, chatThreads.id))
-        .where(
-          and(
-            eq(chatThreads.organizationId, organizationId),
-            cursor === null ? undefined : gt(userFiles.id, cursor),
-          ),
-        )
+        .where(cursor === null ? undefined : gt(userFiles.id, cursor))
         .orderBy(asc(userFiles.id))
         .limit(PAGE_SIZE),
   );
@@ -161,42 +151,7 @@ while (true) {
       }
     }
 
-    let fileCursor: SafeId<"userFile"> | null = null;
-    while (true) {
-      // db-await-in-loop: the previous file page supplies this organization's next cursor
-      const files = await readUserFilePage({
-        cursor: fileCursor,
-        organizationId,
-      });
-      if (files.length === 0) {
-        break;
-      }
-      for (const file of files) {
-        if (await importObject(organizationId, file.s3Key)) {
-          imported += 1;
-        }
-        if (
-          file.thumbnailFileId &&
-          (await importObject(
-            organizationId,
-            createUserFileKey({
-              fileId: file.thumbnailFileId,
-              mimeType: THUMBNAIL_MIME_TYPE,
-              userId: brandPersistedUserId(file.userId),
-            }),
-          ))
-        ) {
-          imported += 1;
-        }
-      }
-      const lastFile = files.at(-1);
-      fileCursor =
-        lastFile === undefined ? null : brandPersistedUserFileId(lastFile.id);
-      if (files.length < PAGE_SIZE) {
-        break;
-      }
-    }
-    // db-await-in-loop: each organization is repaired after its full object and file walk
+    // db-await-in-loop: each organization is repaired after its organization-prefixed object walk
     removed += await reconcileAbsentOrganizationFileObjects({
       db: ledgerDb,
       organizationId,
@@ -229,6 +184,43 @@ while (true) {
       ? null
       : brandPersistedOrganizationId(lastOrganization.id);
 }
+// User-scoped object keys have no organization prefix. Scan their rows once
+// through the global primary key; joining a tenant filter would force each
+// organization to rescan other organizations' files on every page.
+let fileCursor: SafeId<"userFile"> | null = null;
+while (true) {
+  // db-await-in-loop: the previous global file page supplies the next id cursor
+  const files = await readUserFilePage(fileCursor);
+  if (files.length === 0) {
+    break;
+  }
+  for (const file of files) {
+    const organizationId = brandPersistedOrganizationId(file.organizationId);
+    if (await importObject(organizationId, file.s3Key)) {
+      imported += 1;
+    }
+    if (
+      file.thumbnailFileId &&
+      (await importObject(
+        organizationId,
+        createUserFileKey({
+          fileId: file.thumbnailFileId,
+          mimeType: THUMBNAIL_MIME_TYPE,
+          userId: brandPersistedUserId(file.userId),
+        }),
+      ))
+    ) {
+      imported += 1;
+    }
+  }
+  const lastFile = files.at(-1);
+  fileCursor =
+    lastFile === undefined ? null : brandPersistedUserFileId(lastFile.id);
+  if (files.length < PAGE_SIZE) {
+    break;
+  }
+}
+
 const unexpectedUnsettled = await reportOrganizationFileUsageBackfill({
   counts: {
     imported,

@@ -342,7 +342,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 901,
+    "count": 899,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -369,7 +369,6 @@
       "apps/api/src/handlers/chat/chat-message-persistence.ts": 3,
       "apps/api/src/handlers/chat/chat-sandbox-plan.ts": 2,
       "apps/api/src/handlers/chat/compaction.ts": 2,
-      "apps/api/src/handlers/chat/send-message.ts": 2,
       "apps/api/src/handlers/chat/stream-chat.ts": 3,
       "apps/api/src/handlers/chat/subagent-runner.ts": 2,
       "apps/api/src/handlers/chat/third-party-boundary.ts": 4,
