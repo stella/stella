@@ -114,9 +114,16 @@ const useTemplateActions = (organizationId: string) => {
     update: (templateId: string, patch: TemplatePatch) =>
       api.templates({ templateId }).post(patch),
     remove: (templateId: string) => api.templates({ templateId }).delete(),
-    /** The detail carries an audited presigned URL for the source DOCX. */
-    readSource: (templateId: string) =>
-      api.templates({ templateId: toSafeId<"template">(templateId) }).get(),
+    /**
+     * The audited presigned URL of the template's source DOCX, read from its
+     * detail; `null` when the detail could not be read.
+     */
+    readSourceUrl: async (templateId: string): Promise<string | null> => {
+      const { data, error } = await api
+        .templates({ templateId: toSafeId<"template">(templateId) })
+        .get();
+      return error ? null : data.presignedUrl;
+    },
   };
 };
 

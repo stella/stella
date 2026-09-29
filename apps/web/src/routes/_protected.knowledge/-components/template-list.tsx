@@ -342,12 +342,12 @@ const MemberTemplateRow = ({
 
   /** Opens the audited presigned URL of the source DOCX. */
   const downloadSource = async () => {
-    const response = await templateActions.readSource(template.id);
-    if (response.error) {
+    const sourceUrl = await templateActions.readSourceUrl(template.id);
+    if (sourceUrl === null) {
       stellaToast.add({ type: "error", title: t("common.unexpectedError") });
       return;
     }
-    openIsolatedWindow(response.data.presignedUrl);
+    openIsolatedWindow(sourceUrl);
   };
 
   const rowActions: ContextMenuAction[] = [

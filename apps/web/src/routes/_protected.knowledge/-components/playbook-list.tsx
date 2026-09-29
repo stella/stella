@@ -94,9 +94,7 @@ export const PlaybookList = ({
       source={{
         starters: {
           ...starters,
-          pendingStarterId: create.isPending
-            ? (create.variables ?? null)
-            : null,
+          pendingStarterId: create.isPending ? create.variables : null,
         },
         recent,
         library: {

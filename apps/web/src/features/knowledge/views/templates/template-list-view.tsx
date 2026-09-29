@@ -1,4 +1,4 @@
-import type { DragEvent, ReactNode } from "react";
+import type { DragEvent, ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { useTranslations } from "use-intl";
@@ -41,7 +41,7 @@ type TemplateListViewProps = {
     row: TemplateRowContext,
   ) => ReactNode;
   /** Shown instead of the list when there is nothing to list and no filter. */
-  emptyState?: ReactNode;
+  emptyState?: ReactElement | undefined;
   /** Desktop navigation beside the list. */
   sidebar?: ((filter: TemplateTagFilter) => ReactNode) | undefined;
   /** Filters above the list on narrow screens. */
