@@ -69,6 +69,15 @@ CREATE POLICY "organization_file_usage_owner_access"
 CREATE POLICY "organization_file_usage_select"
   ON "organization_file_usage" AS PERMISSIVE FOR SELECT TO "stella"
   USING ("organization_id" = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_file_usage_no_insert"
+  ON "organization_file_usage" AS RESTRICTIVE FOR INSERT TO "stella"
+  WITH CHECK (false);--> statement-breakpoint
+CREATE POLICY "organization_file_usage_no_update"
+  ON "organization_file_usage" AS RESTRICTIVE FOR UPDATE TO "stella"
+  USING (false);--> statement-breakpoint
+CREATE POLICY "organization_file_usage_no_delete"
+  ON "organization_file_usage" AS RESTRICTIVE FOR DELETE TO "stella"
+  USING (false);--> statement-breakpoint
 
 CREATE POLICY "organization_file_objects_owner_access"
   ON "organization_file_objects" AS PERMISSIVE FOR ALL TO public
@@ -78,4 +87,13 @@ CREATE POLICY "organization_file_objects_owner_access"
     FROM pg_catalog.pg_class WHERE oid = 'public.organization_file_objects'::regclass));--> statement-breakpoint
 CREATE POLICY "organization_file_objects_select"
   ON "organization_file_objects" AS PERMISSIVE FOR SELECT TO "stella"
-  USING ("organization_id" = (SELECT current_setting('app.organization_id', true)));
+  USING ("organization_id" = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
+CREATE POLICY "organization_file_objects_no_insert"
+  ON "organization_file_objects" AS RESTRICTIVE FOR INSERT TO "stella"
+  WITH CHECK (false);--> statement-breakpoint
+CREATE POLICY "organization_file_objects_no_update"
+  ON "organization_file_objects" AS RESTRICTIVE FOR UPDATE TO "stella"
+  USING (false);--> statement-breakpoint
+CREATE POLICY "organization_file_objects_no_delete"
+  ON "organization_file_objects" AS RESTRICTIVE FOR DELETE TO "stella"
+  USING (false);

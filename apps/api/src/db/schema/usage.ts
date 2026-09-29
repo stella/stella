@@ -736,6 +736,24 @@ export const organizationFileUsage = p.pgTable(
       to: stella,
       using: organizationCheck,
     }),
+    p.pgPolicy("organization_file_usage_no_insert", {
+      as: "restrictive",
+      for: "insert",
+      to: stella,
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("organization_file_usage_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("organization_file_usage_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
   ],
 );
 
@@ -790,6 +808,24 @@ export const organizationFileObjects = p.pgTable(
       for: "select",
       to: stella,
       using: organizationCheck,
+    }),
+    p.pgPolicy("organization_file_objects_no_insert", {
+      as: "restrictive",
+      for: "insert",
+      to: stella,
+      withCheck: sql`false`,
+    }),
+    p.pgPolicy("organization_file_objects_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("organization_file_objects_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
     }),
   ],
 );
