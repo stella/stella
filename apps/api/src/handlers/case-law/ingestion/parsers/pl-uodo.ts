@@ -228,13 +228,24 @@ type WalkBlockOptions = {
   node: AnyNode;
   context: ParagraphContext;
   extra?: Partial<ParagraphBlock>;
+  depth?: number;
 };
 
 /** Unexpected children retain their text where they stand, with a markup report. */
-const walkBlock = ({ state, node, context, extra }: WalkBlockOptions): void => {
+const walkBlock = ({
+  state,
+  node,
+  context,
+  extra,
+  depth = 0,
+}: WalkBlockOptions): void => {
   if (isTag(node)) {
     if (node.tagName !== "xText") {
       state.unmapped.add(node.tagName);
+      if (state.$(node).find("xUnit, xText, xBlock").length > 0) {
+        walkUnit(state, node, depth, context);
+        return;
+      }
     }
   } else if (isText(node) || isCDATA(node)) {
     if (inlinesToPlainText(inlinesOf(state, node)).trim() === "") {
@@ -322,7 +333,7 @@ const walkUnit = (
   let pendingMarker = title === "" && marker !== "" ? opening : "";
   for (const child of unit.children) {
     if (!isTag(child)) {
-      walkBlock({ state, node: child, context: unitContext });
+      walkBlock({ state, node: child, context: unitContext, depth: depth + 1 });
       continue;
     }
     if (child.tagName === "xText") {
@@ -354,7 +365,7 @@ const walkUnit = (
     if (child.tagName === "xUnit") {
       walkUnit(state, child, depth + 1, unitContext);
     } else {
-      walkBlock({ state, node: child, context: unitContext });
+      walkBlock({ state, node: child, context: unitContext, depth: depth + 1 });
     }
   }
 };
@@ -541,6 +552,7 @@ export const parsePlUodoDecisionXml = (
       // A container this reader has no rule for: its texts are read as plain
       // paragraphs in place rather than dropped.
       default: {
+        state.unmapped.add(child.tagName);
         walkBlock({
           state,
           node: child,
