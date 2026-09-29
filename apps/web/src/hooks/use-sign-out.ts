@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -8,6 +8,7 @@ import { signalSessionChange } from "@/lib/account/session-signal";
 import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
+import { rootKeys } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
@@ -28,12 +29,16 @@ export const useSignOut = () => {
   const routeLocation = useLocation();
   const navigate = useNavigate();
   const t = useTranslations();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async () => {
       const result = await signOutAndRelease();
 
       if (result.error) {
+        // Still signed in: read the session again so this tab keeps the
+        // user's storage instead of the visitor's.
+        await queryClient.refetchQueries({ queryKey: rootKeys.session });
         stellaToast.add({
           title: userErrorFromThrown(
             toAuthClientError(result.error),

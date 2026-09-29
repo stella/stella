@@ -12,8 +12,13 @@ const SESSION_SIGNAL_KEY = "stella.session-signal";
 
 type SessionSignal = { type: "session-changed"; sender: string; nonce: string };
 
-/** This tab, so it can tell its own notes from the others'. */
-const TAB_ID = crypto.randomUUID();
+/**
+ * This tab, so it can tell its own notes from the others'. Built from
+ * `getRandomValues`, which pages served over plain http also have.
+ */
+const TAB_ID = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+  byte.toString(16).padStart(2, "0"),
+).join("");
 
 const isSessionSignal = (value: unknown): value is SessionSignal =>
   typeof value === "object" &&
