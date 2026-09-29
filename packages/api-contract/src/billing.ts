@@ -97,3 +97,25 @@ type MissingInvoiceStatus = Exclude<
 >;
 
 true satisfies MissingInvoiceStatus extends never ? true : never;
+
+/** Where an invoice line's amount comes from. */
+export const INVOICE_LINE_SOURCES = [
+  "manual",
+  "time_entry",
+  "expense",
+] as const;
+
+export type InvoiceLineSource = (typeof INVOICE_LINE_SOURCES)[number];
+
+export const INVOICE_LINE_SOURCE = {
+  MANUAL: "manual",
+  TIME_ENTRY: "time_entry",
+  EXPENSE: "expense",
+} as const satisfies Record<string, InvoiceLineSource>;
+
+type MissingInvoiceLineSource = Exclude<
+  InvoiceLineSource,
+  (typeof INVOICE_LINE_SOURCE)[keyof typeof INVOICE_LINE_SOURCE]
+>;
+
+true satisfies MissingInvoiceLineSource extends never ? true : never;

@@ -313,6 +313,8 @@ export const LIMITS = {
   invoicesPerWorkspace: 10_000,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
+  // An invoice read returns every line, so the count stays bounded.
+  invoiceLinesPerInvoice: 1000,
   exportRowLimit: 10_000,
   /** One reader's highlights and comments on one decision or statute
    *  version, read whole when the reader opens the document. */

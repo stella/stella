@@ -395,6 +395,15 @@ export const CAPABILITY_DISPATCH = {
   "invoices.get": {
     load: async () => await import("@/api/handlers/invoices/get"),
   },
+  "invoices.lines.create": {
+    load: async () => await import("@/api/handlers/invoices/lines/create"),
+  },
+  "invoices.lines.delete": {
+    load: async () => await import("@/api/handlers/invoices/lines/delete"),
+  },
+  "invoices.lines.update": {
+    load: async () => await import("@/api/handlers/invoices/lines/update"),
+  },
   "invoices.list": {
     load: async () => await import("@/api/handlers/invoices/list"),
   },
