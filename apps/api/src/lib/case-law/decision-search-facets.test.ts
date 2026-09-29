@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 
 import {
   COURT_TIER_LABELS,
@@ -20,6 +20,7 @@ import {
   LOWEST_COURT_TIER,
 } from "@/api/lib/legal-search/rerank";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 
 const bucket = (value: string, count: number): SearchFacetBucket => ({
   value,
@@ -51,6 +52,42 @@ test("every seeded rank maps onto a declared tier", () => {
   const labels = COURT_WEIGHT_SEED.map((row) => courtTierLabel(row.tier));
 
   expect(labels.every((label) => COURT_TIER_LABELS.includes(label))).toBe(true);
+});
+
+test("a stale directory court name is unranked and reported, and its peers are grouped as usual", () => {
+  const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  try {
+    // The stale name is off the listed tiers' caps: one court per tier, and
+    // the apex court is the larger bucket.
+    const grouped = groupCourtsByTier({
+      buckets: [
+        bucket("Supreme Court of the United States", 10),
+        bucket("Court of Appeals for the First Circuit", 4),
+        bucket("Supreme Court of the United States (stale)", 1),
+      ],
+      country: "USA",
+      courtWeights,
+      perTierLimit: 1,
+    });
+    expect(
+      grouped.map((tier) => [tier.tierLabel, tier.courts.map((c) => c.value)]),
+    ).toEqual([
+      ["supreme", ["Supreme Court of the United States"]],
+      ["regional", ["Court of Appeals for the First Circuit"]],
+      ["other", ["Supreme Court of the United States (stale)"]],
+    ]);
+    expect(warn).toHaveBeenCalledWith(
+      "case_law.court_rank.invalid_directory_identity",
+      {
+        country: "USA",
+        lookup: "court_name",
+        "court.identity": "Supreme Court of the United States (stale)",
+        effect: "unranked",
+      },
+    );
+  } finally {
+    warn.mockRestore();
+  }
 });
 
 test("courts group into the apex-first tiers of their jurisdiction", () => {

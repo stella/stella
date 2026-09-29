@@ -128,13 +128,12 @@ export const providerSearchPlan = ({
   // pagination is only stable while the two are the same expression.
   const scoreExpr = blendedRankSql({
     authority: sql`d.citation_authority`,
-    courtTier: sql.raw(
-      courtTierSqlFromMap({
-        countryColumn: "d.country",
-        courtColumn: "d.court",
-        map: courtWeights,
-      }),
-    ),
+    courtTier: courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      courtIdColumn: "d.court_id",
+      map: courtWeights,
+    }),
     lexicalRank: ftsSearch.rank,
   });
 

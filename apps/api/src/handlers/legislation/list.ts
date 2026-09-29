@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { status, t } from "elysia";
@@ -40,7 +41,10 @@ import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -348,9 +352,87 @@ export const listStatutesHandler = async (
   }
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
+  const trimmedQuery = query.query?.trim() || null;
+  if (
+    cursor !== null &&
+    cursor.type !==
+      (trimmedQuery === null
+        ? LEGISLATION_LIST_CURSOR_KIND.recent
+        : LEGISLATION_LIST_CURSOR_KIND.search)
+  ) {
+    return status(400, { message: "Invalid cursor" });
+  }
+  if (
+    query.number !== undefined &&
+    actNumberCondition(query.number, query.collection) === null
+  ) {
+    return status(400, { message: "Invalid act number" });
+  }
+
+  const normalizedQuery = { ...query };
+  delete normalizedQuery.query;
+  if (trimmedQuery !== null) {
+    normalizedQuery.query = trimmedQuery;
+  }
+
+  const rows = await legislationDb(
+    async (tx) =>
+      await buildListStatutesQuery(tx, {
+        country: countryRead.country,
+        query: normalizedQuery,
+        limit,
+        cursor,
+        asOf,
+      }),
+  );
+
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) =>
+      trimmedQuery === null
+        ? encodePaginationCursor([
+            LEGISLATION_LIST_CURSOR_KIND.recent,
+            item.validFromKey,
+            item.id,
+          ])
+        : encodePaginationCursor([
+            LEGISLATION_LIST_CURSOR_KIND.search,
+            String(item.rank),
+            item.titleSortKey,
+            item.id,
+          ]),
+  });
+
+  return {
+    ...page,
+    items: page.items.map(
+      ({
+        rank: _rank,
+        titleSortKey: _titleSortKey,
+        validFromKey: _validFromKey,
+        ...item
+      }) => item,
+    ),
+  };
+};
+
+type BuildListStatutesQueryOptions = {
+  country: string;
+  query: Omit<ListStatutesQuery, "country" | "limit" | "cursor" | "asOf">;
+  limit: number;
+  cursor: ListCursor | null;
+  asOf: SQLWrapper;
+};
+
+/** Builds the same bounded production statement used by the public list handler. */
+export const buildListStatutesQuery = (
+  tx: LegislationReadTransaction,
+  { country, query, limit, cursor, asOf }: BuildListStatutesQueryOptions,
+) => {
   const conditions: SQL[] = [
     publishedLegislationDocument,
-    eq(legislationDocuments.country, countryRead.country),
+    eq(legislationDocuments.country, country),
     isLatestOpenedVersionOfWorkAt(asOf),
   ];
 
@@ -369,7 +451,7 @@ export const listStatutesHandler = async (
   if (query.number !== undefined) {
     const byNumber = actNumberCondition(query.number, query.collection);
     if (byNumber === null) {
-      return status(400, { message: "Invalid act number" });
+      return panic("List statutes query received an invalid act number");
     }
     conditions.push(byNumber);
   }
@@ -404,7 +486,7 @@ export const listStatutesHandler = async (
 
   if (cursor !== null) {
     if (cursor.type !== ordering.type) {
-      return status(400, { message: "Invalid cursor" });
+      return panic("List statutes query received a mismatched cursor");
     }
     conditions.push(
       cursor.type === LEGISLATION_LIST_CURSOR_KIND.recent
@@ -413,78 +495,42 @@ export const listStatutesHandler = async (
     );
   }
 
-  const rows = await legislationDb(
-    async (tx) =>
-      await tx
-        .select({
-          id: legislationDocuments.id,
-          eli: legislationDocuments.eli,
-          slug: legislationDocuments.slug,
-          title: legislationDocuments.title,
-          titleSortKey,
-          validFromKey: sql<string>`${validFromKey}::text`.as("valid_from_key"),
-          rank:
-            ordering.type === LEGISLATION_LIST_CURSOR_KIND.search
-              ? sql<number>`${ordering.rank}`.as("title_rank")
-              : sql<number>`0`.as("title_rank"),
-          country: legislationDocuments.country,
-          language: legislationDocuments.language,
-          documentType: legislationDocuments.documentType,
-          status: legislationDocuments.status,
-          effectiveDate: legislationDocuments.effectiveDate,
-          versionValidFrom: legislationDocuments.versionValidFrom,
-          versionValidTo: legislationDocuments.versionValidTo,
-          sourceUrl: legislationDocuments.sourceUrl,
-          documentUrl: legislationDocuments.documentUrl,
-          citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
-          firstVersionValidFrom: firstVersionValidFrom.as(
-            "first_version_valid_from",
-          ),
-          amendmentCount: amendmentCount(asOf).as("amendment_count"),
-          lastAmendedOn: lastAmendedOn.as("last_amended_on"),
-          validity: listValidity(asOf).as("validity"),
-        })
-        .from(legislationDocuments)
-        .innerJoin(
-          legislationSources,
-          eq(legislationSources.id, legislationDocuments.sourceId),
-        )
-        .leftJoin(
-          caseLawStatuteCitationCountState,
-          statuteCitationCountStateJoin,
-        )
-        .where(and(...conditions))
-        .orderBy(...ordering.orderBy)
-        .limit(limit + 1),
-  );
-
-  const page = createCursorPage({
-    rows,
-    limit,
-    cursorForItem: (item) =>
-      ordering.type === LEGISLATION_LIST_CURSOR_KIND.recent
-        ? encodePaginationCursor([
-            LEGISLATION_LIST_CURSOR_KIND.recent,
-            item.validFromKey,
-            item.id,
-          ])
-        : encodePaginationCursor([
-            LEGISLATION_LIST_CURSOR_KIND.search,
-            String(item.rank),
-            item.titleSortKey,
-            item.id,
-          ]),
-  });
-
-  return {
-    ...page,
-    items: page.items.map(
-      ({
-        rank: _rank,
-        titleSortKey: _titleSortKey,
-        validFromKey: _validFromKey,
-        ...item
-      }) => item,
-    ),
-  };
+  return tx
+    .select({
+      id: legislationDocuments.id,
+      eli: legislationDocuments.eli,
+      slug: legislationDocuments.slug,
+      title: legislationDocuments.title,
+      titleSortKey,
+      validFromKey: sql<string>`${validFromKey}::text`.as("valid_from_key"),
+      rank:
+        ordering.type === LEGISLATION_LIST_CURSOR_KIND.search
+          ? sql<number>`${ordering.rank}`.as("title_rank")
+          : sql<number>`0`.as("title_rank"),
+      country: legislationDocuments.country,
+      language: legislationDocuments.language,
+      documentType: legislationDocuments.documentType,
+      status: legislationDocuments.status,
+      effectiveDate: legislationDocuments.effectiveDate,
+      versionValidFrom: legislationDocuments.versionValidFrom,
+      versionValidTo: legislationDocuments.versionValidTo,
+      sourceUrl: legislationDocuments.sourceUrl,
+      documentUrl: legislationDocuments.documentUrl,
+      citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
+      firstVersionValidFrom: firstVersionValidFrom.as(
+        "first_version_valid_from",
+      ),
+      amendmentCount: amendmentCount(asOf).as("amendment_count"),
+      lastAmendedOn: lastAmendedOn.as("last_amended_on"),
+      validity: listValidity(asOf).as("validity"),
+    })
+    .from(legislationDocuments)
+    .innerJoin(
+      legislationSources,
+      eq(legislationSources.id, legislationDocuments.sourceId),
+    )
+    .leftJoin(caseLawStatuteCitationCountState, statuteCitationCountStateJoin)
+    .where(and(...conditions))
+    .orderBy(...ordering.orderBy)
+    .limit(limit + 1);
 };

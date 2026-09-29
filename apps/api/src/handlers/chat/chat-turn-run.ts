@@ -7,6 +7,7 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import type { SafeDb } from "@/api/db/safe-db";
 import { persistFailedChatTurn } from "@/api/handlers/chat/chat-message-persistence";
 import {
+  isChatTurnNotOwned,
   readChatTurnExecutionStanding,
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -103,25 +104,39 @@ type ChatTurnRunOptions = {
   ownership?: ChatTurnOwnership | undefined;
 };
 
+/** A run's heartbeat: stopped at once, idle once its last beat is over. */
+type ChatTurnRunHeartbeatHandle = {
+  /** Resolves once no beat is reading the turn any more. */
+  idle: () => Promise<void>;
+  /** No beat starts from now on. */
+  stop: () => void;
+};
+
 type ChatTurnRunState =
   | { status: "handed-over" }
-  | { status: "producing"; stopHeartbeat: () => void }
+  | { status: "producing"; heartbeat: ChatTurnRunHeartbeatHandle }
   | { status: "settled" };
 
-/** Whether a run stored the turn's outcome (its own, or its failure). */
+/**
+ * Whether the run's turn has its outcome stored: the run's own, its failure,
+ * or the outcome of whoever settled the turn after taking it over. Only an
+ * unstored turn is left to the reaper.
+ */
 type ChatTurnRunEnd = "stored" | "unstored";
 
 type ChatTurnClaim = { execution: ChatTurnExecution; safeDb: SafeDb };
 
 /**
  * What a process owns of chat turns: the runs handed a turn and not yet over,
- * by execution id, and the turns a send has claimed but not yet handed to a
- * run. The process has one (`processChatTurnOwnership`); a test gives its runs
- * their own.
+ * by execution id, the turns a send has claimed but not yet handed to a run,
+ * and the work a turn left running once it ended (its follow-ups). The
+ * process has one (`processChatTurnOwnership`); a test gives its runs their
+ * own.
  */
 export class ChatTurnOwnership {
   private readonly liveRuns = new Map<string, ChatTurnRun>();
   private readonly claims = new Set<ChatTurnClaim>();
+  private readonly followUps = new Set<Promise<unknown>>();
   private relinquishing = false;
   private changed = Promise.withResolvers<undefined>();
 
@@ -147,6 +162,19 @@ export class ChatTurnOwnership {
   }
 
   /**
+   * Track `work`, which runs past the end of the turn that started it: a
+   * process giving up its turns waits for it before its database goes away.
+   * Returns `work` for the caller to detach under its own label.
+   */
+  async followUp<T>(work: Promise<T>): Promise<T> {
+    const tracked: Promise<unknown> = Promise.allSettled([work]).finally(() => {
+      this.followUps.delete(tracked);
+    });
+    this.followUps.add(tracked);
+    return await work;
+  }
+
+  /**
    * Record a turn a send has claimed and still prepares, so relinquishing
    * finds it. Call the returned function once the send no longer holds it.
    */
@@ -165,8 +193,8 @@ export class ChatTurnOwnership {
    * its lease; a run handed a turn from now on is cut short at once. A turn a
    * send still prepares gets the short run lease, so if the process ends
    * before the send hands it over, the reaper finds it within that lease.
-   * Resolves once nothing is owned any more, saying whether every run stored
-   * its outcome; the caller bounds the wait.
+   * Resolves once nothing is owned any more, the turns' follow-ups included,
+   * saying whether every run stored its outcome; the caller bounds the wait.
    */
   async relinquish(): Promise<ChatTurnRunEnd> {
     this.relinquishing = true;
@@ -185,7 +213,10 @@ export class ChatTurnOwnership {
       for (const claim of this.claims) {
         if (!shortened.has(claim)) {
           shortened.add(claim);
-          detached(shortenClaimLease(claim), "chat-turn-run.relinquish-claim");
+          detached(
+            this.followUp(shortenClaimLease(claim)),
+            "chat-turn-run.relinquish-claim",
+          );
         }
       }
       const current: Promise<ChatTurnRunEnd>[] = [];
@@ -199,6 +230,10 @@ export class ChatTurnOwnership {
       await Promise.race([...current, changed]);
     }
     const settled = await Promise.all(ends.values());
+    // A run's follow-ups start before it ends; a follow-up may start another.
+    while (this.followUps.size > 0) {
+      await Promise.all(this.followUps);
+    }
     return settled.includes("unstored") ? "unstored" : "stored";
   }
 
@@ -259,7 +294,7 @@ export class ChatTurnRun {
     if (this.state.status !== "handed-over") {
       return panic(`A chat turn run cannot produce once ${this.state.status}`);
     }
-    this.state = { status: "producing", stopHeartbeat: this.startHeartbeat() };
+    this.state = { status: "producing", heartbeat: this.startHeartbeat() };
     // Building the response starts its pump, which pulls the stream first.
     const response = withSseHeartbeat(
       toServerSentEventsResponse(output, {
@@ -280,13 +315,22 @@ export class ChatTurnRun {
     }
     // Settling ends the run's hold on the turn: from here a beat would find
     // the turn no longer running and cut the response's last chunks.
-    this.state.stopHeartbeat();
+    this.state.heartbeat.stop();
     try {
       await persist();
       this.stored = true;
     } finally {
       this.release();
     }
+  }
+
+  /**
+   * Track `work`, which runs past the end of this turn (a title, say): its
+   * owner waits for it before the process gives up its database. Returns
+   * `work` for the caller to detach under its own label.
+   */
+  async followUp<T>(work: Promise<T>): Promise<T> {
+    return await this.ownership.followUp(work);
   }
 
   /**
@@ -312,13 +356,15 @@ export class ChatTurnRun {
       userId: owner.userId,
       workspaceId: owner.workspaceId,
     });
-    if (Result.isError(failure)) {
+    if (Result.isOk(failure) || isChatTurnNotOwned(failure.error)) {
+      // A turn another execution or the reaper settled first keeps that
+      // outcome: the fence refused this run, and nothing is left to store.
+      this.stored = true;
+    } else {
       observeFailure(failure.error, {
         sink: SETTLEMENT_FAILED_SINK,
         ctx: { threadId: owner.threadId },
       });
-    } else {
-      this.stored = true;
     }
     if (status !== "handed-over") {
       return;
@@ -382,7 +428,7 @@ export class ChatTurnRun {
    * the lease every few beats. A run that finds its turn no longer its own
    * stops producing: another owner, or the reaper, settles it.
    */
-  private startHeartbeat(): () => void {
+  private startHeartbeat(): ChatTurnRunHeartbeatHandle {
     const { heartbeat = CHAT_TURN_RUN_HEARTBEAT, owner } = this.options;
     let beats = 0;
     let stopped = false;
@@ -421,18 +467,17 @@ export class ChatTurnRun {
           panic(`Unhandled standing: ${String(standing.value)}`);
       }
     };
-    let beating = false;
+    /** The beat still reading the turn, settled either way. */
+    let beating: Promise<unknown> | undefined;
     const interval = setInterval(() => {
-      if (beating) {
+      if (beating !== undefined) {
         return;
       }
-      beating = true;
-      detached(
-        beat().finally(() => {
-          beating = false;
-        }),
-        "chat-turn-run.heartbeat",
-      );
+      const current = beat();
+      detached(current, "chat-turn-run.heartbeat");
+      beating = Promise.allSettled([current]).finally(() => {
+        beating = undefined;
+      });
     }, heartbeat.intervalMs);
     interval.unref();
     const stop = () => {
@@ -442,16 +487,34 @@ export class ChatTurnRun {
     this.control.abortController.signal.addEventListener("abort", stop, {
       once: true,
     });
-    return stop;
+    return {
+      idle: async () => {
+        await beating;
+      },
+      stop,
+    };
   }
 
+  /**
+   * End the run: it is no longer owned, and it is over (`settled` resolves)
+   * once a beat still reading its turn is done, so nothing of it touches the
+   * database after that. Its response does not wait for the beat.
+   */
   private release(): void {
-    if (this.state.status === "producing") {
-      this.state.stopHeartbeat();
-    }
+    const { state } = this;
     this.state = { status: "settled" };
+    const end: ChatTurnRunEnd = this.stored ? "stored" : "unstored";
+    if (state.status !== "producing") {
+      this.ownership.release(this);
+      this.settledResolvers.resolve(end);
+      return;
+    }
+    state.heartbeat.stop();
+    // Handed to the owner before the run leaves it, so giving up the
+    // process's turns at any moment from here still waits for that beat.
+    const idle = this.ownership.followUp(state.heartbeat.idle());
     this.ownership.release(this);
-    this.settledResolvers.resolve(this.stored ? "stored" : "unstored");
+    this.settledResolvers.resolve(idle.then(() => end));
   }
 }
 

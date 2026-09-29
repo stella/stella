@@ -1147,8 +1147,10 @@ const applyChatContext = ({
   const activeSkill = context?.getActiveSkill?.();
   if (activeSkill) {
     body.activeSkill = {
-      skillId: toSafeId<"agentSkill">(activeSkill.skillId),
       skillName: activeSkill.skillName,
+      ...(activeSkill.skillId === undefined
+        ? {}
+        : { skillId: toSafeId<"agentSkill">(activeSkill.skillId) }),
     };
   }
 

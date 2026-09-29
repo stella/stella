@@ -116,6 +116,22 @@ export class ChatTurnStopRequestedError extends TaggedError(
 }> {}
 
 /**
+ * Thrown inside a settlement transaction whose execution no longer owns its
+ * turn: another execution or the reaper settled it first, so the transaction
+ * rolls back and that outcome stands. It is how the ownership fence refuses a
+ * stale owner, never a defect of the owner that meets it.
+ */
+export class ChatTurnNotOwnedError extends TaggedError(
+  "ChatTurnNotOwnedError",
+)<{
+  message: string;
+}> {}
+
+/** Whether a settlement failed because its execution no longer owns the turn. */
+export const isChatTurnNotOwned = (error: { cause?: unknown }): boolean =>
+  ChatTurnNotOwnedError.is(error.cause);
+
+/**
  * Turn timestamps participate in database check constraints with `created_at`.
  * Generate them on the database too: API worker clocks are not an authority for
  * a row whose creation and settlement are both enforced by PostgreSQL.

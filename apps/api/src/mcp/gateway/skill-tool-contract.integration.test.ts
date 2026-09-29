@@ -10,6 +10,8 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import { listSkillMetadata, loadSkill } from "@stll/skills";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
@@ -17,6 +19,7 @@ import { agentSkills } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { SKILL_TOOL_OUTPUT } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
@@ -94,15 +97,21 @@ const insertSkill = async ({
   });
 };
 
-const createContext = (): McpRequestContext =>
+const createContext = ({
+  organizationId = ids.orgA,
+  userId = ids.userA1,
+}: {
+  organizationId?: TestIds["orgA"];
+  userId?: TestIds["userA1"];
+} = {}): McpRequestContext =>
   asTestRaw<McpRequestContext>({
     enabledRegistrySlugs: undefined,
     grantedScopes: [],
     memberRole: "owner",
-    organizationId: ids.orgA,
+    organizationId,
     recordAuditEvent: asTestRaw<AuditRecorder>(async () => undefined),
     safeDb,
-    userId: ids.userA1,
+    userId,
   });
 
 const upstreamTool = {
@@ -229,6 +238,56 @@ describe("skill tool output contract", () => {
     });
     expect(analytics.exceptions()).toHaveLength(1);
   });
+});
+
+describe("built-in skill tools", () => {
+  // The second organization has no skill rows, so every built-in is served
+  // unshadowed there.
+  // A skill is offered only beside the tools it requires, so the caller holds
+  // the scope of each built-in's required tools too.
+  const builtInScopes = ["stella:skills", "stella:knowledge_write"];
+  const builtInContext = (): McpRequestContext => ({
+    ...createContext({ organizationId: ids.orgB, userId: ids.userB1 }),
+    grantedScopes: builtInScopes,
+  });
+
+  test.each(listSkillMetadata().map(({ name }) => name))(
+    "%s is listed and served with no stored row, within the contract",
+    async (name) => {
+      const listed = (
+        await listMcpTools(builtInContext(), "default", builtInScopes)
+      ).find((tool) => tool.name === namespaceSkillToolName(name));
+      if (listed === undefined) {
+        throw new Error(`expected built-in skill ${name} to be listed`);
+      }
+
+      const result = await handleMcpToolCall({
+        args: {},
+        context: builtInContext(),
+        toolName: listed.name,
+      });
+      const missingResource = await handleMcpToolCall({
+        args: { resource: "knowledge/not-shipped.md" },
+        context: builtInContext(),
+        toolName: listed.name,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toMatchObject({
+        body: loadSkill(name).body,
+        id: null,
+        name,
+        origin: "built-in",
+      });
+      expect(
+        v.safeParse(
+          SKILL_TOOL_OUTPUT.outputSchemaSource,
+          result.structuredContent,
+        ).success,
+      ).toBe(true);
+      expect(missingResource.isError).toBe(true);
+    },
+  );
 });
 
 describe("third-party connector tools keep their upstream contract", () => {
