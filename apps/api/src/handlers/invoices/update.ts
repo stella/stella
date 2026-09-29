@@ -2,10 +2,8 @@ import { Result } from "better-result";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import {
-  INVOICE_LINE_SOURCE,
-  type InvoiceDocumentType,
-} from "@stll/api-contract";
+import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import { resultTx } from "@/api/db/safe-db";

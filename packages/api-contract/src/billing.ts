@@ -79,8 +79,6 @@ export const NUMBER_SERIES_DOCUMENT_TYPES = [
   "credit_note",
 ] as const;
 
-export type InvoiceDocumentType = (typeof NUMBER_SERIES_DOCUMENT_TYPES)[number];
-
 export const INVOICE_STATUSES = [
   "draft",
   "finalized",

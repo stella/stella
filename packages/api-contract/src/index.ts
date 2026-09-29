@@ -58,7 +58,6 @@ export type {
   ExpenseCategory,
   InvoiceLineSource,
   InvoiceStatus,
-  InvoiceDocumentType,
   TimeEntrySource,
   TimeEntryStatus,
   TimeEntrySuggestionStatus,

@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
-import type { InvoiceDocumentType } from "@stll/api-contract";
+import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
