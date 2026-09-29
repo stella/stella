@@ -450,8 +450,8 @@ const CATALOG_CLOSE = "]";
  * different capabilities touch different lines and merge cleanly (unless both
  * insert at the same sorted slot); a reader that needs a count computes it.
  */
-export const serializeCatalog = (
-  entries: readonly { readonly id: string }[],
+export const serializeCatalog = <Entry extends { readonly id: string }>(
+  entries: readonly Entry[],
 ): string => {
   const lines = entries
     .toSorted((a, b) => compareCapabilityIds(a.id, b.id))
