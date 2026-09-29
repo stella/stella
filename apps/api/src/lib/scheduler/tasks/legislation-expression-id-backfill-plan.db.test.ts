@@ -352,7 +352,7 @@ const expectUnclaimedPlan = async (cursorAt: number | null) => {
   );
   expectNoWholeTableWork(root);
   const scans = documentScans(root);
-  expect([...scans.keys()].toSorted()).toEqual([TABLE, "sibling", "twin"]);
+  expect(new Set(scans.keys())).toEqual(new Set([TABLE, "sibling", "twin"]));
   expectSeek(
     scans.get(TABLE),
     [PRIMARY_KEY],
@@ -372,7 +372,7 @@ const expectClaimPlan = async () => {
   const claimable = claimableIds();
   const root = await explain((tx) => claimExpressionIdsQuery(tx, claimable));
   const scans = documentScans(root);
-  expect([...scans.keys()].toSorted()).toEqual([TABLE, "sibling"]);
+  expect(new Set(scans.keys())).toEqual(new Set([TABLE, "sibling"]));
   expectSeek(scans.get(TABLE), [PRIMARY_KEY], ["id"]);
   expectSeek(scans.get("sibling"), WORK_INDEXES, [WORK_SEEK]);
   // The sibling re-check stays a per-row probe: an anti-join is free to hash
@@ -474,7 +474,7 @@ test(
         typeof index["relpages"] !== "number" ||
         typeof index["reltuples"] !== "number"
       ) {
-        return panic("index statistics are malformed");
+        panic("index statistics are malformed");
       }
       const [restored] = executedRows(
         await db.execute(sql`
