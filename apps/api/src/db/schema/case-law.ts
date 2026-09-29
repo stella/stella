@@ -70,6 +70,7 @@ import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-l
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
+import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 
 import {
   caseLawAnalysisReaderPolicies,
@@ -871,6 +872,26 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_document_pending_date_idx")
       .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+    // Deferred-document queue, parked decisions: the pending rows that used
+    // up their attempts. The pending index above holds every decision whose
+    // text lives outside `fulltext`, so counting or requeueing parked rows
+    // through it walks most of the source to find a few. This one holds
+    // only rows that ever reached the threshold, keyed (source, id) for the
+    // count and the requeue's id-ordered batch. The attempt test is
+    // `documentFetchParked`, the same text the parked reads apply, so the
+    // two cannot drift and leave the index unmatched; the rest of the
+    // pending predicate stays a heap filter.
+    //
+    // Cost: an attempt-count change can no longer be a HOT update, so each
+    // claim of a document writes an entry to every index on the table.
+    // Accepted because the walk's rate is modest and a successful fill
+    // already rewrites indexed columns of the same row.
+    p
+      .index("case_law_decisions_document_parked_idx")
+      .on(t.sourceId, t.id)
+      .where(
+        sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${documentFetchParked(t.documentFetchAttempts)}`,
+      ),
     // Same rule as on the citation side: null means "does not canonicalize",
     // and an empty string would make every such decision a candidate for
     // every such citation.
