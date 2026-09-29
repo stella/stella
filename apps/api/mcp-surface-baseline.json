@@ -6,12 +6,12 @@
         "name": 1149,
         "title": 1184,
         "description": 28603,
-        "inputSchema": 81086,
-        "outputSchema": 53951,
+        "inputSchema": 82351,
+        "outputSchema": 54298,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 179347,
+      "payloadUtf8Bytes": 180959,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -57,11 +57,11 @@
         "title": 496,
         "description": 12876,
         "inputSchema": 26219,
-        "outputSchema": 30852,
+        "outputSchema": 31199,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 76170,
+      "payloadUtf8Bytes": 76517,
       "largestDescription": {
         "tool": "search_case_law",
         "chars": 803

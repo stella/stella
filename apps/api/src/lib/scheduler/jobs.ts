@@ -42,6 +42,7 @@ import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
 import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
+import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -428,6 +429,13 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
+  },
+  {
+    description: "Refresh global reference lists",
+    id: "sanctions.refreshSources.twoHourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 2 * 60 * 60 * 1000 },
+    task: REFRESH_SANCTIONS_SOURCES_TASK,
   },
   {
     description: "Expire abandoned desktop edit sessions past their token TTL",

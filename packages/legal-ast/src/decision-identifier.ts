@@ -86,6 +86,12 @@ const structuredIdentifierValueSchema = v.pipe(
   ),
 );
 
+/** One branch of the identifier schema, for a field that holds only this kind. */
+export const reporterCitationIdentifierSchema = v.strictObject({
+  type: v.literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
+  value: structuredIdentifierValueSchema,
+});
+
 export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
   v.variant("type", [
     v.strictObject({
@@ -100,10 +106,7 @@ export const decisionIdentifierSchema: v.GenericSchema<DecisionIdentifier> =
       type: v.literal(DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION),
       value: structuredIdentifierValueSchema,
     }),
-    v.strictObject({
-      type: v.literal(DECISION_IDENTIFIER_TYPES.REPORTER_CITATION),
-      value: structuredIdentifierValueSchema,
-    }),
+    reporterCitationIdentifierSchema,
   ]);
 
 export const isDecisionIdentifier = (

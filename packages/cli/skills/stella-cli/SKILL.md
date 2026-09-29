@@ -221,7 +221,8 @@ are omitted here.
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes
+  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
+  - via `--input` only: date_of_birth
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)

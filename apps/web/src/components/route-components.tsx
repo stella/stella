@@ -13,6 +13,7 @@ import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { FEEDBACK_CHANNELS } from "@/components/feedback-dialog.logic";
 import { MattersNavIcon } from "@/components/matter-icon";
 import {
   isNetworkError,
@@ -374,6 +375,8 @@ const UnexpectedRouteError = ({
               {reportMounted && (
                 <Suspense fallback={null}>
                   <FeedbackDialog
+                    // `report` support is offered to signed-in members only.
+                    channel={FEEDBACK_CHANNELS.account}
                     errorReference={errorReference}
                     onOpenChange={setReportOpen}
                     open={reportOpen}

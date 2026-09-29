@@ -1495,7 +1495,7 @@ export type WebRoutes = {
             200: (Response | {
               fields: Array<T21b00a9f66>;
               conditions: Array<stll_template_conditions_NamedCondition>;
-              structureErrors: Array<T85e6600670>;
+              structureErrors: Array<Te9acc7e185>;
             });
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -1959,12 +1959,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: {
-                paragraphs: Array<T540f9c7521>;
-                charCount: number;
-                structureErrors: Array<T85e6600670>;
-                clauseSlots: Array<string>;
-              };
+              200: Tb26a03bcf4;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -2150,11 +2145,11 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                paragraphs: Array<T540f9c7521>;
+                paragraphs: Array<T2d6eece830>;
                 charCount: number;
                 unmatchedPlaceholders: Array<string>;
                 unusedValues: Array<string>;
-                structureErrors: Array<T85e6600670>;
+                structureErrors: Array<Te9acc7e185>;
                 aiFieldErrors: Array<T6e9118d33d>;
                 conditionDecisions: Array<((T3a5b898b8d & {
                   state: "decided";
@@ -3585,7 +3580,7 @@ export type WebRoutes = {
                   name: string;
                   samples: Array<string>;
                   sourceIndex: number;
-                  targetField: ("address_line_1" | "address_line_2" | "city" | "country" | "custom_field" | "display_name" | "first_name" | "ignore" | "last_name" | "middle_name" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type");
+                  targetField: ("address_line_1" | "address_line_2" | "city" | "country" | "custom_field" | "date_of_birth" | "display_name" | "first_name" | "ignore" | "last_name" | "middle_name" | "nationality_codes" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type");
                 }>;
                 readonly defaultType: T1dacb02040;
                 readonly delimiter: ("comma" | "labeled" | "semicolon" | "tab");
@@ -3693,6 +3688,20 @@ export type WebRoutes = {
                   type: T1d719fd945;
                   isPrimary: Tfddd645dc8;
                 }>;
+                dateOfBirth?: {
+                  precision: "year";
+                  year: number;
+                } | {
+                  precision: "month";
+                  year: number;
+                  month: number;
+                } | {
+                  precision: "day";
+                  year: number;
+                  month: number;
+                  day: number;
+                };
+                nationalityCodes?: Array<string>;
                 registrationNumber?: string;
                 taxId?: string;
                 notes?: string;
@@ -3784,6 +3793,20 @@ export type WebRoutes = {
             type: T1d719fd945;
             isPrimary: Tfddd645dc8;
           }>;
+          dateOfBirth?: {
+            precision: "year";
+            year: number;
+          } | {
+            precision: "month";
+            year: number;
+            month: number;
+          } | {
+            precision: "day";
+            year: number;
+            month: number;
+            day: number;
+          };
+          nationalityCodes?: Array<string>;
           registrationNumber?: string;
           taxId?: string;
           currency?: string;
@@ -3844,6 +3867,7 @@ export type WebRoutes = {
             organizationName: Tbe0400fa4c;
             emails: Ta92a4cb146;
             phones: Tf879a89ce3;
+            nationalityCodes: Array<string>;
             registrationNumber: Tbe0400fa4c;
             taxId: Tbe0400fa4c;
             currency: Tbe0400fa4c;
@@ -3853,6 +3877,9 @@ export type WebRoutes = {
             prefix: Tbe0400fa4c;
             middleName: Tbe0400fa4c;
             suffix: Tbe0400fa4c;
+            dateOfBirthYear: T588d0ee653;
+            dateOfBirthMonth: T588d0ee653;
+            dateOfBirthDay: T588d0ee653;
             addresses: T6124e792aa;
             bankAccounts: Tcd94cef1c0;
             billingAddress: T3b4d67e019;
@@ -3912,6 +3939,20 @@ export type WebRoutes = {
                 type: T1d719fd945;
                 isPrimary: Tfddd645dc8;
               }>;
+              dateOfBirth?: {
+                precision: "year";
+                year: number;
+              } | {
+                precision: "month";
+                year: number;
+                month: number;
+              } | {
+                precision: "day";
+                year: number;
+                month: number;
+                day: number;
+              };
+              nationalityCodes?: Array<string>;
               registrationNumber?: string;
               taxId?: string;
               notes?: string;
@@ -4075,6 +4116,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
+              dateOfBirth: (T87d6a3582a | T4390c87707 | T667bb98824 | null);
               clientMatterCount: number;
               clientMatters: Array<{
                 name: string;
@@ -4103,6 +4145,7 @@ export type WebRoutes = {
               organizationName: Tbe0400fa4c;
               emails: Ta92a4cb146;
               phones: Tf879a89ce3;
+              nationalityCodes: Array<string>;
               registrationNumber: Tbe0400fa4c;
               taxId: Tbe0400fa4c;
               currency: Tbe0400fa4c;
@@ -4188,6 +4231,20 @@ export type WebRoutes = {
               type: T1d719fd945;
               isPrimary: Tfddd645dc8;
             }> | null;
+            dateOfBirth?: {
+              precision: "year";
+              year: number;
+            } | {
+              precision: "month";
+              year: number;
+              month: number;
+            } | {
+              precision: "day";
+              year: number;
+              month: number;
+              day: number;
+            } | null;
+            nationalityCodes?: Array<string> | null;
             registrationNumber?: string | null;
             taxId?: string | null;
             currency?: string | null;
@@ -10151,7 +10208,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: T2203ecc422;
+              200: T8f61650de5;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -10674,6 +10731,271 @@ export type WebRoutes = {
               500: T9a51b7d2bc;
               502: T9a51b7d2bc;
               503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
+    public: {
+      knowledge: {
+        "template-packs": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            get: {
+              body: unknown;
+              params: {
+                packId: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  templates: Array<Tfd0bde727d>;
+                  id: string;
+                  name: string;
+                  version: string;
+                  description: string;
+                  license: string;
+                  licenseUrl: Tbe0400fa4c;
+                  source: Tdc9ed49116;
+                  authors: ReadonlyArray<T8f22b22b9e>;
+                  jurisdictions: ReadonlyArray<T61d3076ac0>;
+                  languages: ReadonlyArray<string>;
+                  legalAreas: ReadonlyArray<string>;
+                  lastReviewedAt: Tbe0400fa4c;
+                  disclaimer: Tbe0400fa4c;
+                  templateCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                get: {
+                  body: unknown;
+                  params: T33b1882b1b;
+                  query: unknown;
+                  headers: unknown;
+                  response: {
+                    200: (T1791c676c5 | Tfd0bde727d);
+                    400: T9a51b7d2bc;
+                    401: T9a51b7d2bc;
+                    402: T9a51b7d2bc;
+                    403: T9a51b7d2bc;
+                    404: T9a51b7d2bc;
+                    409: T9a51b7d2bc;
+                    413: T9a51b7d2bc;
+                    422: (T9a51b7d2bc | {
+                      type: "validation";
+                      on: string;
+                      summary?: string;
+                      message?: string;
+                      found?: unknown;
+                      property?: string;
+                      expected?: string;
+                    });
+                    428: T9a51b7d2bc;
+                    429: T9a51b7d2bc;
+                    500: T9a51b7d2bc;
+                    502: T9a51b7d2bc;
+                    503: T9a51b7d2bc;
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "template-packs": {
+          ":packId": {
+            templates: {
+              ":templateId": {
+                preview: {
+                  get: {
+                    body: unknown;
+                    params: T33b1882b1b;
+                    query: unknown;
+                    headers: unknown;
+                    response: {
+                      200: (Tb26a03bcf4 | T1791c676c5);
+                      400: T9a51b7d2bc;
+                      401: T9a51b7d2bc;
+                      402: T9a51b7d2bc;
+                      403: T9a51b7d2bc;
+                      404: T9a51b7d2bc;
+                      409: T9a51b7d2bc;
+                      413: T9a51b7d2bc;
+                      422: (T9a51b7d2bc | {
+                        type: "validation";
+                        on: string;
+                        summary?: string;
+                        message?: string;
+                        found?: unknown;
+                        property?: string;
+                        expected?: string;
+                      });
+                      428: T9a51b7d2bc;
+                      429: T9a51b7d2bc;
+                      500: T9a51b7d2bc;
+                      502: T9a51b7d2bc;
+                      503: T9a51b7d2bc;
+                    };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          get: {
+            body: unknown;
+            params: T5e3ac29766;
+            query: unknown;
+            headers: unknown;
+            response: {
+              200: (T1791c676c5 | {
+                items: Array<{
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                }>;
+              });
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: T9a51b7d2bc;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: T9a51b7d2bc;
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      knowledge: {
+        "playbook-starters": {
+          ":id": {
+            get: {
+              body: unknown;
+              params: {
+                id: string;
+              };
+              query: unknown;
+              headers: unknown;
+              response: {
+                200: (T1791c676c5 | {
+                  positions: Tc892bdfad5;
+                  id: T15dbebb935;
+                  name: string;
+                  description: string;
+                  documentTypeKey: string;
+                  positionCount: number;
+                });
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: T9a51b7d2bc;
+                404: T9a51b7d2bc;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
             };
           };
         };
@@ -33693,6 +34015,10 @@ type T173eec1550 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "property";
 };
 
+type T1791c676c5 = {
+  readonly error: "Not Found";
+};
+
 type T17f9c80581 = {
   readonly value: T1bc07bd9cb;
   readonly issues?: undefined;
@@ -33920,74 +34246,6 @@ type T21ddbd121a = {
 type T21e7b1b9fc = {
   countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
   isPrimary: Tfddd645dc8;
-};
-
-type T2203ecc422 = {
-  documentAst: {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: "decision-title" | "section-heading" | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
-      note?: T8bbaf16642 | undefined;
-      listDepth?: 1 | 2 | 3 | 4 | undefined;
-      number?: number | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: "metadata-table" | "related-proceedings" | undefined;
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: number | undefined;
-        rowSpan?: number | undefined;
-        header?: true | undefined;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: string | undefined;
-      width?: number | undefined;
-      height?: number | undefined;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4 | null;
-  fulltext: Tbe0400fa4c;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  id: Tfc8a750351;
 };
 
 type T22259c97a4 = string & valibot_Brand<"SafeId"> & {
@@ -34363,6 +34621,36 @@ type T2d674d595a = {
   kind: "create-document";
   name: string;
   documentTitle: string;
+};
+
+type T2d6eece830 = {
+  text: string;
+  index: number;
+  style?: string;
+  bold?: false | true;
+  fontSize?: number;
+  alignment?: "both" | "center" | "left" | "right";
+  tableRow?: {
+    table: number;
+    kind: "cells";
+    cells: ReadonlyArray<{
+      paragraphs: ReadonlyArray<{
+        text: string;
+        style?: string;
+        bold?: false | true;
+        fontSize?: number;
+        alignment?: "both" | "center" | "left" | "right";
+      }>;
+    }>;
+  } | {
+    table: number;
+    kind: ("delimiter" | "syntheticHeader");
+  };
+} & {
+  source?: "body" | "footer" | "header" | undefined;
+  isDirective?: false | true | undefined;
+  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if" | undefined;
+  directiveExpression?: string | undefined;
 };
 
 type T2df478253f = "approved" | "draft" | "ephemeral";
@@ -35014,6 +35302,11 @@ type T32fdeee18e = {
 
 type T334757ea46 = "document" | "folder" | "link" | "message" | "task";
 
+type T33b1882b1b = {
+  templateId: string;
+  packId: string;
+};
+
 type T34252d475f = {
   viewId: T7e10a0d884;
 };
@@ -35335,6 +35628,12 @@ type T426e4657a4 = Array<string> | number | string | null;
 type T42b0ce8576 = {
   ok: false;
   error: string;
+};
+
+type T4390c87707 = {
+  precision: "month";
+  year: number;
+  month: number;
 };
 
 type T43a95a3581 = {
@@ -35737,43 +36036,13 @@ type T539e1e5c66 = {
 
 type T53be3fbe82 = {
   code: stll_api_contract_ContactImportIssueCode;
-  field: ("address_line_1" | "address_line_2" | "city" | "country" | "display_name" | "first_name" | "last_name" | "middle_name" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type" | null);
+  field: ("address_line_1" | "address_line_2" | "city" | "country" | "date_of_birth" | "display_name" | "first_name" | "last_name" | "middle_name" | "nationality_codes" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type" | null);
   rowNumber: number;
 };
 
 type T53caa211eb = {
   kind: "constraint";
   condition: stll_conditions_ConditionNode;
-};
-
-type T540f9c7521 = {
-  text: string;
-  index: number;
-  style?: string;
-  bold?: false | true;
-  fontSize?: number;
-  alignment?: "both" | "center" | "left" | "right";
-  tableRow?: {
-    table: number;
-    kind: "cells";
-    cells: ReadonlyArray<{
-      paragraphs: ReadonlyArray<{
-        text: string;
-        style?: string;
-        bold?: false | true;
-        fontSize?: number;
-        alignment?: "both" | "center" | "left" | "right";
-      }>;
-    }>;
-  } | {
-    table: number;
-    kind: ("delimiter" | "syntheticHeader");
-  };
-} & {
-  source?: "body" | "footer" | "header" | undefined;
-  isDirective?: false | true | undefined;
-  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if" | undefined;
-  directiveExpression?: string | undefined;
 };
 
 type T54ad5c389f = {
@@ -36187,6 +36456,13 @@ type T658a00d740 = {
 
 type T65bedee18b = "free" | "paid" | null;
 
+type T667bb98824 = {
+  precision: "day";
+  year: number;
+  month: number;
+  day: number;
+};
+
 type T6685765ee4 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawCitation";
 };
@@ -36462,6 +36738,8 @@ type T71f8c17907 = {
   tags?: Array<string> | undefined;
   registrationNumber?: string | undefined;
   taxId?: string | undefined;
+  dateOfBirth?: T87d6a3582a | T4390c87707 | T667bb98824 | undefined;
+  nationalityCodes?: Array<string> | undefined;
   metadata?: Ta716eb8a48 | undefined;
 };
 
@@ -36537,10 +36815,7 @@ type T73b2a1010d = {
 } | {
   type: "neutral-citation";
   value: string;
-} | {
-  type: "reporter-citation";
-  value: string;
-};
+} | Td1ccc251c4;
 
 type T740180a0c1 = "companies-house" | "denue" | "edgar";
 
@@ -36895,13 +37170,6 @@ type T84b2a2edb5 = {
 
 type T85c0da56d3 = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
 
-type T85e6600670 = {
-  message: string;
-  paragraphIndex: number;
-  directive: string;
-  source?: "body" | "footer" | "header";
-};
-
 type T85f803b281 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "anonymizationBlacklistEntry";
 };
@@ -36931,6 +37199,11 @@ type T870458a513 = "matters" | "organization";
 type T8723d9d642 = {
   code?: string;
   message: string;
+};
+
+type T87d6a3582a = {
+  precision: "year";
+  year: number;
 };
 
 type T87debc7a12 = {
@@ -37134,6 +37407,74 @@ type T8f465d529b = {
 };
 
 type T8f584f9d60 = T8065b8ad03 | null;
+
+type T8f61650de5 = {
+  documentAst: {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: "decision-title" | "section-heading" | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
+      note?: T8bbaf16642 | undefined;
+      listDepth?: 1 | 2 | 3 | 4 | undefined;
+      number?: number | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: "metadata-table" | "related-proceedings" | undefined;
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: number | undefined;
+        rowSpan?: number | undefined;
+        header?: true | undefined;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: string | undefined;
+      width?: number | undefined;
+      height?: number | undefined;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4 | null;
+  fulltext: Tbe0400fa4c;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  id: Tfc8a750351;
+};
 
 type T8ff9f6d126 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
@@ -37644,6 +37985,18 @@ type Ta4c2166933 = {
   cite: string;
   href?: string | undefined;
   children: Array<Ta4c2166933>;
+  target?: {
+    status: "identified";
+    identifiers: T3fbc5ba165;
+  } | {
+    status: "unresolved";
+    reason: ("ambiguous-antecedent" | "ambiguous-reporter" | "authority-barrier" | "conflicting-parallels" | "missing-antecedent" | "scope-unknown");
+  } | undefined;
+  pin?: {
+    raw: string;
+    parts: readonly [Tc8b3b0ec3a, ...Tc8b3b0ec3a[]];
+    reporter?: Td1ccc251c4 | undefined;
+  } | undefined;
 } | {
   type: "line-break";
 } | {
@@ -37857,7 +38210,7 @@ type Tad027ba68a = {
 
 type Tad12f531bb = "held" | "included";
 
-type Tada6067f00 = T2203ecc422 | T279717e2be;
+type Tada6067f00 = T8f61650de5 | T279717e2be;
 
 type Tae4c134ba8 = "active" | "awaiting_acknowledgement" | "cancelled" | "completed" | "unassigned";
 
@@ -38028,6 +38381,13 @@ type Tb23918f1b2 = {
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
+
+type Tb26a03bcf4 = {
+  paragraphs: Array<T2d6eece830>;
+  charCount: number;
+  structureErrors: Array<Te9acc7e185>;
+  clauseSlots: Array<string>;
+};
 
 type Tb28d44fa4d = "busy" | "free" | "out_of_office" | "tentative" | "unknown" | "working_elsewhere" | null;
 
@@ -38556,6 +38916,12 @@ type Tc892bdfad5 = {
   version: 3;
 };
 
+type Tc8b3b0ec3a = {
+  kind: ("footnote" | "page" | "paragraph");
+  start: string;
+  end?: string | undefined;
+};
+
 type Tc9c6fb618b = {
   stored: number;
   storedAsOf: string;
@@ -38814,6 +39180,11 @@ type Td15a61239d = {
 } & T4d73965770;
 
 type Td16108295a = "address" | "addressCity" | "addressCountry" | "addressPostalCode" | "addressStreet" | "bic" | "dataBox" | "displayName" | "email" | "firstName" | "iban" | "lastName" | "organizationName" | "phone" | "registrationNumber" | "taxId";
+
+type Td1ccc251c4 = {
+  type: "reporter-citation";
+  value: string;
+};
 
 type Td204418ab7 = "decision" | "fact" | "instruction" | "preference" | "relationship";
 
@@ -39484,6 +39855,13 @@ type Te8eee0ded7 = {
 
 type Te8fa9c655e = "accepted" | "dismissed" | "open";
 
+type Te9acc7e185 = {
+  message: string;
+  paragraphIndex: number;
+  directive: string;
+  source?: "body" | "footer" | "header";
+};
+
 type Tea0fd307f9 = {
   success: true;
   fileName: string;
@@ -39940,6 +40318,17 @@ type Tfc8a750351 = string & valibot_Brand<"SafeId"> & {
 type Tfce51d6930 = {
   readonly value: Ta2adf01c0a;
   readonly issues?: undefined;
+};
+
+type Tfd0bde727d = {
+  id: string;
+  title: string;
+  jurisdictions: ReadonlyArray<T61d3076ac0>;
+  languages: ReadonlyArray<string>;
+  legalArea: Tbe0400fa4c;
+  license: string;
+  fields: ReadonlyArray<string>;
+  sha256: string;
 };
 
 type Tfd761de317 = {

@@ -109,6 +109,10 @@ import {
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
+  REFRESH_SANCTIONS_SOURCES_TASK,
+  refreshSanctionsSourcesTask,
+} from "@/api/lib/scheduler/tasks/sanctions-refresh";
+import {
   REPAIR_CHAT_SEARCH_INDEX_TASK,
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
@@ -153,6 +157,7 @@ const SCHEDULER_TASKS = {
   "scheduler.noop": noopTask,
   "scheduler.dispatchBullMq": createBullMqDispatchTask(),
   [INFO_SOUD_SYNC_TRACKED_CASES_TASK]: syncInfoSoudTrackedCases,
+  [REFRESH_SANCTIONS_SOURCES_TASK]: refreshSanctionsSourcesTask,
   [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK]: expireDesktopEditSessions,
   [DISPATCH_DOCUMENT_OCR_TASK]: dispatchDocumentOcr,
   [FLOW_RUN_TASK]: runScheduledFlow,

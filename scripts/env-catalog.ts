@@ -119,6 +119,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_MCP",
   "FEATURE_ORG_ACCESS_STATE",
   "FEATURE_PUBLIC_LAW",
+  "FEATURE_PUBLIC_KNOWLEDGE",
   "FEATURE_PUBLIC_TOOLS",
   "FEATURE_SHAREPOINT",
   "FEATURE_TEMPLATE_PACKS",
@@ -323,6 +324,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable GitHub-sourced public skills in the authenticated catalogue.",
   FEATURE_TEMPLATE_PACKS:
     "Offer the bundled template-pack catalogue. Off until a deployment opts in; its routes do not exist while off.",
+  FEATURE_PUBLIC_KNOWLEDGE:
+    "Enable unauthenticated read-only endpoints for opted-in bundled knowledge content. Off by default.",
   FEEDBACK_EMAIL_TO:
     "Destination for maintainer feedback email. Unset disables email delivery.",
   FEEDBACK_GITHUB_REPO:

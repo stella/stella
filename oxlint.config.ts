@@ -243,6 +243,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
+    "no-custom-account-modal/no-custom-account-modal",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -1159,6 +1162,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
+    "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
@@ -1603,18 +1607,18 @@ export default defineConfig({
               "apps/web/src/components/workspaces/entity-kind-icon.tsx",
               "apps/web/src/components/workspaces/field-value.tsx",
               "apps/web/src/features/chat/components/chat-title-rename.tsx",
+              "apps/web/src/features/knowledge/views/playbooks/playbooks-page-view.tsx",
               "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx",
               "apps/web/src/routes/_protected.contacts/-procuracao-extraction.tsx",
               "apps/web/src/routes/_protected.contacts/import.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-detail-panel.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx",
+              "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/import-skill-dialog.tsx",
-              "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-cards.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx",
               "apps/web/src/routes/_protected.knowledge/-components/template-studio-fields.tsx",
@@ -2477,6 +2481,15 @@ export default defineConfig({
       ],
       rules: {
         "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
+      },
+    },
+    {
+      // One modal asks a reader for an account: `SignInDialog`, opened by the
+      // account gate or the public shell's sign-in request. A module that
+      // draws a modal and also reaches account entry is building a second.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-custom-account-modal/no-custom-account-modal": "error",
       },
     },
     {

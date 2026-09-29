@@ -90,7 +90,7 @@ export const AddQuestionColumn = ({
   surface,
   triggerVariant,
 }: AddQuestionColumnProps) => {
-  const { accountDialog, ensureAccount } = useRequireAccount();
+  const ensureAccount = useRequireAccount();
   const action = questionColumnAddAction(surface);
 
   if (action === null) {
@@ -118,21 +118,18 @@ export const AddQuestionColumn = ({
       );
     case "gate":
       return (
-        <>
-          <BulkAddColumns
-            // Held closed: the press is answered by the gate, and the composer
-            // opens on the next visit, with an organization behind it.
-            open={false}
-            onOpenChange={(open) => {
-              if (open) {
-                ensureAccount("writeResearchQuestion");
-              }
-            }}
-            target={{ kind: "organisation", suggestion: action.suggestion }}
-            triggerVariant={triggerVariant}
-          />
-          {accountDialog}
-        </>
+        <BulkAddColumns
+          // Held closed: the press is answered by the gate, and the composer
+          // opens on the next visit, with an organization behind it.
+          open={false}
+          onOpenChange={(open) => {
+            if (open) {
+              ensureAccount();
+            }
+          }}
+          target={{ kind: "organisation", suggestion: action.suggestion }}
+          triggerVariant={triggerVariant}
+        />
       );
     default:
       action satisfies never;
