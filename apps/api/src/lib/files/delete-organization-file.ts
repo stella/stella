@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 
@@ -14,8 +15,7 @@ export const deleteOrganizationFileWithSignal = async (
   { fileUsageDb }: DeleteOrganizationFileOptions = {},
 ): Promise<void> => {
   await deleteS3ObjectWithSignal(key, signal);
-  const { env } = await import("@/api/env");
-  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+  if (!envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS) {
     return;
   }
   const { removeOrganizationFileBytes } =

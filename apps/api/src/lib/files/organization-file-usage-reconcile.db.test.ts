@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createFileKey } from "@/api/lib/file-key";
 import {
   reconcileOrganizationFileObject,
@@ -32,6 +33,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let fake: FakeS3;
 const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
 const db = () =>
   asTestRaw<
     Parameters<typeof reconcileAbandonedOrganizationFileReservations>[0]["db"]
@@ -43,10 +45,12 @@ beforeAll(async () => {
   await setupRlsTestData(testDb, ids);
   fake = startFakeS3();
   env.FEATURE_FILE_USAGE_LIMITS = true;
+  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
 });
 
 afterAll(async () => {
   env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   fake.stop();
   await testDb
     .delete(organizationFileObjects)
@@ -388,10 +392,12 @@ describe("abandoned organization file reservations", () => {
       signal: new AbortController().signal,
     });
     env.FEATURE_FILE_USAGE_LIMITS = false;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
     await task(context);
     expect(calls).toBe(0);
     expect(mismatchWarnings).toBe(0);
     env.FEATURE_FILE_USAGE_LIMITS = true;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
     await task(context);
     expect(calls).toBe(1);
     expect(mismatchWarnings).toBe(1);

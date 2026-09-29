@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
@@ -623,7 +624,10 @@ describe("chat attachment hydration", () => {
       >({ transaction: async () => ({ status: reservationStatus }) });
       const settleIntents = mock(async () => Result.ok(undefined));
       const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+      const priorWorkerFlag =
+        envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
       env.FEATURE_FILE_USAGE_LIMITS = true;
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
       try {
         const result = await uploadUserFile({
           dependencies: {
@@ -652,6 +656,7 @@ describe("chat attachment hydration", () => {
         expect(requestKeys("PUT")).toHaveLength(0);
       } finally {
         env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+        envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
       }
     },
   );

@@ -36,7 +36,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -257,7 +256,8 @@ const writeOcrSearchablePdfDerivative = async ({
         objectKey,
         organizationId: run.organizationId,
         pdfBytes: searchablePdf.value,
-        usageLimitsEnabled: env.FEATURE_FILE_USAGE_LIMITS,
+        usageLimitsEnabled:
+          envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS,
         writePdf,
       });
       if (Result.isError(fileWrite)) {

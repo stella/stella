@@ -10,7 +10,7 @@ import {
   usagePolicies,
   usageSeatAssignments,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -242,7 +242,7 @@ export const reserveOrganizationFileBytes = async (
   { organizationId, objectKey, sizeBytes, contentSha256Hex }: FileUsageInput,
   db?: FileUsageDb,
 ): Promise<Result<FileUsageReservation, OrganizationFileUsageError>> => {
-  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+  if (!envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS) {
     return Result.ok({ status: "disabled" } as const);
   }
   if (
@@ -625,7 +625,7 @@ export const removeOrganizationFileBytes = async (
   objectKey: string,
   db?: FileUsageDb,
 ) => {
-  if (!env.FEATURE_FILE_USAGE_LIMITS) {
+  if (!envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS) {
     return Result.ok(undefined);
   }
   return await Result.tryPromise({

@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId } from "@/api/lib/branded-types";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
@@ -35,6 +36,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 let testDb: TestDatabase;
 let ids: TestIds;
 const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
 const policyId = createSafeId<"usagePolicy">();
 const entitlementId = createSafeId<"usageEntitlement">();
 const assignmentId = createSafeId<"usageSeatAssignment">();
@@ -102,10 +104,12 @@ beforeAll(async () => {
     userId: ids.userA1,
   });
   env.FEATURE_FILE_USAGE_LIMITS = true;
+  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
 });
 
 afterAll(async () => {
   env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
   await testDb
     .delete(organizationFileObjects)
     .where(eq(organizationFileObjects.organizationId, ids.orgA));
@@ -496,6 +500,7 @@ describe("organization file usage", () => {
 
   test("flag off does not call the database", async () => {
     env.FEATURE_FILE_USAGE_LIMITS = false;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
     const noDb = {
       transaction: async () => {
         throw new Error("unexpected transaction");
@@ -509,5 +514,6 @@ describe("organization file usage", () => {
     );
     expect(reservation).toMatchObject({ value: { status: "disabled" } });
     env.FEATURE_FILE_USAGE_LIMITS = true;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
   });
 });

@@ -22,6 +22,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
   createChatAttachmentPart,
   toPersistedChatMessageContentV3,
@@ -933,7 +934,9 @@ test("a metered fork reports capacity refusal without creating a copy", async ()
     userId: ids.userA1,
   });
   const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+  const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
   env.FEATURE_FILE_USAGE_LIMITS = true;
+  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
   try {
     const meteredFork = createForkThread({
       fileUsageDb:
@@ -959,6 +962,7 @@ test("a metered fork reports capacity refusal without creating a copy", async ()
     ).toHaveLength(0);
   } finally {
     env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
     await testDb
       .delete(usageSeatAssignments)
       .where(eq(usageSeatAssignments.id, assignmentId));
@@ -994,7 +998,9 @@ test("a metered fork skips a source object confirmed missing", async () => {
       testDb,
     );
   const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+  const priorWorkerFlag = envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
   env.FEATURE_FILE_USAGE_LIMITS = true;
+  envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
   try {
     const meteredFork = createForkThread({
       fileUsageDb,
@@ -1028,6 +1034,7 @@ test("a metered fork skips a source object confirmed missing", async () => {
     expect(new Set(remainingKeys)).toEqual(previousKeys);
   } finally {
     env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
     const pending = await testDb
       .select({
         objectKey: organizationFileObjects.objectKey,
