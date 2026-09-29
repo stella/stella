@@ -72,69 +72,68 @@ const validateEntries = async (
   safeDb: SafeDb,
   workspaceId: SafeId<"workspace">,
   body: CreateInvoiceBody,
-) => {
-  const entriesResult = await safeDb((tx) =>
-    tx
-      .select({
-        id: timeEntries.id,
-        status: timeEntries.status,
-        billable: timeEntries.billable,
-        currency: timeEntries.currency,
-        invoiceId: timeEntries.invoiceId,
-      })
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.workspaceId, workspaceId),
-          inArray(timeEntries.id, body.timeEntryIds),
-        ),
+) =>
+  Result.gen(async function* () {
+    const entries = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({
+            id: timeEntries.id,
+            status: timeEntries.status,
+            billable: timeEntries.billable,
+            currency: timeEntries.currency,
+            invoiceId: timeEntries.invoiceId,
+          })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.workspaceId, workspaceId),
+              inArray(timeEntries.id, body.timeEntryIds),
+            ),
+          ),
       ),
-  );
-  if (entriesResult.isErr()) {
-    return Result.err(entriesResult.error);
-  }
-  const entries = entriesResult.value;
-
-  if (entries.length !== body.timeEntryIds.length) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Some time entries were not found",
-      }),
     );
-  }
 
-  const invalid = entries.some(
-    (e) =>
-      e.status !== BILLING_STATUS.APPROVED ||
-      !e.billable ||
-      e.invoiceId !== null,
-  );
-  if (invalid) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message:
-          "All entries must be approved, billable," +
-          " and not already on an invoice",
-      }),
+    if (entries.length !== body.timeEntryIds.length) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Some time entries were not found",
+        }),
+      );
+    }
+
+    const invalid = entries.some(
+      (e) =>
+        e.status !== BILLING_STATUS.APPROVED ||
+        !e.billable ||
+        e.invoiceId !== null,
     );
-  }
+    if (invalid) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "All entries must be approved, billable," +
+            " and not already on an invoice",
+        }),
+      );
+    }
 
-  // An invoice is single-currency: there is no FX conversion, so summing
-  // entries in different currencies would produce a meaningless total.
-  const currencyMismatch = entries.some((e) => e.currency !== body.currency);
-  if (currencyMismatch) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "All time entries must match the invoice currency",
-      }),
-    );
-  }
+    // An invoice is single-currency: there is no FX conversion, so summing
+    // entries in different currencies would produce a meaningless total.
+    const currencyMismatch = entries.some((e) => e.currency !== body.currency);
+    if (currencyMismatch) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "All time entries must match the invoice currency",
+        }),
+      );
+    }
 
-  return Result.ok(entries);
-};
+    return Result.ok(entries);
+  });
 
 const createInvoice = createSafeHandler(
   {
