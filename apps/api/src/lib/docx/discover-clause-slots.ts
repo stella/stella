@@ -12,6 +12,8 @@ import * as slimdom from "slimdom";
 
 import { clauseSlotKey, clauseSlotPattern } from "@stll/template-conditions";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
 import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 
 // ── Types ────────────────────────────────────────────
@@ -67,10 +69,10 @@ const scanParagraphs = (
  * template. Scans body, headers, and footers.
  */
 export const discoverClauseSlots = async (
-  docxBuffer: Buffer,
+  file: ScannedFile,
 ): Promise<ClauseSlot[]> => {
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(docxBuffer);
+  const zip = await JSZip.loadAsync(file.bytes);
   const slots = new Map<string, ClauseSlot>();
 
   for (const path of templateContentPartPaths(Object.keys(zip.files))) {

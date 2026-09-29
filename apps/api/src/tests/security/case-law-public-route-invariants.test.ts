@@ -293,6 +293,11 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Ingestion backfill of Slovak documents; not a public read.",
   },
+  "apps/api/src/lib/legal-search/sk-document-parking-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "States the parking predicate the queue and its index share; issues no query.",
+  },
   [PUBLIC_READ_DB_FILE]: {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The public reader's connection and its per-transaction guards.",

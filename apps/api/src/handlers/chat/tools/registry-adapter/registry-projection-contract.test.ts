@@ -1277,6 +1277,7 @@ const CONTRACT_CORPUS = {
             {
               anchorId: null,
               caseNumber: "22 Cdo 1000/2020",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
               citationAuthority: 1.4,
               citationCount: 3,
               country: "CZ",
@@ -1330,12 +1331,18 @@ const CONTRACT_CORPUS = {
         lookupDecisionsByIdentityMock.mockResolvedValue([
           {
             caseNumber: "22 Cdo 1000/2020",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             country: "CZ",
             court: "Nejvyšší soud",
             decisionDate: "2020-05-01",
             ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
             id: toSafeId<"caseLawDecision">(uid(53)),
-            identifiers: [{ type: "case-number", value: "22 Cdo 1000/2020" }],
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                value: "22 Cdo 1000/2020",
+              },
+            ],
             language: "cs",
             languageAlternates: [],
             slug: "ns-22-cdo-1000-2020",
@@ -1357,6 +1364,7 @@ const CONTRACT_CORPUS = {
           id: toSafeId<"caseLawDecision">(uid(54)),
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationsFrom: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -1446,6 +1454,7 @@ const CONTRACT_CORPUS = {
                 decision: {
                   id: toSafeId<"caseLawDecision">(uid(58)),
                   caseNumber: "23 Cdo 200/2021",
+                  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
                   citationAuthority: 2.5,
                   country: "CZ",
                   court: "Nejvyšší soud",

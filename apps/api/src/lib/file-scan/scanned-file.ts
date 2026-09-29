@@ -1,8 +1,9 @@
 /**
  * Proof that document bytes may reach a parser.
  *
- * Text extraction, PDF conversion, the PDF and OCR workers, and the folio-core
- * parsers take a `ScannedFile`, never raw bytes. The class has a private
+ * Text extraction, PDF conversion, the PDF and OCR workers, the folio-core
+ * parsers, and the template and style-set parsers take a `ScannedFile`, never
+ * raw bytes. The class has a private
  * constructor and an ES private field, so an object literal, a spread copy, or
  * `new ScannedFile(...)` cannot stand in for one; the only ways to hold one are:
  *
@@ -12,7 +13,9 @@
  *   only after a scan (upload finalize, direct upload, version writes, chat
  *   attachments) or as server-built derivatives of such objects (PDF and OCR
  *   renditions). Presigned staging keys are plain strings, so a raw upload
- *   cannot be passed off as stored.
+ *   cannot be passed off as stored. Template and style-set files reach one
+ *   through `readStoredObject` (`stored-object.ts`), which scans a file its
+ *   row does not record as scanned before handing it on.
  *
  * A cast to `ScannedFile` or `FileKey` is the remaining forgery path; the
  * `scanned-file-boundary` lint rule rejects it outside the owning modules.
