@@ -18,8 +18,15 @@ import type {
   ProvisionBackfillStep,
 } from "./step";
 
-const ID_PAGE_SIZE = 50;
-const BOOTSTRAP_PAGE_SIZE = 1000;
+export const ID_PAGE_SIZE = 50;
+export const BOOTSTRAP_PAGE_SIZE = 1000;
+/**
+ * Units one run may commit. Keyset pages are cheap one by one, so without a
+ * count a run would keep reading the decision table until its wall-clock
+ * deadline. With this bound a run reads at most this many pages (up to
+ * `BOOTSTRAP_PAGE_SIZE` decisions each) and the next scheduled run resumes.
+ */
+export const PROVISION_BACKFILL_UNITS_PER_RUN = 200;
 const LOCK_TIMEOUT = "30s";
 const STATEMENT_TIMEOUT = "1min";
 
@@ -138,17 +145,39 @@ const advanceCursor = async (
   }
 };
 
+/**
+ * One page of decision ids in id order. The first page and the pages after a
+ * cursor are separate statements: an optional bound (`$1 IS NULL OR id > $1`)
+ * is no index condition under a generic plan, so every page would walk the
+ * primary key from its start. The order names the table's column: a bare
+ * `id` would mean the text output column and sort every row past the cursor.
+ * The size is a module constant and is written into the statement, so the
+ * planner costs the page it will actually read.
+ */
+export const decisionPageSql = (
+  cursor: "first" | "after",
+  size: number,
+): string => {
+  if (!Number.isSafeInteger(size) || size < 1) {
+    return panic("Provision repair page size must be a positive integer");
+  }
+  return cursor === "first"
+    ? `SELECT id::text AS id FROM case_law_decisions
+       ORDER BY case_law_decisions.id LIMIT ${size}`
+    : `SELECT id::text AS id FROM case_law_decisions
+       WHERE id > $1::uuid
+       ORDER BY case_law_decisions.id LIMIT ${size}`;
+};
+
 const readDecisionPage = async (
   connection: ProvisionBackfillSession,
   cursor: string | null,
   size: number,
 ): Promise<string[]> => {
-  const rows = await connection.query(
-    `SELECT id::text AS id FROM case_law_decisions
-     WHERE ($1::uuid IS NULL OR id > $1::uuid)
-     ORDER BY id LIMIT $2`,
-    [cursor, size],
-  );
+  const rows =
+    cursor === null
+      ? await connection.query(decisionPageSql("first", size))
+      : await connection.query(decisionPageSql("after", size), [cursor]);
   return rows.map((row) => readString(row, "id"));
 };
 
@@ -393,6 +422,8 @@ type ProvisionStateBackfillOptions = {
   deadline: number;
   /** Checked before every unit; an aborted run starts nothing more. */
   signal: AbortSignal;
+  /** Units after which no further unit starts. */
+  maxUnits?: number;
   now?: () => number;
   /** The build's admission; a test stands in an older or newer build. */
   admission?: Admission;
@@ -408,6 +439,7 @@ type BackfillRun = {
   connection: ProvisionBackfillSession;
   deadline: number;
   signal: AbortSignal;
+  maxUnits: number;
   now: () => number;
   admission: Admission;
   steps: readonly ProvisionBackfillStep[];
@@ -421,7 +453,7 @@ type BackfillRun = {
 const runFrom = async (
   run: BackfillRun,
   index: number,
-  worked: boolean,
+  units: number,
 ): Promise<
   Result<ProvisionStateBackfillOutcome, ProvisionBackfillUnitError>
 > => {
@@ -430,7 +462,7 @@ const runFrom = async (
     return Result.ok({ type: "complete" });
   }
   if ((await step.readCompletion(run.connection)).type === "complete") {
-    return await runFrom(run, index + 1, worked);
+    return await runFrom(run, index + 1, units);
   }
   if (run.signal.aborted) {
     return Result.ok({ type: "aborted", step: step.name });
@@ -442,7 +474,11 @@ const runFrom = async (
     return Result.ok({ type: "superseded", appliedRevision: applied });
   }
   const isScan = step.budget === PROVISION_BACKFILL_BUDGET.WHOLE_RUN;
-  if (run.now() >= run.deadline || (isScan && worked)) {
+  if (
+    run.now() >= run.deadline ||
+    units >= run.maxUnits ||
+    (isScan && units > 0)
+  ) {
     return Result.ok({ type: "progress", step: step.name });
   }
   const unit = await step.advance(run.connection);
@@ -451,12 +487,13 @@ const runFrom = async (
   }
   return isScan
     ? Result.ok({ type: "progress", step: step.name })
-    : await runFrom(run, index, true);
+    : await runFrom(run, index, units + 1);
 };
 
 /**
- * One bounded run of the backfill. Each unit commits its own work and its
- * cursor together, so a run that stops anywhere is resumed by the next one.
+ * One bounded run of the backfill: it stops at its deadline or after
+ * `maxUnits` units. Each unit commits its own work and its cursor together,
+ * so a run that stops anywhere is resumed by the next one.
  * A whole-scan unit runs alone: it starts only on a run that has done
  * nothing else, and ends the run.
  */
@@ -464,6 +501,7 @@ export const runProvisionStateBackfill = async ({
   connection,
   deadline,
   signal,
+  maxUnits = PROVISION_BACKFILL_UNITS_PER_RUN,
   now = () => Temporal.Now.instant().epochMilliseconds,
   admission = CURRENT_ADMISSION,
 }: ProvisionStateBackfillOptions): Promise<
@@ -474,10 +512,11 @@ export const runProvisionStateBackfill = async ({
       connection,
       deadline,
       signal,
+      maxUnits,
       now,
       admission,
       steps: backfillSteps(admission),
     },
     0,
-    false,
+    0,
   );

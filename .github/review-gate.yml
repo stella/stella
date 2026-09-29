@@ -14,6 +14,10 @@
 #         other terminal state is the reviewer erroring: the gate keeps
 #         waiting until the timeout. review_by: a submitted review by that
 #         login. reaction: a reaction by that login on the pull request.
+#         commit_status.not_reviewed: fragments (any case, anywhere) of a
+#         reporting status's description that mean the reviewer declined
+#         to review; the summary says so and the wait is waived at once, as
+#         waiting cannot change it. Any other description is a review.
 # scope:  head    - must report on the exact head commit (runs on every push).
 #         request - reports once per request (when the pull request opens, or
 #                   on `rerequest_comment` from someone with write access);
@@ -29,6 +33,10 @@ reviewers:
       commit_status:
         context: CodeRabbit
         states: [success]
+        # CodeRabbit reports success whether or not it reviewed; seen:
+        # "Review completed", "Review rate limited", "Review paused",
+        # "Review skipped: <reason>".
+        not_reviewed: [rate limited, paused, skipped]
     scope: head
     timeout_minutes: 20
 
@@ -42,6 +50,7 @@ reviewers:
     scope: request
     rerequest_comment: "@codex review"
     timeout_minutes: 15
-    skip_authors: ["dependabot[bot]"]
+    # Bots it never reviews: waiting for it only runs out its timeout.
+    skip_authors: ["dependabot[bot]", "stella-provenance-updater[bot]"]
 
 skip_authors: ["github-actions[bot]"]

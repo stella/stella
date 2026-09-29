@@ -510,7 +510,7 @@ const continueSavedThread = async (
     return { executions: [...harness.executions], violations };
   } finally {
     client?.dispose();
-    harness.close();
+    await harness.close();
   }
 };
 
@@ -558,7 +558,7 @@ describe("the saved-state fixtures", () => {
     try {
       pendingToolCallId = await writeSavedStateConversation(harness, threadId);
     } finally {
-      harness.close();
+      await harness.close();
     }
     const rows = await dumpSavedState(testDb, threadId);
     const shape = savedStateShape(rows);

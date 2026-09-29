@@ -1,7 +1,7 @@
 import type { createFormatter } from "use-intl/core";
 
-import { US_WRITABLE_COURTS } from "@stll/api-contract/us-court-enrollment";
-import type { UsWritableCourtId } from "@stll/api-contract/us-court-enrollment";
+import { US_ABBREVIATED_COURTS } from "@stll/api-contract/us-court-abbreviations";
+import type { UsAbbreviatedCourtId } from "@stll/api-contract/us-court-abbreviations";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -248,27 +248,27 @@ const INDIGOBOOK_MONTHS = [
 ] as const;
 
 /**
- * The IndigoBook court abbreviation of each writable court. Total over the
- * writable courts, so enrolling a court cannot compile without deciding its
- * form.
+ * The IndigoBook court abbreviation of each abbreviated court. Total over
+ * those courts, so listing a court cannot compile without deciding its form.
  */
 const US_COURT_INDIGOBOOK_ABBREVIATIONS = {
   scotus: "U.S.",
-} as const satisfies Record<UsWritableCourtId, string>;
+} as const satisfies Record<UsAbbreviatedCourtId, string>;
 
-const WRITABLE_COURT_BY_NAME: ReadonlyMap<string, UsWritableCourtId> = new Map(
-  US_WRITABLE_COURTS.map(({ canonicalName, id }) => [canonicalName, id]),
-);
+const ABBREVIATED_COURT_BY_NAME: ReadonlyMap<string, UsAbbreviatedCourtId> =
+  new Map(
+    US_ABBREVIATED_COURTS.map(({ canonicalName, id }) => [canonicalName, id]),
+  );
 
 /**
- * A USA decision is stored under its enrolled court's canonical name, so the
- * name finds the abbreviation; any other name is cited as it stands.
+ * A USA decision is stored under its court's canonical name, so the name
+ * finds the abbreviation; any other court is cited by its name as it stands.
  */
 const usCourtAbbreviation = (court: string): string => {
-  const enrolled = WRITABLE_COURT_BY_NAME.get(court);
-  return enrolled === undefined
+  const abbreviated = ABBREVIATED_COURT_BY_NAME.get(court);
+  return abbreviated === undefined
     ? court
-    : US_COURT_INDIGOBOOK_ABBREVIATIONS[enrolled];
+    : US_COURT_INDIGOBOOK_ABBREVIATIONS[abbreviated];
 };
 
 const DOCKET_PREFIX_RE = /^Nos?\.\s/u;

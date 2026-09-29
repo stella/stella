@@ -10,12 +10,10 @@ import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-re
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { selectStatuteProvisions } from "@/api/handlers/chat/active-statute-selection.logic";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import {
-  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
-} from "@/api/lib/agent-skills/skills";
+import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -70,6 +68,7 @@ const SKILL_METADATA = [
   {
     name: "custom-research-skill",
     description: "Apply a user-authored research workflow.",
+    source: "installed",
     version: "1.0",
   },
 ] as const;
@@ -687,6 +686,7 @@ describe("chat prompt builders", () => {
           description: "Use the Acme acquisition playbook.",
           displayName: "Acme Acquisition Review",
           name: "acme-acquisition-review",
+          source: "installed",
           version: null,
         },
       ],
@@ -702,16 +702,38 @@ describe("chat prompt builders", () => {
     expect(prompt.fullPrompt).toContain("acme-acquisition-review");
   });
 
+  test("keeps built-in skill metadata in the cache-stable prefix", () => {
+    const prompt = buildGlobalPromptParts({
+      skillMetadata: [
+        {
+          description: "Shipped review workflow.",
+          name: "shipped-review",
+          source: "built-in",
+          version: null,
+        },
+      ],
+      userContext: null,
+    });
+
+    expect(prompt.cacheStablePrefix).toContain(
+      "- shipped-review: Shipped review workflow.",
+    );
+    expect(prompt.untrustedSuffix).not.toContain("shipped-review");
+  });
+
   test("active skill section anchors this skill and its editable files", () => {
     const activeSkill = {
       body: "# Skill body\nUse the active workflow.",
       description: "Active workflow description.",
       displayName: "Active Workflow",
       editable: true,
+      documentedChatReads: [],
+      excludedChatTools: [],
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       requiredTools: [],
       resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+      source: "installed",
       toolName: "active-workflow",
       version: "1.0",
     } satisfies ActiveChatSkillContext;
@@ -736,10 +758,13 @@ describe("chat prompt builders", () => {
       description: "Active workflow description.",
       displayName: "Active Workflow",
       editable: true,
+      documentedChatReads: [],
+      excludedChatTools: [],
       id: toSafeId<"agentSkill">("skill_active"),
       origin: "authored",
       requiredTools: [],
       resources: [],
+      source: "installed",
       toolName: "active-workflow",
       version: null,
     } satisfies ActiveChatSkillContext;

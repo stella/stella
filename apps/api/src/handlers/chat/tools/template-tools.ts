@@ -29,6 +29,21 @@ const FILL_TEMPLATE_TOOL_NAME = "fill_template" as const;
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_NAME =
   "suggest_template_fields" as const;
 
+// Exported so the playbook eval offers the tool as chat does, answered by a
+// stub, instead of a copy that can drift from it.
+export const LIST_TEMPLATES_TOOL_DEFINITION = toolDefinition({
+  name: LIST_TEMPLATES_TOOL_NAME,
+  description:
+    "List the document templates in this organization (NDAs, powers of " +
+    "attorney, leases, and so on). Returns each template's id, name, " +
+    "number of fillable fields, tags, and usage guidance (whenToUse / " +
+    "whenNotToUse). Call this first so you know which templates exist " +
+    "and their ids before describing or filling one. When picking a " +
+    "template, prefer one whose whenToUse matches the request and skip " +
+    "any whose whenNotToUse applies.",
+  inputSchema: toTanStackToolSchema(v.strictObject({})),
+});
+
 // Exported so the fill_template eval can register the exact wording
 // production sends, instead of a copy that can drift from it.
 export const DESCRIBE_TEMPLATE_DESCRIPTION =
@@ -148,35 +163,26 @@ export const createTemplateTools = ({
   };
 
   return {
-    [LIST_TEMPLATES_TOOL_NAME]: toolDefinition({
-      name: LIST_TEMPLATES_TOOL_NAME,
-      description:
-        "List the document templates in this organization (NDAs, powers of " +
-        "attorney, leases, and so on). Returns each template's id, name, " +
-        "number of fillable fields, tags, and usage guidance (whenToUse / " +
-        "whenNotToUse). Call this first so you know which templates exist " +
-        "and their ids before describing or filling one. When picking a " +
-        "template, prefer one whose whenToUse matches the request and skip " +
-        "any whose whenNotToUse applies.",
-      inputSchema: toTanStackToolSchema(v.strictObject({})),
-    }).server(async () => {
-      const rows = await scopedDb((tx) =>
-        tx.query.templates.findMany({
-          columns: {
-            id: true,
-            name: true,
-            fieldCount: true,
-            tags: true,
-            whenToUse: true,
-            whenNotToUse: true,
-          },
-          where: { organizationId: { eq: organizationId } },
-          orderBy: { createdAt: "desc" },
-          limit: LIMITS.templatesCount,
-        }),
-      );
-      return { templates: rows };
-    }),
+    [LIST_TEMPLATES_TOOL_NAME]: LIST_TEMPLATES_TOOL_DEFINITION.server(
+      async () => {
+        const rows = await scopedDb((tx) =>
+          tx.query.templates.findMany({
+            columns: {
+              id: true,
+              name: true,
+              fieldCount: true,
+              tags: true,
+              whenToUse: true,
+              whenNotToUse: true,
+            },
+            where: { organizationId: { eq: organizationId } },
+            orderBy: { createdAt: "desc" },
+            limit: LIMITS.templatesCount,
+          }),
+        );
+        return { templates: rows };
+      },
+    ),
 
     [DESCRIBE_TEMPLATE_TOOL_NAME]: toolDefinition({
       name: DESCRIBE_TEMPLATE_TOOL_NAME,

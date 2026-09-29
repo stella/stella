@@ -14,6 +14,7 @@ import {
 import {
   caseLawCitations,
   caseLawCourtWeights,
+  caseLawCourtDirectoryRanks,
   caseLawDecisionIdentifiers,
   caseLawDecisionSourceIdentities,
   caseLawDecisions,
@@ -215,6 +216,7 @@ export const relations = defineRelations(
     caseLawCitations,
     caseLawPolarityRules,
     caseLawCourtWeights,
+    caseLawCourtDirectoryRanks,
     caseLawFtsConfigs,
     caseLawMatterLinks,
     caseLawSearchDocuments,
@@ -1219,6 +1221,7 @@ export const relations = defineRelations(
     },
     caseLawPolarityRules: {},
     caseLawCourtWeights: {},
+    caseLawCourtDirectoryRanks: {},
     caseLawFtsConfigs: {},
     caseLawMatterLinks: {
       decision: r.one.caseLawDecisions({

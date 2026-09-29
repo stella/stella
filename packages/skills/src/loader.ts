@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { getSkillResourceKind } from "./resource-kinds";
 import type { SkillResourceKind } from "./resource-kinds";
+import { GENERATED_SKILLS } from "./skills.gen";
 
 export type SkillMetadata = {
   compatibility?: string | null;
@@ -16,6 +17,29 @@ export type SkillResource = {
   path: string;
   kind: SkillResourceKind;
 };
+
+/** A skill shipped with stella: every organization has it, with no row. */
+export type StellaSkill = SkillMetadata & {
+  body: string;
+  resources: SkillResource[];
+};
+
+/**
+ * Frontmatter `metadata` key under which a skill names the chat tools a turn
+ * must not offer while the skill is active. The Agent Skills spec reserves
+ * `metadata` for host extensions; the value follows the `allowed-tools`
+ * spelling: tool names separated by whitespace.
+ */
+export const CHAT_EXCLUDED_TOOLS_METADATA_KEY = "stella-chat-excluded-tools";
+export const CHAT_DOCUMENTED_READS_METADATA_KEY =
+  "stella-chat-documented-reads";
+/**
+ * Frontmatter `metadata` key holding the title a shipped skill is shown under.
+ * `name` is the skill's slug, the identifier every tool and ref uses, so the
+ * title lives beside it, as an installed skill's row keeps its name apart
+ * from its slug.
+ */
+export const SKILL_DISPLAY_NAME_METADATA_KEY = "stella-display-name";
 
 const RESOURCE_EXTENSIONS = [
   ".csv",
@@ -39,6 +63,70 @@ type Frontmatter = {
   metadata: Record<string, string> | undefined;
   name: string;
   version: string | undefined;
+};
+
+type GeneratedSkill = (typeof GENERATED_SKILLS)[number];
+
+const skillsById: ReadonlyMap<string, GeneratedSkill> = new Map(
+  GENERATED_SKILLS.map((skill) => [skill.id, skill]),
+);
+
+/** The shipped skills' metadata, sorted by name. */
+export const listSkillMetadata = (): SkillMetadata[] =>
+  GENERATED_SKILLS.map((skill) => parseShippedSkill(skill).metadata).toSorted(
+    (a, b) => a.name.localeCompare(b.name),
+  );
+
+/** One shipped skill; `skillId` must name one (see `listSkillMetadata`). */
+export const loadSkill = (skillId: string): StellaSkill => {
+  const skill = getSkill(skillId);
+  const parsed = parseShippedSkill(skill);
+
+  return {
+    ...parsed.metadata,
+    body: parsed.body,
+    resources: listSkillResources(skillId),
+  };
+};
+
+export const listSkillResources = (skillId: string): SkillResource[] =>
+  getSkill(skillId).resources.map(({ kind, path }) => ({ kind, path }));
+
+/**
+ * One resource file of a shipped skill by its exact path, as a stored skill's
+ * resources are read; `null` when the skill ships no file at that path.
+ */
+export const readSkillResource = ({
+  resourcePath,
+  skillId,
+}: {
+  resourcePath: string;
+  skillId: string;
+}): (SkillResource & { content: string }) | null => {
+  const resource = getSkill(skillId).resources.find(
+    ({ path }) => path === resourcePath,
+  );
+  return resource
+    ? { content: resource.source, kind: resource.kind, path: resource.path }
+    : null;
+};
+
+const getSkill = (skillId: string): GeneratedSkill => {
+  const skill = skillsById.get(skillId);
+  if (!skill) {
+    panic(`Unknown built-in skill: ${skillId}`);
+  }
+  return skill;
+};
+
+// A shipped SKILL.md that does not parse is a build defect, not a runtime
+// failure: the package tests parse every shipped skill.
+const parseShippedSkill = (skill: GeneratedSkill): ParsedSkillFile => {
+  const parsed = parseSkillFile(skill.source);
+  if (Result.isError(parsed)) {
+    panic(`Built-in skill ${skill.id}: ${parsed.error.message}`);
+  }
+  return parsed.value;
 };
 
 /** A SKILL.md file whose frontmatter does not satisfy the skill format. */
@@ -179,6 +267,50 @@ const readMetadata = (
   }
   return Result.ok(Object.fromEntries(entries));
 };
+
+/**
+ * A whitespace-separated name list under one `metadata` key. Built-in skills
+ * carry the mapping from `SKILL.md`; installed skills carry the same mapping
+ * in their stored row, so both sources are read here. Empty when the key is
+ * absent; deduplicated otherwise.
+ */
+const readMetadataNameList = (
+  metadata: Readonly<Record<string, string>> | undefined,
+  key: string,
+): readonly string[] => {
+  const value = metadata?.[key];
+  if (value === undefined) {
+    return [];
+  }
+  return [...new Set(value.split(/\s+/u).filter((name) => name.length > 0))];
+};
+
+/** The title a shipped skill is shown under; its `name` when it has none. */
+export const readSkillDisplayName = ({
+  metadata,
+  name,
+}: Pick<SkillMetadata, "metadata" | "name">): string => {
+  const displayName = metadata?.[SKILL_DISPLAY_NAME_METADATA_KEY]?.trim();
+  return displayName === undefined || displayName === "" ? name : displayName;
+};
+
+/** Chat tool names a skill excludes from the turns it is active in. */
+export const readExcludedChatTools = (
+  metadata: Readonly<Record<string, string>> | undefined,
+): readonly string[] =>
+  readMetadataNameList(metadata, CHAT_EXCLUDED_TOOLS_METADATA_KEY);
+
+/**
+ * Registry read tools a skill documents up front on the chat surface: their
+ * full signatures join the code-mode prompt while the skill is active, so the
+ * model writes the call without `discover_tools`. Values are registry names
+ * (`list_documents`), not the sandbox's `external_` bindings. The chat side
+ * narrows them to the reads it can document.
+ */
+export const readDocumentedChatReads = (
+  metadata: Readonly<Record<string, string>> | undefined,
+): readonly string[] =>
+  readMetadataNameList(metadata, CHAT_DOCUMENTED_READS_METADATA_KEY);
 
 export const normalizeResourcePath = (resourcePath: string): string => {
   if (resourcePath.startsWith("/")) {
