@@ -71,7 +71,7 @@ export type ToolAnnotation = {
 };
 
 /** One table of a composite result; see the API-side `McpCliCompositeSection`. */
-export type CompositeSection = {
+type CompositeSection = {
   title: string;
   /** Dot path to an array of records; a `[]` segment spreads an array. */
   rows: string;
