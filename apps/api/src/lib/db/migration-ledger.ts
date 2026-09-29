@@ -96,9 +96,9 @@ export const planLedgerAdoption = ({
       };
     }
 
-    const candidates = byHash.get(receipt.hash) ?? [];
-    const soleCandidate = candidates.at(0);
-    if (candidates.length === 1 && soleCandidate !== undefined) {
+    const candidates = byHash.get(receipt.hash);
+    const soleCandidate = candidates?.at(0);
+    if (candidates?.length === 1 && soleCandidate !== undefined) {
       return {
         type: "mapped",
         receipt,
@@ -106,7 +106,7 @@ export const planLedgerAdoption = ({
         matchedBy: "hash",
       };
     }
-    if (candidates.length > 1) {
+    if (candidates !== undefined && candidates.length > 1) {
       const timestampMatches = candidates.filter(
         ({ folderMillis }) =>
           String(folderMillis) === String(receipt.created_at),
@@ -238,7 +238,7 @@ export const validateLedger = ({
 };
 
 const FOLDER_NAME = /^[0-9]{14}_[a-z0-9_-]+$/u;
-const REQUIRES_LINE = /^\s*--\s*requires:\s*(.*)$/u;
+const REQUIRES_PREFIX = /^[ \t]*--[ \t]*requires:/u;
 
 type RequiresLine = { line: number; value: string };
 
@@ -260,11 +260,14 @@ const scanRequiresLines = (sqlText: string) => {
     if (!/^\s*--/u.test(line)) {
       inLeadingComments = false;
     }
-    const value = REQUIRES_LINE.exec(line)?.at(1);
-    if (value === undefined) {
+    const prefix = REQUIRES_PREFIX.exec(line)?.at(0);
+    if (prefix === undefined) {
       continue;
     }
-    const requiresLine = { line: index + 1, value: value.trim() };
+    const requiresLine = {
+      line: index + 1,
+      value: line.slice(prefix.length).trim(),
+    };
     if (!FOLDER_NAME.test(requiresLine.value)) {
       malformedLines.push(requiresLine);
     } else if (!inLeadingComments) {
@@ -329,7 +332,10 @@ export const validateRequires = ({
   const violations: RequiresViolation[] = [];
 
   for (const [index, migration] of bundle.entries()) {
-    for (const dependency of dependenciesByName.get(migration.name) ?? []) {
+    const dependencies =
+      dependenciesByName.get(migration.name) ??
+      panic("Missing migration dependency entry");
+    for (const dependency of dependencies) {
       const dependencyIndex = indexByName.get(dependency);
       if (dependencyIndex === undefined) {
         violations.push({
@@ -371,7 +377,10 @@ export const validateRequires = ({
     }
     state.set(name, "visiting");
     stack.push(name);
-    for (const dependency of dependenciesByName.get(name) ?? []) {
+    const dependencies =
+      dependenciesByName.get(name) ??
+      panic("Missing migration dependency entry");
+    for (const dependency of dependencies) {
       if (indexByName.has(dependency)) {
         visit(dependency);
       }
