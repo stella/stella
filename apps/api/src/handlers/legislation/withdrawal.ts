@@ -9,8 +9,7 @@ import { legislationDocuments } from "@/api/db/schema";
 import { declareWriterContract } from "@/api/handlers/legislation/ingestion";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  CorpusIndexProjectionSubjectMissingError,
-  lockActiveCorpusProjectionSourceTx,
+  lockActiveCorpusProjectionSourceByIdTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { stripDangerousChars } from "@/api/lib/legal-search/corpus-sanitize";
@@ -105,18 +104,12 @@ const withdrawTarget = async (
   await declareWriterContract(tx);
   const subject = { family: "legislation", entityId: id } as const;
   // The source before the row, in the order every legislation writer takes
-  // them.
-  let projectionLock: Awaited<
-    ReturnType<typeof lockActiveCorpusProjectionSourceTx>
-  >;
-  try {
-    projectionLock = await lockActiveCorpusProjectionSourceTx(tx, subject);
-  } catch (error) {
-    if (error instanceof CorpusIndexProjectionSubjectMissingError) {
-      return { type: "missing" };
-    }
-    throw error;
-  }
+  // them. The source is locked by its id, so a version deleted since the
+  // lookup is found missing by the row lock below instead of failing here.
+  const projectionLock = await lockActiveCorpusProjectionSourceByIdTx(tx, {
+    family: "legislation",
+    sourceId: withdrawal.sourceId,
+  });
   const row = (
     await tx
       .select({
