@@ -22,7 +22,9 @@ export const createReconcileOrganizationFileReservationsTask =
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
-    const settled = (await reconcile({ db, signal })).unwrap();
+    const settled = (await reconcile({ db, signal })).unwrap(
+      "Reservation reconciliation must succeed before this task completes",
+    );
     logger.info("scheduler.organization_file_reservations_reconciled", {
       "fileReservations.scanned": settled.scanned,
       "fileReservations.committed": settled.committed,

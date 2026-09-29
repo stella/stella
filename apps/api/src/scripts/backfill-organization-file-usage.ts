@@ -209,7 +209,7 @@ while (true) {
           db: ledgerDb,
           organizationId,
         })
-      ).unwrap();
+      ).unwrap("Reservation reconciliation must succeed during backfill");
       settledReservations +=
         settledBatch.committed + settledBatch.deleted + settledBatch.released;
       mismatchedReservations += settledBatch.mismatched;

@@ -275,7 +275,9 @@ export const deleteQueuedStyleSetPackages = async (
           s3Key,
           AbortSignal.timeout(10_000),
         );
-        deleted.unwrap();
+        deleted.unwrap(
+          "Queued style set package deletion must succeed before cleanup completes",
+        );
         return;
       }
       await getS3().delete(s3Key);
@@ -315,7 +317,9 @@ export const deleteUnreferencedStyleSetPackage = async (
       s3Key,
       AbortSignal.timeout(10_000),
     );
-    deleted.unwrap();
+    deleted.unwrap(
+      "Unreferenced style set package deletion must succeed before clearing its cleanup key",
+    );
   } else {
     await getS3().delete(s3Key);
   }
