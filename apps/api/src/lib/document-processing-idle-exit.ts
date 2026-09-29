@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -143,20 +143,21 @@ export const createIdleExitCheck = ({
    * Any other rejection is a failed sample, as before.
    */
   const reconciliationUnfinished = async (): Promise<boolean> => {
-    try {
-      return await withTimeout(
-        async () => await hasUnfinishedReconciliation(),
-        {
+    const verdict = await Result.tryPromise({
+      try: async () =>
+        await withTimeout(async () => await hasUnfinishedReconciliation(), {
           label: "document processing idle sample reconciliation wait",
           timeoutMs: sampleTimeoutMs,
-        },
-      );
-    } catch (error) {
-      if (TimeoutError.is(error)) {
-        return true;
-      }
-      throw error;
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isOk(verdict)) {
+      return verdict.value;
     }
+    if (TimeoutError.is(verdict.error)) {
+      return true;
+    }
+    throw verdict.error;
   };
 
   /**
