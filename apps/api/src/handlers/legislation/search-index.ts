@@ -47,7 +47,10 @@ const CORPUS_READ_RETRY_DELAY_MS = 5 * 60_000;
 
 type ProjectionWriteScope =
   | { type: "shared"; scopedDb: ScopedDb }
-  | { type: "dedicated"; scopedDb: ScopedDb };
+  | {
+      type: "dedicated";
+      withProjectionDb: typeof withDedicatedCorpusBackfillDb;
+    };
 
 class LegislationCorpusReadError extends TaggedError(
   "LegislationCorpusReadError",
@@ -154,12 +157,13 @@ export const indexLegislationDocument = async (
       : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${indexedText}, ''))`;
     const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
-    await projectionWriteScope.scopedDb(async (tx) => {
-      // audit: skip — search index maintenance; rebuilds derived state
-      if (projectionWriteScope.type === "shared") {
-        await setCorpusBackfillStatementTimeout(tx);
-      }
-      await tx.execute(sql`
+    const persist = async (writeDb: ScopedDb): Promise<void> => {
+      await writeDb(async (tx) => {
+        // audit: skip — search index maintenance; rebuilds derived state
+        if (projectionWriteScope.type === "shared") {
+          await setCorpusBackfillStatementTimeout(tx);
+        }
+        await tx.execute(sql`
     INSERT INTO legislation_search_documents (
       document_id, title, searchable_text,
       language, regconfig, updated_at, retry_after, tsv
@@ -182,7 +186,13 @@ export const indexLegislationDocument = async (
       retry_after = EXCLUDED.retry_after,
       tsv = EXCLUDED.tsv
   `);
-    });
+      });
+    };
+    if (projectionWriteScope.type === "dedicated") {
+      await projectionWriteScope.withProjectionDb(persist);
+    } else {
+      await persist(projectionWriteScope.scopedDb);
+    }
   };
 
   const projection = await writeProjectionWithinTsvectorCeiling(
@@ -303,13 +313,10 @@ export const backfillLegislationSearchIndex = async (
     const indexed = (
       await Result.tryPromise({
         try: async () =>
-          await withProjectionDb(
-            async (dedicatedDb) =>
-              await indexLegislationDocument(row.id, scopedDb, dependencies, {
-                type: "dedicated",
-                scopedDb: dedicatedDb,
-              }),
-          ),
+          await indexLegislationDocument(row.id, scopedDb, dependencies, {
+            type: "dedicated",
+            withProjectionDb,
+          }),
         catch: (cause) => cause,
       })
     ).andThen((result) => result);

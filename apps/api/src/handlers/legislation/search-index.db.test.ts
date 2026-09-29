@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -255,6 +256,47 @@ test("the FTS rebuild reads canonical text only when inline payloads are absent"
       .where(eq(legislationSearchDocuments.documentId, corpusId))
   ).at(0);
   expect(match?.matches).toBe(true);
+});
+
+test("the dedicated connection is reserved only for the projection write", async () => {
+  const events: string[] = [];
+  const result = await indexLegislationDocument(
+    corpusId,
+    async (callback) => {
+      events.push("metadata read");
+      return await scopedDb(callback);
+    },
+    {
+      readText: async () => {
+        events.push("corpus read");
+        return "canonical corpus sentinel";
+      },
+      resolveConfig: async () => {
+        events.push("configuration read");
+        return { regconfig: "simple", useUnaccent: false };
+      },
+    },
+    {
+      type: "dedicated",
+      withProjectionDb: async (work) => {
+        events.push("connection reserved");
+        try {
+          return await work(scopedDb);
+        } finally {
+          events.push("connection released");
+        }
+      },
+    },
+  );
+
+  expect(Result.isOk(result)).toBe(true);
+  expect(events).toEqual([
+    "metadata read",
+    "corpus read",
+    "configuration read",
+    "connection reserved",
+    "connection released",
+  ]);
 });
 
 test("an unreadable corpus row does not block the bounded missing scan", async () => {
