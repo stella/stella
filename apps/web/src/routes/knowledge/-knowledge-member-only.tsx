@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { Navigate, useRouterState } from "@tanstack/react-router";
 
@@ -7,9 +7,9 @@ import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launc
 
 type KnowledgeMemberOnlyProps = {
   /** While the session is unknown. */
-  pending: ReactNode;
+  pending: ReactElement | null;
   /** The organization's page, for a member of it. */
-  children: (organizationId: string) => ReactNode;
+  children: (organizationId: string) => ReactElement | null;
 };
 
 /**

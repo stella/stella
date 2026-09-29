@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { panic } from "better-result";
 
@@ -8,11 +8,11 @@ import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launc
 
 type KnowledgeAudienceGateProps = {
   /** While the session is unknown: a skeleton, no data. */
-  checking: ReactNode;
+  checking: ReactElement | null;
   /** A visitor without an account: the catalogue container. */
-  anonymous: () => ReactNode;
+  anonymous: () => ReactElement | null;
   /** A member: the organization's container, lazily loaded by the route. */
-  member: (organizationId: string) => ReactNode;
+  member: (organizationId: string) => ReactElement | null;
 };
 
 /**

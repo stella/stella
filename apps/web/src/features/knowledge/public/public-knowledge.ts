@@ -56,8 +56,7 @@ const toCatalogueDetail = (
 const useCatalogueTemplates = () => {
   const { data, isLoading, isError } = useQuery(catalogueTemplatesOptions());
   // Nothing is listed until the catalogue has been read.
-  const catalogue: readonly CatalogueTemplate[] =
-    data === undefined ? [] : data;
+  const catalogue: readonly CatalogueTemplate[] = data ?? [];
   const status = ((): KnowledgeSource<"templates">["status"] => {
     if (isLoading) {
       return "loading";

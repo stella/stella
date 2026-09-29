@@ -140,7 +140,7 @@ export const MemberCatalogueTemplateActions = ({
       }
       default: {
         act satisfies never;
-        return panic(`Unhandled template act: ${String(act)}`);
+        panic(`Unhandled template act: ${String(act)}`);
       }
     }
   };

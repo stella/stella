@@ -105,7 +105,7 @@ const CATALOGUE_TEMPLATE = {
 };
 
 const libraryTemplate = (name: string) => ({
-  id: `${name.toLowerCase().replaceAll(" ", "-")}`,
+  id: name.toLowerCase().replaceAll(" ", "-"),
   name,
   fileName: "lease.docx",
   fieldCount: 3,
