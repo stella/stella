@@ -52,6 +52,8 @@ const MERGEABLE_POLL_ATTEMPTS = 8;
 const MERGEABLE_POLL_INTERVAL_MS = 2000;
 const MERGE_COMMIT_POLL_ATTEMPTS = 5;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
+const MIGRATION_ALIAS_INVENTORY =
+  "apps/api/src/lib/db/migration-alias-inventory.json";
 
 // --- Repository policy --------------------------------------------------------
 
@@ -184,6 +186,9 @@ type ReviewThreadSnapshot = { id: string; isResolved: boolean };
 type MigrationSnapshot = {
   addedDirectories: readonly string[];
   removedDirectories: readonly string[];
+  modifiedDirectories: readonly string[];
+  unsupportedChanges: readonly string[];
+  inventoryChanged: boolean;
 };
 
 export type MergeBarSnapshot = {
@@ -417,6 +422,14 @@ const evaluateReviewThreads = (
 const evaluateMigrationIdentity = (
   migrations: MigrationSnapshot,
 ): GateVerdict => {
+  if (migrations.unsupportedChanges.length > 0) {
+    return {
+      gate: "migration-identity",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.migrationIdentity,
+      detail: `unsupported migration changes: ${migrations.unsupportedChanges.join(", ")}`,
+    };
+  }
   const violation = findMigrationIdentityViolation(migrations);
   if (violation?.type === "invalid-name") {
     return {
@@ -436,6 +449,19 @@ const evaluateMigrationIdentity = (
         `identity in the deployed ledger. Renaming a merged migration makes ` +
         `deployed databases re-run it under the new name; deleting it removes ` +
         `it from fresh databases. Add a new migration instead.`,
+    };
+  }
+  if (
+    migrations.modifiedDirectories.length > 0 &&
+    !migrations.inventoryChanged
+  ) {
+    return {
+      gate: "migration-identity",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.migrationIdentity,
+      detail:
+        `${migrations.modifiedDirectories.join(", ")} changed without a migration ` +
+        `alias inventory update`,
     };
   }
   return {
@@ -877,49 +903,113 @@ const createGhGateway = ({
     // checkout, which can be behind the base branch.
     readMigrationDirectories: () => {
       if (migrationDirectory === null) {
-        return { addedDirectories: [], removedDirectories: [] };
+        return {
+          addedDirectories: [],
+          removedDirectories: [],
+          modifiedDirectories: [],
+          unsupportedChanges: [],
+          inventoryChanged: false,
+        };
+      }
+      const rawChangedFiles = runGhJson([
+        "api",
+        `repos/${repo}/pulls/${pullNumber}`,
+        "--jq",
+        ".changed_files",
+      ]);
+      if (
+        typeof rawChangedFiles !== "number" ||
+        !Number.isSafeInteger(rawChangedFiles) ||
+        rawChangedFiles < 0
+      ) {
+        panic("Expected a nonnegative changed_files count from gh");
       }
       const changedFiles = runGh([
         "api",
         "--paginate",
         `repos/${repo}/pulls/${pullNumber}/files`,
         "--jq",
-        '.[] | select(.status == "added" or .status == "removed" or .status == "renamed") | {status, filename, previous_filename} | @json',
+        ".[] | {status, filename, previous_filename} | @json",
       ])
         .split("\n")
         .filter(Boolean)
         .map((line) =>
           readRecord(JSON.parse(line), "changed pull request file"),
         );
+      if (changedFiles.length !== rawChangedFiles) {
+        panic(
+          `Expected ${rawChangedFiles} changed files from gh, received ${changedFiles.length}`,
+        );
+      }
       const addedDirectories: string[] = [];
       const removedDirectories: string[] = [];
+      const modifiedDirectories: string[] = [];
+      const unsupportedChanges: string[] = [];
+      let inventoryChanged = false;
       for (const file of changedFiles) {
         const status = readString(file, "status");
         const filename = readString(file, "filename");
-        if (status === "added" || status === "renamed") {
-          const directory = migrationDirectoryFromFile({
-            filename,
-            migrationDirectory,
-          });
-          if (directory !== null) {
-            addedDirectories.push(directory);
-          }
+        const directory = migrationDirectoryFromFile({
+          filename,
+          migrationDirectory,
+        });
+        const previousFilename =
+          status === "renamed" || status === "copied"
+            ? readString(file, "previous_filename")
+            : filename;
+        const previousDirectory = migrationDirectoryFromFile({
+          filename: previousFilename,
+          migrationDirectory,
+        });
+        if (
+          filename === MIGRATION_ALIAS_INVENTORY ||
+          (status === "renamed" &&
+            previousFilename === MIGRATION_ALIAS_INVENTORY)
+        ) {
+          inventoryChanged = true;
         }
-        if (status === "removed" || status === "renamed") {
-          const previousFilename =
-            status === "renamed"
-              ? readString(file, "previous_filename")
-              : filename;
-          const directory = migrationDirectoryFromFile({
-            filename: previousFilename,
-            migrationDirectory,
-          });
-          if (directory !== null) {
-            removedDirectories.push(directory);
+        if (status === "changed" || status === "copied") {
+          if (directory !== null || previousDirectory !== null) {
+            unsupportedChanges.push(
+              `${status}: ${previousDirectory ?? directory}`,
+            );
           }
+          continue;
+        }
+        if (
+          status !== "added" &&
+          status !== "removed" &&
+          status !== "modified" &&
+          status !== "renamed"
+        ) {
+          if (directory !== null) {
+            unsupportedChanges.push(`${status}: ${directory}`);
+          }
+          continue;
+        }
+        if (
+          (status === "added" || status === "renamed") &&
+          directory !== null
+        ) {
+          addedDirectories.push(directory);
+        }
+        if (
+          (status === "removed" || status === "renamed") &&
+          previousDirectory !== null
+        ) {
+          removedDirectories.push(previousDirectory);
+        }
+        if (status === "modified" && directory !== null) {
+          modifiedDirectories.push(directory);
         }
       }
-      return { addedDirectories, removedDirectories };
+      return {
+        addedDirectories,
+        removedDirectories,
+        modifiedDirectories,
+        unsupportedChanges,
+        inventoryChanged,
+      };
     },
 
     merge: ({ expectedHeadSha }) => {
