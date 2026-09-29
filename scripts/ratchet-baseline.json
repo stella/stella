@@ -179,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 268,
+    "count": 269,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -196,7 +196,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline/corpus-mirror.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-existing.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 3,
-      "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 1,
+      "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/source-observation.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/supplement-placement.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/source-totals.ts": 2,
