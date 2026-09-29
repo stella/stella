@@ -71,6 +71,17 @@ const MARKER_ONLY_SOURCE =
 // ── Content completeness ────────────────────────────────────
 
 describe("validateAst", () => {
+  test("a comparison override may change whitespace only", () => {
+    expect(() =>
+      validateAst(
+        wrapInHtml("Alpha bravo charlie"),
+        [makeBlock({ plainText: "Alpha bravo charlie" })],
+        {
+          wordComparisonText: "Alpha delta charlie",
+        },
+      ),
+    ).toThrow("Word comparison may change whitespace only");
+  });
   describe("content retention", () => {
     test("passes when AST retains all source text", () => {
       const text =

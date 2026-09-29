@@ -7,6 +7,7 @@
  * in tests, the result can be asserted.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 
 import type { Block, Inline } from "@/api/lib/case-law/document-ast";
@@ -31,6 +32,7 @@ export type ValidationResult = {
     retainedPct: number;
     blockCount: number;
     missingWords: string[];
+    boundaryWhitespaceWords: string[];
     blockTypeCounts: Record<string, number>;
     /** Blocks with suspiciously short text (< 5 chars). */
     tinyBlocks: number;
@@ -216,6 +218,7 @@ const collapseWhitespace = (text: string): string =>
 
 /** Issue code for source markup found in a block's text. */
 const MARKUP_RESIDUE = "MARKUP_RESIDUE";
+const BOUNDARY_WHITESPACE = "BOUNDARY_WHITESPACE";
 
 // ── Validator ──────────────────────────────────────────────
 
@@ -225,6 +228,8 @@ export const validateAst = (
   options?: {
     minRetainedPct?: number;
     maxMissingWords?: number;
+    /** Source words with explicit inline breaks; never used for retention. */
+    wordComparisonText?: string;
   },
 ): ValidationResult => {
   const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
@@ -332,13 +337,31 @@ export const validateAst = (
   // the same rule extractWords applies. Peeling only ever clears a
   // phantom: a genuinely absent meaningful word keeps a remainder that is
   // meaningful and not in the AST, so real loss is still reported.
-  const missingWords = [...originalWords].filter((w) => {
-    if (astWords.has(w)) {
-      return false;
-    }
-    const peeled = peelDecorativeMarkers(w);
-    return isMeaningfulWord(peeled) && !astWords.has(peeled);
-  });
+  const missingFrom = (words: Set<string>): string[] =>
+    [...words].filter((w) => {
+      if (astWords.has(w)) {
+        return false;
+      }
+      const peeled = peelDecorativeMarkers(w);
+      return isMeaningfulWord(peeled) && !astWords.has(peeled);
+    });
+  const wordComparisonText = options?.wordComparisonText;
+  if (
+    wordComparisonText !== undefined &&
+    normalize(wordComparisonText).replace(/\s+/gu, "") !==
+      originalText.replace(/\s+/gu, "")
+  ) {
+    panic("Word comparison may change whitespace only");
+  }
+  const comparisonWords =
+    wordComparisonText === undefined
+      ? originalWords
+      : extractWords(normalize(wordComparisonText));
+  const missingWords = missingFrom(comparisonWords);
+  const boundaryWhitespaceWords =
+    comparisonWords === originalWords
+      ? []
+      : missingFrom(originalWords).filter((word) => !comparisonWords.has(word));
 
   if (retainedPct < minRetainedPct) {
     issues.push({
@@ -355,6 +378,14 @@ export const validateAst = (
       code: "MISSING_WORDS",
       message: `${missingWords.length} meaningful words missing: ${missingWords.slice(0, 10).join(", ")}`,
       severity: "error",
+    });
+  }
+
+  if (boundaryWhitespaceWords.length > 0) {
+    issues.push({
+      code: BOUNDARY_WHITESPACE,
+      message: `${boundaryWhitespaceWords.length} source words cross an inline break`,
+      severity: "warning",
     });
   }
 
@@ -512,6 +543,7 @@ export const validateAst = (
       retainedPct: Math.round(retainedPct * 10) / 10,
       blockCount: blocks.length,
       missingWords,
+      boundaryWhitespaceWords,
       blockTypeCounts: typeCounts,
       tinyBlocks,
       hugeBlocks,
@@ -561,6 +593,10 @@ export const AST_MARKUP_RESIDUE = "case_law.ingestion.ast_markup_residue";
  */
 export const AST_STRUCTURE_DEGRADED =
   "case_law.ingestion.ast_structure_degraded";
+
+/** The source oracle joins words across a rendered inline break. */
+export const AST_BOUNDARY_WHITESPACE =
+  "case_law.ingestion.ast_boundary_whitespace";
 
 /**
  * Log event emitted when a decision is stored with neither text nor an
@@ -620,14 +656,17 @@ export type ValidationSignal =
 export const validationSignal = (
   result: Pick<ValidationResult, "ok" | "issues">,
 ): ValidationSignal | undefined => {
-  if (result.issues.length === 0) {
+  const issues = result.issues.filter(
+    (issue) => issue.code !== BOUNDARY_WHITESPACE,
+  );
+  if (issues.length === 0) {
     return undefined;
   }
   // Residue outranks content loss, and the log line carries every code
   // either way: retention is measured over text that includes the markup,
   // so it reads high while the document is wrong. Fixing the parser and
   // re-parsing from sourceRaw is the action for both.
-  if (result.issues.some((issue) => issue.code === MARKUP_RESIDUE)) {
+  if (issues.some((issue) => issue.code === MARKUP_RESIDUE)) {
     return { event: AST_MARKUP_RESIDUE, level: "error" };
   }
   return result.ok
@@ -639,8 +678,25 @@ export const validateAndLog = (
   subject: ValidationSubject,
   html: string,
   blocks: Block[],
+  options?: Parameters<typeof validateAst>[2],
 ): ValidationResult => {
-  const result = validateAst(html, blocks);
+  const result = validateAst(html, blocks, options);
+  const subjectFields = {
+    parser: subject.parser,
+    caseNumber: subject.caseNumber,
+    ...(subject.language === undefined ? {} : { language: subject.language }),
+    ...(subject.url === undefined ? {} : { url: subject.url }),
+  };
+  if (result.stats.boundaryWhitespaceWords.length > 0) {
+    logger.warn(AST_BOUNDARY_WHITESPACE, {
+      ...subjectFields,
+      codes: BOUNDARY_WHITESPACE,
+      boundaryWordCount: result.stats.boundaryWhitespaceWords.length,
+      boundaryWords: result.stats.boundaryWhitespaceWords
+        .slice(0, 25)
+        .join(", "),
+    });
+  }
   const signal = validationSignal(result);
   if (!signal) {
     return result;
@@ -650,12 +706,13 @@ export const validateAndLog = (
   // failure is actionable straight from the log line, without
   // re-fetching and re-parsing the source.
   const common = {
-    parser: subject.parser,
-    caseNumber: subject.caseNumber,
-    ...(subject.language === undefined ? {} : { language: subject.language }),
-    ...(subject.url === undefined ? {} : { url: subject.url }),
-    codes: result.issues.map((issue) => issue.code).join(","),
+    ...subjectFields,
+    codes: result.issues
+      .filter((issue) => issue.code !== BOUNDARY_WHITESPACE)
+      .map((issue) => issue.code)
+      .join(","),
     issues: result.issues
+      .filter((issue) => issue.code !== BOUNDARY_WHITESPACE)
       .map((issue) => `${issue.code}: ${issue.message}`)
       .join("; "),
     blockCount: result.stats.blockCount,

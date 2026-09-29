@@ -44,6 +44,17 @@ import {
   validatePlNcourtDocument,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import {
+  AST_BOUNDARY_WHITESPACE,
+  AST_CONTENT_LOST,
+  AST_STRUCTURE_DEGRADED,
+  buildValidationHtml,
+  validateAst,
+} from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -760,6 +771,92 @@ describe("the document", () => {
     expect(codes(blocks.slice(0, Math.floor(blocks.length / 2)))).toContain(
       "CONTENT_LOSS",
     );
+  });
+
+  test("XML line breaks reclassify glued source words without changing the AST", () => {
+    const boundaryXml = `<xPart><xBlock><xText>${Array.from({ length: 20 }, (_, index) => `wyraz${index}<xBRx/>w`).join(" ")}</xText></xBlock></xPart>`;
+    const content =
+      readPlNcourtContent(boundaryXml) ?? panic("the XML did not read");
+    const parsed = parsePlDecisionContent({
+      caseNumber: "I C 1/2026",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "boundary-test",
+    });
+    const blocks = parsed.documentAst.blocks;
+    expect(content.sourceParagraphs.at(0)).toContain("wyraz0w");
+    expect(content.comparisonParagraphs.at(0)).toContain("wyraz0 w");
+    expect(parsed.fulltext).toContain("wyraz0\nw");
+    expect(
+      validateAst(
+        buildValidationHtml(content.sourceParagraphs),
+        blocks,
+      ).issues.map((issue) => issue.code),
+    ).toContain("MISSING_WORDS");
+
+    const events: string[] = [];
+    setLogSinkForTesting(({ message }) => events.push(message));
+    const result = (() => {
+      try {
+        return validatePlNcourtDocument(
+          { parser: "pl-ncourt", caseNumber: "I C 1/2026" },
+          content,
+          blocks,
+        );
+      } finally {
+        resetLogSinkForTesting();
+      }
+    })();
+    expect(result.stats.boundaryWhitespaceWords).toHaveLength(20);
+    expect(result.issues.map((issue) => issue.code)).toContain(
+      "BOUNDARY_WHITESPACE",
+    );
+    expect(result.issues.map((issue) => issue.code)).not.toContain(
+      "MISSING_WORDS",
+    );
+    expect(events).toContain(AST_BOUNDARY_WHITESPACE);
+    expect(events).toContain(AST_STRUCTURE_DEGRADED);
+    expect(events).not.toContain(AST_CONTENT_LOST);
+  });
+
+  test("a missing sentence still fails after an XML boundary is reconciled", () => {
+    const lostSentence = Array.from(
+      { length: 20 },
+      (_, index) => `utracony${String.fromCodePoint(97 + index)}`,
+    ).join(" ");
+    const content =
+      readPlNcourtContent(
+        `<xPart><xBlock><xText>Powództwo<xBRx/>w sprawie.</xText><xText>${lostSentence}</xText></xBlock></xPart>`,
+      ) ?? panic("the XML did not read");
+    const blocks = parsePlDecisionContent({
+      caseNumber: "I C 2/2026",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "loss-test",
+    }).documentAst.blocks;
+    expect(blocks).toHaveLength(2);
+    const result = validatePlNcourtDocument(
+      { parser: "pl-ncourt", caseNumber: "I C 2/2026" },
+      content,
+      blocks.slice(0, 1),
+    );
+    expect(result.issues.map((issue) => issue.code)).toContain("MISSING_WORDS");
+    expect(result.issues.map((issue) => issue.code)).toContain("CONTENT_LOSS");
+    expect(result.stats.missingWords).toHaveLength(20);
   });
 
   test("bold and italic in the XML stay bold and italic in the document", async () => {

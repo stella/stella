@@ -18,6 +18,7 @@
  * sentence.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
@@ -64,6 +65,8 @@ export type PlNcourtContent = {
    * that loses text cannot also be what vouches for it.
    */
   sourceParagraphs: string[];
+  /** XML text with rendered inline breaks, used only by the word comparison. */
+  comparisonParagraphs: string[];
 };
 
 const ISAP_DETAILS_URL = "https://isap.sejm.gov.pl/DetailsServlet?id=";
@@ -101,6 +104,20 @@ const textOf = (node: AnyNode): string => {
     return node.data;
   }
   return isTag(node) ? node.children.map(textOf).join("") : "";
+};
+
+const comparisonTextOf = (node: AnyNode): string => {
+  if (isText(node)) {
+    return node.data;
+  }
+  if (!isTag(node)) {
+    return "";
+  }
+  if (node.name === "xBRx") {
+    return " ";
+  }
+  const children = node.children.map(comparisonTextOf).join("");
+  return node.name === "xSUPx" ? ` ${children}` : children;
 };
 
 const attributeOf = (element: Element, name: string): string =>
@@ -270,21 +287,24 @@ export const readPlNcourtContent = (xml: string): PlNcourtContent | null => {
     .join("\n");
   const title =
     name === undefined ? undefined : textOf(name).trim() || undefined;
+  const paragraphs = sourceParagraphsOf(root);
   return {
     attributes: { ...root.attribs },
     title,
     html,
     legalReferences: state.legalReferences,
     unmappedMarkup: [...state.unmapped],
-    sourceParagraphs: sourceParagraphsOf(root),
+    sourceParagraphs: paragraphs.source,
+    comparisonParagraphs: paragraphs.comparison,
   };
 };
 
 /** Elements whose text is a paragraph of the document as the court wrote it. */
 const TEXT_ELEMENTS = new Set(["xText", "xTitle", "xName"]);
 
-const sourceParagraphsOf = (root: Element): string[] => {
-  const paragraphs: string[] = [];
+const sourceParagraphsOf = (root: Element) => {
+  const source: string[] = [];
+  const comparison: string[] = [];
   const walk = (element: Element): void => {
     for (const child of childElements(element)) {
       if (!TEXT_ELEMENTS.has(child.name)) {
@@ -295,12 +315,13 @@ const sourceParagraphsOf = (root: Element): string[] => {
       const text =
         element === root ? "" : textOf(child).replace(/\s+/gu, " ").trim();
       if (text.length > 0) {
-        paragraphs.push(text);
+        source.push(text);
+        comparison.push(comparisonTextOf(child).replace(/\s+/gu, " ").trim());
       }
     }
   };
   walk(root);
-  return paragraphs;
+  return { source, comparison };
 };
 
 /**
@@ -313,9 +334,23 @@ export const validatePlNcourtDocument = (
   subject: ValidationSubject,
   content: PlNcourtContent,
   blocks: Block[],
-): ValidationResult =>
-  validateAndLog(
+): ValidationResult => {
+  const seen = new Set<string>();
+  const comparisonParts: string[] = [];
+  for (const [index, source] of content.sourceParagraphs.entries()) {
+    if (seen.has(source)) {
+      continue;
+    }
+    seen.add(source);
+    comparisonParts.push(
+      content.comparisonParagraphs[index] ??
+        panic("Missing pl-ncourt comparison paragraph"),
+    );
+  }
+  return validateAndLog(
     subject,
     buildValidationHtml(content.sourceParagraphs.map(escapeHtml)),
     blocks,
+    { wordComparisonText: comparisonParts.join(" ") },
   );
+};
