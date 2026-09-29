@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 2.3.3
+
+### Patch Changes
+
+- [#3798](https://github.com/stella/stella/pull/3798) [`ce30a4c`](https://github.com/stella/stella/commit/ce30a4c989003f81123057b25f10c1b70333775f) Thanks [@shanehobson](https://github.com/shanehobson)! - `save_playbook` documents when `scope.perspective` is set: only for a buyer, seller, or neutral side; a recipient, controller, or customer omits it.
+
 ## 2.3.2
 
 ### Patch Changes
