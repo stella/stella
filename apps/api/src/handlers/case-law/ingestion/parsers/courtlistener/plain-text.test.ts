@@ -133,7 +133,7 @@ describe("preformatted bodies", () => {
       "See Werb v. D'Alessandro, 606 A.2d 117, 119 (Del. 1992).",
     ]);
     expect(
-      parsed?.status === "parsed" ? parsed.text.counts.publisherLinks : null,
+      parsed.status === "parsed" ? parsed.text.counts.publisherLinks : null,
     ).toBe(1);
   });
 
