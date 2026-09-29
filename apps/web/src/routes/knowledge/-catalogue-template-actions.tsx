@@ -49,6 +49,7 @@ export const CatalogueTemplateActions = ({
           intent={intent}
           key={authStatus.user.activeOrganizationId}
           onIntentSettled={onIntentSettled}
+          organizationId={authStatus.user.activeOrganizationId}
           packId={packId}
           templateName={templateName}
           templateSlug={templateSlug}

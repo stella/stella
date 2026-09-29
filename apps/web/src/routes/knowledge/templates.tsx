@@ -25,9 +25,9 @@ function TemplatesSection() {
     <KnowledgeAudienceGate
       anonymous={() => <PublicTemplatesCatalogue />}
       checking={<TemplateListSkeleton />}
-      member={() => (
+      member={(organizationId) => (
         <Suspense fallback={<TemplateListSkeleton />}>
-          <LazyMemberTemplatesPage />
+          <LazyMemberTemplatesPage organizationId={organizationId} />
         </Suspense>
       )}
     />

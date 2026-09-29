@@ -17,7 +17,6 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { TemplateIntent } from "@/lib/knowledge/catalogue-intent";
@@ -26,6 +25,8 @@ import { organizationListOptions } from "@/lib/organization/queries";
 import { UseTemplateDialog } from "@/routes/knowledge/-components/use-template-dialog";
 
 type MemberCatalogueTemplateActionsProps = {
+  /** The organization the page's gate selected; the install lands there. */
+  organizationId: string;
   packId: string;
   templateSlug: string;
   templateName: string;
@@ -49,6 +50,7 @@ const CONFIRM_TITLE_KEY = {
  * An act named in the page's query opens the same confirmation.
  */
 export const MemberCatalogueTemplateActions = ({
+  organizationId: activeOrganizationId,
   packId,
   templateSlug,
   templateName,
@@ -56,7 +58,6 @@ export const MemberCatalogueTemplateActions = ({
   onIntentSettled,
 }: MemberCatalogueTemplateActionsProps) => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
   const { data: organizations } = useQuery(organizationListOptions);
   const organizationName =
     organizations?.find(({ id }) => id === activeOrganizationId)?.name ?? "";

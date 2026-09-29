@@ -14,7 +14,6 @@ import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dia
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -32,9 +31,13 @@ const templatesRouteApi = getRouteApi("/knowledge/templates");
 
 /** The organization's template library and its Studio: the member side of
  *  the templates section. */
-export function MemberTemplatesPage() {
+export function MemberTemplatesPage({
+  organizationId: activeOrganizationId,
+}: {
+  /** The organization the section's gate selected; every read is keyed by it. */
+  organizationId: string;
+}) {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   // The open template lives in the URL, so a reload lands back in its Studio.
   const openTemplateId = templatesRouteApi.useSearch({
     select: (s) => s.template,
@@ -138,6 +141,7 @@ export function MemberTemplatesPage() {
     return (
       <>
         <TemplateDetail
+          organizationId={activeOrganizationId}
           onBack={() => {
             // Leaving the Studio discards unsaved document/manifest edits.
             if (useTemplateStudioStore.getState().isDirty) {
@@ -238,7 +242,9 @@ const TemplateDetail = ({
   templateId,
   onBack,
   onMissing,
+  organizationId: activeOrganizationId,
 }: {
+  organizationId: string;
   templateId: string;
   onBack: () => void;
   /** The id cannot be opened by this org, so the URL must stop naming it. */
@@ -248,8 +254,6 @@ const TemplateDetail = ({
   const format = useFormatter();
   const setNavOpen = useTemplateNavStore((s) => s.setOpen);
   const clearNav = useTemplateNavStore((s) => s.clear);
-
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const {
     data: detailData,
