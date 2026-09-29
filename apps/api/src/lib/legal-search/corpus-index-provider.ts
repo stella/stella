@@ -117,6 +117,7 @@ export const rehydrateCorpusIndexProviderCandidates =
         .select({
           id: caseLawDecisions.id,
           caseNumber: caseLawDecisions.caseNumber,
+          caseNumberType: caseLawDecisions.caseNumberType,
           ecli: caseLawDecisions.ecli,
           identifiers: sql<unknown>`coalesce((
             SELECT jsonb_agg(
@@ -359,6 +360,7 @@ const searchResult = async (
         ecli: toNullableString(row.ecli),
         identifiers: decisionIdentifierProjection(row.identifiers, {
           caseNumber: row.caseNumber,
+          caseNumberType: row.caseNumberType,
           ecli: toNullableString(row.ecli),
         }),
         court: row.court,

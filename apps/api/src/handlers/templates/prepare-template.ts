@@ -24,6 +24,8 @@ import {
 } from "@/api/lib/docx/ooxml";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import { derivedScannedFile } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 export type SuggestFields = (
   documentText: string,
@@ -31,31 +33,31 @@ export type SuggestFields = (
 
 export type PrepareTemplateResult = {
   /** The prepared docx: literals rewritten as configured markers. */
-  buffer: Buffer;
+  file: ScannedFile;
   fields: FieldMeta[];
   /** Suggestions whose literal text spanned runs and could not be applied. */
   unapplied: FieldSuggestion[];
 };
 
 export const prepareTemplateFromDocument = async ({
-  buffer,
+  file,
   suggest,
 }: {
-  buffer: Buffer;
+  file: ScannedFile;
   suggest: SuggestFields;
 }): Promise<PrepareTemplateResult> => {
-  const { paragraphs } = await extractDocxDocument(buffer);
+  const { paragraphs } = await extractDocxDocument(file);
   const documentText = paragraphs.map((paragraph) => paragraph.text).join("\n");
 
   const suggestions = await suggest(documentText);
   if (suggestions.length === 0) {
-    return { buffer, fields: [], unapplied: [] };
+    return { file, fields: [], unapplied: [] };
   }
 
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(buffer);
+  const zip = await JSZip.loadAsync(file.bytes);
   if (!zip.file(MAIN_DOCUMENT_PART_PATH)) {
-    return { buffer, fields: [], unapplied: suggestions };
+    return { file, fields: [], unapplied: suggestions };
   }
 
   // Rewrite the body and every header/footer part, matching the parts the rest
@@ -105,11 +107,12 @@ export const prepareTemplateFromDocument = async ({
 
   const unapplied = stillUnapplied ? [...stillUnapplied] : [];
 
-  const rewritten = Buffer.from(
-    await zip.generateAsync({ type: "nodebuffer" }),
+  const rewritten = derivedScannedFile(
+    file,
+    await zip.generateAsync({ type: "uint8array" }),
   );
 
-  const { buffer: configured } = await writeFieldFilters(
+  const { file: configured } = await writeFieldFilters(
     rewritten,
     fields.map((field) => ({
       path: field.path,
@@ -117,5 +120,5 @@ export const prepareTemplateFromDocument = async ({
     })),
   );
 
-  return { buffer: configured, fields, unapplied };
+  return { file: configured, fields, unapplied };
 };

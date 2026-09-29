@@ -179,7 +179,7 @@
     }
   },
   "audit-skip-directives": {
-    "count": 264,
+    "count": 266,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -311,8 +311,10 @@
       "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts": 1,
       "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts": 1,
       "apps/api/src/lib/style-set-package-cleanup-queue.ts": 1,
+      "apps/api/src/lib/style-sets.ts": 1,
       "apps/api/src/lib/templates/lookup-formats/set-user-default.ts": 1,
       "apps/api/src/lib/templates/record-use.ts": 1,
+      "apps/api/src/lib/templates/write-template.ts": 1,
       "apps/api/src/lib/uploads/entity-create.ts": 1,
       "apps/api/src/lib/uploads/file-comparison/deliver-redline.ts": 1,
       "apps/api/src/lib/uploads/file-comparison/sweep.ts": 1,
@@ -340,7 +342,7 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 899,
+    "count": 902,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -459,6 +461,8 @@
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 3,
+      "apps/api/src/lib/legal-search/decision-language-identity.ts": 2,
+      "apps/api/src/lib/legal-search/decision-primary-reference.ts": 1,
       "apps/api/src/lib/legal-search/ingestion-normalization.ts": 4,
       "apps/api/src/lib/legal-search/sk-document-backfill.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 2,
@@ -943,11 +947,8 @@
     "files": {}
   },
   "scanned-file-boundary-suppressions": {
-    "count": 2,
-    "files": {
-      "apps/api/src/lib/docx/extract-text.ts": 1,
-      "apps/api/src/lib/style-set-editor.ts": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "no-direct-buffer-cleanup-intent-delete-suppressions": {
     "count": 0,

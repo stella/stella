@@ -1,25 +1,25 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import * as v from "valibot";
 
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { OnboardingWizard } from "@/routes/onboarding/-components/onboarding-wizard";
 import { nativeToolDeployAvailabilityOptions } from "@/routes/onboarding/-queries";
+import { onboardingSearchSchema } from "@/routes/onboarding/-search";
 
 const isDev = import.meta.env.DEV;
 
-const searchSchema = v.strictObject({
-  preview: v.optional(v.boolean()),
-});
-
 export const Route = createFileRoute("/onboarding")({
-  validateSearch: searchSchema,
+  validateSearch: onboardingSearchSchema,
   beforeLoad: async ({ context, search }) => {
     const authContext = await loadAuthContext(context.queryClient);
 
     if (!authContext.session) {
-      throw redirect({ to: "/auth", replace: true });
+      throw redirect({
+        to: "/auth",
+        search: { redirectTo: search.redirectTo },
+        replace: true,
+      });
     }
 
     // In dev, ?preview=true bypasses the "already has org" check
@@ -28,7 +28,7 @@ export const Route = createFileRoute("/onboarding")({
     }
 
     if (authContext.session.activeOrganizationId) {
-      throw redirect({ to: "/", replace: true });
+      throw redirect({ href: search.redirectTo ?? "/", replace: true });
     }
 
     return authContext;

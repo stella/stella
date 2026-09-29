@@ -17,11 +17,11 @@
 export { Temporal } from "temporal-polyfill/full";
 
 /** 24 hours in milliseconds. A duration, not a calendar day. */
-export const DAY_IN_MS = 24 * 60 * 60 * 1000;
+export const DAY_IN_MS: number = 24 * 60 * 60 * 1000;
 
 export {
   addDays,
   isIsoDateString,
   parseIsoDateLocal,
   parsePlainDate,
-} from "./dates";
+} from "./dates.js";

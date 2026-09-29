@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
@@ -45,6 +45,7 @@ import {
   aiConfigKeys,
   updateCachedAIAvailability,
 } from "@/lib/organization/ai-config-queries";
+import { afterOnboardingNavigation } from "@/lib/redirect";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
@@ -99,9 +100,14 @@ const STEP_TO_PROGRESS = {
   download: 5,
 } as const satisfies Record<Step, number>;
 
+const onboardingRouteApi = getRouteApi("/onboarding");
+
 export const OnboardingWizard = () => {
   const t = useTranslations();
   const navigate = useNavigate();
+  const redirectTo = onboardingRouteApi.useSearch({
+    select: (search) => search.redirectTo,
+  });
   const analytics = useAnalytics();
   const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
@@ -554,6 +560,14 @@ export const OnboardingWizard = () => {
     preview = <DownloadSetupPreview target={downloadTarget} />;
   }
 
+  // Land where the visitor was headed before signing up, or in chat.
+  const enterApp = () => {
+    detached(
+      navigate(afterOnboardingNavigation(redirectTo)),
+      "onboarding-wizard.navigate",
+    );
+  };
+
   const renderStep = () => {
     if (step === "organization") {
       return (
@@ -729,17 +743,9 @@ export const OnboardingWizard = () => {
             // Set before navigating: the sidebar that owns the drawer mounts
             // with the chat route and reads the store on first render.
             openGuideDrawer(GUIDE_DRAWER_OPEN_SOURCES.onboarding);
-            detached(
-              navigate({ to: "/chat", replace: true }),
-              "onboarding-wizard.navigate",
-            );
+            enterApp();
           }}
-          onSkip={() => {
-            detached(
-              navigate({ to: "/chat", replace: true }),
-              "onboarding-wizard.navigate",
-            );
-          }}
+          onSkip={enterApp}
         />
       </OnboardingLayout>
     );

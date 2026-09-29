@@ -57,6 +57,7 @@ type DecisionWorkspaceDecision = Pick<
   PublicCaseLawDecision,
   | keyof DecisionDocumentState
   | "caseNumber"
+  | "caseNumberType"
   | "country"
   | "court"
   | "courtAbbreviation"
@@ -149,6 +150,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const annotationTarget = {
     type: "decision",
     caseNumber: decision.caseNumber,
+    caseNumberType: decision.caseNumberType,
     country: decision.country,
     court: decision.court,
     decisionDate: decision.decisionDate,
@@ -197,13 +199,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // the panel below pages further, the links stop at what is already read.
   const citationAnchors = useDecisionCitationAnchors(decisionId);
   const provisionAnchors = useDecisionProvisionAnchors({
-    blocks: visibleDecisionBlocks(ast),
+    blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
     country: decision.country,
     decisionId,
     decisionDate: decision.decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast),
+    visibleDecisionBlocks(ast, decision.caseNumberType),
     decision.decisionDate,
   );
 

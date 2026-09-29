@@ -121,9 +121,13 @@ import {
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import type { CorpusIndexScanReport } from "@/api/lib/legal-search/corpus-index-pagination";
+import type {
+  CorpusIndexScanReport,
+  CorpusIndexScanTransport,
+} from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   emptyCorpusIndexScan,
+  NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -153,6 +157,7 @@ import {
   RELEVANCE_ORDER,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   type ExpandedCorpusQuery,
   resolveExpandedCorpusQuery,
@@ -442,6 +447,7 @@ export const caseLawSearchPlan = ({
     SELECT
       m.decision_id,
       d.case_number,
+      d.case_number_type,
       d.slug,
       d.ecli,
       (
@@ -747,13 +753,18 @@ const searchPostgresDecisions = async (
       ecli: toNullableString(row["ecli"]),
     });
 
+    const caseNumberType = primaryReferenceTypeFromStored(
+      row["case_number_type"],
+    );
     return {
       decisionId: String(row["decision_id"]),
       caseNumber: String(row["case_number"]),
+      caseNumberType,
       slug: toNullableString(row["slug"]),
       ecli: toNullableString(row["ecli"]),
       identifiers: decisionIdentifierProjection(row["identifiers"], {
         caseNumber: String(row["case_number"]),
+        caseNumberType,
         ecli: toNullableString(row["ecli"]),
       }),
       court: String(row["court"]),
@@ -1515,14 +1526,17 @@ const decisionHitsPage = ({
       court: row.court,
       ecli: row.ecli,
     });
+    const { caseNumberType } = row;
     return [
       {
         decisionId: row.id,
         caseNumber: row.caseNumber,
+        caseNumberType,
         slug: row.slug,
         ecli: row.ecli,
         identifiers: decisionIdentifierProjection(row.identifiers, {
           caseNumber: row.caseNumber,
+          caseNumberType,
           ecli: row.ecli,
         }),
         court: row.court,
@@ -1670,6 +1684,24 @@ const readCaseLawSearchFacets = async ({
     },
     total: countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, read.value.total),
   };
+};
+
+/**
+ * The engine transport a case-law scan reads through. Relevance reads ids and
+ * scores rather than whole passages; the page still ranks by position, so the
+ * order it is cut from is the same either way. A date order has no score to
+ * read and stays on the native endpoint.
+ */
+const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
+  switch (sort) {
+    case "relevance":
+      return { type: "scored", fields: ["document_id"] };
+    case "newest":
+      return NATIVE_SCAN_TRANSPORT;
+    default:
+      sort satisfies never;
+      return panic(`Unhandled search sort: ${String(sort)}`);
+  }
 };
 
 export const searchCorpusIndexDecisions = async (
@@ -1923,6 +1955,7 @@ export const searchCorpusIndexDecisions = async (
     limit,
     order: corpusSearchOrder(sort),
     parsedCursor,
+    scanTransport: caseLawScanTransport(sort),
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];

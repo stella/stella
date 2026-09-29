@@ -9,6 +9,9 @@ import {
 } from "@stll/template-conditions";
 import type { FilterCall } from "@stll/template-conditions";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { deriveManifest } from "./derived-manifest";
 import { discoverTemplate } from "./discover-template";
 import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
@@ -21,10 +24,12 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (paragraphs: readonly string[]): Promise<Buffer> => {
+const makeDocx = async (
+  paragraphs: readonly string[],
+): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", WRAP(paragraphs.map(P).join("")));
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const filtersOf = (marker: string): readonly FilterCall[] => {

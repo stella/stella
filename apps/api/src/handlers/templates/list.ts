@@ -39,6 +39,9 @@ const UNPROJECTED_TEMPLATE_LIST_COLUMNS = [
   "kind",
   // Internal object storage location; never sent to the client.
   "s3Key",
+  // Whether the stored file has passed the scan; read only by the server's
+  // own file reader.
+  "scanState",
   // Large structural manifest, parsed at get-time only; omitted from the
   // list view for payload size.
   "manifest",

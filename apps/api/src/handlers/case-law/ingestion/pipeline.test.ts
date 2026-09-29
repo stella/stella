@@ -53,6 +53,7 @@ import {
   observedDocketOf,
   sanitizeResult,
   partialObservationFromMetadata,
+  storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -189,7 +190,9 @@ describe("sanitizeResult — decision identifiers", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
         caseNumber: sanitized.caseNumber,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: sanitized.ecli ?? null,
+        jurisdiction: sanitized.country,
         metadata: sanitized.metadata,
       }),
     ).toEqual([
@@ -231,6 +234,15 @@ describe("sanitizeResult — docket grammar", () => {
     expect(sanitized.metadata["caseNumber"]).toBe(raw);
   });
 
+  test.each([
+    ["a trimmed sheet", "33 Cdo 1751/2023- II."],
+    ["a control character", "33 Cdo​ 1751/2023"],
+    ["a docket as written", "33 Cdo 1751/2023"],
+  ])("the stored reference of %s is the one the write stores", (_, raw) => {
+    const input = observed("CZE", raw);
+    expect(storedCaseNumberOf(input)).toBe(sanitizeResult(input).caseNumber);
+  });
+
   test("a docket keyed row keeps its tail and is reported unkeyed", () => {
     const input = {
       ...observed("CZE", "33 Cdo 1751/2023- II."),
@@ -262,6 +274,15 @@ describe("sanitizeResult — docket grammar", () => {
         caseNumberIsPlaceholder: true,
       }),
     ).toEqual({ type: "kept" });
+  });
+
+  test("a primary reference other than a docket is never read against the grammar", () => {
+    const input = {
+      ...observed("USA", "347 U.S. 483."),
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    };
+    expect(observedDocketOf(input)).toEqual({ type: "kept" });
+    expect(sanitizeResult(input).caseNumber).toBe("347 U.S. 483.");
   });
 });
 
