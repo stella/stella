@@ -514,7 +514,7 @@
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/template-conditions": "workspace:^",
@@ -703,7 +703,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "2.2.3",
+      "version": "2.2.4",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1057,7 +1057,7 @@
     },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -1067,7 +1067,7 @@
     },
     "packages/time": {
       "name": "@stll/time",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "better-result": "catalog:",
         "temporal-polyfill": "catalog:",
