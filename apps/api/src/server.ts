@@ -104,6 +104,7 @@ import {
   templateCategoriesRoute,
   templatesRoute,
 } from "@/api/handlers/templates/routes";
+import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
 import { usageRoute } from "@/api/handlers/usage/routes";
@@ -391,6 +392,7 @@ const api = new Elysia()
   .use(feedbackPublicRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
+  .use(myTimeEntriesRoute)
   .use(localDevPublicRoutes)
   .use(smokeRoute)
   .use(operatorRoute)

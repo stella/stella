@@ -15,7 +15,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { resolveClauseSlotBodies } from "@/api/lib/docx/resolve-clause-slots";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  readStoredTemplateFile,
+  STORED_TEMPLATE_FILE_COLUMNS,
+} from "@/api/lib/templates/stored-template-file";
 
 const clauseSlotsParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -46,7 +49,7 @@ const getTemplateClauseSlots = createSafeRootHandler(
             id: { eq: params.templateId },
             organizationId: { eq: organizationId },
           },
-          columns: { s3Key: true },
+          columns: { ...STORED_TEMPLATE_FILE_COLUMNS, fileName: true },
         }),
       ),
     );
@@ -57,8 +60,15 @@ const getTemplateClauseSlots = createSafeRootHandler(
       );
     }
 
-    const arrayBuf = await readS3ArrayBuffer(template.s3Key);
-    const slots = await discoverClauseSlots(Buffer.from(arrayBuf));
+    const file = yield* Result.await(
+      readStoredTemplateFile({
+        safeDb,
+        organizationId,
+        row: template,
+        fileName: template.fileName,
+      }),
+    );
+    const slots = await discoverClauseSlots(file);
     if (slots.length === 0) {
       return Result.ok({ slots: [] });
     }

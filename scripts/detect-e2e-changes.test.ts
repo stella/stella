@@ -30,6 +30,17 @@ const e2eStackSetup = readFileSync(
   ),
   "utf-8",
 );
+const productionE2eSetup = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/actions/setup-production-e2e/action.yml",
+  ),
+  "utf-8",
+);
+const e2eWebBuild = readFileSync(
+  path.join(import.meta.dirname, "../.github/actions/build-e2e-web/action.yml"),
+  "utf-8",
+);
 const marketingWorkflow = readFileSync(
   path.join(
     import.meta.dirname,
@@ -202,6 +213,8 @@ describe("detect-e2e-changes", () => {
     for (const file of [
       ".github/workflows/ci.yml",
       ".github/actions/setup-e2e-stack/action.yml",
+      ".github/actions/setup-production-e2e/action.yml",
+      ".github/actions/build-e2e-web/action.yml",
       ".github/actions/setup-playwright/action.yml",
     ]) {
       expect(detects("core", [file])).toBe("true");
@@ -304,11 +317,17 @@ describe("detect-e2e-changes", () => {
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {
-    for (const jobId of ["e2e-production-shard", "e2e-vite-canary"]) {
-      const job = workflowJob(jobId);
-      expect(job).toContain("uses: ./.github/actions/setup-e2e-stack");
-      expect(job).not.toContain("gotenberg");
-    }
+    expect(workflowJob("e2e-production-shard")).toContain(
+      "uses: ./.github/actions/setup-production-e2e",
+    );
+    expect(productionE2eSetup).toContain(
+      "uses: ./.github/actions/setup-e2e-stack",
+    );
+    expect(workflowJob("e2e-vite-canary")).toContain(
+      "uses: ./.github/actions/setup-e2e-stack",
+    );
+    expect(workflowJob("e2e-production-shard")).not.toContain("gotenberg");
+    expect(workflowJob("e2e-vite-canary")).not.toContain("gotenberg");
     expect(e2eStackSetup).toContain("- name: Start docker stack");
     const composeStartLines = e2eStackSetup
       .split("\n")
@@ -340,39 +359,50 @@ describe("detect-e2e-changes", () => {
       e2eStackSetup.match(/if: steps\.stack\.outputs\.status == 'ready'/gu),
     ).toHaveLength(4);
 
-    const guardedSteps = {
-      "e2e-production-shard": [
-        "Install Playwright browsers",
-        "Download production web build",
-        "Validate production web build",
-        "Start production web server",
-        "Wait for production web server",
-        "Run Playwright shard",
-        "Upload Playwright blob report",
-        "Upload server logs",
-      ],
-      "e2e-vite-canary": [
-        "Start web dev server",
-        "Wait for web dev server",
-        "Install Playwright browsers",
-        "Run Vite dependency canary",
-        "Guard against mid-test Vite re-optimize",
-        "Stop web dev server",
-        "Upload Playwright blob report",
-        "Upload server logs",
-      ],
-    } as const;
-
-    for (const [jobId, stepNames] of Object.entries(guardedSteps)) {
-      const job = workflowJob(jobId);
-      expect(workflowStep(job, "Start docker stack and API server")).toContain(
-        "id: e2e-stack",
+    for (const stepName of [
+      "Install Playwright browsers",
+      "Download production web build",
+      "Validate production web build",
+      "Start production web server",
+      "Wait for production web server",
+    ]) {
+      expect(actionStep(productionE2eSetup, stepName)).toContain(
+        "steps.stack.outputs.status == 'ready'",
       );
-      for (const stepName of stepNames) {
-        expect(workflowStep(job, stepName)).toContain(
-          "steps.e2e-stack.outputs.status == 'ready'",
-        );
-      }
+    }
+    expect(
+      actionStep(productionE2eSetup, "Start docker stack and API server"),
+    ).toContain("id: stack");
+    const productionJob = workflowJob("e2e-production-shard");
+    expect(
+      workflowStep(productionJob, "Setup production browser stack"),
+    ).toContain("id: e2e-stack");
+    for (const stepName of [
+      "Run Playwright shard",
+      "Upload Playwright blob report",
+      "Upload server logs",
+    ]) {
+      expect(workflowStep(productionJob, stepName)).toContain(
+        "steps.e2e-stack.outputs.status == 'ready'",
+      );
+    }
+    const canary = workflowJob("e2e-vite-canary");
+    expect(workflowStep(canary, "Start docker stack and API server")).toContain(
+      "id: e2e-stack",
+    );
+    for (const stepName of [
+      "Start web dev server",
+      "Wait for web dev server",
+      "Install Playwright browsers",
+      "Run Vite dependency canary",
+      "Guard against mid-test Vite re-optimize",
+      "Stop web dev server",
+      "Upload Playwright blob report",
+      "Upload server logs",
+    ]) {
+      expect(workflowStep(canary, stepName)).toContain(
+        "steps.e2e-stack.outputs.status == 'ready'",
+      );
     }
   });
 
@@ -643,7 +673,8 @@ describe("detect-e2e-changes", () => {
     const webBuild = workflowJob("web-build");
     expect(webBuild).toContain("needs: ci-plan");
     expect(webBuild).toContain("Upload production E2E web build");
-    expect(webBuild).toContain("VITE_FEATURE_TIME_BILLING");
+    expect(webBuild).toContain("uses: ./.github/actions/build-e2e-web");
+    expect(e2eWebBuild).toContain("VITE_FEATURE_TIME_BILLING");
 
     const production = workflowJob("e2e-production-shard");
     const productionHeader = production.slice(
@@ -663,8 +694,11 @@ describe("detect-e2e-changes", () => {
     );
     expect(production).not.toContain("Build web for route checks");
     expect(production).not.toContain("Wait for production web build");
-    expect(production).toContain("Download production web build");
-    expect(production).toContain("Validate production web build");
+    expect(production).toContain(
+      "uses: ./.github/actions/setup-production-e2e",
+    );
+    expect(productionE2eSetup).toContain("Download production web build");
+    expect(productionE2eSetup).toContain("Validate production web build");
 
     // The marketing capture serves that same build, never the Vite dev
     // server: PR CI hands the artifact over, and the callers without a
@@ -717,7 +751,10 @@ describe("detect-e2e-changes", () => {
   test("shares and launch-verifies a version-keyed browser cache", () => {
     expect(
       workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
-    ).toHaveLength(4);
+    ).toHaveLength(3);
+    expect(productionE2eSetup).toContain(
+      "uses: ./.github/actions/setup-playwright",
+    );
     const ciBrowser = workflowJob("ci-browser");
     expect(ciBrowser).toContain("Check UI browser test scope");
     expect(ciBrowser).toContain("apps/web/src/routes/dev");

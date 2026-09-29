@@ -23,6 +23,7 @@ import { Route as ToolsRouteRouteImport } from './routes/tools/route'
 import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
 import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
 import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected.settings/route'
+import { Route as ProtectedTimeRouteImport } from './routes/_protected.time'
 import { Route as AuthIndexRouteImport } from './routes/auth/index'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
@@ -169,6 +170,11 @@ const ProtectedKnowledgeRouteRoute = ProtectedKnowledgeRouteRouteImport.update({
 const ProtectedSettingsRouteRoute = ProtectedSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => ProtectedRoute,
+} as any)
+const ProtectedTimeRoute = ProtectedTimeRouteImport.update({
+  id: '/time',
+  path: '/time',
   getParentRoute: () => ProtectedRoute,
 } as any)
 const AuthIndexRoute = AuthIndexRouteImport.update({
@@ -628,6 +634,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ProtectedChatRouteRouteWithChildren
   '/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/settings': typeof ProtectedSettingsRouteRouteWithChildren
+  '/time': typeof ProtectedTimeRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -715,6 +722,7 @@ export interface FileRoutesByTo {
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/time': typeof ProtectedTimeRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -807,6 +815,7 @@ export interface FileRoutesById {
   '/_protected/chat': typeof ProtectedChatRouteRouteWithChildren
   '/_protected/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/_protected/settings': typeof ProtectedSettingsRouteRouteWithChildren
+  '/_protected/time': typeof ProtectedTimeRoute
   '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
@@ -902,6 +911,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/knowledge'
     | '/settings'
+    | '/time'
     | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
@@ -989,6 +999,7 @@ export interface FileRouteTypes {
     | '/dev'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/time'
     | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
@@ -1080,6 +1091,7 @@ export interface FileRouteTypes {
     | '/_protected/chat'
     | '/_protected/knowledge'
     | '/_protected/settings'
+    | '/_protected/time'
     | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
@@ -1279,6 +1291,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof ProtectedSettingsRouteRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
+    '/_protected/time': {
+      id: '/_protected/time'
+      path: '/time'
+      fullPath: '/time'
+      preLoaderRoute: typeof ProtectedTimeRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/auth/': {
@@ -2107,6 +2126,7 @@ interface ProtectedRouteChildren {
   ProtectedChatRouteRoute: typeof ProtectedChatRouteRouteWithChildren
   ProtectedKnowledgeRouteRoute: typeof ProtectedKnowledgeRouteRouteWithChildren
   ProtectedSettingsRouteRoute: typeof ProtectedSettingsRouteRouteWithChildren
+  ProtectedTimeRoute: typeof ProtectedTimeRoute
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   ProtectedChatNewRoute: typeof ProtectedChatNewRoute
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
@@ -2122,6 +2142,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedChatRouteRoute: ProtectedChatRouteRouteWithChildren,
   ProtectedKnowledgeRouteRoute: ProtectedKnowledgeRouteRouteWithChildren,
   ProtectedSettingsRouteRoute: ProtectedSettingsRouteRouteWithChildren,
+  ProtectedTimeRoute: ProtectedTimeRoute,
   ProtectedWorkspacesWorkspaceIdRouteRoute:
     ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren,
   ProtectedChatNewRoute: ProtectedChatNewRoute,

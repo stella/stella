@@ -22,7 +22,7 @@ const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
 );
 const CHAT_TURN_RUN_OWNERSHIP_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261003120300_chat_turn_run_ownership",
+  "20261003121500_chat_turn_run_ownership",
   "migration.sql",
 );
 const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
@@ -68,6 +68,11 @@ const PROVISION_BACKFILL_MIGRATION_PATH = nodePath.join(
 const PROVISION_READ_STATUS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260927090000_case_law_provision_read_status",
+  "migration.sql",
+);
+const PROVISION_READER_GRANTS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120300_case_law_provision_reader_grants",
   "migration.sql",
 );
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
@@ -287,7 +292,7 @@ const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
 
 const CHAT_RUN_LOG_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261003120400_chat_run_log",
+  "20261003121600_chat_run_log",
   "migration.sql",
 );
 
@@ -417,6 +422,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_EXTRACTION_STATE_MIGRATION_PATH,
     PROVISION_BACKFILL_MIGRATION_PATH,
     PROVISION_READ_STATUS_MIGRATION_PATH,
+    PROVISION_READER_GRANTS_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>

@@ -12,6 +12,8 @@
  * of object storage on every request.
  */
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
 import { discoverTemplate } from "./discover-template";
 import {
   manifestFieldsFromMerge,
@@ -46,8 +48,7 @@ export const deriveManifest = (
   };
 };
 
-/** The manifest these bytes declare. */
+/** The manifest this document declares. */
 export const deriveManifestFromDocx = async (
-  docxBuffer: Buffer,
-): Promise<TemplateManifest> =>
-  deriveManifest(await discoverTemplate(docxBuffer));
+  file: ScannedFile,
+): Promise<TemplateManifest> => deriveManifest(await discoverTemplate(file));

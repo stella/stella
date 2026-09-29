@@ -16,7 +16,7 @@ import { CHAT_TURN_INTERRUPTION_REASONS } from "@/api/handlers/chat/chat-turn-st
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20261003120300_chat_turn_run_ownership/migration.sql",
+  "../../drizzle/20261003121500_chat_turn_run_ownership/migration.sql",
 );
 
 const PRE_MIGRATION = `
