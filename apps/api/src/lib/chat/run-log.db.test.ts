@@ -312,13 +312,14 @@ describe("chat run log database contract", () => {
 
   test("settlement closes a run log, including a run with no chunks", async () => {
     const run = await seedRunningTurn();
-    const settled = await scopedDbA((tx) =>
-      settleChatTurnOnTx({
-        assistantMessageId: null,
-        execution: run.execution,
-        outcome: USER_STOP_OUTCOME,
-        tx,
-      }),
+    const settled = await scopedDbA(
+      async (tx) =>
+        await settleChatTurnOnTx({
+          assistantMessageId: null,
+          execution: run.execution,
+          outcome: USER_STOP_OUTCOME,
+          tx,
+        }),
     );
     expect(settled).toBe("settled");
     const [header] = await testDb
@@ -341,8 +342,9 @@ describe("chat run log database contract", () => {
         })
         .where(eq(chatTurns.id, run.execution.id));
     });
-    await scopedDbA((tx) =>
-      reapOwnerlessChatTurnOnTx({ threadId: run.threadId, tx }),
+    await scopedDbA(
+      async (tx) =>
+        await reapOwnerlessChatTurnOnTx({ threadId: run.threadId, tx }),
     );
     const [header] = await testDb
       .select({ closedAt: chatRunLogs.closedAt })

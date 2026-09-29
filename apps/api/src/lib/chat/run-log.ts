@@ -136,11 +136,11 @@ const createRunLogReader = ({
         }
         if (after === null) {
           const { log } = await loadPage(0n);
-          after = log === undefined ? 0n : BigInt(log.nextSeq) - 1n;
+          after = log === undefined ? 0n : log.nextSeq - 1n;
         }
         const { entries, log } = await loadPage(after);
         for (const entry of entries) {
-          after = BigInt(entry.seq);
+          after = entry.seq;
           yield { offset: after.toString(), chunk: entry.chunk };
         }
         if (
@@ -191,11 +191,11 @@ const createRunLogReader = ({
             .orderBy(asc(chatRunLogEntries.seq))
             .limit(READ_PAGE_SIZE);
           for (const entry of entries) {
-            after = BigInt(entry.seq);
+            after = entry.seq;
             result.push({ offset: after.toString(), chunk: entry.chunk });
           }
           if (entries.length < READ_PAGE_SIZE) {
-            if (after !== BigInt(log.nextSeq) - 1n) {
+            if (after !== log.nextSeq - 1n) {
               throw new ChatRunLogError({
                 message: "Chat run log changed during snapshot",
               });
@@ -316,17 +316,16 @@ export const createChatRunLog = ({
           ) {
             panic("Chat run log retry differs from stored batch");
           }
-          return alreadyStored.map((row) => BigInt(row.seq).toString());
+          return alreadyStored.map((row) => row.seq.toString());
         }
         const nextBytes =
-          BigInt(log.bytesUsed) +
-          BigInt(bytes.reduce((sum, size) => sum + size, 0));
+          log.bytesUsed + BigInt(bytes.reduce((sum, size) => sum + size, 0));
         if (nextBytes > BigInt(MAX_RUN_BYTES)) {
           throw new ChatRunLogError({
             message: "Chat run log exceeds its size limit",
           });
         }
-        const first = BigInt(log.nextSeq);
+        const first = log.nextSeq;
         await tx.insert(chatRunLogEntries).values(
           chunks.map((chunk, index) => ({
             organizationId,
