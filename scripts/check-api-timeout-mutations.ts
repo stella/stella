@@ -474,9 +474,12 @@ export const findApiTimeoutMutations = (
       node.expression.name.text === "raw" &&
       node.arguments.length === 1
     ) {
-      const value = resolver.resolve(node.arguments[0], file);
-      if (value !== undefined) {
-        record(node, value);
+      const argument = node.arguments.at(0);
+      if (argument !== undefined) {
+        const value = resolver.resolve(argument, file);
+        if (value !== undefined) {
+          record(node, value);
+        }
       }
     } else if (
       ts.isBinaryExpression(node) &&
