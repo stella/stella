@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
 
 import { useTranslations } from "use-intl";
@@ -55,9 +55,9 @@ type ToolsCatalogueViewProps<TTool extends KnowledgeTool> = {
    */
   practiceJurisdictions?: readonly PracticeJurisdiction[] | undefined;
   /** Renders one entry, normally a `CatalogueRow` with the route's actions. */
-  renderEntry: (tool: TTool) => ReactNode;
+  renderEntry: (tool: TTool) => ReactElement;
   /** A control at the end of the toolbar, e.g. adding a custom tool. */
-  addAction?: ReactNode;
+  addAction?: ReactElement | undefined;
   /** A control beside the "Recommended" heading, given the tools in view. */
   recommendedAction?: ((tools: readonly TTool[]) => ReactNode) | undefined;
   /** Replaces the empty list when the connector filter finds none at all. */
@@ -317,7 +317,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
           </Popover>
         </ResponsiveActionToolbarItem>
 
-        {addAction && (
+        {addAction !== undefined && (
           <ResponsiveActionToolbarItem
             className="ms-auto sm:ms-0"
             slot="action"

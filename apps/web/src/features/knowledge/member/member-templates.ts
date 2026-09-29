@@ -103,17 +103,19 @@ const useTemplateActions = (organizationId: string) => {
   return {
     invalidateTemplates,
     invalidateCategories,
-    discover: (file: File) => api.templates.discover.post({ file }),
-    upload: (file: File, name: string) => api.templates.put({ file, name }),
-    createBlank: (name: string) => api.templates.blank.put({ name }),
-    createFromStyleSet: (name: string, styleSetId: string) =>
+    discover: async (file: File) => api.templates.discover.post({ file }),
+    upload: async (file: File, name: string) =>
+      api.templates.put({ file, name }),
+    createBlank: async (name: string) => api.templates.blank.put({ name }),
+    createFromStyleSet: async (name: string, styleSetId: string) =>
       api.templates["style-set"].put({
         name,
         styleSetId: toSafeId<"styleSet">(styleSetId),
       }),
-    update: (templateId: string, patch: TemplatePatch) =>
+    update: async (templateId: string, patch: TemplatePatch) =>
       api.templates({ templateId }).post(patch),
-    remove: (templateId: string) => api.templates({ templateId }).delete(),
+    remove: async (templateId: string) =>
+      api.templates({ templateId }).delete(),
     /**
      * The audited presigned URL of the template's source DOCX, read from its
      * detail; `null` when the detail could not be read.

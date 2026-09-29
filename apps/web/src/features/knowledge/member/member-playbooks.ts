@@ -70,7 +70,7 @@ const usePlaybookActions = (organizationId: string) => {
         "knowledge-playbooks.invalidate",
       );
     },
-    loadPage: (cursor: string, signal: AbortSignal) =>
+    loadPage: async (cursor: string, signal: AbortSignal) =>
       api.playbooks.get({
         query: { cursor, limit: PLAYBOOKS_PAGE_LIMIT },
         fetch: { signal },
