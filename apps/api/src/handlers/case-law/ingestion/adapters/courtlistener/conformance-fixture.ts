@@ -101,7 +101,11 @@ export const courtListenerConformanceFixture = () => {
   }
   return {
     buildDecision: async () =>
-      await Promise.resolve(mapCourtListenerRecord(input).unwrap()),
+      await Promise.resolve(
+        mapCourtListenerRecord(input).unwrap(
+          "the synthetic conformance record maps to a decision",
+        ),
+      ),
     rawFieldValues,
   };
 };

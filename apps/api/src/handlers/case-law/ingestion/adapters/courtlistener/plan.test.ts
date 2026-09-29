@@ -498,7 +498,6 @@ describe("the field inventory", () => {
     const declared = new Set(
       Object.values(COURTLISTENER_SOURCE_FIELD_INVENTORY.fields).flatMap(
         (disposition) =>
-          disposition.disposition === "stored" &&
           disposition.target.type === "metadata"
             ? [disposition.target.key]
             : [],
