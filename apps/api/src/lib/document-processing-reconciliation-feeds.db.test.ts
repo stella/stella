@@ -71,11 +71,18 @@ beforeAll(async () => {
     enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun: async () => undefined,
     indexEntity: async () => undefined,
+    now: () => Date.now(),
     readRepairScanCursor: async () => null,
     readyRepairCursor: async () => {
       if (!redisAvailable) {
         throw new Error("redis unavailable");
       }
+    },
+    // Every fixture re-runs repair against rows it just seeded, so the
+    // sweep here never rests between passes.
+    repairPassMemo: {
+      completedAt: () => null,
+      recordCompleted: () => undefined,
     },
     writeRepairScanCursor: async () => true,
   } satisfies DocumentProcessingReconciliationDependencies;

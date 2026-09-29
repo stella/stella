@@ -1,12 +1,16 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
   createDocumentProcessingLeaseRenewal,
+  createDocumentProcessingReconciliationPhases,
+  createRepairPassMemo,
   createWorkerReconciliationPhases,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
   handleDocumentProcessingReconcilePhaseFailure,
@@ -14,6 +18,8 @@ import {
   readRepairScanCursor,
   RECONCILE_BATCH_SIZE,
   reconciliationLeftWorkBehind,
+  reconciliationUnfinishedPhases,
+  REPAIR_PASS_REST_MS,
   resolveRepairScanPage,
   resolveScheduledDeliveryBatch,
   resolveSearchIndexReplayBatch,
@@ -22,6 +28,7 @@ import {
   tryEnqueueDocumentProcessingRun,
   writeRepairScanCursor,
 } from "@/api/lib/document-processing-queue";
+import type { DocumentProcessingReconciliationDependencies } from "@/api/lib/document-processing-queue";
 import {
   automaticOcrRetryDelayMs,
   DOCUMENT_PROCESSING_FAILURE_REPORT,
@@ -49,6 +56,7 @@ import { createReconciliationProgress } from "@/api/lib/document-processing-reco
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isTransientPgConnectionError } from "@/api/lib/pg-error";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -1290,6 +1298,26 @@ describe("reconciliationLeftWorkBehind", () => {
     }
   });
 
+  test("the phases named as unfinished are exactly the ones that left work", async () => {
+    const results = await resultsOf([
+      { name: "repair", run: async () => ({ count: 0, hasMore: false }) },
+      {
+        name: "retry",
+        run: async () => {
+          throw new Error("retry unavailable");
+        },
+      },
+      { name: "delivery", run: async () => ({ count: 4, hasMore: true }) },
+    ]);
+
+    // A failed phase is named too: it is work left behind like any other.
+    expect(reconciliationUnfinishedPhases(results).toSorted()).toEqual([
+      "delivery",
+      "retry",
+    ]);
+    expect(reconciliationUnfinishedPhases(await resultsOf([]))).toEqual([]);
+  });
+
   test("a phase that acted on almost nothing still reports its backlog", async () => {
     expect(
       reconciliationLeftWorkBehind(
@@ -1381,6 +1409,173 @@ describe("resolveRepairScanPage", () => {
 });
 
 /**
+ * The class these pin: a repair sweep that reached the end of the table
+ * reports drained until its rest is over, so a table larger than one page
+ * cannot keep the phase reporting work behind on every tick. Driven
+ * through the real phase, with a database and cursor store that count
+ * every touch.
+ */
+describe("repair sweep rest", () => {
+  /** A file repair scans and skips: nothing extractable, so no run. */
+  const skippedFile = {
+    ...fileContent,
+    fileName: "archiv.bin",
+    mimeType: "application/octet-stream",
+  } satisfies FieldContent;
+
+  const repairSweep = () => {
+    let clock = Date.parse("2030-01-01T00:00:00.000Z");
+    let pageSize = 0;
+    let cursor: SafeId<"field"> | null = null;
+    let failReady = false;
+    const touches = { cursorReads: 0, cursorWrites: 0, ready: 0, selects: 0 };
+    const page = () =>
+      Array.from({ length: pageSize }, () => ({
+        content: skippedFile,
+        entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+        entityVersionId: run.entityVersionId,
+        fieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+        organizationId: mintAuthProviderId<"organization">(),
+        workspaceId,
+      }));
+    // Every builder step returns the same query; awaiting it yields the
+    // page. Any other database call is absent, so reaching one fails.
+    const query: object = new Proxy(
+      {},
+      {
+        get: (_target, property) =>
+          property === "then"
+            ? (resolve: (rows: unknown) => void) => {
+                resolve(page());
+              }
+            : () => query,
+      },
+    );
+    const dependencies = {
+      broadcastWorkspaceResourceUpdated: () => undefined,
+      database: asTestRaw<typeof rootDb>({
+        select: () => {
+          touches.selects += 1;
+          return query;
+        },
+      }),
+      enqueueDocumentDeadlineScout: async () => undefined,
+      enqueueDocumentProcessingRun: async () => undefined,
+      indexEntity: async () => undefined,
+      now: () => clock,
+      readRepairScanCursor: async () => {
+        touches.cursorReads += 1;
+        return cursor;
+      },
+      readyRepairCursor: async () => {
+        touches.ready += 1;
+        if (failReady) {
+          throw new Error("redis unavailable");
+        }
+      },
+      repairPassMemo: createRepairPassMemo(),
+      writeRepairScanCursor: async ({ nextCursor }) => {
+        touches.cursorWrites += 1;
+        cursor = nextCursor;
+        return true;
+      },
+    } satisfies DocumentProcessingReconciliationDependencies;
+    const repair = createDocumentProcessingReconciliationPhases(
+      dependencies,
+    ).find(({ name }) => name === "repair");
+    if (repair === undefined) {
+      throw new Error("the repair phase is not wired");
+    }
+    return {
+      advance: (ms: number) => {
+        clock += ms;
+      },
+      cursor: () => cursor,
+      failReady: (fail: boolean) => {
+        failReady = fail;
+      },
+      run: async () => await repair.run(),
+      setPageSize: (size: number) => {
+        pageSize = size;
+      },
+      touches: () => ({ ...touches }),
+    };
+  };
+
+  const untouched = { cursorReads: 0, cursorWrites: 0, ready: 0, selects: 0 };
+
+  test("a pass that ends on a short page rests without touching either store, then scans again", async () => {
+    const sweep = repairSweep();
+    sweep.setPageSize(3);
+
+    expect(await sweep.run()).toEqual({ count: 0, hasMore: false });
+    const afterPass = sweep.touches();
+    expect(afterPass.selects).toBeGreaterThan(0);
+
+    sweep.advance(REPAIR_PASS_REST_MS - 1);
+    expect(await sweep.run()).toEqual({ count: 0, hasMore: false });
+    expect(await sweep.run()).toEqual({ count: 0, hasMore: false });
+    expect(sweep.touches()).toEqual(afterPass);
+
+    sweep.advance(1);
+    await sweep.run();
+    expect(sweep.touches().selects).toBeGreaterThan(afterPass.selects);
+    expect(sweep.touches().cursorReads).toBe(afterPass.cursorReads + 1);
+  });
+
+  test("a full page keeps the pass going, and an empty page after it ends the pass", async () => {
+    const sweep = repairSweep();
+    sweep.setPageSize(RECONCILE_BATCH_SIZE);
+
+    expect(await sweep.run()).toEqual({ count: 0, hasMore: true });
+    expect(sweep.cursor()).not.toBeNull();
+    // No rest after a full page: the next tick resumes from the cursor.
+    expect(await sweep.run()).toEqual({ count: 0, hasMore: true });
+    expect(sweep.touches().cursorReads).toBe(2);
+
+    // The table ran out exactly at the page boundary.
+    sweep.setPageSize(0);
+    expect(await sweep.run()).toEqual({ count: 0, hasMore: false });
+    expect(sweep.cursor()).toBeNull();
+    const afterPass = sweep.touches();
+
+    expect(await sweep.run()).toEqual({ count: 0, hasMore: false });
+    expect(sweep.touches()).toEqual(afterPass);
+  });
+
+  test("a pass that failed does not rest", async () => {
+    const sweep = repairSweep();
+    sweep.setPageSize(3);
+    sweep.failReady(true);
+
+    const rejection: unknown = await sweep.run().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+
+    sweep.failReady(false);
+    await sweep.run();
+    expect(sweep.touches().selects).toBeGreaterThan(untouched.selects);
+  });
+
+  test("each memo paces only its own sweep", async () => {
+    const first = repairSweep();
+    const second = repairSweep();
+    first.setPageSize(3);
+    second.setPageSize(3);
+
+    await first.run();
+    await second.run();
+    const secondAfterPass = second.touches();
+    await first.run();
+
+    expect(second.touches()).toEqual(secondAfterPass);
+    expect(first.touches().selects).toBe(secondAfterPass.selects);
+  });
+});
+
+/**
  * Work a phase leaves for itself is the one kind the phase order cannot
  * place, so each of those phases has to report it.
  */
@@ -1445,16 +1640,20 @@ describe("work a phase keeps for itself", () => {
  * previous tick's answer. A sample therefore waits for the tick in flight.
  */
 describe("createReconciliationProgress", () => {
+  /** A tick reports the phases it left work in; any one stands in here. */
+  const unfinishedPhasesFor = (leftWorkBehind: boolean): string[] =>
+    leftWorkBehind ? ["repair"] : [];
+
   /** A tick the test settles on demand, standing in for a slow drain. */
   const pendingTick = () => {
-    let settle: (leftWorkBehind: boolean) => void = () => undefined;
+    let settle: (unfinishedPhases: string[]) => void = () => undefined;
     return {
       run: async () =>
-        await new Promise<boolean>((resolve) => {
+        await new Promise<string[]>((resolve) => {
           settle = resolve;
         }),
       settle: (leftWorkBehind: boolean) => {
-        settle(leftWorkBehind);
+        settle(unfinishedPhasesFor(leftWorkBehind));
       },
     };
   };
@@ -1469,11 +1668,15 @@ describe("createReconciliationProgress", () => {
       hasUnfinishedReconciliation: progress.hasUnfinishedWork,
       isReconciliationInFlight: progress.isTickRunning,
       reconciliationGeneration: progress.tickGeneration,
+      // Out of reach: these pin the strict path alone.
+      maxQuietChecks: 1000,
       onCheckFailure: () => undefined,
       onIdleExit: () => {
         exits += 1;
       },
+      onReconciliationHold: () => undefined,
       requiredIdleChecks: 1,
+      sampleTimeoutMs: 60_000,
     });
     return { exits: () => exits, sample };
   };
@@ -1481,7 +1684,7 @@ describe("createReconciliationProgress", () => {
   test("a sample inside a tick waits for that tick, not the last one", async () => {
     const progress = createReconciliationProgress();
     // The last completed tick was drained: a snapshot read would exit on it.
-    await progress.runTick(async () => false);
+    await progress.runTick(async () => []);
     const tick = pendingTick();
     const inFlight = progress.runTick(tick.run);
     const h = sampler(progress);
@@ -1581,7 +1784,9 @@ describe("createReconciliationProgress", () => {
         await Promise.resolve(0).then(async (pending) => {
           if (!ran) {
             ran = true;
-            await progress.runTick(async () => leftWorkBehind);
+            await progress.runTick(async () =>
+              unfinishedPhasesFor(leftWorkBehind),
+            );
           }
           return pending;
         }),
@@ -1591,7 +1796,7 @@ describe("createReconciliationProgress", () => {
   test("a saturated tick that fits inside the count is not exited past", async () => {
     const progress = createReconciliationProgress();
     // The verdict this sample waits on is the drained tick before it.
-    await progress.runTick(async () => false);
+    await progress.runTick(async () => []);
     const h = samplerRunningATickInsideTheCount(progress, true);
 
     expect(await h.sample()).toBe("checked");
@@ -1603,7 +1808,7 @@ describe("createReconciliationProgress", () => {
 
   test("a drained tick that fits inside the count is resolved by the same sample", async () => {
     const progress = createReconciliationProgress();
-    await progress.runTick(async () => false);
+    await progress.runTick(async () => []);
     const h = samplerRunningATickInsideTheCount(progress, false);
 
     // The crossing moved the generation, so the sample measures again: it
@@ -1616,20 +1821,58 @@ describe("createReconciliationProgress", () => {
 
   test("a saturated tick keeps the worker alive", async () => {
     const progress = createReconciliationProgress();
-    await progress.runTick(async () => true);
+    await progress.runTick(async () => ["repair"]);
     const h = sampler(progress);
 
     expect(await h.sample()).toBe("checked");
     expect(h.exits()).toBe(0);
 
-    await progress.runTick(async () => false);
+    await progress.runTick(async () => []);
 
     expect(await h.sample()).toBe("exit");
   });
 
+  test("the latest finished tick names the phases holding it, or that it failed", async () => {
+    const progress = createReconciliationProgress<"repair" | "delivery">();
+    expect(progress.latestTickReport()).toEqual({ status: "none" });
+
+    await progress.runTick(async () => ["repair"]);
+    expect(progress.latestTickReport()).toEqual({
+      status: "reported",
+      unfinishedPhases: ["repair"],
+    });
+
+    // A tick in flight does not replace the account of the last one.
+    let settle: (phases: "delivery"[]) => void = () => undefined;
+    const inFlight = progress.runTick(
+      async () =>
+        await new Promise<"delivery"[]>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    expect(progress.latestTickReport()).toEqual({
+      status: "reported",
+      unfinishedPhases: ["repair"],
+    });
+    settle([]);
+    await inFlight;
+    expect(progress.latestTickReport()).toEqual({
+      status: "reported",
+      unfinishedPhases: [],
+    });
+    expect(await progress.hasUnfinishedWork()).toBe(false);
+
+    await progress
+      .runTick(async () => {
+        throw new Error("reconcile unavailable");
+      })
+      .catch(() => undefined);
+    expect(progress.latestTickReport()).toEqual({ status: "failed" });
+  });
+
   test("a tick that never reported leaves work unfinished", async () => {
     const progress = createReconciliationProgress();
-    await progress.runTick(async () => false);
+    await progress.runTick(async () => []);
 
     const rejection: unknown = await progress
       .runTick(async () => {
