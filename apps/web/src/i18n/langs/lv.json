@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Citēts vismaz {count} reizes",
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
@@ -629,6 +630,7 @@
       "none": "Citējumi vēl nav reģistrēti.",
       "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
+      "partialSummary": "Citējumu kopsummas un laika skala ir nepilnīgas.",
       "passageNotFound": "Citējošais fragments tekstā netika atrasts",
       "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
       "showAll": "{count, plural, zero {Rādīt visus # nolēmumus} one {Rādīt # nolēmumu} other {Rādīt visus # nolēmumus}}",
@@ -1447,6 +1449,7 @@
     "back": "Atpakaļ",
     "cancel": "Atcelt",
     "caseLaw": "Tiesu prakse",
+    "catalogue": "Katalogs",
     "category": "Kategorija",
     "categoryName": "Kategorijas nosaukums",
     "changeColor": "Mainīt krāsu",
@@ -3225,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Pievienot bibliotēkai",
+      "added": "{name} ir jūsu bibliotēkā",
+      "confirmAddTitle": "Pievienot {name} organizācijai {organization}?",
+      "confirmDescription": "Šīs veidnes kopija tiks saglabāta organizācijas {organization} bibliotēkā.",
+      "confirmDownloadTitle": "Lejupielādēt {name} organizācijai {organization}?",
+      "confirmStarterDescription": "Šīs rokasgrāmatas kopija tiks saglabāta organizācijas {organization} bibliotēkā.",
+      "confirmUseTitle": "Izmantot {name} organizācijā {organization}?",
+      "installFailed": "Veidni neizdevās pievienot",
+      "noPreview": "Šai veidnei priekšskatījums nav pieejams.",
+      "notFound": "Šīs veidnes katalogā nav.",
+      "unavailable": "Katalogs pašlaik nav pieejams."
+    },
+    "landing": {
+      "accountLine": "Ar bezmaksas kontu glabājiet savas organizācijas veidnes, klauzulas un rokasgrāmatas.",
+      "withAccount": "Ar bezmaksas kontu"
+    },
     "mcp": {
       "addAndConnect": "Pievienot un savienot",
       "addServer": "Pievienot serveri",
@@ -3706,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, zero {Neizdevās nosūtīt # uzaicinājumu} one {Neizdevās nosūtīt # uzaicinājumu} other {Neizdevās nosūtīt # uzaicinājumus}}",
     "stepAi": "AI",
     "stepApps": "Lietotnes un rīki",
-    "stepCatalogue": "Katalogs",
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
     "stepTeam": "Uzaicināt",

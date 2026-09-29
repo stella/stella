@@ -490,6 +490,8 @@ export const envApiServerSchema = {
    */
   FEATURE_ORG_ACCESS_STATE: featureFlagSchema,
 
+  /** Enforces organization file byte reservations at storage writes. */
+
   /** Length of an organization's evaluation period, in days. */
   ORG_EVALUATION_PERIOD_DAYS: v.optional(
     v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),

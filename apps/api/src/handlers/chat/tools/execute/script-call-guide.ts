@@ -125,12 +125,19 @@ const nearMisses = (name: string, catalog: ScriptCallCatalog): Suggestion[] => {
     .filter(
       ({ distance, name: candidate }) => distance <= nearMissBudget(candidate),
     )
-    .toSorted(
-      (a, b) =>
-        a.distance - b.distance ||
-        // oxlint-disable-next-line require-cached-collator/require-cached-collator -- tool names are machine identifiers (agent-facing "did you mean"), not display text
-        a.name.localeCompare(b.name),
-    );
+    .toSorted((a, b) => {
+      const distance = a.distance - b.distance;
+      if (distance !== 0) {
+        return distance;
+      }
+      if (a.name < b.name) {
+        return -1;
+      }
+      if (a.name > b.name) {
+        return 1;
+      }
+      return 0;
+    });
   const [best, second] = scored;
   if (best === undefined) {
     return [];

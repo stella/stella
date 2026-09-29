@@ -13,9 +13,11 @@ describe("workspace activity invalidation", () => {
   test("invalidates every organization-scoped page for one workspace", async () => {
     const queryClient = new QueryClient();
     const targetKey = workspacesKeys.activity("organization-a", {
+      userId: "user-a",
       workspaceId: "workspace-a",
     });
     const otherKey = workspacesKeys.activity("organization-a", {
+      userId: "user-a",
       workspaceId: "workspace-b",
     });
     const overviewKey = workspacesKeys.overviewActivity(
@@ -37,6 +39,7 @@ describe("workspace activity invalidation", () => {
   test("inherits entity invalidation through the shared parent key", async () => {
     const queryClient = new QueryClient();
     const activityKey = workspacesKeys.activity("organization-a", {
+      userId: "user-a",
       workspaceId: "workspace-a",
     });
     queryClient.setQueryData(activityKey, { pages: [] });

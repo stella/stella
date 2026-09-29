@@ -31,6 +31,21 @@ type KnowledgeTemplateCategory = {
   name: string;
 };
 
+/** A template from a published catalogue, as its detail page shows it. */
+export type KnowledgeCatalogueTemplate = {
+  title: string;
+  packName: string;
+  license: string;
+  licenseUrl: string | null;
+  /** Country codes the template is drafted for. */
+  jurisdictions: readonly string[];
+  languages: readonly string[];
+  legalArea: string | null;
+  /** The names of the fields a filled copy asks for. */
+  fields: readonly string[];
+  disclaimer: string | null;
+};
+
 /** What the template list renders. The route's adapter fills it. */
 export type TemplatesSource = {
   status: "loading" | "error" | "ready";

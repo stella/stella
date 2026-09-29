@@ -33,6 +33,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { RECORDED_CONVERSATION_SUITES } from "../apps/api/src/tests/helpers/recorded-conversation-suites";
+
 const ROOT = path.resolve(import.meta.dir, "..");
 const PACKAGE_JSON = path.join(ROOT, "package.json");
 const STATE_FILE = path.join(ROOT, ".cache", "tanstack-drift.json");
@@ -56,7 +58,7 @@ const SUITES: readonly Suite[] = [
   apiSuite("src/handlers/chat/provider-wire-replay.integration.test.ts"),
   apiSuite("src/handlers/chat/approval-settlement.integration.test.ts"),
   apiSuite("src/handlers/chat/live-reload-parity.integration.test.ts"),
-  apiSuite("src/handlers/chat/recorded-conversations.integration.test.ts"),
+  ...Object.values(RECORDED_CONVERSATION_SUITES).map(apiSuite),
   apiSuite("src/handlers/chat/tool-call-end-arguments.test.ts"),
   {
     command: [

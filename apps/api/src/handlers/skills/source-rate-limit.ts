@@ -1,10 +1,10 @@
 import { Temporal } from "@stll/time";
 
-import { resolveClientIp } from "@/api/lib/client-ip";
+import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import type {
-  RateLimitContext,
-  RateLimitGenerator,
+import {
+  type RateLimitContext,
+  scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,
@@ -21,14 +21,11 @@ const SKILL_SOURCE_RATE_LIMIT_SCOPE = "skill-source";
 
 const skillSourceRateLimitCounterKey = (clientIp: string | null): string =>
   clientIp
-    ? `${SKILL_SOURCE_RATE_LIMIT_SCOPE}:${clientIp}`
+    ? `${SKILL_SOURCE_RATE_LIMIT_SCOPE}:${normalizeRateLimitClientAddress(clientIp)}`
     : SKILL_SOURCE_RATE_LIMIT_SCOPE;
 
-const skillSourceCounterKeyGenerator: RateLimitGenerator = (request, server) =>
-  skillSourceRateLimitCounterKey(resolveClientIp(request, server ?? null));
-
 export const skillSourceRateLimitBinding = createRedisRateLimit({
-  counterKeyGenerator: skillSourceCounterKeyGenerator,
+  counterKeyGenerator: scopedGenerator(SKILL_SOURCE_RATE_LIMIT_SCOPE),
   failurePolicy: "fail_open_local",
   scope: SKILL_SOURCE_RATE_LIMIT_SCOPE,
 });

@@ -15,7 +15,7 @@
 
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
 import type { ParagraphListDepth } from "@stll/legal-ast/document-ast";
 
@@ -52,6 +52,8 @@ export type ParsePlUodoDecisionOutput = {
   documentAst: DocumentAst;
   fulltext: string;
   validationIssues: string[];
+  /** Unexpected element names, or #text/#cdata for stray text nodes. */
+  unmappedMarkup: string[];
 };
 
 /** Unit types that print a marker and nest as an enumeration. */
@@ -116,6 +118,7 @@ type ParseState = {
   /** Footnote bookmark to the label the source prints for it. */
   glossLabels: Map<string, string>;
   counter: number;
+  unmapped: Set<string>;
 };
 
 const nextId = (state: ParseState): number => {
@@ -132,6 +135,11 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
       return;
     }
     if (!isTag(current)) {
+      if (isCDATA(current)) {
+        for (const child of current.children) {
+          walk(child, target);
+        }
+      }
       return;
     }
     switch (current.tagName) {
@@ -169,14 +177,19 @@ const inlinesOf = (state: ParseState, node: AnyNode): Inline[] => {
         return;
       }
       default: {
+        state.unmapped.add(current.tagName);
         for (const child of current.children) {
           walk(child, target);
         }
       }
     }
   };
-  for (const child of isTag(node) ? node.children : []) {
-    walk(child, inlines);
+  if (isTag(node)) {
+    for (const child of node.children) {
+      walk(child, inlines);
+    }
+  } else {
+    walk(node, inlines);
   }
   return trimInlines(inlines);
 };
@@ -208,6 +221,41 @@ const pushParagraph = (
     inlines,
     plainText,
   });
+};
+
+type WalkBlockOptions = {
+  state: ParseState;
+  node: AnyNode;
+  context: ParagraphContext;
+  extra?: Partial<ParagraphBlock>;
+  depth?: number;
+};
+
+/** Unexpected children retain their text where they stand, with a markup report. */
+const walkBlock = ({
+  state,
+  node,
+  context,
+  extra,
+  depth = 0,
+}: WalkBlockOptions): void => {
+  if (isTag(node)) {
+    if (node.tagName !== "xText") {
+      state.unmapped.add(node.tagName);
+      if (state.$(node).find("xUnit, xText, xBlock").length > 0) {
+        walkUnit(state, node, depth, context);
+        return;
+      }
+    }
+  } else if (isText(node) || isCDATA(node)) {
+    if (inlinesToPlainText(inlinesOf(state, node)).trim() === "") {
+      return;
+    }
+    state.unmapped.add(isText(node) ? "#text" : "#cdata");
+  } else {
+    return;
+  }
+  pushParagraph(state, inlinesOf(state, node), context, extra);
 };
 
 const pushHeading = (
@@ -261,7 +309,9 @@ const walkUnit = (
   const type = unit.attribs["xType"] ?? "";
   const enumerated = ENUMERATED_UNIT_TYPES.has(type);
   const marker = markerOf($, unit);
-  const title = ownText($, childElements(unit, "xTitle").at(0));
+  const nameNode = childElements(unit, "xName").at(0);
+  const titleNode = childElements(unit, "xTitle").at(0);
+  const title = ownText($, titleNode);
   const unitContext: ParagraphContext = {
     role: type === "cite" ? "quote" : context.role,
     listDepth: enumerated ? context.listDepth + 1 : context.listDepth,
@@ -282,16 +332,8 @@ const walkUnit = (
   const opening = type === "cite" ? marker : `${marker} `;
   let pendingMarker = title === "" && marker !== "" ? opening : "";
   for (const child of unit.children) {
-    if (isText(child)) {
-      // Text set directly in a unit rather than in its `xText`: a shape the
-      // portal does not use today, kept as a paragraph if it starts to.
-      const text = collapse(child.data).trim();
-      if (text !== "") {
-        pushParagraph(state, [{ type: "text", text }], unitContext);
-      }
-      continue;
-    }
     if (!isTag(child)) {
+      walkBlock({ state, node: child, context: unitContext, depth: depth + 1 });
       continue;
     }
     if (child.tagName === "xText") {
@@ -316,12 +358,15 @@ const walkUnit = (
       }
       continue;
     }
-    if (child.tagName === "xName" || child.tagName === "xTitle") {
+    if (child === nameNode || child === titleNode) {
       continue;
     }
-    // A unit, or an element this reader has no rule for: its texts are read
-    // in place as a unit of their own rather than dropped.
-    walkUnit(state, child, depth + 1, unitContext);
+    // Nested units keep their structure; unknown elements become paragraphs.
+    if (child.tagName === "xUnit") {
+      walkUnit(state, child, depth + 1, unitContext);
+    } else {
+      walkBlock({ state, node: child, context: unitContext, depth: depth + 1 });
+    }
   }
 };
 
@@ -331,11 +376,22 @@ const walkUnit = (
  * reasons, read as body text.
  */
 const walkBranches = (state: ParseState, block: Element): void => {
-  for (const branch of childElements(block, "xUnit")) {
-    const titled = ownText(state.$, childElements(branch, "xTitle").at(0));
-    walkUnit(state, branch, 0, {
-      role: titled === "" ? "holding" : undefined,
-      listDepth: 0,
+  for (const branch of block.children) {
+    if (isTag(branch) && branch.tagName === "xUnit") {
+      const titled = ownText(state.$, childElements(branch, "xTitle").at(0));
+      walkUnit(state, branch, 0, {
+        role: titled === "" ? "holding" : undefined,
+        listDepth: 0,
+      });
+      continue;
+    }
+    if (isTag(branch) && branch.tagName === "xText") {
+      state.unmapped.add(branch.tagName);
+    }
+    walkBlock({
+      state,
+      node: branch,
+      context: { role: undefined, listDepth: 0 },
     });
   }
 };
@@ -359,24 +415,36 @@ const glossLabelsOf = (
 
 const walkGlosses = (state: ParseState, root: Element): void => {
   for (const glosses of childElements(root, "xGlosses")) {
-    for (const gloss of childElements(glosses, "xGloss")) {
+    for (const gloss of glosses.children) {
+      if (!isTag(gloss) || gloss.tagName !== "xGloss") {
+        if (isTag(gloss)) {
+          state.unmapped.add(gloss.tagName);
+        }
+        walkBlock({
+          state,
+          node: gloss,
+          context: { role: undefined, listDepth: 0 },
+        });
+        continue;
+      }
       const label = collapse(gloss.attribs["xID"] ?? "").trim();
       const bookmark = gloss.attribs["xBookmark"];
-      for (const text of childElements(gloss, "xText")) {
-        pushParagraph(
+      for (const text of gloss.children) {
+        walkBlock({
           state,
-          inlinesOf(state, text),
-          { role: undefined, listDepth: 0 },
-          label === ""
-            ? {}
-            : {
-                note: {
-                  type: "footnote",
-                  label,
-                  ...(bookmark === undefined ? {} : { noteId: bookmark }),
+          node: text,
+          context: { role: undefined, listDepth: 0 },
+          extra:
+            label === ""
+              ? {}
+              : {
+                  note: {
+                    type: "footnote",
+                    label,
+                    ...(bookmark === undefined ? {} : { noteId: bookmark }),
+                  },
                 },
-              },
-        );
+        });
       }
     }
   }
@@ -387,26 +455,38 @@ const walkGlosses = (state: ParseState, root: Element): void => {
  * through the walk above, so the validator measures the walk against the
  * source and not against itself.
  */
-const sourceTextsOf = ($: cheerio.CheerioAPI, root: Element): string[] =>
-  [
-    ...$(root)
-      .find("xText, xTitle, xPart > xName")
-      .toArray()
-      .map((element) => collapse($(element).text()).trim()),
-    // Text any other element holds directly, outside every `xText`: the
-    // validator has to see it too, or text set there could be lost unmeasured.
-    ...$(root)
-      .find("*")
-      .not("xText, xText *, xTitle, xTitle *, xName, xName *")
-      .toArray()
-      .map((element) =>
-        collapse(
-          element.children
-            .map((child) => (isText(child) ? child.data : " "))
-            .join(""),
-        ).trim(),
-      ),
-  ].filter((text) => text !== "");
+const sourceTextsOf = ($: cheerio.CheerioAPI, root: Element): string[] => {
+  const texts: string[] = [];
+  const walk = (node: AnyNode): void => {
+    if (isText(node)) {
+      const text = collapse(node.data).trim();
+      if (text !== "") {
+        texts.push(text);
+      }
+      return;
+    }
+    if (isTag(node)) {
+      if (["xText", "xTitle", "xName"].includes(node.tagName)) {
+        const text = ownText($, node);
+        if (text !== "") {
+          texts.push(text);
+        }
+        return;
+      }
+      for (const child of node.children) {
+        walk(child);
+      }
+      return;
+    }
+    if (isCDATA(node)) {
+      for (const child of node.children) {
+        walk(child);
+      }
+    }
+  };
+  walk(root);
+  return texts;
+};
 
 /** What the validator measures a parse against, read from the XML alone. */
 export const plUodoSourceTexts = (xml: string): string[] => {
@@ -434,10 +514,16 @@ export const parsePlUodoDecisionXml = (
     blocks: [],
     glossLabels: glossLabelsOf($, root),
     counter: 0,
+    unmapped: new Set(),
   };
 
   for (const child of root.children) {
     if (!isTag(child)) {
+      walkBlock({
+        state,
+        node: child,
+        context: { role: undefined, listDepth: 0 },
+      });
       continue;
     }
     switch (child.tagName) {
@@ -466,7 +552,12 @@ export const parsePlUodoDecisionXml = (
       // A container this reader has no rule for: its texts are read as plain
       // paragraphs in place rather than dropped.
       default: {
-        walkUnit(state, child, 0, { role: undefined, listDepth: 0 });
+        state.unmapped.add(child.tagName);
+        walkBlock({
+          state,
+          node: child,
+          context: { role: undefined, listDepth: 0 },
+        });
         break;
       }
     }
@@ -529,5 +620,6 @@ export const parsePlUodoDecisionXml = (
     },
     fulltext: state.blocks.map((block) => block.plainText).join("\n\n"),
     validationIssues: validation.issues.map((issue) => issue.code),
+    unmappedMarkup: [...state.unmapped],
   });
 };

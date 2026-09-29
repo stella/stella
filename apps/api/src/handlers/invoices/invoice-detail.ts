@@ -1,5 +1,11 @@
+import { INVOICE_LINE_COLUMNS } from "@/api/handlers/invoices/invoice-lines";
+
 /** The line items an invoice detail read loads with the invoice row. */
 export const INVOICE_DETAIL_RELATIONS = {
+  lines: {
+    columns: INVOICE_LINE_COLUMNS,
+    orderBy: { position: "asc", id: "asc" },
+  },
   timeEntries: {
     columns: {
       id: true,

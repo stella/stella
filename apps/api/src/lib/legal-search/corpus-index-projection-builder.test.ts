@@ -22,6 +22,7 @@ import type {
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { LIMITS } from "@/api/lib/limits";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
@@ -64,6 +65,7 @@ const LEGISLATION_INPUT = {
   versionValidFrom: "2014-01-01",
   versionValidTo: null,
   eli: "eli/cz/sb/2012/89",
+  ...EFFECTIVE_CONSOLIDATION,
 } as const satisfies LegislationV2ProjectionInput;
 const DATED_CASE_LAW_INPUT = {
   ...CASE_LAW_INPUT,
@@ -228,6 +230,28 @@ test("under-cap legislation keeps the v2 wire documents from main", () => {
       ],
     ].map((documents) => JSON.stringify(documents)),
   );
+});
+
+test("a version's classification writes nothing into the v2 wire documents", () => {
+  // v2 has no field for it: a generation that indexes it is a new generation.
+  const build = (input: LegislationV2ProjectionInput) =>
+    buildLegislationV2ProjectionDocuments({
+      input,
+      payload: { text: "§ 1 Předmět úpravy", ast: null },
+      revision: REVISION,
+    });
+  const untyped = build(LEGISLATION_INPUT);
+  expect(untyped.isOk()).toBe(true);
+  for (const input of [
+    { ...LEGISLATION_INPUT, expressionKind: "promulgated" },
+    {
+      ...LEGISLATION_INPUT,
+      windowDisposition: "invalid-window",
+      windowDispositionBasis: "reversed",
+    },
+  ] as const satisfies readonly LegislationV2ProjectionInput[]) {
+    expect(build(input)).toEqual(untyped);
+  }
 });
 
 test("oversized legislation becomes exact consecutive v2 passages", () => {

@@ -7,9 +7,6 @@ import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions
 
 type RefreshDb = Pick<typeof rootDb, "select" | "transaction">;
 
-/** One refresh statement may run for at most 15 minutes; rollback keeps the old snapshot. */
-const BROWSE_FACET_REFRESH_STATEMENT_TIMEOUT = "15min";
-
 /** The published input; its four fields are covered by the search-candidate index. */
 export const pgFtsBrowseFacetPublishedQuery = (db: Pick<RefreshDb, "select">) =>
   db
@@ -23,11 +20,11 @@ export const pgFtsBrowseFacetPublishedQuery = (db: Pick<RefreshDb, "select">) =>
     .where(publishedCaseLawDecision);
 
 /** Recount source-scoped buckets so public reads can apply live source policy. */
-export const refreshPgFtsBrowseFacets = async (db: RefreshDb) =>
+export const refreshPgFtsBrowseFacets = async (
+  db: RefreshDb,
+  signal?: AbortSignal,
+) =>
   await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout', ${BROWSE_FACET_REFRESH_STATEMENT_TIMEOUT}, true)`,
-    );
     await tx.delete(caseLawBrowseFacetCounts).where(sql`true`);
     await tx.execute(sql`
       WITH published AS MATERIALIZED (${pgFtsBrowseFacetPublishedQuery(tx)})
@@ -54,5 +51,6 @@ export const refreshPgFtsBrowseFacets = async (db: RefreshDb) =>
     if (!summary) {
       panic("Browse facet refresh aggregate returned no row.");
     }
+    signal?.throwIfAborted();
     return { buckets: summary.buckets };
   });

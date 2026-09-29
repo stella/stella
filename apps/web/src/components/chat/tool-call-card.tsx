@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -30,6 +31,8 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
 
 type ToolPart = ChatToolCallPart;
@@ -333,6 +336,22 @@ const findCatalogEntry = ({
   };
 };
 
+// The skills list is cached per user; without a signed-in user (the dev
+// playground) there is no cache to read.
+const readCachedSkillPages = ({
+  organizationId,
+  queryClient,
+  user,
+}: {
+  organizationId: string;
+  queryClient: QueryClient;
+  user: AuthenticatedUser | null;
+}) =>
+  user === null
+    ? undefined
+    : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
+        ?.pages;
+
 export const ToolCallCard = ({
   activeOrganizationId,
   durationMs,
@@ -349,6 +368,7 @@ export const ToolCallCard = ({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
+  const user = useMaybeAuthenticatedUser();
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
   const { data: catalogData } = useQuery({
@@ -464,9 +484,11 @@ export const ToolCallCard = ({
               // The chat routes load the skills list, so its title is read
               // from the cache; without it the tab shows the slug.
               const skillDisplayName = findSkillDisplayName({
-                pages: queryClient.getQueryData(
-                  skillsOptions(activeOrganizationId).queryKey,
-                )?.pages,
+                pages: readCachedSkillPages({
+                  organizationId: activeOrganizationId,
+                  queryClient,
+                  user,
+                }),
                 skillName: skillResourceOutput.skillName,
                 source: skillResourceOutput.source,
               });

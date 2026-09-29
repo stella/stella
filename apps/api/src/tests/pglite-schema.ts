@@ -50,6 +50,12 @@ const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
   "20260926150000_legislation_payload_revision",
   "migration.sql",
 );
+const LEGISLATION_PAYLOAD_REVISION_CLASSIFICATION_MIGRATION_PATH =
+  nodePath.join(
+    DRIZZLE_DIR,
+    "20261003122200_legislation_payload_revision_classification",
+    "migration.sql",
+  );
 const LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20261003120000_legislation_expression_identity",
@@ -473,17 +479,28 @@ const LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES = [
   "CREATE TRIGGER",
 ] as const;
 
-/** Install the triggers and forced row security that schema push omits. */
+/**
+ * Install the triggers and forced row security that schema push omits, then
+ * the function body later migrations replaced, so the tests run the body
+ * production runs.
+ */
 export const installPgliteLegislationPayloadRevision = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH,
-  ).filter((statement) =>
-    LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES.some((prefix) =>
-      executableSql(statement).startsWith(prefix),
+  const statements = [
+    ...readMigrationStatements(
+      LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH,
+    ).filter((statement) =>
+      LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES.some((prefix) =>
+        executableSql(statement).startsWith(prefix),
+      ),
     ),
-  );
+    ...readMigrationStatements(
+      LEGISLATION_PAYLOAD_REVISION_CLASSIFICATION_MIGRATION_PATH,
+    ).filter((statement) =>
+      executableSql(statement).startsWith("CREATE OR REPLACE FUNCTION"),
+    ),
+  ];
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

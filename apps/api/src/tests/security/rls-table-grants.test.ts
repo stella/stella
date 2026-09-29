@@ -5,7 +5,7 @@ import nodePath from "node:path";
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const BOOTSTRAP_MIGRATION = "20260510140000_document_rls_role_bootstrap";
 
-// These migrations contain reviewed dynamic grants. New grants
+// Deployed migrations contain these reviewed dynamic grants. New grants
 // must be literal SQL so the privilege parser below can classify their target;
 // an exact site allowlist prevents EXECUTE format(...) from becoming a bypass.
 const AUDITED_DYNAMIC_GRANT_SITES = new Set([
@@ -16,6 +16,7 @@ const AUDITED_DYNAMIC_GRANT_SITES = new Set([
   "20260516000000_case_law_ingestion_role: EXECUTE format('GRANT stella_ingestion TO %I', CURRENT_USER)",
   "20260808014000_legal_lists: EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO stella', table_name)",
   "20261003122400_public_sanctions_reader: EXECUTE format('GRANT stella_public_sanctions_reader TO %I WITH SET TRUE, INHERIT FALSE', CURRENT_USER)",
+  "20261003122400_ingestion_role_set_grant: EXECUTE format('GRANT stella_ingestion TO %I WITH SET TRUE', CURRENT_USER)",
 ]);
 
 // These migrations were already in the tree when the bootstrap migration
@@ -53,6 +54,10 @@ const BOOTSTRAP_COVERED_RLS_MIGRATIONS = new Set([
 // tables and derived preview passages are maintained by privileged background
 // writers, so the request role correctly receives SELECT only, not full DML.
 const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
+  // File usage is written through the owner transaction; scoped requests may
+  // read only their organization's counter and object records.
+  "organization_file_usage",
+  "organization_file_objects",
   // History written only by the record_agent_skill_revision trigger.
   "agent_skill_revisions",
   "search_document_preview_passages",
@@ -155,6 +160,8 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Search backfill retries are ingestion control state, not request data.
+  "case_law_search_backfill_failures",
   "agent_registration",
   "agent_trusted_issuer",
   "agent_delegation",
@@ -176,6 +183,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Raw prefixes owed a sweep: keys of erased decisions, recorded by
   // ingestion and erasure and drained by the root scheduler.
   "case_law_raw_sweeps",
+  // Names stored legislation titles state: written by ingestion and the owner
+  // backfill, read by the public-law reader, never by the request role.
+  "legislation_work_names",
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",

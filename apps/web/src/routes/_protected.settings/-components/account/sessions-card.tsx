@@ -39,6 +39,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, revokeAuthSession } from "@/lib/auth-client";
 import type { SessionRevocationToken } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -105,8 +106,9 @@ const SessionsCardError = ({ onRetry }: { onRetry: () => void }) => {
 
 const SessionsCardContent = () => {
   const t = useTranslations();
+  const { id: userId } = useAuthenticatedUser();
   const [{ data: sessions }, { data: currentSession }] = useSuspenseQueries({
-    queries: [sessionsOptions, sessionOptions],
+    queries: [sessionsOptions(userId), sessionOptions],
   });
 
   const currentSessionId = currentSession?.session.id;

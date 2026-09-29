@@ -49,3 +49,15 @@ export const openMaintenanceDb = ({
     transaction,
   };
 };
+
+/** Owner transactions for the organization file ledger, whose writes are not
+ * available through tenant RLS. Callers still pass an organization ID to every
+ * ledger operation; the ledger checks it against the object row. */
+export const openOrganizationFileUsageDb = (): Pick<
+  MaintenanceDb,
+  "transaction"
+> => {
+  const transaction = async <T>(fn: (tx: Transaction) => Promise<T>) =>
+    await rootDb.transaction(fn);
+  return { transaction };
+};

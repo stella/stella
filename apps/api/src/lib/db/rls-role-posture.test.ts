@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   applicationRlsRolePostureViolation,
   databaseLoginPostureNotes,
+  ingestionRolePostureViolation,
 } from "@/api/lib/db/rls-role-posture";
 
 describe("application RLS role posture", () => {
@@ -70,6 +71,19 @@ describe("application RLS role posture", () => {
     ],
   ])("classifies %#", (posture, expected) => {
     expect(applicationRlsRolePostureViolation(posture)).toBe(expected);
+  });
+});
+
+describe("ingestion role posture", () => {
+  test.each([
+    [undefined, "Ingestion role is missing."],
+    [
+      { canAssumeRole: false },
+      "Database login must be able to assume the ingestion role. Run `bun run db:migrate` to grant SET rights.",
+    ],
+    [{ canAssumeRole: true }, null],
+  ])("classifies %#", (posture, expected) => {
+    expect(ingestionRolePostureViolation(posture)).toBe(expected);
   });
 });
 

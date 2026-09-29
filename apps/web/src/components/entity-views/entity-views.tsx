@@ -42,6 +42,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -77,7 +78,8 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const direction = useI18nStore((state) => getLangDir(state.lang));
-  const saved = useQuery(entityViewsOptions(organizationId));
+  const userId = useAuthenticatedUser().id;
+  const saved = useQuery(entityViewsOptions(organizationId, userId));
   const sortProperties = useEntityViewSortProperties();
   const canCreateView = usePermissions({ view: ["create"] });
   const canUpdateView = usePermissions({ view: ["update"] });
@@ -151,7 +153,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       return { sequence };
     },
     onSuccess: async (view, submitted, context) => {
-      await queryClient.invalidateQueries(entityViewsOptions(organizationId));
+      await queryClient.invalidateQueries(
+        entityViewsOptions(organizationId, userId),
+      );
       if (context.sequence !== latestSave.current) {
         return;
       }
@@ -181,7 +185,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
           savedIds.current.delete(temporaryId);
         }
       }
-      await queryClient.invalidateQueries(entityViewsOptions(organizationId));
+      await queryClient.invalidateQueries(
+        entityViewsOptions(organizationId, userId),
+      );
       setSelectedId("default:kanban");
     },
     onError: reportError,
@@ -194,7 +200,9 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
         }),
       ),
     onSuccess: async () => {
-      await queryClient.invalidateQueries(entityViewsOptions(organizationId));
+      await queryClient.invalidateQueries(
+        entityViewsOptions(organizationId, userId),
+      );
     },
     onError: reportError,
   });
@@ -468,9 +476,11 @@ const EntityViewContent = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
+  const userId = useAuthenticatedUser().id;
   const records = useInfiniteQuery(
     entityViewRowsOptions({
       organizationId,
+      userId,
       scope,
       layout: view.layout,
       inboxView: proposalView,
@@ -488,10 +498,10 @@ const EntityViewContent = ({
   const refresh = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: entityViewKeys.all(organizationId),
+        queryKey: entityViewKeys.all(organizationId, userId),
       }),
       queryClient.invalidateQueries({
-        queryKey: inboxKeys.all(organizationId),
+        queryKey: inboxKeys.all(organizationId, userId),
       }),
       ...[
         ...new Set(

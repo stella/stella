@@ -21,7 +21,10 @@ export const Route = createFileRoute(
   loader: async ({ context }) => {
     // Prime the connected-apps query the page suspends on so the fetch starts
     // during navigation instead of after the component mounts and suspends.
-    await ensureRouteQueryData(context.queryClient, connectedAppsOptions);
+    await ensureRouteQueryData(
+      context.queryClient,
+      connectedAppsOptions(context.user.id),
+    );
   },
   pendingComponent: ConnectionsPagePending,
 });

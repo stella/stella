@@ -22,6 +22,10 @@ export const useCreateViewTemplate = () => {
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.id,
+  });
 
   return useMutation({
     mutationFn: async ({ workspaceId, ...body }: CreateViewTemplateVars) => {
@@ -33,7 +37,7 @@ export const useCreateViewTemplate = () => {
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({
-          queryKey: viewTemplateKeys.all({ organizationId }),
+          queryKey: viewTemplateKeys.all({ organizationId, userId }),
         }),
         "view-templates.invalidate",
       );
@@ -56,6 +60,10 @@ export const useDeleteViewTemplate = () => {
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.id,
+  });
 
   return useMutation({
     mutationFn: async ({ workspaceId, templateId }: DeleteViewTemplateVars) => {
@@ -69,7 +77,7 @@ export const useDeleteViewTemplate = () => {
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({
-          queryKey: viewTemplateKeys.all({ organizationId }),
+          queryKey: viewTemplateKeys.all({ organizationId, userId }),
         }),
         "view-templates.invalidate",
       );

@@ -112,6 +112,7 @@ import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
 import { usageRoute } from "@/api/handlers/usage/routes";
 import { userFilesRoute } from "@/api/handlers/user-files/routes";
+import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
 import { verifyAuthRoute } from "@/api/handlers/verify/routes";
 import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
@@ -487,7 +488,12 @@ const api = new Elysia()
       .use(invoicesRoute)
       // Issuer settings share one link: every `.use` here deepens the
       // app's type, and the chain sits at TypeScript's instantiation limit.
-      .use(new Elysia().use(sellerProfilesRoute).use(numberSeriesRoute))
+      .use(
+        new Elysia()
+          .use(sellerProfilesRoute)
+          .use(numberSeriesRoute)
+          .use(vatRateRoute),
+      )
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
       .use(sharepointRoute)

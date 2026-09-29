@@ -34,6 +34,7 @@
 
 import { sql } from "drizzle-orm";
 
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 
 // Hold the maintenance lane before the first statement: operator passes over
@@ -41,7 +42,7 @@ import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
 const BATCH_SIZE = 2000;
-const STATEMENT_TIMEOUT_MS = 120_000;
+const STATEMENT_TIMEOUT_MS = 100_000;
 
 type BatchResult = {
   next_cursor: string | null;
@@ -54,7 +55,9 @@ const repairBatch = async (
 ): Promise<BatchResult | null> => {
   const cursorClause = cursorId ? sql`WHERE id > ${cursorId}::uuid` : sql``;
 
-  const rows = await rootDb.execute(sql`
+  const rows = await rootDb.transaction(async (tx) => {
+    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
+    return await tx.execute(sql`
     WITH batch AS (
       SELECT id
       FROM case_law_decisions
@@ -107,7 +110,8 @@ const repairBatch = async (
       (SELECT id::text FROM batch ORDER BY id DESC LIMIT 1) AS next_cursor,
       (SELECT count(*)::int FROM batch) AS scanned,
       (SELECT count(*)::int FROM updated) AS updated
-  `);
+    `);
+  });
 
   const row = rows.at(0);
   if (!row) {
@@ -130,13 +134,6 @@ const formatDuration = (ms: number): string => {
 };
 
 const main = async () => {
-  // Lift the per-statement timeout for this session so a heavy
-  // batch that has to read TOAST pages doesn't get cancelled mid-
-  // way through a write.
-  await rootDb.execute(
-    sql.raw(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`),
-  );
-
   console.log("Starting case_law_decisions JSONB repair");
   console.log(
     `Batch size: ${BATCH_SIZE}, statement timeout: ${STATEMENT_TIMEOUT_MS}ms`,

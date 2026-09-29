@@ -1,4 +1,4 @@
-import { resolveClientIp } from "@/api/lib/client-ip";
+import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import type {
   RateLimitGenerator,
@@ -63,7 +63,7 @@ const addressKey = (
   request: Request,
   server: Parameters<RateLimitGenerator>[1],
 ): string => {
-  const clientIp = resolveClientIp(request, server);
+  const clientIp = resolveRateLimitClientAddress({ request, server });
   return clientIp ? `${scope}:ip:${clientIp}` : scope;
 };
 

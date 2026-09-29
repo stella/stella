@@ -3,6 +3,8 @@ import { and, asc, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
+import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
 
 import type { Transaction } from "@/api/db/root";
@@ -13,6 +15,7 @@ import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/inge
 import {
   defectiveJunctions,
   storedWindow,
+  windowDisposition,
 } from "@/api/handlers/legislation/version-windows";
 import type { StoredWindow } from "@/api/handlers/legislation/version-windows";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -48,6 +51,8 @@ import {
   MAX_SYNC_PAGES,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
+import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
+import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type {
   LegislationDocumentInput,
   LegislationSourceAdapter,
@@ -56,6 +61,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
@@ -115,7 +121,10 @@ const sanitizeInput = (
   expression:
     input.expression === undefined
       ? undefined
-      : { publisherId: stripDangerousChars(input.expression.publisherId) },
+      : {
+          ...input.expression,
+          publisherId: stripDangerousChars(input.expression.publisherId),
+        },
 });
 
 /**
@@ -259,11 +268,17 @@ const settleLegislationCorpusProjection = async ({
  * something this parser does not yet read, and without the observation
  * fingerprint that change hashes identically and the row can never be
  * refreshed once a later parser learns to read it.
+ *
+ * The version's classification is appended only when it is one a writer could
+ * not state before classifications existed, so every hash stored before then
+ * keeps its bytes and an unchanged re-ingest of such a row stays a skip.
  */
-const legislationSourceHash = (
+export const legislationSourceHash = (
   input: LegislationDocumentInput,
   window: StoredWindow,
+  classification: LegislationExpressionClassification,
 ): string => {
+  const typed = typedLegislationClassification(classification);
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(
     JSON.stringify([
@@ -287,6 +302,15 @@ const legislationSourceHash = (
       input.metadata ?? {},
       input.rawHash,
       input.sourceRawContentType ?? null,
+      ...(typed === null
+        ? []
+        : [
+            [
+              typed.expressionKind,
+              typed.windowDisposition,
+              typed.windowDispositionBasis,
+            ],
+          ]),
     ]),
   );
   return hasher.digest("hex");
@@ -307,6 +331,7 @@ const legislationSourceHash = (
 type ReportWindowJunctionsArgs = {
   input: Pick<LegislationDocumentInput, "sourceId" | "eli" | "language">;
   window: StoredWindow;
+  classification: LegislationExpressionClassification;
   documentId: SafeId<"legislationDocument">;
   scopedDb: ScopedDb;
 };
@@ -314,11 +339,14 @@ type ReportWindowJunctionsArgs = {
 const reportWindowJunctions = async ({
   input,
   window,
+  classification,
   documentId,
   scopedDb,
 }: ReportWindowJunctionsArgs): Promise<void> => {
   const validFrom = window.versionValidFrom;
-  if (validFrom === null) {
+  // A version that cannot apply meets no neighbour: its dates are the
+  // publisher's as stated, not a window any read would cross.
+  if (validFrom === null || !isEligibleLegislationExpression(classification)) {
     return;
   }
   // Only versions that can apply are neighbours: a version that never took
@@ -446,31 +474,87 @@ const storeSourceRaw = async ({
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
 };
 
-type StoredClassification = Required<
-  Pick<
-    typeof legislationDocuments.$inferInsert,
-    "expressionKind" | "windowDisposition" | "windowDispositionBasis"
-  >
->;
+/**
+ * What the input says the version is: the kind its connector states, or the
+ * one its window implies, and the disposition its window declares.
+ *
+ * A typed version (anything but an effective consolidation or unversioned
+ * work) must carry the publisher's id. Without one it is found by its start
+ * date, which two versions opening the same day share, so its classification
+ * could land on the other one; that is a connector defect, named here.
+ */
+const statedClassification = (
+  input: LegislationDocumentInput,
+): LegislationExpressionClassification => {
+  const unversioned = input.version.type === "unversioned";
+  const expressionKind =
+    input.expression?.kind ?? (unversioned ? "unversioned" : "consolidation");
+  if ((expressionKind === "unversioned") !== unversioned) {
+    return panic("legislation expression kind contradicts its window", {
+      eli: input.eli,
+      kind: expressionKind,
+      window: input.version.type,
+    });
+  }
+  const classification = {
+    expressionKind,
+    ...windowDisposition(input.version),
+  };
+  if (
+    input.expression === undefined &&
+    typedLegislationClassification(classification) !== null
+  ) {
+    return panic("a typed legislation version needs the publisher's id", {
+      eli: input.eli,
+      ...classification,
+    });
+  }
+  return classification;
+};
 
 /**
- * What the input says the version is. The contract can only express a
- * version with a placeable window, so every write states it effective; its
- * kind follows the input's version shape. A row that says otherwise is a
- * changed row, not an unchanged one.
+ * The withdrawals a live listing of the version lifts: those that say only
+ * that the publisher stopped listing it (or kept it out of the corpus), which
+ * a listing now answers. A withdrawal for any other reason is the census's to
+ * lift, whatever a writer sees.
+ */
+const LIFTED_BY_A_LIVE_LISTING: readonly LegislationWindowDispositionBasis[] = [
+  "publisher-unlisted",
+  "listed-not-stored",
+];
+
+/**
+ * What the row will say the version is: what the input states, unless the
+ * stored row is a withdrawal this observation cannot lift. Then the row keeps
+ * exactly what it holds (kind, disposition and basis), and only its payload is
+ * refreshed. Only an observation declared `live` lifts one: a snapshot, a
+ * replay of a stored payload, or a writer that states no origin proves what
+ * the publisher listed at some point, not now.
  */
 const storedClassification = (
   input: LegislationDocumentInput,
-): StoredClassification => ({
-  expressionKind:
-    input.version.type === "unversioned" ? "unversioned" : "consolidation",
-  windowDisposition: "effective",
-  windowDispositionBasis: null,
-});
+  stated: LegislationExpressionClassification,
+  existing: StoredVersion | undefined,
+): LegislationExpressionClassification => {
+  if (existing?.windowDisposition !== "withdrawn") {
+    return stated;
+  }
+  const lifted =
+    input.origin === "live" &&
+    existing.windowDispositionBasis !== null &&
+    LIFTED_BY_A_LIVE_LISTING.includes(existing.windowDispositionBasis);
+  return lifted
+    ? stated
+    : {
+        expressionKind: existing.expressionKind,
+        windowDisposition: existing.windowDisposition,
+        windowDispositionBasis: existing.windowDispositionBasis,
+      };
+};
 
 const hasStoredClassification = (
   row: StoredVersion,
-  classification: StoredClassification,
+  classification: LegislationExpressionClassification,
 ): boolean =>
   row.expressionKind === classification.expressionKind &&
   row.windowDisposition === classification.windowDisposition &&
@@ -525,10 +609,7 @@ type StoredVersion = {
   astS3Key: string | null;
   sourceRawS3Key: string | null;
   sourceRawContentType: string | null;
-  expressionKind: string;
-  windowDisposition: string;
-  windowDispositionBasis: string | null;
-};
+} & LegislationExpressionClassification;
 
 type StoredVersionLookup = {
   input: LegislationDocumentInput;
@@ -542,25 +623,61 @@ const workOf = (input: LegislationDocumentInput): SQL | undefined =>
     eq(legislationDocuments.language, input.language),
   );
 
-const selectStoredVersionTx = async (
+const storedVersionQuery = (tx: Transaction, where: SQL | undefined) =>
+  tx
+    .select(STORED_VERSION_COLUMNS)
+    .from(legislationDocuments)
+    .where(where)
+    // Deterministic should a duplicate ever exist.
+    .orderBy(asc(legislationDocuments.id))
+    .limit(1);
+
+/** The row, locked for the write that decides from it. */
+const lockStoredVersionTx = async (
   tx: Transaction,
   where: SQL | undefined,
 ): Promise<StoredVersion | undefined> =>
-  (
+  (await storedVersionQuery(tx, where).for("update")).at(0);
+
+/**
+ * Update the stored version, or insert it with its publisher id, and write the
+ * names its title states in the same transaction, so a search never sees the
+ * version without them.
+ */
+const writeDecidedVersionTx = async (
+  tx: Transaction,
+  row: StoredVersion | undefined,
+  values: typeof legislationDocuments.$inferInsert,
+  publisherId: string | undefined,
+) => {
+  let id = row?.id;
+  // audit: skip — background legislation ingestion; public data, not user actions
+  if (id === undefined) {
+    const [insertedRow] = await tx
+      .insert(legislationDocuments)
+      .values({ ...values, publisherExpressionId: publisherId ?? null })
+      .returning({ id: legislationDocuments.id });
+    if (!insertedRow) {
+      panic("Failed to insert legislation document");
+    }
+    id = insertedRow.id;
+  } else {
     await tx
-      .select(STORED_VERSION_COLUMNS)
-      .from(legislationDocuments)
-      .where(where)
-      // Deterministic should a duplicate ever exist.
-      .orderBy(asc(legislationDocuments.id))
-      .limit(1)
-  ).at(0);
+      .update(legislationDocuments)
+      .set({ ...values, updatedAt: new Date() })
+      .where(eq(legislationDocuments.id, id));
+  }
+  await syncLegislationWorkNamesTx(tx, [
+    { id, country: values.country, title: values.title },
+  ]);
+  return id;
+};
 
 const selectStoredVersion = async (
   scopedDb: ScopedDb,
   where: SQL | undefined,
 ): Promise<StoredVersion | undefined> =>
-  await scopedDb(async (tx) => await selectStoredVersionTx(tx, where));
+  await scopedDb(async (tx) => (await storedVersionQuery(tx, where)).at(0));
 
 const byPublisherId = (
   input: LegislationDocumentInput,
@@ -759,11 +876,12 @@ export const processLegislationDocument = async (
   const sections = input.sections ?? null;
   const ast = input.ast ?? null;
   const window = storedWindow(input.version);
-  const sourceHash = legislationSourceHash(input, window);
+  const stated = statedClassification(input);
   const expectedContentHash = corpusContentHash({ text, sections, ast });
-  const classification = storedClassification(input);
 
   let existing = await findStoredVersion({ input, window, scopedDb });
+  let classification = storedClassification(input, stated, existing);
+  let sourceHash = legislationSourceHash(input, window, classification);
   const existingCorpusPlan =
     existing === undefined
       ? null
@@ -829,8 +947,6 @@ export const processLegislationDocument = async (
     sourceUrl: input.sourceUrl ?? null,
     documentUrl: input.documentUrl ?? null,
     metadata: input.metadata ?? {},
-    sourceHash,
-    ...classification,
     ...sourceRaw,
     ...(corpus.mode === "off"
       ? {
@@ -846,37 +962,53 @@ export const processLegislationDocument = async (
    * Update the version's row, or insert it. Under the identity lock a writer
    * that found nothing looks once more before inserting: a concurrent writer
    * may have stored the version since, and then its row is this version's row.
+   *
+   * The row is read again under its lock and the classification decided from
+   * that read, not the one before the payload write: a withdrawal committed in
+   * between is what the row now says, and a write decided from the older read
+   * would lift it.
    */
   const written = await scopedDb(async (tx) => {
     await declareWriterContract(tx);
     const publisherId = input.expression?.publisherId;
-    let row = existing;
+    let row =
+      existing === undefined
+        ? undefined
+        : await lockStoredVersionTx(
+            tx,
+            eq(legislationDocuments.id, existing.id),
+          );
     if (row === undefined && publisherId !== undefined) {
       await lockExpressionIdentity(tx, input, publisherId);
-      row = await selectStoredVersionTx(tx, byPublisherId(input, publisherId));
+      row = await lockStoredVersionTx(tx, byPublisherId(input, publisherId));
     }
-    // audit: skip — background legislation ingestion; public data, not user actions
-    if (row !== undefined) {
-      await tx
-        .update(legislationDocuments)
-        .set({ ...values, updatedAt: new Date() })
-        .where(eq(legislationDocuments.id, row.id));
-      return { id: row.id, row };
-    }
-    const [insertedRow] = await tx
-      .insert(legislationDocuments)
-      .values({ ...values, publisherExpressionId: publisherId ?? null })
-      .returning({ id: legislationDocuments.id });
-    if (!insertedRow) {
-      panic("Failed to insert legislation document");
-    }
-    return { id: insertedRow.id, row: undefined };
+    const decided = storedClassification(input, stated, row);
+    const decidedValues = {
+      ...values,
+      ...decided,
+      sourceHash: legislationSourceHash(input, window, decided),
+    };
+    const id = await writeDecidedVersionTx(tx, row, decidedValues, publisherId);
+    return {
+      id,
+      row,
+      classification: decided,
+      sourceHash: decidedValues.sourceHash,
+    };
   });
   const { id } = written;
   const inserted = written.row === undefined;
   existing = written.row;
+  classification = written.classification;
+  sourceHash = written.sourceHash;
 
-  await reportWindowJunctions({ input, window, documentId: id, scopedDb });
+  await reportWindowJunctions({
+    input,
+    window,
+    classification,
+    documentId: id,
+    scopedDb,
+  });
 
   let corpusWriteFailed = false;
   // Legislation mirrors the payload whenever corpus storage is on and never
@@ -1050,8 +1182,13 @@ export const runLegislationIngestion = async ({
     for (const document of documents) {
       const checked = restrictLegislationDocumentUrls({
         // The runner holds the source row, so it stamps the identity rather
-        // than making every adapter recover it from its config.
-        document: { ...document, sourceId: source.id },
+        // than making every adapter recover it from its config. A page an
+        // adapter fetched is live unless the adapter says otherwise.
+        document: {
+          ...document,
+          sourceId: source.id,
+          origin: document.origin ?? "live",
+        },
         hostPolicy: adapter.outboundHostPolicy,
       });
       for (const refusal of checked.refusals) {

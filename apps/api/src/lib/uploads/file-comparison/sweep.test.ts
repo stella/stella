@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { sweepExpiredFileComparisonUploads } from "@/api/lib/uploads/file-comparison/sweep";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -14,12 +15,14 @@ type ExpiredRow = { id: string; organizationId: string };
 
 const createHarness = ({
   deleteFailsFor = new Set<string>(),
+  ledgerFailsFor = new Set<string>(),
   rows = [
     { id: FIRST_ID, organizationId: ORGANIZATION_ID },
     { id: SECOND_ID, organizationId: ORGANIZATION_ID },
   ],
 }: {
   deleteFailsFor?: Set<string>;
+  ledgerFailsFor?: Set<string>;
   rows?: ExpiredRow[];
 } = {}) => {
   const deletedKeys: string[] = [];
@@ -60,8 +63,16 @@ const createHarness = ({
           if (deleteFailsFor.has(key)) {
             throw new Error("s3 delete failed");
           }
+          if (ledgerFailsFor.has(key)) {
+            return Result.err(
+              new OrganizationFileUsageError({
+                message: "Ledger unavailable",
+                reason: "storage_unavailable",
+              }),
+            );
+          }
           deletedKeys.push(key);
-          await Promise.resolve();
+          return Result.ok(undefined);
         },
         ...(limit === undefined ? {} : { limit }),
         safeDb,
@@ -95,6 +106,19 @@ describe("file comparison expiry sweep", () => {
     // The surviving row is what makes the next tick retry that key; deleting
     // it here would leave bytes nothing can name.
     expect(swept).toBe(1);
+    expect(harness.deletedKeys).toEqual([
+      `${ORGANIZATION_ID}/tmp/comparisons/${SECOND_ID}`,
+    ]);
+  });
+
+  test("keeps the row when ledger decrement fails after storage deletion", async () => {
+    const harness = createHarness({
+      ledgerFailsFor: new Set([
+        `${ORGANIZATION_ID}/tmp/comparisons/${FIRST_ID}`,
+      ]),
+    });
+
+    expect(await harness.sweep()).toBe(1);
     expect(harness.deletedKeys).toEqual([
       `${ORGANIZATION_ID}/tmp/comparisons/${SECOND_ID}`,
     ]);

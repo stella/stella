@@ -54,7 +54,8 @@ export const NotificationBell = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId: organizationId, id: userId } =
+    useAuthenticatedUser();
 
   const {
     data,
@@ -63,7 +64,7 @@ export const NotificationBell = () => {
     hasNextPage,
     isFetchingNextPage,
     refetch,
-  } = useInfiniteQuery(notificationsOptions({ organizationId }));
+  } = useInfiniteQuery(notificationsOptions({ organizationId, userId }));
 
   // The count travels with every page and is computed server-side, so it stays
   // right no matter how little history this client holds. A failed read is not
@@ -79,7 +80,7 @@ export const NotificationBell = () => {
     // second kind a compile error here instead of a silently ignored event.
     eventType satisfies typeof REALTIME_EVENT_TYPE.NEW_NOTIFICATION;
     detached(
-      refetchFirstNotificationsPage({ organizationId, queryClient }),
+      refetchFirstNotificationsPage({ organizationId, queryClient, userId }),
       "notification-bell.refetch-first-page",
     );
   });
@@ -118,7 +119,11 @@ export const NotificationBell = () => {
       reportFailure(requested.error);
       return;
     }
-    await refetchFirstNotificationsPage({ organizationId, queryClient });
+    await refetchFirstNotificationsPage({
+      organizationId,
+      queryClient,
+      userId,
+    });
   };
 
   const markAllRead = async () => {
@@ -129,7 +134,11 @@ export const NotificationBell = () => {
       reportFailure(requested.error);
       return;
     }
-    await refetchFirstNotificationsPage({ organizationId, queryClient });
+    await refetchFirstNotificationsPage({
+      organizationId,
+      queryClient,
+      userId,
+    });
   };
 
   return (

@@ -32,9 +32,12 @@ function ReportExportRecoveryPage() {
       workspaceId: params.workspaceId,
     }),
   });
+  const userId = Route.useRouteContext({
+    select: (context) => context.user.id,
+  });
   const [isDownloading, setIsDownloading] = useState(false);
   const { data, refetch } = useSuspenseQuery(
-    reportExportRecoveryOptions({ exportId, workspaceId }),
+    reportExportRecoveryOptions({ exportId, userId, workspaceId }),
   );
   let statusTitle = t("common.preparing");
   if (data.status === "completed") {
@@ -89,6 +92,7 @@ function ReportExportRecoveryPage() {
       const destination = await resolveReportExportDestinationQuery({
         exportId,
         queryClient,
+        userId,
         workspaceId,
       });
       if (destination === null) {
@@ -182,22 +186,28 @@ const POLL_INTERVAL_MS = 2000;
 
 type ReportExportRecoveryKey = {
   exportId: string;
+  userId: string;
   workspaceId: string;
 };
 
 const reportExportRecoveryKeys = {
   all: (workspaceId: string) =>
     ["report-export-recovery", workspaceId] as const,
-  detail: ({ exportId, workspaceId }: ReportExportRecoveryKey) =>
-    [...reportExportRecoveryKeys.all(workspaceId), exportId] as const,
+  detail: ({ exportId, userId, workspaceId }: ReportExportRecoveryKey) =>
+    [...reportExportRecoveryKeys.all(workspaceId), userId, exportId] as const,
 };
 
 const reportExportRecoveryOptions = ({
   exportId,
+  userId,
   workspaceId,
 }: ReportExportRecoveryKey) =>
   queryOptions({
-    queryKey: reportExportRecoveryKeys.detail({ exportId, workspaceId }),
+    queryKey: reportExportRecoveryKeys.detail({
+      exportId,
+      userId,
+      workspaceId,
+    }),
     queryFn: async ({ signal }) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -222,7 +232,7 @@ export const Route = createFileRoute(
   loader: async ({ context, params }) => {
     await ensureRouteQueryData(
       context.queryClient,
-      reportExportRecoveryOptions(params),
+      reportExportRecoveryOptions({ ...params, userId: context.user.id }),
     );
   },
   pendingComponent: ReportExportRecoverySkeleton,

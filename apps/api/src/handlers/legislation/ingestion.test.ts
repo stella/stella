@@ -6,12 +6,17 @@ import { drizzle } from "drizzle-orm/pglite";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import {
+  legislationSourceHash,
   processLegislationDocument,
   runLegislationIngestion,
 } from "@/api/handlers/legislation/ingestion";
 import type { ProcessLegislationResult } from "@/api/handlers/legislation/ingestion";
 import { createSafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  EFFECTIVE_CONSOLIDATION,
+  type LegislationExpressionClassification,
+} from "@/api/lib/legal-search/legislation-expression-classification";
 import type {
   LegislationDocumentInput,
   LegislationSourceAdapter,
@@ -307,6 +312,79 @@ test("a changed observation fingerprint alone refreshes the row", async () => {
   expect(refreshed.skipped).toBe(false);
 });
 
+/**
+ * Source hashes computed before versions carried a classification. Every row
+ * stored then is untyped, and an untyped version must keep hashing to these
+ * bytes, or each re-ingest of the whole corpus rewrites every row.
+ */
+const HASH_INPUT = {
+  sourceId,
+  eli: "eli/cz/sb/2012/89",
+  title: "Občanský zákoník",
+  country: "CZE",
+  language: "cs",
+  documentType: "act",
+  status: "current",
+  effectiveDate: "2014-01-01",
+  version: { type: "unversioned" },
+  fulltext: "§ 1 Předmět úpravy",
+  metadata: {
+    versionIri: "https://example.test/eli/cz/sb/2012/89/2014-01-01",
+  },
+  rawHash: "raw-2012-89-2014-01-01",
+} as const satisfies LegislationDocumentInput;
+const UNTYPED_HASHES = [
+  {
+    window: { versionValidFrom: "2014-01-01", versionValidTo: "2020-01-01" },
+    expressionKind: "consolidation",
+    hash: "d6a8e1e4144df6959d7f641e5cd51643662a1ac7e3e01f027bcdccf50f842012",
+  },
+  {
+    window: { versionValidFrom: null, versionValidTo: null },
+    expressionKind: "unversioned",
+    hash: "1961dfa82f21ccbc93bd454a86cf3ba84980f03ceeab8440947f030b22ecc4b8",
+  },
+] as const;
+
+test("an untyped version hashes to the bytes it had before classifications", () => {
+  for (const { window, expressionKind, hash } of UNTYPED_HASHES) {
+    expect(
+      legislationSourceHash(HASH_INPUT, window, {
+        ...EFFECTIVE_CONSOLIDATION,
+        expressionKind,
+      }),
+    ).toBe(hash);
+  }
+});
+
+test("a typed classification moves the source hash, and each one differently", () => {
+  const { window, hash } = UNTYPED_HASHES[0];
+  const typed = [
+    { ...EFFECTIVE_CONSOLIDATION, expressionKind: "promulgated" },
+    {
+      ...EFFECTIVE_CONSOLIDATION,
+      windowDisposition: "withdrawn",
+      windowDispositionBasis: "publisher-unlisted",
+    },
+    {
+      ...EFFECTIVE_CONSOLIDATION,
+      windowDisposition: "withdrawn",
+      windowDispositionBasis: "listed-not-stored",
+    },
+    {
+      ...EFFECTIVE_CONSOLIDATION,
+      windowDisposition: "invalid-window",
+      windowDispositionBasis: "reversed",
+    },
+  ] as const satisfies readonly LegislationExpressionClassification[];
+  const hashes = typed.map((classification) =>
+    legislationSourceHash(HASH_INPUT, window, classification),
+  );
+
+  expect(hashes).not.toContain(hash);
+  expect(new Set(hashes).size).toBe(typed.length);
+});
+
 test("the publisher's payload round-trips onto the row", async () => {
   const sourceRaw =
     '<html lang="sk"><body><div class="paragraf" id="paragraf-1">§ 1</div></body></html>';
@@ -479,6 +557,38 @@ test("a document naming a foreign source is stored under the source being run", 
     .from(legislationDocuments)
     .where(eq(legislationDocuments.eli, "SVK/act/3"));
   expect(rows).toEqual([{ sourceId: runnerSourceId }]);
+});
+
+test("a page the runner fetched is a live listing, so it restores a version withdrawn for being unlisted", async () => {
+  const run = async () =>
+    await runLegislationIngestion({
+      adapter: runnerAdapter({
+        documents: [runnerDocument("SVK/act/5", `${PUBLISHER_ORIGIN}/act/5`)],
+        nextCursor: null,
+      }),
+      source: { id: runnerSourceId, syncCursor: null },
+      scopedDb,
+      signal: new AbortController().signal,
+    });
+  const disposition = async () =>
+    await db
+      .select({ disposition: legislationDocuments.windowDisposition })
+      .from(legislationDocuments)
+      .where(eq(legislationDocuments.eli, "SVK/act/5"));
+
+  await run();
+  await db
+    .update(legislationDocuments)
+    .set({
+      windowDisposition: "withdrawn",
+      windowDispositionBasis: "publisher-unlisted",
+    })
+    .where(eq(legislationDocuments.eli, "SVK/act/5"));
+  const withdrawn = await disposition();
+  await run();
+
+  expect(withdrawn).toEqual([{ disposition: "withdrawn" }]);
+  expect(await disposition()).toEqual([{ disposition: "effective" }]);
 });
 
 test("a page the adapter could not fetch holds the cursor", async () => {

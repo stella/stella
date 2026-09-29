@@ -12,6 +12,7 @@ import {
   type CorpusSearchOrder,
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { collapseLegislationHitsByWork } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
   blendStableCitationAuthority,
   DEFAULT_AUTHORITY_WEIGHT,
@@ -1136,5 +1137,112 @@ describe("a page boundary carries the order it was cut from", () => {
       "doc-5",
     ]);
     expect(second.nextCursor?.sort).toBe("newest");
+  });
+});
+
+describe("folded acts stay folded across capped windows", () => {
+  const reachable =
+    LIMITS.corpusIndexSearchMaxRounds * LIMITS.corpusIndexSearchCandidateLimit;
+  /** Acts behind the first window's other hits, several versions each. */
+  const FILLER_ACTS = 150;
+  /** `<act>#<version>`: every version of an act folds into the act. */
+  const actOf = (id: string): string => id.split("#")[0] ?? id;
+  const fillerAct = (index: number) =>
+    `act-${String(index % FILLER_ACTS).padStart(3, "0")}`;
+
+  const readActPage = async (
+    limit: number,
+    parsedCursor: SearchCursor | null,
+  ) =>
+    await readCorpusIndexSearchPage({
+      cluster: "q09",
+      indexId: "legislation_v2_cze",
+      query: "text:smlouva",
+      limit,
+      order: RELEVANCE_ORDER,
+      parsedCursor,
+      snippetFields: ["text"],
+      extractId: (hit: CorpusIndexHit) =>
+        typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+      extractSnippet: () => null,
+      // No bound ever proves the page: only the round cap ends a scan.
+      unseenScoreUpperBound: (score) => score + 1,
+      rankCandidates: async (candidates) => {
+        const collapsed = collapseLegislationHitsByWork({
+          ranked: candidates.map((candidate) => ({
+            id: candidate.id,
+            score: candidate.score,
+            lexicalScore: candidate.score,
+            citationAuthority: 0,
+          })),
+          workOf: new Map(
+            candidates.map((candidate) => [candidate.id, actOf(candidate.id)]),
+          ),
+          representatives: new Map(),
+          namedWorks: [],
+          namedScoreFloor: 10,
+          excludedWork: parsedCursor === null ? null : actOf(parsedCursor.id),
+          excludedWorkTokens: new Set(parsedCursor?.excludedGroups),
+        });
+        return {
+          context: null,
+          ranked: collapsed.ranked,
+          groups: collapsed.workTokens,
+        };
+      },
+    });
+
+  test("an act shown before a window move does not come back from a deeper version", async () => {
+    // Act A's best version opens the first window, which the other acts fill
+    // with several versions each; a deeper version of A, and of every other
+    // act, sits in the second window beside acts never seen before.
+    engineHits = [
+      { document_id: "act-a#2020" },
+      ...Array.from({ length: reachable - 1 }, (_, index) => ({
+        document_id: `${fillerAct(index)}#${String(index)}`,
+      })),
+      { document_id: "act-a#2014" },
+      ...Array.from({ length: FILLER_ACTS }, (_, index) => ({
+        document_id: `${fillerAct(index)}#late`,
+      })),
+      ...Array.from({ length: 20 }, (_, index) => ({
+        document_id: `late-${String(index).padStart(2, "0")}#1`,
+      })),
+    ];
+
+    const first = await readActPage(200, null);
+
+    expect(first.scan.roundCapHit).toBe(true);
+    expect(first.pageRanked).toHaveLength(FILLER_ACTS + 1);
+    expect(first.nextCursor?.windowStart).toBe(reachable);
+    expect(first.nextCursor?.excludedGroups).toHaveLength(FILLER_ACTS + 1);
+
+    const second = await readActPage(200, first.nextCursor);
+    const firstActs = new Set(first.pageRanked.map((hit) => actOf(hit.id)));
+    const secondActs = second.pageRanked.map((hit) => actOf(hit.id));
+
+    expect(secondActs.some((act) => firstActs.has(act))).toBe(false);
+    expect(secondActs.toSorted()).toEqual(
+      Array.from(
+        { length: 20 },
+        (_, index) => `late-${String(index).padStart(2, "0")}`,
+      ),
+    );
+  });
+
+  test("a continuation that would carry too many acts is not offered", async () => {
+    engineHits = Array.from({ length: reachable + 20 }, (_, index) => ({
+      document_id: `act-${String(index).padStart(4, "0")}#1`,
+    }));
+
+    const first = await readActPage(reachable, null);
+
+    // The first window held more acts than a cursor may carry, so the reader
+    // is not handed a continuation that could repeat one.
+    expect(reachable).toBeGreaterThan(
+      LIMITS.corpusIndexSearchMaxExcludedGroups,
+    );
+    expect(first.scan.roundCapHit).toBe(true);
+    expect(first.nextCursor).toBeNull();
   });
 });

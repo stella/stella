@@ -220,6 +220,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.entries.add`    | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-add`    |
 | `invoices.entries.remove` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-remove` |
 | `invoices.get`            | read               | stella:read          | FEATURE_TIME_BILLING | covered by `list_invoices`                                   |
+| `invoices.lines.create`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-create`   |
+| `invoices.lines.delete`   | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete`   |
+| `invoices.lines.update`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-update`   |
 | `invoices.list`           | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `list_invoices`                                 |
 | `invoices.transition`     | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition`     |
 | `invoices.update`         | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update`         |
@@ -592,6 +595,15 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | Capability              | Access | Scope       | Feature       | Reachable via            |
 | ----------------------- | ------ | ----------- | ------------- | ------------------------ |
 | `usage.entitlement.get` | read   | stella:read | FEATURE_USAGE | curated tool `get_usage` |
+
+## vat-rates
+
+| Capability          | Access | Scope                | Feature | Reachable via                                          |
+| ------------------- | ------ | -------------------- | ------- | ------------------------------------------------------ |
+| `vat-rates.archive` | write  | stella:billing_write | —       | generic invoke → `stella capability vat-rates archive` |
+| `vat-rates.create`  | write  | stella:billing_write | —       | generic invoke → `stella capability vat-rates create`  |
+| `vat-rates.list`    | read   | stella:read          | —       | generic invoke → `stella capability vat-rates list`    |
+| `vat-rates.update`  | write  | stella:billing_write | —       | generic invoke → `stella capability vat-rates update`  |
 
 ## view-templates
 

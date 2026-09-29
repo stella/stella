@@ -269,6 +269,10 @@ export const ROLE_GRANT_STATEMENTS = [
       ON ALL TABLES IN SCHEMA public TO stella
   `,
   `
+    REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
+      FROM stella
+  `,
+  `
     REVOKE ALL PRIVILEGES ON TABLE ${AUTH_TABLES_SQL} FROM stella
   `,
   `
@@ -378,6 +382,7 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
       "case_law_reconciliation_items",
+      "case_law_search_backfill_failures",
       "case_law_coverage_slices",
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
@@ -494,6 +499,15 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   `
     GRANT INSERT ON TABLE "legislation_work_changes" TO stella_ingestion
+  `,
+  // Written by legislation ingestion beside each version, read by the
+  // public-law reader through the column map below.
+  `
+    REVOKE ALL PRIVILEGES ON TABLE "legislation_work_names" FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "legislation_work_names"
+    TO stella_ingestion
   `,
   // Written only by the owner-run sitemap refresh; the public-law reader's
   // column grants come from the public-law map below.

@@ -162,28 +162,6 @@ const newerOfSameWork = sql`newer.source_id = ${legislationDocuments.sourceId}
       AND newer.language = ${legislationDocuments.language}
       AND newer.id <> ${legislationDocuments.id}`;
 
-/**
- * The one applicable consolidation of a work: no later eligible window
- * covering the same date exists for its `(source, eli, language)`. The
- * anti-join keeps the list flat, so Postgres can stop at the page limit.
- */
-const isVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`NOT EXISTS (
-    SELECT 1
-    FROM legislation_documents AS newer
-    WHERE ${newerOfSameWork}
-      AND ${inForceOn(newerRef, asOf)}
-      AND (
-        ${versionSortKey(newerRef.validFrom)},
-        newer.id
-      ) > (
-        ${versionSortKey(legislationDocuments.versionValidFrom)},
-        ${legislationDocuments.id}
-      )
-  )`;
-
-/** The version each work's ordinary, present-day listing shows. */
-export const isCurrentVersionOfWork = isVersionOfWorkAt(sql`CURRENT_DATE`);
-
 /** The same Work's rows as the listed one: `(source, eli, language)`. */
 const sameWork = sql`work.source_id = ${legislationDocuments.sourceId}
   AND work.eli = ${legislationDocuments.eli}

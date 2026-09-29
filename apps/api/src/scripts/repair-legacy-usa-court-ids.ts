@@ -24,6 +24,7 @@
  */
 import { sql } from "drizzle-orm";
 
+import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
@@ -87,7 +88,7 @@ if (!apply) {
 }
 
 await rootDb.transaction(async (tx) => {
-  await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
+  await setSharedLockTimeout(tx, 2000);
   await tx.execute(sql.raw(ENSURE_DECISION_COURT_ID_COLUMN_SQL));
 });
 

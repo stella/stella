@@ -30,6 +30,7 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
+import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
 import type { TranslationKey } from "@/i18n/types";
 import { loadPublicToolsIndexData } from "@/lib/public-tools-data";
 import {
@@ -46,7 +47,6 @@ import {
   type PublicToolGroup,
   type PublicToolTask,
 } from "@/routes/tools/-components/public-tools-index.logic";
-import { ToggleChip } from "@/routes/tools/-components/toggle-chip";
 import { ToolCatalogueCard } from "@/routes/tools/-components/tool-catalogue-card";
 
 const KIND_LABEL_KEY = {
