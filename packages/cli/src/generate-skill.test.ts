@@ -95,7 +95,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
         expect(skill).toContain(
           'kind="person": first_name:string, last_name:string, birth_date:{year}',
         );
-        const json = skill.match(/Example: `--input '([^']+)'`/u)?.at(1);
+        const json = /Example: `--input '([^']+)'`/u.exec(skill)?.at(1);
         expect(json).toBeDefined();
         const input: unknown = JSON.parse(json ?? "null");
         expect(input).toEqual({
