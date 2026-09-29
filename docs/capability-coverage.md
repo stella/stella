@@ -220,6 +220,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.entries.add`    | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-add`    |
 | `invoices.entries.remove` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-remove` |
 | `invoices.get`            | read               | stella:read          | FEATURE_TIME_BILLING | covered by `list_invoices`                                   |
+| `invoices.lines.create`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-create`   |
+| `invoices.lines.delete`   | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete`   |
+| `invoices.lines.update`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-update`   |
 | `invoices.list`           | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `list_invoices`                                 |
 | `invoices.transition`     | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices transition`     |
 | `invoices.update`         | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices update`         |
@@ -650,5 +653,3 @@ mechanics, and similar), not gaps in coverage.
 | ui_navigation_state    | 9     |
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
-
-Total: 184

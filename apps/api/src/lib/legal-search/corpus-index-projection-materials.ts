@@ -17,6 +17,7 @@ import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-ma
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   caseLawProjectionInputFromCanonical,
+  LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
   legislationProjectionInputFromCanonical,
   readActiveCorpusProjectionManifest,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -324,18 +325,7 @@ const readLegislationMaterials = async (
   );
   const rows = await tx
     .select({
-      documentId: legislationDocuments.id,
-      sourceId: legislationDocuments.sourceId,
-      jurisdiction: legislationDocuments.country,
-      language: legislationDocuments.language,
-      documentType: legislationDocuments.documentType,
-      contentHash: legislationDocuments.contentHash,
-      title: legislationDocuments.title,
-      status: legislationDocuments.status,
-      effectiveDate: legislationDocuments.effectiveDate,
-      versionValidFrom: legislationDocuments.versionValidFrom,
-      versionValidTo: legislationDocuments.versionValidTo,
-      eli: legislationDocuments.eli,
+      ...LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
       projectionEpoch: legislationDocuments.projectionEpoch,
       textS3Key: legislationDocuments.textS3Key,
       astS3Key: legislationDocuments.astS3Key,

@@ -67,12 +67,14 @@ import {
   CAPABILITY_ID_SEGMENT_PATTERN,
   type CapabilityInputSchema,
   checkTransportAgainstDerived,
+  compareCapabilityIds,
   compareScopeStrictness,
   deriveActionVerb,
   deriveCapabilityId,
   deriveDomain,
   deriveHandlerImportPath,
   DOMAIN_ACTION_VERBS,
+  findCatalogFormatProblems,
   findInlineCapabilityMismatches,
   inputSchemaByteSize,
   isAllowedActionVerb,
@@ -1577,8 +1579,8 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
   }
 
-  entries.sort((a, b) => a.id.localeCompare(b.id));
-  dispatchRecords.sort((a, b) => a.id.localeCompare(b.id));
+  entries.sort((a, b) => compareCapabilityIds(a.id, b.id));
+  dispatchRecords.sort((a, b) => compareCapabilityIds(a.id, b.id));
   return {
     entries,
     dispatchRecords,
@@ -1781,6 +1783,14 @@ const main = async (): Promise<number> => {
   }
 
   const serialized = serializeCatalog(entries);
+  // The layout is what keeps independent catalog changes from colliding on
+  // merge (one sorted entry per line, no stored counts). Asserting it on every
+  // run, `--check` included, stops a serializer change from quietly undoing it.
+  const formatProblems = findCatalogFormatProblems(serialized);
+  if (formatProblems.length > 0) {
+    printErrors(formatProblems.map((problem) => `catalog format: ${problem}`));
+    return 1;
+  }
   const dispatchSerialized = await formatGeneratedArtifact(
     serializeDispatchModule(dispatchRecords),
     "capability-dispatch.ts",

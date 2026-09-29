@@ -95,6 +95,8 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     kind: "route",
     // Reuse the canonical "Tools" label; no per-surface variant.
     labelKey: "knowledge.sections.tools.title",
+    // The older top-level tools pages; this entry goes with them once the
+    // Knowledge flag is permanent.
     to: "/tools",
   },
   {
@@ -115,32 +117,52 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
   },
 ] as const satisfies readonly WorkspacePrimaryNavItem[];
 
+/** Knowledge as an entry anyone can open, tools included. */
+const PUBLIC_KNOWLEDGE_NAV_ITEM = {
+  icon: LibraryBigIcon,
+  id: "knowledge",
+  audience: "public",
+  kind: "route",
+  labelKey: "navigation.knowledge",
+  to: "/knowledge",
+} as const satisfies WorkspacePrimaryNavItem;
+
 export type WorkspacePrimaryNavId =
   (typeof WORKSPACE_PRIMARY_NAV_ITEMS)[number]["id"];
+
+type WorkspacePrimaryNavEntry =
+  | (typeof WORKSPACE_PRIMARY_NAV_ITEMS)[number]
+  | typeof PUBLIC_KNOWLEDGE_NAV_ITEM;
 
 export const getWorkspacePrimaryNavItems = ({
   includeInbox,
   includePublicLaw,
   includePublicTools,
   includeTimesheets,
+  publicKnowledge,
 }: {
   includeInbox: boolean;
   includePublicLaw: boolean;
   includePublicTools: boolean;
   includeTimesheets: boolean;
+  /** Knowledge is readable without an account, and holds the tools. */
+  publicKnowledge: boolean;
 }) =>
-  WORKSPACE_PRIMARY_NAV_ITEMS.filter((item) => {
+  WORKSPACE_PRIMARY_NAV_ITEMS.flatMap((item): WorkspacePrimaryNavEntry[] => {
     if (item.id === "caseLaw") {
-      return includePublicLaw;
+      return includePublicLaw ? [item] : [];
     }
     if (item.id === "inbox") {
-      return includeInbox;
+      return includeInbox ? [item] : [];
     }
     if (item.id === "tools") {
-      return includePublicTools;
+      return includePublicTools && !publicKnowledge ? [item] : [];
     }
     if (item.id === "timesheets") {
-      return includeTimesheets;
+      return includeTimesheets ? [item] : [];
     }
-    return true;
+    if (item.id === "knowledge" && publicKnowledge) {
+      return [PUBLIC_KNOWLEDGE_NAV_ITEM];
+    }
+    return [item];
   });

@@ -24,6 +24,44 @@ describe("getActiveSkillChatContext", () => {
     });
   });
 
+  test("names a built-in skill resource tab without a skill id", () => {
+    const tab = {
+      type: "skill-resource",
+      id: "skill-resource:summarize/SKILL.md",
+      label: "SKILL.md",
+      skillName: "summarize",
+      skillId: null,
+      origin: "built-in",
+      target: "body",
+      resourcePath: "SKILL.md",
+      mimeType: "text/markdown",
+      content: "# Summarize",
+    } satisfies InspectorTab;
+
+    expect(getActiveSkillChatContext(tab)).toEqual({ skillName: "summarize" });
+  });
+
+  test("carries a built-in skill's title beside its slug", () => {
+    const tab = {
+      type: "skill-resource",
+      id: "skill-resource:playbook-builder/SKILL.md",
+      label: "SKILL.md",
+      skillName: "playbook-builder",
+      skillDisplayName: "Build a playbook",
+      skillId: null,
+      origin: "built-in",
+      target: "body",
+      resourcePath: "SKILL.md",
+      mimeType: "text/markdown",
+      content: "# Build a playbook",
+    } satisfies InspectorTab;
+
+    expect(getActiveSkillChatContext(tab)).toEqual({
+      skillDisplayName: "Build a playbook",
+      skillName: "playbook-builder",
+    });
+  });
+
   test("extracts active skill context from a skill catalogue detail tab", () => {
     const tab = {
       type: "view",
@@ -43,7 +81,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(getActiveSkillChatContext(tab)).toEqual({
@@ -67,7 +105,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(
@@ -80,8 +118,9 @@ describe("getActiveSkillChatContext", () => {
         },
       ]),
     ).toEqual({
+      skillDisplayName: "Review Skill",
       skillId: "skill-live",
-      skillName: "Review Skill",
+      skillName: "review",
     });
   });
 
@@ -104,7 +143,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(
@@ -135,7 +174,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(getActiveSkillChatContext(tab)).toBeUndefined();
@@ -156,7 +195,7 @@ describe("getActiveSkillChatContext", () => {
           iconUrl: null,
         },
       },
-      ownerRouteId: "/_protected/knowledge/tools",
+      ownerRouteId: "/knowledge/tools",
     } satisfies InspectorTab;
 
     expect(getActiveSkillChatContext(tab)).toBeUndefined();

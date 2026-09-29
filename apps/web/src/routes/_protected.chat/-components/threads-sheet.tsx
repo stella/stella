@@ -74,6 +74,9 @@ export const ThreadsSheet = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
 
   const globalThreadMatch = useMatch({
     from: "/_protected/chat/$threadId",
@@ -114,6 +117,7 @@ export const ThreadsSheet = ({
     groupedChatThreadsOptions({
       activeOrganizationId,
       search: debouncedSearch,
+      userId,
     }),
   );
   const groupedThreads = mergeGroupedChatThreadPages(data?.pages);
@@ -219,6 +223,9 @@ const DeleteThreadButton = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
 
   const deleteThread = useMutation({
     mutationFn: async ({
@@ -242,8 +249,10 @@ const DeleteThreadButton = ({
     onSettled: async (_data, error, variables) => {
       if (error) {
         await queryClient.invalidateQueries({
-          queryKey: groupedChatThreadsOptions({ activeOrganizationId })
-            .queryKey,
+          queryKey: groupedChatThreadsOptions({
+            activeOrganizationId,
+            userId,
+          }).queryKey,
         });
         return;
       }

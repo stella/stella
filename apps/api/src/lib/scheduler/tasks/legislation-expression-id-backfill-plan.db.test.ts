@@ -26,7 +26,6 @@ import type { Transaction } from "@/api/db/root";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   claimExpressionIdsQuery,
   expressionIdPageQuery,
@@ -39,7 +38,10 @@ import {
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import type { ScanOccurrence } from "@/api/tests/query-plans/plan-walker";
-import { SYNTHETIC_SCALE_PROFILE } from "@/api/tests/query-plans/scale-profile";
+import {
+  scaleTableToProfile,
+  SYNTHETIC_SCALE_PROFILE,
+} from "@/api/tests/query-plans/scale-profile";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const TABLE = "legislation_documents";
@@ -437,94 +439,7 @@ test(
 test(
   "the page plans stay bounded when the table and its indexes are scaled up",
   async () => {
-    const scale = SYNTHETIC_SCALE_PROFILE.tables.legislation_documents;
-    const [pages] = executedRows(
-      await db.execute(
-        sql`SELECT relpages, reltuples FROM pg_class WHERE oid = ${TABLE}::regclass`,
-      ),
-    );
-    const relpages = isRecord(pages) ? pages["relpages"] : undefined;
-    const reltuples = isRecord(pages) ? pages["reltuples"] : undefined;
-    if (
-      typeof relpages !== "number" ||
-      relpages < 1 ||
-      typeof reltuples !== "number" ||
-      reltuples < 1
-    ) {
-      panic("the documents table has no physical pages");
-    }
-    // The indexes' statistics grow with the table's, partial ones keeping the
-    // share of rows they cover. The planner still takes a full index's page
-    // count from its file, so a small index looks cheap to read whole: the
-    // claim's shape, not these numbers, has to keep it on the primary key.
-    const growth = scale.reltuples / reltuples;
-    const indexes = executedRows(
-      await db.execute(sql`
-        SELECT c.relname, c.relpages, c.reltuples
-          FROM pg_index AS i
-          JOIN pg_class AS c ON c.oid = i.indexrelid
-         WHERE i.indrelid = ${TABLE}::regclass
-      `),
-    );
-    expect(indexes.length).toBeGreaterThan(0);
-    for (const index of indexes) {
-      if (
-        !isRecord(index) ||
-        typeof index["relname"] !== "string" ||
-        typeof index["relpages"] !== "number" ||
-        typeof index["reltuples"] !== "number"
-      ) {
-        panic("index statistics are malformed");
-      }
-      const [restored] = executedRows(
-        await db.execute(sql`
-          SELECT pg_restore_relation_stats(
-            'schemaname', 'public', 'relname', ${index["relname"]}::text,
-            'relpages', ${Math.ceil(index["relpages"] * growth)}::integer,
-            'reltuples', ${Math.max(index["reltuples"], 0) * growth}::real
-          ) AS restored
-        `),
-      );
-      if (!isRecord(restored) || restored["restored"] !== true) {
-        panic(`could not scale ${index["relname"]}`);
-      }
-    }
-    const [relation] = executedRows(
-      await db.execute(sql`
-        SELECT pg_restore_relation_stats(
-          'schemaname', 'public', 'relname', ${TABLE}::text,
-          'reltuples', ${scale.reltuples}::real,
-          'relallvisible', ${Math.round(relpages * scale.allVisibleFraction)}::integer
-        ) AS restored
-      `),
-    );
-    if (!isRecord(relation) || relation["restored"] !== true) {
-      panic("could not scale the documents table's statistics");
-    }
-    for (const attribute of SYNTHETIC_SCALE_PROFILE.attributes) {
-      if (attribute.table !== TABLE) {
-        continue;
-      }
-      // The fixture's own distribution would otherwise survive the restore.
-      await db.execute(sql`
-        SELECT pg_clear_attribute_stats(
-          'public', ${TABLE}::text, ${attribute.column}::text, false
-        )
-      `);
-      const [column] = executedRows(
-        await db.execute(sql`
-          SELECT pg_restore_attribute_stats(
-            'schemaname', 'public', 'relname', ${TABLE}::text,
-            'attname', ${attribute.column}::text, 'inherited', false,
-            'null_frac', ${attribute.nullFraction}::real,
-            'n_distinct', ${attribute.distinctValues}::real
-          ) AS restored
-        `),
-      );
-      if (!isRecord(column) || column["restored"] !== true) {
-        panic(`could not scale ${TABLE}.${attribute.column}`);
-      }
-    }
+    await scaleTableToProfile(db, TABLE, SYNTHETIC_SCALE_PROFILE);
     await expectBoundedPlans();
   },
   DB_TEST_TIMEOUT_MS,

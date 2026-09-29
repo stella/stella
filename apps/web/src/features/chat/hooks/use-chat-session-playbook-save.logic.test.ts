@@ -7,6 +7,7 @@ import { knowledgeKeys } from "@/lib/knowledge/queries";
 
 const ORGANIZATION_ID = "org-1";
 const PLAYBOOK_ID = "playbook-1";
+const USER_ID = "user-1";
 
 const saveMessages = ({
   output,
@@ -33,7 +34,7 @@ const saveMessages = ({
 
 const LIST_QUERY_KEYS = [
   knowledgeKeys.playbooks.list(ORGANIZATION_ID, { limit: 50 }),
-  knowledgeKeys.playbooks.recent(ORGANIZATION_ID, { limit: 5 }),
+  knowledgeKeys.playbooks.recent(ORGANIZATION_ID, USER_ID, { limit: 5 }),
 ];
 const DETAIL_KEY = knowledgeKeys.playbooks.detail(ORGANIZATION_ID, PLAYBOOK_ID);
 const PLAYBOOK_QUERY_KEYS = [...LIST_QUERY_KEYS, DETAIL_KEY];

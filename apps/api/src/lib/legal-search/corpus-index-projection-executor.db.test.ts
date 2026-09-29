@@ -23,6 +23,7 @@ import { CORPUS_PROJECTION_APPEND_COMMIT_MODE } from "@/api/lib/legal-search/cor
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { CORPUS_PROJECTION_APPEND_UNKNOWN_ATTEMPT_LIMIT } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -77,6 +78,7 @@ const seedLegislation = async (indexes: readonly number[]) => {
           versionValidTo: row.versionValidTo,
           eli: row.eli,
           sourceDescriptor: null,
+          ...EFFECTIVE_CONSOLIDATION,
         }),
       );
       if (descriptor.action !== "upsert") {

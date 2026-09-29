@@ -29,6 +29,7 @@ import {
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 
 const CORPUS_INDEX_MANIFEST_COUNT = Object.keys(CORPUS_INDEX_MANIFESTS).length;
 
@@ -143,6 +144,29 @@ export const caseLawProjectionInputFromCanonical = ({
   metadata,
 });
 
+/**
+ * The canonical columns a legislation projection is derived from. Every read
+ * that derives one (the subject lock, the executor's materials, the bootstrap
+ * seed) selects these, so no path can derive a descriptor from fewer.
+ */
+export const LEGISLATION_PROJECTION_CANONICAL_COLUMNS = {
+  documentId: legislationDocuments.id,
+  sourceId: legislationDocuments.sourceId,
+  jurisdiction: legislationDocuments.country,
+  language: legislationDocuments.language,
+  documentType: legislationDocuments.documentType,
+  contentHash: legislationDocuments.contentHash,
+  title: legislationDocuments.title,
+  status: legislationDocuments.status,
+  effectiveDate: legislationDocuments.effectiveDate,
+  versionValidFrom: legislationDocuments.versionValidFrom,
+  versionValidTo: legislationDocuments.versionValidTo,
+  eli: legislationDocuments.eli,
+  expressionKind: legislationDocuments.expressionKind,
+  windowDisposition: legislationDocuments.windowDisposition,
+  windowDispositionBasis: legislationDocuments.windowDispositionBasis,
+};
+
 export type LegislationProjectionCanonicalInput = {
   documentId: SafeId<"legislationDocument">;
   sourceId: SafeId<"legislationSource">;
@@ -157,7 +181,7 @@ export type LegislationProjectionCanonicalInput = {
   versionValidTo: string | null;
   eli: string;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
-};
+} & LegislationExpressionClassification;
 
 export const legislationProjectionInputFromCanonical = ({
   documentId,
@@ -172,6 +196,9 @@ export const legislationProjectionInputFromCanonical = ({
   versionValidFrom,
   versionValidTo,
   eli,
+  expressionKind,
+  windowDisposition,
+  windowDispositionBasis,
   sourceDescriptor,
 }: LegislationProjectionCanonicalInput): LegislationV2ProjectionInput => ({
   family: "legislation",
@@ -188,6 +215,9 @@ export const legislationProjectionInputFromCanonical = ({
   versionValidFrom,
   versionValidTo,
   eli,
+  expressionKind,
+  windowDisposition,
+  windowDispositionBasis,
 });
 
 const lockCaseLawProjectionSource = async (
@@ -434,18 +464,7 @@ const lockLegislationProjectionInput = async (
   const source = await lockLegislationProjectionSource(tx, subject);
   const rows = await tx
     .select({
-      documentId: legislationDocuments.id,
-      sourceId: legislationDocuments.sourceId,
-      jurisdiction: legislationDocuments.country,
-      language: legislationDocuments.language,
-      documentType: legislationDocuments.documentType,
-      contentHash: legislationDocuments.contentHash,
-      title: legislationDocuments.title,
-      status: legislationDocuments.status,
-      effectiveDate: legislationDocuments.effectiveDate,
-      versionValidFrom: legislationDocuments.versionValidFrom,
-      versionValidTo: legislationDocuments.versionValidTo,
-      eli: legislationDocuments.eli,
+      ...LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
       projectionEpoch: legislationDocuments.projectionEpoch,
     })
     .from(legislationDocuments)

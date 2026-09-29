@@ -6,6 +6,7 @@ import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resol
 type ResolveReportExportDestinationQueryOptions = {
   exportId: string;
   queryClient: QueryClient;
+  userId: string;
   workspaceId: string;
 };
 
@@ -16,10 +17,11 @@ type ResolveReportExportDestinationQueryOptions = {
 export const resolveReportExportDestinationQuery = async ({
   exportId,
   queryClient,
+  userId,
   workspaceId,
 }: ResolveReportExportDestinationQueryOptions) => {
   const detail = await queryClient.query(
-    reportExportDetailOptions({ exportId, workspaceId }),
+    reportExportDetailOptions({ exportId, userId, workspaceId }),
   );
   if (detail.status !== "completed") {
     return null;

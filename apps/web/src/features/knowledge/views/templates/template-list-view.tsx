@@ -39,7 +39,7 @@ type TemplateListViewProps = {
   renderRow: (
     template: KnowledgeTemplate,
     row: TemplateRowContext,
-  ) => ReactElement;
+  ) => ReactElement | null;
   /** Shown instead of the list when there is nothing to list and no filter. */
   emptyState?: ReactElement | undefined;
   /** Desktop navigation beside the list. */
@@ -271,7 +271,7 @@ const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 // Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
 // pane with count/new-template toolbar and divided rows) so the page keeps its
 // shape while templates load; only the values fade in.
-const TemplateListSkeleton = () => (
+export const TemplateListSkeleton = () => (
   <div className="flex min-h-0 flex-1">
     <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
       <nav className="flex-1 space-y-1 p-2">

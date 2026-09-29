@@ -9,13 +9,22 @@ import { usePublicSignInRequest } from "@/components/public-sign-in-request";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { detached } from "@/lib/detached";
 
+type EnsureAccountOptions = {
+  /**
+   * Where sign-in returns to, when not the current page: the same page with
+   * the act named in its query, so it can be offered again once the account
+   * exists. Normalized again at every hop of the round trip.
+   */
+  returnTo?: string | undefined;
+};
+
 /**
  * Whether the act may go ahead. A member gets `allowed` and the caller
  * carries on unchanged; a visitor gets `asking` and the sign-in dialog; a
  * reader whose session has not been read yet gets `checking` and nothing
  * happens. Only `allowed` may reach an AI endpoint.
  */
-type EnsureAccount = () => AccountGateOutcome;
+type EnsureAccount = (options?: EnsureAccountOptions) => AccountGateOutcome;
 
 /**
  * The one account gate on the public law surface.
@@ -37,21 +46,22 @@ export const useRequireAccount = (): EnsureAccount => {
     select: (state) => state.location.href,
   });
 
-  return () => {
+  return (options) => {
     const outcome = ACCOUNT_GATE_FOR_SESSION[authStatus.status];
     if (outcome !== ACCOUNT_GATE_OUTCOME.asking) {
       return outcome;
     }
+    const returnTo = options?.returnTo ?? currentHref;
     // Outside the public shell there is no dialog to open, so the same round
     // trip is taken as a navigation.
     if (requestSignIn === null) {
       detached(
-        navigate({ to: "/auth", search: { redirectTo: currentHref } }),
+        navigate({ to: "/auth", search: { redirectTo: returnTo } }),
         "require-account.navigate-to-auth",
       );
       return outcome;
     }
-    requestSignIn(currentHref);
+    requestSignIn(returnTo);
     return outcome;
   };
 };

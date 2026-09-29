@@ -1,12 +1,12 @@
 import type { Result } from "better-result";
 
 import type { SafeDbError } from "@/api/db/safe-db";
+import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { chatPartText } from "@/api/handlers/chat/chat-message-parts";
 import { buildRequestedSkillsSection } from "@/api/handlers/chat/chat-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveRequestedSkills } from "@/api/lib/agent-skills/requested-skills";
 import type { ResolveRequestedSkillsOptions } from "@/api/lib/agent-skills/requested-skills";
-import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 
 type RequestedSkillsPromptOptions = Omit<
   ResolveRequestedSkillsOptions,
@@ -37,7 +37,7 @@ export const loadRequestedSkillsPrompt = async ({
           .join("\n");
   const requested = await resolveRequestedSkills({
     ...options,
-    activeSkillId: activeSkillContext?.id,
+    activeSkillId: activeSkillContext?.id ?? undefined,
     messageText,
   });
   return requested.map(buildRequestedSkillsSection);

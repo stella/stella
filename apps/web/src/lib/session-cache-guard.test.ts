@@ -60,6 +60,7 @@ afterAll(() => {
 
 const threadsOptions = groupedChatThreadsOptions({
   activeOrganizationId: "org-x",
+  userId: "member-a",
 });
 
 /** A client as the app builds it, with a page on screen and a record of the

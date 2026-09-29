@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Cituota bent {count} kartų",
       "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
       "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
       "lastNegative": "paskutinė neigiama citata {year} m.",
@@ -629,6 +630,7 @@
       "none": "Citavimų dar neužfiksuota.",
       "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
+      "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
       "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
@@ -1447,6 +1449,7 @@
     "back": "Atgal",
     "cancel": "Atšaukti",
     "caseLaw": "Teismų praktika",
+    "catalogue": "Katalogas",
     "category": "Kategorija",
     "categoryName": "Kategorijos pavadinimas",
     "changeColor": "Pakeisti spalvą",
@@ -3182,6 +3185,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Integruoti įgūdžiai",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
       "disableSkill": "Išjungti įgūdį",
@@ -3223,6 +3227,23 @@
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Įtraukti į biblioteką",
+      "added": "{name} yra jūsų bibliotekoje",
+      "confirmAddTitle": "Įtraukti {name} į {organization}?",
+      "confirmDescription": "Šio šablono kopija bus įrašyta į {organization} biblioteką.",
+      "confirmDownloadTitle": "Atsisiųsti {name} organizacijai {organization}?",
+      "confirmStarterDescription": "Šio vadovo kopija bus įrašyta į {organization} biblioteką.",
+      "confirmUseTitle": "Naudoti {name} organizacijoje {organization}?",
+      "installFailed": "Šablono pridėti nepavyko",
+      "noPreview": "Šio šablono peržiūra neprieinama.",
+      "notFound": "Šio šablono kataloge nėra.",
+      "unavailable": "Katalogas šiuo metu nepasiekiamas."
+    },
+    "landing": {
+      "accountLine": "Su nemokama paskyra laikykite savo organizacijos šablonus, sąlygas ir vadovus.",
+      "withAccount": "Su nemokama paskyra"
     },
     "mcp": {
       "addAndConnect": "Pridėti ir prijungti",
@@ -3705,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {nepavyko išsiųsti # kvietimo} few {nepavyko išsiųsti # kvietimų} many {nepavyko išsiųsti # kvietimo} other {nepavyko išsiųsti # kvietimų}}",
     "stepAi": "DI",
     "stepApps": "Programos ir įrankiai",
-    "stepCatalogue": "Katalogas",
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
     "stepTeam": "Kvietimai",

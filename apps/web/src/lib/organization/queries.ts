@@ -15,7 +15,7 @@ export const organizationKeys = {
     ...organizationKeys.all,
     organizationId,
   ],
-  list: [...ORGANIZATION_KEY_ROOT, "list"],
+  list: (userId: string) => [...organizationKeys.root, "list", userId],
 };
 
 /** Every organization the signed-in user belongs to.
@@ -25,19 +25,20 @@ export const organizationKeys = {
  * list, so keying it per organization would issue one identical request per
  * consumer and blow the per-route network baseline. Consumers narrow to the
  * active organization client-side. */
-export const organizationListOptions = queryOptions({
-  queryKey: organizationKeys.list,
-  queryFn: async () => {
-    const result = await authClient.organization.list();
+export const organizationListOptions = (userId: string) =>
+  queryOptions({
+    queryKey: organizationKeys.list(userId),
+    queryFn: async () => {
+      const result = await authClient.organization.list();
 
-    if (result.error) {
-      throw toAuthClientError(result.error);
-    }
+      if (result.error) {
+        throw toAuthClientError(result.error);
+      }
 
-    return result.data;
-  },
-  staleTime: ROUTE_QUERY_STALE_TIME_MS,
-});
+      return result.data;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
 
 export const organizationOptions = (organizationId: string) =>
   queryOptions({

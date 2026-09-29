@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Citada pelo menos {count} vezes",
       "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
       "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
       "lastNegative": "última citação negativa em {year}",
@@ -629,6 +630,7 @@
       "none": "Nenhuma citação registrada ainda.",
       "openAtCitation": "Abrir na citação",
       "openDecision": "Abrir a decisão",
+      "partialSummary": "Os totais de citações e a linha do tempo são parciais.",
       "passageNotFound": "O trecho citante não foi encontrado no texto",
       "positiveCount": "{count, plural, one {# positiva} many {# positivas} other {# positivas}}",
       "showAll": "{count, plural, one {Mostrar a decisão} many {Mostrar todas as # decisões} other {Mostrar todas as # decisões}}",
@@ -1447,6 +1449,7 @@
     "back": "Voltar",
     "cancel": "Cancelar",
     "caseLaw": "Jurisprudência",
+    "catalogue": "Catálogo",
     "category": "Categoria",
     "categoryName": "Nome da categoria",
     "changeColor": "Mudar cor",
@@ -3182,6 +3185,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Habilidades integradas",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
       "disableSkill": "Desativar habilidade",
@@ -3223,6 +3227,23 @@
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Adicionar à biblioteca",
+      "added": "{name} está na sua biblioteca",
+      "confirmAddTitle": "Adicionar {name} a {organization}?",
+      "confirmDescription": "Uma cópia deste modelo será salva na biblioteca de {organization}.",
+      "confirmDownloadTitle": "Baixar {name} para {organization}?",
+      "confirmStarterDescription": "Uma cópia deste playbook será salva na biblioteca de {organization}.",
+      "confirmUseTitle": "Usar {name} em {organization}?",
+      "installFailed": "Não foi possível adicionar o modelo",
+      "noPreview": "Nenhuma pré-visualização disponível para este modelo.",
+      "notFound": "Este modelo não está no catálogo.",
+      "unavailable": "O catálogo não está disponível no momento."
+    },
+    "landing": {
+      "accountLine": "Com uma conta gratuita, mantenha os modelos, cláusulas e playbooks próprios da sua organização.",
+      "withAccount": "Com uma conta gratuita"
     },
     "mcp": {
       "addAndConnect": "Adicionar e conectar",
@@ -3705,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# convite falhou} many {# convites falharam} other {# convites falharam}}",
     "stepAi": "IA",
     "stepApps": "Aplicativos e ferramentas",
-    "stepCatalogue": "Catálogo",
     "stepJurisdiction": "Jurisdição",
     "stepOrganization": "Equipe",
     "stepTeam": "Convidar",

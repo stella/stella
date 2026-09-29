@@ -34,6 +34,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationDocuments: "legislation_documents",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
+  legislationWorkNames: "legislation_work_names",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
@@ -385,6 +386,15 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   legislation_sources: {
     id: "required",
     descriptor: "required",
+  },
+  // The name lookup a legislation search places named acts first by: the
+  // match keys and what they point at, not the names' text.
+  legislation_work_names: {
+    document_id: "required",
+    country: "required",
+    derivation: "required",
+    cited_key: "required",
+    match_key: "required",
   },
 } as const satisfies Record<
   PublicLawRelation,

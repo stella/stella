@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { SubmitEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -33,10 +32,9 @@ import {
 } from "@/features/style-sets/style-set-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 type StyleSetEditorDialogProps = {
   target: StyleSetEditorTarget;
@@ -49,9 +47,7 @@ export const StyleSetEditorDialog = ({
   onOpenChange,
   onSaved,
 }: StyleSetEditorDialogProps) => {
-  const organizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
 
   return (
     <Dialog onOpenChange={onOpenChange} open>

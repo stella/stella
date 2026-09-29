@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "ذُكر في {count} استشهادات على الأقل",
       "citedSummary": "{count, plural, =0 {لم يُستشهد به} zero {لم يُستشهد به} one {استُشهد به مرة واحدة} two {استُشهد به مرتين} few {استُشهد به # مرات} many {استُشهد به # مرة} other {استُشهد به # مرة}}",
       "decisionCount": "{count, plural, =0 {لا توجد أحكام} zero {لا توجد أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}}",
       "lastNegative": "آخر استشهاد سلبي في {year}",
@@ -629,6 +630,7 @@
       "none": "لم تُسجَّل أي استشهادات بعد.",
       "openAtCitation": "فتح عند موضع الاستشهاد",
       "openDecision": "فتح الحكم",
+      "partialSummary": "إجماليات الاستشهادات والخط الزمني غير مكتملة.",
       "passageNotFound": "لم يُعثر على المقطع المستشهِد في النص",
       "positiveCount": "{count, plural, zero {لا إيجابية} one {إيجابي واحد} two {إيجابيان} few {# إيجابية} many {# إيجابيًا} other {# إيجابي}}",
       "showAll": "{count, plural, zero {عرض كل الأحكام} one {عرض الحكم} two {عرض الحكمين} few {عرض كل # أحكام} many {عرض كل # حكمًا} other {عرض كل # حكم}}",
@@ -1447,6 +1449,7 @@
     "back": "رجوع",
     "cancel": "إلغاء",
     "caseLaw": "الاجتهاد القضائي",
+    "catalogue": "الكتالوج",
     "category": "الفئة",
     "categoryName": "اسم الفئة",
     "changeColor": "تغيير اللون",
@@ -3182,6 +3185,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "المهارات المُدمَجة",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",
       "disableSkill": "تعطيل المهارة",
@@ -3223,6 +3227,23 @@
       "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "إضافة إلى المكتبة",
+      "added": "{name} موجود في مكتبتك",
+      "confirmAddTitle": "إضافة {name} إلى {organization}؟",
+      "confirmDescription": "ستُحفظ نسخة من هذا القالب في مكتبة {organization}.",
+      "confirmDownloadTitle": "تنزيل {name} لـ {organization}؟",
+      "confirmStarterDescription": "ستُحفظ نسخة من دليل المراجعة هذا في مكتبة {organization}.",
+      "confirmUseTitle": "استخدام {name} في {organization}؟",
+      "installFailed": "تعذّرت إضافة القالب",
+      "noPreview": "لا تتوفر معاينة لهذا القالب.",
+      "notFound": "هذا القالب غير موجود في الفهرس.",
+      "unavailable": "الفهرس غير متاح حاليًا."
+    },
+    "landing": {
+      "accountLine": "احتفظ بقوالب مؤسستك وبنودها وأدلة المراجعة الخاصة بها مع حساب مجاني.",
+      "withAccount": "مع حساب مجاني"
     },
     "mcp": {
       "addAndConnect": "إضافة واتصال",
@@ -3705,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, zero {فشلت # دعوة} one {فشلت دعوة واحدة} two {فشلت دعوتان} few {فشلت # دعوات} many {فشلت # دعوة} other {فشلت # دعوة}}",
     "stepAi": "الذكاء الاصطناعي",
     "stepApps": "التطبيقات والأدوات",
-    "stepCatalogue": "الكتالوج",
     "stepJurisdiction": "الولاية القضائية",
     "stepOrganization": "الفريق",
     "stepTeam": "دعوة",

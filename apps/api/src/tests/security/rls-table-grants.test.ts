@@ -175,6 +175,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Raw prefixes owed a sweep: keys of erased decisions, recorded by
   // ingestion and erasure and drained by the root scheduler.
   "case_law_raw_sweeps",
+  // Names stored legislation titles state: written by ingestion and the owner
+  // backfill, read by the public-law reader, never by the request role.
+  "legislation_work_names",
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",

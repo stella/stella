@@ -18,10 +18,12 @@ import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/co
 import {
   buildCorpusIndexProjectionDesiredStateValues,
   caseLawProjectionInputFromCanonical,
+  LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
+  legislationProjectionInputFromCanonical,
   lockActiveCorpusProjectionManifestForMutation,
   type CorpusIndexProjectionSubject,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
-import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
+import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /**
  * Upper bound for one bootstrap transaction. This bounds row locks and the
@@ -575,18 +577,7 @@ const bootstrapLegislation = async ({
     lockUnseededRows: async (unseededIds) =>
       await tx
         .select({
-          documentId: legislationDocuments.id,
-          sourceId: legislationDocuments.sourceId,
-          jurisdiction: legislationDocuments.country,
-          language: legislationDocuments.language,
-          documentType: legislationDocuments.documentType,
-          contentHash: legislationDocuments.contentHash,
-          title: legislationDocuments.title,
-          status: legislationDocuments.status,
-          effectiveDate: legislationDocuments.effectiveDate,
-          versionValidFrom: legislationDocuments.versionValidFrom,
-          versionValidTo: legislationDocuments.versionValidTo,
-          eli: legislationDocuments.eli,
+          ...LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
           projectionEpoch: legislationDocuments.projectionEpoch,
         })
         .from(legislationDocuments)
@@ -608,24 +599,13 @@ const bootstrapLegislation = async ({
           subject: { family: "legislation", entityId: row.documentId },
           generation,
           epoch: row.projectionEpoch === 0n ? 1n : row.projectionEpoch,
-          descriptor: deriveCorpusIndexProjectionDescriptor(manifest, {
-            family: "legislation",
-            documentId: row.documentId,
-            sourceId: row.sourceId,
-            jurisdiction: row.jurisdiction,
-            language: row.language,
-            documentType: row.documentType,
-            contentHash: row.contentHash,
-            redistributionEligible: isRedistributable(
-              descriptorOf(row.sourceId),
-            ),
-            title: row.title,
-            status: row.status,
-            effectiveDate: row.effectiveDate,
-            versionValidFrom: row.versionValidFrom,
-            versionValidTo: row.versionValidTo,
-            eli: row.eli,
-          }),
+          descriptor: deriveCorpusIndexProjectionDescriptor(
+            manifest,
+            legislationProjectionInputFromCanonical({
+              ...row,
+              sourceDescriptor: descriptorOf(row.sourceId),
+            }),
+          ),
         }),
       ),
   });

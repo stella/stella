@@ -73,7 +73,7 @@ export const Route = createFileRoute(
     await Promise.all([
       ensureRouteInfiniteQueryData(
         context.queryClient,
-        timeEntriesInfiniteOptions(params.workspaceId, {
+        timeEntriesInfiniteOptions(params.workspaceId, context.user.id, {
           dateFrom: today,
           dateTo: today,
           scope: "me",
@@ -81,12 +81,18 @@ export const Route = createFileRoute(
       ),
       ensureRouteQueryData(
         context.queryClient,
-        timeEntrySummaryOptions(params.workspaceId, today, today),
+        timeEntrySummaryOptions(
+          params.workspaceId,
+          context.user.id,
+          today,
+          today,
+        ),
       ),
       ensureRouteQueryData(
         context.queryClient,
         timeEntrySuggestionsOptions(
           params.workspaceId,
+          context.user.id,
           today,
           Temporal.Now.timeZoneId(),
         ),
