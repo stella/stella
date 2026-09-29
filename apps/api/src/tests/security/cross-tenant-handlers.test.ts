@@ -45,18 +45,26 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
+import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts";
+import readChatThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
 import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
 import listChatMessages from "@/api/handlers/chat/messages/list";
 import listOlderChatMessages from "@/api/handlers/chat/older-messages/list";
 import readFileChatThread from "@/api/handlers/chat/read-file-thread";
+import resolveFileChatThread from "@/api/handlers/chat/resolve-file-thread";
+import resolveTemplateChatThread from "@/api/handlers/chat/resolve-template-thread";
+import rotateTemplateChatThread from "@/api/handlers/chat/rotate-template-thread";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import { createSuggestThreadTitle } from "@/api/handlers/chat/suggest-thread-title";
+import { RECAP_PROMPT_VERSION } from "@/api/handlers/chat/thread-recap";
 import deleteChatThread from "@/api/handlers/chat/threads/delete";
 import listChatThreads from "@/api/handlers/chat/threads/list";
 import renameChatThread from "@/api/handlers/chat/threads/rename";
@@ -100,7 +108,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
+import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -306,7 +316,7 @@ const chatRenameFromA = "Renamed from organization A";
 /** Thread B's stored model, so a foreign "auto" selection is observable. */
 const chatModelB = "openai::gpt-5.4-mini";
 
-const chatSendOrgAIConfig = {
+const chatOrgAIConfig = {
   providers: [{ provider: "openai", apiKey: "test-api-key" }],
   overrideModels: {
     chat: { provider: "openai", modelId: "gpt-5.4-mini" },
@@ -351,6 +361,21 @@ const sendChatMessage = createSendMessage({
   uploadMessageFiles: uploadMessageFilesWithRollback,
 });
 
+const chatRecapB = "Recap of thread B";
+
+// The model sees only the transcript the handler loaded. Answering with a
+// title only when thread B's answer is in it shows the read reached B's rows.
+const generateTitleFromTranscript: typeof generateTanStackTextForRole = async (
+  options,
+) =>
+  "prompt" in options && String(options.prompt).includes("Here is the summary.")
+    ? "Matter summary"
+    : "";
+
+const suggestChatThreadTitle = createSuggestThreadTitle({
+  generateTextForRole: generateTitleFromTranscript,
+});
+
 type SendChatMessageBody = Parameters<
   typeof sendChatMessage.handler
 >[0]["body"];
@@ -379,7 +404,7 @@ const chatSendRequest = (threadId: SafeId<"chatThread">, messageId: string) => {
       threadId,
       tools: [],
     }),
-    orgAIConfig: chatSendOrgAIConfig,
+    orgAIConfig: chatOrgAIConfig,
     pinServerValidatedWorkspaceId: () => false,
   };
 };
@@ -1305,6 +1330,137 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expect(result).toBeInstanceOf(Response),
   },
   {
+    // Thread B carries a cached recap for its latest answer, so the owner's
+    // read returns it without a model call.
+    name: "chat thread recap",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatThreadRecap, workspaceA, {
+        orgAIConfig: chatOrgAIConfig,
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatThreadRecap, sameUserWorkspaceB, {
+        orgAIConfig: chatOrgAIConfig,
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ recap: chatRecapB }),
+  },
+  {
+    // The turn thread's latest turn has not completed, so the owner is
+    // offered no follow-ups; the foreign caller does not reach that far.
+    name: "chat suggested prompts",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readSuggestedChatPrompts, workspaceA, {
+        orgAIConfig: chatOrgAIConfig,
+        params: { threadId: chatTurnThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readSuggestedChatPrompts, sameUserWorkspaceB, {
+        orgAIConfig: chatOrgAIConfig,
+        params: { threadId: chatTurnThreadB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ prompts: [] }),
+  },
+  {
+    name: "chat thread title suggestion",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(suggestChatThreadTitle, workspaceA, {
+        orgAIConfig: chatOrgAIConfig,
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(suggestChatThreadTitle, sameUserWorkspaceB, {
+        orgAIConfig: chatOrgAIConfig,
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toEqual({ title: "Matter summary" }),
+  },
+  {
+    name: "chat message export",
+    runAAgainstB: async ({ workspaceA }) =>
+      await withFakeObjectStore(
+        async () =>
+          await runHandler(exportChatMessage, workspaceA, {
+            body: chatExportBody,
+            params: { threadId: chatThreadB },
+            query: {},
+          }),
+      ),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await withFakeObjectStore(
+        async () =>
+          await runHandler(exportChatMessage, sameUserWorkspaceB, {
+            body: chatExportBody,
+            params: { threadId: chatThreadB },
+            query: {},
+          }),
+      ),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "writes")).toEqual([]);
+    },
+    expectPositive: (result) => {
+      expect(recordField(result, "response")).toMatchObject({
+        downloadUrl: expect.any(String),
+      });
+      expect(recordField(result, "writes")).toHaveLength(1);
+    },
+  },
+  {
+    // Template chats are keyed by a template id from the request body: one
+    // naming another firm's template creates nothing.
+    name: "template chat thread resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveTemplateChatThread, workspaceA, {
+        body: { templateId: testIds.templateB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveTemplateChatThread, workspaceB, {
+        body: { templateId: testIds.templateB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toEqual({ threadId: expect.any(String) }),
+  },
+  {
+    name: "template chat thread rotate",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(rotateTemplateChatThread, workspaceA, {
+        body: { templateId: testIds.templateB },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(rotateTemplateChatThread, workspaceB, {
+        body: { templateId: testIds.templateB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toEqual({ threadId: expect.any(String) }),
+  },
+  {
+    name: "file chat thread resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveFileChatThread, workspaceA, {
+        body: { entityId: testIds.entityB1, fieldId: testIds.fileFieldB1 },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveFileChatThread, workspaceB, {
+        body: { entityId: testIds.entityB1, fieldId: testIds.fileFieldB1 },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ threadId: expect.any(String) }),
+  },
+  {
     // The composer names the open file by id; another firm's document is
     // not found rather than evaluated.
     name: "chat skill availability for an open file",
@@ -1345,6 +1501,30 @@ const isolationCases: IsolationCase[] = [
       ),
   },
 ];
+
+const chatExportBody = {
+  citationStyle: "none",
+  format: "docx",
+  messageId: chatAssistantMessageB,
+} as const;
+
+/** Runs `run` against an in-process object store and reports its writes. */
+const withFakeObjectStore = async (
+  run: () => Promise<unknown>,
+): Promise<{ response: unknown; writes: string[] }> => {
+  const store = startFakeS3();
+  try {
+    const response = await run();
+    return {
+      response,
+      writes: store.requests.flatMap((request) =>
+        request.method === "PUT" ? [request.key] : [],
+      ),
+    };
+  } finally {
+    store.stop();
+  }
+};
 
 const chatSkillFileQuery = (testIds: TestIds) => ({
   anonymized: false,
@@ -1568,14 +1748,18 @@ beforeAll(async () => {
     userId: ids.userA1,
     workspaceId: null,
   });
-  await testDb
-    .insert(chatThreads)
-    .values([
-      { ...chatThreadOfB(chatThreadB), chatModel: chatModelB },
-      chatThreadOfB(chatTurnThreadB),
-      chatThreadOfB(chatDeleteThreadB),
-      chatThreadOfB(chatSendThreadB),
-    ]);
+  await testDb.insert(chatThreads).values([
+    {
+      ...chatThreadOfB(chatThreadB),
+      chatModel: chatModelB,
+      recapMessageId: chatAssistantMessageB,
+      recapPromptVersion: RECAP_PROMPT_VERSION,
+      recapText: chatRecapB,
+    },
+    chatThreadOfB(chatTurnThreadB),
+    chatThreadOfB(chatDeleteThreadB),
+    chatThreadOfB(chatSendThreadB),
+  ]);
   const chatText = (text: string) => ({
     version: 1 as const,
     data: [{ type: "text" as const, text }],
