@@ -122,21 +122,23 @@ export const CitationTimelinePanel = ({
         </p>
       )}
 
-      <div className="flex flex-col gap-2">
-        <CitationTreatmentBar
-          className="h-2"
-          counts={summary.incoming}
-          total={total}
-        />
-        <TreatmentCounts counts={summary.incoming} />
-        {lastNegative !== null && (
-          <p className="text-destructive text-xs">
-            {t("caseLaw.citation.lastNegative", {
-              year: formatYear(format, lastNegative),
-            })}
-          </p>
-        )}
-      </div>
+      {!summary.capped.incoming && (
+        <div className="flex flex-col gap-2">
+          <CitationTreatmentBar
+            className="h-2"
+            counts={summary.incoming}
+            total={total}
+          />
+          <TreatmentCounts counts={summary.incoming} />
+          {lastNegative !== null && (
+            <p className="text-destructive text-xs">
+              {t("caseLaw.citation.lastNegative", {
+                year: formatYear(format, lastNegative),
+              })}
+            </p>
+          )}
+        </div>
+      )}
 
       <CitationTimelineChart
         byYear={summary.incomingByYear}
