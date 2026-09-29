@@ -289,7 +289,7 @@ const confirmTimer = createSafeRootHandler(
         });
       }),
     );
-    return outcome;
+    return Result.ok(yield* outcome);
   },
 );
 export default confirmTimer;

@@ -101,6 +101,10 @@ describe("policy coverage", () => {
     // whose matter has since been deleted, which are exactly the rows whose
     // message the recipient still needs to read.
     "notifications",
+    // A timer belongs to its user and organization before a matter is chosen.
+    // Its nullable matter pointer does not admit the row; the dedicated timer
+    // assertion covers owner policies and the restrictive membership check.
+    "time_timers",
     // AI memory is multi-scope (org OR user OR workspace in one table)
     // and archive-only (no permissive DELETE). The generic workspace /
     // org loops can't express either shape; the dedicated test below
@@ -629,6 +633,70 @@ describe("policy coverage", () => {
       expect(expr).toContain("workspace_id");
       expect(expr).toContain(SETTING_WORKSPACE_IDS);
       expect(expr).toContain("source_data_workspace_ids");
+    }
+  });
+
+  test("global timers pin the owner and organization and require current membership", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    for (const table of ["time_timers", "time_timer_confirmations"]) {
+      const tablePolicies = policies.filter(
+        (policy) => policy.table_name === table,
+      );
+      const ownerPolicies = tablePolicies.filter((policy) => policy.permissive);
+      expect(
+        ownerPolicies.map((policy) => policy.policy_name).toSorted(),
+      ).toEqual(["user_delete", "user_insert", "user_select", "user_update"]);
+      for (const [name, command] of [
+        ["user_select", "r"],
+        ["user_insert", "a"],
+        ["user_update", "w"],
+        ["user_delete", "d"],
+      ] as const) {
+        const policy = ownerPolicies.find(
+          (candidate) => candidate.policy_name === name,
+        );
+        expect(policy?.command).toBe(command);
+        const expressions = [];
+        if (command !== "a") {
+          expressions.push(policy?.using_expr);
+        }
+        if (command === "a" || command === "w") {
+          expressions.push(policy?.check_expr);
+        }
+        for (const expression of expressions) {
+          expect(expression).toContain("user_id");
+          expect(expression).toContain(SETTING_USER_ID);
+          expect(expression).toContain("organization_id");
+          expect(expression).toContain(SETTING_ORGANIZATION_ID);
+          expect(expression).not.toContain(SETTING_WORKSPACE_IDS);
+        }
+      }
+      const restrictivePolicies = tablePolicies.filter(
+        (policy) => !policy.permissive,
+      );
+      if (table === "time_timer_confirmations") {
+        expect(restrictivePolicies).toEqual([]);
+        continue;
+      }
+      expect(restrictivePolicies).toHaveLength(1);
+      const membership = restrictivePolicies.at(0);
+      expect(membership?.policy_name).toBe("current_member");
+      expect(membership?.command).toBe("*");
+      expect(membership?.using_expr).toBe(membership?.check_expr);
+      for (const expression of [
+        membership?.using_expr,
+        membership?.check_expr,
+      ]) {
+        const normalized = expression?.replaceAll('"', "");
+        expect(normalized).toContain("EXISTS");
+        expect(normalized).toContain("AND");
+        expect(normalized).toMatch(
+          /member\.organization_id\s*=\s*\(?time_timers\.organization_id/u,
+        );
+        expect(normalized).toMatch(
+          /member\.user_id\s*=\s*time_timers\.user_id/u,
+        );
+      }
     }
   });
 
