@@ -245,6 +245,19 @@ export const generatedToolAnnotations: Readonly<
   check_counterparty: {
     command: ["contact", "check-counterparty"],
     scope: "read",
+    itemsKey: "lists",
+    columns: [
+      "source",
+      "status",
+      "classification",
+      "reason",
+      "editionId",
+      "publishedAt",
+      "verifiedAt",
+      "totalMatches",
+      "truncated",
+    ],
+    paginationless: true,
   },
   list_tasks: {
     command: ["task", "list"],

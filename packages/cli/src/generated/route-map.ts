@@ -2499,17 +2499,16 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contact", "check-counterparty"],
             toolName: "check_counterparty",
-            description:
-              "Screen a company or a person against an official register for due diligence.",
+            description: "Screen a company or person for due diligence.",
             flags: [
               {
                 flag: "--check",
                 prop: "check",
                 kind: "enum",
-                enum: ["cz-insolvency", "cz-vat-reliability"],
+                enum: ["cz-insolvency", "cz-vat-reliability", "sanctions"],
                 repeatable: false,
                 description:
-                  "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized.",
+                  "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person with a full birth date. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. sanctions: every sanctions list stella keeps (the EU, UN and national lists), one outcome per list; takes a company ID, an organization by name, or a person by name with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized.",
                 required: true,
               },
             ],
@@ -2517,6 +2516,7 @@ export const generatedRouteMap: RouteNode = {
             paginated: false,
             followable: true,
             windowedText: false,
+            itemsKey: "lists",
             destructive: false,
             scope: "read",
             inputSchema: {
@@ -2525,10 +2525,10 @@ export const generatedRouteMap: RouteNode = {
               additionalProperties: false,
               properties: {
                 check: {
-                  enum: ["cz-insolvency", "cz-vat-reliability"],
+                  enum: ["cz-insolvency", "cz-vat-reliability", "sanctions"],
                   type: "string",
                   description:
-                    "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized.",
+                    "Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person with a full birth date. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. sanctions: every sanctions list stella keeps (the EU, UN and national lists), one outcome per list; takes a company ID, an organization by name, or a person by name with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized.",
                   "x-stella-agent-input": {
                     kind: "enum",
                   },
@@ -2550,7 +2550,21 @@ export const generatedRouteMap: RouteNode = {
                           minLength: 1,
                           maxLength: 32,
                           description:
-                            "National business ID in the check's country, e.g. the Czech IČO 26863154",
+                            "National business ID, e.g. the Czech IČO 26863154. The sanctions check reads the company's name from its register (ARES for CZ, RPO for SK) and screens that name.",
+                        },
+                        country: {
+                          type: "string",
+                          maxLength: 64,
+                          description:
+                            "Country that issued the ID, as an ISO 3166-1 alpha-2 code or the country's name: CZ (the default) or SK. The register checks cover CZ only. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                          "x-stella-agent-input": {
+                            kind: "country",
+                            country: {
+                              spelling: "alpha-2",
+                              admitted: ["CZ", "SK"],
+                              tool: "check_counterparty",
+                            },
+                          },
                         },
                       },
                       required: ["type", "company_id"],
@@ -2581,7 +2595,7 @@ export const generatedRouteMap: RouteNode = {
                         type: {
                           enum: ["person"],
                           description:
-                            "A natural person, by name and birth date.",
+                            "A natural person, by name. cz-insolvency also needs the full birth date; the sanctions check uses whatever date and nationalities are known.",
                           type: "string",
                         },
                         first_name: {
@@ -2601,18 +2615,127 @@ export const generatedRouteMap: RouteNode = {
                           format: "date",
                           maxLength: 10,
                           description:
-                            "Birth date. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
+                            "Full birth date. When only the year or the month is known, send date_of_birth instead; never invent a day. Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized.",
                           "x-stella-agent-input": {
                             kind: "date",
                           },
                         },
+                        date_of_birth: {
+                          description:
+                            "Birth date at the precision known, in the shape read_contact returns: year only, year and month, or a full date.",
+                          anyOf: [
+                            {
+                              type: "object",
+                              properties: {
+                                precision: {
+                                  enum: ["year"],
+                                  type: "string",
+                                },
+                                year: {
+                                  type: "integer",
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                },
+                              },
+                              required: ["precision", "year"],
+                              additionalProperties: false,
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                precision: {
+                                  enum: ["month"],
+                                  type: "string",
+                                },
+                                year: {
+                                  type: "integer",
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                },
+                                month: {
+                                  type: "integer",
+                                  minimum: 1,
+                                  maximum: 12,
+                                },
+                              },
+                              required: ["precision", "year", "month"],
+                              additionalProperties: false,
+                            },
+                            {
+                              type: "object",
+                              properties: {
+                                precision: {
+                                  enum: ["day"],
+                                  type: "string",
+                                },
+                                year: {
+                                  type: "integer",
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                },
+                                month: {
+                                  type: "integer",
+                                  minimum: 1,
+                                  maximum: 12,
+                                },
+                                day: {
+                                  type: "integer",
+                                  minimum: 1,
+                                  maximum: 31,
+                                },
+                              },
+                              required: ["precision", "year", "month", "day"],
+                              additionalProperties: false,
+                            },
+                          ],
+                        },
+                        nationality_codes: {
+                          type: "array",
+                          items: {
+                            type: "string",
+                            maxLength: 64,
+                            description:
+                              "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                            "x-stella-agent-input": {
+                              kind: "country",
+                              country: {
+                                spelling: "alpha-2",
+                                tool: "check_counterparty",
+                              },
+                            },
+                          },
+                          maxItems: 250,
+                          description:
+                            "Nationalities, as ISO 3166-1 alpha-2 codes; used by the sanctions check",
+                        },
                       },
-                      required: [
-                        "type",
-                        "first_name",
-                        "last_name",
-                        "birth_date",
-                      ],
+                      required: ["type", "first_name", "last_name"],
+                      additionalProperties: false,
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: {
+                          enum: ["organization"],
+                          description:
+                            "A company or other organization, by name. For the sanctions check.",
+                          type: "string",
+                        },
+                        name: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 512,
+                          description: "The organization's name as registered",
+                        },
+                        company_id: {
+                          type: "string",
+                          minLength: 1,
+                          maxLength: 32,
+                          description:
+                            "Its registration number, if known; screened beside the name",
+                        },
+                      },
+                      required: ["type", "name"],
                       additionalProperties: false,
                     },
                   ],
