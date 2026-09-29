@@ -102,8 +102,8 @@ const seedRunningTurn = async (): Promise<{
       createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     ),
   );
-  const inserted = await scopedDb((tx) =>
-    insertChatTurnAcceptanceOnTx({ acceptance, tx }),
+  const inserted = await scopedDb(
+    async (tx) => await insertChatTurnAcceptanceOnTx({ acceptance, tx }),
   );
   if (Result.isError(inserted)) {
     panic("Could not seed chat turn", inserted.error);
@@ -148,6 +148,17 @@ const chunk = (text: string): StreamChunk => ({
   value: { text },
 });
 
+// bun-types declares `.rejects.toThrow` as void; capture the rejection so
+// type-aware lint and the runtime observe the same promise.
+const rejectionMessage = async (
+  promise: Promise<unknown>,
+): Promise<string | null> =>
+  await promise.then(
+    () => null,
+    (error: unknown) =>
+      error instanceof Error ? error.message : String(error),
+  );
+
 describe("chat run log database contract", () => {
   test("appends in order, preserves JSONB objects, normalizes bigint offsets, and reads strictly after an offset", async () => {
     const run = await seedRunningTurn();
@@ -175,7 +186,7 @@ describe("chat run log database contract", () => {
       ...run,
       execution: { ...run.execution, executionId: Bun.randomUUIDv7() },
     });
-    await expect(log.append([chunk("rejected")])).rejects.toThrow(
+    expect(await rejectionMessage(log.append([chunk("rejected")]))).toContain(
       "execution fence lost",
     );
   });
@@ -185,7 +196,9 @@ describe("chat run log database contract", () => {
     const log = logFor(run);
     await log.close();
     await log.close();
-    await expect(log.append([chunk("late")])).rejects.toThrow("closed");
+    expect(await rejectionMessage(log.append([chunk("late")]))).toContain(
+      "closed",
+    );
   });
 
   test("rejects a stale execution close and leaves the open log unchanged", async () => {
@@ -196,7 +209,9 @@ describe("chat run log database contract", () => {
       ...run,
       execution: { ...run.execution, executionId: Bun.randomUUIDv7() },
     });
-    await expect(stale.close()).rejects.toThrow("execution fence lost");
+    expect(await rejectionMessage(stale.close())).toContain(
+      "execution fence lost",
+    );
     const [row] = await testDb
       .select({ closedAt: chatRunLogs.closedAt })
       .from(chatRunLogs)
@@ -286,10 +301,12 @@ describe("chat run log database contract", () => {
     // The caller supplies the target organization; the scoped handle still denies it.
     const foreign = logFor(run, scopedDbB, ids.orgA);
     expect(await foreign.snapshot()).toEqual([]);
-    await expect(foreign.append([chunk("wrong tenant")])).rejects.toThrow(
+    expect(
+      await rejectionMessage(foreign.append([chunk("wrong tenant")])),
+    ).toContain("execution fence lost");
+    expect(await rejectionMessage(foreign.close())).toContain(
       "execution fence lost",
     );
-    await expect(foreign.close()).rejects.toThrow("execution fence lost");
     await own.close();
   });
 
@@ -351,7 +368,7 @@ describe("chat run log database contract", () => {
       name: "test",
       value: { omittedByJsonb: undefined, kept: true },
     } satisfies StreamChunk;
-    await expect(log.append([withUndefined])).rejects.toThrow(
+    expect(await rejectionMessage(log.append([withUndefined]))).toContain(
       "injected response loss after commit",
     );
     expect(await log.append([withUndefined])).toEqual(["1"]);

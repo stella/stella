@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import {
   RETENTION_ENTRY_BATCH_SIZE,
   sweepClosedChatRunLogs,
@@ -13,9 +11,7 @@ export const sweepChatRunLogs: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  if (signal.aborted) {
-    panic("SchedulerAborted");
-  }
+  signal.throwIfAborted();
   let entriesDeleted = 0;
   let logsClosed = 0;
   let logsDeleted = 0;
