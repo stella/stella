@@ -70,9 +70,9 @@ const documentOf = (
   };
 };
 
-const parse = (lines: readonly LineSpec[], footnotes?: readonly Footnote[]) =>
+const parseDocument = (document: FolioDocument) =>
   parseHuBhgyDecision({
-    document: documentOf(lines, footnotes),
+    document,
     listedCaseNumber: "Gfv.30091/2025/4",
     court: "Kúria",
     sourceUrl: "https://eakta.birosag.hu/anonimizalt-hatarozatok?azonosito=x",
@@ -80,6 +80,33 @@ const parse = (lines: readonly LineSpec[], footnotes?: readonly Footnote[]) =>
     documentId: "3cca08de",
     statutes: [],
   });
+
+const parse = (lines: readonly LineSpec[], footnotes?: readonly Footnote[]) =>
+  parseDocument(documentOf(lines, footnotes));
+
+/** One paragraph whose lines a soft break joins, as a DOCX `w:br` does. */
+const softBrokenParagraph = (lines: readonly string[]): Paragraph => ({
+  type: "paragraph",
+  content: lines.flatMap((text, index): Paragraph["content"] => [
+    ...(index === 0
+      ? []
+      : [{ type: "run" as const, content: [{ type: "break" as const }] }]),
+    { type: "run", content: [{ type: "text", text }] },
+  ]),
+});
+
+/** A body of an `Indokolás` heading and the given paragraphs, with notes. */
+const bodyOf = (
+  paragraphs: readonly Paragraph[],
+  footnotes: readonly Footnote[] = [],
+): FolioDocument => ({
+  package: {
+    document: {
+      content: [paragraphOf({ text: "Indokolás" }), ...paragraphs],
+    },
+    ...(footnotes.length === 0 ? {} : { footnotes: [...footnotes] }),
+  },
+});
 
 const shapeOfBlock = (block: Block): string => {
   if (block.type === "heading") {
@@ -386,6 +413,83 @@ describe("reading a document folio handed over", () => {
       "p:signature:Dr. Példa Anna s.k. a tanács elnöke",
       "p:apparatus:A kiadmány hiteléül:",
     ]);
+  });
+
+  // A body paragraph can carry the closing formula after a soft break rather
+  // than in a paragraph of its own; a match anchored to the paragraph's start
+  // never saw it, and the decision went undated.
+  test("a closing line after a soft break in a DOCX body paragraph dates the decision", () => {
+    const parsed = parseDocument(
+      bodyOf([
+        softBrokenParagraph([
+          "[1] A Kúria a jogerős ítéletet hatályában fenntartja.",
+          "Budapest, 2021. március 3.",
+          "Dr. Példa Anna s.k. a tanács elnöke",
+        ]),
+      ]),
+    );
+    expect(parsed.decisionDate).toBe("2021-03-03");
+    expect(parsed.documentAst.metadata.decisionDate).toBe("2021-03-03");
+  });
+
+  test("a closing line after an RTF line break in a body paragraph dates the decision", () => {
+    const rtf = String.raw`{\rtf1\ansi\ansicpg1250\deff0{\fonttbl{\f0\froman Times;}}\pard Indokol\'e1s\par\pard A t\'e1rgyal\'e1s mell\'f5z\'e9s\'e9vel hozott v\'e9gz\'e9s.\line Gy\'f5r, 2009. j\'fanius 30. napj\'e1n\line Dr. P\'e9lda Anna s.k.\par }`;
+    const parsed = parseDocument(readRtf(new TextEncoder().encode(rtf)));
+    expect(parsed.readerWarnings).toEqual([]);
+    expect(parsed.decisionDate).toBe("2009-06-30");
+  });
+
+  test("a closing line that opens its own paragraph wins over one after a soft break", () => {
+    const parsed = parseDocument(
+      bodyOf([
+        softBrokenParagraph([
+          "[1] Az elsőfokú bíróság ítélete:",
+          "Szeged, 2019. május 5.",
+        ]),
+        paragraphOf({ text: "Budapest, 2021. március 3." }),
+      ]),
+    );
+    expect(parsed.decisionDate).toBe("2021-03-03");
+  });
+
+  test("a footnote's closing-shaped line after a soft break dates nothing", () => {
+    const parsed = parseDocument(
+      bodyOf(
+        [paragraphOf({ text: "[1] A Kúria döntése." })],
+        [
+          {
+            type: "footnote",
+            id: 1,
+            content: [
+              softBrokenParagraph([
+                "Az elsőfokú bíróság ítélete.",
+                "Budapest, 2021. március 3.",
+              ]),
+            ],
+          },
+        ],
+      ),
+    );
+    expect(parsed.decisionDate).toBeUndefined();
+  });
+
+  test.each([
+    [
+      "within a line, with no break",
+      [
+        "[1] Az elsőfokú bíróság ítéletét (Budapest, 2021. március 3.) helybenhagyta.",
+      ],
+    ],
+    [
+      "mid-sentence on the line after a break",
+      [
+        "[1] A tényállás:",
+        "Az elsőfokú bíróság Budapest, 2021. március 3. napján kelt ítéletét helybenhagyta.",
+      ],
+    ],
+  ])("a date inside running text dates nothing: %s", (_case, lines) => {
+    const parsed = parseDocument(bodyOf([softBrokenParagraph(lines)]));
+    expect(parsed.decisionDate).toBeUndefined();
   });
 
   test("a footnote is apparatus carrying its mark, wherever the body left off", () => {
