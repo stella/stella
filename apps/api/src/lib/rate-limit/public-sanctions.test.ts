@@ -3,12 +3,13 @@ import Elysia, { t } from "elysia";
 
 import { parseTrustedProxies } from "@/api/lib/client-ip";
 import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
-
+import { rateLimit, scopedRateLimitKey } from "@/api/lib/rate-limit/rate-limit";
 import {
-  createPublicSanctionsRateLimit,
-  createPublicSanctionsRateLimitOptions,
-} from "./public-sanctions";
+  createRedisRateLimitRequestKey,
+  RedisRateLimitContext,
+} from "@/api/lib/rate-limit/redis-context";
+
+import { createPublicSanctionsRateLimitOptions } from "./public-sanctions";
 
 const request = (
   forwardedFor: string,
@@ -23,7 +24,10 @@ const request = (
     body,
   });
 
-const createFixture = async (peer: string | null = "10.0.0.5") => {
+const createFixture = async (
+  peer: string | null = "10.0.0.5",
+  addressPolicy: "configured" | "default" = "configured",
+) => {
   const trusted = parseTrustedProxies("10.0.0.0/8");
   const counts = new Map<string, number>();
   const context = new RedisRateLimitContext({
@@ -41,9 +45,7 @@ const createFixture = async (peer: string | null = "10.0.0.5") => {
     failurePolicy: "fail_closed",
     onRedisError: () => undefined,
   });
-  const options = createPublicSanctionsRateLimitOptions({
-    clientAddressOptions: { trusted, edgeHeader: null },
-  });
+  const options = createPublicSanctionsRateLimitOptions();
   await options.context.kill();
   const server = {
     requestIP: () => (peer === null ? null : { address: peer }),
@@ -51,10 +53,21 @@ const createFixture = async (peer: string | null = "10.0.0.5") => {
   const app = new Elysia()
     .onError(answerRequestError)
     .use(
-      createPublicSanctionsRateLimit({
+      rateLimit({
         ...options,
         context,
-        generator: (incoming) => options.generator(incoming, server),
+        generator: (incoming) =>
+          addressPolicy === "default"
+            ? options.generator(incoming, server)
+            : createRedisRateLimitRequestKey({
+                counterKey: scopedRateLimitKey({
+                  scope: "public-sanctions-search",
+                  request: incoming,
+                  server,
+                  clientAddressOptions: { trusted, edgeHeader: null },
+                }),
+                requestId: Bun.randomUUIDv7(),
+              }),
       }),
     )
     .post("/search", () => "ok", { body: t.Object({ name: t.String() }) });
@@ -70,6 +83,7 @@ describe("anonymous sanctions search rate limiting", () => {
       }
       const limited = await app.handle(request("192.0.2.1"));
       expect(limited.status).toBe(429);
+      expect(await limited.text()).toBe("rate-limit reached");
       expect(limited.headers.get("RateLimit-Limit")).toBe("20");
       expect(limited.headers.get("Retry-After")).toBe("60");
       expect((await app.handle(request("192.0.2.2"))).status).toBe(200);
@@ -141,15 +155,42 @@ describe("anonymous sanctions search rate limiting", () => {
     }
   });
 
-  test("fails closed without incrementing a counter when no address is available", async () => {
-    const { app, context, counts } = await createFixture(null);
+  test("bounds requests with no address in the shared scope counter", async () => {
+    const { app, context, counts } = await createFixture(null, "default");
     try {
-      const response = await app.handle(request("192.0.2.1"));
+      for (let index = 0; index < 20; index += 1) {
+        expect((await app.handle(request(`192.0.2.${index + 1}`))).status).toBe(
+          200,
+        );
+      }
+      const response = await app.handle(request("198.51.100.1"));
       expect(response.status).toBe(429);
-      const body = await response.text();
-      expect(body).not.toContain("192.0.2.1");
-      expect(body).not.toContain("x-forwarded-for");
-      expect(counts.size).toBe(0);
+      expect(await response.text()).toBe("rate-limit reached");
+      expect([...counts.entries()]).toEqual([
+        ["api-ratelimit:{public-sanctions-search}", 21],
+      ]);
+    } finally {
+      await context.kill();
+    }
+  });
+
+  test("default production options preserve peer keys and the standard 429", async () => {
+    const { app, context, counts } = await createFixture(
+      "192.0.2.1",
+      "default",
+    );
+    try {
+      for (let index = 0; index < 20; index += 1) {
+        expect(
+          (await app.handle(request(`198.51.100.${index + 1}`))).status,
+        ).toBe(200);
+      }
+      const response = await app.handle(request("203.0.113.1"));
+      expect(response.status).toBe(429);
+      expect(await response.text()).toBe("rate-limit reached");
+      expect([...counts.entries()]).toEqual([
+        ["api-ratelimit:{public-sanctions-search:192.0.2.1}", 21],
+      ]);
     } finally {
       await context.kill();
     }
@@ -159,25 +200,25 @@ describe("anonymous sanctions search rate limiting", () => {
     { name: "malformed JSON", body: "{", status: 400 },
     { name: "invalid schema", body: JSON.stringify({ name: 1 }), status: 422 },
   ]) {
-    test(`fails closed before answering ${name} when no address is available`, async () => {
-      // A resolved request first proves the fixture reaches this failure boundary.
+    test(`counts ${name} against viewer and shared scope counters`, async () => {
       const resolved = await createFixture();
       try {
         expect(
           (await resolved.app.handle(request("192.0.2.1", body))).status,
         ).toBe(status);
-        expect(resolved.counts.size).toBe(1);
+        expect([...resolved.counts.entries()]).toEqual([
+          ["api-ratelimit:{public-sanctions-search:192.0.2.1}", 1],
+        ]);
       } finally {
         await resolved.context.kill();
       }
-      const missing = await createFixture(null);
+      const missing = await createFixture(null, "default");
       try {
         const response = await missing.app.handle(request("192.0.2.1", body));
-        expect(response.status).toBe(429);
-        const answer = await response.text();
-        expect(answer).not.toContain("192.0.2.1");
-        expect(answer).not.toContain("x-forwarded-for");
-        expect(missing.counts.size).toBe(0);
+        expect(response.status).toBe(status);
+        expect([...missing.counts.entries()]).toEqual([
+          ["api-ratelimit:{public-sanctions-search}", 1],
+        ]);
       } finally {
         await missing.context.kill();
       }
