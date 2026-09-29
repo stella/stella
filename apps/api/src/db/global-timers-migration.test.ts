@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 const expectRejected = async (operation: Promise<unknown>, message: RegExp) => {
-  const outcome = await Result.tryPromise(() => operation);
+  const outcome = await Result.tryPromise(async () => await operation);
   expect(outcome.isErr()).toBe(true);
   if (outcome.isErr()) {
     expect(outcome.error.cause).toMatchObject({
