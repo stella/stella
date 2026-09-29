@@ -24,6 +24,10 @@ describe("API service shutdown", () => {
       closeDatabaseLoginProbe: async () => undefined,
       drainScheduler: Promise.resolve(),
       onHttpStopError: () => undefined,
+      relinquishChatTurnRuns: async () => {
+        events.push("chat-turn-runs-relinquished");
+        return await Promise.resolve("stored" as const);
+      },
       stopHttp: async () => {
         events.push("http-stop-started");
         await httpStopped.promise;
@@ -45,11 +49,13 @@ describe("API service shutdown", () => {
       "http-stop-started",
       "sse-stopped",
       "scheduler-stopped",
+      "chat-turn-runs-relinquished",
     ]);
   });
 
   test("bounds shutdown when HTTP and worker draining never settle", async () => {
     const never = Promise.withResolvers<undefined>().promise;
+    const neverRunEnd = Promise.withResolvers<"stored" | "unstored">().promise;
 
     const outcome = observeWithinDeadline(
       shutdownApiServices({
@@ -57,6 +63,7 @@ describe("API service shutdown", () => {
         closeDatabaseLoginProbe: async () => await never,
         drainScheduler: never,
         onHttpStopError: () => undefined,
+        relinquishChatTurnRuns: async () => await neverRunEnd,
         stopHttp: async () => await never,
         stopScheduler: () => undefined,
         stopSse: () => undefined,
@@ -68,6 +75,7 @@ describe("API service shutdown", () => {
   });
 
   for (const failedService of [
+    "chat-turn-runs",
     "http",
     "login-probe",
     "scheduler",
@@ -97,6 +105,11 @@ describe("API service shutdown", () => {
           onHttpStopError: (error) => {
             loggedErrors.push(error);
           },
+          // A run that could not store its outcome fails the drain.
+          relinquishChatTurnRuns: async () =>
+            await Promise.resolve(
+              failedService === "chat-turn-runs" ? "unstored" : "stored",
+            ),
           stopHttp: async () => {
             if (failedService === "http") {
               throw failure;

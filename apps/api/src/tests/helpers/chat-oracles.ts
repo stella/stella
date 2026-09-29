@@ -19,6 +19,8 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A turn that streamed holds the id of the run its request started. */
+  persistedRunIdentity: "chat.persisted.run-identity",
   /** A thread an earlier release stored loads on the current code, serves
    *  every message, part and answer it held, and keeps them once continued;
    *  and what the current code stores has a fixture. */

@@ -8,6 +8,10 @@ import type {
   FolioToolCallResultFor,
 } from "@stll/folio-agents/tool-contract";
 
+import type {
+  ChatTurnCancellationReason,
+  ChatTurnInterruptionReason,
+} from "@/api/handlers/chat/chat-turn-state";
 import type { AutoApplySuggestChangesOutput } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
 import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 import type {
@@ -125,11 +129,11 @@ export type ChatTurnOutcome =
         | { type: "client-tool"; toolCallId: string };
     }
   | { type: "completed" }
-  | { type: "cancelled"; reason: "superseded" | "user-stop" }
+  | { type: "cancelled"; reason: ChatTurnCancellationReason }
   | { type: "failed"; error: AIErrorKind }
   | {
       type: "interrupted";
-      reason: "client-disconnected" | "timeout";
+      reason: ChatTurnInterruptionReason;
     };
 
 export type ChatMessageMetadata = {

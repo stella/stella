@@ -15,10 +15,13 @@ import {
 } from "@/api/db/schema";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
+import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import {
+  ChatSendLifecycle,
   createSendMessage,
   shouldLoadExternalMcpToolsForStreaming,
 } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
@@ -27,6 +30,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -89,7 +93,9 @@ const rollbackUnpersistedChatSideEffectsMock = mock(
     >[0],
   ) => await realRollbackUnpersistedChatSideEffects(options),
 );
+const compactMessagesForContextMock = mock(compactMessagesForContext);
 const sendMessage = createSendMessage({
+  compactMessagesForContext: compactMessagesForContextMock,
   createRefRegistry: createChatRefRegistry,
   indexThread: upsertChatThreadSearchDocumentMock,
   loadExternalMcpTools: loadExternalMcpToolsForUserMock,
@@ -175,6 +181,16 @@ const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   }
   const query = "query" in transaction ? transaction.query : undefined;
   return {
+    execute: async (statement: SQL) => {
+      if (
+        !new PgDialect()
+          .sqlToQuery(statement)
+          .sql.includes("chat_turn_run_id_taken")
+      ) {
+        throw new Error("Unexpected SQL execution in chat send test");
+      }
+      return { rows: [{ taken: false }] };
+    },
     select: selectChatMessages,
     ...transaction,
     query: {
@@ -372,6 +388,70 @@ describe("agent connector isolation", () => {
 });
 
 describe("send message disconnect handling", () => {
+  test("tracks a preflight claim until settlement and rollback finish", async () => {
+    for (const settlementFails of [false, true]) {
+      const settlementStarted = Promise.withResolvers<undefined>();
+      const finishSettlement =
+        Promise.withResolvers<Result<boolean, DatabaseError>>();
+      const rollbackStarted = Promise.withResolvers<undefined>();
+      const finishRollback = Promise.withResolvers<undefined>();
+      let calls = 0;
+      const safeDb = asTestRaw<SafeDb>(async () => {
+        calls += 1;
+        if (calls === 1) {
+          settlementStarted.resolve(undefined);
+          return await finishSettlement.promise;
+        }
+        return Result.ok("owned");
+      });
+      const lifecycle = new ChatSendLifecycle({
+        externalMcpToolsLoader:
+          externalMcpToolsModule.createLazyExternalMcpToolsLoader(async () => {
+            throw new Error("Connector discovery was not expected");
+          }),
+        recordAuditEvent: async () => undefined,
+        rollbackSideEffects: async () => {
+          rollbackStarted.resolve(undefined);
+          await finishRollback.promise;
+          return Result.ok(undefined);
+        },
+        safeDb,
+        threadId,
+        userId,
+        workspaceId: activeWorkspaceId,
+      });
+      lifecycle.claimTurn(
+        { executionId: Bun.randomUUIDv7(), id: turnId },
+        undefined,
+      );
+      lifecycle.adoptThread(
+        asTestRaw<Parameters<ChatSendLifecycle["adoptThread"]>[0]>({}),
+      );
+      const cleanup = lifecycle.cleanup();
+      await settlementStarted.promise;
+      const relinquishing = processChatTurnOwnership.relinquish();
+      const finishedEarly = await Promise.race([
+        relinquishing.then(() => true),
+        Bun.sleep(20).then(() => false),
+      ]);
+      expect(finishedEarly).toBe(false);
+      finishSettlement.resolve(
+        settlementFails
+          ? Result.err(new DatabaseError({ message: "settlement failed" }))
+          : Result.ok(true),
+      );
+      await rollbackStarted.promise;
+      const finishedDuringRollback = await Promise.race([
+        relinquishing.then(() => true),
+        Bun.sleep(20).then(() => false),
+      ]);
+      expect(finishedDuringRollback).toBe(false);
+      finishRollback.resolve(undefined);
+      await cleanup;
+      expect(await relinquishing).toBe("stored");
+    }
+  });
+
   test("treats every thread mutation as rollback ownership adoption", () => {
     const adoptionUpdate = chatThreads.rollbackToken.onUpdateFn?.();
     if (!(adoptionUpdate instanceof SQL)) {
@@ -1027,6 +1107,102 @@ describe("send message disconnect handling", () => {
     ]);
   });
 
+  test("rejects a taken run id before metered context compaction", async () => {
+    const turnUpdates: unknown[] = [];
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: () =>
+        table === chatTurns
+          ? {
+              onConflictDoNothing: () => ({
+                returning: async () => [{ id: turnId }],
+              }),
+            }
+          : undefined,
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        if (table === chatTurns) {
+          turnUpdates.push(values);
+          return {
+            where: () => ({ returning: async () => [{ id: turnId }] }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
+    const lookup = mock(async (statement: SQL) => {
+      expect(new PgDialect().sqlToQuery(statement).sql).toContain(
+        "chat_turn_run_id_taken",
+      );
+      return { rows: [{ taken: true }] };
+    });
+    compactMessagesForContextMock.mockClear();
+    loadExternalMcpToolsForUserMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        transaction: {
+          execute: lookup,
+          insert,
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: withThreadNameReads(selectWithThreadLock),
+          update,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 409,
+      response: { message: "The run id already names another chat turn" },
+    });
+    expect(lookup).toHaveBeenCalledTimes(1);
+    expect(compactMessagesForContextMock).not.toHaveBeenCalled();
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({
+        failureCode: "internal",
+        failureRetryable: false,
+        status: "failed",
+      }),
+    );
+  });
+
   test("stops before connector discovery when the client disconnects during persistence", async () => {
     const abortController = new AbortController();
     const insertValues = mock(() => ({
@@ -1314,6 +1490,7 @@ describe("assistant turn settlement", () => {
       });
     });
     const send = createSendMessage({
+      compactMessagesForContext: compactMessagesForContextMock,
       createRefRegistry: createChatRefRegistry,
       indexThread: upsertChatThreadSearchDocumentMock,
       loadExternalMcpTools: loadExternalMcpToolsForUserMock,
