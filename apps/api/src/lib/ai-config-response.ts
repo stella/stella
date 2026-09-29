@@ -36,9 +36,35 @@ export const ownAIKeyRequiredError = () =>
       "Configure an organization-wide AI key in organization settings.",
   });
 
+export const AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE =
+  "ai_member_assignment_required";
+
+export const memberAssignmentRequiredError = () =>
+  new HandlerError({
+    code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+    status: 403,
+    message:
+      "AI is available only to members with an assigned seat in this " +
+      "organization. Ask an organization admin to assign you one.",
+  });
+
+/**
+ * For call sites that start AI work without resolving a model themselves
+ * (run starters whose worker loads the config again, streams that never read
+ * the instance fallback): refuses only a member the organization does not
+ * admit to AI work, so their other behavior is unchanged.
+ */
+export const memberAIAccessError = (
+  status: OrgAIConfigStatus,
+): HandlerError<403> | null =>
+  status === ORG_AI_CONFIG_STATUS.memberAssignmentRequired
+    ? memberAssignmentRequiredError()
+    : null;
+
 /**
  * The error an AI call site returns when the org's null config must not fall
- * through to the instance provider, or null when it may.
+ * through to the instance provider, or the requesting member may not run AI
+ * work at all; null when it may proceed.
  */
 export const orgAIConfigStatusError = (
   status: OrgAIConfigStatus,
@@ -50,6 +76,8 @@ export const orgAIConfigStatusError = (
       return storedAIConfigUnreadableError(undefined);
     case ORG_AI_CONFIG_STATUS.ownKeyRequired:
       return ownAIKeyRequiredError();
+    case ORG_AI_CONFIG_STATUS.memberAssignmentRequired:
+      return memberAssignmentRequiredError();
     default: {
       status satisfies never;
       return panic(

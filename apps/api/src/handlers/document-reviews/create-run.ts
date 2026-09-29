@@ -17,6 +17,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { documentReviewRuns } from "@/api/db/schema";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { createDocumentReviewRunBodySchema } from "@/api/handlers/document-reviews/schemas";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import {
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
@@ -91,12 +92,17 @@ const createDocumentReviewRun = createSafeHandler(
     body,
     memberRole,
     orgAIConfig,
+    orgAIConfigStatus,
     recordAuditEvent,
     safeDb,
     session,
     user,
     workspaceId,
   }) {
+    const accessError = memberAIAccessError(orgAIConfigStatus);
+    if (accessError) {
+      return Result.err(accessError);
+    }
     const organizationId = session.activeOrganizationId;
 
     const positions: Position[] = body.positions;

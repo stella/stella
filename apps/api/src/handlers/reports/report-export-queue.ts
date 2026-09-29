@@ -383,9 +383,7 @@ const runExport = async ({
   // Deterministic export: skip loading the org AI config entirely; fillReport
   // builds no generators and runs no usage preflight when aiNarrative is off.
   const orgAIConfigResult = aiNarrative
-    ? await actor.scopedDb(
-        async (tx) => await loadOrgAIConfig(tx, actor.organizationId),
-      )
+    ? await actor.scopedDb(async (tx) => await loadOrgAIConfig(tx, actor))
     : Result.ok(null);
   if (Result.isError(orgAIConfigResult)) {
     await markExportFailedRow(actor, orgAIConfigResult.error.message);

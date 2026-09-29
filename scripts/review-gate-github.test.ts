@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
   fail,
+  latestRun,
+  outputStatus,
   parseReviewGateConfig,
   type GateOutput,
   type PublishedRun,
@@ -19,6 +21,7 @@ import {
   evaluateGroupTarget,
   evaluatePullRequestTarget,
   guardedPullRequest,
+  publish,
   type Gateway,
   type PullRequestRead,
 } from "./review-gate-github";
@@ -110,6 +113,7 @@ const fakeGateway = ({
     writeRun: (sha, output, identity) => {
       calls.push({ kind: "write", sha, output, identity });
     },
+    restampRun: () => expect.unreachable("no run to re-stamp"),
     readHead: (number) => headOf(number),
     pullRequestsForSha: () => [],
     discoverOpenPullRequests: () => [],
@@ -347,5 +351,109 @@ describe("a failed read", () => {
     guardedPullRequest(state, 1, { withGroups: true });
     const write = calls.find((call) => call.kind === "write");
     expect(write?.kind === "write" && write.sha).toBe(headOf(1));
+  });
+});
+
+describe("overlapping publishers for one commit", () => {
+  const SHA = headOf(1);
+  const at = (minutes: number): string =>
+    new Date(Date.parse(OPENED) + minutes * 60_000).toISOString();
+  const verdict = (conclusion: GateOutput["conclusion"]): GateOutput => ({
+    conclusion,
+    title: conclusion,
+    summary: `${conclusion} summary`,
+  });
+  const identity = (minutes: number): RunIdentity => ({
+    kind: "pr",
+    pullRequest: 1,
+    observedAt: at(minutes),
+  });
+
+  // One commit's gate runs, shared by every publisher. `interrupt` holds,
+  // per publisher, what other publishers complete right before its Nth
+  // write lands: the interleavings a per-run concurrency group allows.
+  const github = (initial: readonly PublishedRun[] = []) => {
+    const runs: PublishedRun[] = [...initial];
+    let nextId = Math.max(0, ...runs.map(({ id }) => id)) + 1;
+    const publisher = (interrupt: Record<number, () => void> = {}) => {
+      let writes = 0;
+      const beforeWrite = () => {
+        writes += 1;
+        interrupt[writes]?.();
+      };
+      const { gateway } = fakeGateway({ pullRequests: [] });
+      return createRun(
+        {
+          ...gateway,
+          readRuns: () => runs.map((run) => ({ ...run })),
+          writeRun: (_sha, output, stamp) => {
+            beforeWrite();
+            const { status, conclusion } = outputStatus(output);
+            runs.push({
+              id: nextId,
+              identity: stamp,
+              status,
+              conclusion,
+              title: output.title,
+              summary: output.summary,
+              startedAt: at(0),
+            });
+            nextId += 1;
+          },
+          restampRun: (id, stamp) => {
+            beforeWrite();
+            const run = runs.find((candidate) => candidate.id === id);
+            if (run !== undefined) {
+              run.identity = stamp;
+            }
+          },
+        },
+        config("shadow"),
+        { baseBranch: "main", dryRun: false },
+      );
+    };
+    return { publisher, latest: () => latestRun(runs) };
+  };
+
+  test("three writers: a stale re-post landing after the newest failure is repaired", () => {
+    const { publisher, latest } = github();
+    const newest = () =>
+      publish(publisher(), SHA, verdict("failure"), identity(3));
+    const middle = () =>
+      publish(publisher(), SHA, verdict("success"), identity(2));
+    // The oldest publisher decides to write before the middle one lands,
+    // then picks the middle observation to re-post; the newest failure
+    // lands and settles before that re-post does.
+    publish(
+      publisher({ 1: middle, 2: newest }),
+      SHA,
+      verdict("success"),
+      identity(1),
+    );
+    expect(latest()?.conclusion).toBe("failure");
+    expect(latest()?.identity).toEqual(identity(3));
+  });
+
+  test("a newer read of the unchanged verdict is recorded, so an older different one stays stale", () => {
+    const pending = verdict("pending");
+    const { publisher, latest } = github([
+      {
+        id: 1,
+        identity: identity(0),
+        status: "in_progress",
+        conclusion: null,
+        title: pending.title,
+        summary: pending.summary,
+        startedAt: at(0),
+      },
+    ]);
+    const newer = () => publish(publisher(), SHA, pending, identity(2));
+    // The older success decided to write before the newer read re-stamped.
+    publish(publisher({ 1: newer }), SHA, verdict("success"), identity(1));
+    expect(latest()?.status).toBe("in_progress");
+    expect(latest()?.identity).toEqual(identity(2));
+    // One read before it and arriving after it is stale outright.
+    publish(publisher(), SHA, verdict("failure"), identity(1));
+    expect(latest()?.status).toBe("in_progress");
   });
 });

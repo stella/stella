@@ -98,7 +98,11 @@ const withAccessStateEnforced = async (run: () => Promise<void>) => {
 const authStatus = async (organizationId: SafeId<"organization">) =>
   (
     await requestScope(organizationId)(
-      async (tx) => await loadOrgSettingsForAuth(tx, organizationId),
+      async (tx) =>
+        await loadOrgSettingsForAuth(tx, {
+          organizationId,
+          userId: ids.userA1,
+        }),
     )
   ).orgAIConfigStatus;
 
@@ -107,8 +111,20 @@ const strictLoads = async (
 ): Promise<Result<unknown, HandlerError<403>>[]> => {
   const scope = requestScope(organizationId);
   return [
-    await scope(async (tx) => await loadOrgAIConfig(tx, organizationId)),
-    await scope(async (tx) => await loadOrgAISettings(tx, organizationId)),
+    await scope(
+      async (tx) =>
+        await loadOrgAIConfig(tx, {
+          organizationId,
+          userId: ids.userA1,
+        }),
+    ),
+    await scope(
+      async (tx) =>
+        await loadOrgAISettings(tx, {
+          organizationId,
+          userId: ids.userA1,
+        }),
+    ),
   ];
 };
 
@@ -254,7 +270,13 @@ describe("with FEATURE_ORG_ACCESS_STATE on", () => {
       const scope = requestScope(ids.orgA);
       expect(
         (
-          await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgA))
+          await scope(
+            async (tx) =>
+              await loadOrgAIConfig(tx, {
+                organizationId: ids.orgA,
+                userId: ids.userA1,
+              }),
+          )
         ).unwrap(),
       ).not.toBeNull();
     });
