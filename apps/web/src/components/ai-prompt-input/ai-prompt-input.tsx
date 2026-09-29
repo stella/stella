@@ -117,13 +117,19 @@ export const AIPromptInput = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
   const {
     data: skillPages,
     fetchNextPage: fetchNextSkillPage,
     hasNextPage: hasNextSkillPage,
     isFetchingNextPage: isFetchingNextSkillPage,
-  } = useInfiniteQuery(skillsOptions(activeOrganizationId));
-  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
+  } = useInfiniteQuery(skillsOptions(activeOrganizationId, userId));
+  const unavailableSkillIds = useChatUnavailableSkillIds(
+    activeOrganizationId,
+    userId,
+  );
   const slashShortcutRows = useMemo(
     () =>
       commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),

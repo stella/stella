@@ -16,9 +16,9 @@ import { usageLaneOptions } from "@/lib/usage-queries";
  */
 export const UsageFallbackNotice = () => {
   const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data } = useQuery({
-    ...usageLaneOptions({ organizationId: activeOrganizationId }),
+    ...usageLaneOptions({ organizationId: activeOrganizationId, userId }),
     enabled: env.VITE_FEATURE_USAGE,
     // Turns settle counters server-side with no client event to hook,
     // so the mounted notice re-reads its single-row state on an

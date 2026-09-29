@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import {
@@ -25,8 +26,9 @@ const usePlaybooks = (organizationId: string) =>
 
 /** The organization's recently used playbooks. */
 const useRecentPlaybooks = (organizationId: string) => {
+  const { id: userId } = useAuthenticatedUser();
   const { data, isLoading } = useQuery({
-    ...recentPlaybooksOptions(organizationId),
+    ...recentPlaybooksOptions(organizationId, userId),
     refetchOnWindowFocus: false,
   });
   return {

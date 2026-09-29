@@ -1,5 +1,6 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
 import {
@@ -8,8 +9,10 @@ import {
 } from "@/lib/knowledge/queries/catalogue";
 
 /** The organization's view of the tools catalogue, with its install state. */
-const useToolsCatalogue = (organizationId: string) =>
-  useSuspenseQuery(catalogueOptions(organizationId));
+const useToolsCatalogue = (organizationId: string) => {
+  const { id: userId } = useAuthenticatedUser();
+  return useSuspenseQuery(catalogueOptions(organizationId, userId));
+};
 
 /** Reads of the organization's tools. */
 export const memberToolsSource = {
@@ -26,7 +29,7 @@ const useToolsActions = (organizationId: string) => {
   const invalidateCatalogue = () => {
     detached(
       queryClient.invalidateQueries({
-        queryKey: catalogueKeys.list(organizationId),
+        queryKey: catalogueKeys.all(organizationId),
       }),
       "knowledge-tools.invalidate",
     );

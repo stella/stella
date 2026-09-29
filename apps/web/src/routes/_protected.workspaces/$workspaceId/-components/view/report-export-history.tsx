@@ -11,6 +11,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import {
   REPORT_EXPORTS_PAGE_SIZE,
@@ -33,6 +34,7 @@ export const ReportExportHistory = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const userId = useAuthenticatedUser().id;
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   const {
     data,
@@ -44,6 +46,7 @@ export const ReportExportHistory = ({
   } = useInfiniteQuery(
     reportExportsHistoryOptions({
       limit: REPORT_EXPORTS_PAGE_SIZE,
+      userId,
       workspaceId,
     }),
   );
@@ -53,7 +56,12 @@ export const ReportExportHistory = ({
   const handleDownload = async (exportId: string) => {
     setActiveActionId(exportId);
     const result = await Result.tryPromise(async () => {
-      await downloadReportExport({ exportId, queryClient, workspaceId });
+      await downloadReportExport({
+        exportId,
+        queryClient,
+        userId,
+        workspaceId,
+      });
     });
     setActiveActionId(null);
     if (Result.isError(result)) {
@@ -72,6 +80,7 @@ export const ReportExportHistory = ({
       const destination = await resolveReportExportDestinationQuery({
         exportId,
         queryClient,
+        userId,
         workspaceId,
       });
       if (destination === null) {

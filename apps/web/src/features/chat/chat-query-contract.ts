@@ -79,11 +79,13 @@ export type ChatThreadKey = ChatThreadRef;
 export type FileChatThreadKey = {
   entityId: string;
   fieldId: string;
+  userId: string;
   workspaceId: string;
 };
 
 export type TemplateChatThreadKey = {
   templateId: string;
+  userId: string;
 };
 
 export type ChatThreadTitleKey = {
@@ -94,6 +96,7 @@ export type ChatThreadTitleKey = {
 export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
   search?: string | undefined;
+  userId: string;
 };
 
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
@@ -167,6 +170,7 @@ export const chatKeys = {
   fileThread: (activeOrganizationId: string, key: FileChatThreadKey) => [
     ...chatKeys.all,
     activeOrganizationId,
+    key.userId,
     "file-thread",
     key.workspaceId,
     key.entityId,
@@ -178,12 +182,18 @@ export const chatKeys = {
   ) => [
     ...chatKeys.all,
     activeOrganizationId,
+    key.userId,
     "template-thread",
     key.templateId,
   ],
-  groupedThreads: ({ activeOrganizationId, search }: GroupedChatThreadsKey) => [
+  groupedThreads: ({
+    activeOrganizationId,
+    search,
+    userId,
+  }: GroupedChatThreadsKey) => [
     ...chatKeys.all,
     activeOrganizationId,
+    userId,
     "threads",
     "grouped",
     search ?? "",

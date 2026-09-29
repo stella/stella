@@ -17,6 +17,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { MemoryCreateForm } from "@/routes/_protected.settings/-components/organization/memory/memory-create-form";
 import { canManageMatterMemory } from "@/routes/_protected.settings/-components/organization/memory/memory-panel.logic";
@@ -239,6 +240,7 @@ const MemoryList = ({
   const t = useTranslations("memory");
   const commonT = useTranslations("common");
   const [view, setView] = useState<MemoryView>("active");
+  const { id: userId } = useAuthenticatedUser();
   const {
     data,
     fetchNextPage,
@@ -251,6 +253,7 @@ const MemoryList = ({
       activeOrganizationId,
       scope,
       status: view,
+      userId,
       ...(workspaceId !== undefined && { workspaceId }),
     }),
   );
