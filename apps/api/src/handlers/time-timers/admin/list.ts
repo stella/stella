@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { isOrganizationManagementRole } from "@stll/permissions";
 
-import { timeTimers } from "@/api/db/schema";
+import { timeTimers, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -29,7 +29,7 @@ const listRunningMemberTimers = createSafeRootHandler(
       cursor: t.Optional(tPaginationCursor()),
     }),
   },
-  async function* ({ safeDb, session, memberRole, query }) {
+  async function* ({ safeDb, session, user, memberRole, query }) {
     if (!isOrganizationManagementRole(memberRole.role)) {
       return Result.err(
         new HandlerError({
@@ -60,12 +60,26 @@ const listRunningMemberTimers = createSafeRootHandler(
           .select({
             id: timeTimers.id,
             ownerId: timeTimers.userId,
-            matterId: timeTimers.workspaceId,
+            matterId: workspaces.id,
             startedAt: timeTimers.startedAt,
             accumulatedSeconds: timeTimers.accumulatedSeconds,
             lastResumedAt: timeTimers.lastResumedAt,
           })
           .from(timeTimers)
+          .leftJoin(
+            workspaces,
+            and(
+              eq(workspaces.id, timeTimers.workspaceId),
+              eq(workspaces.organizationId, session.activeOrganizationId),
+              eq(workspaces.status, "active"),
+              sql`CASE WHEN ${workspaces.clientId} IS NOT NULL THEN true
+                ELSE EXISTS (
+                  SELECT 1 FROM workspace_members AS workspace_member
+                  WHERE workspace_member.workspace_id = ${workspaces.id}
+                    AND workspace_member.user_id = ${user.id}
+                ) END`,
+            ),
+          )
           .where(
             and(
               eq(timeTimers.organizationId, session.activeOrganizationId),

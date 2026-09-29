@@ -15,12 +15,11 @@ import { timerNotFound, timerParams } from "@/api/lib/billing/time-timers";
 const stopMemberTimer = createSafeRootHandler(
   {
     description:
-      "End a member's running timer in the active organization into that member's draft entry. Only organization owners and admins can end timers. Uses the timer description first; supply narrative when it is empty and policy requires one. Refuses inaccessible matters and locked months without changing the timer. Retry the same ID to retrieve the original entry. timezoneId is an IANA timezone for the work date.",
+      "End a member's running timer in the active organization into that member's draft entry. Only organization owners and admins can end timers. Uses the timer description first; supply narrative when it is empty and policy requires one. Refuses inaccessible matters and locked months without changing the timer. Retry the same ID to retrieve the original entry. The work date uses the timer owner's timezone.",
     permissions: { timeEntry: ["approve"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: timerParams,
     body: t.Object({
-      timezoneId: t.String({ minLength: 1, maxLength: 64 }),
       narrative: t.Optional(t.String({ maxLength: 10_000 })),
     }),
   },
@@ -77,7 +76,6 @@ const stopMemberTimer = createSafeRootHandler(
           tx,
           owner: { organizationId, userId: brandPersistedUserId(ownerId) },
           id: params.id,
-          body: { timezoneId: body.timezoneId },
           memberRole,
           recordAuditEvent,
           completion: {
@@ -88,7 +86,7 @@ const stopMemberTimer = createSafeRootHandler(
         });
       }),
     );
-    return outcome;
+    return Result.ok(yield* outcome);
   },
 );
 export default stopMemberTimer;

@@ -22,6 +22,7 @@ import {
   timeEntries,
   timeTimers,
   workspaces,
+  workspaceMembers,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -54,6 +55,11 @@ const auditEvents: AuditEvent[] = [];
 beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);
+  await db.insert(workspaceMembers).values({
+    id: createSafeId<"workspaceMember">(),
+    workspaceId: ids.wsA1,
+    userId: ids.userA2,
+  });
 });
 afterAll(async () => {
   await releaseTestDb();
@@ -77,9 +83,12 @@ const context = <TContext>(
     body?: unknown;
     params?: unknown;
     workspaceId?: SafeId<"workspace">;
+    actor?: "owner" | "member";
   },
 ) => {
   const workspaceId = request.workspaceId ?? ids.wsA1;
+  const actor = request.actor ?? "owner";
+  const actorId = actor === "member" ? ids.userA2 : ids.userAdmin;
   const recordAuditEvent = async (
     _tx: unknown,
     events: AuditEvent | AuditEvent[],
@@ -89,11 +98,11 @@ const context = <TContext>(
   return asTestRaw<TContext>({
     ...request,
     workspaceId,
-    memberRole: { role: "owner" },
+    memberRole: { role: actor },
     session: { activeOrganizationId: ids.orgA },
-    user: { id: ids.userAdmin },
-    safeDb: createSafeDb(db, [workspaceId], ids.orgA, ids.userAdmin),
-    scopedDb: createScopedDb(db, [workspaceId], ids.orgA, ids.userAdmin),
+    user: { id: actorId },
+    safeDb: createSafeDb(db, [workspaceId], ids.orgA, actorId),
+    scopedDb: createScopedDb(db, [workspaceId], ids.orgA, actorId),
     recordAuditEvent,
     createAuditRecorder: () => recordAuditEvent,
     request: new Request("https://example.test/invoices/running-time"),
@@ -122,11 +131,13 @@ const seedInvoice = async (
 type SeedRunningEntryOptions = {
   kind: "direct" | "migrated";
   owner?: "self" | "other";
+  state?: "running" | "paused";
   invoiceId?: SafeId<"invoice">;
 };
 const seedRunningEntry = async ({
   kind,
   owner = "other",
+  state = "running",
   invoiceId,
 }: SeedRunningEntryOptions) => {
   const id = createSafeId<"timeEntry">();
@@ -160,9 +171,9 @@ const seedRunningEntry = async ({
       userId,
       legacyTimeEntryId: id,
       description: "Research",
-      state: "running",
+      state,
       startedAt,
-      lastResumedAt: startedAt,
+      lastResumedAt: state === "running" ? startedAt : null,
       accumulatedSeconds: 0,
     });
   }
@@ -209,15 +220,17 @@ const readState = async () =>
   ]);
 
 type InvoiceClaimOptions = {
+  actor?: "owner" | "member";
   invoiceId: SafeId<"invoice">;
   entryId: SafeId<"timeEntry">;
 };
 const claimOperations = [
   {
     name: "create invoice",
-    run: async ({ entryId }: InvoiceClaimOptions) =>
+    run: async ({ entryId, actor }: InvoiceClaimOptions) =>
       await createInvoice.handler(
         context(createInvoice.handler, {
+          actor,
           body: {
             invoiceNumber: `NEW-${entryId}`,
             invoiceDate: "2026-09-30",
@@ -229,9 +242,10 @@ const claimOperations = [
   },
   {
     name: "add entries",
-    run: async ({ invoiceId, entryId }: InvoiceClaimOptions) =>
+    run: async ({ invoiceId, entryId, actor }: InvoiceClaimOptions) =>
       await addEntries.handler(
         context(addEntries.handler, {
+          actor,
           params: { workspaceId: ids.wsA1, invoiceId },
           body: { timeEntryIds: [entryId] },
         }),
@@ -239,9 +253,10 @@ const claimOperations = [
   },
   {
     name: "add time line",
-    run: async ({ invoiceId, entryId }: InvoiceClaimOptions) =>
+    run: async ({ invoiceId, entryId, actor }: InvoiceClaimOptions) =>
       await createLine.handler(
         context(createLine.handler, {
+          actor,
           params: { workspaceId: ids.wsA1, invoiceId },
           body: {
             source: { type: "time_entry", timeEntryId: entryId },
@@ -260,9 +275,10 @@ const releaseOperations = [
   {
     name: "delete invoice",
     status: INVOICE_STATUS.DRAFT,
-    run: async ({ invoiceId }: InvoiceReleaseOptions) =>
+    run: async ({ invoiceId, actor }: InvoiceReleaseOptions) =>
       await deleteInvoice.handler(
         context(deleteInvoice.handler, {
+          actor,
           params: { workspaceId: ids.wsA1, invoiceId },
         }),
       ),
@@ -270,9 +286,10 @@ const releaseOperations = [
   {
     name: "void invoice",
     status: INVOICE_STATUS.FINALIZED,
-    run: async ({ invoiceId }: InvoiceReleaseOptions) =>
+    run: async ({ invoiceId, actor }: InvoiceReleaseOptions) =>
       await transitionInvoice.handler(
         context(transitionInvoice.handler, {
+          actor,
           params: { workspaceId: ids.wsA1, invoiceId },
           body: { action: "void" },
         }),
@@ -281,9 +298,10 @@ const releaseOperations = [
   {
     name: "remove entries",
     status: INVOICE_STATUS.DRAFT,
-    run: async ({ invoiceId, entryId }: InvoiceReleaseOptions) =>
+    run: async ({ invoiceId, entryId, actor }: InvoiceReleaseOptions) =>
       await removeEntries.handler(
         context(removeEntries.handler, {
+          actor,
           params: { workspaceId: ids.wsA1, invoiceId },
           body: { timeEntryIds: [entryId] },
         }),
@@ -292,9 +310,10 @@ const releaseOperations = [
   {
     name: "delete time line",
     status: INVOICE_STATUS.DRAFT,
-    run: async ({ invoiceId, lineId }: InvoiceReleaseOptions) =>
+    run: async ({ invoiceId, lineId, actor }: InvoiceReleaseOptions) =>
       await deleteLine.handler(
         context(deleteLine.handler, {
+          actor,
           params: { workspaceId: ids.wsA1, invoiceId, lineId },
         }),
       ),
@@ -318,6 +337,79 @@ const releaseCases = (["direct", "migrated"] as const).flatMap((kind) =>
 );
 
 describe("invoice mutations respect running time ownership", () => {
+  test.each(claimCases)(
+    "plain member $name refuses a colleague's $kind running entry without writes",
+    async ({ kind, run }) => {
+      const invoiceId = await seedInvoice();
+      const entryId = await seedRunningEntry({ kind });
+      const before = await readState();
+      expect(await run({ invoiceId, entryId, actor: "member" })).toMatchObject({
+        code: 409,
+        response: { code: "running_timer" },
+      });
+      expect(await readState()).toEqual(before);
+      expect(auditEvents).toHaveLength(0);
+    },
+  );
+
+  test.each(releaseCases)(
+    "plain member $name refuses a colleague's $kind running billed entry without writes",
+    async ({ kind, run, status }) => {
+      const invoiceId = await seedInvoice(status);
+      const entryId = await seedRunningEntry({ kind, invoiceId });
+      const lineId = await seedTimeLine(invoiceId, entryId);
+      const before = await readState();
+      expect(
+        await run({ invoiceId, entryId, lineId, actor: "member" }),
+      ).toMatchObject({
+        code: 409,
+        response: { code: "running_timer" },
+      });
+      expect(await readState()).toEqual(before);
+      expect(auditEvents).toHaveLength(0);
+    },
+  );
+
+  test.each(claimOperations)(
+    "plain member $name permits a colleague's paused migrated entry",
+    async ({ run }) => {
+      const invoiceId = await seedInvoice();
+      const entryId = await seedRunningEntry({
+        kind: "migrated",
+        state: "paused",
+      });
+      expect(
+        await run({ invoiceId, entryId, actor: "member" }),
+      ).not.toHaveProperty("code");
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: entryId } },
+        }),
+      ).toMatchObject({ status: BILLING_STATUS.BILLED });
+    },
+  );
+
+  test.each(releaseOperations)(
+    "plain member $name permits releasing a colleague's paused migrated entry",
+    async ({ run, status }) => {
+      const invoiceId = await seedInvoice(status);
+      const entryId = await seedRunningEntry({
+        kind: "migrated",
+        state: "paused",
+        invoiceId,
+      });
+      const lineId = await seedTimeLine(invoiceId, entryId);
+      expect(
+        await run({ invoiceId, entryId, lineId, actor: "member" }),
+      ).not.toHaveProperty("code");
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: entryId } },
+        }),
+      ).toMatchObject({ status: BILLING_STATUS.APPROVED, invoiceId: null });
+    },
+  );
+
   test.each(claimCases)(
     "$name refuses another member's $kind running approved entry without writes",
     async ({ kind, run }) => {

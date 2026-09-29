@@ -1,21 +1,19 @@
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { timeEntries, timeTimers } from "@/api/db/schema";
+import { timeEntries, timeEntryTimerStates } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const RUNNING_TIMER_STATE = "running";
-
-const timeEntryIsRunning = () => sql`CASE
-  WHEN ${timeEntries.timerStartedAt} IS NOT NULL AND ${timeEntries.timerStoppedAt} IS NULL THEN true
-  ELSE EXISTS (
-    SELECT 1 FROM ${timeTimers}
-    WHERE ${timeTimers.organizationId} = ${timeEntries.organizationId}
-      AND ${timeTimers.legacyTimeEntryId} = ${timeEntries.id}
-      AND ${timeTimers.state} = ${RUNNING_TIMER_STATE}
-  ) END`;
+const timeEntryIsRunning = () => sql`COALESCE((
+  SELECT ${timeEntryTimerStates.state} = ${RUNNING_TIMER_STATE}
+  FROM ${timeEntryTimerStates}
+  WHERE ${timeEntryTimerStates.entryId} = ${timeEntries.id}
+    AND ${timeEntryTimerStates.organizationId} = ${timeEntries.organizationId}
+    AND ${timeEntryTimerStates.userId} = ${timeEntries.userId}
+), ${timeEntries.timerStartedAt} IS NOT NULL AND ${timeEntries.timerStoppedAt} IS NULL)`;
 
 type GuardRunningTimeEntriesOptions = {
   tx: Transaction;

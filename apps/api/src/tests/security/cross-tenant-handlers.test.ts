@@ -930,7 +930,7 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) => expectPageContainsId(result, timeTimerB),
   },
   {
-    name: "admin timer listing across organizations",
+    name: "admin-role timer listing across organizations",
     runAAgainstB: async ({ ids: testIds }) =>
       await runHandler(
         listAdminTimers,
@@ -940,7 +940,7 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsA1,
         }),
-        { query: {} },
+        { query: {}, memberRole: { role: "admin" } },
       ),
     runBPositive: async ({ ids: testIds }) =>
       await runHandler(
@@ -951,13 +951,13 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsB1,
         }),
-        { query: {} },
+        { query: {}, memberRole: { role: "admin" } },
       ),
     expectDenied: (result) => expectPageExcludesId(result, adminTimeTimerB),
     expectPositive: (result) => expectPageContainsId(result, adminTimeTimerB),
   },
   {
-    name: "admin timer stop across organizations",
+    name: "admin-role timer stop across organizations",
     runAAgainstB: async ({ ids: testIds }) =>
       await runHandler(
         stopAdminTimer,
@@ -967,7 +967,11 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsA1,
         }),
-        { params: { id: stopTimeTimerB }, body: { timezoneId: "UTC" } },
+        {
+          params: { id: stopTimeTimerB },
+          body: {},
+          memberRole: { role: "admin" },
+        },
       ),
     runBPositive: async ({ ids: testIds }) =>
       await runHandler(
@@ -978,7 +982,11 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsB1,
         }),
-        { params: { id: stopTimeTimerB }, body: { timezoneId: "UTC" } },
+        {
+          params: { id: stopTimeTimerB },
+          body: {},
+          memberRole: { role: "admin" },
+        },
       ),
     expectDenied: expectStatus(404),
     expectPositive: (result) => {

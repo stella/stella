@@ -5,9 +5,10 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  setSystemTime,
   test,
 } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import { Temporal } from "@stll/time";
@@ -17,11 +18,13 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   auditLogs,
+  contacts,
   organizationSettings,
   entities,
   TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
+  timeTimerConfirmations,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -547,7 +550,7 @@ const stopAs = async ({
           : noopAuditRecorder,
       ),
       params: { id },
-      body: { timezoneId: "UTC", narrative },
+      body: { narrative },
     }),
   );
 
@@ -891,6 +894,182 @@ describe("admin ending a member's timer", () => {
     expect(result.items.at(0)).not.toHaveProperty("description");
     await testDb.delete(timeTimers).where(eq(timeTimers.id, runningId));
     await testDb.delete(timeTimers).where(eq(timeTimers.id, pausedId));
+  });
+
+  test("admin listing hides an unstaffed clientless matter identifier", async () => {
+    const hiddenMatterId = createSafeId<"workspace">();
+    await testDb.insert(workspaces).values({
+      id: hiddenMatterId,
+      organizationId,
+      name: "Private matter",
+      reference: `PRIVATE-${hiddenMatterId}`,
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: hiddenMatterId,
+      userId: actors.timekeeper.userId,
+    });
+    const id = await seedTimer({ matterId: hiddenMatterId });
+    const result = await adminListTimers.handler(
+      asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
+        ...contextFor("admin"),
+        query: {},
+      }),
+    );
+    if (!("items" in result)) {
+      throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
+    }
+    expect(result.items.find((item) => item.id === id)).toMatchObject({
+      id,
+      ownerId: actors.timekeeper.userId,
+      matterId: null,
+    });
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+    await testDb.delete(workspaces).where(eq(workspaces.id, hiddenMatterId));
+  });
+
+  test("admin listing exposes a client matter through firm-admin access without staffing", async () => {
+    const clientId = createSafeId<"contact">();
+    const clientMatterId = createSafeId<"workspace">();
+    await testDb.insert(contacts).values({
+      id: clientId,
+      organizationId,
+      type: "organization",
+      displayName: "Client",
+      organizationName: "Client",
+    });
+    await testDb.insert(workspaces).values({
+      id: clientMatterId,
+      organizationId,
+      clientId,
+      name: "Client matter",
+      reference: `CLIENT-${clientMatterId}`,
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: clientMatterId,
+      userId: actors.timekeeper.userId,
+    });
+    const id = await seedTimer({ matterId: clientMatterId });
+    const result = await adminListTimers.handler(
+      asTestRaw<Parameters<typeof adminListTimers.handler>[0]>({
+        ...contextFor("admin"),
+        query: {},
+      }),
+    );
+    if (!("items" in result)) {
+      throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
+    }
+    expect(result.items.find((item) => item.id === id)).toMatchObject({
+      id,
+      ownerId: actors.timekeeper.userId,
+      matterId: clientMatterId,
+    });
+    await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+    await testDb.delete(workspaces).where(eq(workspaces.id, clientMatterId));
+    await testDb.delete(contacts).where(eq(contacts.id, clientId));
+  });
+
+  test("admin end uses the owner's timezone across the monthly lock boundary", async () => {
+    setSystemTime(new Date("2026-10-01T01:00:00Z"));
+    await testDb
+      .update(user)
+      .set({ timezoneId: "Pacific/Honolulu" })
+      .where(eq(user.id, actors.timekeeper.userId));
+    const id = await seedTimer();
+    await testDb
+      .update(timeTimers)
+      .set({
+        startedAt: new Date("2026-10-01T00:30:00Z"),
+        lastResumedAt: new Date("2026-10-01T00:30:00Z"),
+      })
+      .where(eq(timeTimers.id, id));
+    await testDb
+      .update(organizationSettings)
+      .set({ timeLockedThroughMonth: "2026-09-30" })
+      .where(eq(organizationSettings.organizationId, organizationId));
+    try {
+      const before = await readTimer(id);
+      const refused = await stopAs({ actor: "admin", id });
+      expect(refused).toMatchObject({
+        code: 400,
+        response: { code: "time_period_locked" },
+      });
+      expect(await readTimer(id)).toEqual(before);
+      await testDb
+        .update(organizationSettings)
+        .set({ timeLockedThroughMonth: null })
+        .where(eq(organizationSettings.organizationId, organizationId));
+      const result = await stopAs({ actor: "admin", id });
+      if (statusOf(result) !== null || !("id" in result)) {
+        throw new Error(`Admin stop failed: ${JSON.stringify(result)}`);
+      }
+      expect(await readEntry(result.id)).toMatchObject({
+        userId: actors.timekeeper.userId,
+        dateWorked: "2026-09-30",
+        timezoneId: "Pacific/Honolulu",
+        status: BILLING_STATUS.DRAFT,
+      });
+      expect(await readTimer(id)).toBeUndefined();
+    } finally {
+      await testDb
+        .update(organizationSettings)
+        .set({ timeLockedThroughMonth: null })
+        .where(eq(organizationSettings.organizationId, organizationId));
+      await testDb
+        .update(user)
+        .set({ timezoneId: "UTC" })
+        .where(eq(user.id, actors.timekeeper.userId));
+      await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+      setSystemTime();
+    }
+  });
+
+  test("admin end rolls back the draft, receipt and audit if the timer cannot be deleted", async () => {
+    const id = await seedTimer({
+      description: "Test refuse admin timer deletion",
+    });
+    const before = await readTimer(id);
+    const entriesBefore = await testDb
+      .select()
+      .from(timeEntries)
+      .where(eq(timeEntries.organizationId, organizationId));
+    await testDb.execute(
+      sql`CREATE FUNCTION test_refuse_admin_timer_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$`,
+    );
+    await testDb.execute(
+      sql`CREATE TRIGGER test_refuse_admin_timer_delete BEFORE DELETE ON time_timers FOR EACH ROW WHEN (OLD.description = 'Test refuse admin timer deletion') EXECUTE FUNCTION test_refuse_admin_timer_delete()`,
+    );
+    try {
+      expect(await stopAs({ actor: "admin", id })).toMatchObject({ code: 409 });
+      expect(await readTimer(id)).toEqual(before);
+      expect(
+        await testDb
+          .select()
+          .from(timeEntries)
+          .where(eq(timeEntries.organizationId, organizationId)),
+      ).toEqual(entriesBefore);
+      expect(
+        await testDb
+          .select()
+          .from(timeTimerConfirmations)
+          .where(eq(timeTimerConfirmations.timerId, id)),
+      ).toHaveLength(0);
+      expect(
+        await testDb
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.resourceId, id)),
+      ).toHaveLength(0);
+    } finally {
+      await testDb.execute(
+        sql`DROP TRIGGER test_refuse_admin_timer_delete ON time_timers`,
+      );
+      await testDb.execute(sql`DROP FUNCTION test_refuse_admin_timer_delete()`);
+      await testDb.delete(timeTimers).where(eq(timeTimers.id, id));
+    }
   });
 
   test("a supplied narrative does not replace a nonblank timer description", async () => {

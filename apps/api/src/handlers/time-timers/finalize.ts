@@ -5,8 +5,10 @@ import type {
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { withResultSavepoint } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
@@ -144,7 +146,7 @@ const readConfirmation = async ({ tx, owner, id }: ReadConfirmationOptions) => {
 };
 
 type TimerCompletion =
-  | { type: "owner" }
+  | { type: "owner"; timezoneId: string; billable?: boolean | undefined }
   | {
       type: "admin";
       actorId: TimerOwner["userId"];
@@ -155,7 +157,6 @@ type FinalizeTimerOptions = {
   tx: Transaction;
   owner: TimerOwner;
   id: typeof timeTimers.$inferSelect.id;
-  body: { timezoneId: string; billable?: boolean | undefined };
   memberRole: AuthorizedMemberRole;
   recordAuditEvent: AuditRecorder;
   completion: TimerCompletion;
@@ -166,30 +167,78 @@ type PrepareTimerOptions = {
   owner: TimerOwner;
   timer: typeof timeTimers.$inferSelect;
   legacy: typeof timeEntries.$inferSelect | undefined;
-  body: FinalizeTimerOptions["body"];
   memberRole: AuthorizedMemberRole;
   narrative: string;
   workspaceId: NonNullable<typeof timeTimers.$inferSelect.workspaceId>;
   now: Date;
+  completion: TimerCompletion;
+};
+type TimerCompletionTimezoneOptions = Pick<
+  PrepareTimerOptions,
+  "tx" | "owner" | "legacy" | "completion"
+>;
+const timerCompletionTimezone = async ({
+  tx,
+  owner,
+  legacy,
+  completion,
+}: TimerCompletionTimezoneOptions) => {
+  if (legacy) {
+    return Result.ok(legacy.timezoneId);
+  }
+  if (completion.type === "owner") {
+    return Result.ok(completion.timezoneId);
+  }
+  const [timerOwner] = await tx
+    .select({ timezoneId: user.timezoneId })
+    .from(user)
+    .innerJoin(
+      member,
+      and(
+        eq(member.userId, user.id),
+        eq(member.organizationId, owner.organizationId),
+      ),
+    )
+    .where(eq(user.id, owner.userId))
+    .limit(1);
+  if (!timerOwner) {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        code: "timer_owner_unavailable",
+        message: "Timer owner is not accessible",
+      }),
+    );
+  }
+  return Result.ok(timerOwner.timezoneId);
 };
 const prepareTimer = async ({
   tx,
   owner,
   timer,
   legacy,
-  body,
   memberRole,
   narrative,
   workspaceId,
   now,
+  completion,
 }: PrepareTimerOptions) => {
-  const timezoneId = legacy?.timezoneId ?? body.timezoneId;
+  const timezoneResult = await timerCompletionTimezone({
+    tx,
+    owner,
+    legacy,
+    completion,
+  });
+  if (timezoneResult.isErr()) {
+    return Result.err(timezoneResult.error);
+  }
+  const timezoneId = timezoneResult.value;
   const dateResult = formatTodayInTimeZone({
     timezoneId,
     now: timer.startedAt,
   });
   if (dateResult.isErr()) {
-    return dateResult;
+    return Result.err(dateResult.error);
   }
   const durationMinutes = Math.max(
     1,
@@ -219,7 +268,10 @@ const prepareTimer = async ({
         timezoneId,
         durationMinutes,
         narrative,
-        billable: body.billable ?? legacy?.billable,
+        billable:
+          completion.type === "owner"
+            ? (completion.billable ?? legacy?.billable)
+            : legacy?.billable,
         workItemId:
           legacy?.workspaceId === workspaceId ? legacy.workItemId : null,
         narrativeLanguage: legacy?.narrativeLanguage,
@@ -230,16 +282,15 @@ const prepareTimer = async ({
     return Result.ok(prepared);
   });
   if (preparedResult.isErr()) {
-    return preparedResult;
+    return Result.err(preparedResult.error);
   }
   return Result.ok({ prepared: preparedResult.value, durationMinutes });
 };
 
-export const finalizeTimer = async ({
+const finalizeTimerInSavepoint = async ({
   tx,
   owner,
   id,
-  body,
   memberRole,
   recordAuditEvent,
   completion,
@@ -359,14 +410,14 @@ export const finalizeTimer = async ({
     owner,
     timer,
     legacy,
-    body,
     memberRole,
     narrative,
     workspaceId,
     now: new Date(),
+    completion,
   });
   if (preparedResult.isErr()) {
-    return preparedResult;
+    return Result.err(preparedResult.error);
   }
   const { prepared, durationMinutes } = preparedResult.value;
   const capacity = await lockTimeEntryCapacity({
@@ -376,7 +427,7 @@ export const finalizeTimer = async ({
       legacy?.workspaceId === workspaceId ? legacy.id : undefined,
   });
   if (capacity.isErr()) {
-    return capacity;
+    return Result.err(capacity.error);
   }
   const entry = await insertPreparedTimeEntry({
     tx,
@@ -387,8 +438,22 @@ export const finalizeTimer = async ({
     recordAuditEvent,
   });
   await tx
+    .insert(timeTimerConfirmations)
+    .values({ ...owner, timerId: timer.id, timeEntryId: entry.id });
+  const deleted = await tx
     .delete(timeTimers)
-    .where(and(ownedTimers(owner), eq(timeTimers.id, timer.id)));
+    .where(and(ownedTimers(owner), eq(timeTimers.id, timer.id)))
+    .returning({ id: timeTimers.id });
+  if (deleted.length !== 1) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "timer_completion_changed",
+        message: "Timer could not be ended",
+        hint: "Reload running timers and retry.",
+      }),
+    );
+  }
   if (legacy) {
     await deleteLegacyTimerDraft({
       tx,
@@ -398,9 +463,7 @@ export const finalizeTimer = async ({
       recordAuditEvent,
     });
   }
-  await tx
-    .insert(timeTimerConfirmations)
-    .values({ ...owner, timerId: timer.id, timeEntryId: entry.id });
+
   await recordAuditEvent(tx, {
     action: AUDIT_ACTION.DELETE,
     resourceType: AUDIT_RESOURCE_TYPE.TIME_TIMER,
@@ -423,3 +486,8 @@ export const finalizeTimer = async ({
     billedMinutes: prepared.billedMinutes,
   });
 };
+
+export const finalizeTimer = ({ tx, ...options }: FinalizeTimerOptions) =>
+  withResultSavepoint(tx, (savepoint) =>
+    finalizeTimerInSavepoint({ tx: savepoint, ...options }),
+  );
