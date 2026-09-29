@@ -13,6 +13,7 @@ import {
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
@@ -28,6 +29,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
   setupRlsTestData,
@@ -76,14 +78,18 @@ beforeEach(async () => {
     .where(eq(organizationSettings.organizationId, ids.orgA));
 });
 
-const context = () => ({
-  safeDb: createSafeDb(db, [ids.wsA1], ids.orgA, ids.userA1),
-  scopedDb: createScopedDb(db, [ids.wsA1], ids.orgA, ids.userA1),
+const context = (workspaceIds = [ids.wsA1]) => ({
+  safeDb: asTestRaw<SafeDb>(
+    createSafeDb(db, workspaceIds, ids.orgA, ids.userA1),
+  ),
+  scopedDb: asTestRaw<ScopedDb>(
+    createScopedDb(db, workspaceIds, ids.orgA, ids.userA1),
+  ),
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
   workspaceId: ids.wsA1,
-  memberRole: { role: "member" },
-  getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
+  memberRole: { role: "member" as const },
+  getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" as const }),
   pinServerValidatedWorkspaceId: () => true,
   recordAuditEvent: async (_tx: unknown, event: unknown) => {
     auditEvents.push(event);
@@ -449,21 +455,7 @@ describe("global timer lifecycle", () => {
       workspaceId: originalMatterId,
       userId: ids.userA1,
     });
-    const originalContext = {
-      ...context(),
-      safeDb: createSafeDb(
-        db,
-        [originalMatterId, ids.wsA1],
-        ids.orgA,
-        ids.userA1,
-      ),
-      scopedDb: createScopedDb(
-        db,
-        [originalMatterId, ids.wsA1],
-        ids.orgA,
-        ids.userA1,
-      ),
-    };
+    const originalContext = context([originalMatterId, ids.wsA1]);
     const started = await startTimer.handler(
       createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
         ...originalContext,
