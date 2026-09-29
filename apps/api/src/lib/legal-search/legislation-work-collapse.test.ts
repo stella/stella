@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import { collapseLegislationHitsByWork } from "@/api/lib/legal-search/legislation-work-collapse";
 import type { LegislationWorkRepresentative } from "@/api/lib/legal-search/legislation-work-collapse";
 import type { RankedHit } from "@/api/lib/legal-search/rerank";
@@ -41,6 +42,14 @@ const collapse = (
     namedScoreFloor: 10,
     excludedWork: options.excludedWork ?? null,
   }).ranked;
+
+/** The relevance cursor a page ending at `last` hands the next request. */
+const boundaryOf = (last: { score: number; id: string }): SearchCursor => ({
+  score: last.score,
+  id: last.id,
+  sort: "relevance",
+  windowStart: 0,
+});
 
 describe("collapseLegislationHitsByWork", () => {
   test("several versions of one work become one hit, shown as the current version", () => {
@@ -103,7 +112,7 @@ describe("collapseLegislationHitsByWork", () => {
       { excludedWork: WORK_OF.get("a-current") ?? null },
     );
     const pageTwo = secondScan.filter((candidate) =>
-      isAfterSearchCursor(candidate, cursor),
+      isAfterSearchCursor(candidate, boundaryOf(cursor)),
     );
 
     expect(pageOne.map(({ id }) => id)).toEqual(["a-current"]);

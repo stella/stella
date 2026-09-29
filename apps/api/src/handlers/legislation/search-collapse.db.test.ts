@@ -18,6 +18,7 @@ import {
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { isAfterSearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import {
   inForceToday,
@@ -229,6 +230,14 @@ afterAll(async () => {
   await client.close();
 });
 
+/** The relevance cursor a page ending at `last` hands the next request. */
+const boundaryOf = (last: { score: number; id: string }): SearchCursor => ({
+  score: last.score,
+  id: last.id,
+  sort: "relevance",
+  windowStart: 0,
+});
+
 describe("one hit per act", () => {
   test("several versions of an act become one hit, shown as the current version", async () => {
     const result = await rehydrate("smlouva", [
@@ -296,7 +305,7 @@ describe("one hit per act", () => {
       cursor.id,
     );
     const pageTwo = replay.ranked.filter((hit) =>
-      isAfterSearchCursor(hit, cursor),
+      isAfterSearchCursor(hit, boundaryOf(cursor)),
     );
 
     expect(ids({ ranked: pageTwo })).toEqual([String(old1964.id)]);
