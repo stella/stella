@@ -13,7 +13,7 @@ import {
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   createChatAttachmentPart,
   chatMessageContentFromMessage,
@@ -38,6 +38,7 @@ import {
   validateToolCallParts,
   validateMessage as validateMessageWithPersistence,
 } from "@/api/handlers/chat/chat-schema";
+import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
@@ -119,13 +120,45 @@ const askUserTools = {
     description: "Ask a user for missing information",
   },
 } satisfies ChatToolMap;
+/** The registered ask-user tool, schema and all, not a stand-in for it. */
+const registeredAskUserTools = createOrgTools({
+  accessibleWorkspaceIds: [],
+  organizationId: toSafeId<"organization">("org_registered_ask_user"),
+  scopedDb: (async () => {
+    throw new Error("The ask-user tool schema needs no database");
+  }) satisfies ScopedDb,
+});
 const suggestChangesTools = {
   suggest_changes: {
     name: "suggest_changes",
     description: "Propose document edits for review",
+    // The optionals a strict provider schema widens with `null`, declared as
+    // the real tool declares them: absent allowed, `null` refused.
     inputSchema: toTanStackToolSchema(
       v.looseObject({
-        operations: v.array(v.looseObject({ type: v.string() })),
+        documentVersion: v.optional(v.looseObject({})),
+        operations: v.array(
+          v.looseObject({
+            type: v.string(),
+            comment: v.optional(v.string()),
+            moveId: v.optional(v.string()),
+            precondition: v.optional(v.looseObject({})),
+          }),
+        ),
+      }),
+    ),
+  },
+} satisfies ChatToolMap;
+/** A client tool with a field that holds `null` and one that refuses it. */
+const noteTools = {
+  mcp__external__set_note: {
+    name: "mcp__external__set_note",
+    description: "Set a note",
+    inputSchema: toTanStackToolSchema(
+      v.strictObject({
+        label: v.optional(v.string()),
+        note: v.nullable(v.string()),
+        query: v.string(),
       }),
     ),
   },
@@ -646,6 +679,75 @@ describe("validateMessage", () => {
     expect(
       Result.isError(validateToolCallParts({ message, tools: askUserTools })),
     ).toBe(true);
+  });
+
+  test("validates the adapter's folded input, not a strict provider's null-widened text", () => {
+    const input = {
+      analysis: "The side and governing law are not in the request.",
+      questions: [
+        { question: "Which side are you on?", reason: "Sets the tiers." },
+      ],
+    };
+    // What a strict provider schema streams: every optional spelled as null.
+    const widenedArguments = JSON.stringify({
+      ...input,
+      questions: input.questions.map((question) => ({
+        ...question,
+        options: null,
+        default: null,
+      })),
+    });
+    const call = {
+      arguments: widenedArguments,
+      id: "ask-user-widened",
+      input,
+      name: "ask-user",
+      state: "input-complete",
+      type: "tool-call",
+    } as const satisfies ChatMessage["parts"][number];
+    const messageWith = (part: ChatMessage["parts"][number]): ChatMessage => ({
+      id: chatMessageId("msg_widened_ask_user"),
+      role: "assistant",
+      parts: [part],
+    });
+
+    // The text alone does not meet the schema: `optional` admits absence,
+    // not null. A part with only the text (rebuilt by a client, or persisted
+    // before adapters attached `input`) is folded the same way the adapter
+    // folds, so it validates and persists the one canonical spelling.
+    const { input: _omitted, ...textOnlyCall } = call;
+    const textOnly = validateToolCallParts({
+      message: messageWith(textOnlyCall),
+      tools: registeredAskUserTools,
+    });
+    expect(Result.isOk(textOnly) && textOnly.value).toEqual([
+      { ...call, arguments: JSON.stringify(input) },
+    ]);
+
+    const validated = validateToolCallParts({
+      message: messageWith(call),
+      tools: registeredAskUserTools,
+    });
+    expect(Result.isOk(validated)).toBe(true);
+    if (Result.isError(validated)) {
+      return;
+    }
+    // One spelling is persisted: the folded input, and the text derived from it.
+    expect(validated.value).toEqual([
+      { ...call, arguments: JSON.stringify(input) },
+    ]);
+
+    // Folding nulls never admits a different call.
+    const drifted = validateToolCallParts({
+      message: messageWith({
+        ...call,
+        arguments: widenedArguments.replace("Which side", "Which law"),
+      }),
+      tools: registeredAskUserTools,
+    });
+    expect(Result.isError(drifted) && drifted.error.message).toBe(
+      "Chat tool input does not match arguments for ask-user",
+    );
   });
 
   test("accepts TanStack text parts at the live boundary", async () => {
@@ -1354,6 +1456,104 @@ describe("validateMessage", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
+  });
+
+  describe("a continuation's input is folded by its tool's schema", () => {
+    const continueSetNote = async ({
+      canonicalInput,
+      echoedInput,
+    }: {
+      canonicalInput: Record<string, unknown>;
+      echoedInput: Record<string, unknown>;
+    }) => {
+      const id = chatMessageId("msg_set_note_continuation");
+      const callId = "call_set_note";
+      const output = { ok: true };
+      const persistedContent = chatMessageContentFromMessage(
+        toPersistableChatMessage({
+          id,
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: callId,
+              name: "mcp__external__set_note",
+              arguments: JSON.stringify(canonicalInput),
+              input: canonicalInput,
+              state: "input-complete",
+            },
+          ],
+        }),
+      );
+      return await validateMessageWithPersistence({
+        message: {
+          id,
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              id: callId,
+              name: "mcp__external__set_note",
+              arguments: JSON.stringify(echoedInput),
+              input: echoedInput,
+              output,
+              state: "complete",
+            },
+            {
+              type: "tool-result",
+              toolCallId: callId,
+              content: JSON.stringify(output),
+              state: "complete",
+            },
+          ],
+        },
+        persistedMessage: { role: "assistant", content: persistedContent },
+        resume: [
+          {
+            interruptId: `client_tool_${callId}`,
+            payload: output,
+            status: "resolved",
+          },
+        ],
+        safeDb: noDbReads,
+        threadId: chatThreadId("thread_set_note_continuation"),
+        tools: noteTools,
+        userId: userId("user_set_note_continuation"),
+      });
+    };
+
+    test("a null a nullable field holds is the same call when echoed", async () => {
+      const input = { note: null, query: "scope" };
+      const result = await continueSetNote({
+        canonicalInput: input,
+        echoedInput: input,
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+    });
+
+    test("dropping a null a nullable field holds is a changed call", async () => {
+      const result = await continueSetNote({
+        canonicalInput: { note: null, query: "scope" },
+        echoedInput: { query: "scope" },
+      });
+
+      if (Result.isOk(result)) {
+        throw new Error("expected the changed call to be refused");
+      }
+      expect(result.error.message).toBe(
+        "Chat continuation does not match its awaited interaction",
+      );
+    });
+
+    test("a null the field refuses still reads as absent", async () => {
+      const result = await continueSetNote({
+        canonicalInput: { note: "kept", query: "scope" },
+        echoedInput: { label: null, note: "kept", query: "scope" },
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+    });
   });
 
   test("allows only an unchanged second pending approval to continue", async () => {

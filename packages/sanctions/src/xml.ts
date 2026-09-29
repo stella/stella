@@ -202,7 +202,10 @@ export type XmlListFormat = {
   layout: XmlLayout;
   recordNames: ReadonlySet<string>;
   metadataName?: string;
-  toEntry: (record: XmlNode) => Result<SanctionsEntry, SanctionsListParseError>;
+  /** Null for supporting records and publisher-retained delisted history. */
+  toEntry: (
+    record: XmlNode,
+  ) => Result<SanctionsEntry | null, SanctionsListParseError>;
   toVersion: (
     root: RootAttributes,
     metadata: XmlNode | null,
@@ -236,7 +239,9 @@ export const parseXmlList = async (
       if (entry.isErr()) {
         return Result.err(entry.error);
       }
-      entries.push(entry.value);
+      if (entry.value !== null) {
+        entries.push(entry.value);
+      }
       return Result.ok();
     },
   });

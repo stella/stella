@@ -14,6 +14,34 @@ export const PROPERTY_DB_TEST_BATCH_SIZE = 1;
 export const dbTestBatchSize = (propertyOnly: boolean) =>
   propertyOnly ? PROPERTY_DB_TEST_BATCH_SIZE : DB_TEST_BATCH_SIZE;
 
+/**
+ * Test files whose own peak RSS leaves too little of their batch budget for
+ * neighbours. Each runs in a process of its own, whatever its class (see
+ * `splitSoloTests`).
+ */
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
+  // ~1.7 GB peak alone: replays every recorded conversation scenario through
+  // the full send pipeline.
+  "src/handlers/chat/recorded-conversations.integration.test.ts",
+]);
+
+/**
+ * Move each solo file out of its composed batch into a batch of its own. The
+ * files it leaves behind keep sharing their process, so no other batch
+ * changes composition.
+ */
+export const splitSoloTests = (
+  batches: readonly string[][],
+  soloPaths: ReadonlySet<string>,
+): string[][] =>
+  batches.flatMap((batch) => {
+    const shared = batch.filter((testPath) => !soloPaths.has(testPath));
+    const solo = batch
+      .filter((testPath) => soloPaths.has(testPath))
+      .map((testPath) => [testPath]);
+    return shared.length > 0 ? [shared, ...solo] : solo;
+  });
+
 export const TEST_BATCH_KIND = {
   db: "db",
   heavyLogic: "heavy-logic",

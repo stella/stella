@@ -2,6 +2,7 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { resetKnowledgeCache } from "@/lib/knowledge/knowledge-cache";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const rootKeys = {
@@ -9,7 +10,13 @@ export const rootKeys = {
   role: ["role"],
 };
 
+/**
+ * Re-reads who is signed in after sign-in, a change of organization or any
+ * other change of session. Knowledge read for the previous session goes
+ * first, so the next one never renders it.
+ */
 export const refreshAuthQueries = async (queryClient: QueryClient) => {
+  await resetKnowledgeCache(queryClient);
   await Promise.all([
     queryClient.refetchQueries({ queryKey: rootKeys.session, type: "all" }),
     queryClient.refetchQueries({ queryKey: rootKeys.role, type: "all" }),

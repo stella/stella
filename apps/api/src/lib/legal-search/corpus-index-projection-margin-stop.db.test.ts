@@ -36,6 +36,7 @@ import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpu
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { CORPUS_PROJECTION_LEASE_MIN_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -145,6 +146,7 @@ beforeAll(
             versionValidTo: row.versionValidTo,
             eli: row.eli,
             sourceDescriptor: null,
+            ...EFFECTIVE_CONSOLIDATION,
           }),
         );
         if (descriptor.action !== "upsert") {

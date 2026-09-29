@@ -2,6 +2,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { commandShortcutRowsFromSkillPages } from "@/components/chat-editor-slash-items";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/lib/knowledge/queries";
@@ -22,16 +23,20 @@ export const useSuggestedSkills = (): ChatPrompt[] => {
   // this hook also renders inside the public law workspace, where no
   // /_protected match exists. Anonymous visitors (pre-signup AI
   // surfaces) simply have no suggested skills.
-  const activeOrganizationId =
-    useMaybeAuthenticatedUser()?.activeOrganizationId;
+  const user = useMaybeAuthenticatedUser();
+  const activeOrganizationId = user?.activeOrganizationId;
+  const userId = user?.id;
   const {
     data: skillPages,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId ?? ""),
-    enabled: activeOrganizationId !== undefined,
+    ...skillsOptions(
+      activeOrganizationId ?? "",
+      userId ?? SIGNED_OUT_QUERY_OWNER,
+    ),
+    enabled: activeOrganizationId !== undefined && userId !== undefined,
   });
   useExternalSyncEffect(() => {
     if (
@@ -43,7 +48,10 @@ export const useSuggestedSkills = (): ChatPrompt[] => {
     }
     detached(fetchNextPage(), "use-suggested-skills.fetch-next-page");
   }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
-  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
+  const unavailableSkillIds = useChatUnavailableSkillIds(
+    activeOrganizationId,
+    userId,
+  );
   const rows = commandShortcutRowsFromSkillPages(
     skillPages?.pages,
     unavailableSkillIds,

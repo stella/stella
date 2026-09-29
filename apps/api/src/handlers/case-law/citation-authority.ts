@@ -9,7 +9,7 @@
  *   authority = ln(1 + weightedCitationSum)
  *
  * where each incoming citation contributes
- * `polarityWeight(polarity) * courtWeight(citingCourt) * 1/(1 + ageYears(citing))`.
+ * `polarityWeight(polarity) * citingCourtWeight(citing) * 1/(1 + ageYears(citing))`.
  * See citation-score.ts for the reference TS implementation; this SQL must
  * stay equal to `citationScore(...)` evaluated at the same instant.
  *
@@ -131,7 +131,12 @@ export const citationContributionWeight: CitationContributionWeight = ({
   now,
 }) =>
   sql`(${sql.raw(polarityWeightSql(`${aliases.citation}.polarity`))})
-      * (${sql.raw(courtWeightSql(`${aliases.citing}.court`, courtWeightEntries))})
+      * (${courtWeightSql({
+        countryColumn: `${aliases.citing}.country`,
+        courtColumn: `${aliases.citing}.court`,
+        courtIdColumn: `${aliases.citing}.court_id`,
+        entries: courtWeightEntries,
+      })})
       * (1.0 / (1 + COALESCE(
           extract(
             epoch FROM (

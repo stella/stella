@@ -49,6 +49,7 @@ export const ReportExportTracker = ({
     queries: trackedExports.map((reportExport) => ({
       ...reportExportDetailOptions({
         exportId: reportExport.exportId,
+        userId: requestedBy,
         workspaceId: reportExport.workspaceId,
       }),
       refetchInterval: POLL_INTERVAL_MS,
@@ -117,6 +118,7 @@ export const ReportExportTracker = ({
           await downloadReportExport({
             exportId: settledExport.exportId,
             queryClient,
+            userId: requestedBy,
             workspaceId: settledExport.workspaceId,
           });
         });
@@ -160,6 +162,7 @@ export const ReportExportTracker = ({
           const destination = await resolveReportExportDestinationQuery({
             exportId: settledExport.exportId,
             queryClient,
+            userId: requestedBy,
             workspaceId: settledExport.workspaceId,
           });
           if (destination === null) {
@@ -222,6 +225,7 @@ export const ReportExportTracker = ({
     analytics,
     navigate,
     queryClient,
+    requestedBy,
     t,
     settledDetail,
     settledExport,

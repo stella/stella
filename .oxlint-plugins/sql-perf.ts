@@ -5,7 +5,10 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import path from "node:path";
 
-import { analyzeSqlPerf } from "../scripts/sql-perf-detector.ts";
+import {
+  analyzeSqlPerf,
+  isBaselinedSqlPerfKind,
+} from "../scripts/sql-perf-detector.ts";
 import baselineCounts from "./sql-perf-baseline.json" with { type: "json" };
 import { filenameForContext } from "./utils.ts";
 
@@ -27,6 +30,9 @@ export default eslintCompatPlugin({
           "s3-key-like": message("LIKE on an S3-key column"),
           "group-by-expression": message("Corpus GROUP BY expression"),
           "or-subquery": message("OR with a subquery operand"),
+          "optional-keyset": message(
+            "An optional keyset bound (<param> IS NULL OR <column> > <param>)",
+          ),
           comment: "{{reason}}",
         },
       },
@@ -48,11 +54,13 @@ export default eslintCompatPlugin({
                 data: { reason: error.message },
               });
             }
-            const legacyHits = hits.filter((hit) => hit.kind !== "or-subquery");
+            const legacyHits = hits.filter((hit) =>
+              isBaselinedSqlPerfKind(hit.kind),
+            );
             const legacyOverBaseline =
               legacyHits.length > (baseline.get(relative) ?? 0);
             for (const hit of hits) {
-              if (hit.kind !== "or-subquery" && !legacyOverBaseline) {
+              if (isBaselinedSqlPerfKind(hit.kind) && !legacyOverBaseline) {
                 continue;
               }
               context.report({

@@ -93,10 +93,15 @@ const parseChatRequestRunId = (init: RequestInit | undefined): string =>
 describe("chatKeys", () => {
   test("isolates normalized history searches from the unfiltered list", () => {
     const activeOrganizationId = "org_test";
-    const unfiltered = groupedChatThreadsOptions({ activeOrganizationId });
+    const userId = "user_test";
+    const unfiltered = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+    });
     const searched = groupedChatThreadsOptions({
       activeOrganizationId,
       search: "  Matter B  ",
+      userId,
     });
 
     expect(searched.queryKey).not.toEqual(unfiltered.queryKey);
@@ -583,10 +588,11 @@ describe("invalidateChatThreadLists", () => {
     const queryClient = new QueryClient();
     const groupedKey = groupedChatThreadsOptions({
       activeOrganizationId: "organization-a",
+      userId: "user-a",
     }).queryKey;
     const activityKey = workspaceActivityOptions({
       activeOrganizationId: "organization-a",
-      key: { workspaceId: "workspace-a" },
+      key: { userId: "user-a", workspaceId: "workspace-a" },
     }).queryKey;
     queryClient.setQueryData(groupedKey, { pageParams: [], pages: [] });
     queryClient.setQueryData(activityKey, { pageParams: [], pages: [] });
@@ -604,10 +610,12 @@ describe("invalidateChatThreadLists", () => {
     const queryClient = new QueryClient();
     const activeKey = chatKeys.groupedThreads({
       activeOrganizationId: "organization-a",
+      userId: "user-a",
     });
     const inactiveSearchKey = chatKeys.groupedThreads({
       activeOrganizationId: "organization-a",
       search: "nda",
+      userId: "user-a",
     });
     let activeFetches = 0;
     let inactiveFetches = 0;
@@ -794,7 +802,10 @@ describe("buildSendRequestBody", () => {
           fileName: "document.docx",
           supportsDocxEdits: undefined,
         }),
-        getActiveSkill: () => ({ skillId: "skill-A", skillName: "Review" }),
+        getActiveSkill: () => ({
+          skillId: undefined,
+          skillName: "Review",
+        }),
         getActiveStatute: () => ({ documentId: "statute-A" }),
         getSendMode: () => CHAT_SEND_MODE.anonymized,
       },
@@ -826,12 +837,13 @@ describe("buildSendRequestBody", () => {
         entityId: "entity-A",
         fileName: "document.docx",
       },
-      activeSkill: { skillId: "skill-A", skillName: "Review" },
+      activeSkill: { skillName: "Review" },
       message: { id: "message-A" },
     });
     expect(body.activeFile).not.toHaveProperty("fileFieldId");
     expect(body.activeFile).not.toHaveProperty("supportsDocxEdits");
     expect(body.activeExternal).not.toHaveProperty("connectorSlug");
+    expect(body.activeSkill).not.toHaveProperty("skillId");
     expect(body.activeFile?.docxEditSnapshot).not.toHaveProperty(
       "canApplyEdits",
     );

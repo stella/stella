@@ -51,12 +51,14 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -209,6 +211,7 @@ function ProfilePage() {
 function ProfilePageBody() {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const authenticatedUser = useAuthenticatedUser();
   const { data: session } = useSuspenseQuery(sessionOptions);
   const deleteAccountConfirmation = useDestructiveActionConfirmation(
     t("settings.account.deleteAccountConfirmationPhrase"),
@@ -241,13 +244,7 @@ function ProfilePageBody() {
     isFetching: isPendingTasksFetching,
     refetch: refetchPendingTasks,
   } = useQuery({
-    queryKey: ["me", "delete", "pending-tasks"],
-    queryFn: async ({ signal }) => {
-      const res = await api.me.delete["pending-tasks"].get({
-        fetch: { signal },
-      });
-      return unwrapEden(res);
-    },
+    ...pendingDeletionTasksOptions(authenticatedUser.id),
     enabled: isDeleteDialogOpen,
   });
 

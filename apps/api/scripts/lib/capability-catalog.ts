@@ -9,7 +9,7 @@
 // derivation, verb classification, and override handling without spinning up
 // the 300+ handler modules.
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "@stll/api-contract";
 
@@ -435,13 +435,95 @@ export type CapabilityInputSchema = {
 export const inputSchemaByteSize = (inputSchema: unknown): number =>
   Buffer.byteLength(JSON.stringify(inputSchema), "utf-8");
 
+/** The one order the committed catalog uses: ascending capability id. */
+export const compareCapabilityIds = (a: string, b: string): number =>
+  a.localeCompare(b);
+
+const CATALOG_OPEN = "[";
+const CATALOG_CLOSE = "]";
+
 /**
- * The committed catalog format: compact JSON (no indentation — pretty-printing
- * the full catalog produced a 6.6MB artifact) plus a trailing newline.
- * Determinism comes from the caller passing id-sorted entries.
+ * The committed catalog format: a JSON array written one entry per line, each
+ * entry compact JSON (pretty-printing the full catalog produced a 6.6MB
+ * artifact), sorted by id, between fixed `[` and `]` lines. Nothing else is
+ * stored: no count, no total, no header. Two changes that add or edit
+ * capabilities that are not neighbours in id order touch non-adjacent lines
+ * and merge cleanly; changes to neighbouring entries still abut, which Git
+ * reports as a conflict whatever the layout. A reader that needs a count
+ * computes it.
  */
-export const serializeCatalog = (entries: readonly unknown[]): string =>
-  `${JSON.stringify(entries)}\n`;
+export const serializeCatalog = (
+  entries: readonly { readonly id: string }[],
+): string => {
+  const lines = entries
+    .toSorted((a, b) => compareCapabilityIds(a.id, b.id))
+    .map((entry) => JSON.stringify(entry));
+  if (lines.length === 0) {
+    return `${CATALOG_OPEN}\n${CATALOG_CLOSE}\n`;
+  }
+  return `${CATALOG_OPEN}\n${lines.join(",\n")}\n${CATALOG_CLOSE}\n`;
+};
+
+/**
+ * Problems with a catalog text's layout, empty when it is in the committed
+ * format: fixed `[`/`]` wrapper lines, exactly one compact JSON object per line
+ * (comma-terminated except the last), ids strictly ascending, no other lines.
+ * The exporter runs this over its own output, so a serializer change that
+ * reintroduces a single-line array, a stored count or an unsorted entry fails
+ * the drift guard rather than bringing back merge conflicts.
+ */
+export const findCatalogFormatProblems = (text: string): string[] => {
+  const problems: string[] = [];
+  if (!text.endsWith("\n")) {
+    problems.push("does not end with a newline");
+  }
+  const lines = text.replace(/\n$/u, "").split("\n");
+  if (lines[0] !== CATALOG_OPEN) {
+    problems.push(`first line must be exactly "${CATALOG_OPEN}"`);
+  }
+  if (lines.length < 2 || lines.at(-1) !== CATALOG_CLOSE) {
+    problems.push(`last line must be exactly "${CATALOG_CLOSE}"`);
+  }
+  const body = lines.slice(1, -1);
+  let previousId: string | undefined;
+  for (const [index, line] of body.entries()) {
+    const lineNumber = index + 2;
+    const isLast = index === body.length - 1;
+    const json = isLast ? line : line.replace(/,$/u, "");
+    if (!isLast && json === line) {
+      problems.push(`line ${lineNumber} must end with ","`);
+    }
+    const parsed = Result.try((): unknown => JSON.parse(json));
+    if (Result.isError(parsed)) {
+      problems.push(`line ${lineNumber} is not one JSON value`);
+      continue;
+    }
+    const entry = parsed.value;
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      Array.isArray(entry) ||
+      !("id" in entry) ||
+      typeof entry.id !== "string"
+    ) {
+      problems.push(`line ${lineNumber} is not one entry object with an id`);
+      continue;
+    }
+    if (JSON.stringify(entry) !== json) {
+      problems.push(`line ${lineNumber} is not compact JSON`);
+    }
+    if (
+      previousId !== undefined &&
+      compareCapabilityIds(previousId, entry.id) >= 0
+    ) {
+      problems.push(
+        `line ${lineNumber}: "${entry.id}" is not after "${previousId}" (ids must be unique and ascending)`,
+      );
+    }
+    previousId = entry.id;
+  }
+  return problems;
+};
 
 /**
  * Textual count of `capability` dispositions in a handler file's source. Same
@@ -1564,14 +1646,17 @@ ${rows.join("\n")}
 `;
 };
 
-/** Render the trailing "Waived internal handlers" section from reason counts. */
+/**
+ * Render the trailing "Waived internal handlers" section from reason counts.
+ * No grand total: a stored sum changes with every waiver anywhere, so any two
+ * changes adding one would collide on that line.
+ */
 const renderWaivedInternalSection = (
   internalWaiverCounts: Readonly<Record<string, number>>,
 ): string => {
   const counts = Object.entries(internalWaiverCounts).toSorted(([a], [b]) =>
     a.localeCompare(b),
   );
-  const total = counts.reduce((sum, [, count]) => sum + count, 0);
   const rows = counts.map(([reason, count]) => `| ${reason} | ${count} |`);
   return `## Waived internal handlers
 
@@ -1582,8 +1667,6 @@ mechanics, and similar), not gaps in coverage.
 | Reason | Count |
 | --- | --- |
 ${rows.join("\n")}
-
-Total: ${total}
 `;
 };
 

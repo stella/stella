@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -26,13 +25,12 @@ import {
   VERDICT_LABEL_KEY,
 } from "@/features/inbox/signal-presentation";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { sanitizeHref } from "@/lib/sanitize-href";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 /** One inbox signal's evidence: the facts the card's claim rests on. */
 export const SignalInspectorView = ({
@@ -40,15 +38,15 @@ export const SignalInspectorView = ({
   tab,
 }: InspectorViewRenderProps<InboxSignalViewPayload>) => {
   const t = useTranslations();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const {
     data: signal,
     isError,
     isPending,
     refetch,
-  } = useQuery(inboxSignalOptions(activeOrganizationId, tab.payload.signalId));
+  } = useQuery(
+    inboxSignalOptions(activeOrganizationId, userId, tab.payload.signalId),
+  );
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">

@@ -625,6 +625,7 @@ type Messages = {
       };
     };
     "citation": {
+      "citedAtLeast": "Cited at least {count} times";
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
@@ -632,6 +633,7 @@ type Messages = {
       "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
+      "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
       "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";
@@ -1450,6 +1452,7 @@ type Messages = {
     "back": "Back";
     "cancel": "Cancel";
     "caseLaw": "Case Law";
+    "catalogue": "Catalogue";
     "category": "Category";
     "categoryName": "Category name";
     "changeColor": "Change color";
@@ -3185,6 +3188,7 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Built-in skills";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";
       "disableSkill": "Disable skill";
@@ -3226,6 +3230,23 @@ type Messages = {
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.";
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill";
       "version": "Version: {version}";
+    };
+    "catalogue": {
+      "addToLibrary": "Add to library";
+      "added": "{name} is in your library";
+      "confirmAddTitle": "Add {name} to {organization}?";
+      "confirmDescription": "A copy of this template goes into the {organization} library.";
+      "confirmDownloadTitle": "Download {name} for {organization}?";
+      "confirmStarterDescription": "A copy of this playbook goes into the {organization} library.";
+      "confirmUseTitle": "Use {name} in {organization}?";
+      "installFailed": "The template could not be added";
+      "noPreview": "No preview is available for this template.";
+      "notFound": "This template is not in the catalogue.";
+      "unavailable": "The catalogue is not available right now.";
+    };
+    "landing": {
+      "accountLine": "Keep your organization's own templates, clauses and playbooks with a free account.";
+      "withAccount": "With a free account";
     };
     "mcp": {
       "addAndConnect": "Add and connect";
@@ -3708,7 +3729,6 @@ type Messages = {
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";
     "stepApps": "Apps & tools";
-    "stepCatalogue": "Catalogue";
     "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
     "stepTeam": "Invite";

@@ -163,6 +163,8 @@ export const LIMITS = {
   styleSetsPageSizeMax: 100,
   sellerProfilesPageSizeDefault: 50,
   sellerProfilesPageSizeMax: 100,
+  vatRatesPageSizeDefault: 50,
+  vatRatesPageSizeMax: 100,
   numberSeriesPageSizeDefault: 50,
   numberSeriesPageSizeMax: 100,
   clauseCategoriesCount: 100,
@@ -311,6 +313,8 @@ export const LIMITS = {
   invoicesPerWorkspace: 10_000,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
+  // An invoice read returns every line, so the count stays bounded.
+  invoiceLinesPerInvoice: 1000,
   exportRowLimit: 10_000,
   /** One reader's highlights and comments on one decision or statute
    *  version, read whole when the reader opens the document. */
@@ -631,6 +635,13 @@ export const LIMITS = {
    * stops advertising candidates a rescan could never get back to.
    */
   corpusIndexSearchMaxRounds: 3,
+  /**
+   * Folded groups (the acts of a legislation search) a cursor may carry past
+   * capped scan windows, so none is shown again from a deeper member. A
+   * continuation that would carry more is not offered, which keeps the
+   * cursor's size bounded.
+   */
+  corpusIndexSearchMaxExcludedGroups: 200,
   /** Max UTF-8 bytes in one corpus-index NDJSON ingest request. A batch is
    *  sized in rows, but a passage-granular family turns one row into as many
    *  documents as it has passages, so the serialized body is not bounded by

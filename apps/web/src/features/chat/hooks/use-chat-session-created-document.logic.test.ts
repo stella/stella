@@ -32,12 +32,17 @@ describe("invalidateCreatedDocumentQueries", () => {
     const targetEntityKey = [...targetEntityRootKey, "list"];
     const otherEntityKey = ["entities", "matter-b", "list"];
     const targetActivityRootKey = ["workspaces", "matter-a", "activity"];
-    const targetActivityKey = [...targetActivityRootKey, "organization-a"];
+    const targetActivityKey = [
+      ...targetActivityRootKey,
+      "organization-a",
+      "user-a",
+    ];
     const otherActivityKey = [
       "workspaces",
       "matter-b",
       "activity",
       "organization-a",
+      "user-a",
     ];
     for (const key of [
       targetEntityKey,

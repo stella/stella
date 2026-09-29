@@ -20,6 +20,10 @@ import {
   type CorpusIndexPublisherFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+import {
+  typedLegislationClassification,
+  type LegislationExpressionClassification,
+} from "@/api/lib/legal-search/legislation-expression-classification";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
 
@@ -59,15 +63,16 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
   metadata: Record<string, unknown> | null;
 };
 
-export type LegislationV2ProjectionInput = ProjectionInputBase & {
-  family: "legislation";
-  title: string;
-  status: string;
-  effectiveDate: string | null;
-  versionValidFrom: string | null;
-  versionValidTo: string | null;
-  eli: string;
-};
+export type LegislationV2ProjectionInput = ProjectionInputBase &
+  LegislationExpressionClassification & {
+    family: "legislation";
+    title: string;
+    status: string;
+    effectiveDate: string | null;
+    versionValidFrom: string | null;
+    versionValidTo: string | null;
+    eli: string;
+  };
 
 export type CorpusIndexProjectionInput =
   | CaseLawProjectionInput
@@ -188,7 +193,10 @@ export const deriveCorpusIndexProjectionDescriptor = (
     input.contentHash === null ||
     EMPTY_CORPUS_CONTENT_HASHES.includes(input.contentHash) ||
     !input.redistributionEligible ||
-    (input.family === "case_law" && (input.redacted || input.listingOnly))
+    (input.family === "case_law" && (input.redacted || input.listingOnly)) ||
+    // A withdrawn version is a tombstone the publisher no longer lists: it
+    // stays openable by id, and no search may find it.
+    (input.family === "legislation" && input.windowDisposition === "withdrawn")
   ) {
     return { action: "erase" };
   }
@@ -250,7 +258,11 @@ export const deriveCorpusIndexProjectionDescriptor = (
         }),
       };
     }
-    case "legislation":
+    case "legislation": {
+      // The classification only where a version carries one it could not
+      // have before, so every fingerprint projected before it keeps its
+      // bytes and no untyped version re-projects.
+      const classification = typedLegislationClassification(input);
       return {
         action: "upsert",
         indexId,
@@ -262,8 +274,10 @@ export const deriveCorpusIndexProjectionDescriptor = (
           versionValidFrom: input.versionValidFrom,
           versionValidTo: input.versionValidTo,
           eli: input.eli,
+          ...(classification === null ? {} : { classification }),
         }),
       };
+    }
     default:
       input satisfies never;
       return panic(`Unhandled input: ${String(input)}`);

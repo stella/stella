@@ -21,8 +21,13 @@ import {
   legislationIndexJobs,
   legislationSearchDocuments,
   legislationSources,
+  statuteSitemapShards,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import {
+  CORPUS_INDEX_MANIFESTS,
+  corpusIndexManifestDigest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
@@ -31,6 +36,7 @@ export const QUERY_PLAN_ROW_COUNT = 3000;
 const DECISION_ID_PREFIX = "00000000-0000-7000-8000-";
 const LEGISLATION_DOCUMENT_ID_PREFIX = "00000000-0000-7000-9000-";
 const SAMPLE_DECISION_NUMBER = 12;
+const CASE_LAW_GENERATION = "case_law_v5";
 
 const makeUuid = (prefix: string, number: number): string =>
   `${prefix}${String(number).padStart(12, "0")}`;
@@ -42,6 +48,12 @@ export const QUERY_PLAN_SAMPLE = {
       makeUuid(DECISION_ID_PREFIX, SAMPLE_DECISION_NUMBER),
     ),
     sharedEcli: "ECLI:EU:C:2024:12",
+    generation: CASE_LAW_GENERATION,
+    candidateIds: Array.from({ length: 10 }, (_, index) =>
+      toSafeId<"caseLawDecision">(
+        makeUuid(DECISION_ID_PREFIX, SAMPLE_DECISION_NUMBER + index),
+      ),
+    ),
   },
   legislation: {
     country: "cze",
@@ -123,6 +135,51 @@ export const seedQueryPlanData = async (
   await db.execute(sql`ANALYZE ${caseLawDecisionIdentifiers}`);
   await db.execute(sql`ANALYZE ${caseLawSources}`);
 
+  await db.execute(sql`
+    INSERT INTO ${caseLawCitations}
+      (id, citing_decision_id, cited_decision_id, citation_text, kind)
+    SELECT
+      ('00000000-0000-7000-a000-' || lpad(n::text, 12, '0'))::uuid,
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad((1 + n % ${QUERY_PLAN_ROW_COUNT})::text, 12, '0'))::uuid,
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad((1 + n % 250)::text, 12, '0'))::uuid,
+      'Query plan citation ' || n::text,
+      'precedent'
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+  await db.execute(sql`ANALYZE ${caseLawCitations}`);
+
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: CASE_LAW_GENERATION,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.case_law_v5,
+    ),
+    status: "building",
+  });
+  await db.execute(sql`
+    INSERT INTO ${corpusIndexProjectionStates}
+      (family, generation, entity_id, desired_action, desired_epoch,
+       desired_fingerprint, desired_index_id)
+    SELECT
+      'case_law', ${CASE_LAW_GENERATION},
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
+      'upsert', 1, lpad(n::text, 64, '0'),
+      ${CASE_LAW_GENERATION} || '_' ||
+        lower(CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END)
+    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+  `);
+  await db.execute(sql`
+    INSERT INTO ${corpusIndexProjectionStates}
+      (family, generation, entity_id, desired_action, desired_epoch)
+    SELECT
+      'case_law', ${CASE_LAW_GENERATION},
+      ('00000000-0000-7000-b000-' || lpad(n::text, 12, '0'))::uuid,
+      'erase', 1
+    FROM generate_series(1, 400) AS generated(n)
+  `);
+  await db.execute(sql`ANALYZE ${corpusIndexProjectionStates}`);
+
   await db.insert(legislationSources).values({
     id: legislationSourceId,
     adapterKey: "query-plan-seed-legislation",
@@ -131,7 +188,7 @@ export const seedQueryPlanData = async (
 
   await db.execute(sql`
     INSERT INTO ${legislationDocuments}
-      (id, source_id, eli, title, slug, country, language, updated_at)
+      (id, source_id, eli, title, slug, country, language, document_type, updated_at)
     SELECT
       (${sql.raw(`'${LEGISLATION_DOCUMENT_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
       ${legislationSourceId}::uuid,
@@ -140,22 +197,11 @@ export const seedQueryPlanData = async (
       'query-plan-act-' || n::text,
       CASE n % 3 WHEN 0 THEN 'CZE' WHEN 1 THEN 'SVK' ELSE 'POL' END,
       CASE n % 3 WHEN 0 THEN 'cs' WHEN 1 THEN 'sk' ELSE 'pl' END,
+      CASE n % 3 WHEN 0 THEN 'act' WHEN 1 THEN 'regulation' ELSE 'decree' END,
       TIMESTAMPTZ '2024-01-01 00:00:00+00' + n * INTERVAL '1 minute'
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);
   await db.execute(sql`ANALYZE ${legislationSources}`);
-
-  await db.execute(sql`
-    INSERT INTO ${caseLawCitations}
-      (id, citing_decision_id, cited_decision_id, citation_text, citation_key)
-    SELECT
-      md5('qpg-citation-' || n::text)::uuid,
-      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid,
-      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad((n % ${QUERY_PLAN_ROW_COUNT} + 1)::text, 12, '0'))::uuid,
-      'QPG citation ' || n::text,
-      'qpg-key-' || (n % 120)::text
-    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
-  `);
 
   await db.execute(sql`
     INSERT INTO ${caseLawIndexJobs}
@@ -229,13 +275,15 @@ export const seedQueryPlanData = async (
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);
 
-  await db.execute(sql`
-    INSERT INTO ${corpusIndexGenerations}
-      (family, generation, cluster, manifest_digest, status)
-    VALUES
-      ('case_law', 'case_law_v5', 'q09', repeat('a', 64), 'building'),
-      ('legislation', 'legislation_v2', 'q09', repeat('b', 64), 'building')
-  `);
+  await db.insert(corpusIndexGenerations).values({
+    family: "legislation",
+    generation: "legislation_v2",
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(
+      CORPUS_INDEX_MANIFESTS.legislation_v2,
+    ),
+    status: "building",
+  });
 
   await db.execute(sql`
     INSERT INTO ${corpusIndexProjectionIntents}
@@ -252,21 +300,6 @@ export const seedQueryPlanData = async (
       END,
       1, md5('qpg-fingerprint-' || n::text) || md5('qpg-fingerprint-' || n::text),
       'qpg_index', 'cancelled', TIMESTAMPTZ '2024-01-01 00:00:00+00'
-    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
-  `);
-
-  await db.execute(sql`
-    INSERT INTO ${corpusIndexProjectionStates}
-      (family, generation, entity_id, desired_action, desired_epoch)
-    SELECT
-      CASE WHEN n % 2 = 0 THEN 'case_law' ELSE 'legislation' END,
-      CASE WHEN n % 2 = 0 THEN 'case_law_v5' ELSE 'legislation_v2' END,
-      CASE WHEN n % 2 = 0 THEN
-        (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid
-      ELSE
-        (${sql.raw(`'${LEGISLATION_DOCUMENT_ID_PREFIX}'`)} || lpad(n::text, 12, '0'))::uuid
-      END,
-      'erase', 1
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);
 
@@ -295,6 +328,11 @@ export const seedQueryPlanData = async (
   for (const table of PLAN_GUARD_TABLES) {
     await db.execute(sql`ANALYZE ${sql.identifier(table)}`);
   }
+  await db.insert(statuteSitemapShards).values([
+    { country: "CZE", bucket: "00", total: 1000, lastmod: "2024-01-01" },
+    { country: "SVK", bucket: "01", total: 1000, lastmod: "2024-01-01" },
+  ]);
+  await db.execute(sql`ANALYZE ${statuteSitemapShards}`);
 
   return { caseLawSourceId, sample: QUERY_PLAN_SAMPLE };
 };

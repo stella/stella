@@ -33,6 +33,7 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
                 activeOrganizationId: context.user.activeOrganizationId,
                 scope: "user",
                 status,
+                userId: context.user.id,
               }),
             );
           } catch (error: unknown) {

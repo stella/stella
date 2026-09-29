@@ -43,6 +43,8 @@ export type {
 export {
   BILLING_STATUS,
   EXPENSE_CATEGORIES,
+  INVOICE_LINE_SOURCE,
+  INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   TIME_ENTRY_SOURCE,
@@ -53,6 +55,7 @@ export {
 } from "./billing";
 export type {
   ExpenseCategory,
+  InvoiceLineSource,
   InvoiceStatus,
   TimeEntrySource,
   TimeEntryStatus,

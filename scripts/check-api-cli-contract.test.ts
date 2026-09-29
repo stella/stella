@@ -206,26 +206,39 @@ describe("API and CLI release contract", () => {
     );
   });
 
-  test("release and pull-request smoke tests reject synthetic migration history", async () => {
-    const smokeSources = await Promise.all([
+  test("release and pull-request smoke tests refuse corrupt history with pending SQL", async () => {
+    const [releaseSmoke, migrationSmoke] = await Promise.all([
       readReleaseSmokeSource(),
       Bun.file(
         new URL("../.github/workflows/db-migrations.yml", import.meta.url),
       ).text(),
     ]);
 
-    for (const source of smokeSources) {
-      expect(source).toContain(
-        "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash",
-      );
+    for (const source of [releaseSmoke, migrationSmoke]) {
       expect(source).toContain(
         "SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup",
       );
       expect(source).toContain(
         "DROP TABLE drizzle.__migration_history_smoke_backup",
       );
+      expect(source).toContain('"event":"migrate.stale_bundle_noop"');
+      expect(source).toContain('"event":"migrate.stale_bundle_refused"');
       expect(source).not.toContain(":'original_hash'");
     }
+    expect(releaseSmoke).toContain(
+      "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT * FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2",
+    );
+    expect(releaseSmoke).toContain("DELETE FROM drizzle.__drizzle_migrations");
+    expect(releaseSmoke).toContain("INSERT INTO drizzle.__drizzle_migrations");
+    expect(migrationSmoke).toContain(
+      "CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT id, hash",
+    );
+    expect(migrationSmoke).toContain(
+      "CREATE TABLE public.__migration_history_smoke_probe",
+    );
+    expect(migrationSmoke).toContain(
+      "Migration SQL ran before the history preflight.",
+    );
   });
 
   test("release and migration smoke tests wait for scheduler initialization", async () => {

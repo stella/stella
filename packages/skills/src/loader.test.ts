@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseSkillFile, SkillFileError } from "./loader";
+import {
+  listSkillMetadata,
+  loadSkill,
+  parseSkillFile,
+  readDocumentedChatReads,
+  readExcludedChatTools,
+  readSkillDisplayName,
+  SkillFileError,
+} from "./loader";
+import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
 import { getSkillResourceKind } from "./resource-kinds";
+import { GENERATED_SKILLS } from "./skills.gen";
 
 // Unwraps a parse for assertions; a refused file surfaces as its typed error.
 const parseValid = (source: string) => {
@@ -151,6 +161,69 @@ metadata: [one, two]
 
 Body.`),
     ).toThrow("Skill file frontmatter metadata must be a string mapping");
+  });
+
+  test("reads the chat tools a skill excludes from its metadata", () => {
+    const parsed = parseValid(`---
+name: excluding-skill
+description: Excludes a chat tool.
+metadata:
+  stella-chat-excluded-tools: "spawn_subagents   web_search\tspawn_subagents"
+---
+
+Body.`);
+
+    expect(readExcludedChatTools(parsed.metadata.metadata)).toEqual([
+      "spawn_subagents",
+      "web_search",
+    ]);
+  });
+
+  test("excludes no chat tool when the metadata key is absent or blank", () => {
+    const absent = parseValid(`---
+name: plain-skill
+description: Excludes nothing.
+metadata:
+  author: stella
+---
+
+Body.`);
+    const blank = parseValid(`---
+name: blank-skill
+description: Declares the key with nothing in it.
+metadata:
+  stella-chat-excluded-tools: "  "
+---
+
+Body.`);
+
+    expect(readExcludedChatTools(absent.metadata.metadata)).toEqual([]);
+    expect(readExcludedChatTools(blank.metadata.metadata)).toEqual([]);
+    expect(readExcludedChatTools(undefined)).toEqual([]);
+  });
+
+  test("reads the chat reads a skill documents up front from its metadata", () => {
+    const parsed = parseValid(`---
+name: documenting-skill
+description: Documents two reads.
+metadata:
+  stella-chat-documented-reads: "list_documents\tread_content_across_matters  list_documents"
+---
+
+Body.`);
+    const absent = parseValid(`---
+name: plain-skill
+description: Documents nothing.
+---
+
+Body.`);
+
+    expect(readDocumentedChatReads(parsed.metadata.metadata)).toEqual([
+      "list_documents",
+      "read_content_across_matters",
+    ]);
+    expect(readDocumentedChatReads(absent.metadata.metadata)).toEqual([]);
+    expect(readDocumentedChatReads(undefined)).toEqual([]);
   });
 
   test("ignores unsupported top-level fields without widening the output", () => {
@@ -340,6 +413,57 @@ Body.`);
     expect(parsed.error).toBeInstanceOf(SkillFileError);
     expect(parsed.error.message).toBe(
       "Skill file frontmatter must include name and description",
+    );
+  });
+});
+
+describe("shipped built-in skills", () => {
+  // Chat resolves a built-in by its frontmatter name and loads it by its
+  // directory id, so the two must be the same string.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s is named after its directory and fits the package limits",
+    (id) => {
+      const skill = loadSkill(id);
+
+      expect(skill.name).toBe(id);
+      expect(skill.name).toMatch(SKILL_NAME_PATTERN);
+      expect(skill.description.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.descriptionMaxChars,
+      );
+      expect(skill.body.length).toBeLessThanOrEqual(
+        SKILL_PACKAGE_LIMITS.bodyMaxChars,
+      );
+    },
+  );
+
+  // Menus show the title; the slug stays the identifier. A shipped skill
+  // with no title of its own would show its slug to every user.
+  test.each(GENERATED_SKILLS.map(({ id }) => id))(
+    "%s carries a readable title apart from its slug",
+    (id) => {
+      const skill = loadSkill(id);
+
+      expect(readSkillDisplayName(skill)).not.toBe(skill.name);
+    },
+  );
+
+  test("a skill without a title is shown under its name", () => {
+    expect(
+      readSkillDisplayName({ metadata: { other: "x" }, name: "plain-skill" }),
+    ).toBe("plain-skill");
+    expect(
+      readSkillDisplayName({
+        metadata: { "stella-display-name": "  " },
+        name: "plain-skill",
+      }),
+    ).toBe("plain-skill");
+  });
+
+  test("the metadata list names every shipped skill", () => {
+    expect(listSkillMetadata().map(({ name }) => name)).toEqual(
+      GENERATED_SKILLS.map(({ id }) => id).toSorted((a, b) =>
+        a.localeCompare(b),
+      ),
     );
   });
 });

@@ -44,6 +44,7 @@ import type {
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { closeChatRunLogOnTx } from "@/api/lib/chat/run-log";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -113,6 +114,22 @@ export class ChatTurnStopRequestedError extends TaggedError(
 )<{
   message: string;
 }> {}
+
+/**
+ * Thrown inside a settlement transaction whose execution no longer owns its
+ * turn: another execution or the reaper settled it first, so the transaction
+ * rolls back and that outcome stands. It is how the ownership fence refuses a
+ * stale owner, never a defect of the owner that meets it.
+ */
+export class ChatTurnNotOwnedError extends TaggedError(
+  "ChatTurnNotOwnedError",
+)<{
+  message: string;
+}> {}
+
+/** Whether a settlement failed because its execution no longer owns the turn. */
+export const isChatTurnNotOwned = (error: { cause?: unknown }): boolean =>
+  ChatTurnNotOwnedError.is(error.cause);
 
 /**
  * Turn timestamps participate in database check constraints with `created_at`.
@@ -275,8 +292,19 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       status: "cancelled",
     })
     .where(and(expired, isNotNull(chatTurns.cancelRequestedAt)))
-    .returning({ id: chatTurns.id });
-  if (stopped.length > 0) {
+    .returning({
+      id: chatTurns.id,
+      organizationId: chatTurns.organizationId,
+      runId: chatTurns.runId,
+    });
+  const [stoppedTurn] = stopped;
+  if (stoppedTurn !== undefined) {
+    await closeChatRunLogOnTx({
+      organizationId: stoppedTurn.organizationId,
+      runId: stoppedTurn.runId,
+      turnId: stoppedTurn.id,
+      tx,
+    });
     await settleInterruptedContinuationOnTx({
       outcome: USER_STOP_OUTCOME,
       threadId,
@@ -294,8 +322,19 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       status: "interrupted",
     })
     .where(and(expired, isNull(chatTurns.cancelRequestedAt)))
-    .returning({ id: chatTurns.id });
-  if (interrupted.length > 0) {
+    .returning({
+      id: chatTurns.id,
+      organizationId: chatTurns.organizationId,
+      runId: chatTurns.runId,
+    });
+  const [interruptedTurn] = interrupted;
+  if (interruptedTurn !== undefined) {
+    await closeChatRunLogOnTx({
+      organizationId: interruptedTurn.organizationId,
+      runId: interruptedTurn.runId,
+      turnId: interruptedTurn.id,
+      tx,
+    });
     await settleInterruptedContinuationOnTx({
       outcome: OWNER_LOST_OUTCOME,
       threadId,
@@ -1350,8 +1389,19 @@ export const settleChatTurnOnTx = async ({
     .update(chatTurns)
     .set(values)
     .where(isUserStop ? owned : and(owned, isNull(chatTurns.cancelRequestedAt)))
-    .returning({ id: chatTurns.id });
-  if (updated.length === 1) {
+    .returning({
+      id: chatTurns.id,
+      organizationId: chatTurns.organizationId,
+      runId: chatTurns.runId,
+    });
+  const [settled, ...others] = updated;
+  if (settled !== undefined && others.length === 0) {
+    await closeChatRunLogOnTx({
+      organizationId: settled.organizationId,
+      runId: settled.runId,
+      turnId: settled.id,
+      tx,
+    });
     return "settled";
   }
   const stillOwned = await tx

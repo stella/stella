@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { beforeEach, expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   courtTierSqlFromMap,
@@ -164,11 +165,14 @@ test("a cache reload ranks an overlapping court the same, whatever order the row
   };
   const rank = (map: CourtWeightMap) => ({
     lookup: courtWeightFromMap(map, "Shared Court"),
-    rendered: courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      map,
-    }),
+    rendered: new PgDialect().sqlToQuery(
+      courtTierSqlFromMap({
+        countryColumn: "d.country",
+        courtColumn: "d.court",
+        courtIdColumn: "d.court_id",
+        map,
+      }),
+    ),
   });
 
   const asRead = rank(await registryFrom(OVERLAPPING_ROWS));

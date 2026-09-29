@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -7,7 +7,14 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatThreadNames, chatThreads, chatTurns } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatRunLogs,
+  chatThreadNames,
+  chatThreads,
+  chatTurns,
+} from "@/api/db/schema";
+import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import {
@@ -25,13 +32,17 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import type { PersistableChatMessage } from "./types";
+import type {
+  PersistableChatMessage,
+  PersistableTerminalAssistantMessage,
+} from "./types";
 import type { UploadedChatFile } from "./upload-files";
 
 let webSearchProviderLoadHook: (() => void) | undefined;
@@ -164,6 +175,19 @@ const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
       ? { where: async () => startedThreadNames }
       : select().from(),
 });
+
+// Settlement closes the turn's run log in the transaction that ends the turn.
+const withRunLogInsert =
+  (insert: (table: unknown) => unknown) => (table: unknown) =>
+    table === chatRunLogs
+      ? { values: () => ({ onConflictDoNothing: async () => undefined }) }
+      : insert(table);
+
+const withRunLogUpdate =
+  (update: (table: unknown) => unknown) => (table: unknown) =>
+    table === chatRunLogs
+      ? { set: () => ({ where: async () => undefined }) }
+      : update(table);
 
 const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   if (typeof transaction !== "object" || transaction === null) {
@@ -818,7 +842,7 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             // The compaction preflight reads the checkpoint once the turn is
@@ -856,7 +880,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -940,7 +964,7 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -968,7 +992,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: findOrganizationSettings },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -1030,7 +1054,7 @@ describe("send message disconnect handling", () => {
       createContext({
         contextMatterIds: [],
         transaction: {
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -1058,7 +1082,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -1144,7 +1168,7 @@ describe("send message disconnect handling", () => {
         contextMatterIds: [],
         transaction: {
           execute: lookup,
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -1172,7 +1196,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -1223,7 +1247,7 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          insert: () => ({ values: insertValues }),
+          insert: withRunLogInsert(() => ({ values: insertValues })),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -1259,7 +1283,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update: (table: unknown) => {
+          update: withRunLogUpdate((table: unknown) => {
             if (table === chatThreads) {
               return { set: () => ({ where: updateWhere }) };
             }
@@ -1271,7 +1295,7 @@ describe("send message disconnect handling", () => {
               };
             }
             throw new Error("Unexpected table update in chat send test");
-          },
+          }),
         },
       }),
     );
@@ -1430,5 +1454,314 @@ describe("send message turn persistence", () => {
         uploadedFiles: [uploadedFile],
       }),
     );
+  });
+});
+
+describe("assistant turn settlement", () => {
+  type StreamChatProps = Parameters<typeof streamChat>[0];
+  const assistantMessageId = toSafeId<"chatMessage">(
+    "00000000-0000-0000-0000-00000000000a",
+  );
+  const completedMessage = (
+    parts: PersistableChatMessage["parts"],
+  ): PersistableTerminalAssistantMessage => ({
+    ...toPersistableChatMessage({
+      id: assistantMessageId,
+      parts,
+      role: "assistant",
+    }),
+    metadata: { turnOutcome: { type: "completed" } },
+    role: "assistant",
+  });
+  const isAssistantRow = (values: unknown) =>
+    Array.isArray(values) &&
+    values.some(
+      (row: unknown) =>
+        typeof row === "object" &&
+        row !== null &&
+        "role" in row &&
+        row.role === "assistant",
+    );
+
+  /**
+   * Runs a send up to the provider dispatch, which is mocked to hand back the
+   * stream's `onFinish` callback instead of streaming, so a test can drive
+   * the settlement path with a chosen response message and fault.
+   */
+  const startStreamingTurn = async ({
+    failAssistantInsertOnce = false,
+    onSafeDbTransaction,
+  }: {
+    failAssistantInsertOnce?: boolean;
+    onSafeDbTransaction?: (() => void) | undefined;
+  } = {}) => {
+    let onFinish: StreamChatProps["onFinish"] | undefined;
+    const turnUpdates: unknown[] = [];
+    const streamResponse = mock(async (props: StreamChatProps) => {
+      onFinish = props.onFinish;
+      return new Response("", {
+        headers: { "content-type": "text/event-stream" },
+      });
+    });
+    const send = createSendMessage({
+      compactMessagesForContext: compactMessagesForContextMock,
+      createRefRegistry: createChatRefRegistry,
+      indexThread: upsertChatThreadSearchDocumentMock,
+      loadExternalMcpTools: loadExternalMcpToolsForUserMock,
+      loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+      rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+      streamResponse,
+      uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+    });
+    externalMcpToolsLoadHook = () => {};
+    let assistantInsertsFailed = 0;
+    const selectWithThreadLock = () => ({
+      from: () => ({
+        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
+        where: () => ({
+          for: async () => [{ id: threadId }],
+          limit: async () => [],
+          orderBy: emptyOrderedRows,
+        }),
+      }),
+    });
+    const insert = (table: unknown) => ({
+      values: (values: unknown) => {
+        if (table === chatTurns) {
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: turnId }],
+            }),
+          };
+        }
+        if (
+          table === chatMessages &&
+          failAssistantInsertOnce &&
+          assistantInsertsFailed === 0 &&
+          isAssistantRow(values)
+        ) {
+          assistantInsertsFailed += 1;
+          throw new Error("chat_messages insert failed");
+        }
+        return undefined;
+      },
+    });
+    const update = (table: unknown) => ({
+      set: (values: unknown) => {
+        if (table === chatTurns) {
+          turnUpdates.push(values);
+          return {
+            where: () => ({
+              returning: async () => [{ cancelRequestedAt: null, id: turnId }],
+            }),
+          };
+        }
+        return { where: async () => undefined };
+      },
+    });
+
+    const result = await send.handler(
+      createContext({
+        contextMatterIds: [],
+        onSafeDbTransaction,
+        transaction: {
+          insert: withRunLogInsert(insert),
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                messages: [],
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            chatTurns: {
+              findFirst: async ({
+                where,
+              }: {
+                where?: { status?: { eq?: string } };
+              }) =>
+                where?.status?.eq === "running" ? undefined : { id: turnId },
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: withThreadNameReads(selectWithThreadLock),
+          update: withRunLogUpdate(update),
+        },
+      }),
+    );
+    expect(streamResponse).toHaveBeenCalledTimes(1);
+    if (onFinish === undefined) {
+      throw new Error(
+        `the send did not reach streaming: ${JSON.stringify(result)}`,
+      );
+    }
+    return { onFinish, turnUpdates };
+  };
+
+  /** The rejection `onFinish` reports to the stream, captured as a value. */
+  const settlementFailure = async (
+    settle: Promise<void> | void,
+  ): Promise<unknown> => {
+    const settled = await Result.tryPromise({
+      try: async () => await settle,
+      catch: (cause) => cause,
+    });
+    return Result.isError(settled) ? settled.error : undefined;
+  };
+
+  const failedTurnUpdate = (failureCode: string) =>
+    expect.objectContaining({
+      failureCode,
+      failureRetryable: true,
+      status: "failed",
+    });
+
+  test("fails the turn when the generated tool parts do not validate", async () => {
+    const { onFinish, turnUpdates } = await startStreamingTurn();
+    const input = {
+      analysis: "The side is not in the request.",
+      questions: [{ question: "Which side are you on?", reason: "Tiers." }],
+    };
+
+    expect(
+      await settlementFailure(
+        onFinish({
+          outcome: { type: "completed" },
+          responseMessage: completedMessage([
+            {
+              // The text names a different call than the input: the
+              // canonical-input check rejects the part.
+              arguments: JSON.stringify({ ...input, analysis: "Which law?" }),
+              id: "call-drifted",
+              input,
+              name: "ask-user",
+              state: "input-complete",
+              type: "tool-call",
+            },
+          ]),
+        }),
+      ),
+    ).toMatchObject({
+      message: "Generated chat tool parts are invalid",
+      status: 500,
+    });
+    expect(turnUpdates).toContainEqual(failedTurnUpdate("persistence"));
+  });
+
+  test("fails the turn as a persistence failure when the assistant message cannot be written", async () => {
+    const { onFinish, turnUpdates } = await startStreamingTurn({
+      failAssistantInsertOnce: true,
+    });
+
+    expect(
+      await settlementFailure(
+        onFinish({
+          outcome: { type: "completed" },
+          responseMessage: completedMessage([
+            { content: "Done.", type: "text" },
+          ]),
+        }),
+      ),
+    ).toMatchObject({
+      message: "Failed to persist assistant turn",
+      status: 500,
+    });
+    expect(turnUpdates).toContainEqual(failedTurnUpdate("persistence"));
+  });
+
+  test("fails the turn when settlement throws instead of returning", async () => {
+    let explodeNextTransaction = false;
+    const { onFinish, turnUpdates } = await startStreamingTurn({
+      onSafeDbTransaction: () => {
+        if (!explodeNextTransaction) {
+          return;
+        }
+        explodeNextTransaction = false;
+        throw new Error("connection reset");
+      },
+    });
+    explodeNextTransaction = true;
+
+    expect(
+      await settlementFailure(
+        onFinish({
+          outcome: { type: "completed" },
+          responseMessage: completedMessage([
+            { content: "Done.", type: "text" },
+          ]),
+        }),
+      ),
+    ).toMatchObject({
+      cause: expect.objectContaining({ message: "connection reset" }),
+      message: "Failed to settle assistant turn",
+      status: 500,
+    });
+    expect(turnUpdates).toContainEqual(failedTurnUpdate("internal"));
+  });
+
+  test("keeps a completed turn completed when a follow-up throws", async () => {
+    let turnCompleted = (): boolean => false;
+    let followUpFailures = 0;
+    const { onFinish, turnUpdates } = await startStreamingTurn({
+      // The first transaction after the turn row reads completed is a
+      // follow-up's (the compaction mark), never the turn's settlement.
+      onSafeDbTransaction: () => {
+        if (!turnCompleted() || followUpFailures > 0) {
+          return;
+        }
+        followUpFailures += 1;
+        throw new Error("compaction mark failed");
+      },
+    });
+    turnCompleted = () =>
+      turnUpdates.some(
+        (update) =>
+          typeof update === "object" &&
+          update !== null &&
+          "status" in update &&
+          update.status === "completed",
+      );
+    // Long enough to cross any model's compaction trigger, so the follow-up
+    // writes the compaction mark.
+    const longReply = Array.from({ length: 128 }, (_, index) => ({
+      content: `${String(index)} ${"clause ".repeat(1200)}`,
+      type: "text" as const,
+    }));
+
+    const failure = await settlementFailure(
+      onFinish({
+        outcome: { type: "completed" },
+        responseMessage: completedMessage(longReply),
+      }),
+    );
+
+    // The fixture reached the fault: the follow-up's write threw.
+    expect(followUpFailures).toBe(1);
+    // The stored completion stays the turn's outcome.
+    const violations = violationsOf(
+      CHAT_ORACLE.persistedTurnOutcome,
+      turnUpdates.filter(
+        (update) =>
+          typeof update === "object" &&
+          update !== null &&
+          "status" in update &&
+          update.status === "failed",
+      ),
+    );
+    if (violations.length > 0) {
+      panic(`The turn breaks an invariant: ${JSON.stringify(violations)}`);
+    }
+    expect(turnUpdates).toContainEqual(
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(failure).toBeUndefined();
   });
 });

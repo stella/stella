@@ -14,6 +14,7 @@
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
+import { skillLabel } from "@/components/inspector/inspector-store-types";
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 
@@ -47,7 +48,7 @@ export const railChatOpenArgs = ({
   const skillContext =
     activeSkill === undefined
       ? {}
-      : { activeSkill, label: activeSkill.skillName };
+      : { activeSkill, label: skillLabel(activeSkill) };
   const matterContext =
     workspaceId === undefined
       ? {}

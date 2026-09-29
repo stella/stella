@@ -26,6 +26,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
@@ -70,6 +71,7 @@ export const PersonalTimesheetDay = ({
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
   const timezoneId = Temporal.Now.timeZoneId();
+  const userId = useAuthenticatedUser().id;
   const [dialog, setDialog] = useState<DayDialog>({ type: "closed" });
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [busySuggestions, setBusySuggestions] = useState<ReadonlySet<string>>(
@@ -79,17 +81,17 @@ export const PersonalTimesheetDay = ({
   const canUpdate = usePermissions({ timeEntry: ["update"] });
   const canDelete = usePermissions({ timeEntry: ["delete"] });
   const entriesQuery = useSuspenseInfiniteQuery(
-    timeEntriesInfiniteOptions(workspaceId, {
+    timeEntriesInfiniteOptions(workspaceId, userId, {
       dateFrom: date,
       dateTo: date,
       scope: "me",
     }),
   );
   const { data: summary } = useSuspenseQuery(
-    timeEntrySummaryOptions(workspaceId, date, date),
+    timeEntrySummaryOptions(workspaceId, userId, date, date),
   );
   const { data: suggestions } = useSuspenseQuery(
-    timeEntrySuggestionsOptions(workspaceId, date, timezoneId),
+    timeEntrySuggestionsOptions(workspaceId, userId, date, timezoneId),
   );
   const entries = useMemo(
     () => entriesQuery.data.pages.flatMap((page) => page.items),

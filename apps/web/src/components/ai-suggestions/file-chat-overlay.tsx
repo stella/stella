@@ -926,11 +926,12 @@ const ResolvedFileChatOverlay = ({
   requestDocxEditMode,
   workspaceId,
 }: ResolvedFileChatOverlayProps) => {
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const queryClient = useQueryClient();
   const fileThreadKey = {
     entityId: activeFile.entityId,
     fieldId: activeFile.fileFieldId,
+    userId,
     workspaceId,
   };
   // Must match FileChatOverlayInner's own `hasDocxEditSurface` below

@@ -26,6 +26,7 @@ a credential.
 | US OFAC SDN                              | [SLS SDN XML](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.XML)                                       | `parseOfacList("us-sdn", stream)`     | `Publish_Date`                   | HTTP HEAD `Last-Modified`                                                                                |
 | US OFAC consolidated non-SDN             | [SLS consolidated XML](https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONSOLIDATED.XML)                     | `parseOfacList("us-non-sdn", stream)` | `Publish_Date`                   | HTTP HEAD `Last-Modified`                                                                                |
 | UK Sanctions List                        | [FCDO XML](https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml)                                                                | `parseUkList(stream)`                 | `DateGenerated`                  | HTTP HEAD `Last-Modified`                                                                                |
+| Swiss SECO consolidated list             | [SECO XML](https://www.seco.admin.ch/en/searching-for-subjects-sanctions)                                                               | `parseSecoList(stream)`               | root `date`                      | HTTP HEAD `Content-Disposition` filename                                                                 |
 
 Every parser returns a `Result`: the complete list or a
 `SanctionsListParseError`, never the entries read before a problem. The XML
@@ -44,6 +45,12 @@ is the UK's official list. Its XML distinguishes individuals, entities and ships
 the parser keeps names and alias strengths, partial birth dates, nationalities,
 identifiers, addresses and regime names. A date with an unknown day or month
 keeps only the stated precision.
+
+The [SECO consolidated XML](https://www.seco.admin.ch/en/searching-for-subjects-sanctions)
+includes delisted history. `parseSecoList` keeps currently listed targets,
+resolves their programme and place references, and retains the source's name
+variants and partial birth dates. Its dated download filename is available in
+the `Content-Disposition` header of an HTTP HEAD response.
 
 ## Screening
 
@@ -88,3 +95,4 @@ The library code is Apache-2.0. Source data has separate terms:
 | [Czech MFA list](https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html)                                                                   | Published on the [MFA open data page](https://mzv.gov.cz/jnp/cz/o_ministerstvu/otevrena_data/index_5.html).                                                          |
 | [US OFAC lists](https://ofac.treasury.gov/sanctions-list-service)                                                                                       | US federal government work is [public domain under 17 USC § 105](https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec105.htm). |
 | [UK Sanctions List](https://www.gov.uk/government/publications/the-uk-sanctions-list)                                                                   | Terms are on the [publication page](https://www.gov.uk/government/publications/the-uk-sanctions-list).                                                               |
+| [Swiss SECO list](https://www.seco.admin.ch/en/searching-for-subjects-sanctions)                                                                        | Terms are on the [federal terms page](https://www.admin.ch/en/terms-and-conditions).                                                                                 |

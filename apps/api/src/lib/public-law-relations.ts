@@ -9,6 +9,7 @@
 export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawCitations: "case_law_citations",
   caseLawCorpusTombstones: "case_law_corpus_tombstones",
+  caseLawCourtDirectoryRanks: "case_law_court_directory_ranks",
   caseLawCourtWeights: "case_law_court_weights",
   caseLawDecisionIdentifiers: "case_law_decision_identifiers",
   caseLawDecisionJudges: "case_law_decision_judges",
@@ -33,6 +34,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   legislationDocuments: "legislation_documents",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
+  legislationWorkNames: "legislation_work_names",
   statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
@@ -128,6 +130,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   // which pack owes the rewrite stay on the owning service side.
   case_law_corpus_tombstones: {
     location: "required",
+  },
+  // The keyed rank lookup in public case-law search and citation scoring.
+  case_law_court_directory_ranks: {
+    country: "required",
+    court_id: "required",
+    tier: "required",
+    weight: "required",
   },
   // The court registry the public ranking and court chips read. The row id
   // and its creation time are bookkeeping.
@@ -377,6 +386,15 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
   legislation_sources: {
     id: "required",
     descriptor: "required",
+  },
+  // The name lookup a legislation search places named acts first by: the
+  // match keys and what they point at, not the names' text.
+  legislation_work_names: {
+    document_id: "required",
+    country: "required",
+    derivation: "required",
+    cited_key: "required",
+    match_key: "required",
   },
 } as const satisfies Record<
   PublicLawRelation,

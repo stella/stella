@@ -106,6 +106,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // the ingestion pipeline.
   "case_law_judges",
   "case_law_decision_judges",
+  // A directory court's rank: global legal data read by case-law search and
+  // citation scoring, written only by its seed migrations and the seed script.
+  "case_law_court_directory_ranks",
   // Addresses erased out of shared corpus packs: every corpus read consults
   // them before it fetches, and only the erasure path writes them.
   "case_law_corpus_tombstones",
@@ -172,6 +175,9 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Raw prefixes owed a sweep: keys of erased decisions, recorded by
   // ingestion and erasure and drained by the root scheduler.
   "case_law_raw_sweeps",
+  // Names stored legislation titles state: written by ingestion and the owner
+  // backfill, read by the public-law reader, never by the request role.
+  "legislation_work_names",
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",

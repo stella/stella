@@ -203,7 +203,7 @@ query($owner: String!, $name: String!, $number: Int!) {
         statusCheckRollup { contexts(first: 100) { nodes {
           __typename
           ... on CheckRun { name status conclusion }
-          ... on StatusContext { context state }
+          ... on StatusContext { context state description }
         } } }
         ${GATE_RUNS_FIELDS}
       } } }
@@ -382,6 +382,7 @@ const parsePullRequest = (
       .map((node) => ({
         context: text(node, "context"),
         state: text(node, "state"),
+        description: nullableText(node, "description"),
       })),
     checkRuns: contexts
       .filter((node) => field(node, "__typename") === "CheckRun")

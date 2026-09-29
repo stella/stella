@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { status, t } from "elysia";
@@ -40,7 +41,10 @@ import {
   readPublicLawCountry,
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
-import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import type {
+  LegislationReadDb,
+  LegislationReadTransaction,
+} from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -158,40 +162,10 @@ const newerOfSameWork = sql`newer.source_id = ${legislationDocuments.sourceId}
       AND newer.language = ${legislationDocuments.language}
       AND newer.id <> ${legislationDocuments.id}`;
 
-/**
- * The one applicable consolidation of a work: no later eligible window
- * covering the same date exists for its `(source, eli, language)`. The
- * anti-join keeps the list flat, so Postgres can stop at the page limit.
- */
-const isVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`NOT EXISTS (
-    SELECT 1
-    FROM legislation_documents AS newer
-    WHERE ${newerOfSameWork}
-      AND ${inForceOn(newerRef, asOf)}
-      AND (
-        ${versionSortKey(newerRef.validFrom)},
-        newer.id
-      ) > (
-        ${versionSortKey(legislationDocuments.versionValidFrom)},
-        ${legislationDocuments.id}
-      )
-  )`;
-
-/** The version each work's ordinary, present-day listing shows. */
-export const isCurrentVersionOfWork = isVersionOfWorkAt(sql`CURRENT_DATE`);
-
 /** The same Work's rows as the listed one: `(source, eli, language)`. */
 const sameWork = sql`work.source_id = ${legislationDocuments.sourceId}
   AND work.eli = ${legislationDocuments.eli}
   AND work.language = ${legislationDocuments.language}`;
-
-/** Whether any version of the listed row's Work can apply, at any date. */
-const workHasEligibleVersion = sql`EXISTS (
-  SELECT 1
-  FROM legislation_documents AS work
-  WHERE ${sameWork}
-    AND ${eligibleExpression(workRef)}
-)`;
 
 /**
  * The row a listing shows per Work: the latest eligible wording that opened
@@ -205,27 +179,40 @@ const workHasEligibleVersion = sql`EXISTS (
  * that opened by `asOf`, preferring a consolidation over a promulgated text,
  * so it stays findable under the validity that says so. Withdrawn versions
  * are never listed, so a Work holding only those is not either.
+ *
+ * One anti-join over the Work's other rows excludes the listed one on either
+ * ground: a later version that outranks it, or (when it is not eligible
+ * itself) any eligible version at all. Written as `eligible OR NOT EXISTS
+ * (…)` the second ground cannot become a join, and Postgres plans it as a
+ * hashed subplan that reads the whole table on every listing; as a second
+ * anti-join it costs the facets aggregate a second pass over the table. The
+ * listed row never satisfies the second ground itself, so leaving it out of
+ * the probe changes nothing.
  */
 export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
   ${openedBy(listedRef, asOf)}
   AND ${notWithdrawn(listedRef)}
-  AND (${eligibleExpression(listedRef)} OR NOT ${workHasEligibleVersion})
 ) AND NOT EXISTS (
     SELECT 1
     FROM legislation_documents AS newer
     WHERE ${newerOfSameWork}
-      AND ${openedBy(newerRef, asOf)}
-      AND ${notWithdrawn(newerRef)}
-      AND (${eligibleExpression(newerRef)} OR NOT ${eligibleExpression(listedRef)})
-      AND (
-        ${applicableKind(newerRef)},
-        ${versionSortKey(newerRef.validFrom)},
-        newer.id
-      ) > (
-        ${applicableKind(listedRef)},
-        ${versionSortKey(legislationDocuments.versionValidFrom)},
-        ${legislationDocuments.id}
-      )
+      AND ((
+        ${openedBy(newerRef, asOf)}
+        AND ${notWithdrawn(newerRef)}
+        AND (${eligibleExpression(newerRef)} OR NOT ${eligibleExpression(listedRef)})
+        AND (
+          ${applicableKind(newerRef)},
+          ${versionSortKey(newerRef.validFrom)},
+          newer.id
+        ) > (
+          ${applicableKind(listedRef)},
+          ${versionSortKey(legislationDocuments.versionValidFrom)},
+          ${legislationDocuments.id}
+        )
+      ) OR (
+        ${eligibleExpression(newerRef)}
+        AND NOT ${eligibleExpression(listedRef)}
+      ))
   )`;
 
 /**
@@ -233,21 +220,19 @@ export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
  * it holds at least one consolidation, and every consolidation it holds is
  * never in force. Anything less (an inconsistent window, only a promulgated
  * text) proves nothing, and the Work is `unknown`.
+ *
+ * One aggregate over the Work's rows rather than `EXISTS … AND NOT EXISTS …`:
+ * `bool_and` of no rows is null, so it is true only for a non-empty set that
+ * is all never in force. An aggregate subquery stays a per-row probe, where
+ * an `EXISTS` inside a `CASE` may be planned as a hashed scan of the table.
  */
-const workNeverInForce = sql`(EXISTS (
-  SELECT 1
+const workNeverInForce = sql`coalesce((
+  SELECT bool_and(${workRef.disposition} = 'never-in-force')
   FROM legislation_documents AS work
   WHERE ${sameWork}
     AND ${applicableKind(workRef)}
     AND ${notWithdrawn(workRef)}
-) AND NOT EXISTS (
-  SELECT 1
-  FROM legislation_documents AS work
-  WHERE ${sameWork}
-    AND ${applicableKind(workRef)}
-    AND ${notWithdrawn(workRef)}
-    AND ${workRef.disposition} <> 'never-in-force'
-))`;
+), false)`;
 
 /** Whether the listed wording still applies on `asOf`; see `LEGISLATION_LIST_VALIDITIES`. */
 const listValidity = (asOf: SQLWrapper): SQL<LegislationListValidity> =>
@@ -367,9 +352,87 @@ export const listStatutesHandler = async (
   }
   const asOf =
     query.asOf === undefined ? sql`CURRENT_DATE` : sql`${query.asOf}::date`;
+  const trimmedQuery = query.query?.trim() || null;
+  if (
+    cursor !== null &&
+    cursor.type !==
+      (trimmedQuery === null
+        ? LEGISLATION_LIST_CURSOR_KIND.recent
+        : LEGISLATION_LIST_CURSOR_KIND.search)
+  ) {
+    return status(400, { message: "Invalid cursor" });
+  }
+  if (
+    query.number !== undefined &&
+    actNumberCondition(query.number, query.collection) === null
+  ) {
+    return status(400, { message: "Invalid act number" });
+  }
+
+  const normalizedQuery = { ...query };
+  delete normalizedQuery.query;
+  if (trimmedQuery !== null) {
+    normalizedQuery.query = trimmedQuery;
+  }
+
+  const rows = await legislationDb(
+    async (tx) =>
+      await buildListStatutesQuery(tx, {
+        country: countryRead.country,
+        query: normalizedQuery,
+        limit,
+        cursor,
+        asOf,
+      }),
+  );
+
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) =>
+      trimmedQuery === null
+        ? encodePaginationCursor([
+            LEGISLATION_LIST_CURSOR_KIND.recent,
+            item.validFromKey,
+            item.id,
+          ])
+        : encodePaginationCursor([
+            LEGISLATION_LIST_CURSOR_KIND.search,
+            String(item.rank),
+            item.titleSortKey,
+            item.id,
+          ]),
+  });
+
+  return {
+    ...page,
+    items: page.items.map(
+      ({
+        rank: _rank,
+        titleSortKey: _titleSortKey,
+        validFromKey: _validFromKey,
+        ...item
+      }) => item,
+    ),
+  };
+};
+
+type BuildListStatutesQueryOptions = {
+  country: string;
+  query: Omit<ListStatutesQuery, "country" | "limit" | "cursor" | "asOf">;
+  limit: number;
+  cursor: ListCursor | null;
+  asOf: SQLWrapper;
+};
+
+/** Builds the same bounded production statement used by the public list handler. */
+export const buildListStatutesQuery = (
+  tx: LegislationReadTransaction,
+  { country, query, limit, cursor, asOf }: BuildListStatutesQueryOptions,
+) => {
   const conditions: SQL[] = [
     publishedLegislationDocument,
-    eq(legislationDocuments.country, countryRead.country),
+    eq(legislationDocuments.country, country),
     isLatestOpenedVersionOfWorkAt(asOf),
   ];
 
@@ -388,7 +451,7 @@ export const listStatutesHandler = async (
   if (query.number !== undefined) {
     const byNumber = actNumberCondition(query.number, query.collection);
     if (byNumber === null) {
-      return status(400, { message: "Invalid act number" });
+      return panic("List statutes query received an invalid act number");
     }
     conditions.push(byNumber);
   }
@@ -423,7 +486,7 @@ export const listStatutesHandler = async (
 
   if (cursor !== null) {
     if (cursor.type !== ordering.type) {
-      return status(400, { message: "Invalid cursor" });
+      return panic("List statutes query received a mismatched cursor");
     }
     conditions.push(
       cursor.type === LEGISLATION_LIST_CURSOR_KIND.recent
@@ -432,78 +495,42 @@ export const listStatutesHandler = async (
     );
   }
 
-  const rows = await legislationDb(
-    async (tx) =>
-      await tx
-        .select({
-          id: legislationDocuments.id,
-          eli: legislationDocuments.eli,
-          slug: legislationDocuments.slug,
-          title: legislationDocuments.title,
-          titleSortKey,
-          validFromKey: sql<string>`${validFromKey}::text`.as("valid_from_key"),
-          rank:
-            ordering.type === LEGISLATION_LIST_CURSOR_KIND.search
-              ? sql<number>`${ordering.rank}`.as("title_rank")
-              : sql<number>`0`.as("title_rank"),
-          country: legislationDocuments.country,
-          language: legislationDocuments.language,
-          documentType: legislationDocuments.documentType,
-          status: legislationDocuments.status,
-          effectiveDate: legislationDocuments.effectiveDate,
-          versionValidFrom: legislationDocuments.versionValidFrom,
-          versionValidTo: legislationDocuments.versionValidTo,
-          sourceUrl: legislationDocuments.sourceUrl,
-          documentUrl: legislationDocuments.documentUrl,
-          citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
-          firstVersionValidFrom: firstVersionValidFrom.as(
-            "first_version_valid_from",
-          ),
-          amendmentCount: amendmentCount(asOf).as("amendment_count"),
-          lastAmendedOn: lastAmendedOn.as("last_amended_on"),
-          validity: listValidity(asOf).as("validity"),
-        })
-        .from(legislationDocuments)
-        .innerJoin(
-          legislationSources,
-          eq(legislationSources.id, legislationDocuments.sourceId),
-        )
-        .leftJoin(
-          caseLawStatuteCitationCountState,
-          statuteCitationCountStateJoin,
-        )
-        .where(and(...conditions))
-        .orderBy(...ordering.orderBy)
-        .limit(limit + 1),
-  );
-
-  const page = createCursorPage({
-    rows,
-    limit,
-    cursorForItem: (item) =>
-      ordering.type === LEGISLATION_LIST_CURSOR_KIND.recent
-        ? encodePaginationCursor([
-            LEGISLATION_LIST_CURSOR_KIND.recent,
-            item.validFromKey,
-            item.id,
-          ])
-        : encodePaginationCursor([
-            LEGISLATION_LIST_CURSOR_KIND.search,
-            String(item.rank),
-            item.titleSortKey,
-            item.id,
-          ]),
-  });
-
-  return {
-    ...page,
-    items: page.items.map(
-      ({
-        rank: _rank,
-        titleSortKey: _titleSortKey,
-        validFromKey: _validFromKey,
-        ...item
-      }) => item,
-    ),
-  };
+  return tx
+    .select({
+      id: legislationDocuments.id,
+      eli: legislationDocuments.eli,
+      slug: legislationDocuments.slug,
+      title: legislationDocuments.title,
+      titleSortKey,
+      validFromKey: sql<string>`${validFromKey}::text`.as("valid_from_key"),
+      rank:
+        ordering.type === LEGISLATION_LIST_CURSOR_KIND.search
+          ? sql<number>`${ordering.rank}`.as("title_rank")
+          : sql<number>`0`.as("title_rank"),
+      country: legislationDocuments.country,
+      language: legislationDocuments.language,
+      documentType: legislationDocuments.documentType,
+      status: legislationDocuments.status,
+      effectiveDate: legislationDocuments.effectiveDate,
+      versionValidFrom: legislationDocuments.versionValidFrom,
+      versionValidTo: legislationDocuments.versionValidTo,
+      sourceUrl: legislationDocuments.sourceUrl,
+      documentUrl: legislationDocuments.documentUrl,
+      citationCaseCount: statuteCitationCaseCount.as("citation_case_count"),
+      firstVersionValidFrom: firstVersionValidFrom.as(
+        "first_version_valid_from",
+      ),
+      amendmentCount: amendmentCount(asOf).as("amendment_count"),
+      lastAmendedOn: lastAmendedOn.as("last_amended_on"),
+      validity: listValidity(asOf).as("validity"),
+    })
+    .from(legislationDocuments)
+    .innerJoin(
+      legislationSources,
+      eq(legislationSources.id, legislationDocuments.sourceId),
+    )
+    .leftJoin(caseLawStatuteCitationCountState, statuteCitationCountStateJoin)
+    .where(and(...conditions))
+    .orderBy(...ordering.orderBy)
+    .limit(limit + 1);
 };

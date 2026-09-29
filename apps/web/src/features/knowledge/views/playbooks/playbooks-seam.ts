@@ -36,9 +36,14 @@ type Loadable<Item> = {
 
 /** What the playbooks page renders. The route's adapter fills it. */
 export type PlaybooksSource = {
-  starters: Loadable<KnowledgePlaybookStarter> & {
+  starters: {
+    /** `error`: the list could not be read. */
+    status: "loading" | "ready" | "error";
+    items: readonly KnowledgePlaybookStarter[];
     /** The starter being added right now; every card waits while it is. */
     pendingStarterId: string | null;
+    /** Reads the list again after it failed; absent where it cannot fail. */
+    retry?: (() => void) | undefined;
   };
   /** A library's recently used playbooks; absent where there is no library. */
   recent?: Loadable<KnowledgeRecentPlaybook> | undefined;

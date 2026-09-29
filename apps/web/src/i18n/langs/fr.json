@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Citée au moins {count} fois",
       "citedSummary": "{count, plural, =0 {Non citée} one {Citée une fois} other {Citée # fois}}",
       "decisionCount": "{count, plural, =0 {Aucune décision} one {# décision} other {# décisions}}",
       "lastNegative": "dernière citation négative en {year}",
@@ -629,6 +630,7 @@
       "none": "Aucune citation enregistrée pour l'instant.",
       "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
+      "partialSummary": "Les totaux des citations et la chronologie sont partiels.",
       "passageNotFound": "Le passage citant n'a pas été trouvé dans le texte",
       "positiveCount": "{count, plural, one {# positive} many {# positives} other {# positives}}",
       "showAll": "{count, plural, one {Afficher la décision} many {Afficher les # décisions} other {Afficher les # décisions}}",
@@ -1447,6 +1449,7 @@
     "back": "Retour",
     "cancel": "Annuler",
     "caseLaw": "Jurisprudence",
+    "catalogue": "Catalogue",
     "category": "Catégorie",
     "categoryName": "Nom de la catégorie",
     "changeColor": "Changer la couleur",
@@ -3182,6 +3185,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Compétences intégrées",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",
       "disableSkill": "Désactiver la compétence",
@@ -3223,6 +3227,23 @@
       "uploadHelp": "Utilisez un fichier SKILL.md ou un dossier .zip contenant SKILL.md et des ressources facultatives en lecture seule.",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Ajouter à la bibliothèque",
+      "added": "{name} est dans votre bibliothèque",
+      "confirmAddTitle": "Ajouter {name} à {organization} ?",
+      "confirmDescription": "Une copie de ce modèle sera enregistrée dans la bibliothèque de {organization}.",
+      "confirmDownloadTitle": "Télécharger {name} pour {organization} ?",
+      "confirmStarterDescription": "Une copie de ce playbook sera enregistrée dans la bibliothèque de {organization}.",
+      "confirmUseTitle": "Utiliser {name} dans {organization} ?",
+      "installFailed": "Le modèle n'a pas pu être ajouté",
+      "noPreview": "Aucun aperçu n'est disponible pour ce modèle.",
+      "notFound": "Ce modèle ne figure pas dans le catalogue.",
+      "unavailable": "Le catalogue n'est pas disponible pour le moment."
+    },
+    "landing": {
+      "accountLine": "Avec un compte gratuit, conservez les modèles, clauses et playbooks propres à votre organisation.",
+      "withAccount": "Avec un compte gratuit"
     },
     "mcp": {
       "addAndConnect": "Ajouter et connecter",
@@ -3705,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# invitation a échoué} many {# invitations ont échoué} other {# invitations ont échoué}}",
     "stepAi": "IA",
     "stepApps": "Applications et outils",
-    "stepCatalogue": "Catalogue d’outils",
     "stepJurisdiction": "Juridiction",
     "stepOrganization": "Équipe",
     "stepTeam": "Inviter",

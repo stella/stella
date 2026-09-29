@@ -31,6 +31,7 @@ import {
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import { startFakeS3, type FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -144,6 +145,7 @@ beforeAll(
         versionValidTo: row.versionValidTo,
         eli: row.eli,
         sourceDescriptor: null,
+        ...EFFECTIVE_CONSOLIDATION,
       }),
     );
     if (descriptor.action !== "upsert") {
@@ -231,6 +233,7 @@ test("a later part failure leaves the whole revision pending cleanup", async () 
       versionValidTo: row.versionValidTo,
       eli: "eli/cz/sb/2015/101",
       sourceDescriptor: null,
+      ...EFFECTIVE_CONSOLIDATION,
     }),
   );
   if (nextDescriptor.action !== "upsert") {

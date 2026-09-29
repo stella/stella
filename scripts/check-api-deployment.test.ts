@@ -86,7 +86,6 @@ describe("API deployment health receipt", () => {
     expect(outputsStart).toBeGreaterThan(permissionsStart);
     const healthPermissions = healthJob.slice(permissionsStart, outputsStart);
     expect(healthPermissions).toContain("contents: read");
-    expect(healthPermissions).toContain("deployments: read");
     expect(healthPermissions).not.toContain("write");
     expect(healthJob).toContain(
       "STAGING_HEALTH_URL: https://api-staging.stll.app/ready",
@@ -96,12 +95,12 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain('status="$NOT_READY_STATUS"');
     expect(healthJob).toContain('status="$READY_STATUS"');
     expect(healthJob).toContain(`echo "status=\${status}" >> "$GITHUB_OUTPUT"`);
+    // An unreachable environment is normally off: skip, unless asked to
+    // deploy into it anyway.
+    expect(healthJob).toContain("DEPLOY_WHEN_UNREACHABLE");
     expect(healthJob).toContain(
-      "workflow_dispatch bypasses the gate and deploys anyway.",
+      "Start staging, then dispatch this workflow again.",
     );
-    // An unreachable environment defers; only a wait past the budget fails.
-    expect(healthJob).toContain("readonly MAX_DEFERRAL_HOURS=");
-    expect(healthJob).toContain("the environment needs attention.");
     expect(apiBuild).toContain("needs: staging-health");
     expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
     expect(webBuild).toContain("needs: staging-health");

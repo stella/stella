@@ -65,7 +65,7 @@ export const Route = createFileRoute("/consent")({
       });
     }
 
-    return authContext;
+    return { ...authContext, userId: authContext.session.userId };
   },
   head: () => ({
     meta: [{ title: pageTitle("consent.title") }],
@@ -84,9 +84,10 @@ function ConsentPage() {
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });
+  const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const { data: organizations } = useQuery(organizationListOptions);
+  const { data: organizations } = useQuery(organizationListOptions(userId));
   const { data: currentUserRole } = useQuery({
     ...roleOptions,
     enabled: activeOrganizationId !== null,

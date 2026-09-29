@@ -14,6 +14,7 @@ export type {
 } from "@stll/api-contract/matter-activity";
 
 export type WorkspaceActivityKey = {
+  userId: string;
   workspaceId: string;
 };
 
@@ -68,5 +69,6 @@ export const workspacesKeys = {
   activity: (activeOrganizationId: string, key: WorkspaceActivityKey) => [
     ...workspacesKeys.activityAll(key.workspaceId),
     activeOrganizationId,
+    key.userId,
   ],
 };
