@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Viidatud vähemalt {count} korda",
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
       "lastNegative": "viimane negatiivne viide aastal {year}",
@@ -629,6 +630,7 @@
       "none": "Viiteid pole veel salvestatud.",
       "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
+      "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
       "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
@@ -1447,6 +1449,7 @@
     "back": "Tagasi",
     "cancel": "Tühista",
     "caseLaw": "Kohtupraktika",
+    "catalogue": "Kataloog",
     "category": "Kategooria",
     "categoryName": "Kategooria nimi",
     "changeColor": "Muuda värvi",
@@ -3225,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Lisa teeki",
+      "added": "{name} on sinu teegis",
+      "confirmAddTitle": "Kas lisada {name} organisatsioonile {organization}?",
+      "confirmDescription": "Selle malli koopia salvestatakse organisatsiooni {organization} teeki.",
+      "confirmDownloadTitle": "Kas laadida {name} alla organisatsioonile {organization}?",
+      "confirmStarterDescription": "Selle playbooki koopia salvestatakse organisatsiooni {organization} teeki.",
+      "confirmUseTitle": "Kas kasutada {name} organisatsioonis {organization}?",
+      "installFailed": "Malli lisamine ebaõnnestus",
+      "noPreview": "Selle malli eelvaade pole saadaval.",
+      "notFound": "Seda malli kataloogis ei ole.",
+      "unavailable": "Kataloog pole praegu saadaval."
+    },
+    "landing": {
+      "accountLine": "Tasuta kontoga hoiad alles oma organisatsiooni mallid, klauslid ja playbookid.",
+      "withAccount": "Tasuta kontoga"
+    },
     "mcp": {
       "addAndConnect": "Lisa ja ühenda",
       "addServer": "Lisa server",
@@ -3706,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# kutse ebaõnnestus} other {# kutset ebaõnnestus}}",
     "stepAi": "AI",
     "stepApps": "Rakendused ja tööriistad",
-    "stepCatalogue": "Kataloog",
     "stepJurisdiction": "Jurisdiktsioon",
     "stepOrganization": "Meeskond",
     "stepTeam": "Kutsu",

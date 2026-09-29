@@ -137,6 +137,8 @@ import { detached } from "@/lib/detached";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
+import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -188,6 +190,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
     includeTimesheets: showTimesheetLink,
+    publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
 
@@ -505,7 +508,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
     },
     tools: {
       action: () => {
-        detached(navigate({ to: "/tools" }), "app-sidebar.navigate");
+        detached(
+          navigate({ to: publicToolsBasePath() }),
+          "app-sidebar.navigate",
+        );
       },
       contextMenu: {},
     },

@@ -5,6 +5,7 @@ import {
   admitCourtListenerRecord,
   COURTLISTENER_RECORD_LIMITS,
 } from "./record";
+import type { CourtListenerRecordRejectedError } from "./rejection";
 import {
   citationRow,
   clusterRow,
@@ -13,6 +14,18 @@ import {
   opinionRow,
   personRow,
 } from "./test-records";
+
+/** Everything a rejection carries, as a log line or ledger row would. */
+const serialized = (rejection: CourtListenerRecordRejectedError): string =>
+  JSON.stringify({
+    message: rejection.message,
+    reason: rejection.reason,
+    sourceRecordKey: rejection.sourceRecordKey,
+    clusterId: rejection.clusterId,
+    diagnostics: rejection.diagnostics,
+    omittedDiagnostics: rejection.omittedDiagnostics,
+    opinionIds: rejection.opinionIds,
+  });
 
 const rejectionOf = (input: unknown) => {
   const admitted = admitCourtListenerRecord(input);
@@ -55,10 +68,14 @@ describe("admitting a CourtListener record", () => {
       detail: "missing column",
     });
     expect(newColumn.reason).toBe("schema-drift");
-    expect(newColumn.diagnostics).toContainEqual({
-      path: "opinions.0.ordering_key",
-      detail: "unexpected column",
-    });
+    expect(newColumn.diagnostics).toEqual([
+      {
+        path: "opinions.0",
+        detail: expect.stringMatching(
+          /^1 unexpected key\(s\), sha256:[0-9a-f]{16}$/u,
+        ),
+      },
+    ]);
   });
 
   test("an undeclared opinion or citation type is schema drift, not a default", () => {
@@ -69,7 +86,7 @@ describe("admitting a CourtListener record", () => {
     ).toBe("schema-drift");
     expect(
       rejectionOf(
-        courtListenerRecord({ citations: [citationRow({ type: "9" })] }),
+        courtListenerRecord({ citations: [citationRow({ type: "10" })] }),
       ).reason,
     ).toBe("schema-drift");
   });
@@ -212,9 +229,32 @@ describe("admitting a CourtListener record", () => {
     expect(Result.isOk(admitCourtListenerRecord(atLimit))).toBe(true);
   });
 
-  test("rejections never carry publisher text", () => {
+  test("rejections never carry publisher text, not even an unexpected key's name", () => {
     const marker = "PRIVILEGED-BODY-TEXT";
+    const record = courtListenerRecord();
     const inputs = [
+      { ...record, [marker]: marker },
+      { ...record, provenance: { ...record.provenance, [marker]: marker } },
+      {
+        ...record,
+        provenance: {
+          ...record.provenance,
+          artifacts: [{ table: "t", url: "u", etag: "e", [marker]: marker }],
+        },
+      },
+      {
+        ...record,
+        judgeRelations: { status: "unavailable", [marker]: marker },
+      },
+      {
+        ...record,
+        judgeRelations: {
+          status: "complete",
+          people: [],
+          joinedBy: [{ opinionId: "1", personId: "2", [marker]: marker }],
+        },
+      },
+      courtListenerRecord({ opinions: [opinionRow({ id: marker })] }),
       courtListenerRecord({
         opinions: [opinionRow({ per_curiam: marker, plain_text: marker })],
       }),
@@ -234,12 +274,61 @@ describe("admitting a CourtListener record", () => {
     ];
 
     for (const input of inputs) {
-      const rejection = rejectionOf(input);
-      expect(rejection.message).not.toContain(marker);
-      expect(
-        JSON.stringify(rejection.diagnostics.map(({ detail }) => detail)),
-      ).not.toContain(marker);
+      expect(serialized(rejectionOf(input))).not.toContain(marker);
     }
+  });
+
+  test("an ID past the publisher's key range is rejected before it is read, with a bounded rejection", () => {
+    const oversized = "1".repeat(10_000);
+    const everywhere = courtListenerRecord({
+      cluster: clusterRow({ id: oversized }),
+      opinions: [opinionRow({ cluster_id: oversized })],
+      citations: [citationRow({ cluster_id: oversized })],
+    });
+    const joinder = courtListenerRecord({
+      judgeRelations: {
+        status: "complete",
+        people: [],
+        joinedBy: [{ opinionId: oversized, personId: "1" }],
+      },
+    });
+    const membership = {
+      ...courtListenerRecord(),
+      provenance: {
+        ...courtListenerRecord().provenance,
+        expectedOpinionIds: Array.from({ length: 64 }, () => oversized),
+      },
+    };
+
+    const rejection = rejectionOf(everywhere);
+    expect(rejection.reason).toBe("invalid-record");
+    expect(rejection.clusterId).toBeNull();
+    expect(rejection.sourceRecordKey).toMatch(/^input-sha256:[0-9a-f]{64}$/u);
+    for (const input of [everywhere, joinder, membership]) {
+      const text = serialized(rejectionOf(input));
+      expect(text).not.toContain("1".repeat(20));
+      expect(text.length).toBeLessThan(16_384);
+    }
+    expect(
+      Result.isOk(
+        admitCourtListenerRecord(
+          courtListenerRecord({
+            cluster: clusterRow({ id: "9223372036854775807" }),
+            opinions: [opinionRow({ cluster_id: "9223372036854775807" })],
+            citations: [],
+          }),
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      rejectionOf(
+        courtListenerRecord({
+          cluster: clusterRow({ id: "9223372036854775808" }),
+          opinions: [opinionRow({ cluster_id: "9223372036854775808" })],
+          citations: [],
+        }),
+      ).reason,
+    ).toBe("invalid-record");
   });
 
   test("an input without a readable cluster ID is keyed by its digest", () => {

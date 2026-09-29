@@ -26,7 +26,7 @@ const DISSENTING = "dissenting" satisfies DecisionJudgeRole;
  * Every opinion type the snapshot's opinion rows use, spelled as upstream
  * spells them (`015unamimous` included). Any other value is schema drift.
  */
-const OPINION_TYPES = {
+export const OPINION_TYPES = {
   "010combined": { rank: 10, judgeRole: PANEL, classSignal: "none" },
   "015unamimous": { rank: 15, judgeRole: PANEL, classSignal: "opinion" },
   "020lead": { rank: 20, judgeRole: PANEL, classSignal: "opinion" },
@@ -53,10 +53,11 @@ export const isOpinionType = (value: string): value is OpinionType =>
 
 /**
  * The citation row types, by the decimal the CSV holds. Type 8 is a
- * court-assigned neutral citation; every other declared type names a printed
- * reporter. An undeclared type is schema drift, not a reporter by default.
+ * court-assigned neutral citation; every other declared type, the journal
+ * category 9 included, names a printed publication and is kept as a reporter
+ * tuple. An undeclared type is schema drift, not a reporter by default.
  */
-const CITATION_TYPES = {
+export const CITATION_TYPES = {
   "1": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "2": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "3": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
@@ -65,6 +66,7 @@ const CITATION_TYPES = {
   "6": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "7": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   "8": DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+  "9": DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
 } as const;
 
 export type CitationType = keyof typeof CITATION_TYPES;

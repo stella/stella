@@ -72,8 +72,22 @@ export const LeadingCitations = ({
   return (
     <div className="flex flex-col gap-6">
       {(["incoming", "outgoing"] as const satisfies CitationDirection[]).map(
-        (direction) =>
-          totalCitations(summary[direction]) > 0 && (
+        (direction) => {
+          if (
+            totalCitations(summary[direction]) === 0 &&
+            !summary.capped[direction]
+          ) {
+            return null;
+          }
+          return summary.capped[direction] ? (
+            <CappedDirectionSection
+              count={totalCitations(summary[direction])}
+              decision={decision}
+              decisionId={decisionId}
+              direction={direction}
+              key={direction}
+            />
+          ) : (
             <DirectionSection
               counts={summary[direction]}
               decision={decision}
@@ -81,9 +95,38 @@ export const LeadingCitations = ({
               direction={direction}
               key={direction}
             />
-          ),
+          );
+        },
       )}
     </div>
+  );
+};
+
+const CappedDirectionSection = ({
+  count,
+  decision,
+  decisionId,
+  direction,
+}: LeadingCitationsProps & { count: number; direction: CitationDirection }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <section className="flex flex-col gap-3">
+      <h3 className="text-foreground-strong-muted flex items-baseline gap-1.5 text-xs font-medium">
+        {t(DIRECTION_TITLE[direction])}
+        <span className="text-muted-foreground font-normal tabular-nums">
+          {format.number(count)}+
+        </span>
+      </h3>
+      <p className="text-muted-foreground text-xs">
+        {t("caseLaw.citation.partialSummary")}
+      </p>
+      <CitationList
+        decision={decision}
+        decisionId={decisionId}
+        direction={direction}
+      />
+    </section>
   );
 };
 

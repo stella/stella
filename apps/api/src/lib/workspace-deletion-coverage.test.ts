@@ -179,7 +179,10 @@ describe("workspace deletion coverage", () => {
       return getTableConfig(table)
         .columns.filter(
           (column) =>
-            column.name.endsWith("file_id") ||
+            // A whole `file_id` word: `seller_profile_id` ends in the same
+            // letters but names a seller profile, not a stored file.
+            column.name === "file_id" ||
+            column.name.endsWith("_file_id") ||
             column.name.endsWith("s3_key") ||
             column.name === "purpose_data" ||
             (tableName === "fields" && column.name === "content") ||

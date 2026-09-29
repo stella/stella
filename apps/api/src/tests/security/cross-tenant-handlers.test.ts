@@ -31,6 +31,7 @@ import {
   entityViews,
   entityVersions,
   fields,
+  invoiceLines,
   legalLists,
   legalReaderAnnotations,
   numberSeries,
@@ -40,6 +41,7 @@ import {
   sellerProfiles,
   signals,
   timeTimers,
+  vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
@@ -87,6 +89,8 @@ import listEntityViews from "@/api/handlers/entity-views/list";
 import readExpenses from "@/api/handlers/expenses/list";
 import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
+import createInvoiceLine from "@/api/handlers/invoices/lines/create";
+import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import listReaderAnnotations from "@/api/handlers/legal-reader/annotations/list";
 import listLegalLists from "@/api/handlers/lists/list";
 import listMemories from "@/api/handlers/memories/list";
@@ -105,6 +109,8 @@ import readTimeEntryById from "@/api/handlers/time-entries/get";
 import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
+import listVatRates from "@/api/handlers/vat-rates/list";
+import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -113,6 +119,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
+import { cents } from "@/api/lib/money";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -183,12 +190,26 @@ const savedSearchB = toSafeId<"savedSearch">(
 const sellerProfileB = toSafeId<"sellerProfile">(
   "22222222-2222-4222-8222-222222222257",
 );
+const invoiceLineB = toSafeId<"invoiceLine">(
+  "22222222-2222-4222-8222-222222222259",
+);
+const manualInvoiceLineBody = {
+  source: {
+    type: "manual",
+    description: "Isolation line",
+    quantity: "1",
+    unitPriceMinor: 100,
+  },
+  vatRateBps: 0,
+  vatTreatment: "domestic_vat",
+} as const;
 const savedTimeNarrativeB = toSafeId<"savedTimeNarrative">(
   "22222222-2222-4222-8222-222222222258",
 );
 const numberSeriesB = toSafeId<"numberSeries">(
   "22222222-2222-4222-8222-222222222259",
 );
+const vatRateB = toSafeId<"vatRate">("22222222-2222-4222-8222-222222222260");
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
 );
@@ -747,6 +768,51 @@ const isolationCases: IsolationCase[] = [
       expectRecordFieldEquals(result, "id", testIds.invoiceB1),
   },
   {
+    // Line writes lock the invoice inside the caller's own workspace, so
+    // another tenant's invoice id reads as missing rather than editable.
+    name: "invoice line create",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(createInvoiceLine, workspaceA, {
+        params: { workspaceId: testIds.wsA1, invoiceId: testIds.invoiceB1 },
+        body: manualInvoiceLineBody,
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(createInvoiceLine, workspaceB, {
+        params: { workspaceId: testIds.wsB1, invoiceId: testIds.invoiceB1 },
+        body: manualInvoiceLineBody,
+      }),
+    expectDenied: expectStatus(409),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        id: expect.any(String),
+        totals: { vatAmountMinor: 0 },
+      }),
+  },
+  {
+    name: "invoice line update",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(updateInvoiceLine, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          invoiceId: testIds.invoiceB1,
+          lineId: invoiceLineB,
+        },
+        body: { description: "Renamed" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(updateInvoiceLine, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          invoiceId: testIds.invoiceB1,
+          lineId: invoiceLineB,
+        },
+        body: { description: "Renamed" },
+      }),
+    expectDenied: expectStatus(409),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", invoiceLineB),
+  },
+  {
     name: "seller profile read by id",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(getSellerProfile, workspaceA, {
@@ -791,6 +857,30 @@ const isolationCases: IsolationCase[] = [
       await runHandler(listNumberSeries, workspaceB, { query: {} }),
     expectDenied: (result) => expectPageExcludesId(result, numberSeriesB),
     expectPositive: (result) => expectPageContainsId(result, numberSeriesB),
+  },
+  {
+    name: "VAT rate list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listVatRates, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listVatRates, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, vatRateB),
+    expectPositive: (result) => expectPageContainsId(result, vatRateB),
+  },
+  {
+    name: "VAT rate update",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(updateVatRate, workspaceA, {
+        params: { vatRateId: vatRateB },
+        body: { name: "Updated VAT rate B" },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(updateVatRate, workspaceB, {
+        params: { vatRateId: vatRateB },
+        body: { name: "Updated VAT rate B" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
   },
   {
     name: "time entry read by id",
@@ -1599,6 +1689,22 @@ beforeAll(async () => {
     legalName: "Seller profile B",
     defaultCurrency: "CZK",
   });
+  await testDb.insert(invoiceLines).values({
+    id: invoiceLineB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    invoiceId: ids.invoiceB1,
+    position: 0,
+    description: "Line B",
+    quantity: "1",
+    unitPrice: cents(100),
+    vatRateBps: 0,
+    vatTreatment: "domestic_vat",
+    netAmount: cents(100),
+    vatAmount: cents(0),
+    grossAmount: cents(100),
+    source: "manual",
+  });
   await testDb.insert(numberSeries).values({
     id: numberSeriesB,
     organizationId: ids.orgB,
@@ -1607,6 +1713,14 @@ beforeAll(async () => {
     pattern: "INV-{YYYY}-{SEQ}",
     padding: 5,
     isDefault: true,
+  });
+  await testDb.insert(vatRates).values({
+    id: vatRateB,
+    organizationId: ids.orgB,
+    code: "standard",
+    name: "VAT rate B",
+    rateBps: 2100,
+    validFrom: "2026-01-01",
   });
   await testDb.insert(entityVersions).values({
     id: compareTargetVersionB,

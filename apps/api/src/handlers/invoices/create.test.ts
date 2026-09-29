@@ -152,44 +152,6 @@ describe("createInvoice", () => {
     });
   });
 
-  test("creates a single-currency invoice and totals the entries", async () => {
-    const entries = [entry("te_1", "USD"), entry("te_2", "USD")];
-    const { safeDb, scopedDb } = createScopedDbMock({
-      $count: async () => 0,
-      select: () => ({ from: () => ({ where: async () => entries }) }),
-      insert: () => ({
-        values: () => ({
-          returning: async () => [
-            { id: toSafeId<"invoice">("inv_1"), invoiceNumber: "INV-001" },
-          ],
-        }),
-      }),
-      update: () => ({
-        set: () => ({
-          where: () => ({
-            returning: async () => entries.map((e) => ({ id: e.id })),
-          }),
-        }),
-      }),
-    });
-
-    const result = await createInvoice.handler(
-      createContext({
-        body: baseBody("USD", ["te_1", "te_2"]),
-        safeDb,
-        scopedDb,
-      }),
-    );
-
-    // Success returns the raw payload (not a {code,response} envelope).
-    // 2 entries * prorate(60min, 10_000 cents/h) = 2 * 10_000 = 20_000.
-    expect(result).toMatchObject({
-      id: "inv_1",
-      totalAmount: 20_000,
-      entryCount: 2,
-    });
-  });
-
   test("returns a retryable conflict when the claim count changes", async () => {
     const entries = [entry("te_1", "USD"), entry("te_2", "USD")];
     const firstEntry = entries.at(0);

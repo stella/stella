@@ -188,12 +188,9 @@ export const decodeCourtListenerRaw = ({
         : COURTLISTENER_RAW_DECODE_FAILURE.WRONG_MEDIA_TYPE,
     );
   }
-  const unexpected = Object.keys(parts).find((name) => !PART_NAMES.has(name));
-  if (unexpected !== undefined) {
-    return decodeFailure(
-      COURTLISTENER_RAW_DECODE_FAILURE.UNEXPECTED_PART,
-      unexpected,
-    );
+  // An undeclared part name is publisher-controlled; it is not echoed back.
+  if (Object.keys(parts).some((name) => !PART_NAMES.has(name))) {
+    return decodeFailure(COURTLISTENER_RAW_DECODE_FAILURE.UNEXPECTED_PART);
   }
   const missing = [...PART_NAMES].find((name) => parts[name] === undefined);
   if (missing !== undefined) {

@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Cytowane co najmniej {count} razy",
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
@@ -629,6 +630,7 @@
       "none": "Nie odnotowano jeszcze żadnych cytowań.",
       "openAtCitation": "Otwórz w miejscu cytowania",
       "openDecision": "Otwórz orzeczenie",
+      "partialSummary": "Sumy cytowań i oś czasu są niepełne.",
       "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
       "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
       "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
@@ -1447,6 +1449,7 @@
     "back": "Wstecz",
     "cancel": "Anuluj",
     "caseLaw": "Orzecznictwo",
+    "catalogue": "Katalog",
     "category": "Kategoria",
     "categoryName": "Nazwa kategorii",
     "changeColor": "Zmień kolor",
@@ -3225,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Dodaj do biblioteki",
+      "added": "{name} jest w Twojej bibliotece",
+      "confirmAddTitle": "Dodać {name} do {organization}?",
+      "confirmDescription": "Kopia tego szablonu trafi do biblioteki {organization}.",
+      "confirmDownloadTitle": "Pobrać {name} dla {organization}?",
+      "confirmStarterDescription": "Kopia tego playbooka trafi do biblioteki {organization}.",
+      "confirmUseTitle": "Użyć {name} w {organization}?",
+      "installFailed": "Nie udało się dodać szablonu",
+      "noPreview": "Podgląd tego szablonu jest niedostępny.",
+      "notFound": "Tego szablonu nie ma w katalogu.",
+      "unavailable": "Katalog jest teraz niedostępny."
+    },
+    "landing": {
+      "accountLine": "Z bezpłatnym kontem przechowasz własne szablony, klauzule i playbooki swojej organizacji.",
+      "withAccount": "Z bezpłatnym kontem"
+    },
     "mcp": {
       "addAndConnect": "Dodaj i połącz",
       "addServer": "Dodaj serwer",
@@ -3706,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# zaproszenie nie zostało wysłane} few {# zaproszenia nie zostały wysłane} many {# zaproszeń nie zostało wysłanych} other {# zaproszeń nie zostało wysłanych}}",
     "stepAi": "AI",
     "stepApps": "Aplikacje i narzędzia",
-    "stepCatalogue": "Katalog",
     "stepJurisdiction": "Jurysdykcja",
     "stepOrganization": "Zespół",
     "stepTeam": "Zaproszenia",

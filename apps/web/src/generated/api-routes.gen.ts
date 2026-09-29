@@ -8464,6 +8464,26 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
+                netAmount: stll_money_CentsAmount;
+                vatAmount: stll_money_CentsAmount;
+                lines: Array<{
+                  releasedAt: Tbe0400fa4c;
+                  description: string;
+                  id: T74aae47c1a;
+                  source: ("expense" | "manual" | "time_entry");
+                  timeEntryId: (Tdb05f01858 | null);
+                  unit: Tbe0400fa4c;
+                  expenseId: (T22259c97a4 | null);
+                  position: number;
+                  quantity: string;
+                  unitPrice: stll_money_CentsAmount;
+                  vatRateBps: number;
+                  vatTreatment: T06b28a6882;
+                  netAmount: stll_money_CentsAmount;
+                  vatAmount: stll_money_CentsAmount;
+                  grossAmount: stll_money_CentsAmount;
+                }>;
+                totals: T5a0acd1281;
                 paidAt: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: string;
@@ -8477,6 +8497,16 @@ export type WebRoutes = {
                 invoiceNumber: string;
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
+                taxableSupplyDate: Tbe0400fa4c;
+                sellerProfileId: T2fc645f541;
+                buyerName: Tbe0400fa4c;
+                buyerRegistrationId: Tbe0400fa4c;
+                buyerVatId: Tbe0400fa4c;
+                buyerAddressLine1: Tbe0400fa4c;
+                buyerAddressLine2: Tbe0400fa4c;
+                buyerCity: Tbe0400fa4c;
+                buyerPostalCode: Tbe0400fa4c;
+                buyerCountry: Tbe0400fa4c;
                 organizationId: Tb1d68817ba;
                 timeEntries: Array<{
                   status: Tef030b2402;
@@ -8554,7 +8584,7 @@ export type WebRoutes = {
             200: {
               id: Tb7bcf69f62;
               invoiceNumber: string;
-              totalAmount: number;
+              totalAmount: stll_money_CentsAmount;
               entryCount: number;
             };
             400: T9a51b7d2bc;
@@ -8592,6 +8622,16 @@ export type WebRoutes = {
               notes?: string | null;
               invoiceNumber?: string;
               invoiceDate?: string;
+              taxableSupplyDate?: string | null;
+              sellerProfileId?: Tfd3441c0df | null;
+              buyerName?: string | null;
+              buyerRegistrationId?: string | null;
+              buyerVatId?: string | null;
+              buyerAddressLine1?: string | null;
+              buyerAddressLine2?: string | null;
+              buyerCity?: string | null;
+              buyerPostalCode?: string | null;
+              buyerCountry?: string | null;
             };
             params: {
               workspaceId: T8d02a37b3f;
@@ -8729,7 +8769,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
-                  totalAmount: number;
+                  totalAmount: stll_money_CentsAmount;
                 };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
@@ -8797,6 +8837,166 @@ export type WebRoutes = {
                 500: T9a51b7d2bc;
                 502: T9a51b7d2bc;
                 503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":invoiceId": {
+          lines: {
+            post: {
+              body: {
+                source: {
+                  unit?: string | null;
+                  type: "manual";
+                  description: string;
+                  quantity: string;
+                  unitPriceMinor: number;
+                } | {
+                  description?: string;
+                  type: "time_entry";
+                  timeEntryId: Tdb05f01858;
+                } | {
+                  description?: string;
+                  type: "expense";
+                  expenseId: T22259c97a4;
+                };
+                vatRateBps: number;
+                vatTreatment: T06b28a6882;
+              };
+              params: {
+                workspaceId: T8d02a37b3f;
+                invoiceId: Tb7bcf69f62;
+              };
+              query: Record<never, never>;
+              headers: Record<never, never>;
+              response: {
+                200: {
+                  id: T74aae47c1a;
+                  totals: T5a0acd1281;
+                };
+                400: T9a51b7d2bc;
+                401: T9a51b7d2bc;
+                402: T9a51b7d2bc;
+                403: Tddfcdef857;
+                404: T98724a80a4;
+                409: T9a51b7d2bc;
+                413: T9a51b7d2bc;
+                422: (T9a51b7d2bc | {
+                  type: "validation";
+                  on: string;
+                  summary?: string;
+                  message?: string;
+                  found?: unknown;
+                  property?: string;
+                  expected?: string;
+                });
+                428: T9a51b7d2bc;
+                429: T9a51b7d2bc;
+                500: T9a51b7d2bc;
+                502: T9a51b7d2bc;
+                503: T9a51b7d2bc;
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":invoiceId": {
+          lines: {
+            ":lineId": {
+              patch: {
+                body: {
+                  description?: string;
+                  unit?: string | null;
+                  quantity?: string;
+                  vatRateBps?: number;
+                  vatTreatment?: "domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge";
+                  unitPriceMinor?: number;
+                };
+                params: {
+                  workspaceId: T8d02a37b3f;
+                  invoiceId: Tb7bcf69f62;
+                  lineId: T74aae47c1a;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    id: T74aae47c1a;
+                    totals: T5a0acd1281;
+                  };
+                  400: T9a51b7d2bc;
+                  401: T9a51b7d2bc;
+                  402: T9a51b7d2bc;
+                  403: Tddfcdef857;
+                  404: T98724a80a4;
+                  409: T9a51b7d2bc;
+                  413: T9a51b7d2bc;
+                  422: (T9a51b7d2bc | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: T9a51b7d2bc;
+                  429: T9a51b7d2bc;
+                  500: T9a51b7d2bc;
+                  502: T9a51b7d2bc;
+                  503: T9a51b7d2bc;
+                };
+              };
+            };
+          };
+        };
+      };
+    } & {
+      ":workspaceId": {
+        ":invoiceId": {
+          lines: {
+            ":lineId": {
+              delete: {
+                body: Record<never, never>;
+                params: {
+                  workspaceId: T8d02a37b3f;
+                  invoiceId: Tb7bcf69f62;
+                  lineId: T74aae47c1a;
+                };
+                query: Record<never, never>;
+                headers: Record<never, never>;
+                response: {
+                  200: {
+                    id: T74aae47c1a;
+                    totals: T5a0acd1281;
+                  };
+                  400: T9a51b7d2bc;
+                  401: T9a51b7d2bc;
+                  402: T9a51b7d2bc;
+                  403: Tddfcdef857;
+                  404: T98724a80a4;
+                  409: T9a51b7d2bc;
+                  413: T9a51b7d2bc;
+                  422: (T9a51b7d2bc | {
+                    type: "validation";
+                    on: string;
+                    summary?: string;
+                    message?: string;
+                    found?: unknown;
+                    property?: string;
+                    expected?: string;
+                  });
+                  428: T9a51b7d2bc;
+                  429: T9a51b7d2bc;
+                  500: T9a51b7d2bc;
+                  502: T9a51b7d2bc;
+                  503: T9a51b7d2bc;
+                };
               };
             };
           };
@@ -17322,8 +17522,8 @@ export type WebRoutes = {
               updatedAt: string;
               documentType: Tbb2566af3f;
               pattern: string;
-              isDefault: Tfddd645dc8;
               sellerProfileId: T2fc645f541;
+              isDefault: Tfddd645dc8;
               padding: number;
             };
             400: T9a51b7d2bc;
@@ -17480,6 +17680,173 @@ export type WebRoutes = {
             response: {
               200: {
                 id: T40fdfe87af;
+                archived: Tfddd645dc8;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
+    "vat-rates": {
+      get: {
+        body: Record<never, never>;
+        params: T5e3ac29766;
+        query: {
+          on?: string;
+          cursor?: string;
+          limit?: number;
+        };
+        headers: Record<never, never>;
+        response: {
+          200: {
+            items: Array<{
+              id: Tc2e180208d;
+              code: string;
+              name: string;
+              rateBps: number;
+              validFrom: string;
+              validTo: Tbe0400fa4c;
+              createdAt: string;
+              updatedAt: string;
+            }>;
+            nextCursor: Tbe0400fa4c;
+            limit: number;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      post: {
+        body: {
+          validTo?: string | null;
+          name: string;
+          code: string;
+          rateBps: number;
+          validFrom: string;
+        };
+        params: T5e3ac29766;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            id: Tc2e180208d;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      ":vatRateId": {
+        patch: {
+          body: {
+            name?: string;
+            code?: string;
+            rateBps?: number;
+            validFrom?: string;
+            validTo?: string | null;
+          };
+          params: T6a2cafc623;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: Tc2e180208d;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":vatRateId": {
+        archive: {
+          post: {
+            body: Record<never, never>;
+            params: T6a2cafc623;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tc2e180208d;
                 archived: Tfddd645dc8;
               };
               400: T9a51b7d2bc;
@@ -20253,6 +20620,10 @@ export type WebRoutes = {
                   200: (T12163e1f6a | {
                     incoming: T2b15184b07;
                     outgoing: T2b15184b07;
+                    capped: {
+                      incoming: Tfddd645dc8;
+                      outgoing: Tfddd645dc8;
+                    };
                     incomingByYear: Array<(T2b15184b07 & {
                       year: number;
                     })>;
@@ -20355,6 +20726,7 @@ export type WebRoutes = {
                     anchor: string;
                     versionValidFrom: Tbe0400fa4c;
                     jurisdiction: string;
+                    unit: ("article" | "section");
                     point: Tbe0400fa4c;
                     confidence: number;
                     section: number;
@@ -20365,7 +20737,6 @@ export type WebRoutes = {
                     workYear: number;
                     workCollection: string;
                     workEli: Tbe0400fa4c;
-                    unit: ("article" | "section");
                     sectionSuffix: Tbe0400fa4c;
                     subsection: Tbe0400fa4c;
                     sentence: Tbe0400fa4c;
@@ -24955,8 +25326,8 @@ export type WebRoutes = {
                   workspaceId: T9e07a7d6cd;
                   createdAt: string;
                   updatedAt: string;
-                  listId: T5ed75bc2cc;
                   position: string;
+                  listId: T5ed75bc2cc;
                 }>;
                 columns: Array<{
                   id: Tfb7cce8440;
@@ -33766,6 +34137,8 @@ type T06a9543aed = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListClaim";
 };
 
+type T06b28a6882 = "domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge";
+
 type T06c45cc300 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillProposal";
 };
@@ -36640,6 +37013,19 @@ type T59c690454c = {
   }>;
 };
 
+type T5a0acd1281 = {
+  netAmountMinor: stll_money_CentsAmount;
+  vatAmountMinor: stll_money_CentsAmount;
+  grossAmountMinor: stll_money_CentsAmount;
+  vatBreakdown: Array<{
+    vatRateBps: number;
+    vatTreatment: ("domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge");
+    netAmountMinor: stll_money_CentsAmount;
+    vatAmountMinor: stll_money_CentsAmount;
+    grossAmountMinor: stll_money_CentsAmount;
+  }>;
+};
+
 type T5aeeefecac = {
   spf: Tccc654a7c7;
   dkim: Tccc654a7c7;
@@ -36904,6 +37290,10 @@ type T69eae4f8b4 = {
 type T69ec7580d1 = {
   condition: T60e51917c9;
   dependsOnPropertyId: T173eec1550;
+};
+
+type T6a2cafc623 = {
+  vatRateId: Tc2e180208d;
 };
 
 type T6a8b8e209a = {
@@ -37195,6 +37585,10 @@ type T74837627f5 = {
   content: string;
   kind?: "decision" | "fact" | "instruction" | "preference" | "relationship" | undefined;
   scope?: "user" | "workspace" | undefined;
+};
+
+type T74aae47c1a = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "invoiceLine";
 };
 
 type T74ebaa3415 = {
@@ -39116,6 +39510,10 @@ type Tc23cfaebea = {
   country: Tbe0400fa4c;
   textAddress: Tbe0400fa4c;
 } | null;
+
+type Tc2e180208d = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "vatRate";
+};
 
 type Tc38488b75b = {
   code: T00b5a3f4ca;

@@ -110,8 +110,17 @@ export const CaseDecisionDetailsInspectorView = ({
               </Section>
               {/* Who cites this decision and what it cites, off the page so
                   the text starts at the top and the lists have room. */}
-              <Section count={citationCount} title={t("common.citations")}>
-                {citationCount === 0 ? (
+              <Section
+                count={citationCount}
+                countCapped={
+                  citationSummary?.capped.incoming === true ||
+                  citationSummary?.capped.outgoing === true
+                }
+                title={t("common.citations")}
+              >
+                {citationCount === 0 &&
+                !citationSummary?.capped.incoming &&
+                !citationSummary?.capped.outgoing ? (
                   <p className="text-muted-foreground text-xs">
                     {t("caseLaw.citation.none")}
                   </p>
@@ -146,11 +155,17 @@ type SectionProps = {
   children: ReactNode;
   /** How many items the section holds, once known; null while it is not. */
   count?: number | null;
+  countCapped?: boolean;
   title: string;
 };
 
 /** A titled block of the pane, with its count beside the title once known. */
-const Section = ({ children, count, title }: SectionProps) => {
+const Section = ({
+  children,
+  count,
+  countCapped = false,
+  title,
+}: SectionProps) => {
   const format = useFormatter();
 
   return (
@@ -160,6 +175,7 @@ const Section = ({ children, count, title }: SectionProps) => {
         {count !== undefined && count !== null && (
           <span className="text-muted-foreground font-normal tabular-nums">
             {format.number(count)}
+            {countCapped ? "+" : null}
           </span>
         )}
       </h2>

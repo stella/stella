@@ -64,11 +64,24 @@ export type SearchCursor = {
    * reached and the window moves on.
    */
   windowStart: number;
+  /**
+   * Groups a ranker folds its hits into (`CorpusIndexRanking.groups`) that
+   * earlier windows already showed. A window move hands them on, because a
+   * group's deeper member in the next window would otherwise show it again;
+   * the ranker leaves them out. Absent for a ranker that folds nothing and
+   * before any window has moved.
+   */
+  excludedGroups?: readonly string[] | undefined;
 };
 
 type CorpusIndexRanking<TContext> = {
   ranked: readonly RankedHit[];
   context: TContext;
+  /**
+   * Tokens of the groups the ranked hits stand for, when the ranker folds
+   * several hits into one (`SearchCursor.excludedGroups`).
+   */
+  groups?: readonly string[] | undefined;
 };
 
 /**
@@ -547,6 +560,30 @@ const windowAfterCursor = (
     ? [...ranked]
     : ranked.filter((hit) => isAfterSearchCursor(hit, parsedCursor));
 
+/** `cursor`, carrying `groups` when there are any. */
+const withGroups = (
+  cursor: SearchCursor,
+  groups: readonly string[],
+): SearchCursor =>
+  groups.length === 0 ? cursor : { ...cursor, excludedGroups: groups };
+
+/**
+ * The groups a continuation into the next window must leave out: the ones
+ * carried into this window and every one this window held. Everything the
+ * window held was emitted (it moves only once its whole ranking fit on a
+ * page). Null when the set outgrows the bound: such a continuation is not
+ * offered, because a cursor that forgot a group would show it twice.
+ */
+const groupsPastWindow = (
+  carried: ReadonlySet<string>,
+  ranking: { groups?: readonly string[] | undefined },
+): string[] | null => {
+  const groups = new Set([...carried, ...new Set(ranking.groups)]);
+  return groups.size > LIMITS.corpusIndexSearchMaxExcludedGroups
+    ? null
+    : [...groups];
+};
+
 export const readCorpusIndexSearchPage = async <TContext>({
   cluster,
   indexId,
@@ -711,6 +748,8 @@ export const readCorpusIndexSearchPage = async <TContext>({
     ranking = await rankCandidates(candidates);
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   }
+  const finalRanking = ranking;
+  const carriedGroups = new Set(parsedCursor?.excludedGroups);
 
   const hasMoreInWindow = windowed.length > limit;
   const pageRanked = hasMoreInWindow ? windowed.slice(0, limit) : windowed;
@@ -733,31 +772,44 @@ export const readCorpusIndexSearchPage = async <TContext>({
       return null;
     }
     if (hasMoreInWindow || (!roundCapHit && windowCanContinue)) {
-      return {
-        score: lastEmitted.score,
-        id: lastEmitted.id,
-        sort: order.type,
-        windowStart,
-      };
+      // Still inside this window: the groups earlier windows showed stay
+      // excluded, and this window's own are behind the cursor.
+      return withGroups(
+        {
+          score: lastEmitted.score,
+          id: lastEmitted.id,
+          sort: order.type,
+          windowStart,
+        },
+        [...carriedGroups],
+      );
     }
     if (!roundCapHit || startOffset >= totalHits) {
       return null;
     }
-    return {
-      // Above every blended score the next window can hold, by the bound's
-      // own contract, so none of that window is filtered out as already seen.
-      score: unseenScoreUpperBound(corpusIndexLexicalScore(startOffset)),
-      // The document the scan stopped inside: the one whose passages can run
-      // across the window edge, and the only one the next window must drop by
-      // name. Everything else this window held was emitted (the window moves
-      // only once its whole ranking fit on a page), so a document that matched
-      // here and again further down can still repeat on a later page — the
-      // price of moving the window at all, and the reason the blend bound is
-      // proven within a window rather than across the cap.
-      id: lastScannedId ?? lastEmitted.id,
-      sort: order.type,
-      windowStart: startOffset,
-    };
+    const excludedGroups = groupsPastWindow(carriedGroups, finalRanking);
+    if (excludedGroups === null) {
+      return null;
+    }
+    return withGroups(
+      {
+        // Above every blended score the next window can hold, by the bound's
+        // own contract, so none of that window is filtered out as already
+        // seen.
+        score: unseenScoreUpperBound(corpusIndexLexicalScore(startOffset)),
+        // The document the scan stopped inside: the one whose passages can
+        // run across the window edge, and the only one the next window must
+        // drop by name. A document that matched here and again further down
+        // can still repeat on a later page unless its ranker folds it into a
+        // group it reports — the price of moving the window at all, and the
+        // reason the blend bound is proven within a window rather than across
+        // the cap.
+        id: lastScannedId ?? lastEmitted.id,
+        sort: order.type,
+        windowStart: startOffset,
+      },
+      excludedGroups,
+    );
   };
   const nextCursor = resolveNextCursor();
 

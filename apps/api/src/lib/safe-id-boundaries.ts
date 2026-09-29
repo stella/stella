@@ -44,6 +44,9 @@ export const brandPersistedSellerProfileId = (
   sellerProfileId: string,
 ): SafeId<"sellerProfile"> => toSafeId<"sellerProfile">(sellerProfileId);
 
+export const brandPersistedVatRateId = (id: string): SafeId<"vatRate"> =>
+  toSafeId<"vatRate">(id);
+
 export const brandPersistedNumberSeriesId = (
   numberSeriesId: string,
 ): SafeId<"numberSeries"> => toSafeId<"numberSeries">(numberSeriesId);
