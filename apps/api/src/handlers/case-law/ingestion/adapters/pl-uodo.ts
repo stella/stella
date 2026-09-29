@@ -1358,11 +1358,13 @@ const assembleAuthorityDecision = ({
     });
   }
   const document = parsed !== null && Result.isOk(parsed) ? parsed.value : null;
-  for (const element of document?.unmappedMarkup ?? []) {
-    logger.warn("case_law.ingestion.markup_unmapped", {
-      adapterKey: ADAPTER_KEYS.PL_UODO,
-      element,
-    });
+  if (document !== null) {
+    for (const element of document.unmappedMarkup) {
+      logger.warn("case_law.ingestion.markup_unmapped", {
+        adapterKey: ADAPTER_KEYS.PL_UODO,
+        element,
+      });
+    }
   }
   if (body?.checksumMatches === false) {
     logger.warn("case_law.ingestion.document_checksum_mismatch", {
