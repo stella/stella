@@ -19,6 +19,8 @@ import {
   dbTestBatchSize,
   hasModuleScopeProcessEnvMutation,
   isDbTest,
+  SOLO_DB_TEST_PATHS,
+  splitSoloTests,
   TEST_BATCH_KIND,
   type TestBatchKind,
 } from "./test-batch-plan";
@@ -506,7 +508,10 @@ const plannedBatches = orderBatchesForLanes([
     isolate: false,
     kind: TEST_BATCH_KIND.db,
     maxPeakRssMb: MAX_DB_BATCH_PEAK_RSS_MB,
-    testBatches: composeTestBatches(dbTests, dbTestBatchSize(propertyOnly)),
+    testBatches: splitSoloTests(
+      composeTestBatches(dbTests, dbTestBatchSize(propertyOnly)),
+      SOLO_DB_TEST_PATHS,
+    ),
   }),
   ...planBatches({
     isolate: true,

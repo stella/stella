@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -7,6 +8,8 @@ import {
   dbTestBatchSize,
   hasModuleScopeProcessEnvMutation,
   isDbTest,
+  SOLO_DB_TEST_PATHS,
+  splitSoloTests,
   TEST_BATCH_KIND,
 } from "../../scripts/test-batch-plan";
 
@@ -90,6 +93,24 @@ describe("API test batch planning", () => {
       ["db-a.test.ts", "db-b.test.ts", "db-c.test.ts"],
       ["db-d.test.ts"],
     ]);
+  });
+
+  test("runs a solo DB file alone without regrouping any other batch", () => {
+    const batches = composeTestBatches(
+      ["a.test.ts", "b.test.ts", "c.test.ts", "d.test.ts", "e.test.ts"],
+      dbTestBatchSize(false),
+    );
+
+    expect(splitSoloTests(batches, new Set(["b.test.ts"]))).toEqual([
+      ["a.test.ts", "c.test.ts"],
+      ["b.test.ts"],
+      ["d.test.ts", "e.test.ts"],
+    ]);
+    expect(
+      [...SOLO_DB_TEST_PATHS].filter(
+        (testPath) => !existsSync(path.join(API_ROOT, testPath)),
+      ),
+    ).toEqual([]);
   });
 
   test("detects database runtime imports without matching inert source text", () => {
