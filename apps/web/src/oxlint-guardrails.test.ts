@@ -219,19 +219,24 @@ describe("custom oxlint guardrails", () => {
     const toolsRouteSource = readRootFixture(
       "apps/web/src/routes/knowledge/tools.tsx",
     );
+    const memberToolsSource = readRootFixture(
+      "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+    );
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-static-catalogue-route-import.ts",
     );
     const configSource = readRootFixture("oxlint.config.ts");
 
-    expect(toolsRouteSource).toContain("const LazyCatalogueBrowser = lazy");
-    expect(toolsRouteSource).toContain("catalogue/catalogue-browser");
-    expect(toolsRouteSource).toContain(
+    expect(toolsRouteSource).toContain("const LazyMemberToolsPage = lazy");
+    expect(memberToolsSource).toContain("const LazyCatalogueBrowser = lazy");
+    expect(memberToolsSource).toContain("catalogue/catalogue-browser");
+    expect(memberToolsSource).toContain(
       "return { default: module.CatalogueBrowserWithRouteData };",
     );
-    expect(toolsRouteSource).toContain("Route.useLoaderData");
-    expect(toolsRouteSource).toContain("canManageCustomTools");
-    expect(toolsRouteSource).toContain("practiceJurisdictions");
+    expect(memberToolsSource).toContain("useSuspenseQueries");
+    expect(memberToolsSource).toContain("canManageCustomTools");
+    expect(memberToolsSource).toContain("practiceJurisdictions");
+    expect(memberToolsSource).not.toContain("import { CatalogueBrowser");
     expect(toolsRouteSource).toContain("const LazyToolDetailView = lazy");
     expect(toolsRouteSource).toContain("const LazyToolDetailRailIcon = lazy");
     expect(toolsRouteSource).not.toContain("import { CatalogueBrowser");
@@ -248,6 +253,9 @@ describe("custom oxlint guardrails", () => {
       "no-static-catalogue-route-import/no-static-catalogue-route-import",
     );
     expect(configSource).toContain("apps/web/src/routes/knowledge/tools.tsx");
+    expect(configSource).toContain(
+      "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+    );
   });
 
   test("devtools shell lazy-loads TanStack panels", () => {

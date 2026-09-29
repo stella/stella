@@ -1,11 +1,7 @@
 import { lazy, Suspense } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 import * as v from "valibot";
-
-import { stellaToast } from "@stll/ui/toast";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import type {
@@ -16,20 +12,9 @@ import {
   ToolsCatalogueSkeleton,
   ToolsPageHeader,
 } from "@/features/knowledge/views/tools/tools-page-chrome";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { authClient } from "@/lib/auth-client";
-import { roleOptions } from "@/lib/auth-queries";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { detached } from "@/lib/detached";
-import {
-  catalogueKeys,
-  catalogueOptions,
-} from "@/lib/knowledge/queries/catalogue";
-import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
-import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
-import { ensureRouteQueryData } from "@/lib/react-query";
-import type { CatalogueBrowserFilterKind } from "@/routes/knowledge/-components/catalogue/catalogue-browser";
 import type { ToolDetailPayload } from "@/routes/knowledge/-components/catalogue/tool-detail-view";
+import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
+import { PublicToolsCatalogue } from "@/routes/knowledge/-public/public-tools-catalogue";
 
 const LazyToolDetailView = lazy(async () => {
   const module =
@@ -37,10 +22,9 @@ const LazyToolDetailView = lazy(async () => {
   return { default: module.ToolDetailView };
 });
 
-const LazyCatalogueBrowser = lazy(async () => {
-  const module =
-    await import("@/routes/knowledge/-components/catalogue/catalogue-browser");
-  return { default: module.CatalogueBrowserWithRouteData };
+const LazyMemberToolsPage = lazy(async () => {
+  const module = await import("@/routes/knowledge/-member/member-tools-page");
+  return { default: module.MemberToolsPage };
 });
 
 const LazyToolDetailRailIcon = lazy(async () => {
@@ -127,118 +111,25 @@ const searchSchema = v.object({
 
 export const Route = createFileRoute("/knowledge/tools")({
   validateSearch: searchSchema,
-  loader: async ({ context }) => {
-    // Readable without an account: nothing is loaded before the section
-    // knows who is visiting.
-    if (context.user === undefined) {
-      return null;
-    }
-    const orgId = context.user.activeOrganizationId;
-    const [, settings, role] = await Promise.all([
-      ensureRouteQueryData(context.queryClient, catalogueOptions(orgId)),
-      ensureRouteQueryData(
-        context.queryClient,
-        organizationSettingsOptions(orgId),
-      ),
-      // CatalogueBrowser reads the member role via a non-suspense useQuery; seed
-      // it here so it is a synchronous cache hit on mount. Otherwise a cold-cache
-      // fetch resolving mid-mount notifies the not-yet-mounted fiber (React
-      // "state update on a component that hasn't mounted yet"), which flaked the
-      // route-smoke e2e.
-      ensureRouteQueryData(context.queryClient, roleOptions),
-    ]);
-
-    return {
-      canCreateSkills: authClient.organization.checkRolePermission({
-        permissions: { agentSkill: ["create"] },
-        role,
-      }),
-      canManageCustomTools: role === "admin" || role === "owner",
-      practiceJurisdictions: settings.practiceJurisdictions,
-    };
-  },
-  component: ToolsPage,
-  pendingComponent: ToolsPagePending,
+  component: ToolsSection,
 });
 
-function ToolsPage() {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
-  const initialKind = Route.useSearch({
-    select: (s): CatalogueBrowserFilterKind | undefined => s.kind,
-  });
-  const initialSlug = Route.useSearch({
-    select: (s): string | undefined => s.slug,
-  });
-  const routeData = Route.useLoaderData({
-    select: (data) =>
-      data === null
-        ? null
-        : {
-            canCreateSkills: data.canCreateSkills,
-            canManageCustomTools: data.canManageCustomTools,
-            practiceJurisdictions: data.practiceJurisdictions,
-          },
-  });
-
-  // OAuth completion lands in a popup tab/window; the popup
-  // broadcasts via BroadcastChannel (falling back to opener
-  // postMessage), so the catalogue page needs an active subscription
-  // to surface the toast and refetch the catalogue.
-  useExternalSyncEffect(
-    () =>
-      subscribeToMcpOAuthOutcome((outcome) => {
-        if (outcome.status === "connected") {
-          stellaToast.add({
-            title: t("knowledge.mcp.connectedToast"),
-            type: "success",
-          });
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: catalogueKeys.list(organizationId),
-            }),
-            "knowledge-tools.invalidate",
-          );
-          return;
-        }
-        stellaToast.add({
-          title: t("knowledge.mcp.errorTitle"),
-          description: t("knowledge.mcp.errorDescription"),
-          type: "error",
-        });
-      }),
-    [organizationId, queryClient, t],
-  );
-
-  if (routeData === null) {
-    return <ToolsPagePending />;
-  }
-
+function ToolsSection() {
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto p-6">
-      <ToolsPageHeader />
-      <Suspense fallback={<ToolsCatalogueSkeleton />}>
-        <LazyCatalogueBrowser
-          canCreateSkills={routeData.canCreateSkills}
-          canManageCustomTools={routeData.canManageCustomTools}
-          initialKind={initialKind}
-          initialSlug={initialSlug}
-          // The browser reads both search params once, on mount, so a link that
-          // changes either one remounts it rather than leaving the previous
-          // filter or detail panel in place.
-          key={`${initialKind ?? "all"}:${initialSlug ?? ""}`}
-          organizationId={organizationId}
-          practiceJurisdictions={routeData.practiceJurisdictions}
-        />
-      </Suspense>
-    </div>
+    <KnowledgeAudienceGate
+      anonymous={() => <PublicToolsCatalogue />}
+      checking={<ToolsPagePending />}
+      member={(organizationId) => (
+        <Suspense fallback={<ToolsPagePending />}>
+          <LazyMemberToolsPage organizationId={organizationId} />
+        </Suspense>
+      )}
+    />
   );
 }
 
-// The route's `loader` waits for the catalogue and settings, so without a
-// pendingComponent it flashes the glowing logo before the catalogue skeleton.
-// Render the real chrome + catalogue skeleton during route-pending as well.
+// The catalogue page's own chrome with a catalogue skeleton, so the page stays
+// put while the visitor is resolved and the catalogue loads.
 function ToolsPagePending() {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-6">

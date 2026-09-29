@@ -916,7 +916,10 @@ export default defineConfig({
     "no-static-catalogue-route-import/no-static-catalogue-route-import": [
       "error",
       {
-        routeFiles: ["apps/web/src/routes/knowledge/tools.tsx"],
+        routeFiles: [
+          "apps/web/src/routes/knowledge/tools.tsx",
+          "apps/web/src/routes/knowledge/-member/member-tools-page.tsx",
+        ],
       },
     ],
     "suppression-hygiene/require-description": "error",
