@@ -205,7 +205,7 @@ export const MemberCatalogueTemplateActions = ({
                 }
               }}
             >
-              {t("knowledge.catalogue.confirm")}
+              {t("common.confirm")}
             </Button>
           </DialogFooter>
         </DialogPopup>

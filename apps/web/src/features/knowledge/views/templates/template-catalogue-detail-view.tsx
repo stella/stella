@@ -60,7 +60,7 @@ export const TemplateCatalogueDetailView = ({
         </header>
 
         <dl className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-          <DetailItem label={t("knowledge.catalogue.license")}>
+          <DetailItem label={t("onboarding.catalogueDetailLicense")}>
             {licenseUrl ? (
               <a
                 className="underline underline-offset-2"
@@ -75,12 +75,12 @@ export const TemplateCatalogueDetailView = ({
             )}
           </DetailItem>
           {template.legalArea !== null && (
-            <DetailItem label={t("knowledge.catalogue.legalArea")}>
+            <DetailItem label={t("caseLaw.viewer.legalArea")}>
               {template.legalArea}
             </DetailItem>
           )}
           {template.jurisdictions.length > 0 && (
-            <DetailItem label={t("knowledge.catalogue.jurisdictions")}>
+            <DetailItem label={t("onboarding.catalogueDetailJurisdictions")}>
               {template.jurisdictions.join(", ")}
             </DetailItem>
           )}

@@ -157,7 +157,7 @@ export const PlaybookList = ({
               }
             }}
           >
-            {t("knowledge.catalogue.confirm")}
+            {t("common.confirm")}
           </Button>
         </DialogFooter>
       </DialogPopup>

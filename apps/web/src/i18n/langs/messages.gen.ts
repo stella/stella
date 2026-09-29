@@ -1450,6 +1450,7 @@ type Messages = {
     "back": "Back";
     "cancel": "Cancel";
     "caseLaw": "Case Law";
+    "catalogue": "Catalogue";
     "category": "Category";
     "categoryName": "Category name";
     "changeColor": "Change color";
@@ -3230,17 +3231,12 @@ type Messages = {
     "catalogue": {
       "addToLibrary": "Add to library";
       "added": "{name} is in your library";
-      "browse": "Catalogue";
-      "confirm": "Continue";
       "confirmAddTitle": "Add {name} to {organization}?";
       "confirmDescription": "A copy of this template goes into the {organization} library.";
       "confirmDownloadTitle": "Download {name} for {organization}?";
       "confirmStarterDescription": "A copy of this playbook goes into the {organization} library.";
       "confirmUseTitle": "Use {name} in {organization}?";
       "installFailed": "The template could not be added";
-      "jurisdictions": "Jurisdictions";
-      "legalArea": "Legal area";
-      "license": "License";
       "noPreview": "No preview is available for this template.";
       "notFound": "This template is not in the catalogue.";
       "unavailable": "The catalogue is not available right now.";
@@ -3730,7 +3726,6 @@ type Messages = {
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";
     "stepApps": "Apps & tools";
-    "stepCatalogue": "Catalogue";
     "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
     "stepTeam": "Invite";
