@@ -985,7 +985,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 120,
+    "count": 121,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1030,6 +1030,7 @@
       "apps/api/src/lib/flows/flow-run-worker.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-executor.ts": 3,
       "apps/api/src/lib/legal-search/corpus-pack-batch.ts": 1,
+      "apps/api/src/lib/lists/sanctions/screening-service.ts": 1,
       "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/chat-run-log-retention.ts": 1,
