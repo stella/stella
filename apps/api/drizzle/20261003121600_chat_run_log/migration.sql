@@ -2,7 +2,7 @@ SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 CREATE TABLE "chat_run_logs" (
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "run_id" text NOT NULL,
   "turn_id" uuid NOT NULL REFERENCES "chat_turns"("id") ON DELETE CASCADE,
   "next_seq" bigint DEFAULT 1 NOT NULL,
@@ -27,7 +27,7 @@ CREATE POLICY "chat_run_logs_owner_access" ON "chat_run_logs" AS PERMISSIVE FOR 
   WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_logs'::regclass));--> statement-breakpoint
 
 CREATE TABLE "chat_run_log_entries" (
-  "organization_id" text NOT NULL,
+  "organization_id" varchar(128) NOT NULL,
   "run_id" text NOT NULL,
   "seq" bigint NOT NULL,
   "batch_id" uuid NOT NULL,
