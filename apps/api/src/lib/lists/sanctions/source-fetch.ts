@@ -12,6 +12,7 @@ import {
   readCzListVersion,
   readEuListVersion,
   readOfacListVersion,
+  readSourceEditionMarker,
   readUkListVersion,
   readUnListVersion,
 } from "@stll/sanctions";
@@ -164,6 +165,29 @@ export type FetchedMarker = {
   source: SanctionsSource;
   version: ListVersion;
   downloadUrl: string;
+  /** See {@link lastModifiedOf}. */
+  lastModified: string | null;
+};
+
+/**
+ * The HTTP Last-Modified of a list response, for sources whose edition marker
+ * is that validator. Their stated list version is a calendar date, so the
+ * validator is what tells two editions published on the same day apart. It
+ * is read from the response that carried the list, which for these sources is
+ * the marker URL itself. Null for other sources, and when the publisher omits
+ * the header or sends one that cannot be read.
+ */
+const lastModifiedOf = (
+  source: SanctionsSource,
+  headers: Headers,
+): string | null => {
+  if (SANCTIONS_SOURCES[source].editionMarker.kind !== "http-last-modified") {
+    return null;
+  }
+  const stamp = readSourceEditionMarker(source, {
+    lastModified: headers.get("last-modified"),
+  });
+  return stamp.isOk() ? stamp.value.value : null;
 };
 
 type FetchOptions = {
@@ -232,7 +256,12 @@ const fetchStream = async ({
   streamTotalTimeoutMs?: number | undefined;
   url: string;
   userAgent?: string | undefined;
-}): Promise<Result<ReadableStream<Uint8Array>, SanctionsRefreshError>> => {
+}): Promise<
+  Result<
+    { body: ReadableStream<Uint8Array>; headers: Headers },
+    SanctionsRefreshError
+  >
+> => {
   const response = await fetchStreamRequest({
     url,
     maxBytes: LIST_MAX_BYTES,
@@ -262,7 +291,10 @@ const fetchStream = async ({
       ),
     );
   }
-  return Result.ok(response.value.body);
+  return Result.ok({
+    body: response.value.body,
+    headers: response.value.headers,
+  });
 };
 
 const trackStreamFailure = (body: ReadableStream<Uint8Array>) => {
@@ -332,10 +364,15 @@ const loadStreamedMarker = async ({
   if (response.isErr()) {
     return response;
   }
-  const body = trackStreamFailure(response.value);
+  const body = trackStreamFailure(response.value.body);
   const version = await readVersion(body.chunks);
   return version.isOk() && !body.failed()
-    ? Result.ok({ source, version: version.value, downloadUrl })
+    ? Result.ok({
+        source,
+        version: version.value,
+        downloadUrl,
+        lastModified: lastModifiedOf(source, response.value.headers),
+      })
     : Result.err(
         refreshError(source, body.failed() ? "fetch-failed" : "parse-failed"),
       );
@@ -437,6 +474,7 @@ const loadMarkerOnce = async (
             source,
             version: version.value,
             downloadUrl: downloadUrl.value,
+            lastModified: null,
           })
         : Result.err(refreshError(source, "metadata-invalid"));
     }
@@ -478,7 +516,12 @@ export const fetchSanctionsMarker = async (
     signal: options.signal,
   });
 
-export type FetchedEdition = { parsed: ParsedList; contentHash: string };
+export type FetchedEdition = {
+  parsed: ParsedList;
+  contentHash: string;
+  /** See {@link lastModifiedOf}; read from the download response. */
+  lastModified: string | null;
+};
 
 const parseStreamedList = async (
   source: StreamedSource,
@@ -530,6 +573,7 @@ const loadEditionOnce = async (
           contentHash: createHash("sha256")
             .update(Buffer.from(downloaded.value))
             .digest("hex"),
+          lastModified: null,
         })
       : Result.err(refreshError(marker.source, "parse-failed"));
   }
@@ -545,7 +589,7 @@ const loadEditionOnce = async (
   if (downloaded.isErr()) {
     return downloaded;
   }
-  const body = trackStreamFailure(downloaded.value);
+  const body = trackStreamFailure(downloaded.value.body);
   const hash = createHash("sha256");
   const hashed = async function* () {
     for await (const chunk of body.chunks) {
@@ -555,7 +599,11 @@ const loadEditionOnce = async (
   };
   const parsed = await parseStreamedList(marker.source, hashed());
   return parsed.isOk() && !body.failed()
-    ? Result.ok({ parsed: parsed.value, contentHash: hash.digest("hex") })
+    ? Result.ok({
+        parsed: parsed.value,
+        contentHash: hash.digest("hex"),
+        lastModified: lastModifiedOf(marker.source, downloaded.value.headers),
+      })
     : Result.err(
         refreshError(
           marker.source,

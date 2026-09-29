@@ -23,7 +23,10 @@ const OFAC_NON_SDN_FIXTURE = path.join(FIXTURES, "ofac-non-sdn.xml");
 const UK_FIXTURE = path.join(FIXTURES, "uk.xml");
 
 /** Serves a fixture file as a successful stream and records requested URLs. */
-const fixtureStream = (fixture: string) => {
+const fixtureStream = (
+  fixture: string,
+  headers: Record<string, string> = {},
+) => {
   const requested: string[] = [];
   const fetchStreamRequest: typeof safeOutboundFetchStream = async ({
     url,
@@ -31,7 +34,7 @@ const fixtureStream = (fixture: string) => {
     requested.push(String(url));
     return Result.ok({
       body: Bun.file(fixture).stream(),
-      headers: new Headers(),
+      headers: new Headers(headers),
       ok: true,
       status: 200,
     });
@@ -99,7 +102,12 @@ describe("streaming list downloads", () => {
     ).unwrap();
     let attempts = 0;
     const result = await fetchSanctionsEdition(
-      { source: "un", version, downloadUrl: "https://example.test/un.xml" },
+      {
+        source: "un",
+        version,
+        downloadUrl: "https://example.test/un.xml",
+        lastModified: null,
+      },
       {
         signal: new AbortController().signal,
         fetchStreamRequest: async ({ headers }) => {
@@ -135,7 +143,12 @@ describe("streaming list downloads", () => {
     ).unwrap();
     let attempts = 0;
     const result = await fetchSanctionsEdition(
-      { source: "un", version, downloadUrl: "https://example.test/un.xml" },
+      {
+        source: "un",
+        version,
+        downloadUrl: "https://example.test/un.xml",
+        lastModified: null,
+      },
       {
         signal: new AbortController().signal,
         streamTotalTimeoutMs: 20,
@@ -180,6 +193,7 @@ describe("OFAC list refresh", () => {
       source: "us-sdn",
       version: { source: "us-sdn", publishedAt: "2026-09-23", fileId: null },
       downloadUrl,
+      lastModified: null,
     });
     expect(requested).toEqual([downloadUrl]);
   });
@@ -255,6 +269,7 @@ describe("UK list refresh", () => {
       source: "uk",
       version: { source: "uk", publishedAt: "2026-09-21", fileId: null },
       downloadUrl,
+      lastModified: null,
     });
     expect(requested).toEqual([downloadUrl]);
   });
@@ -309,5 +324,70 @@ describe("UK list refresh", () => {
       expect(marker.error.code).toBe("parse-failed");
     }
     expect(attempts).toBe(1);
+  });
+});
+
+describe("HTTP validators for same-day editions", () => {
+  const options = (
+    fixture: string,
+    headers: Record<string, string>,
+  ): Parameters<typeof fetchSanctionsMarker>[1] => ({
+    signal: new AbortController().signal,
+    fetchStreamRequest: fixtureStream(fixture, headers).fetchStreamRequest,
+  });
+
+  test("keeps the stated OFAC date and adds the Last-Modified of the export", async () => {
+    const marker = (
+      await fetchSanctionsMarker(
+        "us-sdn",
+        options(OFAC_SDN_FIXTURE, {
+          "Last-Modified": "Wed, 23 Sep 2026 18:42:07 GMT",
+        }),
+      )
+    ).unwrap();
+    expect(marker.version.publishedAt).toBe("2026-09-23");
+    expect(marker.lastModified).toBe("2026-09-23T18:42:07Z");
+
+    const edition = (
+      await fetchSanctionsEdition(
+        marker,
+        options(OFAC_SDN_FIXTURE, {
+          "Last-Modified": "Wed, 23 Sep 2026 18:42:07 GMT",
+        }),
+      )
+    ).unwrap();
+    expect(edition.parsed.version).toEqual(marker.version);
+    expect(edition.lastModified).toBe("2026-09-23T18:42:07Z");
+  });
+
+  test("reads the Last-Modified of the UK export", async () => {
+    const marker = (
+      await fetchSanctionsMarker(
+        "uk",
+        options(UK_FIXTURE, {
+          "Last-Modified": "Mon, 21 Sep 2026 09:15:00 GMT",
+        }),
+      )
+    ).unwrap();
+    expect(marker.version.publishedAt).toBe("2026-09-21");
+    expect(marker.lastModified).toBe("2026-09-21T09:15:00Z");
+  });
+
+  test("leaves the validator out when the header is missing or unreadable", async () => {
+    const missing = await fetchSanctionsMarker("uk", options(UK_FIXTURE, {}));
+    expect(missing.unwrap().lastModified).toBeNull();
+    const unreadable = await fetchSanctionsMarker(
+      "us-non-sdn",
+      options(OFAC_NON_SDN_FIXTURE, { "Last-Modified": "yesterday" }),
+    );
+    expect(unreadable.unwrap().lastModified).toBeNull();
+  });
+
+  test("ignores Last-Modified for a source whose marker is not that header", async () => {
+    const marker = await fetchSanctionsMarker(
+      "un",
+      options(UN_FIXTURE, { "Last-Modified": "Wed, 23 Sep 2026 18:42:07 GMT" }),
+    );
+    expect(marker.unwrap().lastModified).toBeNull();
   });
 });
