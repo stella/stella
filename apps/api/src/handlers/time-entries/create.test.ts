@@ -2,9 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { createTimeEntryHandler } from "@/api/lib/time-entry-insert";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
-
-import { createTimeEntryHandler } from "./time-entry-insert";
 
 describe("createTimeEntryHandler", () => {
   test("rejects an invalid IANA timezone id with a typed error", async () => {

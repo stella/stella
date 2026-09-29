@@ -7,7 +7,6 @@ import {
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
-import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { timeEntryReadColumns } from "@/api/handlers/time-entries/time-entry-columns";
 import {
   selectTimekeeperNames,
@@ -38,6 +37,7 @@ import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 type TimeEntryRow = typeof timeEntries.$inferSelect;

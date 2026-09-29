@@ -7,10 +7,6 @@ import { BILLING_STATUS } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
-import {
-  canApproveTimeEntries,
-  canManageTimeEntry,
-} from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -29,6 +25,10 @@ import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  canApproveTimeEntries,
+  canManageTimeEntry,
+} from "@/api/lib/time-entry-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const updateTimeEntryBodySchema = t.Object({

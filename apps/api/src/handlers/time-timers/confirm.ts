@@ -11,20 +11,22 @@ import {
   timeTimerConfirmations,
   timeTimers,
 } from "@/api/db/schema";
-import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
-import {
-  insertPreparedTimeEntry,
-  lockTimeEntryCapacity,
-  prepareTimeEntryInsert,
-} from "@/api/handlers/time-entries/time-entry-insert";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
+import {
+  insertPreparedTimeEntry,
+  lockTimeEntryCapacity,
+  prepareTimeEntryInsert,
+} from "@/api/lib/time-entry-insert";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
-import { formatTodayInTimeZone } from "@/api/lib/timezone";
-
-import type { TimerOwner } from "./shared";
+import type { TimerOwner } from "@/api/lib/time-timers";
 import {
   deleteLegacyTimerDraft,
   lockTimerOwner,
@@ -33,7 +35,55 @@ import {
   timerNotFound,
   timerParams,
   timerSeconds,
-} from "./shared";
+} from "@/api/lib/time-timers";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
+
+const CONFIRMED_ENTRY_COLUMNS = {
+  id: timeEntries.id,
+  durationMinutes: timeEntries.durationMinutes,
+  billedMinutes: timeEntries.billedMinutes,
+};
+type TimeEntryRow = typeof timeEntries.$inferSelect;
+const UNPROJECTED_CONFIRMED_ENTRY_COLUMNS = [
+  // Scope and attribution remain on the owner's draft, not this completion receipt.
+  "organizationId",
+  "workspaceId",
+  "userId",
+  "workItemId",
+  // The receipt reports identity and elapsed/billed minutes only; the draft owns
+  // dates, billing details, narrative, classification and lifecycle metadata.
+  "dateWorked",
+  "timezoneId",
+  "rateAtEntry",
+  "currency",
+  "narrative",
+  "narrativeLanguage",
+  "invoiceNarrative",
+  "billable",
+  "noCharge",
+  "status",
+  "source",
+  "taskCode",
+  "activityCode",
+  "invoiceId",
+  "splitGroupId",
+  "timerStartedAt",
+  "timerStoppedAt",
+  "createdAt",
+  "updatedAt",
+] as const satisfies readonly (keyof TimeEntryRow)[];
+type MissingConfirmedEntryColumn = UnprojectedColumns<
+  TimeEntryRow,
+  typeof CONFIRMED_ENTRY_COLUMNS,
+  (typeof UNPROJECTED_CONFIRMED_ENTRY_COLUMNS)[number]
+>;
+type UnexpectedConfirmedEntryColumn = UnbackedProjectionKeys<
+  TimeEntryRow,
+  typeof CONFIRMED_ENTRY_COLUMNS,
+  (typeof UNPROJECTED_CONFIRMED_ENTRY_COLUMNS)[number]
+>;
+true satisfies MissingConfirmedEntryColumn extends never ? true : never;
+true satisfies UnexpectedConfirmedEntryColumn extends never ? true : never;
 
 // Reuse the current transaction for policy, context and rate reads; no nested
 // transaction may observe a different timer or policy snapshot.
@@ -70,11 +120,7 @@ const readConfirmation = async ({ tx, owner, id }: ReadConfirmationOptions) => {
       );
     }
     const [entry] = await tx
-      .select({
-        id: timeEntries.id,
-        durationMinutes: timeEntries.durationMinutes,
-        billedMinutes: timeEntries.billedMinutes,
-      })
+      .select(CONFIRMED_ENTRY_COLUMNS)
       .from(timeEntries)
       .where(
         and(

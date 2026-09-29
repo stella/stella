@@ -32,7 +32,6 @@ import type { readLegislationProvisionVersions } from "@/api/handlers/legislatio
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import type { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
-import type { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-insert";
 import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
@@ -84,6 +83,7 @@ import type {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
+import type { createTimeEntryHandler } from "@/api/lib/time-entry-insert";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";

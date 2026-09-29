@@ -5,10 +5,6 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { timeEntries, workspaces } from "@/api/db/schema";
 import {
-  lockTimerOwner,
-  pauseRunningTimers,
-} from "@/api/handlers/time-timers/shared";
-import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
@@ -19,6 +15,7 @@ import {
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockTimerOwner, pauseRunningTimers } from "@/api/lib/time-timers";
 
 /**
  * Close the removed member's single active timer while the caller's

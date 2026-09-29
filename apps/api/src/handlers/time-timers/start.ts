@@ -5,13 +5,12 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
-
 import {
   lockTimerOwner,
   pauseRunningTimers,
   timerDetails,
   timerItem,
-} from "./shared";
+} from "@/api/lib/time-timers";
 
 const startTimer = createSafeRootHandler(
   {

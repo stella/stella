@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-
-import { canApproveTimeEntries, canManageTimeEntry } from "./authorization";
+import {
+  canApproveTimeEntries,
+  canManageTimeEntry,
+} from "@/api/lib/time-entry-authorization";
 
 const CURRENT_USER_ID = toSafeId<"user">(
   "00000000-0000-4000-8000-000000000001",

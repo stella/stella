@@ -5,7 +5,6 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import type { TimeEntrySource } from "@/api/db/schema";
-import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
@@ -21,6 +20,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 type TimeEntryInsertInput = {

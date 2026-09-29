@@ -5,10 +5,6 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import {
-  canApproveTimeEntries,
-  canManageTimeEntry,
-} from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -17,6 +13,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import {
+  canApproveTimeEntries,
+  canManageTimeEntry,
+} from "@/api/lib/time-entry-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const deleteTimeEntryBodySchema = t.Object({

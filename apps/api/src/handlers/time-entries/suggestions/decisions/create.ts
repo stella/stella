@@ -9,18 +9,12 @@ import {
   TIME_ENTRY_SUGGESTION_STATUS,
   timeEntrySuggestions,
 } from "@/api/db/schema";
-import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { loadTimeSuggestions } from "@/api/handlers/time-entries/suggestions/load";
 import {
   timeSuggestionDateSchema,
   timeSuggestionFingerprintSchema,
   timeSuggestionTimezoneSchema,
 } from "@/api/handlers/time-entries/suggestions/schemas";
-import {
-  insertPreparedTimeEntry,
-  lockTimeEntryCapacity,
-  prepareTimeEntryInsert,
-} from "@/api/handlers/time-entries/time-entry-insert";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
@@ -28,6 +22,12 @@ import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
+import {
+  insertPreparedTimeEntry,
+  lockTimeEntryCapacity,
+  prepareTimeEntryInsert,
+} from "@/api/lib/time-entry-insert";
 
 const SUGGESTION_UNAVAILABLE_HINT =
   "The suggestion was already accepted or dismissed, or the day's activity " +

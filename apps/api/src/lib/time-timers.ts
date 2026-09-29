@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -127,6 +127,55 @@ type UnexpectedTimerColumn = UnbackedProjectionKeys<
 >;
 true satisfies MissingTimerColumn extends never ? true : never;
 true satisfies UnexpectedTimerColumn extends never ? true : never;
+
+type ChangeTimerStateOptions = {
+  tx: Transaction;
+  owner: TimerOwner;
+  id: SafeId<"timeTimer">;
+  state: (typeof timeTimers.$inferSelect)["state"];
+  recordAuditEvent: AuditRecorder;
+};
+export const changeTimerState = async ({
+  tx,
+  owner,
+  id,
+  state,
+  recordAuditEvent,
+}: ChangeTimerStateOptions) => {
+  await lockTimerOwner(tx, owner);
+  const timer = await readOwnedTimer({ tx, owner, id });
+  if (!timer) {
+    return Result.err(timerNotFound());
+  }
+  if (timer.state === state) {
+    return Result.ok(timerItem(timer));
+  }
+  const now = new Date();
+  if (state === "running") {
+    await pauseRunningTimers({ tx, owner, now, recordAuditEvent });
+  }
+  const [changed] = await tx
+    .update(timeTimers)
+    .set({
+      state,
+      accumulatedSeconds: timerSeconds(timer, now),
+      lastResumedAt: state === "running" ? now : null,
+      updatedAt: now,
+    })
+    .where(and(ownedTimers(owner), eq(timeTimers.id, timer.id)))
+    .returning();
+  if (!changed) {
+    return panic("Locked timer update returned no row");
+  }
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.TIME_TIMER,
+    resourceId: timer.id,
+    workspaceId: timer.workspaceId,
+    changes: { state: { old: timer.state, new: state } },
+  });
+  return Result.ok(timerItem(changed));
+};
 
 type PauseRunningTimersOptions = {
   tx: Transaction;

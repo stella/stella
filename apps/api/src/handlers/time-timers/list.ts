@@ -14,8 +14,7 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
-
-import { ownedTimers, timerItem } from "./shared";
+import { ownedTimers, timerItem } from "@/api/lib/time-timers";
 
 const listMyTimeTimers = createSafeRootHandler(
   {

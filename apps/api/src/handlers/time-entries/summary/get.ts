@@ -7,10 +7,10 @@ import { addDays, parseIsoDateLocal } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries, workspaceMembers } from "@/api/db/schema";
-import { canApproveTimeEntries } from "@/api/handlers/time-entries/authorization";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
 
 const MAX_SUMMARY_DAYS = 31;
 const MAX_TEAM_SUMMARY_ROWS = LIMITS.workspaceMembersCount * MAX_SUMMARY_DAYS;
