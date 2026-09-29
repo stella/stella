@@ -9,7 +9,10 @@ import {
   createStyleSetEditorBuffer,
 } from "@/api/lib/style-set-editor";
 import { createStyleSetFromEditorSchema } from "@/api/lib/style-set-editor-contract";
-import { normalizeStyleSetName } from "@/api/lib/style-sets";
+import {
+  normalizeStyleSetName,
+  scanStyleSetPackage,
+} from "@/api/lib/style-sets";
 
 const config = {
   description:
@@ -40,13 +43,14 @@ export default createSafeRootHandler(
               }),
       }),
     );
+    const file = yield* Result.await(scanStyleSetPackage(buffer, name));
     const row = yield* Result.await(
       createStoredStyleSet({
         safeDb,
         organizationId: session.activeOrganizationId,
         userId: user.id,
         name,
-        buffer,
+        file,
         recordAuditEvent,
       }),
     );

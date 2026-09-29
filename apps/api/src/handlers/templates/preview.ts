@@ -8,7 +8,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  readStoredTemplateFile,
+  STORED_TEMPLATE_FILE_COLUMNS,
+} from "@/api/lib/templates/stored-template-file";
 
 const previewTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -32,7 +35,7 @@ const previewTemplateHandler = async function* ({
           id: { eq: templateId },
           organizationId: { eq: organizationId },
         },
-        columns: { s3Key: true },
+        columns: { ...STORED_TEMPLATE_FILE_COLUMNS, fileName: true },
       }),
     ),
   );
@@ -43,8 +46,16 @@ const previewTemplateHandler = async function* ({
     );
   }
 
-  const docxBytes = Buffer.from(await readS3ArrayBuffer(template.s3Key));
-  return Result.ok(await renderTemplatePreview(docxBytes));
+  const file = yield* Result.await(
+    readStoredTemplateFile({
+      safeDb,
+      organizationId,
+      row: template,
+      fileName: template.fileName,
+    }),
+  );
+
+  return Result.ok(await renderTemplatePreview(file));
 };
 
 const config = {

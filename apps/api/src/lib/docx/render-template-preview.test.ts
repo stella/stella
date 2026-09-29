@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { renderTemplatePreview } from "./render-template-preview";
 
 const makeDocx = async (body: string): Promise<Buffer> => {
@@ -20,7 +22,7 @@ const makeDocx = async (body: string): Promise<Buffer> => {
 const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 describe("renderTemplatePreview", () => {
-  test("renders preview details directly from DOCX bytes", async () => {
+  test("renders preview details from a scanned DOCX file", async () => {
     const docxBytes = await makeDocx(
       [
         paragraph("Intro"),
@@ -29,7 +31,7 @@ describe("renderTemplatePreview", () => {
       ].join(""),
     );
 
-    const preview = await renderTemplatePreview(docxBytes);
+    const preview = await renderTemplatePreview(testDocxFile(docxBytes));
 
     expect(preview.paragraphs.map(({ text }) => text)).toEqual([
       "Intro",

@@ -8,7 +8,7 @@ import {
 
 import { env } from "@/api/env";
 import { createPublicKnowledgeEndpoints } from "@/api/handlers/public-knowledge/endpoints";
-import type { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
+import type { PublicKnowledgeDependencies } from "@/api/handlers/public-knowledge/endpoints";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 
 let bundledCatalogue: TemplatePackCatalogue | null = null;
@@ -23,7 +23,7 @@ const isPublicKnowledgePath = (path: string) =>
 
 export const createPublicKnowledgeRoute = (
   catalogue: () => TemplatePackCatalogue,
-  renderPreview?: typeof renderTemplatePreview,
+  dependencies?: PublicKnowledgeDependencies,
 ) => {
   const {
     listPacks,
@@ -32,7 +32,7 @@ export const createPublicKnowledgeRoute = (
     readTemplatePreview,
     listStarters,
     readStarter,
-  } = createPublicKnowledgeEndpoints(catalogue, renderPreview);
+  } = createPublicKnowledgeEndpoints(catalogue, dependencies);
   return new Elysia({ prefix: PUBLIC_KNOWLEDGE_PATH })
     .onRequest(({ request, set }) => {
       if (isPublicKnowledgePath(new URL(request.url).pathname)) {

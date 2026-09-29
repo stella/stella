@@ -19,6 +19,7 @@ import {
   createBilingualDocx,
   docxToMarkdown,
   extractDocumentStyleSetFromDocx,
+  extractDocxText,
   FolioDocxReviewer,
   materializeYjsDocx,
   parseDocx,
@@ -54,6 +55,9 @@ export const scannedDocxToMarkdown = async (
   file: ScannedFile,
   options?: Parameters<typeof docxToMarkdown>[1],
 ) => await docxToMarkdown(file.bytes, options);
+
+export const extractScannedDocxText = async (file: ScannedFile) =>
+  await extractDocxText(file.bytes);
 
 export const compareScannedDocx = async (
   base: ScannedFile,

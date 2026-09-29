@@ -11,7 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { readStyleSetBuffer } from "@/api/lib/style-sets";
+import { readStyleSetFile } from "@/api/lib/style-sets";
 import {
   type CreatedTemplate,
   createStoredTemplate,
@@ -42,8 +42,8 @@ const createTemplateFromStyleSetHandler = async function* ({
   body,
   recordAuditEvent,
 }: CreateTemplateFromStyleSetOptions): SafeHandlerGenerator<CreatedTemplate> {
-  const buffer = yield* Result.await(
-    readStyleSetBuffer({
+  const file = yield* Result.await(
+    readStyleSetFile({
       safeDb,
       organizationId,
       styleSetId: body.styleSetId,
@@ -54,7 +54,7 @@ const createTemplateFromStyleSetHandler = async function* ({
     safeDb,
     organizationId,
     userId,
-    buffer,
+    file,
     name: body.name,
     fileName: sanitizeFilenamePreservingExtension(`${body.name}.docx`),
     categoryId: body.categoryId,

@@ -8,9 +8,15 @@ import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  FileScanFailedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scan-upload";
+import type { FileScanRejectedError } from "@/api/lib/file-scan/scan-upload";
+import {
   findStarterPlaybook,
   STARTER_PLAYBOOKS,
 } from "@/api/lib/knowledge/starter-playbooks";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const packMetadata = (pack: GeneratedTemplatePack) => ({
   id: pack.id,
@@ -56,16 +62,41 @@ const starterParams = t.Object({
   id: t.String({ minLength: 1, maxLength: 64 }),
 });
 
+const previewUnavailable = (cause: unknown) =>
+  Result.err(
+    new HandlerError({ status: 503, message: "Preview unavailable", cause }),
+  );
+
 const MAX_CACHED_PREVIEWS = 64;
+
+type TemplatePreview = Awaited<ReturnType<typeof renderTemplatePreview>>;
+
+/**
+ * A bundled template's scan verdict and rendered preview. A render failure
+ * rejects the promise instead.
+ */
+type PreviewOutcome = Result<
+  TemplatePreview,
+  FileScanRejectedError | FileScanFailedError
+>;
+
+export type PublicKnowledgeDependencies = {
+  renderPreview?: typeof renderTemplatePreview;
+  scan?: typeof scanUpload;
+};
 
 export const createPublicKnowledgeEndpoints = (
   catalogue: () => TemplatePackCatalogue,
-  renderPreview: typeof renderTemplatePreview = renderTemplatePreview,
+  {
+    renderPreview = renderTemplatePreview,
+    scan = scanUpload,
+  }: PublicKnowledgeDependencies = {},
 ) => {
-  const previewCache = new Map<
-    string,
-    ReturnType<typeof renderTemplatePreview>
-  >();
+  // Keyed by manifest hash: each bundled template is scanned and rendered
+  // once per process. A rejecting verdict stays cached, since the same
+  // hash-verified bytes would be rejected again; a scanner or render failure
+  // is evicted, so the next request retries.
+  const previewCache = new Map<string, Promise<PreviewOutcome>>();
   const publicPack = (packId: string) => {
     const pack = catalogue().get(packId);
     return pack?.publicDisplay ? pack : null;
@@ -142,38 +173,48 @@ export const createPublicKnowledgeEndpoints = (
         // The manifest advertises this template, so missing or mismatched
         // bytes are a deployment fault, not an unknown template.
         if (Result.isError(docx)) {
-          return Result.err(
-            new HandlerError({
-              status: 503,
-              message: "Preview unavailable",
-              cause: docx.error,
-            }),
-          );
+          return previewUnavailable(docx.error);
         }
         pending = previewCache.get(template.sha256);
         if (!pending) {
-          const render = Promise.resolve().then(() =>
-            renderPreview(docx.value.bytes),
-          );
-          previewCache.set(template.sha256, render);
+          const { bytes, fileName } = docx.value;
+          // Bundled bytes reach the parsers the way server-built output
+          // does: through the same security scan as an upload.
+          const build = async (): Promise<PreviewOutcome> => {
+            const scanned = await scan({
+              bytes,
+              declaredMimeType: DOCX_MIME_TYPE,
+              fileName,
+            });
+            if (Result.isError(scanned)) {
+              return Result.err(scanned.error);
+            }
+            return Result.ok(await renderPreview(scanned.value));
+          };
+          const built = build();
+          previewCache.set(template.sha256, built);
           if (previewCache.size > MAX_CACHED_PREVIEWS) {
             const oldest = previewCache.keys().next().value;
             if (oldest !== undefined) {
               previewCache.delete(oldest);
             }
           }
-          pending = render;
+          pending = built;
         }
       }
-      const outcome = await Result.tryPromise(async () => await pending);
-      if (
-        Result.isError(outcome) &&
-        previewCache.get(template.sha256) === pending
-      ) {
+      const settled = await Result.tryPromise(async () => await pending);
+      const retryable =
+        Result.isError(settled) ||
+        (Result.isError(settled.value) &&
+          FileScanFailedError.is(settled.value.error));
+      if (retryable && previewCache.get(template.sha256) === pending) {
         previewCache.delete(template.sha256);
       }
-      const preview = yield* outcome;
-      return Result.ok(preview);
+      const outcome = yield* settled;
+      if (Result.isError(outcome)) {
+        return previewUnavailable(outcome.error);
+      }
+      return Result.ok(outcome.value);
     },
   );
 

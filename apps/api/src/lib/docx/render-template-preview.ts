@@ -1,15 +1,16 @@
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+
 import { discoverClauseSlots } from "./discover-clause-slots";
 import { discoverTemplate } from "./discover-template";
 import { extractTextForPreview } from "./extract-text";
 
-/** Render the read-only template preview from its DOCX bytes. */
-export const renderTemplatePreview = async (docxBytes: Uint8Array) => {
-  const buffer = Buffer.from(docxBytes);
+/** Render the read-only template preview from a scanned DOCX file. */
+export const renderTemplatePreview = async (file: ScannedFile) => {
   const [{ paragraphs, charCount }, { structureErrors }, clauseSlots] =
     await Promise.all([
-      extractTextForPreview(buffer),
-      discoverTemplate(buffer),
-      discoverClauseSlots(buffer),
+      extractTextForPreview(file),
+      discoverTemplate(file),
+      discoverClauseSlots(file),
     ]);
 
   // Discovery reports section-relative indices; preview paragraphs use one

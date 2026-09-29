@@ -18,6 +18,12 @@ import {
   publicKnowledgeRoute,
 } from "@/api/handlers/public-knowledge/routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
+import {
+  FileScanRejectedError,
+  scanUpload,
+} from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 const request = (path: string, cookie?: string) =>
   publicKnowledgeRoute.handle(
@@ -99,7 +105,7 @@ describe("public knowledge routes", () => {
     });
   });
 
-  test("two preview requests render the static bytes once", async () => {
+  test("two preview requests scan and render the static bytes once", async () => {
     await withFeature(true, async () => {
       const pack = FIXTURE_TEMPLATE_PACKS.at(0);
       const template = pack?.templates.at(0);
@@ -109,26 +115,92 @@ describe("public knowledge routes", () => {
       const catalogue = createFixtureTemplatePackCatalogue([
         { ...pack, publicDisplay: true },
       ]);
-      let renders = 0;
-      const route = createPublicKnowledgeRoute(
-        () => catalogue,
-        async () => {
-          renders += 1;
-          return {
+      let scans = 0;
+      const rendered: ScannedFile[] = [];
+      const route = createPublicKnowledgeRoute(() => catalogue, {
+        scan: async (input) => {
+          scans += 1;
+          return await scanUpload(input);
+        },
+        renderPreview: async (file) => {
+          rendered.push(file);
+          return await Promise.resolve({
             paragraphs: [],
             charCount: 0,
             structureErrors: [],
             clauseSlots: [],
-          };
+          });
         },
-      );
+      });
       const path = `/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`;
       const first = await route.handle(new Request(`http://localhost${path}`));
       const second = await route.handle(new Request(`http://localhost${path}`));
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
       expect(await first.text()).toBe(await second.text());
-      expect(renders).toBe(1);
+      expect(scans).toBe(1);
+      expect(rendered).toHaveLength(1);
+      expect(rendered[0]?.source.type).toBe("scan");
+    });
+  });
+
+  test("a rejecting scan of bundled bytes is a server fault", async () => {
+    await withFeature(true, async () => {
+      const pack = FIXTURE_TEMPLATE_PACKS.at(0);
+      const template = pack?.templates.at(0);
+      if (!pack || !template) {
+        throw new Error("Fixture template missing");
+      }
+      const catalogue = createFixtureTemplatePackCatalogue([
+        { ...pack, publicDisplay: true },
+      ]);
+      const rejection = fileSecurityRejection({
+        verdict: "reject",
+        findings: [
+          { rule: "corrupt-zip", severity: "reject", message: "not a zip" },
+        ],
+      });
+      if (!rejection) {
+        throw new Error("Rejection fixture missing");
+      }
+      let scans = 0;
+      let renders = 0;
+      const route = createPublicKnowledgeRoute(() => catalogue, {
+        scan: async () => {
+          scans += 1;
+          return await Promise.resolve(
+            Result.err(
+              new FileScanRejectedError({
+                message: rejection.message,
+                rejection,
+              }),
+            ),
+          );
+        },
+        renderPreview: async () => {
+          renders += 1;
+          return await Promise.resolve({
+            paragraphs: [],
+            charCount: 0,
+            structureErrors: [],
+            clauseSlots: [],
+          });
+        },
+      });
+      const path = `/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await route.handle(
+          new Request(`http://localhost${path}`),
+        );
+        expect(response.status).toBe(503);
+        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        const body = await response.text();
+        expect(body).toContain("Preview unavailable");
+        expect(body).not.toContain("not a zip");
+      }
+      // The verdict on hash-verified bytes is kept: the file is scanned once.
+      expect(scans).toBe(1);
+      expect(renders).toBe(0);
     });
   });
 
@@ -174,12 +246,11 @@ describe("public knowledge routes", () => {
       const catalogue = createFixtureTemplatePackCatalogue([
         { ...pack, publicDisplay: true },
       ]);
-      const route = createPublicKnowledgeRoute(
-        () => catalogue,
-        async () => {
+      const route = createPublicKnowledgeRoute(() => catalogue, {
+        renderPreview: async () => {
           throw new Error("Preview failed");
         },
-      );
+      });
       const response = await route.handle(
         new Request(
           `http://localhost/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`,
