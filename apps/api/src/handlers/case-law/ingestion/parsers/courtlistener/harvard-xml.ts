@@ -49,7 +49,7 @@ const XML_DECLARATION = /^\uFEFF?\s*<\?xml\s[^?]*\?>/u;
 const DOCUMENT_TYPE = /<!(?:DOCTYPE|ENTITY)/iu;
 
 /** The text after a leading XML declaration, the only one a fragment may carry. */
-export const withoutXmlDeclaration = (text: string): string =>
+const withoutXmlDeclaration = (text: string): string =>
   text.replace(XML_DECLARATION, "");
 
 const textOf = (node: AnyNode): string => {

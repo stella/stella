@@ -16,7 +16,7 @@ import type { Block } from "@/api/handlers/case-law/document-ast";
  * Named bounds on one cluster's text. Past any, the cluster is held whole;
  * nothing is truncated.
  */
-export const COURTLISTENER_TEXT_LIMITS = {
+const COURTLISTENER_TEXT_LIMITS = {
   /** DOM nodes parsed across every candidate the cluster's opinions try. */
   DOM_NODES: 200_000,
   /** Blocks the composed document emits. */
@@ -45,7 +45,7 @@ export const TEXT_CANDIDATE_UNUSABLE = {
   MARKUP_RESIDUE: "markup-residue",
 } as const;
 
-export type TextCandidateUnusable =
+type TextCandidateUnusable =
   (typeof TEXT_CANDIDATE_UNUSABLE)[keyof typeof TEXT_CANDIDATE_UNUSABLE];
 
 /**
@@ -60,7 +60,7 @@ export type TextUnit = {
 };
 
 /** Counts a reader of the parse can check against the source. */
-export type TextCounts = {
+type TextCounts = {
   readonly pageAnchors: number;
   readonly notes: number;
   /** Publisher citation links unwrapped to their words. */
@@ -73,7 +73,7 @@ export type TextCounts = {
   readonly unknownConstructs: Readonly<Record<string, number>>;
 };
 
-export type ParsedOpinionText = {
+type ParsedOpinionText = {
   readonly units: readonly TextUnit[];
   readonly counts: TextCounts;
   /**

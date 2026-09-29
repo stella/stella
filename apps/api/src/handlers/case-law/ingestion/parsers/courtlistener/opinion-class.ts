@@ -95,13 +95,3 @@ export const unitClass = (
     ? { body: "unknown", separate: row.separate, structural: true, conflict }
     : { ...dom, structural: true, conflict };
 };
-
-/**
- * A combined row whose element states no class has no proven opinion
- * boundary: its blocks are scoped one by one, so no short form resolves
- * across a boundary nobody established.
- */
-export const hasUnprovenBoundaries = (
-  rowType: OpinionType,
-  domType: string | null,
-): boolean => rowType === "010combined" && domClass(domType) === null;
