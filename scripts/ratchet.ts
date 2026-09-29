@@ -70,8 +70,8 @@ import {
   RESULT_CONVENTION_SOURCE_GLOBS,
 } from "./result-boundary-globs";
 import {
+  countRootConnectionImports,
   countRootConnectionShapes,
-  isRootConnectionModule,
 } from "./root-connection-shapes";
 import {
   ALL_SOURCE_GLOBS,
@@ -1013,61 +1013,26 @@ const countDirectAuditLogInserts = (content: string): number => {
   );
 };
 
-// Value imports of the root connection handle, static or dynamic, by alias
-// or relative path. Request handlers are covered by lint; this keeps the
-// remaining sites visible. Type-only imports are not counted.
-const countRootConnectionImportsAs = (
-  content: string,
-  scriptKind: ts.ScriptKind,
-): number => {
-  const sourceFile = ts.createSourceFile(
-    "ratchet-source",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind,
-  );
-  let count = 0;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isImportDeclaration(node) &&
-      isRootConnectionModule(node.moduleSpecifier) &&
-      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
-    ) {
-      const bindingsNode = node.importClause?.namedBindings;
-      if (
-        bindingsNode !== undefined &&
-        ts.isNamedImports(bindingsNode) &&
-        bindingsNode.elements.some(
-          (specifier) =>
-            !specifier.isTypeOnly &&
-            (specifier.propertyName ?? specifier.name).text === "rootDb",
-        )
-      ) {
-        count += 1;
-      }
-      return;
-    }
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      isRootConnectionModule(node.arguments.at(0))
-    ) {
-      count += 1;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return count;
-};
-// The counter sees content, not the file name. Parsing a `.ts` generic arrow
-// as TSX misreads what follows it, so both parses run and the larger count
-// is the one that read the file correctly.
-const countDirectRootConnectionImports = (content: string): number =>
-  Math.max(
-    countRootConnectionImportsAs(content, ts.ScriptKind.TS),
-    countRootConnectionImportsAs(content, ts.ScriptKind.TSX),
-  );
+// Every hand-written API module, not only `src`: a script or eval that reaches
+// an owner-level handle is as much a use of it as a lib module.
+const API_OWNER_HANDLE_GLOBS = [
+  "apps/api/*.{ts,tsx}",
+  "apps/api/contracts/**/*.{ts,tsx}",
+  "apps/api/evals/**/*.{ts,tsx}",
+  "apps/api/scripts/**/*.{ts,tsx}",
+  "apps/api/src/**/*.{ts,tsx}",
+] as const;
+
+const OWNER_HANDLE_ALLOWLIST_REMEDY =
+  "`rootDb` and `rlsDb` (apps/api/src/db/root.ts) run as the table owner, so\n" +
+  "every module that reaches them is listed by name. New code takes the scoped\n" +
+  "handle its caller gives it (`ctx.safeDb` / `ctx.scopedDb`, see\n" +
+  "apps/api/src/db/safe-db.ts and scoped.ts), or calls an owner operation\n" +
+  "behind a door in ROOT_CONNECTION_DOORS (scripts/ownership.ts).\n" +
+  "If owner access is genuinely needed, run\n" +
+  `\`${WRITE_HINT}\`, commit the new line in\n` +
+  `${BASELINE_REL}, and say in the PR why a scoped handle\n` +
+  "cannot do the job: that line is the exception review signs off.";
 
 // The worker hosts and doors that hand the root connection on by design. The
 // lint rule confining each door's importers reads the same rows.
@@ -2274,6 +2239,14 @@ type RatchetMetric =
        * one occurrence cannot fund a new one elsewhere.
        */
       readonly perFile?: true;
+      /**
+       * The baseline is an allowlist of files, and this text tells whoever
+       * trips it what new code does instead and how an exception is justified.
+       * Needs `perFile`. A file below its own entry fails too, until `--write`
+       * shrinks the entry: an allowance must not outlive the use it was
+       * granted for, or the next use in that file would land unseen.
+       */
+      readonly allowlist?: string;
     }
   | {
       readonly scope: "repo";
@@ -2892,25 +2865,27 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "direct-root-connection-imports",
     description:
-      "imports of the root database connection (`rootDb`) outside request handlers, which lint already covers; new code takes a scoped or purpose-named handle",
-    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+      "references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed, type-only and namespace imports, re-exports, `import = require`, dynamic imports and import type queries (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, or a file naming one more handle, fails even when another file dropped one",
+    include: API_OWNER_HANDLE_GLOBS,
     exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/api/src/db/root.ts" ||
-      file.startsWith("apps/api/src/handlers/"),
-    count: countDirectRootConnectionImports,
+      isExcludedSource(file) || file === "apps/api/src/db/root.ts",
+    count: countRootConnectionImports,
+    perFile: true,
+    allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
   {
     scope: "file",
     id: "implicit-root-connection-shapes",
     description:
-      "places that supply the root database connection (`rootDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, assignments, object-literal dependency properties, module-level calls, aliases and returned factories, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts), awaited or not. Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt, plus the awaited owner operations listed with their file in ROOT_OPERATION_RESULTS; everything else takes its connection as a required dependency",
-    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
+      "places that supply an owner-level database handle (`rootDb`, `rlsDb`) without the caller asking for it: parameter and destructured defaults, `??`/`||` fallbacks, conditional operands, assignments, object-literal dependency properties, module-level calls, aliases and returned factories, resolved through renamed, namespace and dynamic imports (scripts/root-connection-shapes.ts), awaited or not. Only the worker hosts and doors in ROOT_CONNECTION_DOORS (scripts/ownership.ts) are exempt, plus the awaited owner operations listed with their file in ROOT_OPERATION_RESULTS; everything else takes its connection as a required dependency. An allowlist gated per file",
+    include: API_OWNER_HANDLE_GLOBS,
     exclude: (file) =>
       isExcludedSource(file) ||
       file === "apps/api/src/db/root.ts" ||
       ROOT_CONNECTION_DOOR_FILES.has(file),
     count: countRootConnectionShapes,
+    perFile: true,
+    allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
   {
     scope: "file",
@@ -3215,6 +3190,16 @@ const PER_FILE_METRIC_IDS: ReadonlySet<string> = new Set(
   ).map(({ id }) => id),
 );
 
+// How `--check` gates a metric: per file, and whether below-baseline files
+// fail as stale allowlist entries. An allowlist is always gated per file.
+const metricGate = (metric: RatchetMetric): DiffOptions =>
+  metric.scope === "file"
+    ? {
+        perFile: metric.allowlist === undefined ? metric.perFile : true,
+        allowlist: metric.allowlist === undefined ? undefined : true,
+      }
+    : {};
+
 // --- Scanning ---------------------------------------------------------------
 
 type MetricSnapshot = { count: number; files: Record<string, number> };
@@ -3438,7 +3423,9 @@ const writeBaseline = (snapshot: Baseline): void => {
 
 // --- Diffing ----------------------------------------------------------------
 
-type MetricStatus = "ok" | "regressed" | "dropped";
+// `stale`: an allowlist metric fell in some file and its baseline has not
+// shrunk to match yet.
+type MetricStatus = "ok" | "regressed" | "dropped" | "stale";
 
 type RegressedFile = { file: string; from: number; to: number };
 
@@ -3448,6 +3435,8 @@ type MetricDiff = {
   current: number;
   baseline: number;
   regressedFiles: RegressedFile[];
+  /** Files below their baseline entry, for an allowlist metric. */
+  staleFiles: RegressedFile[];
 };
 
 const metricStatus = (current: number, baseline: number): MetricStatus => {
@@ -3460,13 +3449,16 @@ const metricStatus = (current: number, baseline: number): MetricStatus => {
   return "ok";
 };
 
-type DiffOptions = { perFile?: true | undefined };
+type DiffOptions = {
+  perFile?: true | undefined;
+  allowlist?: true | undefined;
+};
 
 const diffMetric = (
   id: string,
   current: MetricSnapshot,
   baseline: MetricSnapshot,
-  { perFile }: DiffOptions = {},
+  { perFile, allowlist }: DiffOptions = {},
 ): MetricDiff => {
   const regressedFiles: RegressedFile[] = [];
   for (const [file, to] of Object.entries(current.files)) {
@@ -3477,9 +3469,24 @@ const diffMetric = (
   }
   regressedFiles.sort((a, b) => a.file.localeCompare(b.file));
 
+  const staleFiles: RegressedFile[] = [];
+  if (allowlist === true) {
+    for (const [file, from] of Object.entries(baseline.files)) {
+      const to = current.files[file] ?? 0;
+      if (to < from) {
+        staleFiles.push({ file, from, to });
+      }
+    }
+    staleFiles.sort((a, b) => a.file.localeCompare(b.file));
+  }
+
   const totalStatus = metricStatus(current.count, baseline.count);
-  const status =
-    perFile === true && regressedFiles.length > 0 ? "regressed" : totalStatus;
+  let status = totalStatus;
+  if ((perFile === true || allowlist === true) && regressedFiles.length > 0) {
+    status = "regressed";
+  } else if (staleFiles.length > 0) {
+    status = "stale";
+  }
 
   return {
     id,
@@ -3487,6 +3494,7 @@ const diffMetric = (
     current: current.count,
     baseline: baseline.count,
     regressedFiles,
+    staleFiles,
   };
 };
 
@@ -3544,6 +3552,8 @@ const runCheck = (): number => {
 
   const regressions: MetricDiff[] = [];
   const drops: MetricDiff[] = [];
+  const stale: MetricDiff[] = [];
+  const remedies = new Set<string>();
 
   for (const metric of RATCHET_METRICS) {
     const base = baseline[metric.id] ?? { count: 0, files: {} };
@@ -3551,13 +3561,23 @@ const runCheck = (): number => {
       metric.id,
       requireSnapshot(current, metric.id),
       base,
-      { perFile: metric.scope === "file" ? metric.perFile : undefined },
+      metricGate(metric),
     );
     if (diff.status === "regressed") {
       regressions.push(diff);
     }
     if (diff.status === "dropped") {
       drops.push(diff);
+    }
+    if (diff.status === "stale") {
+      stale.push(diff);
+    }
+    if (
+      diff.status === "regressed" &&
+      metric.scope === "file" &&
+      metric.allowlist !== undefined
+    ) {
+      remedies.add(metric.allowlist);
     }
   }
 
@@ -3567,17 +3587,36 @@ const runCheck = (): number => {
     );
   }
 
-  if (regressions.length === 0) {
+  if (regressions.length === 0 && stale.length === 0) {
     console.log(
       `ratchet --check: OK. ${RATCHET_METRICS.length} metric(s) at or below baseline.`,
     );
     return 0;
   }
 
+  if (stale.length > 0) {
+    console.error(
+      "\nratchet --check: allowlist entries above what the tree uses:\n",
+    );
+    for (const diff of stale) {
+      console.error(`  ${diff.id}:`);
+      for (const { file, from, to } of diff.staleFiles) {
+        console.error(`      ${file}: ${from} -> ${to}`);
+      }
+    }
+    console.error(
+      `\nAn allowlist shrinks with its use: run \`${WRITE_HINT}\` and commit\n` +
+        `${BASELINE_REL}, so the allowance goes with the code it was granted for.`,
+    );
+  }
+  if (regressions.length === 0) {
+    return 1;
+  }
+
   console.error("\nratchet --check: metric(s) rose above baseline:\n");
   for (const diff of regressions) {
     console.error(
-      `  ${diff.id}: ${diff.baseline} -> ${diff.current} (+${diff.current - diff.baseline})`,
+      `  ${diff.id}: ${diff.baseline} -> ${diff.current} (${formatDelta(diff.current - diff.baseline)})`,
     );
     for (const { file, from, to } of diff.regressedFiles) {
       console.error(`      ${file}: ${from} -> ${to}`);
@@ -3588,6 +3627,9 @@ const runCheck = (): number => {
       "\nA per-file metric fails on any file above its own baseline, even when\n" +
         "the total did not rise: move the new occurrence behind the owner instead.",
     );
+  }
+  for (const remedy of remedies) {
+    console.error(`\n${remedy}`);
   }
   console.error(
     "\nThese metrics may only decrease. Remove the new occurrence(s) above, or,\n" +
@@ -3861,7 +3903,9 @@ const IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES = [
   'import { rootDb } from "@/api/db/root";',
   'import { rootDb as owner } from "../db/root";',
   'import * as root from "@/api/db/root";',
+  'import { rlsDb } from "@/api/db/root";',
   "export const load = async (db = rootDb) => db;",
+  "export const pool = { db: rlsDb };",
   "export const read = ({ database = owner }) => database;",
   "export const pick = (db?: typeof owner) => db ?? root.rootDb;",
   "export const write = async (ok: boolean, fn: () => Promise<void>) =>",
@@ -3880,11 +3924,35 @@ const IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES = [
   'const text = "db = rootDb";',
 ];
 const SELF_TEST_IMPLICIT_ROOT_CONNECTION = `${IMPLICIT_ROOT_CONNECTION_FIXTURE_LINES.join("\n")}\n`;
-// Expected: default, destructured default, namespace fallback, conditional,
-// dependency property, module-level call, assignment, returned factory,
-// awaited returned factory (9). The explicit argument in a statement, the
-// shadowing parameter and the string are not shapes.
-const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 9;
+// Expected: default, `rlsDb` dependency property, destructured default,
+// namespace fallback, conditional, dependency property, module-level call,
+// assignment, returned factory, awaited returned factory (10). The explicit
+// argument in a statement, the shadowing parameter and the string are not
+// shapes.
+const EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES = 10;
+
+// The owner-handle allowlist: a value import from an eval, a type-only import
+// from a handler (both in scope), and two files it must not list, a test and a
+// module that takes only the shared transaction type.
+const OWNER_HANDLE_RLS_FIXTURE = "apps/api/evals/owner-handle-rls.ts";
+const OWNER_HANDLE_TYPE_FIXTURE = "apps/api/src/handlers/owner-handle-type.ts";
+const OWNER_HANDLE_TEST_FIXTURE =
+  "apps/api/src/lib/case-law/owner-handle.test.ts";
+const OWNER_HANDLE_TRANSACTION_FIXTURE =
+  "apps/api/src/lib/case-law/owner-handle-transaction.ts";
+const OWNER_HANDLE_FIXTURES = [
+  [OWNER_HANDLE_RLS_FIXTURE, 'import { rlsDb } from "@/api/db/root";\n'],
+  [
+    OWNER_HANDLE_TYPE_FIXTURE,
+    'import type { rootDb } from "@/api/db/root";\n' +
+      'export type Reader = Pick<typeof rootDb, "select">;\n',
+  ],
+  [OWNER_HANDLE_TEST_FIXTURE, 'import { rootDb } from "@/api/db/root";\n'],
+  [
+    OWNER_HANDLE_TRANSACTION_FIXTURE,
+    'import type { Transaction } from "@/api/db/root";\n',
+  ],
+] as const;
 // A worker host, whose dependency property is the design, not a leak.
 const IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE =
   "apps/api/src/api-background-workers.ts";
@@ -4684,6 +4752,112 @@ const failureSinkSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const ownerHandleAllowlistSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "direct-root-connection-imports";
+  const imports = requireSnapshot(snapshot, id);
+  for (const [file, expected] of [
+    [OWNER_HANDLE_RLS_FIXTURE, 1],
+    [OWNER_HANDLE_TYPE_FIXTURE, 1],
+    [OWNER_HANDLE_TEST_FIXTURE, undefined],
+    [OWNER_HANDLE_TRANSACTION_FIXTURE, undefined],
+  ] as const) {
+    if (imports.files[file] !== expected) {
+      failures.push(
+        `${id} counted ${String(imports.files[file])} in ${file}, expected ${String(expected)}`,
+      );
+    }
+  }
+
+  for (const metricId of [id, "implicit-root-connection-shapes"]) {
+    const metric = RATCHET_METRICS.find((entry) => entry.id === metricId);
+    if (metric?.scope !== "file" || metric.allowlist === undefined) {
+      failures.push(`${metricId} is not a per-file allowlist`);
+    }
+  }
+  const registered = RATCHET_METRICS.find((entry) => entry.id === id);
+  if (registered === undefined) {
+    return [...failures, `${id} is not registered`];
+  }
+  const gate = metricGate(registered);
+  const snap = (files: Record<string, number>): MetricSnapshot => ({
+    count: Object.values(files).reduce((total, count) => total + count, 0),
+    files,
+  });
+  const listed = "apps/api/src/lib/listed.ts";
+  const other = "apps/api/src/lib/other.ts";
+  const added = "apps/api/src/lib/added.ts";
+
+  // A new file naming `rlsDb` fails, and the report names it.
+  const rls = diffMetric(
+    id,
+    snap({ [listed]: 1, [OWNER_HANDLE_RLS_FIXTURE]: 1 }),
+    snap({ [listed]: 1 }),
+    gate,
+  );
+  if (
+    rls.status !== "regressed" ||
+    rls.regressedFiles.at(0)?.file !== OWNER_HANDLE_RLS_FIXTURE
+  ) {
+    failures.push(`${id} let a new file import rlsDb`);
+  }
+  // A new `rootDb` file fails even when another file dropped its import in
+  // the same change, so the total stays level.
+  if (
+    diffMetric(
+      id,
+      snap({ [listed]: 1, [added]: 1 }),
+      snap({ [listed]: 1, [other]: 1 }),
+      gate,
+    ).status !== "regressed"
+  ) {
+    failures.push(`${id} let one file's removal fund another file's import`);
+  }
+  // A listed file naming one more handle fails.
+  if (
+    diffMetric(id, snap({ [listed]: 2 }), snap({ [listed]: 1 }), gate)
+      .status !== "regressed"
+  ) {
+    failures.push(`${id} let a listed file add a second handle`);
+  }
+  // A type-only import is counted above, so it needs an entry like any other.
+  const withoutType = Object.fromEntries(
+    Object.entries(imports.files).filter(
+      ([file]) => file !== OWNER_HANDLE_TYPE_FIXTURE,
+    ),
+  );
+  if (diffMetric(id, imports, snap(withoutType), gate).status !== "regressed") {
+    failures.push(`${id} let a new type-only import through`);
+  }
+  // Removing a use fails until the baseline shrinks with it; the rewritten
+  // baseline, which is the current snapshot, then passes and lists no file
+  // the tree no longer uses.
+  const removed = diffMetric(
+    id,
+    snap({ [listed]: 1 }),
+    snap({ [listed]: 1, [other]: 1 }),
+    gate,
+  );
+  if (removed.status !== "stale" || removed.staleFiles.at(0)?.file !== other) {
+    failures.push(`${id} kept an allowance after its use was removed`);
+  }
+  const shrunk = snap({ [listed]: 1 });
+  if (diffMetric(id, shrunk, shrunk, gate).status !== "ok") {
+    failures.push(`${id} failed a baseline that matches the tree`);
+  }
+  // A metric that is not an allowlist still passes when it falls.
+  if (
+    diffMetric(
+      "as-casts",
+      snap({ [listed]: 1 }),
+      snap({ [listed]: 1, [other]: 1 }),
+    ).status !== "dropped"
+  ) {
+    failures.push("a metric that is not an allowlist failed when it fell");
+  }
+  return failures;
+};
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -5077,6 +5251,9 @@ const runSelfTest = (): number => {
       IMPLICIT_ROOT_CONNECTION_DOOR_FIXTURE,
       SELF_TEST_IMPLICIT_ROOT_CONNECTION_DOOR,
     );
+    for (const [rel, content] of OWNER_HANDLE_FIXTURES) {
+      writeFixture(root, rel, content);
+    }
     writeFixture(
       root,
       "apps/web/src/shared-helper-shapes.tsx",
@@ -5411,6 +5588,7 @@ const runSelfTest = (): number => {
 
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
+    failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 
     const mockLedgerMetric = requireSnapshot(
       snapshot,
