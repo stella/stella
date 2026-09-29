@@ -78,91 +78,92 @@ describe("addEntries currency enforcement", () => {
     });
   });
 
-  test("returns a retryable conflict when a claim count changes", async () => {
-    let auditCalls = 0;
-    const lockInvoiceForUpdate = mock(async () => [
-      {
-        id: toSafeId<"invoice">("inv_test"),
-        totalAmount: 0,
-        currency: "USD",
-      },
-    ]);
-    const { safeDb } = createScopedDbMock({
-      // The invoice holds no lines yet, so the line limit leaves room.
-      $count: async () => 0,
-      query: {
-        invoices: {
-          findFirst: async () => ({
-            id: toSafeId<"invoice">("inv_test"),
-            status: INVOICE_STATUS.DRAFT,
-            currency: "USD",
-            totalAmount: 0,
-          }),
+  test.each([
+    { timeEntryIds: [toSafeId<"timeEntry">("te_1")] },
+    { expenseIds: [toSafeId<"expense">("exp_1")] },
+  ])(
+    "returns a retryable conflict when a claim count changes: %j",
+    async (body) => {
+      let auditCalls = 0;
+      const lockInvoiceForUpdate = mock(async () => [
+        {
+          id: toSafeId<"invoice">("inv_test"),
+          totalAmount: 0,
+          currency: "USD",
         },
-      },
-      select: () => ({
-        from: (table: unknown) => {
-          if (table === invoices) {
-            return {
-              where: () => ({
-                limit: () => ({
-                  for: lockInvoiceForUpdate,
+      ]);
+      const { safeDb } = createScopedDbMock({
+        // The invoice holds no lines yet, so the line limit leaves room.
+        $count: async () => 0,
+        query: {
+          invoices: {
+            findFirst: async () => ({
+              id: toSafeId<"invoice">("inv_test"),
+              status: INVOICE_STATUS.DRAFT,
+              currency: "USD",
+              totalAmount: 0,
+            }),
+          },
+        },
+        select: () => ({
+          from: (table: unknown) => {
+            if (table === invoices) {
+              return {
+                where: () => ({
+                  limit: () => ({
+                    for: lockInvoiceForUpdate,
+                  }),
                 }),
-              }),
-            };
-          }
+              };
+            }
 
-          // The preflight read awaits the filter; the legacy-line backfill
-          // orders it and finds no attached entry without a line.
-          return {
-            where: (): unknown =>
-              Object.assign(
-                Promise.resolve([
-                  {
-                    id: toSafeId<"timeEntry">("te_1"),
-                    status: BILLING_STATUS.APPROVED,
-                    billable: true,
-                    invoiceId: null,
-                    currency: "USD",
-                  },
-                ]),
-                { orderBy: () => ({ limit: async () => [] }) },
-              ),
-          };
-        },
-      }),
-      update: () => ({
-        set: () => ({
-          where: () => ({
-            returning: async () => [],
+            // The preflight read awaits the filter; the legacy-line backfill
+            // orders it and finds no attached entry without a line.
+            return {
+              where: (): unknown =>
+                Object.assign(
+                  Promise.resolve([
+                    {
+                      id: toSafeId<"timeEntry">("te_1"),
+                      status: BILLING_STATUS.APPROVED,
+                      billable: true,
+                      invoiceId: null,
+                      currency: "USD",
+                    },
+                  ]),
+                  { orderBy: () => ({ limit: async () => [] }) },
+                ),
+            };
+          },
+        }),
+        update: () => ({
+          set: () => ({
+            where: () => ({
+              returning: async () => [],
+            }),
           }),
         }),
-      }),
-    });
+      });
 
-    const ctx = createContext(
-      asTestRaw<AddEntriesCtx["body"]>({
-        timeEntryIds: [toSafeId<"timeEntry">("te_1")],
-      }),
-      safeDb,
-    );
+      const ctx = createContext(body, safeDb);
 
-    const result = await addEntries.handler(
-      asTestRaw<AddEntriesCtx>({
-        ...ctx,
-        recordAuditEvent: async () => {
-          auditCalls += 1;
+      const result = await addEntries.handler(
+        asTestRaw<AddEntriesCtx>({
+          ...ctx,
+          recordAuditEvent: async () => {
+            auditCalls += 1;
+          },
+        }),
+      );
+
+      expect(result).toEqual({
+        code: 409,
+        response: {
+          message: "Some entries were modified concurrently; please retry",
         },
-      }),
-    );
-
-    expect(result).toEqual({
-      code: 409,
-      response: {
-        message: "Some entries were modified concurrently; please retry",
-      },
-    });
-    expect(auditCalls).toBe(0);
-    expect(lockInvoiceForUpdate).toHaveBeenCalledWith("update");
-  });
+      });
+      expect(auditCalls).toBe(0);
+      expect(lockInvoiceForUpdate).toHaveBeenCalledWith("update");
+    },
+  );
 });

@@ -25,10 +25,7 @@ import { LIMITS } from "@/api/lib/limits";
 import type { CentsAmount } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
-import {
-  INVOICE_ENTRIES_MODIFIED_MESSAGE,
-  isInvoiceEntriesModifiedConcurrentlyError,
-} from "./concurrent-modification";
+import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "./concurrent-modification";
 import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
 
 const createInvoiceBodySchema = t.Object({
@@ -311,14 +308,6 @@ const createInvoice = createSafeHandler(
     );
 
     if (Result.isError(txResult)) {
-      if (isInvoiceEntriesModifiedConcurrentlyError(txResult.error)) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-          }),
-        );
-      }
       if (
         DatabaseError.is(txResult.error) &&
         txResult.error.code === PG_ERROR.UNIQUE_VIOLATION
