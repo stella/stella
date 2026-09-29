@@ -359,12 +359,15 @@ export const runMigrations = async ({
     const inserted = postflightRows.filter(({ id }) => !priorIds.has(id));
     if (
       inserted.length !== predicted.length ||
-      inserted.some(
-        ({ hash, name, created_at }, index) =>
-          hash !== predicted[index]?.hash ||
-          name !== predicted[index]?.name ||
-          String(created_at) !== String(predicted[index]?.folderMillis),
-      )
+      inserted.some(({ hash, name, created_at }, index) => {
+        const expected = predicted.at(index);
+        return (
+          expected === undefined ||
+          hash !== expected.hash ||
+          name !== expected.name ||
+          String(created_at) !== String(expected.folderMillis)
+        );
+      })
     ) {
       panic("Migration postflight receipts differ from Drizzle's prediction");
     }
