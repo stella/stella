@@ -808,6 +808,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CANARY_STATE_PATH",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
+  // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
+  "CLEAN_DATABASE_URL",
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",

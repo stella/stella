@@ -147,13 +147,13 @@ log "Installing the base's pinned dependencies"
 database_url_for() {
   # ShellCheck cannot see that these expressions belong to Bun, not Bash.
   # shellcheck disable=SC2016
-  SOURCE_URL="$1" TARGET_DATABASE="$2" bun -e '
-    const url = new URL(process.env.SOURCE_URL);
+  DATABASE_URL="$1" bun -e '
+    const url = new URL(process.env.DATABASE_URL);
     if (!["postgres:", "postgresql:"].includes(url.protocol)) process.exit(2);
     if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) process.exit(2);
-    url.pathname = `/${process.env.TARGET_DATABASE}`;
+    url.pathname = `/${process.argv.at(1)}`;
     console.log(url.toString());
-  '
+  ' "$2"
 }
 
 upgrade_url="$(database_url_for "$DATABASE_URL" upgrade)" || fail "DATABASE_URL must be a loopback PostgreSQL URL."
@@ -168,14 +168,14 @@ DATABASE_URL="$CLEAN_DATABASE_URL" bun "$repo_root/scripts/migration-rehearsal-d
 log "Creating upgrade and clean databases"
 create_database() {
   # shellcheck disable=SC2016
-  DATABASE_URL="$1" TARGET_DATABASE="$2" bun -e '
+  DATABASE_URL="$1" bun -e '
     import { SQL } from "bun";
-    const database = process.env.TARGET_DATABASE;
+    const database = process.argv.at(1);
     if (database !== "upgrade" && database !== "clean") process.exit(2);
     const client = new SQL({ url: process.env.DATABASE_URL, max: 1 });
     try { await client.unsafe(`CREATE DATABASE ${database}`); }
     finally { await client.end(); }
-  '
+  ' "$2"
 }
 create_database "$DATABASE_URL" upgrade
 create_database "$CLEAN_DATABASE_URL" clean

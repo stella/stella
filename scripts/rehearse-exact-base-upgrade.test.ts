@@ -27,8 +27,8 @@ esac
 const fakeBun = `#!/usr/bin/env bash
 set -eu
 if [[ "$1" == "-e" ]]; then
-  if [[ -n "\${SOURCE_URL:-}" ]]; then
-    printf '%s/%s\\n' "\${SOURCE_URL%/*}" "$TARGET_DATABASE"
+  if [[ "$2" == *"new URL("* ]]; then
+    printf '%s/%s\\n' "\${DATABASE_URL%/*}" "$3"
   fi
   exit 0
 fi
