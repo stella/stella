@@ -51,7 +51,7 @@ const TopBarCitationsFor = ({
     return null;
   }
   const total = totalCitations(summary.incoming);
-  if (total === 0) {
+  if (total === 0 && !summary.capped.incoming) {
     return null;
   }
   const positive = summary.incoming.positive + summary.incoming.supportive;
@@ -65,11 +65,13 @@ const TopBarCitationsFor = ({
     firstCitedYear: summary.incomingByYear.at(0)?.year ?? null,
   });
   const label = [
-    t("caseLaw.citation.citedSummary", { count: total }),
-    positive > 0
+    summary.capped.incoming
+      ? t("caseLaw.citation.citedAtLeast", { count: total })
+      : t("caseLaw.citation.citedSummary", { count: total }),
+    !summary.capped.incoming && positive > 0
       ? t("caseLaw.citation.positiveCount", { count: positive })
       : null,
-    negative > 0
+    !summary.capped.incoming && negative > 0
       ? t("caseLaw.citation.negativeCount", { count: negative })
       : null,
   ]
@@ -106,8 +108,9 @@ const TopBarCitationsFor = ({
         />
         <span aria-hidden="true" className="tabular-nums">
           {format.number(total)}
+          {summary.capped.incoming ? "+" : null}
         </span>
-        {(positive > 0 || negative > 0) && (
+        {!summary.capped.incoming && (positive > 0 || negative > 0) && (
           <span
             aria-hidden="true"
             className="flex items-center gap-1 tabular-nums"

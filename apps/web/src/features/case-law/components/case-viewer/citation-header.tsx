@@ -78,7 +78,7 @@ export const CitationHeader = ({
     return null;
   }
   const total = totalCitations(summary.incoming);
-  if (total === 0) {
+  if (total === 0 && !summary.capped.incoming) {
     return null;
   }
 
@@ -94,11 +94,13 @@ export const CitationHeader = ({
   const lastNegative = lastNegativeYear(summary.incomingByYear);
 
   const summaryText = [
-    t("caseLaw.citation.citedSummary", { count: total }),
-    negative > 0
+    summary.capped.incoming
+      ? t("caseLaw.citation.citedAtLeast", { count: total })
+      : t("caseLaw.citation.citedSummary", { count: total }),
+    !summary.capped.incoming && negative > 0
       ? t("caseLaw.citation.negativeCount", { count: negative })
       : null,
-    lastNegative === null
+    summary.capped.incoming || lastNegative === null
       ? null
       : t("caseLaw.citation.lastNegative", {
           year: formatYear(format, lastNegative),

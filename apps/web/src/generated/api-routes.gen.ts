@@ -20253,6 +20253,10 @@ export type WebRoutes = {
                   200: (T12163e1f6a | {
                     incoming: T2b15184b07;
                     outgoing: T2b15184b07;
+                    capped: {
+                      incoming: Tfddd645dc8;
+                      outgoing: Tfddd645dc8;
+                    };
                     incomingByYear: Array<(T2b15184b07 & {
                       year: number;
                     })>;

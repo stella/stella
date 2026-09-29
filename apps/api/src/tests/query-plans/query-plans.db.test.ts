@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
+import { CITATION_SUMMARY_SCAN_LIMIT } from "@/api/handlers/case-law/decisions/citation-graph";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import { isRecord } from "@/api/lib/type-guards";
@@ -208,12 +209,7 @@ for (const entry of QUERY_PLAN_REGISTRY) {
       assertPlan(
         [
           ...violations,
-          ...heapFetchRiskViolations(
-            scans,
-            entry.class,
-            mitigation,
-            "heapFetchExceptions" in entry ? entry.heapFetchExceptions : [],
-          ),
+          ...heapFetchRiskViolations(scans, entry.class, mitigation),
         ],
         scans,
       );
@@ -221,6 +217,30 @@ for (const entry of QUERY_PLAN_REGISTRY) {
     DB_TEST_TIMEOUT_MS,
   );
 }
+
+test("citation summary caps both indexed citation scans before joining decisions", async () => {
+  const entry = QUERY_PLAN_REGISTRY.find(
+    (candidate) => candidate.id === "case-law.citation-summary",
+  );
+  if (entry === undefined) {
+    panic("Citation summary has no query-plan entry");
+  }
+  const scans = await explainPhysical(entry.role, entry.build, entry.planMode);
+  const citations = scans.filter(
+    ({ relation }) => relation === "case_law_citations",
+  );
+  expect(citations).toHaveLength(2);
+  expect(citations.map(({ index }) => index).toSorted()).toEqual(
+    [
+      "case_law_citations_cited_page_idx",
+      "case_law_citations_citing_page_idx",
+    ].toSorted(),
+  );
+  for (const { limitAbove, limitRows } of citations) {
+    expect(limitAbove).toBe(true);
+    expect(limitRows).toBeLessThanOrEqual(CITATION_SUMMARY_SCAN_LIMIT + 1);
+  }
+});
 
 test(
   "the old ECLI OR shape fails while the UNION shape keeps both indexes",

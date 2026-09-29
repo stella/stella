@@ -625,6 +625,7 @@ type Messages = {
       };
     };
     "citation": {
+      "citedAtLeast": "Cited at least {count} times";
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}";
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}";
       "lastNegative": "last negative treatment in {year}";
@@ -632,6 +633,7 @@ type Messages = {
       "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
+      "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
       "showAll": "{count, plural, one {Show all # decision} other {Show all # decisions}}";

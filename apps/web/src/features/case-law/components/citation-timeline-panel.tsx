@@ -112,8 +112,15 @@ export const CitationTimelinePanel = ({
         </PopoverTitle>
         <span className="text-muted-foreground text-xs tabular-nums">
           {format.number(total)}
+          {summary.capped.incoming ? "+" : null}
         </span>
       </div>
+
+      {summary.capped.incoming && (
+        <p className="text-muted-foreground text-xs">
+          {t("caseLaw.citation.partialSummary")}
+        </p>
+      )}
 
       <div className="flex flex-col gap-2">
         <CitationTreatmentBar
@@ -153,7 +160,9 @@ export const CitationTimelinePanel = ({
           />
         }
       >
-        {t("caseLaw.citation.showAll", { count: total })}
+        {summary.capped.incoming
+          ? t("common.showAll")
+          : t("caseLaw.citation.showAll", { count: total })}
       </PopoverClose>
     </>
   );
