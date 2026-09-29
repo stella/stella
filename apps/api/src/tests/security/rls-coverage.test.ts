@@ -126,6 +126,7 @@ describe("policy coverage", () => {
   const GLOBAL_CASE_LAW_TABLES = [
     "case_law_citations",
     "case_law_court_weights",
+    "case_law_court_directory_ranks",
     "case_law_decisions",
     "case_law_fts_configs",
     "case_law_index_jobs",

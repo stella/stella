@@ -2,11 +2,17 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import {
+  listApiTestPaths,
+  planApiTestBatches,
+} from "../../scripts/api-test-plan";
+import {
   classifyTestBatch,
   composeTestBatches,
   dbTestBatchSize,
   hasModuleScopeProcessEnvMutation,
   isDbTest,
+  SOLO_TEST_PATHS,
+  splitSoloTests,
   TEST_BATCH_KIND,
 } from "../../scripts/test-batch-plan";
 
@@ -90,6 +96,36 @@ describe("API test batch planning", () => {
       ["db-a.test.ts", "db-b.test.ts", "db-c.test.ts"],
       ["db-d.test.ts"],
     ]);
+  });
+
+  test("runs a solo file alone without regrouping any other batch", () => {
+    const batches = composeTestBatches(
+      ["a.test.ts", "b.test.ts", "c.test.ts", "d.test.ts", "e.test.ts"],
+      dbTestBatchSize(false),
+    );
+
+    expect(splitSoloTests(batches, new Set(["b.test.ts"]))).toEqual([
+      ["a.test.ts", "c.test.ts"],
+      ["b.test.ts"],
+      ["d.test.ts", "e.test.ts"],
+    ]);
+  });
+
+  test("the runner's plan gives every solo file a batch of its own", async () => {
+    const testPaths = listApiTestPaths(API_ROOT);
+    const batches = (
+      await planApiTestBatches({
+        apiRoot: API_ROOT,
+        propertyOnly: false,
+        testPaths,
+      })
+    ).flatMap(({ testBatches }) => testBatches);
+
+    for (const soloPath of SOLO_TEST_PATHS) {
+      expect(batches.filter((batch) => batch.includes(soloPath))).toEqual([
+        [soloPath],
+      ]);
+    }
   });
 
   test("detects database runtime imports without matching inert source text", () => {

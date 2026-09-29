@@ -15,6 +15,10 @@ export type ScanOccurrence = {
   indexCond: string | null;
   filter: string | null;
   rows: number | null;
+  /** A Limit stops this scan early; see `childLimitBound` for what counts. */
+  limitAbove: boolean;
+  /** The tightest bounding Limit's estimated rows, when it has one. */
+  limitRows: number | null;
   subplans: readonly {
     position: string;
     name: string | null;
@@ -31,6 +35,25 @@ export type AccessPath = Pick<
     | { alias: string; position?: never; occurrence?: never }
     | { occurrence: number; position?: never; alias?: never }
   );
+
+export type HeapFetchMitigation =
+  | { type: "batched"; pageSize: number }
+  | { type: "snapshot"; relation: string }
+  | { type: "heapFetchBudget"; rows: number; reason: string };
+
+/**
+ * A dated exception for one exact covering scan, while a rework is pending.
+ * It fails once it expires, and once the plan no longer has that risky scan.
+ */
+export type HeapFetchException = {
+  scan: Pick<ScanOccurrence, "position" | "relation" | "nodeType"> & {
+    index: string;
+  };
+  reason: string;
+  rework: string;
+  /** Last day the exception holds, as YYYY-MM-DD (UTC). */
+  expiresOn: string;
+};
 
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
 
@@ -145,15 +168,76 @@ export const explainRoot = (explained: unknown): PlanNode => {
   return document["Plan"];
 };
 
+/** `null`: nothing stops the node early. `rows: null`: a Limit without an estimate. */
+type LimitBound = { rows: number | null } | null;
+
+const tighterBound = (bound: LimitBound, node: PlanNode): LimitBound => {
+  const planRows = node["Plan Rows"];
+  const rows = typeof planRows === "number" ? planRows : null;
+  const boundRows = bound?.rows ?? null;
+  if (boundRows === null) {
+    return { rows };
+  }
+  return { rows: rows === null ? boundRows : Math.min(boundRows, rows) };
+};
+
+/**
+ * Only nodes that emit at least one row per input row, and pull input lazily,
+ * pass an enclosing Limit to a child. Everything else counts as blocking:
+ * aggregates, sorts, hashes, materialization, windowing, set operations,
+ * Unique, ProjectSet (an empty set drops its input row), merge joins, and
+ * the inner side of any join, which reruns per outer row. SubPlans and
+ * InitPlans run separately, so an outer Limit bounds how often they run,
+ * never what they read. A Filter discards rows it has already read, so a
+ * node with one bounds nothing below it; EXPLAIN only estimates how many.
+ */
+const childLimitBound = (
+  node: PlanNode,
+  child: PlanNode,
+  bound: LimitBound,
+): LimitBound => {
+  const relationship = field(child, "Parent Relationship");
+  if (relationship === "SubPlan" || relationship === "InitPlan") {
+    return null;
+  }
+  const nodeType = field(node, "Node Type");
+  if (nodeType === "Limit") {
+    return tighterBound(bound, node);
+  }
+  if (nodeType === null || bound === null || field(node, "Filter") !== null) {
+    return null;
+  }
+  switch (nodeType) {
+    case "Result":
+    case "Subquery Scan":
+    case "Append":
+    case "Merge Append":
+    case "Gather":
+    case "Gather Merge":
+      return bound;
+    case "Nested Loop":
+    case "Hash Join":
+      // A left join keeps every outer row, so the outer side streams to the Limit.
+      return field(node, "Join Type") === "Left" && relationship === "Outer"
+        ? bound
+        : null;
+    default:
+      return null;
+  }
+};
+
 /** Each physical relation scan keeps its structural path, including UNION arms. */
 export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
   const scans: ScanOccurrence[] = [];
-  const visit = (node: PlanNode, position: string) => {
+  const visit = (node: PlanNode, position: string, bound: LimitBound) => {
     const relation = field(node, "Relation Name");
     const nodeType = field(node, "Node Type");
+    const filter = field(node, "Filter");
     if (relation !== null && nodeType?.includes("Scan")) {
       const { index, indexCond } = indexDetails(node);
       const rows = node["Plan Rows"];
+      // A filtered scan reads past the rows the Limit counts.
+      const scanBound = filter === null ? bound : null;
       scans.push({
         position,
         alias: field(node, "Alias"),
@@ -161,17 +245,146 @@ export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
         nodeType,
         index,
         indexCond,
-        filter: field(node, "Filter"),
+        filter,
         rows: typeof rows === "number" ? rows : null,
+        limitAbove: scanBound !== null,
+        limitRows: scanBound?.rows ?? null,
         subplans: subplansOf(node, position),
       });
     }
     for (const [index, child] of childPlans(node).entries()) {
-      visit(child, `${position}/${index}`);
+      visit(child, `${position}/${index}`, childLimitBound(node, child, bound));
     }
   };
-  visit(root, "root");
+  visit(root, "root", null);
   return scans;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const exceptionViolations = (
+  riskyScans: readonly ScanOccurrence[],
+  exceptions: readonly HeapFetchException[],
+  today: Date,
+): { violations: string[]; excepted: Set<ScanOccurrence> } => {
+  const violations: string[] = [];
+  const excepted = new Set<ScanOccurrence>();
+  const todayIso = today.toISOString().slice(0, 10);
+  for (const exception of exceptions) {
+    const { scan, reason, rework, expiresOn } = exception;
+    const label = `heap-fetch exception for ${scan.position} on ${scan.relation}`;
+    if (
+      reason.trim().length === 0 ||
+      rework.trim().length === 0 ||
+      !ISO_DATE.test(expiresOn) ||
+      Number.isNaN(Date.parse(expiresOn))
+    ) {
+      violations.push(`${label} needs a reason, a rework and an expiry date`);
+      continue;
+    }
+    if (todayIso > expiresOn) {
+      violations.push(`${label} expired on ${expiresOn}: ${rework}`);
+    }
+    const match = riskyScans.find(
+      (candidate) =>
+        candidate.position === scan.position &&
+        candidate.relation === scan.relation &&
+        candidate.nodeType === scan.nodeType &&
+        candidate.index === scan.index,
+    );
+    if (match === undefined) {
+      violations.push(
+        `${label} is stale: the plan has no such risky ${scan.nodeType}/${scan.index}; remove it`,
+      );
+    } else if (excepted.has(match)) {
+      violations.push(`${label} is declared twice`);
+    } else {
+      excepted.add(match);
+    }
+  }
+  return { violations, excepted };
+};
+
+const mitigationViolations = (
+  scans: readonly ScanOccurrence[],
+  coveringScans: readonly ScanOccurrence[],
+  mitigation: HeapFetchMitigation | undefined,
+): string[] => {
+  const riskyScans = coveringScans.filter(({ limitAbove }) => !limitAbove);
+  if (mitigation === undefined) {
+    return riskyScans.map(
+      ({ position, relation }) =>
+        `${position}: heap-fetch risk on ${relation}: declare one mitigation`,
+    );
+  }
+  switch (mitigation.type) {
+    case "batched": {
+      const { pageSize } = mitigation;
+      if (!Number.isSafeInteger(pageSize) || pageSize <= 0) {
+        return ["batched heap-fetch mitigation needs a positive page size"];
+      }
+      // The declared page size only counts when the observed plan enforces it.
+      return coveringScans.flatMap(({ position, relation, limitRows }) => {
+        if (limitRows === null) {
+          return [
+            `${position}: batched mitigation but no observed LIMIT bounds ${relation}`,
+          ];
+        }
+        return limitRows > pageSize
+          ? [
+              `${position}: LIMIT of ${String(limitRows)} rows exceeds the batched page size ${String(pageSize)} on ${relation}`,
+            ]
+          : [];
+      });
+    }
+    case "snapshot":
+      if (!scans.some(({ relation }) => relation === mitigation.relation)) {
+        return [
+          `snapshot heap-fetch mitigation does not read ${mitigation.relation}`,
+        ];
+      }
+      return riskyScans.map(
+        ({ position, relation }) =>
+          `${position}: snapshot mitigation does not cover ${relation}`,
+      );
+    case "heapFetchBudget":
+      return Number.isFinite(mitigation.rows) &&
+        mitigation.rows >= 0 &&
+        mitigation.reason.trim().length > 0
+        ? []
+        : ["heap-fetch budget needs a nonnegative number and a reason"];
+    default:
+      mitigation satisfies never;
+      return panic("Unhandled heap-fetch mitigation");
+  }
+};
+
+/** Unbounded covering scans can visit heap pages when visibility bits are clear. */
+export const heapFetchRiskViolations = (
+  scans: readonly ScanOccurrence[],
+  scanClass: "point" | "page" | "aggregate",
+  mitigation?: HeapFetchMitigation,
+  exceptions: readonly HeapFetchException[] = [],
+  today: Date = new Date(),
+): string[] => {
+  const guardedCovering = scans.filter(
+    ({ relation, nodeType }) =>
+      guardedTables.has(relation) &&
+      nodeType === "Index Only Scan" &&
+      scanClass !== "point",
+  );
+  const exceptionResult = exceptionViolations(
+    guardedCovering.filter(({ limitAbove }) => !limitAbove),
+    exceptions,
+    today,
+  );
+  const coveringScans = guardedCovering.filter(
+    (scan) => !exceptionResult.excepted.has(scan),
+  );
+  return [
+    ...exceptionResult.violations,
+    ...mitigationViolations(scans, coveringScans, mitigation),
+  ];
 };
 
 /** The workspace access view appears as `aw` over its base tables in EXPLAIN. */

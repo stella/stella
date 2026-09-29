@@ -186,16 +186,16 @@ export const usCourtPartitionLabel = (bucket: number): UsCourtPartition =>
   US_COURT_PARTITIONS[bucket] ?? panic(`no court partition ${String(bucket)}`);
 
 /**
- * The ids of the accepted courts whose decisions may be written today, as a
- * closed list: a type keyed by it (a court's citation form, say) must decide
- * every writable court. Every other accepted court is named by the directory
- * but not yet admitted to the index. `scripts/generate-us-courts.ts` refuses
- * an id the directory does not accept.
+ * The ids of the accepted courts cited under a decided abbreviation, as a
+ * closed list: a type keyed by it (the citation form's abbreviation) must
+ * decide every listed court. Any other court is cited by its canonical name.
+ * `scripts/generate-us-courts.ts` refuses an id the directory does not accept.
  */
-export const US_WRITABLE_COURT_ID_LIST = ["scotus"] as const;
+export const US_ABBREVIATED_COURT_ID_LIST = ["scotus"] as const;
 
-/** The id of a court whose decisions may be written. */
-export type UsWritableCourtId = (typeof US_WRITABLE_COURT_ID_LIST)[number];
+/** The id of a court cited under a decided abbreviation. */
+export type UsAbbreviatedCourtId =
+  (typeof US_ABBREVIATED_COURT_ID_LIST)[number];
 
 /** Why a source court is not part of the jurisdiction. */
 export const US_COURT_REJECTION_REASONS = [

@@ -106,6 +106,9 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // the ingestion pipeline.
   "case_law_judges",
   "case_law_decision_judges",
+  // A directory court's rank: global legal data read by case-law search and
+  // citation scoring, written only by its seed migrations and the seed script.
+  "case_law_court_directory_ranks",
   // Addresses erased out of shared corpus packs: every corpus read consults
   // them before it fetches, and only the erasure path writes them.
   "case_law_corpus_tombstones",

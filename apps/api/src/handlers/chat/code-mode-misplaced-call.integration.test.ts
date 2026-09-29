@@ -145,7 +145,7 @@ describe("a script that calls a direct tool", () => {
       ).toBe(true);
     } finally {
       client.dispose();
-      harness.close();
+      await harness.close();
     }
   });
 });

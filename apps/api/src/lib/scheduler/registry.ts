@@ -36,6 +36,10 @@ import {
   refreshCaseLawSitemapShardsTask,
 } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
 import {
+  SWEEP_CHAT_RUN_LOGS_TASK,
+  sweepChatRunLogs,
+} from "@/api/lib/scheduler/tasks/chat-run-log-retention";
+import {
   CHAT_THREAD_COMPACTOR_TASK,
   compactChatThreads,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
@@ -174,6 +178,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
+  [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,

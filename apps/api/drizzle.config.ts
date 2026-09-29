@@ -15,5 +15,7 @@ export default defineConfig({
     "./src/db/rls.ts",
   ],
   dialect: "postgresql",
+  // The migration ledger lives in drizzle; schema parity owns public only.
+  schemaFilter: ["public"],
   dbCredentials: { url },
 });
