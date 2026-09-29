@@ -24,8 +24,13 @@ export type AppFrame =
   | "unresolved";
 
 /** Who is visiting, as far as the frame is concerned. A member has a
- *  session and an active organization; anyone else is anonymous. */
-export type AppFrameAudience = "checking" | "anonymous" | "member";
+ *  session and an active organization; anyone else is anonymous, and a
+ *  session that could not be read is `unavailable`. */
+export type AppFrameAudience =
+  | "checking"
+  | "anonymous"
+  | "unavailable"
+  | "member";
 
 const PROTECTED_ROUTE_ID = "/_protected";
 const KNOWLEDGE_ROUTE_ID = "/knowledge";
@@ -76,7 +81,10 @@ export const selectAppFrame = ({
       return routeIds.some((id) => VISITOR_INDEPENDENT_ROUTE_IDS.includes(id))
         ? "neutral"
         : "checking";
+    // An unreadable session is not a member's: the visitors' shell shows only
+    // what is published, and its sign-in is how the session recovers.
     case "anonymous":
+    case "unavailable":
       return "public";
     case "member":
       return "member";

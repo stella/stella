@@ -5,6 +5,7 @@ import {
   selectAppFrame,
   visitorChanged,
 } from "@/lib/app-frame.logic";
+import type { AppFrameAudience } from "@/lib/app-frame.logic";
 
 const PROTECTED = ["__root__", "/_protected", "/_protected/chat/"];
 const KNOWLEDGE = ["__root__", "/knowledge", "/knowledge/templates"];
@@ -30,7 +31,12 @@ describe("selectAppFrame", () => {
   });
 
   test("signed-in routes ignore the session state", () => {
-    for (const audience of ["checking", "anonymous", "member"] as const) {
+    for (const audience of [
+      "checking",
+      "anonymous",
+      "unavailable",
+      "member",
+    ] as const) {
       expect(
         selectAppFrame({
           routeIds: PROTECTED,
@@ -71,7 +77,7 @@ describe("selectAppFrame", () => {
   });
 
   test("Knowledge for everyone fails closed until the visitor is known", () => {
-    const frame = (audience: "checking" | "anonymous" | "member") =>
+    const frame = (audience: AppFrameAudience) =>
       selectAppFrame({
         routeIds: KNOWLEDGE,
         hasRouteUser: false,
@@ -80,6 +86,8 @@ describe("selectAppFrame", () => {
       });
     expect(frame("checking")).toBe("checking");
     expect(frame("anonymous")).toBe("public");
+    // A session that could not be read never opens the member frame.
+    expect(frame("unavailable")).toBe("public");
     expect(frame("member")).toBe("member");
   });
 

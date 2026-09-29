@@ -30,7 +30,13 @@ export const KnowledgeMemberOnly = ({
   if (authStatus.status === "authenticated") {
     return children(authStatus.user.activeOrganizationId);
   }
-  if (authStatus.status === "anonymous" && isPublicKnowledgeEnabled()) {
+  // An unreadable session goes to the landing too: its sign-in is how the
+  // session recovers.
+  if (
+    (authStatus.status === "anonymous" ||
+      authStatus.status === "unavailable") &&
+    isPublicKnowledgeEnabled()
+  ) {
     return <Navigate replace search={{ from: href }} to="/knowledge" />;
   }
   return pending;

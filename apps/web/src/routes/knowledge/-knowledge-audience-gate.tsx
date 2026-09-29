@@ -33,6 +33,7 @@ export const KnowledgeAudienceGate = ({
     case "checking":
       return checking;
     case "anonymous":
+    case "unavailable":
       // Behind sign-in the route guard has already sent visitors away; a
       // session read that fails here must not open the catalogue instead.
       return isPublicKnowledgeEnabled() ? anonymous() : checking;
