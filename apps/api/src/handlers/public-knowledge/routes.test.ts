@@ -1,7 +1,11 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { createBundledTemplatePackCatalogue } from "@stll/template-packs";
+import {
+  createBundledTemplatePackCatalogue,
+  TemplatePackContentError,
+} from "@stll/template-packs";
 import {
   createFixtureTemplatePackCatalogue,
   FIXTURE_TEMPLATE_PACKS,
@@ -125,6 +129,38 @@ describe("public knowledge routes", () => {
       expect(second.status).toBe(200);
       expect(await first.text()).toBe(await second.text());
       expect(renders).toBe(1);
+    });
+  });
+
+  test("unreadable bytes for an advertised template are a server fault", async () => {
+    await withFeature(true, async () => {
+      const pack = FIXTURE_TEMPLATE_PACKS.at(0);
+      const template = pack?.templates.at(0);
+      if (!pack || !template) {
+        throw new Error("Fixture template missing");
+      }
+      const catalogue = createFixtureTemplatePackCatalogue([
+        { ...pack, publicDisplay: true },
+      ]);
+      const route = createPublicKnowledgeRoute(() => ({
+        ...catalogue,
+        readTemplateDocx: async (ref) =>
+          Result.err(
+            new TemplatePackContentError({
+              message: "hash mismatch",
+              packId: ref.packId,
+              slug: ref.slug,
+            }),
+          ),
+      }));
+      const response = await route.handle(
+        new Request(
+          `http://localhost/public/knowledge/template-packs/${pack.id}/templates/${template.slug}/preview`,
+        ),
+      );
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.text()).not.toContain("hash mismatch");
     });
   });
 

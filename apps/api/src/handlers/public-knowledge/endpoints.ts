@@ -139,8 +139,16 @@ export const createPublicKnowledgeEndpoints = (
           packId: params.packId,
           slug: params.templateId,
         });
+        // The manifest advertises this template, so missing or mismatched
+        // bytes are a deployment fault, not an unknown template.
         if (Result.isError(docx)) {
-          return notFound();
+          return Result.err(
+            new HandlerError({
+              status: 503,
+              message: "Preview unavailable",
+              cause: docx.error,
+            }),
+          );
         }
         pending = previewCache.get(template.sha256);
         if (!pending) {
