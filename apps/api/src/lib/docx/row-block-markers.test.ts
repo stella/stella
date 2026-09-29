@@ -5,6 +5,9 @@ import * as slimdom from "slimdom";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { processBlockDirectives } from "./block-directives";
 import { discoverTemplate } from "./discover-template";
 import { processInlineConditions } from "./inline-conditions";
@@ -25,10 +28,10 @@ const TC = (...paragraphs: string[]) => `<w:tc>${paragraphs.join("")}</w:tc>`;
 const TR = (...cells: string[]) => `<w:tr>${cells.join("")}</w:tr>`;
 const TBL = (...rows: string[]) => `<w:tbl>${rows.join("")}</w:tbl>`;
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const parseBody = (xml: string): slimdom.Element => {

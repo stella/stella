@@ -19,6 +19,7 @@ import {
   globalCaseLawPolicies,
   jsonb,
   p,
+  publicLawReaderPolicies,
   safeUuid,
   sql,
   timestamptz,
@@ -231,6 +232,7 @@ export const caseLawProvisionExtractionRevisionsRegistry = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ownerAccessPolicy(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -264,6 +266,7 @@ export const caseLawProvisionExtractionRevisions = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ownerAccessPolicy(),
+    ...publicLawReaderPolicies(),
   ],
 );
 
@@ -433,5 +436,6 @@ export const caseLawProvisionExtractions = p.pgTable(
     ),
     ...globalCaseLawPolicies(),
     ownerAccessPolicy(),
+    ...publicLawReaderPolicies(),
   ],
 );

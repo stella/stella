@@ -127,11 +127,10 @@ export const fillHandler = async ({
   if (Result.isError(scanned)) {
     return templateUploadRejectionResponse(scanned.error);
   }
-  const buffer = scanned.value;
   const sourceName = sanitizeFilename(file.name);
 
   const result = await fillTemplateDocx({
-    source: { name: sourceName, fileName: sourceName, buffer },
+    source: { name: sourceName, fileName: sourceName, file: scanned.value },
     values: parsed,
     scopedDb,
     organizationId,
@@ -210,7 +209,7 @@ export const fillHandler = async ({
   // PDF conversion via Gotenberg
   if (format === "pdf") {
     const scannedOutput = await scanTemplateOutput({
-      buffer: new Uint8Array(result.buffer),
+      buffer: new Uint8Array(result.file.bytes),
       fileName: sourceName,
     });
     if (scannedOutput === null) {
@@ -265,7 +264,7 @@ export const fillHandler = async ({
   }
   return secureDocumentResponse({
     additionalHeaders,
-    body: new Uint8Array(result.buffer),
+    body: new Uint8Array(result.file.bytes),
     // Octet-stream, not the DOCX mime type: the Eden treaty client
     // text-decodes unrecognized content types, which corrupts the ZIP
     // container (Word then reports unreadable content).

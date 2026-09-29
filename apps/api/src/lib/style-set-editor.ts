@@ -8,13 +8,14 @@ import {
   createEmptyDocument,
   createStellaStyleDocumentPreset,
   extractDocumentStyleSet,
-  FolioDocxReviewer,
   paragraph,
 } from "@stll/folio-core/server";
 import type { DocumentPreset, DocumentStyleSet } from "@stll/folio-core/server";
 
 import { documentToDocx } from "@/api/lib/docx-authoring/document";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { openScannedDocxReviewer } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import type {
   StyleSetEditorSettings,
   StyleSetPreviewContent,
@@ -66,11 +67,10 @@ export const createStellaStyleEditorPreset = (): EditablePreset => {
 };
 
 export const readStyleSetEditorPreset = async (
-  buffer: Buffer,
+  file: ScannedFile,
   name: string,
 ): Promise<EditablePreset> => {
-  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary -- style-set packages are server-built from scanned or preset input and read back by plain storage key, which carries no ScannedFile proof (SW-0014)
-  const reviewer = await FolioDocxReviewer.fromBuffer(toArrayBuffer(buffer));
+  const reviewer = await openScannedDocxReviewer(file);
   const document = reviewer.toDocument();
   const firstParagraph = document.package.document.content.find(
     (block) => block.type === "paragraph",
@@ -609,18 +609,6 @@ const textFormatting = (
   fontFamily: { ...existing?.fontFamily, ascii: family, hAnsi: family },
   fontSize: sizePt * HALF_POINTS_PER_POINT,
 });
-
-const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
-  if (bytes.buffer instanceof ArrayBuffer) {
-    return bytes.buffer.slice(
-      bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength,
-    );
-  }
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-};
 
 const applyAlignment = (formatting: ParagraphFormatting, value: Alignment) => {
   if (value !== "preserve") {

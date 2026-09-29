@@ -16,6 +16,8 @@ import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -27,7 +29,7 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -43,8 +45,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const emptyManifest: TemplateManifest = {
@@ -65,10 +66,10 @@ const checkDocument = async ({
   manifest = emptyManifest,
   clauseLinks = [],
 }: CheckOptions): Promise<TemplateCheckFinding[]> => {
-  const buffer = await makeDocx(WRAP(paragraphs.map(P).join("")));
+  const file = await makeDocx(WRAP(paragraphs.map(P).join("")));
   const [discovered, clauseSlots] = await Promise.all([
-    discoverTemplate(buffer),
-    discoverClauseSlots(buffer),
+    discoverTemplate(file),
+    discoverClauseSlots(file),
   ]);
   return buildTemplateCheckFindings({
     discovered,
@@ -515,7 +516,7 @@ describe("template check: bounds", () => {
     const declared: FieldMeta[] = [
       { path: "clientName", label: "Client Name", inputType: "text" },
     ];
-    const { buffer } = await writeFieldFilters(
+    const { file } = await writeFieldFilters(
       await makeDocx(
         WRAP([P("Client: {{clientName}}"), P("{{scope}}")].join("")),
       ),
@@ -526,8 +527,8 @@ describe("template check: bounds", () => {
     );
 
     const [discovered, clauseSlots] = await Promise.all([
-      discoverTemplate(buffer),
-      discoverClauseSlots(buffer),
+      discoverTemplate(file),
+      discoverClauseSlots(file),
     ]);
     const findings = buildTemplateCheckFindings({
       discovered,

@@ -9,28 +9,6 @@
       "count": 1,
       "reason": "tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller",
       "evidence": "apps/api/src/lib/search/index-chat.test.ts"
-    },
-    {
-      "id": "SW-0013",
-      "kind": "temporary",
-      "expires": "2026-12-31",
-      "rule": "scanned-file-boundary/scanned-file-boundary",
-      "file": "apps/api/src/lib/docx/extract-text.ts",
-      "symbol": "import @stll/folio-core/server",
-      "count": 1,
-      "reason": "Template uploads are scanned at the route, but stored templates and filled template output are read back by plain storage key, which carries no ScannedFile proof; this parser input moves to a ScannedFile once template storage keys get a stored-file reader.",
-      "evidence": "apps/api/src/lib/docx/extract-text.test.ts"
-    },
-    {
-      "id": "SW-0014",
-      "kind": "temporary",
-      "expires": "2026-12-31",
-      "rule": "scanned-file-boundary/scanned-file-boundary",
-      "file": "apps/api/src/lib/style-set-editor.ts",
-      "symbol": "readStyleSetEditorPreset",
-      "count": 1,
-      "reason": "Style-set packages are server-built from scanned uploads or presets and read back by plain storage key, which carries no ScannedFile proof; this parser input moves to a ScannedFile once style-set storage keys get a stored-file reader.",
-      "evidence": "apps/api/src/lib/style-set-editor.test.ts"
     }
   ]
 }

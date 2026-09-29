@@ -11,8 +11,6 @@ import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-  PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
-  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
@@ -257,12 +255,6 @@ const CORPUS_PROJECTION_HISTORY_TABLES_SQL = [
 
 const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
   getTableName(schema.corpusIndexProjectionRevisions),
-);
-
-const PREGRANT_PROVISION_LINK_STATUS_COLUMNS = new Set(
-  publicLawColumnPairs(PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION)
-    .filter(({ grant }) => grant === "permitted")
-    .map(({ relation, column }) => `${relation}.${column}`),
 );
 
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
@@ -561,22 +553,12 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).flatMap(
-    ([relation, columns]) => {
-      const grantedColumns = Object.keys(columns).filter(
-        (column) =>
-          !PREGRANT_PROVISION_LINK_STATUS_COLUMNS.has(`${relation}.${column}`),
-      );
-      return grantedColumns.length === 0
-        ? []
-        : [
-            `
-      GRANT SELECT (${grantedColumns.map(quoteSqlIdentifier).join(", ")})
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-          ];
-    },
   ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
