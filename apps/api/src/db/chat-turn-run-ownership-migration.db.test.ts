@@ -104,7 +104,7 @@ test("binds each run id to one turn per organization, accepts owner-lost, and re
     "SET ROLE stella; SET app.organization_id = 'org-a'; SET app.user_id = 'user-b'",
   );
   const checkRunId = async (executionId: string) =>
-    await database.query(
+    await database.query<{ taken: boolean }>(
       "SELECT public.chat_turn_run_id_taken('018f0000-0000-7000-8000-000000000002', $1::uuid, 'run-1') AS taken",
       [executionId],
     );
