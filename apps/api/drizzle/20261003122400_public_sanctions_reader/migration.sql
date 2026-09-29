@@ -7,8 +7,8 @@ CREATE ROLE stella_public_sanctions_reader NOLOGIN;--> statement-breakpoint
 DO $$
 BEGIN
   IF CURRENT_USER <> 'stella_public_sanctions_reader'
-     AND NOT pg_has_role(CURRENT_USER, 'stella_public_sanctions_reader', 'member') THEN
-    EXECUTE format('GRANT stella_public_sanctions_reader TO %I', CURRENT_USER);
+     AND NOT pg_has_role(CURRENT_USER, 'stella_public_sanctions_reader', 'SET') THEN
+    EXECUTE format('GRANT stella_public_sanctions_reader TO %I WITH SET TRUE, INHERIT FALSE', CURRENT_USER);
   END IF;
 END $$;--> statement-breakpoint
 GRANT USAGE ON SCHEMA public TO stella_public_sanctions_reader;--> statement-breakpoint

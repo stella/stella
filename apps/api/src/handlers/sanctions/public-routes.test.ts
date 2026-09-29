@@ -199,8 +199,8 @@ describe("anonymous sanctions search", () => {
     const marker = "Private Role Failure Sentinel";
     const { app } = appWith(
       screen,
-      testDb(async () => 
-        Result.err(new SanctionsPublicRoleError({ message: marker }))
+      testDb(async () =>
+        Result.err(new SanctionsPublicRoleError({ message: marker })),
       ),
     );
     const response = await app.handle(

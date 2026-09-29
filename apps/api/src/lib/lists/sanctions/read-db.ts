@@ -50,7 +50,9 @@ export const createSanctionsPublicReadDb = <
           message: "Public sanctions database role is unavailable",
         }),
     }).then((result) => {
-      if (result.isErr()) {validation = undefined;}
+      if (result.isErr()) {
+        validation = undefined;
+      }
       return result;
     });
     return await validation;

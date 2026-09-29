@@ -134,15 +134,14 @@ export const createPublicSanctionsSearchHandler = ({
       // Never retain the rejected operation's cause: it may contain identity input.
       const result = yield* Result.await(
         Result.tryPromise({
-          try: async () => 
+          try: async () =>
             await screen({
               db,
               subject,
               practiceJurisdictions: [],
               now,
               indexCache,
-            })
-          ,
+            }),
           catch: screeningUnavailable,
         }),
       );
