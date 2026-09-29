@@ -8650,7 +8650,7 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                id: string;
+                id: Tb7bcf69f62;
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
