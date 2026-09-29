@@ -8422,8 +8422,8 @@ export type WebRoutes = {
                 totalAmount: stll_money_CentsAmount;
                 organizationId: Tb1d68817ba;
                 timeEntries: Array<{
-                  status: T61747391b1;
-                  id: T094c3ba654;
+                  status: Tef030b2402;
+                  id: Tdb05f01858;
                   currency: string;
                   narrative: string;
                   dateWorked: string;
@@ -8488,7 +8488,7 @@ export type WebRoutes = {
             currency: string;
             invoiceNumber: string;
             invoiceDate: string;
-            timeEntryIds: Array<T094c3ba654>;
+            timeEntryIds: Array<Tdb05f01858>;
           };
           params: T4042d27c41;
           query: Record<never, never>;
@@ -8661,7 +8661,7 @@ export type WebRoutes = {
           entries: {
             post: {
               body: {
-                timeEntryIds?: Array<T094c3ba654>;
+                timeEntryIds?: Array<Tdb05f01858>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -8706,7 +8706,7 @@ export type WebRoutes = {
           entries: {
             delete: {
               body: {
-                timeEntryIds?: Array<T094c3ba654>;
+                timeEntryIds?: Array<Tdb05f01858>;
                 expenseIds?: Array<T22259c97a4>;
               };
               params: {
@@ -8777,7 +8777,7 @@ export type WebRoutes = {
                 invoiceDescription: Tbe0400fa4c;
                 billable: Tfddd645dc8;
                 markup: number;
-                status: T61747391b1;
+                status: Tef030b2402;
                 userName: Tbe0400fa4c;
                 createdAt: string;
                 updatedAt: Tbe0400fa4c;
@@ -30771,6 +30771,66 @@ export type CorrespondenceRoutes = {
   };
 };
 
+export type MyTimeEntriesRoutes = {
+  v1: {
+    "time-entries": {
+      me: {
+        get: {
+          body: Record<never, never>;
+          params: T5e3ac29766;
+          query: {
+            cursor?: string;
+            limit?: number;
+            date: string;
+          };
+          headers: Record<never, never>;
+          response: {
+            200: {
+              items: Array<{
+                id: Tdb05f01858;
+                workspaceId: T9e07a7d6cd;
+                workspaceName: string;
+                workspaceReference: string;
+                dateWorked: string;
+                durationMinutes: number;
+                billedMinutes: number;
+                narrative: string;
+                billable: Tfddd645dc8;
+                status: Tef030b2402;
+                source: ("manual" | "suggested" | "timer");
+                timerStartedAt: Tbe0400fa4c;
+              }>;
+              nextCursor: Tbe0400fa4c;
+              limit: number;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    };
+  };
+};
+
 export type MemoriesRoutes = {
   v1: {
     memories: T5e3ac29766;
@@ -33176,10 +33236,6 @@ type T08ed227429 = {
     };
     addedLastWeek: T588d0ee653;
   }>;
-};
-
-type T094c3ba654 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "timeEntry";
 };
 
 type T09610a4d6a = {
@@ -36015,8 +36071,6 @@ type T6124e792aa = Array<T3c3fa57c15> | null;
 type T613c5cabbb = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "pdfSigningSession";
 };
-
-type T61747391b1 = "approved" | "billed" | "draft" | "written_off";
 
 type T61a314e9df = "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "EU" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
 
@@ -38996,6 +39050,10 @@ type Tdadf537056 = {
 
 type Tdaf2e43033 = "a4" | "legal" | "letter" | "preserve";
 
+type Tdb05f01858 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "timeEntry";
+};
+
 type Tdb5805e6ca = {
   required?: false | true | undefined;
   minLength?: number | undefined;
@@ -39575,6 +39633,8 @@ type Tee36eb0f81 = {
   key: string;
   labelKey: T7a0a473ce3;
 };
+
+type Tef030b2402 = "approved" | "billed" | "draft" | "written_off";
 
 type Tefb102e423 = {
   "content-type": string;

@@ -137,6 +137,7 @@ import { detached } from "@/lib/detached";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
+import { localISODate } from "@/lib/local-iso-date";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -186,6 +187,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
+    includeTimesheets: showTimesheetLink,
   });
   const user = useAuthenticatedUser();
 
@@ -484,6 +486,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
         },
         recents: recents.slice(0, 3).map(recentMatterAction),
       },
+    },
+    timesheets: {
+      action: () => {
+        detached(
+          navigate({ to: "/time", search: { date: localISODate() } }),
+          "app-sidebar.navigate",
+        );
+      },
+      contextMenu: {},
     },
     caseLaw: {
       action: () => {

@@ -5,12 +5,12 @@ import { Temporal } from "@stll/time";
 import { cn } from "@stll/ui/utils";
 
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
-import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import {
   formatDecimalHours,
   formatMinutes,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
+} from "@/lib/workspaces/format-duration";
+import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
+import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
   summarizeBillableAmountByMatterAndCurrency,
