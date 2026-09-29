@@ -97,6 +97,10 @@ const scopedDb: Parameters<typeof indexLegislationDocument>[1] = async (
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
   await callback(db as unknown as Transaction);
 
+const withTestProjectionDb: NonNullable<
+  Parameters<typeof backfillLegislationSearchIndex>[3]
+> = async (work) => await work(scopedDb);
+
 const searchReadDb: LegislationReadDb = async (callback) => {
   const tx = new Proxy(db, {
     get: (target, property, receiver) => {
@@ -278,10 +282,20 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
   readKeys.length = 0;
 
   expect(
-    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+    await backfillLegislationSearchIndex(
+      scopedDb,
+      1,
+      dependencies,
+      withTestProjectionDb,
+    ),
   ).toEqual({ found: 1, indexed: 0 });
   expect(
-    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+    await backfillLegislationSearchIndex(
+      scopedDb,
+      1,
+      dependencies,
+      withTestProjectionDb,
+    ),
   ).toEqual({ found: 1, indexed: 1 });
   expect(readKeys).toEqual([unavailableKey, laterKey]);
   expect(unavailableCorpusId < laterCorpusId).toBe(true);
@@ -317,7 +331,12 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
     .set({ retryAfter: new Date("2025-01-01T00:00:00.000Z") })
     .where(eq(legislationSearchDocuments.documentId, unavailableCorpusId));
   expect(
-    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+    await backfillLegislationSearchIndex(
+      scopedDb,
+      1,
+      dependencies,
+      withTestProjectionDb,
+    ),
   ).toEqual({ found: 1, indexed: 1 });
   expect(readKeys).toEqual([unavailableKey, laterKey, unavailableKey]);
 
@@ -388,7 +407,12 @@ test("the stale scan breaks equal update timestamps by document id", async () =>
     );
 
   expect(
-    await backfillLegislationSearchIndex(scopedDb, 1, dependencies),
+    await backfillLegislationSearchIndex(
+      scopedDb,
+      1,
+      dependencies,
+      withTestProjectionDb,
+    ),
   ).toEqual({ found: 1, indexed: 1 });
   expect(firstStaleCorpusId < laterStaleCorpusId).toBe(true);
   expect(readKeys).toEqual([firstKey]);
@@ -408,12 +432,17 @@ test("a failed projection names the error class in its log fields", async () => 
   const errorSpy = spyOn(logger, "error");
   try {
     expect(
-      await backfillLegislationSearchIndex(scopedDb, 1, {
-        readText: async () => "unused corpus sentinel",
-        resolveConfig: async () => {
-          throw new TypeError("fts configuration unavailable");
+      await backfillLegislationSearchIndex(
+        scopedDb,
+        1,
+        {
+          readText: async () => "unused corpus sentinel",
+          resolveConfig: async () => {
+            throw new TypeError("fts configuration unavailable");
+          },
         },
-      }),
+        withTestProjectionDb,
+      ),
     ).toEqual({ found: 1, indexed: 0 });
 
     const failure = errorSpy.mock.calls.find(
@@ -455,10 +484,18 @@ test("a document whose text outgrows the tsvector ceiling is still indexed", asy
   );
 
   expect(
-    await backfillLegislationSearchIndex(scopedDb, 1, {
-      readText: async () => "unused corpus sentinel",
-      resolveConfig: async () => ({ regconfig: "simple", useUnaccent: false }),
-    }),
+    await backfillLegislationSearchIndex(
+      scopedDb,
+      1,
+      {
+        readText: async () => "unused corpus sentinel",
+        resolveConfig: async () => ({
+          regconfig: "simple",
+          useUnaccent: false,
+        }),
+      },
+      withTestProjectionDb,
+    ),
   ).toEqual({ found: 1, indexed: 1 });
 
   const projection = (

@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 import { databaseRelations } from "@/api/db/database-relations";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
+import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -23,29 +24,17 @@ const poolRecycling = {
   idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
 } as const;
 
-// Optional per-deployment statement ceiling, set on every connection as it
-// opens. Work that needs longer raises it with `SET LOCAL`, and `RESET`
-// returns to this value rather than to the server default.
-const sessionSettings =
-  envBase.DATABASE_STATEMENT_TIMEOUT_MS > 0
-    ? {
-        connection: {
-          statement_timeout: envBase.DATABASE_STATEMENT_TIMEOUT_MS,
-        },
-      }
-    : {};
-
 const rootClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_ROOT_POOL_MAX,
   ...poolRecycling,
-  ...sessionSettings,
+  ...sharedPoolConnectionSettings("root"),
 });
 const rlsClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_RLS_POOL_MAX,
   ...poolRecycling,
-  ...sessionSettings,
+  ...sharedPoolConnectionSettings("raw_rls"),
 });
 
 /**

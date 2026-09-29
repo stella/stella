@@ -362,6 +362,11 @@ run_db_await_in_loop_guard() {
   bun run check:db-await-in-loop
 }
 run_step "Database awaits in loops" run_db_await_in_loop_guard
+run_api_timeout_mutation_guard() {
+  bun test scripts/check-api-timeout-mutations.test.ts || return 1
+  bun run check:api-timeout-mutations
+}
+run_step "API timeout mutation guard" run_api_timeout_mutation_guard
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_design_system_backlog_guard() {
   bun test scripts/design-lint-baseline.test.ts \

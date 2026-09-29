@@ -6,8 +6,7 @@
  *
  *   bun run --env-file=.env src/scripts/normalize-review-passage-references.ts [--dry-run]
  */
-import { sql } from "drizzle-orm";
-
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   PASSAGE_REFERENCE_STEPS,
@@ -16,15 +15,13 @@ import {
 } from "@/api/lib/document-review/passage-reference-normalize";
 
 const BATCH_SIZE = 200;
-const STATEMENT_TIMEOUT = "60000ms";
+const STATEMENT_TIMEOUT_MS = 60_000;
 
 type Step = (typeof PASSAGE_REFERENCE_STEPS)[number];
 
 const rewriteBatch = async ({ rewrite }: Step): Promise<number> =>
   await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, true)`,
-    );
+    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
     await tx.execute(PASSAGES_BY_ID_FUNCTION);
     await tx.execute(POSITION_ITEMS_BY_ID_FUNCTION);
     const rows = await tx.execute<{ changed: number }>(rewrite(BATCH_SIZE));

@@ -19,7 +19,10 @@ import { resolveLocalFtsConfig } from "@/api/lib/case-law/local-case-law-config"
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorSystemFields } from "@/api/lib/errors/utils";
-import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import {
+  setCorpusBackfillStatementTimeout,
+  withDedicatedCorpusBackfillDb,
+} from "@/api/lib/legal-search/backfill-statement-timeout";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
@@ -31,6 +34,10 @@ import {
 } from "@/api/lib/search/preview-passages";
 
 const SEARCH_INDEX_CONCURRENCY = 4;
+
+type ProjectionWriteScope =
+  | { type: "shared"; scopedDb: ScopedDb }
+  | { type: "dedicated"; scopedDb: ScopedDb };
 
 const sectionsToPlainText = (
   sections: readonly DecisionSection[] | null,
@@ -48,7 +55,11 @@ export const indexDecision = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
   resolveConfig: typeof resolveLocalFtsConfig = resolveLocalFtsConfig,
+  writeScope?: ProjectionWriteScope,
 ): Promise<Result<void, unknown>> => {
+  const projectionWriteScope =
+    writeScope ??
+    ({ type: "shared", scopedDb } as const satisfies ProjectionWriteScope);
   const [decision] = await scopedDb((tx) =>
     tx
       .select({
@@ -119,12 +130,10 @@ export const indexDecision = async (
       : sql`arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${indexedText}, ''))`;
     const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
-    await scopedDb(async (tx) => {
-      // Raise statement timeout for the tsvector upsert.
-      // to_tsvector + unaccent on very long court decisions is
-      // CPU-intensive. The helper scopes the higher timeout to
-      // this transaction only; user-facing queries keep the default.
-      await setCorpusBackfillStatementTimeout(tx);
+    await projectionWriteScope.scopedDb(async (tx) => {
+      if (projectionWriteScope.type === "shared") {
+        await setCorpusBackfillStatementTimeout(tx);
+      }
       const writableDecision = await tx
         .select({ id: caseLawDecisions.id })
         .from(caseLawDecisions)
@@ -224,6 +233,7 @@ export const backfillSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
   resolveConfig: typeof resolveLocalFtsConfig = resolveLocalFtsConfig,
+  withProjectionDb: typeof withDedicatedCorpusBackfillDb = withDedicatedCorpusBackfillDb,
 ): Promise<SearchIndexBackfillResult> => {
   // Find decisions that need (re)indexing. ASC order so the backlog
   // clears in insertion order, avoiding a "poison pill" where a
@@ -339,10 +349,14 @@ export const backfillSearchIndex = async (
     const indexed = (
       await Result.tryPromise({
         try: async () =>
-          await indexDecision(
-            brandPersistedCaseLawDecisionId(row.id),
-            scopedDb,
-            resolveConfig,
+          await withProjectionDb(
+            async (dedicatedDb) =>
+              await indexDecision(
+                brandPersistedCaseLawDecisionId(row.id),
+                scopedDb,
+                resolveConfig,
+                { type: "dedicated", scopedDb: dedicatedDb },
+              ),
           ),
         catch: (cause) => cause,
       })

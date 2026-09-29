@@ -23,6 +23,10 @@ export type ProvisionBackfillSession = {
     query: string,
     params?: readonly ProvisionBackfillParam[],
   ) => Promise<readonly unknown[]>;
+  setTransactionBudget: (budget: {
+    lockTimeout: number;
+    statementTimeout: number;
+  }) => Promise<void>;
 };
 
 export type ProvisionBackfillCompletion =
@@ -66,7 +70,7 @@ export class ProvisionBackfillUnitError extends TaggedError(
 
 export type ProvisionBackfillUnit = Result<void, ProvisionBackfillUnitError>;
 
-type UnitBudget = { lockTimeout: string; statementTimeout: string };
+type UnitBudget = { lockTimeout: number; statementTimeout: number };
 
 /**
  * Runs `work` as one transaction on the session under `budget`: it commits
@@ -80,10 +84,10 @@ export const inBackfillTransaction = async (
   await session.execute("BEGIN");
   const unit = await Result.tryPromise({
     try: async () => {
-      await session.execute(`SET LOCAL lock_timeout = '${lockTimeout}'`);
-      await session.execute(
-        `SET LOCAL statement_timeout = '${statementTimeout}'`,
-      );
+      await session.setTransactionBudget({
+        lockTimeout,
+        statementTimeout,
+      });
       await work();
       await session.execute("COMMIT");
     },

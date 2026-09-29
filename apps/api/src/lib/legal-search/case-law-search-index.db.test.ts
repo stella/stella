@@ -53,6 +53,10 @@ const scopedDb: Parameters<typeof indexDecision>[1] = async (callback) =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test transaction shim
   await callback(db as unknown as Transaction);
 
+const withTestProjectionDb: NonNullable<
+  Parameters<typeof backfillSearchIndex>[3]
+> = async (work) => await work(scopedDb);
+
 const sourceId = createSafeId<"caseLawSource">();
 const shortId = createSafeId<"caseLawDecision">();
 const oversizedId = createSafeId<"caseLawDecision">();
@@ -225,7 +229,12 @@ test(
       .delete(caseLawSearchDocumentPreviewPassages)
       .where(eq(caseLawSearchDocumentPreviewPassages.decisionId, previewId));
 
-    const result = await backfillSearchIndex(scopedDb, 4, resolveConfig);
+    const result = await backfillSearchIndex(
+      scopedDb,
+      4,
+      resolveConfig,
+      withTestProjectionDb,
+    );
     expect(result).toMatchObject({ found: 2, indexed: 2 });
     const restored = await db
       .select({ id: caseLawSearchDocumentPreviewPassages.decisionId })
@@ -274,7 +283,12 @@ test(
     };
     const error = spyOn(logger, "error");
     try {
-      const result = await backfillSearchIndex(scopedDb, 32, failingConfig);
+      const result = await backfillSearchIndex(
+        scopedDb,
+        32,
+        failingConfig,
+        withTestProjectionDb,
+      );
 
       const projected = await db
         .select({ decisionId: caseLawSearchDocuments.decisionId })

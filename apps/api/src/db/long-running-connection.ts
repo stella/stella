@@ -1,0 +1,198 @@
+import { panic } from "better-result";
+import { SQL } from "bun";
+import type { ReservedSQL } from "bun";
+import { drizzle } from "drizzle-orm/bun-sql";
+
+import { databaseRelations } from "@/api/db/database-relations";
+import { isRecord } from "@/api/lib/type-guards";
+
+const CONNECTION_TIMEOUT_SECONDS = 10;
+const CANCELLATION_STATEMENT_TIMEOUT_MS = 5000;
+
+type LongRunningConnectionOptions = {
+  /** Milliseconds; these budgets belong only to this dedicated connection. */
+  statementTimeout: number;
+  lockTimeout: number;
+  signal: AbortSignal;
+};
+
+const positiveMilliseconds = (value: number, name: string): number => {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    return panic(`${name} must be a finite positive millisecond budget`);
+  }
+  return value;
+};
+
+type ReservableSession = {
+  unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
+  release: () => void;
+  close: () => Promise<void>;
+};
+
+type TransactionBudget = Pick<
+  LongRunningConnectionOptions,
+  "statementTimeout" | "lockTimeout"
+>;
+
+type SetTransactionBudget = (budgets: TransactionBudget) => Promise<void>;
+
+type ReservedWorkOptions<T, TSession extends ReservableSession> = {
+  reserve: () => Promise<TSession>;
+  cancelBackend: (pid: number) => Promise<unknown>;
+  signal: AbortSignal;
+  work: (
+    session: TSession,
+    setTransactionBudget: SetTransactionBudget,
+  ) => Promise<T>;
+};
+
+/** The reserved-session lifecycle shared by dedicated jobs and test adapters. */
+export const withDedicatedReservedSession = async <
+  T,
+  TSession extends ReservableSession,
+>({
+  reserve,
+  cancelBackend,
+  signal,
+  work,
+}: ReservedWorkOptions<T, TSession>): Promise<T> => {
+  const reserved = await reserve();
+  let cancelling: Promise<unknown> | undefined;
+  let onAbort: (() => void) | undefined;
+  const body = (async () => {
+    const rows = await reserved.unsafe("SELECT pg_backend_pid() AS pid");
+    if (!Array.isArray(rows)) {
+      return panic("Expected an array from the dedicated PostgreSQL session");
+    }
+    const pid = rows.find(isRecord)?.["pid"];
+    if (typeof pid !== "number") {
+      return panic("Expected the dedicated PostgreSQL backend pid");
+    }
+    onAbort = () => {
+      if (cancelling !== undefined) {
+        return;
+      }
+      cancelling = Promise.allSettled([
+        Promise.resolve().then(() => cancelBackend(pid)),
+      ]);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      signal.throwIfAborted();
+    }
+    return await work(reserved, async ({ statementTimeout, lockTimeout }) => {
+      const statementBudget = positiveMilliseconds(
+        statementTimeout,
+        "statementTimeout",
+      );
+      const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
+      await reserved.unsafe(`SET LOCAL lock_timeout = '${lockBudget}ms'`);
+      await reserved.unsafe(
+        `SET LOCAL statement_timeout = '${statementBudget}ms'`,
+      );
+    });
+  })();
+  await Promise.allSettled([body]);
+  if (onAbort !== undefined) {
+    signal.removeEventListener("abort", onAbort);
+  }
+  if (cancelling === undefined) {
+    reserved.release();
+  } else {
+    await cancelling;
+    await reserved.close();
+  }
+  return await body;
+};
+
+const databaseFor = (client: SQL) =>
+  drizzle({ client, relations: databaseRelations });
+
+type LongRunningHandle = {
+  /** Drizzle is bound to the reserved session, not an application pool. */
+  db: ReturnType<typeof databaseFor>;
+  /** Raw SQL is available for maintenance statements Drizzle cannot express. */
+  connection: ReservedSQL;
+  /** Installs a shorter LOCAL budget on this reserved connection. */
+  setTransactionBudget: SetTransactionBudget;
+};
+
+/**
+ * Owns one connection for bounded maintenance work. Abort cancels the backend
+ * through a separate short-lived connection, then closes the aborted session
+ * after cancellation settles so a late cancel cannot affect the next borrower.
+ */
+export const withLongRunningConnection = async <T>(
+  { statementTimeout, lockTimeout, signal }: LongRunningConnectionOptions,
+  work: (handle: LongRunningHandle) => Promise<T>,
+): Promise<T> => {
+  const statementBudget = positiveMilliseconds(
+    statementTimeout,
+    "statementTimeout",
+  );
+  const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
+  signal.throwIfAborted();
+  const { envBase } = await import("@/api/env-base");
+  const client = new SQL({
+    url: envBase.DATABASE_URL,
+    max: 1,
+    idleTimeout: 0,
+    connectionTimeout: CONNECTION_TIMEOUT_SECONDS,
+    connection: {
+      statement_timeout: statementBudget,
+      lock_timeout: lockBudget,
+    },
+  });
+  try {
+    const dedicatedResult = await withDedicatedReservedSession({
+      reserve: async () => await client.reserve({ signal }),
+      cancelBackend: async (pid) => {
+        const canceller = new SQL({
+          url: envBase.DATABASE_URL,
+          max: 1,
+          idleTimeout: 0,
+          connectionTimeout: CONNECTION_TIMEOUT_SECONDS,
+          connection: {
+            statement_timeout: CANCELLATION_STATEMENT_TIMEOUT_MS,
+          },
+        });
+        try {
+          await canceller`SELECT pg_cancel_backend(${pid})`;
+        } finally {
+          await canceller.end();
+        }
+      },
+      signal,
+      work: async (reserved, setTransactionBudget) => {
+        const workResult = await work({
+          db: databaseFor(reserved),
+          connection: reserved,
+          setTransactionBudget: async ({
+            statementTimeout: requestedStatementTimeout,
+            lockTimeout: requestedLockTimeout,
+          }) => {
+            const requestedStatement = positiveMilliseconds(
+              requestedStatementTimeout,
+              "statementTimeout",
+            );
+            const requestedLock = positiveMilliseconds(
+              requestedLockTimeout,
+              "lockTimeout",
+            );
+            await setTransactionBudget({
+              statementTimeout: Math.min(requestedStatement, statementBudget),
+              lockTimeout: Math.min(requestedLock, lockBudget),
+            });
+          },
+        });
+        signal.throwIfAborted();
+        return workResult;
+      },
+    });
+    signal.throwIfAborted();
+    return dedicatedResult;
+  } finally {
+    await client.end();
+  }
+};
