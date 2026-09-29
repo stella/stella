@@ -10151,7 +10151,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: T2203ecc422;
+              200: T8f61650de5;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -33770,74 +33770,6 @@ type T21e7b1b9fc = {
   isPrimary: Tfddd645dc8;
 };
 
-type T2203ecc422 = {
-  documentAst: {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: "decision-title" | "section-heading" | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
-      note?: T8bbaf16642 | undefined;
-      listDepth?: 1 | 2 | 3 | 4 | undefined;
-      number?: number | undefined;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: "metadata-table" | "related-proceedings" | undefined;
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: number | undefined;
-        rowSpan?: number | undefined;
-        header?: true | undefined;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: string | undefined;
-      width?: number | undefined;
-      height?: number | undefined;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4 | null;
-  fulltext: Tbe0400fa4c;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  id: Tfc8a750351;
-};
-
 type T22259c97a4 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "expense";
 };
@@ -36481,10 +36413,7 @@ type T73b2a1010d = {
 } | {
   type: "neutral-citation";
   value: string;
-} | {
-  type: "reporter-citation";
-  value: string;
-};
+} | Td1ccc251c4;
 
 type T740180a0c1 = "companies-house" | "denue" | "edgar";
 
@@ -37079,6 +37008,74 @@ type T8f465d529b = {
 
 type T8f584f9d60 = T8065b8ad03 | null;
 
+type T8f61650de5 = {
+  documentAst: {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: "decision-title" | "section-heading" | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
+      note?: T8bbaf16642 | undefined;
+      listDepth?: 1 | 2 | 3 | 4 | undefined;
+      number?: number | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: "metadata-table" | "related-proceedings" | undefined;
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: number | undefined;
+        rowSpan?: number | undefined;
+        header?: true | undefined;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: string | undefined;
+      width?: number | undefined;
+      height?: number | undefined;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4 | null;
+  fulltext: Tbe0400fa4c;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  id: Tfc8a750351;
+};
+
 type T8ff9f6d126 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
 };
@@ -37590,6 +37587,18 @@ type Ta4c2166933 = {
   cite: string;
   href?: string | undefined;
   children: Array<Ta4c2166933>;
+  target?: {
+    status: "identified";
+    identifiers: T3fbc5ba165;
+  } | {
+    status: "unresolved";
+    reason: ("ambiguous-antecedent" | "ambiguous-reporter" | "authority-barrier" | "conflicting-parallels" | "missing-antecedent" | "scope-unknown");
+  } | undefined;
+  pin?: {
+    raw: string;
+    parts: readonly [Tc8b3b0ec3a, ...Tc8b3b0ec3a[]];
+    reporter?: Td1ccc251c4 | undefined;
+  } | undefined;
 } | {
   type: "line-break";
 } | {
@@ -37803,7 +37812,7 @@ type Tad027ba68a = {
 
 type Tad12f531bb = "held" | "included";
 
-type Tada6067f00 = T2203ecc422 | T279717e2be;
+type Tada6067f00 = T8f61650de5 | T279717e2be;
 
 type Tae4c134ba8 = "active" | "awaiting_acknowledgement" | "cancelled" | "completed" | "unassigned";
 
@@ -38502,6 +38511,12 @@ type Tc892bdfad5 = {
   version: 3;
 };
 
+type Tc8b3b0ec3a = {
+  kind: ("footnote" | "page" | "paragraph");
+  start: string;
+  end?: string | undefined;
+};
+
 type Tc9c6fb618b = {
   stored: number;
   storedAsOf: string;
@@ -38760,6 +38775,11 @@ type Td15a61239d = {
 } & T4d73965770;
 
 type Td16108295a = "address" | "addressCity" | "addressCountry" | "addressPostalCode" | "addressStreet" | "bic" | "dataBox" | "displayName" | "email" | "firstName" | "iban" | "lastName" | "organizationName" | "phone" | "registrationNumber" | "taxId";
+
+type Td1ccc251c4 = {
+  type: "reporter-citation";
+  value: string;
+};
 
 type Td204418ab7 = "decision" | "fact" | "instruction" | "preference" | "relationship";
 
