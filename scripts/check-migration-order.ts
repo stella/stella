@@ -448,8 +448,13 @@ if (import.meta.main) {
 
   const migrationsFolder = path.join(REPO_ROOT, "apps/api/drizzle");
   const bundle = readMigrationFiles({ migrationsFolder });
-  for (const directory of changes.addedDirectories) {
-    const file = `${directory}/migration.sql`;
+  const changedMigrationSqlFiles = new Set([
+    ...changes.addedDirectories.map(
+      (directory) => `${directory}/migration.sql`,
+    ),
+    ...changes.modifiedFiles.filter((file) => MIGRATION_FILE.test(file)),
+  ]);
+  for (const file of changedMigrationSqlFiles) {
     const sqlText = new TextDecoder("utf-8", { fatal: true }).decode(
       readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT }),
     );

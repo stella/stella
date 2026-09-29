@@ -616,6 +616,21 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
     const aliased = runGate();
     expect(aliased.stderr.toString()).toBe("");
     expect(aliased.exitCode).toBe(0);
+
+    const malformedAliasedSql =
+      "  -- requires: 2026080111000_missing\nSELECT 4;\n";
+    writeFileSync(path.join(cwd, FILE), malformedAliasedSql);
+    writeFileSync(
+      inventoryPath,
+      `${JSON.stringify([{ ...alias, priorHash: hash(originalSql), newHash: hash(malformedAliasedSql) }])}\n`,
+    );
+    runGit("add", "apps");
+    runGit("commit", "-m", "Add malformed header to aliased migration");
+    const malformedAliased = runGate();
+    expect(malformedAliased.exitCode).not.toBe(0);
+    expect(malformedAliased.stderr.toString()).toContain(
+      "Malformed migration dependency",
+    );
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
