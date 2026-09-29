@@ -121,6 +121,7 @@ import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -145,6 +146,7 @@ import {
 import type { McpToolInputSchema } from "@/api/mcp/tool-types";
 import type { NullAsAbsentInputSchema } from "@/api/mcp/tool-utils";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { runEvalModelTurn } from "./lib/model-turn";
 import type {
@@ -292,8 +294,10 @@ const buildDocx = async (blocks: readonly AuthoredBlock[]): Promise<Buffer> =>
  * model reads from the fixture's real bytes (never from a parallel string
  * constant that could drift), and to inspect the filled output's rows.
  */
-const readDocxBlocks = async (buffer: Buffer): Promise<AuthoredBlock[]> => {
-  const zip = await JSZip.loadAsync(buffer);
+const readDocxBlocks = async (
+  bytes: ArrayBuffer | Uint8Array,
+): Promise<AuthoredBlock[]> => {
+  const zip = await JSZip.loadAsync(bytes);
   const xml = await zip.file(MAIN_DOCUMENT_PART_PATH)?.async("string");
   if (xml === undefined) {
     return panic("DOCX has no word/document.xml");
@@ -357,8 +361,10 @@ type FilledDocument = {
   tables: (readonly (readonly string[])[])[];
 };
 
-const readFilledDocument = async (buffer: Buffer): Promise<FilledDocument> => {
-  const blocks = await readDocxBlocks(buffer);
+const readFilledDocument = async (
+  bytes: ArrayBuffer,
+): Promise<FilledDocument> => {
+  const blocks = await readDocxBlocks(bytes);
   const lines: string[] = [];
   const tables: (readonly (readonly string[])[])[] = [];
   for (const block of blocks) {
@@ -468,7 +474,7 @@ type SaveOutcome =
   | { status: "rejected"; issues: string[] }
   | {
       status: "saved";
-      buffer: Buffer;
+      file: ScannedFile;
       manifest: TemplateManifest;
       /** What the configuration could not apply, unformatted, as the engine
        *  and the tool site reported it: an entry that did not land, or one
@@ -535,18 +541,18 @@ const configurableTemplatePaths = (
  * disagree with the document it holds.
  */
 const savedTemplate = async ({
-  buffer,
+  file,
   issues,
   manifest,
 }: {
-  buffer: Buffer;
+  file: ScannedFile;
   issues: readonly FieldConfigurationIssue[];
   manifest: TemplateManifest;
 }): Promise<SavedTemplate> => {
-  const discovered = await discoverTemplate(buffer);
+  const discovered = await discoverTemplate(file);
   return {
     status: "saved",
-    buffer,
+    file,
     manifest,
     issues,
     resolvedPaths: mergeManifestWithDiscovery(manifest, discovered).map(
@@ -587,10 +593,11 @@ const createTemplateInMemory = async (
   if (!validation.valid) {
     return { status: "invalid-docx", reason: validation.error };
   }
+  const file = testDocxFile(buffer);
   return await savedTemplate({
-    buffer,
+    file,
     issues: [],
-    manifest: await deriveManifestFromDocx(buffer),
+    manifest: await deriveManifestFromDocx(file),
   });
 };
 
@@ -605,13 +612,13 @@ const createTemplateInMemory = async (
  * the document that edit produced.
  */
 const configureTemplateInMemory = async ({
-  buffer,
+  file,
   entries,
 }: {
-  buffer: Buffer;
+  file: ScannedFile;
   entries: readonly FieldMeta[];
 }): Promise<SavedTemplate> =>
-  await savedTemplate(await configureTemplateDocument({ buffer, entries }));
+  await savedTemplate(await configureTemplateDocument({ file, entries }));
 
 // ── The round trip ───────────────────────────────────────
 
@@ -635,9 +642,9 @@ const withoutExternalSource = ({
  */
 const neutralizeExternalSources = async (
   saved: SavedTemplate,
-): Promise<Buffer> => {
-  const { buffer } = await writeFieldFilters(
-    saved.buffer,
+): Promise<ScannedFile> => {
+  const { file } = await writeFieldFilters(
+    saved.file,
     saved.manifest.fields.flatMap((field) =>
       field.lookup === undefined && field.source === undefined
         ? []
@@ -649,7 +656,7 @@ const neutralizeExternalSources = async (
           ],
     ),
   );
-  return buffer;
+  return file;
 };
 
 type RoundTripResult = {
@@ -666,11 +673,11 @@ const runRoundTrip = async ({
   task: EvalTask;
   organizationId: SafeId<"organization">;
 }): Promise<RoundTripResult> => {
-  const buffer = await neutralizeExternalSources(saved);
+  const file = await neutralizeExternalSources(saved);
   const source: FillTemplateSource = {
     name: task.name,
     fileName: `${task.id}.docx`,
-    buffer,
+    file,
   };
   const filled = await fillTemplateDocx({
     source,
@@ -692,7 +699,7 @@ const runRoundTrip = async ({
       text: "",
     };
   }
-  const document = await readFilledDocument(filled.buffer);
+  const document = await readFilledDocument(filled.file.bytes);
   const leftoverMarkers = [...document.text.matchAll(/\{\{/gu)].length;
   return {
     defects: {
@@ -1366,7 +1373,7 @@ const createAuthoringTools = ({
   // describes it. Bytes are the whole template, so a configure call writes
   // into these and the result becomes them; a second configure then refines
   // the first one's document exactly as it does a stored one.
-  let stored: { buffer: Buffer; name: string | undefined } | null = null;
+  let stored: { file: ScannedFile; name: string | undefined } | null = null;
 
   const handleWriteDocx = async ({
     blocks,
@@ -1402,7 +1409,9 @@ const createAuthoringTools = ({
       // Traps are read off the document that was actually saved, not off the
       // write_docx input, so they describe the bytes the contract received.
       blocks:
-        outcome.status === "saved" ? await readDocxBlocks(outcome.buffer) : [],
+        outcome.status === "saved"
+          ? await readDocxBlocks(outcome.file.bytes)
+          : [],
       overlay,
       outcome,
     });
@@ -1448,7 +1457,7 @@ const createAuthoringTools = ({
     if (outcome.status === "rejected") {
       return { error: "validation_error", issues: outcome.issues };
     }
-    stored = { buffer: outcome.buffer, name: parsed.output.name };
+    stored = { file: outcome.file, name: parsed.output.name };
     return {
       templateId: EVAL_TEMPLATE_ID,
       name: parsed.output.name,
@@ -1507,12 +1516,12 @@ const createAuthoringTools = ({
       return { error: "not_found", issues };
     }
     const outcome = await configureTemplateInMemory({
-      buffer: stored.buffer,
+      file: stored.file,
       entries: overlay,
     });
     // The entries were written into the markers, so the document they produced
     // IS the template from here on.
-    stored = { ...stored, buffer: outcome.buffer };
+    stored = { ...stored, file: outcome.file };
     // `configureTemplateDocument` only saw the entries the schema accepted, so
     // it counts positions in THAT list. The model counts positions in the list
     // it sent, so the positions are translated back before the two lists meet,
@@ -1843,7 +1852,7 @@ const buildUnsavedAttempt = async ({
   task: EvalTask;
   overlayIssues: readonly string[];
 }): Promise<SaveAttempt> => {
-  const discovered = await discoverTemplate(buffer);
+  const discovered = await discoverTemplate(testDocxFile(buffer));
   const paths = mergeManifestWithDiscovery(null, discovered).map(
     (field) => field.path,
   );

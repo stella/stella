@@ -57,6 +57,7 @@ import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -70,6 +71,7 @@ import { isFillableTemplateInputField } from "@/api/lib/templates/template-input
 import type { MissingRequiredField } from "@/api/lib/templates/template-optional-defaults";
 import { isTemplateFieldRequired } from "@/api/lib/templates/template-optional-defaults";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { runEvalModelTurn } from "./lib/model-turn";
 
@@ -143,7 +145,7 @@ type TemplateFixture = {
   templateId: string;
   name: string;
   fileName: string;
-  buffer: Buffer;
+  file: ScannedFile;
   manifest: TemplateManifest;
 };
 
@@ -162,8 +164,8 @@ const buildFixture = async (
   fields: readonly FieldMeta[],
 ): Promise<TemplateFixture> => {
   const raw = await makeDocx(WRAP(paragraphs));
-  const { buffer, written } = await writeFieldFilters(
-    raw,
+  const { file, written } = await writeFieldFilters(
+    testDocxFile(raw, `org/templates/${templateId}.docx`),
     fields.map((field) => ({
       path: field.path,
       filters: filtersFromFieldConfig(field),
@@ -181,8 +183,8 @@ const buildFixture = async (
     templateId,
     name,
     fileName: `${templateId}.docx`,
-    buffer,
-    manifest: await deriveManifestFromDocx(buffer),
+    file,
+    manifest: await deriveManifestFromDocx(file),
   };
 };
 
@@ -273,7 +275,7 @@ const createFixtureTools = ({
   const source: FillTemplateSource = {
     name: fixture.name,
     fileName: fixture.fileName,
-    buffer: fixture.buffer,
+    file: fixture.file,
   };
 
   const describeTool = toolDefinition({
@@ -350,7 +352,7 @@ const createFixtureTools = ({
       fillCalls.push({ templateId, values, result });
       return result;
     }
-    const { paragraphs } = await extractDocxDocument(filled.buffer);
+    const { paragraphs } = await extractDocxDocument(filled.file);
     const result = {
       text: paragraphs
         .map((paragraph) => paragraph.text)

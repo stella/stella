@@ -26,6 +26,8 @@ import {
   safeUuid,
   safeWorkspaceId,
   stella,
+  storedFileScanState,
+  storedFileScanStateCheck,
   tsvector,
   user,
   userOrganizationPolicies,
@@ -238,6 +240,7 @@ export const templates = p.pgTable(
       .default("document"),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
+    scanState: storedFileScanState(),
     sizeBytes: p.integer("size_bytes").notNull(),
     manifest: jsonb().$type<TemplateManifest>(),
     fieldCount: p.integer("field_count").notNull().default(0),
@@ -279,6 +282,7 @@ export const templates = p.pgTable(
       .index("templates_org_category_idx")
       .on(table.organizationId, table.categoryId),
     p.unique("templates_id_org_unq").on(table.id, table.organizationId),
+    storedFileScanStateCheck("templates_scan_state_check", table.scanState),
     p.check(
       "templates_origin_type_values_check",
       sql`${table.originType} IN (${sql.join(TEMPLATE_ORIGIN_TYPE_SQL_VALUES, sql`, `)})`,
@@ -410,6 +414,7 @@ export const templateVersions = p.pgTable(
     templateId: safeUuid<"template">("template_id").notNull(),
     version: p.integer().notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
+    scanState: storedFileScanState(),
     manifest: jsonb().$type<TemplateManifest>(),
     fieldCount: p.integer("field_count").notNull().default(0),
     createdBy: p
@@ -430,6 +435,10 @@ export const templateVersions = p.pgTable(
       })
       .onDelete("cascade"),
     p.index("template_versions_organization_id_idx").on(table.organizationId),
+    storedFileScanStateCheck(
+      "template_versions_scan_state_check",
+      table.scanState,
+    ),
     ...orgPolicies(),
   ],
 );
