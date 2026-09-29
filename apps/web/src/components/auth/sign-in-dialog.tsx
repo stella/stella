@@ -15,6 +15,7 @@ import { OTPPanel } from "@/components/auth/otp-panel";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
+import { normalizeRedirectTo } from "@/lib/redirect";
 
 type SignInDialogProps = {
   onOpenChange: (open: boolean) => void;
@@ -29,9 +30,12 @@ type SignInDialogStep =
 export const SignInDialog = ({
   onOpenChange,
   open,
-  redirectTo,
+  redirectTo: requestedRedirectTo,
 }: SignInDialogProps) => {
   const t = useTranslations();
+  // Callers pass the current href. The route schemas check it again, but the
+  // dialog also hands it to the social providers' callback URL.
+  const redirectTo = normalizeRedirectTo(requestedRedirectTo);
   const navigate = useNavigate();
   const [step, setStep] = useState<SignInDialogStep>({ status: "sign-in" });
 

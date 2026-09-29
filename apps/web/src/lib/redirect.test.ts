@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { redirectToSchema } from "@/lib/redirect";
+import {
+  normalizeRedirectTo,
+  redirectToSchema,
+  returnPathOf,
+  toAppRedirectTo,
+} from "@/lib/redirect";
 
 const sanitize = (input: string | undefined) =>
   v.parse(redirectToSchema, input);
@@ -73,6 +78,91 @@ describe("redirectToSchema open-redirect guard", () => {
       expect(out.startsWith("/")).toBe(true);
       expect(out.startsWith("//")).toBe(false);
       expect(out.startsWith("/\\")).toBe(false);
+    }
+  });
+});
+
+const HOSTILE_TARGETS = [
+  "//evil.com",
+  "/\\evil.com",
+  "\\/evil.com",
+  "/\t/evil.com",
+  "/\n/evil.com",
+  "https://evil.com",
+  scriptSchemeUrl,
+  "evil.com",
+  "",
+];
+
+describe("normalizeRedirectTo", () => {
+  test("keeps a same-origin path with its query and fragment", () => {
+    expect(normalizeRedirectTo("/knowledge/templates?intent=use#top")).toBe(
+      "/knowledge/templates?intent=use#top",
+    );
+  });
+
+  test("sends every hostile target to '/'", () => {
+    for (const evil of HOSTILE_TARGETS) {
+      expect(normalizeRedirectTo(evil)).toBe("/");
+    }
+  });
+});
+
+describe("returnPathOf", () => {
+  test("keeps the path and the query of the page asked for", () => {
+    expect(
+      returnPathOf({
+        pathname: "/workspaces/abc/all",
+        searchStr: "?entity=1&view=table",
+      }),
+    ).toBe("/workspaces/abc/all?entity=1&view=table");
+  });
+
+  test("a page without a query returns its path", () => {
+    expect(returnPathOf({ pathname: "/chat", searchStr: "" })).toBe("/chat");
+  });
+
+  test("a hostile location falls back to '/'", () => {
+    expect(returnPathOf({ pathname: "//evil.com", searchStr: "" })).toBe("/");
+    expect(returnPathOf({ pathname: "/\\evil.com", searchStr: "?a=1" })).toBe(
+      "/",
+    );
+  });
+});
+
+describe("toAppRedirectTo", () => {
+  test("keeps an app page with its query", () => {
+    expect(toAppRedirectTo("/knowledge/templates?intent=use&slug=nda")).toBe(
+      "/knowledge/templates?intent=use&slug=nda",
+    );
+    // Only the auth and onboarding segments themselves are refused.
+    expect(toAppRedirectTo("/authors")).toBe("/authors");
+    expect(toAppRedirectTo("/onboarding-guide")).toBe("/onboarding-guide");
+  });
+
+  test("an absent or default target leaves the landing page to the caller", () => {
+    expect(toAppRedirectTo(undefined)).toBeUndefined();
+    expect(toAppRedirectTo("/")).toBeUndefined();
+  });
+
+  test("never ends the trip on a sign-in or onboarding page", () => {
+    for (const loop of [
+      "/auth",
+      "/auth?redirectTo=/chat",
+      "/auth/organization",
+      "/auth/otp?email=a@b.c",
+      "/auth/accept-invitation/xyz",
+      "/onboarding",
+      "/onboarding?preview=true",
+      "/onboarding#step",
+    ]) {
+      expect(toAppRedirectTo(loop)).toBeUndefined();
+    }
+  });
+
+  test("refuses every hostile target", () => {
+    for (const evil of HOSTILE_TARGETS) {
+      expect(toAppRedirectTo(evil)).toBeUndefined();
     }
   });
 });

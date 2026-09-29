@@ -53,6 +53,7 @@ import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
 import {
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
+  toAppRedirectTo,
 } from "@/lib/redirect";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
@@ -153,6 +154,9 @@ const OrganizationSkeleton = () => (
 
 const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const { data: organizations, isPending } = authClient.useListOrganizations();
+  const onboardingRedirectTo = Route.useSearch({
+    select: (search) => toAppRedirectTo(search.redirectTo),
+  });
   const hasOrganizations = (organizations?.length ?? 0) > 0;
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,
@@ -162,7 +166,13 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
     (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
 
   if (hydrated && !isPending && !hasOrganizations && !isOauthPostLogin) {
-    return <Navigate replace to="/onboarding" />;
+    return (
+      <Navigate
+        replace
+        search={{ redirectTo: onboardingRedirectTo }}
+        to="/onboarding"
+      />
+    );
   }
 
   if (!hydrated || isPending || (!hasOrganizations && !isOauthPostLogin)) {

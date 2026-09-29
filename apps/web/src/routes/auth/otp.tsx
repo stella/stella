@@ -34,8 +34,14 @@ function OTP() {
   });
   const devOtp = Route.useLoaderData({ select: (d) => d.devOtp });
 
+  // The organization step takes a new account through onboarding first and
+  // sends everyone else on to the destination.
   const handleVerified = async () => {
-    await navigate({ href: redirectTo, replace: true });
+    await navigate({
+      to: "/auth/organization",
+      search: { redirectTo },
+      replace: true,
+    });
   };
 
   return (
