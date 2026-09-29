@@ -4,8 +4,8 @@
  *
  * A candidate is one text column of one opinion row. It is `parsed`,
  * `unusable` (selection moves to the next column), `requires-assets` (its
- * text depends on images nothing captured), `unsupported` (no parser for its
- * structure yet) or `over-limit` (the cluster's shared budget ran out).
+ * text depends on images nothing captured) or `over-limit` (the cluster's
+ * shared budget ran out).
  */
 
 import type { AnyNode } from "domhandler";
@@ -104,7 +104,6 @@ export type FormatParse =
       /** Graphic constructs found, by element name. */
       readonly graphics: Readonly<Record<string, number>>;
     }
-  | { readonly status: "unsupported"; readonly structure: string }
   | { readonly status: "over-limit"; readonly limit: CourtListenerTextLimit };
 
 /**

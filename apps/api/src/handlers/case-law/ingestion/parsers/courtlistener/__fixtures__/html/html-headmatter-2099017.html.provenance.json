@@ -1,0 +1,15 @@
+{
+  "source": "CourtListener public bulk data",
+  "snapshotDate": "2026-06-30",
+  "snapshotManifest": "dev/MANIFEST.md",
+  "sourceDataset": "dev-clusters-full.ndjson.gz",
+  "clusterId": "2099017",
+  "opinionId": null,
+  "column": "headmatter",
+  "sourceRecord": "cluster 2099017 headmatter",
+  "fixtureSelection": "Complete field value copied byte-for-byte from the named row in the bounded development snapshot.",
+  "sha256": "c24e6e03571d8b847b4b85680ee2a2bb18b86d3b7ce75f4dfb4ff731dba8c528",
+  "recordIdentityUrl": "https://www.courtlistener.com/api/rest/v3/clusters/2099017/",
+  "sourceArtifact": null,
+  "sourceArtifactNote": "The local manifest does not identify an upstream artifact for the joined cluster headmatter field."
+}

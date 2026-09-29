@@ -46,7 +46,8 @@ const ROW_CLASS = {
 } as const satisfies Record<OpinionType, ClassDeclaration>;
 
 /**
- * The Harvard `<opinion type>` values that state a class. Any other value,
+ * The opinion-element type values that state a class: Harvard's
+ * `<opinion type>` and the anonymized HTML's `opiniontype`. Any other value,
  * the generic `opinion` included, is a wrapper that proves none.
  */
 const DOM_CLASS: Readonly<Record<string, ClassDeclaration>> = {
@@ -54,6 +55,7 @@ const DOM_CLASS: Readonly<Record<string, ClassDeclaration>> = {
   plurality: ARGUMENTATION,
   unanimous: ARGUMENTATION,
   "on-the-merits": ARGUMENTATION,
+  concur: SEPARATE_ARGUMENTATION,
   concurrence: SEPARATE_ARGUMENTATION,
   "concurring-in-part-and-dissenting-in-part": SEPARATE_ARGUMENTATION,
   dissent: SEPARATE_DISSENT,
