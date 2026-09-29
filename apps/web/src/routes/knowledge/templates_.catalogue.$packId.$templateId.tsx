@@ -8,7 +8,11 @@ import { TemplateCatalogueDetailView } from "@/features/knowledge/views/template
 import { detached } from "@/lib/detached";
 import { templateIntentSearchSchema } from "@/lib/knowledge/catalogue-intent";
 import { pageTitle } from "@/lib/page-title";
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
+import {
+  isPublicKnowledgeCrawlAllowed,
+  isPublicKnowledgeEnabled,
+} from "@/lib/public-knowledge-launch";
+import { createPublicHead } from "@/lib/public-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { CatalogueTemplateActions } from "@/routes/knowledge/-catalogue-template-actions";
 
@@ -39,16 +43,16 @@ export const Route = createFileRoute(
     }
     return { displayName: template.title };
   },
-  head: ({ loaderData }) => ({
-    meta: [
-      {
-        title:
-          loaderData === undefined
-            ? pageTitle("navigation.knowledge")
-            : `${loaderData.displayName} · ${pageTitle("navigation.knowledge")}`,
-      },
-    ],
-  }),
+  head: ({ loaderData, params }) =>
+    createPublicHead({
+      crawlAllowed: isPublicKnowledgeCrawlAllowed(),
+      path: `/knowledge/templates/catalogue/${params.packId}/${params.templateId}`,
+      title:
+        loaderData === undefined
+          ? pageTitle("navigation.knowledge")
+          : `${loaderData.displayName} · ${pageTitle("navigation.knowledge")}`,
+      type: "article",
+    }),
   component: CatalogueTemplatePage,
 });
 

@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { MouseEvent, ReactElement, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { QueryClient } from "@tanstack/react-query";
@@ -258,10 +258,18 @@ export const prefetchProtectedShell = async ({
 // subtree. Mirrors the real shell's shape (left side-rail → sidebar
 // column → main content with a header bar) using the same layout
 // constants so the skeleton lines up with the chrome that replaces
-// it. Intentionally free of hooks, context, data, and Suspense.
-export function ProtectedPendingSkeleton() {
+// it. Intentionally free of hooks, context, data, and Suspense. A page that
+// is the same for every visitor can take the content column's place.
+export function ProtectedPendingSkeleton({
+  content,
+}: {
+  content?: ReactElement | undefined;
+}) {
   return (
-    <div aria-hidden="true" className="bg-background flex h-full min-h-dvh">
+    <div
+      aria-hidden={content === undefined ? "true" : undefined}
+      className="bg-background flex h-full min-h-dvh"
+    >
       {/* Sidebar column — matches AppSidebar's 16rem width with a
           header row, a few stacked nav rows, and a footer row. */}
       <div className="bg-sidebar hidden w-64 shrink-0 flex-col gap-2 border-e p-2 md:flex">
@@ -295,13 +303,17 @@ export function ProtectedPendingSkeleton() {
             <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
           </div>
         </div>
-        <div className="flex flex-1 flex-col gap-4 p-6">
-          <Skeleton className="h-8 w-1/3" />
-          <Skeleton className="h-4 w-2/3" />
-          <Skeleton className="h-40 w-full rounded-md" />
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-24 w-full rounded-md" />
-        </div>
+        {content === undefined ? (
+          <div className="flex flex-1 flex-col gap-4 p-6">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-40 w-full rounded-md" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-24 w-full rounded-md" />
+          </div>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col">{content}</div>
+        )}
       </div>
 
       {/* Right side-rail — same width as the real rail with muted

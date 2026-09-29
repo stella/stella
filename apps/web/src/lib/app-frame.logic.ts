@@ -7,12 +7,21 @@ import { panic } from "better-result";
  * - `public`: the shell for visitors without an account.
  * - `checking`: a neutral skeleton while the session is still being read;
  *   neither frame mounts, so nothing fetches.
+ * - `neutral`: the same skeleton around a page that shows the same to every
+ *   visitor (a published catalogue entry), so it renders, on the server too,
+ *   before the visitor is known.
  * - `none`: the route renders its own shell (sign-in, public law, …) or is
  *   still pending, so the root adds nothing.
  * - `unresolved`: the frame depends on who is visiting; read the session and
  *   ask again with `audience`.
  */
-export type AppFrame = "none" | "member" | "public" | "checking" | "unresolved";
+export type AppFrame =
+  | "none"
+  | "member"
+  | "public"
+  | "checking"
+  | "neutral"
+  | "unresolved";
 
 /** Who is visiting, as far as the frame is concerned. A member has a
  *  session and an active organization; anyone else is anonymous. */
@@ -20,6 +29,13 @@ export type AppFrameAudience = "checking" | "anonymous" | "member";
 
 const PROTECTED_ROUTE_ID = "/_protected";
 const KNOWLEDGE_ROUTE_ID = "/knowledge";
+
+// Pages that show the same to every visitor: published catalogue entries.
+const VISITOR_INDEPENDENT_ROUTE_IDS: readonly string[] = [
+  "/knowledge/templates_/catalogue/$packId/$templateId",
+  "/knowledge/tools_/$entry",
+  "/knowledge/tools_/contribute",
+];
 
 type SelectAppFrameInput = {
   /** Ids of the matched routes, root first. */
@@ -57,7 +73,9 @@ export const selectAppFrame = ({
     case undefined:
       return "unresolved";
     case "checking":
-      return "checking";
+      return routeIds.some((id) => VISITOR_INDEPENDENT_ROUTE_IDS.includes(id))
+        ? "neutral"
+        : "checking";
     case "anonymous":
       return "public";
     case "member":
@@ -86,6 +104,7 @@ export const frameVisitor = (
     case "public":
       return "anonymous";
     case "checking":
+    case "neutral":
     case "unresolved":
     case "none":
       return null;

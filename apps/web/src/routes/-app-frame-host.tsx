@@ -181,6 +181,10 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
       // Until the visitor is known, neither frame (nor anything it would
       // fetch) mounts.
       return <ProtectedPendingSkeleton />;
+    case "neutral":
+      // A page the same for every visitor shows inside the skeleton, so it
+      // is there in the server render before either frame mounts.
+      return <ProtectedPendingSkeleton content={children} />;
     case "none":
       return children;
     default: {

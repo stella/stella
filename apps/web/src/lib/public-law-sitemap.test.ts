@@ -524,6 +524,24 @@ describe("public law sitemap", () => {
     expect(robots).toContain("Disallow: /");
   });
 
+  test("robots opens the published template catalogue only behind the Knowledge crawl switch", () => {
+    const allowLinesFor = (publicKnowledgeCrawlAllowed: boolean) =>
+      createRobotsTxt({
+        publicKnowledgeCrawlAllowed,
+        publicLawCrawlAllowed: false,
+        publicToolsCrawlAllowed: false,
+        seoIndexable: true,
+      })
+        .split("\n")
+        .filter((line) => line.startsWith("Allow:"));
+
+    expect(allowLinesFor(true)).toEqual([
+      "Allow: /knowledge/templates/catalogue/",
+      "Allow: /knowledge/templates/catalogue$",
+    ]);
+    expect(allowLinesFor(false)).toEqual([]);
+  });
+
   test("robots always default-denies for every flag combination", () => {
     for (const publicLawCrawlAllowed of [false, true]) {
       for (const publicToolsCrawlAllowed of [false, true]) {

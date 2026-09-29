@@ -167,3 +167,51 @@ describe("visitorChanged", () => {
     ).toBe(false);
   });
 });
+
+describe("pages that show the same to every visitor", () => {
+  const CATALOGUE_ENTRIES = [
+    ["__root__", "/knowledge", "/knowledge/tools_/$entry"],
+    ["__root__", "/knowledge", "/knowledge/tools_/contribute"],
+    [
+      "__root__",
+      "/knowledge",
+      "/knowledge/templates_/catalogue/$packId/$templateId",
+    ],
+  ];
+
+  test("render inside a neutral frame while the visitor is unknown", () => {
+    for (const routeIds of CATALOGUE_ENTRIES) {
+      expect(
+        selectAppFrame({
+          routeIds,
+          hasRouteUser: false,
+          publicKnowledge: true,
+          audience: "checking",
+        }),
+      ).toBe("neutral");
+      expect(
+        selectAppFrame({
+          routeIds,
+          hasRouteUser: false,
+          publicKnowledge: true,
+          audience: "anonymous",
+        }),
+      ).toBe("public");
+    }
+  });
+
+  test("a section page still shows only the skeleton", () => {
+    expect(
+      selectAppFrame({
+        routeIds: KNOWLEDGE,
+        hasRouteUser: false,
+        publicKnowledge: true,
+        audience: "checking",
+      }),
+    ).toBe("checking");
+  });
+
+  test("the neutral frame names no visitor", () => {
+    expect(frameVisitor("neutral", MEMBER_A)).toBeNull();
+  });
+});
