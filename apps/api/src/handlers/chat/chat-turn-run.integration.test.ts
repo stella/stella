@@ -152,11 +152,7 @@ describe("a turn's run", () => {
     } finally {
       await harness.close();
     }
-    expect(
-      processChatTurnOwnership.run(
-        executionId ?? panic("Expected the crashed request's turn"),
-      ),
-    ).toBeUndefined();
+    expect(processChatTurnOwnership.run(executionId)).toBeUndefined();
     expect(
       await testDb
         .select({ status: chatTurns.status })

@@ -166,12 +166,12 @@ export class ChatTurnOwnership {
    * process giving up its turns waits for it before its database goes away.
    * Returns `work` for the caller to detach under its own label.
    */
-  followUp<T>(work: Promise<T>): Promise<T> {
+  async followUp<T>(work: Promise<T>): Promise<T> {
     const tracked: Promise<unknown> = Promise.allSettled([work]).finally(() => {
       this.followUps.delete(tracked);
     });
     this.followUps.add(tracked);
-    return work;
+    return await work;
   }
 
   /**
@@ -329,8 +329,8 @@ export class ChatTurnRun {
    * owner waits for it before the process gives up its database. Returns
    * `work` for the caller to detach under its own label.
    */
-  followUp<T>(work: Promise<T>): Promise<T> {
-    return this.ownership.followUp(work);
+  async followUp<T>(work: Promise<T>): Promise<T> {
+    return await this.ownership.followUp(work);
   }
 
   /**
