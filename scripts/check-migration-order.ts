@@ -346,6 +346,27 @@ const readBaseInventory = ({
   );
 };
 
+export const readMigrationBaseSnapshot = ({
+  baseRef,
+  cwd,
+}: {
+  baseRef: string;
+  cwd: string;
+}) => {
+  const mergeBase = new TextDecoder()
+    .decode(runGit({ arguments_: ["merge-base", baseRef, "HEAD"], cwd }))
+    .trim();
+  const changes = readMigrationChanges({ baseRef: mergeBase, cwd });
+  const baseInventory = readBaseInventory({ baseRef: mergeBase, cwd });
+  const baseHashes: Record<string, string> = {};
+  for (const file of changes.modifiedFiles.filter((candidate) =>
+    MIGRATION_FILE.test(candidate),
+  )) {
+    baseHashes[file] = hashBytes(readGitFile({ ref: mergeBase, file, cwd }));
+  }
+  return { mergeBase, changes, baseInventory, baseHashes };
+};
+
 export const formatAliasSummary = (
   entries: readonly {
     fileName: string;
@@ -381,7 +402,10 @@ if (import.meta.main) {
     panic("Usage: bun scripts/check-migration-order.ts <base-ref>");
   }
 
-  const changes = readMigrationChanges({ baseRef, cwd: REPO_ROOT });
+  const { changes, baseInventory, baseHashes } = readMigrationBaseSnapshot({
+    baseRef,
+    cwd: REPO_ROOT,
+  });
   const violation = findMigrationIdentityViolation(changes);
   if (violation?.type === "invalid-name") {
     panic(
@@ -397,23 +421,16 @@ if (import.meta.main) {
     );
   }
 
-  const baseInventory = readBaseInventory({ baseRef, cwd: REPO_ROOT });
-  const modifiedSqlFiles = changes.modifiedFiles.filter((file) =>
-    MIGRATION_FILE.test(file),
-  );
   const inventorySqlFiles = aliasInventory.map(
     ({ fileName }) => `apps/api/drizzle/${fileName}/migration.sql`,
   );
   const headHashes: Record<string, string> = {};
-  for (const file of new Set([...modifiedSqlFiles, ...inventorySqlFiles])) {
+  for (const file of new Set([
+    ...Object.keys(baseHashes),
+    ...inventorySqlFiles,
+  ])) {
     headHashes[file] = hashBytes(
       readGitFile({ ref: "HEAD", file, cwd: REPO_ROOT }),
-    );
-  }
-  const baseHashes: Record<string, string> = {};
-  for (const file of modifiedSqlFiles) {
-    baseHashes[file] = hashBytes(
-      readGitFile({ ref: baseRef, file, cwd: REPO_ROOT }),
     );
   }
   const immutabilityViolation = findMigrationImmutabilityViolation({

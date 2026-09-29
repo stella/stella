@@ -3,6 +3,7 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -16,6 +17,7 @@ import {
   findMigrationImmutabilityViolation,
   findMigrationIdentityViolation,
   formatAliasSummary,
+  readMigrationBaseSnapshot,
   readMigrationChanges,
 } from "./check-migration-order";
 
@@ -389,6 +391,126 @@ describe("migration immutability", () => {
         removedDirectories: [],
         modifiedFiles: [FILE],
       });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("compares a branch behind main against its merge base", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "migration-merge-base-"));
+    const inventoryPath = "apps/api/src/lib/db/migration-alias-inventory.json";
+    const originalSql = "SELECT 1;\n";
+    const editedSql = "SELECT 2;\n";
+    const hash = (text: string) =>
+      new Bun.CryptoHasher("sha256").update(text).digest("hex");
+    const runGit = (...arguments_: string[]) => {
+      const result = Bun.spawnSync(["git", ...arguments_], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    try {
+      runGit("init", "-b", "main");
+      runGit("config", "user.name", "Test User");
+      runGit("config", "user.email", "test@example.com");
+      runGit("config", "commit.gpgsign", "false");
+      mkdirSync(path.join(cwd, migrationDirectory(FILE_NAME)), {
+        recursive: true,
+      });
+      mkdirSync(path.join(cwd, path.dirname(inventoryPath)), {
+        recursive: true,
+      });
+      writeFileSync(path.join(cwd, FILE), originalSql);
+      writeFileSync(path.join(cwd, inventoryPath), "[]\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Initial migration");
+      const branchPoint = runGit("rev-parse", "HEAD");
+
+      runGit("switch", "-c", "feature");
+      writeFileSync(path.join(cwd, "note.txt"), "Unrelated branch change\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Change note");
+
+      runGit("switch", "main");
+      const mainAlias = {
+        ...alias,
+        fileName: "20260801130000_unrelated",
+      };
+      writeFileSync(
+        path.join(cwd, inventoryPath),
+        `${JSON.stringify([mainAlias])}\n`,
+      );
+      runGit("add", ".");
+      runGit("commit", "-m", "Append unrelated alias");
+      expect(runGit("show", `main:${inventoryPath}`)).toContain(
+        mainAlias.fileName,
+      );
+      runGit("switch", "feature");
+
+      const unchanged = readMigrationBaseSnapshot({ baseRef: "main", cwd });
+      expect(unchanged.mergeBase).toBe(branchPoint);
+      expect(unchanged.changes.modifiedFiles).toEqual([]);
+      expect(unchanged.baseInventory).toEqual([]);
+      expect(
+        findMigrationImmutabilityViolation({
+          modifiedFiles: unchanged.changes.modifiedFiles,
+          baseInventory: unchanged.baseInventory,
+          headInventory: [],
+          baseHashes: unchanged.baseHashes,
+          headHashes: {},
+        }),
+      ).toBeNull();
+
+      writeFileSync(path.join(cwd, FILE), editedSql);
+      runGit("add", ".");
+      runGit("commit", "-m", "Edit migration");
+      const edited = readMigrationBaseSnapshot({ baseRef: "main", cwd });
+      expect(edited.mergeBase).toBe(branchPoint);
+      expect(edited.changes.modifiedFiles).toEqual([FILE]);
+      expect(edited.baseInventory).toEqual([]);
+      expect(edited.baseHashes).toEqual({ [FILE]: hash(originalSql) });
+      const headHashes = {
+        [FILE]: hash(readFileSync(path.join(cwd, FILE), "utf-8")),
+      };
+      expect(
+        findMigrationImmutabilityViolation({
+          modifiedFiles: edited.changes.modifiedFiles,
+          baseInventory: edited.baseInventory,
+          headInventory: [],
+          baseHashes: edited.baseHashes,
+          headHashes,
+        }),
+      ).toEqual({
+        type: "edited-base-migration",
+        file: FILE,
+        baseHash: hash(originalSql),
+        headHash: hash(editedSql),
+      });
+
+      const branchAlias = {
+        ...alias,
+        priorHash: hash(originalSql),
+        newHash: hash(editedSql),
+      };
+      writeFileSync(
+        path.join(cwd, inventoryPath),
+        `${JSON.stringify([branchAlias])}\n`,
+      );
+      runGit("add", ".");
+      runGit("commit", "-m", "Record migration alias");
+      const aliased = readMigrationBaseSnapshot({ baseRef: "main", cwd });
+      expect(
+        findMigrationImmutabilityViolation({
+          modifiedFiles: aliased.changes.modifiedFiles,
+          baseInventory: aliased.baseInventory,
+          headInventory: [branchAlias],
+          baseHashes: aliased.baseHashes,
+          headHashes,
+        }),
+      ).toBeNull();
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
