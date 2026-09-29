@@ -70,6 +70,16 @@ test.each([
     "statement_timeout",
   ],
   [
+    "concatenated SQL",
+    "await connection.execute('SET ' + 'statement_timeout = 0');",
+    "statement_timeout",
+  ],
+  [
+    "dynamic concatenated setting",
+    "await connection.execute('SET ' + setting + ' = 0');",
+    "dynamic timeout setting",
+  ],
+  [
     "interpolated SQL",
     `await connection.execute(\`SET statement_timeout = '${budgetExpression}'\`);`,
     "statement_timeout",

@@ -207,6 +207,15 @@ const createResolver = (load: SourceLoader): Resolver => {
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       return node.text;
     }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.PlusToken
+    ) {
+      return (
+        (evaluate(node.left, file, seen) ?? UNKNOWN) +
+        (evaluate(node.right, file, seen) ?? UNKNOWN)
+      );
+    }
     if (ts.isIdentifier(node)) {
       const key = `${file}:${node.text}`;
       if (seen.has(key)) {
@@ -466,6 +475,16 @@ export const findApiTimeoutMutations = (
       node.arguments.length === 1
     ) {
       const value = resolver.resolve(node.arguments[0], file);
+      if (value !== undefined) {
+        record(node, value);
+      }
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.PlusToken &&
+      (!ts.isBinaryExpression(node.parent) ||
+        node.parent.operatorToken.kind !== ts.SyntaxKind.PlusToken)
+    ) {
+      const value = resolver.resolve(node, file);
       if (value !== undefined) {
         record(node, value);
       }

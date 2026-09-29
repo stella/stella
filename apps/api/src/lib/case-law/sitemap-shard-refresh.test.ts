@@ -341,19 +341,20 @@ const recordingRefreshDb = (
   onExecute: (statement: string) => void = () => {},
 ) => {
   const dialect = new PgDialect();
-  const transactions: string[][] = [];
+  const transactions: { sql: string; params: unknown[] }[][] = [];
   const recording = {
     transaction: async (work: (tx: unknown) => Promise<unknown>) =>
       await db.transaction(async (tx) => {
-        const sent: string[] = [];
+        const sent: { sql: string; params: unknown[] }[] = [];
         transactions.push(sent);
         return await work(
           new Proxy(tx, {
             get: (target, property, receiver) =>
               property === "execute"
                 ? async (query: SQL) => {
-                    const statement = dialect.sqlToQuery(query).sql.trim();
-                    sent.push(statement);
+                    const rendered = dialect.sqlToQuery(query);
+                    const statement = rendered.sql.trim();
+                    sent.push({ sql: statement, params: rendered.params });
                     onExecute(statement);
                     return await target.execute(query);
                   }
@@ -381,16 +382,23 @@ test(
     // Every page in one read-only snapshot, then the swap.
     expect(outcome.pages).toBeGreaterThan(2);
     expect(recorded.transactions).toHaveLength(2);
-    expect(recorded.transactions[0]?.[0]).toBe(
+    expect(recorded.transactions[0]?.[0]?.sql).toBe(
       "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
     );
     for (const sent of recorded.transactions) {
-      const budgetAt = sent.indexOf("SET LOCAL statement_timeout = '10000ms'");
+      const budgetAt = sent.findIndex(({ sql: statement }) =>
+        statement.includes("set_config('statement_timeout'"),
+      );
       expect(budgetAt).toBeGreaterThanOrEqual(0);
+      expect(sent[budgetAt]?.params).toContain("10000ms");
       expect(
         sent
           .slice(0, budgetAt)
-          .every((statement) => statement.startsWith("SET ")),
+          .every(
+            ({ sql: statement }) =>
+              statement.startsWith("SET ") ||
+              statement.includes("set_config('lock_timeout'"),
+          ),
       ).toBe(true);
     }
   },
