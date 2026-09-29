@@ -4,8 +4,6 @@ import { and, eq } from "drizzle-orm";
 import { timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import {
   lockTimerOwner,
   ownedTimers,
@@ -14,7 +12,9 @@ import {
   timerItem,
   timerNotFound,
   timerParams,
-} from "@/api/lib/time-timers";
+} from "@/api/lib/billing/time-timers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
 const updateTimer = createSafeRootHandler(
   {

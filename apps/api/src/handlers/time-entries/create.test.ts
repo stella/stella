@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { toSafeId } from "@/api/lib/branded-types";
-import { createTimeEntryHandler } from "@/api/lib/time-entry-insert";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 describe("createTimeEntryHandler", () => {

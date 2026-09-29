@@ -14,19 +14,13 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { readTimePolicy } from "@/api/lib/billing-time";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type {
-  UnbackedProjectionKeys,
-  UnprojectedColumns,
-} from "@/api/lib/projection-totality";
-import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
+import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   insertPreparedTimeEntry,
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
-} from "@/api/lib/time-entry-insert";
-import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
-import type { TimerOwner } from "@/api/lib/time-timers";
+} from "@/api/lib/billing/time-entry-insert";
+import type { TimerOwner } from "@/api/lib/billing/time-timers";
 import {
   deleteLegacyTimerDraft,
   lockTimerOwner,
@@ -35,7 +29,13 @@ import {
   timerNotFound,
   timerParams,
   timerSeconds,
-} from "@/api/lib/time-timers";
+} from "@/api/lib/billing/time-timers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
+import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const CONFIRMED_ENTRY_COLUMNS = {

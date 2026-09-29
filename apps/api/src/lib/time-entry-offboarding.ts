@@ -14,8 +14,11 @@ import {
   getTimePeriodLockError,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import {
+  lockTimerOwner,
+  pauseRunningTimers,
+} from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockTimerOwner, pauseRunningTimers } from "@/api/lib/time-timers";
 
 /**
  * Close the removed member's single active timer while the caller's

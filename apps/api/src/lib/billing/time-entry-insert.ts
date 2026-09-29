@@ -15,12 +15,12 @@ import {
 } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
 import { resolveRate } from "@/api/lib/billing/rates";
+import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
-import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 type TimeEntryInsertInput = {

@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { ownedTimers, timerItem } from "@/api/lib/billing/time-timers";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -14,7 +15,6 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
-import { ownedTimers, timerItem } from "@/api/lib/time-timers";
 
 const listMyTimeTimers = createSafeRootHandler(
   {

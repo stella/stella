@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   TIME_ENTRY_SOURCE,
@@ -254,3 +255,35 @@ export const deleteLegacyTimerDraft = async ({
     changes: { migratedTimerId: { old: timerId, new: null } },
   });
 };
+
+type TimerStateTransitionContext = {
+  safeDb: SafeDb;
+  session: { activeOrganizationId: SafeId<"organization"> };
+  user: { id: SafeId<"user"> };
+  params: { id: SafeId<"timeTimer"> };
+  recordAuditEvent: AuditRecorder;
+};
+export const timerStateTransition = (state: "running" | "paused") =>
+  async function* ({
+    safeDb,
+    session,
+    user,
+    params,
+    recordAuditEvent,
+  }: TimerStateTransitionContext) {
+    const outcome = yield* Result.await(
+      safeDb(async (tx) =>
+        changeTimerState({
+          tx,
+          owner: {
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          },
+          id: params.id,
+          state,
+          recordAuditEvent,
+        }),
+      ),
+    );
+    return Result.ok(yield* outcome);
+  };

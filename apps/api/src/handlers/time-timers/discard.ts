@@ -4,7 +4,6 @@ import { and, eq } from "drizzle-orm";
 import { timeEntries, timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   deleteLegacyTimerDraft,
   lockTimerOwner,
@@ -12,7 +11,8 @@ import {
   readOwnedTimer,
   timerNotFound,
   timerParams,
-} from "@/api/lib/time-timers";
+} from "@/api/lib/billing/time-timers";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const discardTimer = createSafeRootHandler(
   {

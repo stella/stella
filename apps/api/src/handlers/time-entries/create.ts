@@ -2,8 +2,8 @@ import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
+import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { createTimeEntryHandler } from "@/api/lib/time-entry-insert";
 
 const createTimeEntryBodySchema = t.Object({
   workItemId: t.Optional(

@@ -18,6 +18,10 @@ import {
 } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { resolveRate } from "@/api/lib/billing/rates";
+import {
+  canApproveTimeEntries,
+  canManageTimeEntry,
+} from "@/api/lib/billing/time-entry-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -25,10 +29,6 @@ import { cents } from "@/api/lib/money";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import {
-  canApproveTimeEntries,
-  canManageTimeEntry,
-} from "@/api/lib/time-entry-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const updateTimeEntryBodySchema = t.Object({

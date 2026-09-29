@@ -13,6 +13,7 @@ import {
   timekeeperIdsOf,
 } from "@/api/handlers/time-entries/timekeeper-names";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -37,7 +38,6 @@ import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { canApproveTimeEntries } from "@/api/lib/time-entry-authorization";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 type TimeEntryRow = typeof timeEntries.$inferSelect;

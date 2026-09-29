@@ -18,6 +18,7 @@ import {
   NARRATIVE_LANGUAGE_PATTERN,
 } from "@/api/lib/billing/narrative-language";
 import { resolveRate } from "@/api/lib/billing/rates";
+import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETE_TIME_ENTRY_PROJECTION,
@@ -45,7 +46,6 @@ import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { createTimeEntryHandler } from "@/api/lib/time-entry-insert";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
