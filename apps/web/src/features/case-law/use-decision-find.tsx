@@ -15,9 +15,12 @@ import type { Decision } from "@/features/case-law/components/decision-cells";
 import type { DecisionTableLayout } from "@/features/case-law/decision-column-preferences.logic";
 import {
   DECISION_COLUMN_IDS,
-  DECISION_COLUMN_LABEL_KEYS,
+  decisionColumnLabelKey,
 } from "@/features/case-law/decision-columns.logic";
-import type { DecisionColumnId } from "@/features/case-law/decision-columns.logic";
+import type {
+  DecisionColumnId,
+  DecisionReferenceColumnKind,
+} from "@/features/case-law/decision-columns.logic";
 import {
   decisionFindRowText,
   isFindableDecisionColumn,
@@ -40,6 +43,8 @@ type UseDecisionFindOptions = {
   /** The pane a Cmd/Ctrl+F inside belongs to. */
   paneRef: RefObject<HTMLElement | null>;
   questions: QuestionColumnSurface;
+  /** What the case-number column holds, so the find names it as the header does. */
+  referenceKind: DecisionReferenceColumnKind;
   /** What the find belongs to: a jurisdiction, or a matter's mixed list. */
   surfaceKey: string;
 };
@@ -51,6 +56,7 @@ export const useDecisionFind = ({
   layout,
   paneRef,
   questions,
+  referenceKind,
   surfaceKey,
 }: UseDecisionFindOptions): PublicLawFind<Decision> => {
   const t = useTranslations();
@@ -71,7 +77,7 @@ export const useDecisionFind = ({
     columns.push({
       icon: <DecisionColumnIcon column={column} />,
       id: column,
-      label: t(DECISION_COLUMN_LABEL_KEYS[column]),
+      label: t(decisionColumnLabelKey(column, referenceKind)),
       ...(isFindableDecisionColumn(column)
         ? { searchable: true }
         : { reason: notSearchable, searchable: false }),
