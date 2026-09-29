@@ -68,11 +68,11 @@ const KEYSET_RANGE = String.raw`\s{0,64}(?:<=|>=|<|>)\s{0,64}`;
 const KEYSET_NULL = String.raw`\s{1,64}IS\s{1,64}NULL`;
 const optionalKeysetPatterns = (parameter: string): RegExp[] => [
   new RegExp(
-    String.raw`${parameter}${KEYSET_CAST}${KEYSET_NULL}\s{1,64}OR\s{1,64}\(?\s{0,64}${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}`,
+    String.raw`${parameter}${KEYSET_CAST}${KEYSET_NULL}\s{0,64}\)?\s{1,64}OR\s{1,64}\(?\s{0,64}${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}`,
     "giu",
   ),
   new RegExp(
-    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}\)?\s{1,64}OR\s{1,64}${parameter}${KEYSET_CAST}${KEYSET_NULL}`,
+    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${parameter}${KEYSET_CAST}\s{0,64}\)?\s{1,64}OR\s{1,64}\(?\s{0,64}${parameter}${KEYSET_CAST}${KEYSET_NULL}`,
     "giu",
   ),
 ];
