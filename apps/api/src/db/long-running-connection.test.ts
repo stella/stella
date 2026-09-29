@@ -94,7 +94,13 @@ test("abort between statements refuses the next statement", async () => {
     },
   });
 
-  await expect(run).rejects.toThrow("session aborted between statements");
+  const rejection: unknown = await run.then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection instanceof Error ? rejection.message : rejection).toBe(
+    "session aborted between statements",
+  );
   expect(statements).toEqual(["SELECT pg_backend_pid() AS pid", "SELECT 1"]);
 });
 

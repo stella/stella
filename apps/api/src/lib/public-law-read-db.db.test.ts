@@ -84,12 +84,20 @@ test("a failed nested read restores its budget when the transaction remains usab
       "read-committed",
       EXTERNAL_PUBLIC_LAW_READ_GUARDS,
     );
-    await expect(
-      withSharedStatementTimeout(tx, 3000, async () => {
+    const rejection: unknown = await withSharedStatementTimeout(
+      tx,
+      3000,
+      async () => {
         expect(await readSetting(tx, "statement_timeout")).toBe("3s");
         throw new Error("nested read failed");
-      }),
-    ).rejects.toThrow("nested read failed");
+      },
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection instanceof Error ? rejection.message : rejection).toBe(
+      "nested read failed",
+    );
     expect(await readSetting(tx, "statement_timeout")).toBe("30s");
   });
 });

@@ -49,8 +49,8 @@ const SEARCH_BACKFILL_PARKED_TTL_MS = 24 * 60 * 60_000;
 const SEARCH_BACKFILL_DEDUPE_WINDOW_MS = 30_000;
 const ERROR_CLASS_MAX_LENGTH = 80;
 
-// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both operands remain PostgreSQL timestamptz columns; neither is round-tripped through a JS Date
-const matchingSearchBackfillSourceVersion = sql`${caseLawSearchBackfillFailures.sourceUpdatedAt} = ${caseLawDecisions.updatedAt}`;
+// Column to column in Postgres, at full timestamptz precision.
+const matchingSearchBackfillSourceVersion = sql`${caseLawSearchBackfillFailures.sourceUpdatedAt}::timestamptz = ${caseLawDecisions.updatedAt}::timestamptz`;
 
 // A marker is only authoritative for the source version that failed. The
 // decision PK probe excludes cooling and parked work without walking the
