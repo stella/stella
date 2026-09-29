@@ -287,6 +287,7 @@ export const listDecisionsHandler = async (
       return {
         id: decision.id,
         caseNumber: decision.caseNumber,
+        caseNumberType: decision.caseNumberType,
         slug: decision.slug,
         ecli: decision.ecli,
         court: decision.court,
