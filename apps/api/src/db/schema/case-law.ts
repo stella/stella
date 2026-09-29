@@ -2777,10 +2777,13 @@ export const caseLawSearchBackfillFailures = p.pgTable(
         foreignColumns: [caseLawDecisions.id],
       })
       .onDelete("cascade"),
-    p.index("case_law_search_backfill_failures_status_idx").on(t.status),
+    p
+      .index("case_law_search_backfill_failures_status_idx")
+      .on(t.status)
+      .where(eq(t.status, CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED)),
     p.check(
-      "case_law_search_backfill_failures_attempt_positive",
-      sql`${t.attemptCount} >= 1`,
+      "case_law_search_backfill_failures_attempt_nonnegative",
+      sql`${t.attemptCount} >= 0`,
     ),
     p.check(
       "case_law_search_backfill_failures_status_values",
@@ -2795,7 +2798,7 @@ export const caseLawSearchBackfillFailures = p.pgTable(
       "case_law_search_backfill_failures_schedule_shape",
       sql`(${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN} AND ${t.nextEligibleAt} IS NOT NULL) OR (${t.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED} AND ${t.nextEligibleAt} IS NULL)`,
     ),
-    ...globalCaseLawPolicies(),
+    ...caseLawIngestionOnlyPolicies(),
   ],
 );
 

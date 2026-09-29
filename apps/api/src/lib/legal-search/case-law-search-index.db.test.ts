@@ -17,6 +17,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
@@ -31,8 +32,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   backfillSearchIndex,
   indexDecision,
+  removeDecisionFromIndex,
 } from "@/api/lib/legal-search/case-law-search-index";
+import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
 import { logger } from "@/api/lib/observability/logger";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -58,6 +62,21 @@ const scopedDb: Parameters<typeof indexDecision>[1] = async (callback) =>
 const withTestProjectionDb: NonNullable<
   Parameters<typeof backfillSearchIndex>[3]
 > = async (work) => await work(scopedDb);
+
+const seedRetryDecision = async (language: string) => {
+  const id = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    caseNumber: `Retry ${id}`,
+    country: "CZE",
+    court: "Nejvyšší soud",
+    createdAt: new Date("1980-01-01T00:00:00Z"),
+    fulltext: "Backfill retry fixture.",
+    id,
+    language,
+    sourceId,
+  });
+  return id;
+};
 
 const sourceId = createSafeId<"caseLawSource">();
 const shortId = createSafeId<"caseLawDecision">();
@@ -361,6 +380,12 @@ test(
             : CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN,
         );
         expect(failure?.nextEligibleAt === null).toBe(attempt === 3);
+        if (attempt < 3) {
+          expect(
+            failure?.nextEligibleAt?.getTime() -
+              failure?.lastFailedAt.getTime(),
+          ).toBe(attempt === 1 ? 60_000 : 5 * 60_000);
+        }
         expect(result.parked).toEqual({
           type: "parked",
           count: attempt === 3 ? 1 : 0,
@@ -368,7 +393,10 @@ test(
         if (attempt < 3) {
           await db
             .update(caseLawSearchBackfillFailures)
-            .set({ nextEligibleAt: new Date("2000-01-01T00:00:00Z") })
+            .set({
+              nextEligibleAt: new Date("2000-01-01T00:00:00Z"),
+              lastFailedAt: new Date(Date.now() - 60_000),
+            })
             .where(eq(caseLawSearchBackfillFailures.decisionId, failingId));
         }
       }
@@ -520,3 +548,348 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("infrastructure timeouts cool down without consuming the row's retry budget", async () => {
+  const decisionId = await seedRetryDecision("cs");
+  let failures = 0;
+  const unavailable: NonNullable<
+    Parameters<typeof backfillSearchIndex>[3]
+  > = async () => {
+    failures += 1;
+    if (failures % 2 === 0) {
+      throw new CorpusSchemaLaneUnavailableError({
+        message: "schema lane is busy",
+        waitedMs: 60_000,
+      });
+    }
+    throw Object.assign(new Error("statement timeout"), {
+      code: PG_ERROR.QUERY_CANCELED,
+    });
+  };
+  try {
+    for (let round = 0; round < 4; round += 1) {
+      const result = await backfillSearchIndex(
+        scopedDb,
+        2,
+        resolveConfig,
+        unavailable,
+      );
+      const marker = (
+        await db
+          .select()
+          .from(caseLawSearchBackfillFailures)
+          .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId))
+      ).at(0);
+      expect(result).toMatchObject({
+        found: 1,
+        indexed: 0,
+        parked: { type: "parked", count: 0 },
+      });
+      expect(marker?.attemptCount).toBe(0);
+      expect(marker?.status).toBe(
+        CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN,
+      );
+      expect(
+        marker?.nextEligibleAt?.getTime() - marker?.lastFailedAt.getTime(),
+      ).toBe(60_000);
+      await db
+        .update(caseLawSearchBackfillFailures)
+        .set({ nextEligibleAt: new Date("2000-01-01T00:00:00Z") })
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId));
+    }
+  } finally {
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+  }
+});
+
+test("overlapping failures count one attempt in the same window", async () => {
+  const decisionId = await seedRetryDecision("cs");
+  const barrier = Promise.withResolvers<boolean>();
+  let arrivals = 0;
+  const failTogether: NonNullable<
+    Parameters<typeof backfillSearchIndex>[3]
+  > = async () => {
+    arrivals += 1;
+    if (arrivals === 2) {
+      barrier.resolve(true);
+    }
+    await barrier.promise;
+    throw new Error("row-specific failure");
+  };
+  try {
+    const results = await Promise.all([
+      backfillSearchIndex(scopedDb, 2, resolveConfig, failTogether),
+      backfillSearchIndex(scopedDb, 2, resolveConfig, failTogether),
+    ]);
+    expect(arrivals).toBe(2);
+    expect(results.map(({ found }) => found)).toEqual([1, 1]);
+    const marker = (
+      await db
+        .select()
+        .from(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId))
+    ).at(0);
+    expect(marker?.attemptCount).toBe(1);
+  } finally {
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+  }
+});
+
+test("a parked row becomes eligible after its expiry and restarts at one attempt", async () => {
+  const decisionId = await seedRetryDecision("cs");
+  const fail: NonNullable<
+    Parameters<typeof backfillSearchIndex>[3]
+  > = async () => {
+    throw new Error("row-specific failure");
+  };
+  try {
+    await backfillSearchIndex(scopedDb, 2, resolveConfig, fail);
+    await db
+      .update(caseLawSearchBackfillFailures)
+      .set({
+        attemptCount: 3,
+        status: CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED,
+        nextEligibleAt: null,
+        lastFailedAt: new Date("2000-01-01T00:00:00Z"),
+      })
+      .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId));
+    expect(
+      (await backfillSearchIndex(scopedDb, 2, resolveConfig, fail)).found,
+    ).toBe(1);
+    const marker = (
+      await db
+        .select()
+        .from(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId))
+    ).at(0);
+    expect(marker?.attemptCount).toBe(1);
+    expect(marker?.status).toBe(
+      CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN,
+    );
+  } finally {
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+  }
+});
+
+test("a failed stale candidate cools down and a changed source cannot leave a marker", async () => {
+  const decisionId = await seedRetryDecision("cs");
+  try {
+    expect(
+      Result.isOk(await indexDecision(decisionId, scopedDb, resolveConfig)),
+    ).toBe(true);
+    await db
+      .update(caseLawDecisions)
+      .set({ updatedAt: new Date("2030-01-01T00:00:00Z") })
+      .where(eq(caseLawDecisions.id, decisionId));
+    const fail: NonNullable<
+      Parameters<typeof backfillSearchIndex>[3]
+    > = async () => {
+      throw new Error("stale row failure");
+    };
+    expect(
+      (await backfillSearchIndex(scopedDb, 2, resolveConfig, fail)).found,
+    ).toBe(1);
+    expect(
+      (await backfillSearchIndex(scopedDb, 2, resolveConfig, fail)).found,
+    ).toBe(0);
+
+    await db
+      .delete(caseLawSearchBackfillFailures)
+      .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId));
+    const changeBeforeFailure: NonNullable<
+      Parameters<typeof backfillSearchIndex>[3]
+    > = async () => {
+      await db
+        .update(caseLawDecisions)
+        .set({ updatedAt: new Date("2031-01-01T00:00:00Z") })
+        .where(eq(caseLawDecisions.id, decisionId));
+      throw new Error("superseded row failure");
+    };
+    expect(
+      (
+        await backfillSearchIndex(
+          scopedDb,
+          2,
+          resolveConfig,
+          changeBeforeFailure,
+        )
+      ).found,
+    ).toBe(1);
+    expect(
+      await db
+        .select()
+        .from(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId)),
+    ).toEqual([]);
+  } finally {
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+  }
+});
+
+test("a success before failure recording leaves no orphan retry marker", async () => {
+  const decisionId = await seedRetryDecision("cs");
+  const succeedThenFail: NonNullable<
+    Parameters<typeof backfillSearchIndex>[3]
+  > = async () => {
+    expect(
+      Result.isOk(await indexDecision(decisionId, scopedDb, resolveConfig)),
+    ).toBe(true);
+    throw new Error("late failure from overlapping worker");
+  };
+  try {
+    expect(
+      (await backfillSearchIndex(scopedDb, 2, resolveConfig, succeedThenFail))
+        .found,
+    ).toBe(1);
+    expect(
+      await db
+        .select()
+        .from(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId)),
+    ).toEqual([]);
+  } finally {
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+  }
+});
+
+test("removal clears markers and unpublished decisions do not inflate parked count", async () => {
+  const decisionId = await seedRetryDecision("cs");
+  const fail: NonNullable<
+    Parameters<typeof backfillSearchIndex>[3]
+  > = async () => {
+    throw new Error("row-specific failure");
+  };
+  try {
+    await backfillSearchIndex(scopedDb, 2, resolveConfig, fail);
+    await removeDecisionFromIndex(decisionId, scopedDb);
+    expect(
+      await db
+        .select()
+        .from(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId)),
+    ).toEqual([]);
+
+    await backfillSearchIndex(scopedDb, 2, resolveConfig, fail);
+    await db
+      .update(caseLawSearchBackfillFailures)
+      .set({
+        status: CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED,
+        nextEligibleAt: null,
+      })
+      .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId));
+    await db
+      .update(caseLawDecisions)
+      .set({
+        metadata: {
+          [PARTIAL_OBSERVATION_KEY]: {
+            caseNumberIsPlaceholder: false,
+            isListingOnly: true,
+          },
+        },
+      })
+      .where(eq(caseLawDecisions.id, decisionId));
+    expect((await backfillSearchIndex(scopedDb, 2)).parked).toEqual({
+      type: "parked",
+      count: 0,
+    });
+    await db
+      .update(caseLawDecisions)
+      .set({ metadata: {} })
+      .where(eq(caseLawDecisions.id, decisionId));
+    await db
+      .update(caseLawSources)
+      .set({ descriptor: { allowsRedistribution: false } })
+      .where(eq(caseLawSources.id, sourceId));
+    expect((await backfillSearchIndex(scopedDb, 2)).parked).toEqual({
+      type: "parked",
+      count: 0,
+    });
+    await db
+      .update(caseLawSources)
+      .set({ descriptor: null })
+      .where(eq(caseLawSources.id, sourceId));
+    await db
+      .update(caseLawDecisions)
+      .set({
+        metadata: {
+          [PARTIAL_OBSERVATION_KEY]: {
+            caseNumberIsPlaceholder: false,
+            isListingOnly: true,
+          },
+        },
+      })
+      .where(eq(caseLawDecisions.id, decisionId));
+    expect(
+      Result.isOk(await indexDecision(decisionId, scopedDb, resolveConfig)),
+    ).toBe(true);
+    expect(
+      await db
+        .select()
+        .from(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId)),
+    ).toEqual([]);
+  } finally {
+    await db
+      .update(caseLawSources)
+      .set({ descriptor: null })
+      .where(eq(caseLawSources.id, sourceId));
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+  }
+});
+
+test("the ingestion role can record retry state while stella cannot read it", async () => {
+  const decisionId = await seedRetryDecision("cs");
+  const ingestionDb: Parameters<typeof backfillSearchIndex>[0] = async (
+    callback,
+  ) =>
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      // SAFETY: this test transaction exposes the ingestion query surface.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- role transaction stands in for production
+      return await callback(tx as unknown as Transaction);
+    });
+  const fail: NonNullable<
+    Parameters<typeof backfillSearchIndex>[3]
+  > = async () => {
+    throw new Error("row-specific failure");
+  };
+  try {
+    expect(
+      (await backfillSearchIndex(ingestionDb, 2, resolveConfig, fail)).found,
+    ).toBe(1);
+    expect(
+      await db
+        .select()
+        .from(caseLawSearchBackfillFailures)
+        .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId)),
+    ).toHaveLength(1);
+    const denial = await db
+      .transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL ROLE stella`);
+        await tx.execute(
+          sql`SELECT decision_id FROM case_law_search_backfill_failures LIMIT 1`,
+        );
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(isPgError(denial, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
+  } finally {
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId));
+  }
+});

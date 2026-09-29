@@ -5,6 +5,7 @@ import { union } from "drizzle-orm/pg-core";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
+import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
@@ -29,7 +30,12 @@ import {
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { writeProjectionWithinTsvectorCeiling } from "@/api/lib/legal-search/tsvector-bounds";
 import { logger } from "@/api/lib/observability/logger";
-import { pgErrorFields } from "@/api/lib/pg-error";
+import {
+  isPgError,
+  isTransientPgConnectionError,
+  PG_ERROR,
+  pgErrorFields,
+} from "@/api/lib/pg-error";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   buildSearchPreviewPassages,
@@ -39,6 +45,8 @@ import {
 const SEARCH_INDEX_CONCURRENCY = 4;
 const SEARCH_BACKFILL_RETRY_DELAYS_MS = [60_000, 5 * 60_000] as const;
 const SEARCH_BACKFILL_MAX_ATTEMPTS = SEARCH_BACKFILL_RETRY_DELAYS_MS.length + 1;
+const SEARCH_BACKFILL_PARKED_TTL_MS = 24 * 60 * 60_000;
+const SEARCH_BACKFILL_DEDUPE_WINDOW_MS = 30_000;
 const ERROR_CLASS_MAX_LENGTH = 80;
 
 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- both operands remain PostgreSQL timestamptz columns; neither is round-tripped through a JS Date
@@ -52,7 +60,9 @@ const eligibleSearchBackfillDecision = sql`NOT EXISTS (
   WHERE ${caseLawSearchBackfillFailures.decisionId} = ${caseLawDecisions.id}
     AND ${matchingSearchBackfillSourceVersion}
     AND (
-      ${caseLawSearchBackfillFailures.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
+      (${caseLawSearchBackfillFailures.status} = ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
+        AND ${caseLawSearchBackfillFailures.lastFailedAt} >
+          now() - (${SEARCH_BACKFILL_PARKED_TTL_MS}::bigint * interval '1 millisecond'))
       OR ${caseLawSearchBackfillFailures.nextEligibleAt} > now()
     )
 )`;
@@ -66,32 +76,108 @@ type SearchBackfillFailure = {
 type SearchBackfillDisposition =
   | { type: "cooldown"; attempts: number }
   | { type: "parked"; attempts: number }
+  | { type: "transient"; attempts: number }
   | { type: "superseded" };
+
+const transientSearchBackfillError = (error: unknown): boolean =>
+  error instanceof CorpusSchemaLaneUnavailableError ||
+  isTransientPgConnectionError(error) ||
+  [
+    PG_ERROR.LOCK_NOT_AVAILABLE,
+    PG_ERROR.QUERY_CANCELED,
+    PG_ERROR.DEADLOCK_DETECTED,
+    PG_ERROR.SERIALIZATION_FAILURE,
+  ].some((code) => isPgError(error, code));
 
 const recordSearchBackfillFailure = async (
   scopedDb: ScopedDb,
   { decisionId, sourceUpdatedAt, error }: SearchBackfillFailure,
 ): Promise<SearchBackfillDisposition> => {
+  const transient = transientSearchBackfillError(error);
   const sameSource = sql`failure.source_updated_at = EXCLUDED.source_updated_at`;
-  const nextAttempts = sql`CASE WHEN ${sameSource}
-    THEN LEAST(failure.attempt_count + 1, ${SEARCH_BACKFILL_MAX_ATTEMPTS})
-    ELSE 1 END`;
+  const sameEpisode = sql`(${sameSource} AND failure.last_failed_at >
+    now() - (${SEARCH_BACKFILL_PARKED_TTL_MS}::bigint * interval '1 millisecond'))`;
+  const duplicate = sql`(${sameEpisode} AND failure.last_failed_at >
+    now() - (${SEARCH_BACKFILL_DEDUPE_WINDOW_MS}::bigint * interval '1 millisecond'))`;
+  const nextAttempts = transient
+    ? sql`CASE WHEN ${sameEpisode} THEN failure.attempt_count ELSE 0 END`
+    : sql`CASE
+        WHEN ${duplicate} THEN failure.attempt_count
+        WHEN ${sameEpisode}
+          THEN LEAST(failure.attempt_count + 1, ${SEARCH_BACKFILL_MAX_ATTEMPTS})
+        ELSE 1 END`;
   const nextEligibleAt = sql`CASE
+    WHEN ${duplicate} AND NOT ${transient} THEN failure.next_eligible_at
     WHEN ${nextAttempts} >= ${SEARCH_BACKFILL_MAX_ATTEMPTS} THEN NULL
+    WHEN ${transient}
+      THEN now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[0]}::bigint * interval '1 millisecond')
     WHEN ${nextAttempts} = 1
       THEN now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[0]}::bigint * interval '1 millisecond')
     ELSE now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[1]}::bigint * interval '1 millisecond')
   END`;
   const errorClass = errorTag(error).slice(0, ERROR_CLASS_MAX_LENGTH);
-  const row = await scopedDb(async (tx) =>
+  const row = await scopedDb(async (tx) => {
+    // The success writer holds FOR SHARE through the projection and marker
+    // delete. This lock serializes that commit with overlapping failures.
+    const current = (
+      await tx
+        .select({
+          id: caseLawDecisions.id,
+        })
+        .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(
+          and(
+            eq(caseLawDecisions.id, decisionId),
+            sql`${caseLawDecisions.updatedAt} = ${sourceUpdatedAt}::timestamptz`,
+            isNull(caseLawDecisions.redactedAt),
+            redistributableCaseLawSource,
+            publishedCaseLawDecision,
+          ),
+        )
+        .for("update", { of: caseLawDecisions })
+        .limit(1)
+    ).at(0);
+    if (!current) {
+      return undefined;
+    }
+    const currentProjection = await tx
+      .select({ id: caseLawSearchDocuments.decisionId })
+      .from(caseLawSearchDocuments)
+      .innerJoin(
+        caseLawSearchDocumentPreviewPassages,
+        and(
+          eq(
+            caseLawSearchDocumentPreviewPassages.decisionId,
+            caseLawSearchDocuments.decisionId,
+          ),
+          eq(
+            caseLawSearchDocumentPreviewPassages.generation,
+            caseLawSearchDocuments.previewGeneration,
+          ),
+        ),
+      )
+      .where(
+        and(
+          eq(caseLawSearchDocuments.decisionId, decisionId),
+          sql`${caseLawSearchDocuments.updatedAt} >= ${sourceUpdatedAt}::timestamptz`,
+        ),
+      )
+      .limit(1);
+    if (currentProjection.length > 0) {
+      return undefined;
+    }
     // audit: skip — durable retry state for a derived public search projection
-    executedRows(
+    return executedRows(
       await tx.execute(sql`INSERT INTO case_law_search_backfill_failures AS failure (
         decision_id, source_updated_at, attempt_count, last_error_class,
         status, next_eligible_at, last_failed_at
       )
       SELECT
-        decision.id, decision.updated_at, 1, ${errorClass},
+        decision.id, decision.updated_at, ${transient ? 0 : 1}, ${errorClass},
         ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN},
         now() + (${SEARCH_BACKFILL_RETRY_DELAYS_MS[0]}::bigint * interval '1 millisecond'),
         now()
@@ -101,17 +187,26 @@ const recordSearchBackfillFailure = async (
       ON CONFLICT (decision_id) DO UPDATE SET
         source_updated_at = EXCLUDED.source_updated_at,
         attempt_count = ${nextAttempts},
-        last_error_class = EXCLUDED.last_error_class,
+        last_error_class = CASE
+          WHEN ${duplicate} AND NOT ${transient}
+            THEN failure.last_error_class
+          ELSE EXCLUDED.last_error_class END,
         status = CASE
+          WHEN ${transient}
+            THEN ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN}
+          WHEN ${duplicate} THEN failure.status
           WHEN ${nextAttempts} >= ${SEARCH_BACKFILL_MAX_ATTEMPTS}
             THEN ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
           ELSE ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN}
         END,
         next_eligible_at = ${nextEligibleAt},
-        last_failed_at = now()
+        last_failed_at = CASE
+          WHEN ${duplicate} AND NOT ${transient}
+            THEN failure.last_failed_at
+          ELSE now() END
       RETURNING attempt_count, status`),
-    ).at(0),
-  );
+    ).at(0);
+  });
   if (row === undefined) {
     return { type: "superseded" };
   }
@@ -126,7 +221,10 @@ const recordSearchBackfillFailure = async (
   }
   switch (row.status) {
     case CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN:
-      return { type: "cooldown", attempts: row.attempt_count };
+      return {
+        type: transient ? "transient" : "cooldown",
+        attempts: row.attempt_count,
+      };
     case CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED:
       return { type: "parked", attempts: row.attempt_count };
     default:
@@ -530,10 +628,21 @@ export const backfillSearchIndex = async (
             matchingSearchBackfillSourceVersion,
           ),
         )
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
         .where(
-          eq(
-            caseLawSearchBackfillFailures.status,
-            CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED,
+          and(
+            eq(
+              caseLawSearchBackfillFailures.status,
+              CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED,
+            ),
+            sql`${caseLawSearchBackfillFailures.lastFailedAt} >
+              now() - (${SEARCH_BACKFILL_PARKED_TTL_MS}::bigint * interval '1 millisecond')`,
+            isNull(caseLawDecisions.redactedAt),
+            redistributableCaseLawSource,
+            publishedCaseLawDecision,
           ),
         )
     ).at(0);
