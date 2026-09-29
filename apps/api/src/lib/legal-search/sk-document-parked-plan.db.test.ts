@@ -246,7 +246,7 @@ test(
   async () => {
     expect(await countParkedDocuments(scopedDb, sourceId)).toBe(PARKED_ROWS);
     const before = await asRoot(async (tx) => await idsQuery(tx));
-    expect(before.map(({ id }) => id)).toEqual(
+    expect(before.map(({ id }): string => id)).toEqual(
       parkedIds.slice(0, REQUEUE_BATCH),
     );
 
@@ -263,7 +263,7 @@ test(
 
     // A requeued row leaves the index, so the next batch starts after it.
     const after = await asRoot(async (tx) => await idsQuery(tx));
-    expect(after.map(({ id }) => id)).toEqual(
+    expect(after.map(({ id }): string => id)).toEqual(
       parkedIds.slice(REQUEUE_BATCH, REQUEUE_BATCH * 2),
     );
   },
