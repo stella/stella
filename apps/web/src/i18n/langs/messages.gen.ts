@@ -1812,6 +1812,7 @@ type Messages = {
       "title": "Custom fields";
       "value": "Field value";
     };
+    "datePrecision": "Date precision";
     "deleteContact": "Delete client";
     "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.";
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.";
@@ -1848,15 +1849,19 @@ type Messages = {
       "billingAddressPostalCode": "Postal code";
       "billingAddressState": "State";
       "color": "Color";
+      "day": "Day of birth";
       "defaultHourlyRate": "Default hourly rate";
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
+      "month": "Month of birth";
+      "nationalities": "Nationalities";
       "paymentTermDays": "Payment terms (days)";
       "prefix": "Prefix";
       "registrationNumber": "Registration number";
       "suffix": "Suffix";
       "taxId": "Tax ID";
+      "year": "Year of birth";
     };
     "filterOrganizations": "Organizations";
     "filterPersons": "Persons";
@@ -1939,11 +1944,14 @@ type Messages = {
       "title": "Import contacts";
       "validateFailed": "Couldn't check these contacts.";
     };
+    "invalidDateOfBirth": "Enter a valid date of birth.";
+    "invalidNationalityCodes": "Enter valid nationality codes.";
     "mattersAsClient": "Matters as client";
     "newContact": "New contact";
     "noContactsDescription": "Create your first contact to start linking them to matters.";
     "noContactsFound": "No contacts found";
     "noMattersAsClient": "This contact is not a client on any matter.";
+    "personalDetails": "Personal details";
     "phoneTypes": {
       "fax": "Fax";
       "home": "Home";
@@ -1951,7 +1959,14 @@ type Messages = {
       "office": "Office";
       "other": "Other";
     };
+    "precision": {
+      "day": "Full date";
+      "month": "Month and year";
+      "year": "Year only";
+    };
+    "saved": "Contact details saved.";
     "search": "Search contacts...";
+    "searchCountries": "Search nationalities";
     "title": "Clients";
     "type": {
       "organization": "Organization";

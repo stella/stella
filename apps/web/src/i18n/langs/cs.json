@@ -1809,6 +1809,7 @@
       "title": "Vlastní pole",
       "value": "Hodnota pole"
     },
+    "datePrecision": "Přesnost data",
     "deleteContact": "Smazat klienta",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
@@ -1845,15 +1846,19 @@
       "billingAddressPostalCode": "PSČ",
       "billingAddressState": "Kraj",
       "color": "Barva",
+      "day": "Den",
       "defaultHourlyRate": "Výchozí hodinová sazba",
       "firstName": "Jméno",
       "lastName": "Příjmení",
       "middleName": "Druhé jméno",
+      "month": "Měsíc",
+      "nationalities": "Státní příslušnosti",
       "paymentTermDays": "Splatnost (dny)",
       "prefix": "Titul před",
       "registrationNumber": "IČO",
       "suffix": "Titul za",
-      "taxId": "DIČ"
+      "taxId": "DIČ",
+      "year": "Rok"
     },
     "filterOrganizations": "Organizace",
     "filterPersons": "Osoby",
@@ -1936,11 +1941,14 @@
       "title": "Import kontaktů",
       "validateFailed": "Kontakty se nepodařilo zkontrolovat."
     },
+    "invalidDateOfBirth": "Zadejte platné datum narození.",
+    "invalidNationalityCodes": "Zadejte platné kódy státní příslušnosti.",
     "mattersAsClient": "Spisy jako klient",
     "newContact": "Nový kontakt",
     "noContactsDescription": "Vytvořte první kontakt a začněte ho přiřazovat ke spisům.",
     "noContactsFound": "Žádné kontakty nenalezeny",
     "noMattersAsClient": "Tento kontakt není klientem žádného spisu.",
+    "personalDetails": "Osobní údaje",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Domů",
@@ -1948,7 +1956,14 @@
       "office": "Kancelář",
       "other": "Jiný"
     },
+    "precision": {
+      "day": "Celé datum",
+      "month": "Měsíc a rok",
+      "year": "Pouze rok"
+    },
+    "saved": "Údaje kontaktu byly uloženy.",
     "search": "Hledat v kontaktech...",
+    "searchCountries": "Hledat země",
     "title": "Klienti",
     "type": {
       "organization": "Organizace",

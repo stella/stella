@@ -16,6 +16,12 @@ import {
 } from "@/api/db/schema-validators";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
+import {
+  dateOfBirthSchema,
+  dateOfBirthToColumns,
+  nationalityCodesSchema,
+  validatePersonDetails,
+} from "@/api/handlers/contacts/person-details";
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -39,6 +45,8 @@ export const createContactBodySchema = t.Object({
   middleName: t.Optional(t.String({ maxLength: 256 })),
   lastName: t.Optional(t.String({ maxLength: 256 })),
   suffix: t.Optional(t.String({ maxLength: 32 })),
+  dateOfBirth: t.Optional(dateOfBirthSchema),
+  nationalityCodes: t.Optional(nationalityCodesSchema),
   organizationName: t.Optional(t.String({ maxLength: 512 })),
   displayName: t.String({ minLength: 1, maxLength: 512 }),
   notes: t.Optional(t.String()),
@@ -121,6 +129,10 @@ export const insertContactRow = async ({
       middleName: body.middleName,
       lastName: body.lastName,
       suffix: body.suffix,
+      ...(body.dateOfBirth === undefined
+        ? {}
+        : dateOfBirthToColumns(body.dateOfBirth)),
+      nationalityCodes: body.nationalityCodes,
       organizationName: body.organizationName,
       displayName: body.displayName,
       notes: body.notes,
@@ -183,6 +195,10 @@ export const createContactHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateContactHandlerProps) {
+  const personDetailsError = validatePersonDetails(body);
+  if (personDetailsError) {
+    return Result.err(personDetailsError);
+  }
   const outcome = yield* Result.await(
     safeDb(async (tx): Promise<CreateContactOutcome> => {
       await lockContactCapacity(tx, organizationId);

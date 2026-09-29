@@ -1809,6 +1809,7 @@
       "title": "Pielāgotie lauki",
       "value": "Lauka vērtība"
     },
+    "datePrecision": "Datuma precizitāte",
     "deleteContact": "Dzēst klientu",
     "deleteContactBlockedByMatters": "Šī kontaktpersona joprojām ir norādīta kā klients lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
     "deleteContactConfirmDescription": "Vai tiešām vēlaties dzēst šo kontaktu? Šo darbību nevar atsaukt.",
@@ -1845,15 +1846,19 @@
       "billingAddressPostalCode": "Pasta indekss",
       "billingAddressState": "Novads / reģions",
       "color": "Krāsa",
+      "day": "Diena",
       "defaultHourlyRate": "Noklusējuma stundas likme",
       "firstName": "Vārds",
       "lastName": "Uzvārds",
       "middleName": "Otrais vārds",
+      "month": "Mēnesis",
+      "nationalities": "Pilsonības",
       "paymentTermDays": "Apmaksas termiņš (dienas)",
       "prefix": "Priedēklis",
       "registrationNumber": "Reģistrācijas numurs",
       "suffix": "Piedēklis",
-      "taxId": "PVN numurs"
+      "taxId": "PVN numurs",
+      "year": "Gads"
     },
     "filterOrganizations": "Organizācijas",
     "filterPersons": "Personas",
@@ -1936,11 +1941,14 @@
       "title": "Kontaktpersonu importēšana",
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas."
     },
+    "invalidDateOfBirth": "Ievadiet derīgu dzimšanas datumu.",
+    "invalidNationalityCodes": "Ievadiet derīgus valstspiederības kodus.",
     "mattersAsClient": "Lietas kā klients",
     "newContact": "Jauns klients",
     "noContactsDescription": "Izveidojiet savu pirmo klientu, lai sāktu tos saistīt ar lietām.",
     "noContactsFound": "Klienti nav atrasti",
     "noMattersAsClient": "Šis kontakts nav klients nevienā lietā.",
+    "personalDetails": "Personas dati",
     "phoneTypes": {
       "fax": "Fakss",
       "home": "Mājas",
@@ -1948,7 +1956,14 @@
       "office": "Birojs",
       "other": "Cits"
     },
+    "precision": {
+      "day": "Pilns datums",
+      "month": "Mēnesis un gads",
+      "year": "Tikai gads"
+    },
+    "saved": "Kontaktinformācija saglabāta.",
     "search": "Meklēt kontaktos...",
+    "searchCountries": "Meklēt valstis",
     "title": "Klienti",
     "type": {
       "organization": "Organizācija",

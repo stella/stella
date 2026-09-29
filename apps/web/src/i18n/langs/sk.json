@@ -1809,6 +1809,7 @@
       "title": "Vlastné polia",
       "value": "Hodnota poľa"
     },
+    "datePrecision": "Presnosť dátumu",
     "deleteContact": "Vymazať klienta",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
@@ -1845,15 +1846,19 @@
       "billingAddressPostalCode": "PSČ",
       "billingAddressState": "Kraj",
       "color": "Farba",
+      "day": "Deň",
       "defaultHourlyRate": "Predvolená hodinová sadzba",
       "firstName": "Meno",
       "lastName": "Priezvisko",
       "middleName": "Stredné meno",
+      "month": "Mesiac",
+      "nationalities": "Štátne príslušnosti",
       "paymentTermDays": "Splatnosť (dni)",
       "prefix": "Titul pred",
       "registrationNumber": "IČO",
       "suffix": "Titul za",
-      "taxId": "DIČ"
+      "taxId": "DIČ",
+      "year": "Rok"
     },
     "filterOrganizations": "Organizácie",
     "filterPersons": "Osoby",
@@ -1936,11 +1941,14 @@
       "title": "Import kontaktov",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
     },
+    "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
+    "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",
     "mattersAsClient": "Spisy ako klient",
     "newContact": "Nový klient",
     "noContactsDescription": "Vytvorte svojho prvého klienta a začnite ho priraďovať k spisom.",
     "noContactsFound": "Žiadni klienti nenájdení",
     "noMattersAsClient": "Tento kontakt nie je klientom žiadneho spisu.",
+    "personalDetails": "Osobné údaje",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Domov",
@@ -1948,7 +1956,14 @@
       "office": "Kancelária",
       "other": "Iný"
     },
+    "precision": {
+      "day": "Úplný dátum",
+      "month": "Mesiac a rok",
+      "year": "Iba rok"
+    },
+    "saved": "Údaje kontaktu boli uložené.",
     "search": "Hľadať v kontaktoch...",
+    "searchCountries": "Hľadať krajiny",
     "title": "Klienti",
     "type": {
       "organization": "Organizácia",

@@ -3,6 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaceContacts, workspaces } from "@/api/db/schema";
+import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -126,8 +127,15 @@ const readContactById = createSafeRootHandler(
       );
     }
 
+    const {
+      dateOfBirthYear: _dateOfBirthYear,
+      dateOfBirthMonth: _dateOfBirthMonth,
+      dateOfBirthDay: _dateOfBirthDay,
+      ...contactFields
+    } = contact;
     return Result.ok({
-      ...contact,
+      ...contactFields,
+      dateOfBirth: dateOfBirthFromColumns(contact),
       clientMatterCount,
       clientMatters,
       partyMatters: partyMatterRows.map(({ total: _total, ...row }) => row),

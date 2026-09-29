@@ -1809,6 +1809,7 @@
       "title": "Benutzerdefinierte Felder",
       "value": "Feldwert"
     },
+    "datePrecision": "Datumsgenauigkeit",
     "deleteContact": "Klient löschen",
     "deleteContactBlockedByMatters": "Dieser Kontakt ist noch als Klient in Akten zugeordnet. Weisen Sie diese Akten neu zu oder löschen Sie sie, bevor Sie den Kontakt löschen.",
     "deleteContactConfirmDescription": "Möchten Sie diesen Kontakt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -1845,15 +1846,19 @@
       "billingAddressPostalCode": "Postleitzahl",
       "billingAddressState": "Bundesland",
       "color": "Farbe",
+      "day": "Tag",
       "defaultHourlyRate": "Standard-Stundensatz",
       "firstName": "Vorname",
       "lastName": "Nachname",
       "middleName": "Zweiter Vorname",
+      "month": "Monat",
+      "nationalities": "Staatsangehörigkeiten",
       "paymentTermDays": "Zahlungsziel (Tage)",
       "prefix": "Titel (vorangestellt)",
       "registrationNumber": "Registernummer",
       "suffix": "Titel (nachgestellt)",
-      "taxId": "Steuer-ID"
+      "taxId": "Steuer-ID",
+      "year": "Jahr"
     },
     "filterOrganizations": "Organisationen",
     "filterPersons": "Personen",
@@ -1936,11 +1941,14 @@
       "title": "Kontakte importieren",
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden."
     },
+    "invalidDateOfBirth": "Geben Sie ein gültiges Geburtsdatum ein.",
+    "invalidNationalityCodes": "Geben Sie gültige Staatsangehörigkeitscodes ein.",
     "mattersAsClient": "Akten als Klient",
     "newContact": "Neuer Klient",
     "noContactsDescription": "Erstellen Sie Ihren ersten Klienten, um ihn mit Akten zu verknüpfen.",
     "noContactsFound": "Keine Klienten gefunden",
     "noMattersAsClient": "Dieser Kontakt ist bei keiner Akte als Klient zugeordnet.",
+    "personalDetails": "Persönliche Angaben",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Privat",
@@ -1948,7 +1956,14 @@
       "office": "Büro",
       "other": "Sonstige"
     },
+    "precision": {
+      "day": "Vollständiges Datum",
+      "month": "Monat und Jahr",
+      "year": "Nur Jahr"
+    },
+    "saved": "Kontaktdaten gespeichert.",
     "search": "Kontakte suchen...",
+    "searchCountries": "Länder suchen",
     "title": "Klienten",
     "type": {
       "organization": "Organisation",

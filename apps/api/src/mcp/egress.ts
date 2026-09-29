@@ -239,6 +239,7 @@ const finalizeStructured = async ({
       context,
       fields: plan.textFields,
     });
+    plan.redactInAnonymized?.();
   }
 
   if (plan.window) {

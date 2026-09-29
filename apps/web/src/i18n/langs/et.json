@@ -1809,6 +1809,7 @@
       "title": "Kohandatud väljad",
       "value": "Välja väärtus"
     },
+    "datePrecision": "Kuupäeva täpsus",
     "deleteContact": "Kustuta klient",
     "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
@@ -1845,15 +1846,19 @@
       "billingAddressPostalCode": "Sihtnumber",
       "billingAddressState": "Maakond",
       "color": "Värv",
+      "day": "Päev",
       "defaultHourlyRate": "Vaikimisi tunnitasu",
       "firstName": "Eesnimi",
       "lastName": "Perekonnanimi",
       "middleName": "Keskmine nimi",
+      "month": "Kuu",
+      "nationalities": "Kodakondsused",
       "paymentTermDays": "Maksetähtaeg (päevad)",
       "prefix": "Eesliide",
       "registrationNumber": "Registrikood",
       "suffix": "Järelliide",
-      "taxId": "KMKR number"
+      "taxId": "KMKR number",
+      "year": "Aasta"
     },
     "filterOrganizations": "Organisatsioonid",
     "filterPersons": "Isikud",
@@ -1936,11 +1941,14 @@
       "title": "Kontaktide importimine",
       "validateFailed": "Neid kontakte ei õnnestunud kontrollida."
     },
+    "invalidDateOfBirth": "Sisestage kehtiv sünnikuupäev.",
+    "invalidNationalityCodes": "Sisestage kehtivad kodakondsuskoodid.",
     "mattersAsClient": "Toimikud kliendina",
     "newContact": "Uus klient",
     "noContactsDescription": "Looge oma esimene klient, et hakata neid toimikutega siduma.",
     "noContactsFound": "Kliente ei leitud",
     "noMattersAsClient": "See kontakt ei ole ühegi toimiku klient.",
+    "personalDetails": "Isikuandmed",
     "phoneTypes": {
       "fax": "Faks",
       "home": "Kodu",
@@ -1948,7 +1956,14 @@
       "office": "Kontor",
       "other": "Muu"
     },
+    "precision": {
+      "day": "Täielik kuupäev",
+      "month": "Kuu ja aasta",
+      "year": "Ainult aasta"
+    },
+    "saved": "Kontakti andmed on salvestatud.",
     "search": "Otsi kontakte...",
+    "searchCountries": "Otsi riike",
     "title": "Kliendid",
     "type": {
       "organization": "Organisatsioon",
