@@ -7,7 +7,12 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatThreadNames, chatThreads, chatTurns } from "@/api/db/schema";
+import {
+  chatRunLogs,
+  chatThreadNames,
+  chatThreads,
+  chatTurns,
+} from "@/api/db/schema";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import {
@@ -164,6 +169,19 @@ const withThreadNameReads = (select: () => { from: () => unknown }) => () => ({
       ? { where: async () => startedThreadNames }
       : select().from(),
 });
+
+// Settlement closes the turn's run log in the transaction that ends the turn.
+const withRunLogInsert =
+  (insert: (table: unknown) => unknown) => (table: unknown) =>
+    table === chatRunLogs
+      ? { values: () => ({ onConflictDoNothing: async () => undefined }) }
+      : insert(table);
+
+const withRunLogUpdate =
+  (update: (table: unknown) => unknown) => (table: unknown) =>
+    table === chatRunLogs
+      ? { set: () => ({ where: async () => undefined }) }
+      : update(table);
 
 const withRegistryCredentialQuery = (transaction: unknown): unknown => {
   if (typeof transaction !== "object" || transaction === null) {
@@ -818,7 +836,7 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             // The compaction preflight reads the checkpoint once the turn is
@@ -856,7 +874,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -940,7 +958,7 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -968,7 +986,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: findOrganizationSettings },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -1030,7 +1048,7 @@ describe("send message disconnect handling", () => {
       createContext({
         contextMatterIds: [],
         transaction: {
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -1058,7 +1076,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -1144,7 +1162,7 @@ describe("send message disconnect handling", () => {
         contextMatterIds: [],
         transaction: {
           execute: lookup,
-          insert,
+          insert: withRunLogInsert(insert),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -1172,7 +1190,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update,
+          update: withRunLogUpdate(update),
         },
       }),
     );
@@ -1223,7 +1241,7 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          insert: () => ({ values: insertValues }),
+          insert: withRunLogInsert(() => ({ values: insertValues })),
           query: {
             chatMessages: { findFirst: async () => null },
             chatThreadCompactions: { findFirst: async () => null },
@@ -1259,7 +1277,7 @@ describe("send message disconnect handling", () => {
             organizationSettings: { findFirst: async () => null },
           },
           select: withThreadNameReads(selectWithThreadLock),
-          update: (table: unknown) => {
+          update: withRunLogUpdate((table: unknown) => {
             if (table === chatThreads) {
               return { set: () => ({ where: updateWhere }) };
             }
@@ -1271,7 +1289,7 @@ describe("send message disconnect handling", () => {
               };
             }
             throw new Error("Unexpected table update in chat send test");
-          },
+          }),
         },
       }),
     );

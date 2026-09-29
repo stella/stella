@@ -876,7 +876,7 @@ describe("a page's client call once the turn was stopped", () => {
       await harness.expectSoundWebClient({ client: stopping, threadId });
     } finally {
       stopping.dispose();
-      harness.close();
+      await harness.close();
     }
   });
 });

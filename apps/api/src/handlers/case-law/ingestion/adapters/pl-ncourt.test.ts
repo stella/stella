@@ -731,6 +731,57 @@ describe("the document", () => {
     expect(content?.html).toContain("353<sup> 1</sup>");
   });
 
+  test("paragraphs left straight in a table or a list, outside its rows and items, are kept in place", () => {
+    const reasons = Array.from(
+      { length: 6 },
+      (_, index) =>
+        `Paragraph ${String(index + 1)} of the reasons states its own sentence about ground ${String(index + 1)} of the appeal in full.`,
+    );
+    const content =
+      readPlNcourtContent(
+        [
+          "<xPart><xName>Judgment</xName><xBlock>",
+          '<xUnit xIsTitle="true"><xName>Reasons</xName>',
+          "<xText>Before the table.</xText>",
+          "<xRows><xCOLGROUPx><xCOLx/></xCOLGROUPx>",
+          "<xRow><xClmn><xText>Heading cell</xText></xClmn><xText>Loose in a row</xText></xRow>",
+          ...reasons.map((reason) => `<xText>${reason}</xText>`),
+          "</xRows>",
+          "<xEnum><xBullet>-</xBullet><xEnumElem><xText>An item</xText></xEnumElem>",
+          "<xText>Loose in a list</xText></xEnum>",
+          "</xUnit></xBlock></xPart>",
+        ].join(""),
+      ) ?? panic("the document did not read");
+    const html = content.html;
+    // The row stays a table; what follows it is paragraphs, in order.
+    expect(html).toContain("<td><p>Loose in a row</p></td>");
+    expect(html.indexOf("</table>")).toBeLessThan(
+      html.indexOf(reasons[0] ?? ""),
+    );
+    expect(html.indexOf(reasons[5] ?? "")).toBeLessThan(html.indexOf("<dl>"));
+    expect(html).toContain("</dl>\n<p>Loose in a list</p>");
+    expect(content.unmappedMarkup).toEqual([]);
+    const blocks = parsePlDecisionContent({
+      caseNumber: "I ACa 1/13",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: html,
+      keywords: [],
+      statutes: [],
+      documentId: "I ACa 1/13",
+    }).documentAst.blocks;
+    const validation = validatePlNcourtDocument(
+      { parser: "pl-ncourt", caseNumber: "I ACa 1/13" },
+      content,
+      blocks,
+    );
+    expect(validation.issues.map((issue) => issue.code)).toEqual([]);
+  });
+
   test("the root's attributes and every statute link are kept", async () => {
     const content = readPlNcourtContent(
       await fixture(`pl-ncourt-content-${PAIR}.xml.gz`),

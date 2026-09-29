@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 2.3.2
+
+### Patch Changes
+
+- [#4082](https://github.com/stella/stella/pull/4082) [`e146c1d`](https://github.com/stella/stella/commit/e146c1d08b7e5086028a668ac7393374e74fdef9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add document number series commands.
+
 ## 2.3.1
 
 ### Patch Changes

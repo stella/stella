@@ -65,7 +65,7 @@ const openThread = async () => {
   return { client, harness, threadId };
 };
 
-const closeThread = ({
+const closeThread = async ({
   client,
   harness,
 }: {
@@ -73,7 +73,7 @@ const closeThread = ({
   harness: ChatHarness;
 }) => {
   client.dispose();
-  harness.close();
+  await harness.close();
 };
 
 const storedCall = (
@@ -201,7 +201,7 @@ describe("an approved server tool's result", () => {
         storedCall(await harness.readThreadMessages(threadId), callId),
       ).toMatchObject({ output: { deleted: "NDA" }, state: "complete" });
     } finally {
-      closeThread(thread);
+      await closeThread(thread);
     }
   });
 
@@ -223,7 +223,7 @@ describe("an approved server tool's result", () => {
         storedCall(await harness.readThreadMessages(threadId), callId),
       ).toMatchObject({ output: { deleted: "NDA" }, state: "complete" });
     } finally {
-      closeThread(thread);
+      await closeThread(thread);
     }
   });
 
@@ -251,7 +251,7 @@ describe("an approved server tool's result", () => {
 
       expect(harness.executions).toEqual(["NDA", "Lease"]);
     } finally {
-      harness.close();
+      await harness.close();
     }
   });
 
@@ -276,7 +276,7 @@ describe("an approved server tool's result", () => {
 
       expect(harness.executions).toEqual(["NDA", "Lease"]);
     } finally {
-      closeThread(thread);
+      await closeThread(thread);
     }
   });
 });

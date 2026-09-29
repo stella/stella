@@ -185,14 +185,6 @@ const sameWork = sql`work.source_id = ${legislationDocuments.sourceId}
   AND work.eli = ${legislationDocuments.eli}
   AND work.language = ${legislationDocuments.language}`;
 
-/** Whether any version of the listed row's Work can apply, at any date. */
-const workHasEligibleVersion = sql`EXISTS (
-  SELECT 1
-  FROM legislation_documents AS work
-  WHERE ${sameWork}
-    AND ${eligibleExpression(workRef)}
-)`;
-
 /**
  * The row a listing shows per Work: the latest eligible wording that opened
  * on or before `asOf`, whether or not its window is still open. A Work whose
@@ -205,27 +197,40 @@ const workHasEligibleVersion = sql`EXISTS (
  * that opened by `asOf`, preferring a consolidation over a promulgated text,
  * so it stays findable under the validity that says so. Withdrawn versions
  * are never listed, so a Work holding only those is not either.
+ *
+ * One anti-join over the Work's other rows excludes the listed one on either
+ * ground: a later version that outranks it, or (when it is not eligible
+ * itself) any eligible version at all. Written as `eligible OR NOT EXISTS
+ * (…)` the second ground cannot become a join, and Postgres plans it as a
+ * hashed subplan that reads the whole table on every listing; as a second
+ * anti-join it costs the facets aggregate a second pass over the table. The
+ * listed row never satisfies the second ground itself, so leaving it out of
+ * the probe changes nothing.
  */
 export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
   ${openedBy(listedRef, asOf)}
   AND ${notWithdrawn(listedRef)}
-  AND (${eligibleExpression(listedRef)} OR NOT ${workHasEligibleVersion})
 ) AND NOT EXISTS (
     SELECT 1
     FROM legislation_documents AS newer
     WHERE ${newerOfSameWork}
-      AND ${openedBy(newerRef, asOf)}
-      AND ${notWithdrawn(newerRef)}
-      AND (${eligibleExpression(newerRef)} OR NOT ${eligibleExpression(listedRef)})
-      AND (
-        ${applicableKind(newerRef)},
-        ${versionSortKey(newerRef.validFrom)},
-        newer.id
-      ) > (
-        ${applicableKind(listedRef)},
-        ${versionSortKey(legislationDocuments.versionValidFrom)},
-        ${legislationDocuments.id}
-      )
+      AND ((
+        ${openedBy(newerRef, asOf)}
+        AND ${notWithdrawn(newerRef)}
+        AND (${eligibleExpression(newerRef)} OR NOT ${eligibleExpression(listedRef)})
+        AND (
+          ${applicableKind(newerRef)},
+          ${versionSortKey(newerRef.validFrom)},
+          newer.id
+        ) > (
+          ${applicableKind(listedRef)},
+          ${versionSortKey(legislationDocuments.versionValidFrom)},
+          ${legislationDocuments.id}
+        )
+      ) OR (
+        ${eligibleExpression(newerRef)}
+        AND NOT ${eligibleExpression(listedRef)}
+      ))
   )`;
 
 /**
@@ -233,21 +238,19 @@ export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
  * it holds at least one consolidation, and every consolidation it holds is
  * never in force. Anything less (an inconsistent window, only a promulgated
  * text) proves nothing, and the Work is `unknown`.
+ *
+ * One aggregate over the Work's rows rather than `EXISTS … AND NOT EXISTS …`:
+ * `bool_and` of no rows is null, so it is true only for a non-empty set that
+ * is all never in force. An aggregate subquery stays a per-row probe, where
+ * an `EXISTS` inside a `CASE` may be planned as a hashed scan of the table.
  */
-const workNeverInForce = sql`(EXISTS (
-  SELECT 1
+const workNeverInForce = sql`coalesce((
+  SELECT bool_and(${workRef.disposition} = 'never-in-force')
   FROM legislation_documents AS work
   WHERE ${sameWork}
     AND ${applicableKind(workRef)}
     AND ${notWithdrawn(workRef)}
-) AND NOT EXISTS (
-  SELECT 1
-  FROM legislation_documents AS work
-  WHERE ${sameWork}
-    AND ${applicableKind(workRef)}
-    AND ${notWithdrawn(workRef)}
-    AND ${workRef.disposition} <> 'never-in-force'
-))`;
+), false)`;
 
 /** Whether the listed wording still applies on `asOf`; see `LEGISLATION_LIST_VALIDITIES`. */
 const listValidity = (asOf: SQLWrapper): SQL<LegislationListValidity> =>
