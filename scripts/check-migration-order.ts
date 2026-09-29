@@ -96,7 +96,9 @@ export const readMigrationChanges = ({
       continue;
     }
     if (status !== "A" && status !== "D" && status !== "M") {
-      panic(`Unsupported migration change status ${status} for ${filename}`);
+      panic(
+        `Unsupported migration change status ${String(status)} for ${filename}`,
+      );
     }
     if (status === "M" && MIGRATION_FOLDER_FILE.test(filename)) {
       modifiedFiles.push(filename);
