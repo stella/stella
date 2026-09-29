@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
@@ -38,6 +39,7 @@ import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispat
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const PLAYBOOK_BUILDER = "playbook-builder";
 
@@ -65,6 +67,10 @@ const unusedScopedDb: ScopedDb = async () => {
 const unusedSafeDb: SafeDb = async () => {
   throw new Error("This test only constructs tool sets and prompts.");
 };
+
+// Resolving a skill by name first asks for an enabled installed skill with
+// that slug, which would shadow the built-in; this organization has none.
+const noInstalledSkillsSafeDb = asTestRaw<SafeDb>(async () => Result.ok([]));
 
 type RunToolsProps = Parameters<typeof getChatTools>[0];
 
@@ -110,7 +116,7 @@ const resolveBuiltInSkill = async (
     activeSkill: { skillName },
     memberRole: { role: "member" },
     organizationId,
-    safeDb: unusedSafeDb,
+    safeDb: noInstalledSkillsSafeDb,
     userId,
   });
   if (resolved.isErr() || resolved.value === null) {
@@ -127,7 +133,7 @@ const resolveDeclaredBuiltInSkill = async (
     activeSkill: { skillName },
     memberRole: { role: "member" },
     organizationId,
-    safeDb: unusedSafeDb,
+    safeDb: noInstalledSkillsSafeDb,
     userId,
   });
   if (resolved.isErr() || resolved.value === null) {
