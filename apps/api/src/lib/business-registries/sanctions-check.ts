@@ -129,6 +129,10 @@ export const loadPracticeJurisdictions = async ({
   );
 };
 
+/** A register lookup the register refused as malformed input, not one it failed to answer. */
+const isInputRejection = (error: HandlerError): boolean =>
+  error.status === 400 || error.status === 422;
+
 type ResolvedName =
   | {
       type: "resolved";
@@ -163,7 +167,15 @@ const resolveCompanyName = async ({
     executeLookup: dependencies.executeLookup,
   });
   if (lookup.isErr()) {
-    return Result.ok({ type: "unresolved", reason: "registry-unavailable" });
+    // The register refusing the ID itself (a failed checksum) is the caller's
+    // to correct; only a register that could not answer (down, timed out,
+    // not configured) leaves the lists unscreened for want of a name.
+    return isInputRejection(lookup.error)
+      ? invalidSubject(
+          `Company ID must be a valid ${label} IČO (8 digits)`,
+          "Check the ID against the register, or pass the company's name as an organization subject.",
+        )
+      : Result.ok({ type: "unresolved", reason: "registry-unavailable" });
   }
   const response = lookup.value;
   if (response.type !== "lookup") {

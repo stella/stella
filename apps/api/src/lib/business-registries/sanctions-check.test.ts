@@ -9,7 +9,10 @@ import type {
   BusinessRegistryHit,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
-import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
+import {
+  personDateOfBirth,
+  runEntityCheckShared,
+} from "@/api/lib/business-registries/entity-checks";
 import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type { SanctionsCheckDependencies } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -181,6 +184,51 @@ describe("sanctions check", () => {
     },
   );
 
+  test("asks for a valid company ID when the register refuses the one given", async () => {
+    const screen = mock<typeof screenSanctionsSubject>(async () =>
+      Result.ok(CLEAR_SCREENING),
+    );
+    const result = await runSanctionsCheck({
+      // Eight digits, but the checksum fails at the register.
+      subject: { type: "company-id", value: "26863155", country: "CZ" },
+      dependencies: dependencies({
+        executeLookup: async () =>
+          new HandlerError({ status: 400, message: "Invalid IČO checksum" }),
+        screen,
+      }),
+    });
+    expect(screen).not.toHaveBeenCalled();
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 400,
+      code: "validation_error",
+      message: "Company ID must be a valid Czech IČO (8 digits)",
+      hint: expect.stringContaining("organization"),
+    });
+  });
+
+  test.each([
+    { name: "not configured", status: 428 as const },
+    { name: "rate limited", status: 429 as const },
+    { name: "down", status: 503 as const },
+    { name: "failing upstream", status: 502 as const },
+  ])(
+    "reports the lists unavailable when the register is $name",
+    async ({ status }) => {
+      const result = await runSanctionsCheck({
+        subject: { type: "company-id", value: "26863154", country: "CZ" },
+        dependencies: dependencies({
+          executeLookup: async () =>
+            new HandlerError({ status, message: "Register did not answer" }),
+        }),
+      });
+      const check = result.unwrap();
+      expect(check.status).toBe("unavailable");
+      for (const list of check.lists) {
+        expect(list.reason).toBe("registry-unavailable");
+      }
+    },
+  );
+
   test("asks for a valid company ID before reading any register", async () => {
     const result = await runSanctionsCheck({
       subject: { type: "company-id", value: "12AB", country: "CZ" },
@@ -287,8 +335,18 @@ describe("counterparty check subject routing", () => {
         name: "Acme Trading",
         companyId: null,
       },
-      message:
-        "The cz-insolvency check finds a company by its company ID, not its name",
+      message: "The cz-insolvency check does not take an organization by name",
+    },
+    {
+      // Its registration number carries no country, so it is never read as
+      // a Czech company ID.
+      name: "an organization named with a registration number",
+      subject: {
+        type: "organization" as const,
+        name: "Slovak Example s.r.o.",
+        companyId: "35757442",
+      },
+      message: "The cz-insolvency check does not take an organization by name",
     },
   ])(
     "asks the caller to correct $name for a register check",
@@ -303,6 +361,93 @@ describe("counterparty check subject routing", () => {
         status: 400,
         code: "validation_error",
         message,
+      });
+    },
+  );
+
+  test("does not ask for a birth date the VAT check would not use", async () => {
+    const result = await runEntityCheckShared({
+      check: "cz-vat-reliability",
+      subject: {
+        type: "person",
+        firstName: "Jan",
+        lastName: "Novák",
+        dateOfBirth: null,
+        nationalityCodes: [],
+      },
+      runCheck: neverRunCheck,
+      sanctions,
+    });
+    const error = result.isErr() ? result.error : null;
+    expect(error).toMatchObject({
+      status: 400,
+      message: "The cz-vat-reliability check does not screen persons",
+    });
+    expect(error?.hint).not.toContain("birth date");
+  });
+});
+
+describe("person birth date", () => {
+  test.each([
+    { name: "a full date", birthDate: "1990-02-31", dateOfBirth: undefined },
+    {
+      name: "a day-precision date of birth",
+      birthDate: undefined,
+      dateOfBirth: {
+        precision: "day" as const,
+        year: 1990,
+        month: 2,
+        day: 31,
+      },
+    },
+  ])(
+    "refuses $name that is not in the calendar",
+    ({ birthDate, dateOfBirth }) => {
+      const result = personDateOfBirth({ birthDate, dateOfBirth });
+      expect(result.isErr() && result.error).toMatchObject({
+        status: 400,
+        code: "validation_error",
+        message: "The birth date is not a valid calendar date",
+      });
+    },
+  );
+
+  test("reads a leap day", () => {
+    expect(
+      personDateOfBirth({
+        birthDate: undefined,
+        dateOfBirth: { precision: "day", year: 1988, month: 2, day: 29 },
+      }).unwrap(),
+    ).toEqual({ precision: "day", year: 1988, month: 2, day: 29 });
+  });
+
+  test.each([
+    { precision: "year" as const, year: 1960 },
+    { precision: "month" as const, year: 1960, month: 5 },
+    { precision: "day" as const, year: 1960, month: 5, day: 12 },
+  ])(
+    "takes the full date beside a $precision-precision date that agrees",
+    (dateOfBirth) => {
+      expect(
+        personDateOfBirth({ birthDate: "1960-05-12", dateOfBirth }).unwrap(),
+      ).toEqual({ precision: "day", year: 1960, month: 5, day: 12 });
+    },
+  );
+
+  test.each([
+    { precision: "year" as const, year: 1961 },
+    { precision: "month" as const, year: 1960, month: 6 },
+    { precision: "day" as const, year: 1960, month: 5, day: 13 },
+  ])(
+    "refuses a $precision-precision date that contradicts the full date",
+    (dateOfBirth) => {
+      const result = personDateOfBirth({
+        birthDate: "1960-05-12",
+        dateOfBirth,
+      });
+      expect(result.isErr() && result.error).toMatchObject({
+        message:
+          "The full birth date and the date of birth name different dates",
       });
     },
   );
