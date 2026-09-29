@@ -6,9 +6,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { extractTextForPreview } from "@/api/lib/docx/extract-text";
+import { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   readStoredTemplateFile,
@@ -57,38 +55,7 @@ const previewTemplateHandler = async function* ({
     }),
   );
 
-  const [{ paragraphs, charCount }, { structureErrors }, clauseSlots] =
-    await Promise.all([
-      extractTextForPreview(file),
-      discoverTemplate(file),
-      discoverClauseSlots(file),
-    ]);
-
-  // discoverTemplate returns structureError indices relative
-  // to each section (body starts at 0, combined headers start
-  // at 0, combined footers start at 0). extractDocxDocument returns
-  // global indices: headers first, then body, then footers.
-  // Offset each error based on its source.
-  const headerCount = paragraphs.filter((p) => p.source === "header").length;
-  const bodyCount = paragraphs.filter((p) => p.source === "body").length;
-
-  for (const err of structureErrors) {
-    if (err.source === "body") {
-      err.paragraphIndex += headerCount;
-    } else if (err.source === "footer") {
-      err.paragraphIndex += headerCount + bodyCount;
-    }
-    // header errors: no offset needed (headers come first)
-  }
-
-  const slotNames = clauseSlots.map((s) => s.name);
-
-  return Result.ok({
-    paragraphs,
-    charCount,
-    structureErrors,
-    clauseSlots: slotNames,
-  });
+  return Result.ok(await renderTemplatePreview(file));
 };
 
 const config = {

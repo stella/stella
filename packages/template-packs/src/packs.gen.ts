@@ -9,6 +9,7 @@ export const GENERATED_TEMPLATE_PACKS: readonly GeneratedTemplatePack[] = [
     description: "Twelve attorney-drafted U.S. templates for startups and technology companies: advisor agreement, BAA, cookie notice, DPAs (U.S. and global), California exempt offer letter, MSA with order form, mutual and one-way NDAs, privacy policies (U.S. and GDPR-enhanced) and website terms of use.",
     license: "CC0-1.0",
     licenseUrl: "https://github.com/General-Legal/legal-templates/blob/main/LICENSE",
+    publicDisplay: true,
     source: {"name":"General-Legal/legal-templates","url":"https://github.com/General-Legal/legal-templates","retrievedAt":"2026-08-19"},
     authors: [{"name":"General Legal","url":"https://general.legal","role":"drafter"},{"name":"Stella","url":"https://github.com/stella/template-packs","role":"converter","date":"2026-08-19"}],
     jurisdictions: [{"country":"US"}],
