@@ -228,7 +228,7 @@ describe("invoice document types", () => {
       }),
     );
     if (!("items" in listed)) {
-      return panic("Expected invoice list");
+      panic("Expected invoice list");
     }
     expect(listed.items).toContainEqual(
       expect.objectContaining({ id: invoiceId, invoiceNumber: null }),
@@ -499,7 +499,7 @@ describe("invoice document types", () => {
     const winner = credited.find((row) => row.totalAmount < 0);
     const loser = credited.find((row) => row.totalAmount === 0);
     if (!winner || !loser) {
-      return panic("Expected one credit reservation");
+      panic("Expected one credit reservation");
     }
     expect(await changeStatus(winner.id, "finalize")).toEqual({
       id: winner.id,

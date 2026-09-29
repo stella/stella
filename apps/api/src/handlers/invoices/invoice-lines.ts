@@ -694,7 +694,7 @@ export const recalculateInvoiceTotals = async (
     .where(invoiceScope);
   const changes: FieldDiffs = {};
   for (const field of ["netAmount", "vatAmount", "totalAmount"] as const) {
-    const old = stored?.[field] ?? null;
+    const old = stored[field] ?? null;
     if (old !== next[field]) {
       changes[field] = { old, new: next[field] };
     }

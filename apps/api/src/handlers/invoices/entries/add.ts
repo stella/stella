@@ -100,7 +100,7 @@ type AttachmentPreflightOptions = {
   workspaceId: SafeId<"workspace">;
   body: Static<typeof addEntriesBodySchema>;
 };
-const validateAttachmentInputs = (
+const validateAttachmentInputs = async (
   safeDb: SafeDb,
   { invoiceId, workspaceId, body }: AttachmentPreflightOptions,
 ) =>
