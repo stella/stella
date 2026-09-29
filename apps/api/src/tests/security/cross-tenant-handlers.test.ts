@@ -303,6 +303,8 @@ const chatForkFromB = toSafeId<"chatThread">(
 );
 const chatThreadTitleB = "Chat thread B";
 const chatRenameFromA = "Renamed from organization A";
+/** Thread B's stored model, so a foreign "auto" selection is observable. */
+const chatModelB = "openai::gpt-5.4-mini";
 
 const chatSendOrgAIConfig = {
   providers: [{ provider: "openai", apiKey: "test-api-key" }],
@@ -1188,7 +1190,9 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: (result) => {
       expect(getStatusCode(recordField(result, "response"))).toBe(404);
-      expect(recordField(result, "thread")).not.toBeNull();
+      expect(recordField(result, "thread")).toMatchObject({
+        chatModel: chatModelB,
+      });
     },
     expectPositive: (result) =>
       expect(result).toEqual({ model: null, reasoningEffort: null }),
@@ -1567,7 +1571,7 @@ beforeAll(async () => {
   await testDb
     .insert(chatThreads)
     .values([
-      chatThreadOfB(chatThreadB),
+      { ...chatThreadOfB(chatThreadB), chatModel: chatModelB },
       chatThreadOfB(chatTurnThreadB),
       chatThreadOfB(chatDeleteThreadB),
       chatThreadOfB(chatSendThreadB),
