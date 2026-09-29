@@ -446,9 +446,7 @@ const executeRun = async (
   const config = Result.flatten(
     await Result.tryPromise({
       try: async () =>
-        await actor.scopedDb(
-          async (tx) => await loadOrgAISettings(tx, actor.organizationId),
-        ),
+        await actor.scopedDb(async (tx) => await loadOrgAISettings(tx, actor)),
       catch: (cause) => cause,
     }),
   );

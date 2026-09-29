@@ -458,6 +458,34 @@ export const installPgliteCaseLawObservationFence = async (
   }
 };
 
+const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120100_organization_member_capacity",
+  "migration.sql",
+);
+
+const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the member capacity function and guard omitted by schema push. */
+export const installPgliteOrganizationMemberCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 export const installPgliteMigration = async ({
   db,
   migrationPath,
