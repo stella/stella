@@ -12,6 +12,13 @@ async function* once(text: string) {
   yield encoder.encode(text);
 }
 
+/** The fixture with the first listed person's birth dates replaced. */
+const withBirthDates = async (dates: readonly string[]) =>
+  (await Bun.file(FILE).text()).replace(
+    /<DOBs>.*<\/DOBs>/u,
+    () => `<DOBs>${dates.map((date) => `<DOB>${date}</DOB>`).join("")}</DOBs>`,
+  );
+
 const fixture = async () =>
   (await parseUkList(Bun.file(FILE).stream())).unwrap();
 
@@ -91,6 +98,50 @@ describe("UK Sanctions List", () => {
       once(xml.replace("21/09/2026", "31/02/2026")),
     );
     expect(invalidDate.isErr() && invalidDate.error.code).toBe("invalid-value");
+  });
+
+  test("leaves out birth dates whose year the list does not know", async () => {
+    const xml = await withBirthDates([
+      "dd/mm/yyyy",
+      "00/00/0000",
+      "dd/mm/0000",
+      "dd/08/0000",
+      "12/08/0000",
+      "0000",
+      "00yy",
+    ]);
+    const parsed = (await parseUkList(once(xml))).unwrap();
+    const person = parsed.entries.find(({ sourceId }) => sourceId === "UK-100");
+    expect(person?.birthDates).toEqual([]);
+
+    const index = buildScreeningIndex([parsed]);
+    const match = screen(
+      index,
+      { name: "Alex Example", birthDate: { year: 1980, month: 1, day: 2 } },
+      { cutoff: DEFAULT_CUTOFF },
+    )
+      .unwrap()
+      .possibleMatches.find(({ entry }) => entry.sourceId === "UK-100");
+    expect(match?.evidence.birthDate).toBe("not-compared");
+    expect(match?.evidence.conflicts).toEqual([]);
+  });
+
+  test("keeps the known year of a date with an unknown month and rejects impossible parts", async () => {
+    const person = (
+      await parseUkList(
+        once(await withBirthDates(["12/mm/1975", "12/00/1975"])),
+      )
+    )
+      .unwrap()
+      .entries.find(({ sourceId }) => sourceId === "UK-100");
+    expect(person?.birthDates).toEqual([
+      { precision: "year", year: 1975, circa: false },
+      { precision: "year", year: 1975, circa: false },
+    ]);
+    for (const invalid of ["dd/13/1975", "31/02/1975", "1975-08-12"]) {
+      const parsed = await parseUkList(once(await withBirthDates([invalid])));
+      expect(parsed.isErr() && parsed.error.code).toBe("invalid-value");
+    }
   });
 
   test("parses across arbitrary byte boundaries and guards replacement counts", async () => {

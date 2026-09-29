@@ -41,8 +41,7 @@ const ADDRESS_LINES = [
   "AddressLine6",
 ];
 const UK_DATE = /^(\d{2})\/(\d{2})\/(\d{4})$/u;
-const UK_MONTH = /^(?:dd|00)\/(\d{2})\/(\d{4})$/u;
-const UK_YEAR = /^(?:dd|00)\/(?:mm|00)\/(\d{4})$/u;
+const UK_BIRTH_DATE = /^(\d{2}|dd)\/(\d{2}|mm)\/(\d{4}|yyyy)$/u;
 const YEAR = /^\d{4}$/u;
 const CENTURY = /^(?:(?:\d{2}|dd)\/(?:\d{2}|mm)\/)?(\d{2})yy$/u;
 
@@ -81,35 +80,36 @@ const version = (
   }));
 };
 
+/**
+ * A date part the list states, or null for one it leaves unknown: the list
+ * writes unknown parts as letters ("dd/mm/1975") or as zeros ("00/00/1975").
+ */
+const knownPart = (text: string): number | null => {
+  const value = /^\d+$/u.test(text) ? Number(text) : 0;
+  return value === 0 ? null : value;
+};
+
+/**
+ * A listed birth date at the precision the list states it. A date without a
+ * known year gives screening nothing to compare, so it is left out rather
+ * than read as the year 0.
+ */
 const birthDate = (
   value: string,
-): Result<BirthDate, SanctionsListParseError> => {
+): Result<BirthDate | null, SanctionsListParseError> => {
   if (YEAR.test(value)) {
-    return Result.ok({ precision: "year", year: Number(value), circa: false });
-  }
-  const year = UK_YEAR.exec(value);
-  if (year !== null) {
-    return Result.ok({
-      precision: "year",
-      year: Number(year[1]),
-      circa: false,
-    });
-  }
-  const month = UK_MONTH.exec(value);
-  if (month !== null) {
-    const monthNumber = Number(month[1]);
-    if (monthNumber >= 1 && monthNumber <= 12) {
-      return Result.ok({
-        precision: "month",
-        year: Number(month[2]),
-        month: monthNumber,
-        circa: false,
-      });
-    }
+    const year = knownPart(value);
+    return Result.ok(
+      year === null ? null : { precision: "year", year, circa: false },
+    );
   }
   const century = CENTURY.exec(value);
   if (century !== null) {
-    const firstYear = Number(century[1]) * 10 ** 2;
+    const hundreds = knownPart(century[1] ?? "");
+    if (hundreds === null) {
+      return Result.ok(null);
+    }
+    const firstYear = hundreds * 10 ** 2;
     return Result.ok({
       precision: "year-range",
       fromYear: firstYear,
@@ -117,8 +117,34 @@ const birthDate = (
       circa: false,
     });
   }
-  return ukDate(value).andThen((date) =>
-    parseDayBirthDate(SOURCE, date, false),
+  const parts = UK_BIRTH_DATE.exec(value);
+  const [, dayText, monthText, yearText] = parts ?? [];
+  if (
+    dayText === undefined ||
+    monthText === undefined ||
+    yearText === undefined
+  ) {
+    return Result.err(invalidValue(SOURCE, `invalid UK birth date "${value}"`));
+  }
+  const year = knownPart(yearText);
+  const month = knownPart(monthText);
+  const day = knownPart(dayText);
+  if (year === null) {
+    return Result.ok(null);
+  }
+  if (month === null) {
+    return Result.ok({ precision: "year", year, circa: false });
+  }
+  if (month > 12) {
+    return Result.err(invalidValue(SOURCE, `invalid UK birth date "${value}"`));
+  }
+  if (day === null) {
+    return Result.ok({ precision: "month", year, month, circa: false });
+  }
+  return parseDayBirthDate(
+    SOURCE,
+    `${yearText}-${monthText}-${dayText}`,
+    false,
   );
 };
 
@@ -252,8 +278,9 @@ const entry = (
       "DOB",
     )) {
       const value = date.text.trim();
-      if (value !== "") {
-        birthDates.push(yield* birthDate(value));
+      const parsed = value === "" ? null : yield* birthDate(value);
+      if (parsed !== null) {
+        birthDates.push(parsed);
       }
     }
 
