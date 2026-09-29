@@ -188,6 +188,7 @@ test("only exempts explicit owners, online migration modules, tests, and scripts
   for (const file of [
     "apps/api/src/db/shared-pool-timeouts.ts",
     "apps/api/src/db/long-running-connection.ts",
+    "apps/api/src/db/migration-runner.ts",
     "apps/api/src/db/online-migrations.ts",
     "apps/api/src/db/corpus-schema-lane.ts",
     "apps/api/src/db/corpus-projection-delete-receipt-repair.ts",

@@ -11,6 +11,7 @@ const DEDICATED_OWNER = `${API_SOURCE}db/long-running-connection.ts`;
 
 // These modules run under the migrator's independently reserved connection.
 const MIGRATION_OWNERS = new Set([
+  `${API_SOURCE}db/migration-runner.ts`,
   `${API_SOURCE}db/online-migrations.ts`,
   `${API_SOURCE}db/corpus-schema-lane.ts`,
   `${API_SOURCE}db/corpus-projection-delete-receipt-repair.ts`,
