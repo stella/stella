@@ -70,7 +70,8 @@ export const withDedicatedReservedSession = async <
       if (typeof target !== "function") {
         return panic("Expected a callable dedicated PostgreSQL session");
       }
-      return Reflect.apply(target, target, args);
+      const result: unknown = Reflect.apply(target, target, args);
+      return result;
     },
     get(target, property) {
       if (property === "unsafe") {
@@ -79,8 +80,10 @@ export const withDedicatedReservedSession = async <
           return Reflect.apply(target.unsafe, target, args);
         };
       }
-      const value = Reflect.get(target, property, target);
-      return typeof value === "function" ? value.bind(target) : value;
+      const value: unknown = Reflect.get(target, property, target);
+      const bound: unknown =
+        typeof value === "function" ? value.bind(target) : value;
+      return bound;
     },
   });
   let cancelling: Promise<unknown> | undefined;
@@ -99,9 +102,11 @@ export const withDedicatedReservedSession = async <
         return;
       }
       cancelling = Promise.allSettled([
-        Promise.resolve().then(() => cancelBackend(pid)),
+        (async () => {
+          await cancelBackend(pid);
+        })(),
       ]).then(([result]) => {
-        if (result?.status === "rejected") {
+        if (result.status === "rejected") {
           observeFailure(result.reason, {
             sink: CANCEL_FAILED_SINK,
             ctx: { step: "cancel_backend" },

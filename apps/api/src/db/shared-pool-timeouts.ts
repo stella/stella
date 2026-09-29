@@ -129,8 +129,7 @@ export const withSharedStatementTimeout = async <T>(
       await setSharedStatementTimeout(
         tx,
         previousMs ||
-          sharedPoolTimeoutPolicy.effectiveStatementTimeoutMs ||
-          requestedMs,
+          (sharedPoolTimeoutPolicy.effectiveStatementTimeoutMs ?? requestedMs),
       );
     }
   })().then(
