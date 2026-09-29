@@ -1,9 +1,7 @@
 import { panic } from "better-result";
 
-import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
-
 import { arrayOrEmpty } from "@/api/lib/array";
-import { RANK, US_TIER_RANK } from "@/api/lib/case-law/court-ranks";
+import { RANK } from "@/api/lib/case-law/court-ranks";
 import {
   compareCourtWeightPrecedence,
   flattenCourtWeightEntries,
@@ -31,40 +29,17 @@ export type CourtWeightSeedRow = {
 };
 
 /**
- * The widest pattern a seed row may carry: the registry's `court_pattern`
- * column is `varchar(512)`.
+ * The one United States row: the name rank the registry held before USA
+ * decisions carried a court id, kept so the table keeps the key its seed
+ * migration wrote. A USA decision ranks by its court id's directory tier
+ * (`court-ranks.ts`), never through this row, and nothing reads a court id
+ * from it; it is a fixed literal, not rendered from the directory.
  */
-export const COURT_PATTERN_MAX_LENGTH = 512;
-
-/**
- * A court's canonical name as an anchored, case-folded pattern that means the
- * same text as a JavaScript `u`-flag RegExp and as a PostgreSQL ARE: every
- * metacharacter either runtime gives a meaning is escaped, and nothing else,
- * since the `u` flag rejects needless escapes.
- */
-const exactCourtPattern = (name: string): string => {
-  const pattern = `^${name.toLowerCase().replace(/[$()*+.?[\\\]^{|}]/gu, "\\$&")}$`;
-  return pattern.length <= COURT_PATTERN_MAX_LENGTH
-    ? pattern
-    : panic(`court name too long for one pattern: ${name}`);
+const US_LEGACY_NAME_ROW: CourtWeightSeedRow = {
+  country: "USA",
+  courtPattern: "^supreme court of the united states$",
+  ...RANK.supreme,
 };
-
-/**
- * The United States rows, rendered from the court directory: one exact,
- * anchored pattern per writable court (`US_WRITABLE_COURT_IDS`), at the rank
- * of its directory tier. Only a writable court's name can be stored, so the
- * rows grow with write enrollment rather than with the directory.
- */
-const usCourtWeightRows = (): CourtWeightSeedRow[] =>
-  US_COURTS.filter(({ id }) => US_WRITABLE_COURT_IDS.has(id)).map(
-    ({ canonicalName, tier }) => ({
-      country: "USA",
-      courtPattern: exactCourtPattern(canonicalName),
-      tier: US_TIER_RANK[tier].tier,
-      tierLabel: US_TIER_RANK[tier].tierLabel,
-      weight: US_TIER_RANK[tier].weight,
-    }),
-  );
 
 export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
   // Czech Republic
@@ -207,10 +182,8 @@ export const COURT_WEIGHT_SEED: readonly CourtWeightSeedRow[] = [
     courtPattern: "general court",
     ...RANK.supreme,
   },
-  // United States: the writable courts of the court directory
-  // (`us-courts.ts`). No court of this jurisdiction holds the constitutional
-  // rank.
-  ...usCourtWeightRows(),
+  // United States: ranked by court id, not by this table.
+  US_LEGACY_NAME_ROW,
 ];
 
 const compile = (row: CourtWeightSeedRow): CourtWeightEntry => ({

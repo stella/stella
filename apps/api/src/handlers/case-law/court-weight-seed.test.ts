@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
-import { US_COURTS, US_WRITABLE_COURT_IDS } from "@stll/api-contract/us-courts";
+import { US_COURTS } from "@stll/api-contract/us-courts";
 
-import { caseLawCourtWeights } from "@/api/db/schema";
 import {
-  COURT_PATTERN_MAX_LENGTH,
   COURT_WEIGHT_SEED,
   courtWeightEntriesFromSeed,
   courtWeightJurisdictionSeedSql,
@@ -242,51 +240,15 @@ describe("court weight seed", () => {
     }
   });
 
-  test("the United States ranks each writable court once, at its directory tier, and no other court", () => {
-    // Its decisions carry the directory's canonical court names, so each rank
-    // is anchored to that spelling rather than to words other courts share.
-    // Only a writable court's name can be stored, so only those are seeded.
-    const rankOfTier = {
-      supreme: { tier: 3, tierLabel: "supreme", weight: 8 },
-      appellate: { tier: 2, tierLabel: "appeal", weight: 5 },
-      trial: { tier: 1, tierLabel: "district", weight: 2 },
-      special: { tier: 1, tierLabel: "special", weight: 3 },
-    } as const;
+  test("the United States keeps its one legacy name row and names no other court", () => {
+    // USA decisions rank by court id, so the registry holds only the row its
+    // seed migration wrote, anchored so no other court's name matches it.
     const entries = seededCourtWeightEntries("USA");
-    const writable = US_COURTS.filter(({ id }) =>
-      US_WRITABLE_COURT_IDS.has(id),
-    );
-    expect(writable.map(({ id }) => id)).toEqual([...US_WRITABLE_COURT_IDS]);
-    expect(entries).toHaveLength(writable.length);
-    for (const court of writable) {
-      expect(
-        entries
-          .filter((entry) => entry.pattern.test(court.canonicalName))
-          .map(({ tier, tierLabel, weight }) => ({ tier, tierLabel, weight })),
-      ).toEqual([rankOfTier[court.tier]]);
-    }
-    const rankedButNotWritable = US_COURTS.filter(
-      (court) =>
-        !US_WRITABLE_COURT_IDS.has(court.id) &&
+    expect(
+      US_COURTS.filter((court) =>
         entries.some((entry) => entry.pattern.test(court.canonicalName)),
-    ).map(({ id }) => id);
-    expect(rankedButNotWritable).toEqual([]);
-    for (const court of [
-      "Supreme Court of California",
-      "United States Court of Appeals for the Ninth Circuit",
-      "Supreme Court of the United States Virgin Islands",
-    ]) {
-      expect([
-        court,
-        entries.some((entry) => entry.pattern.test(court)),
-      ]).toEqual([court, false]);
-    }
-  });
-
-  test("United States patterns are exact names that fit the registry column", () => {
-    expect(caseLawCourtWeights.courtPattern.getSQLType()).toBe(
-      `varchar(${String(COURT_PATTERN_MAX_LENGTH)})`,
-    );
+      ).map(({ id }) => id),
+    ).toEqual(["scotus"]);
     expect(COURT_WEIGHT_SEED.filter((row) => row.country === "USA")).toEqual([
       {
         country: "USA",
