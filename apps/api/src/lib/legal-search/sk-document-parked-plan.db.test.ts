@@ -181,20 +181,55 @@ const expectParkedIndexOnly = async (
   ).toEqual([{ seqScan: false, index: PARKED_INDEX }]);
 };
 
-test("the index predicate spells the parking threshold the queue uses", async () => {
-  const [row] = executedRows(
-    await db.execute(
-      sql`SELECT pg_get_indexdef(${PARKED_INDEX}::regclass) AS definition`,
-    ),
-  );
-  const definition = isRecord(row) ? row["definition"] : undefined;
-  expect(definition).toContain(
-    `(document_fetch_attempts >= ${MAX_DOCUMENT_FETCH_ATTEMPTS})`,
-  );
+test("the migration builds the schema's index, with the queue's threshold", async () => {
+  // The fixture's index comes from the schema, so the plan tests below never
+  // see the shipped migration. Build the migration's statement under another
+  // name and require the same definition, keys and predicate alike.
   const migration = await Bun.file(MIGRATION_PATH).text();
-  expect(migration).toContain(
-    `"document_fetch_attempts" >= ${MAX_DOCUMENT_FETCH_ATTEMPTS};`,
+  const create = migration
+    .split("--> statement-breakpoint")
+    .find((part) =>
+      part.includes(`CREATE INDEX CONCURRENTLY "${PARKED_INDEX}"`),
+    );
+  if (create === undefined) {
+    panic(`Migration has no CREATE INDEX for ${PARKED_INDEX}.`);
+  }
+  const copyName = `${PARKED_INDEX}_migration`;
+  await client.query(
+    create
+      .slice(create.indexOf("CREATE INDEX CONCURRENTLY"))
+      .trim()
+      .replace("CREATE INDEX CONCURRENTLY", "CREATE INDEX")
+      .replace(`"${PARKED_INDEX}"`, () => `"${copyName}"`),
   );
+  try {
+    const [row] = executedRows(
+      await db.execute(
+        sql`SELECT pg_get_indexdef(${PARKED_INDEX}::regclass) AS schema_definition,
+                   pg_get_indexdef(${copyName}::regclass) AS migration_definition`,
+      ),
+    );
+    if (!isRecord(row)) {
+      panic("Index comparison returned no row.");
+    }
+    const schemaDefinition = row["schema_definition"];
+    const migrationDefinition = row["migration_definition"];
+    if (
+      typeof schemaDefinition !== "string" ||
+      typeof migrationDefinition !== "string"
+    ) {
+      panic("Index comparison returned no definitions.");
+    }
+    expect(migrationDefinition.replace(copyName, () => PARKED_INDEX)).toBe(
+      schemaDefinition,
+    );
+    expect(schemaDefinition).toContain(
+      `(document_fetch_attempts >= ${MAX_DOCUMENT_FETCH_ATTEMPTS})`,
+    );
+  } finally {
+    // The copy would otherwise compete with the schema's index in the plans.
+    await client.query(`DROP INDEX "${copyName}"`);
+  }
 });
 
 test(
