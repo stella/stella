@@ -1,15 +1,15 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useFormatter, useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
   PencilIcon,
   PinIcon,
-} from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";

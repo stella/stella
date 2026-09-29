@@ -73,6 +73,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -85,7 +86,6 @@ import {
   decideDecisionDateRepair,
   decisionDateSourceSurveyStatement,
   decisionDateYearSurveyStatement,
-  executedRows,
   parseCorruptDecisionDateRow,
   repairDecisionDateBatch,
   selectCorruptDecisionDatesStatement,

@@ -3,8 +3,8 @@
 import type * as React from "react";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { XIcon } from "lucide-react";
 
+import { XIcon } from "../icons";
 import {
   OVERLAY_LAYER_CLASS_NAMES,
   type OverlayLayer,

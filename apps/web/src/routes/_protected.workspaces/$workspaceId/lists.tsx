@@ -8,17 +8,17 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { Result } from "better-result";
+import { useFormatter, useTranslations } from "use-intl";
+import * as v from "valibot";
+
+import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
   FileTextIcon,
   ListChecksIcon,
   PlusIcon,
   XIcon,
-} from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
-import * as v from "valibot";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,

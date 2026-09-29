@@ -26,9 +26,9 @@ import {
   useState,
 } from "react";
 
-import { ChevronRight } from "lucide-react";
 import { Temporal } from "temporal-polyfill/full";
 
+import { ChevronRightIcon as ChevronRight } from "../icons";
 import { cn } from "../lib/utils";
 import { DirectionalIcon } from "./directional-icon";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./tooltip";

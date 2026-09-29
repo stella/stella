@@ -6,6 +6,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -18,7 +19,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 export const CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS = {
   empty: "empty",
-  blocked: "blocked",
+  knownBlocked: "known_blocked",
   pending: "pending",
   intentOutstanding: "intent_outstanding",
   /**
@@ -56,16 +57,6 @@ const intentScope = ({
     eq(corpusIndexProjectionIntents.generation, generation),
   );
 
-const rowsOf = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
-
 /**
  * Whether any revision of the generation can still change the engine, asked
  * only once the state queue is quiet.
@@ -95,6 +86,7 @@ const readOutstandingCorpusProjectionIntentTx = async (
   tx: Transaction,
   target: CorpusIndexProjectionConvergenceTarget,
 ): Promise<boolean> => {
+  // sql-perf-allow: index corpus_index_projection_intents_work_idx and corpus_index_projection_states_applied_census_idx for one family/generation
   const result: unknown = await tx.execute(sql`
     SELECT EXISTS (
       SELECT 1
@@ -120,7 +112,7 @@ const readOutstandingCorpusProjectionIntentTx = async (
         AND ${corpusIndexProjectionStates.appliedRevision} IS NOT NULL
     ) AS "hasOutstandingIntent"
   `);
-  const observation = rowsOf(result).at(0);
+  const observation = executedRows(result).at(0);
   if (
     !isRecord(observation) ||
     typeof observation["hasOutstandingIntent"] !== "boolean"
@@ -159,7 +151,7 @@ export const readCorpusIndexProjectionConvergenceTx = async (
         AND ${corpusIndexProjectionNeedsWork(corpusIndexProjectionStates)}
     ) AS "hasPendingState"
   `);
-  const observation = rowsOf(result).at(0);
+  const observation = executedRows(result).at(0);
   if (
     !isRecord(observation) ||
     typeof observation["hasState"] !== "boolean" ||
@@ -171,14 +163,14 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   if (!observation["hasState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.empty;
   }
-  if (observation["hasBlockedState"]) {
-    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.blocked;
-  }
   if (observation["hasPendingState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending;
   }
   if (await readOutstandingCorpusProjectionIntentTx(tx, target)) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding;
+  }
+  if (observation["hasBlockedState"]) {
+    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.knownBlocked;
   }
   const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
     tx,

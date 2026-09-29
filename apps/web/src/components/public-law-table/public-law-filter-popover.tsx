@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { SlidersHorizontalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { SlidersHorizontalIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverPanel,

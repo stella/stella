@@ -32,9 +32,7 @@ export const isSqlPerfSource = (file: string): boolean => {
     return false;
   }
   const directories = new Set(file.split("/").slice(0, -1));
-  if (
-    EXCLUDED_DIRECTORIES.some((directory) => directories.has(directory))
-  ) {
+  if (EXCLUDED_DIRECTORIES.some((directory) => directories.has(directory))) {
     return false;
   }
   return !EXCLUDED_PREFIXES.some((prefix) => file.startsWith(prefix));

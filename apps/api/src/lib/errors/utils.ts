@@ -5,7 +5,6 @@ import path from "node:path";
 import { createDevErrorLogger } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import { envBase } from "@/api/env-base";
 import {
   errorClassName,
   errorTag,
@@ -18,6 +17,7 @@ import {
   systemFields,
 } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Re-exported so callers keep one import path, while modules that must not
 // pay this file's import-time env read can take it from the split module.
@@ -200,7 +200,7 @@ export const errorFingerprint = (error: unknown): ErrorFingerprint => ({
 // below has initialized — a direct reference here would hit its TDZ during
 // module evaluation.
 export const logServerDevError = createDevErrorLogger({
-  isDev: envBase.isDev,
+  echoErrors: isLocalDevOpen(),
   sink: ({ error, context }) => {
     devLogWrites = devLogWrites.then(
       async () => await appendDevErrorJsonl({ error, context }),

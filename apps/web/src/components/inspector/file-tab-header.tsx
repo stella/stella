@@ -6,10 +6,10 @@ import type {
   SetStateAction,
 } from "react";
 
-import { Maximize2Icon, Minimize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Maximize2Icon, Minimize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";

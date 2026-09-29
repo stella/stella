@@ -12,11 +12,11 @@
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
-import { RefreshCwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { RefreshCwIcon } from "@stll/ui/icons";
 import {
   PreviewCard,
   PreviewCardPopup,

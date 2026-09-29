@@ -22,6 +22,7 @@ import {
   legislationIndexJobs,
   schedulerJobs,
 } from "@/api/db/schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusIndexProjectionSubject } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import type {
@@ -211,16 +212,6 @@ const CONSTRAINT_STATE_QUERY = (table: string, constraint: string) => sql`
     AND constraint_state.conname = ${constraint}
 `;
 
-/** `execute` answers with an array on one driver and `{ rows }` on the other. */
-const executedRows = (result: unknown): Record<string, unknown>[] => {
-  if (Array.isArray(result)) {
-    return result.filter((row: unknown) => isRecord(row));
-  }
-  return isRecord(result) && Array.isArray(result["rows"])
-    ? result["rows"].filter((row: unknown) => isRecord(row))
-    : [];
-};
-
 type IndexJobTable = keyof typeof CORPUS_INDEX_JOB_SUCCEEDED_CHECKS;
 
 /**
@@ -240,7 +231,7 @@ const validateCheck = async (
   const state = executedRows(
     await tx.execute(CONSTRAINT_STATE_QUERY(table, constraint)),
   ).at(0);
-  if (state?.["isValidated"] !== true) {
+  if (!isRecord(state) || state["isValidated"] !== true) {
     panic(`Constraint ${constraint} on ${table} is not validated`);
   }
 };

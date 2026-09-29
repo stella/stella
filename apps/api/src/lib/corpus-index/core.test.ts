@@ -1,12 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { settleBoth, splitIngestRequests } from "@/api/lib/corpus-index/core";
+import {
+  settleBoth,
+  splitIngestRequests,
+  type IngestRequest,
+} from "@/api/lib/corpus-index/core";
 
 /**
  * A batch is sized in rows, but a passage family turns one row into as many
  * documents as it has passages, so the NDJSON body a batch serializes to is
- * not bounded by the row count. These tests pin the byte bound and the row
- * boundary it must never cut across.
+ * not bounded by the row count. These tests pin the byte bound and document
+ * order when a row spans multiple requests.
  */
 
 const utf8Bytes = (value: string): number => Buffer.byteLength(value, "utf-8");
@@ -20,7 +24,7 @@ const builtRow = (id: string, passages: number, filler: string) => ({
   })),
 });
 
-const ingestedIds = (requests: ReturnType<typeof splitIngestRequests>) =>
+const ingestedIds = (requests: IngestRequest<unknown>[]) =>
   requests.flatMap(({ ndjson }) =>
     ndjson.split("\n").map((line) => {
       const doc: Record<string, unknown> = JSON.parse(line);
@@ -32,7 +36,7 @@ describe("splitIngestRequests", () => {
   test("a group that fits stays one request", () => {
     const group = [builtRow("a", 3, "x"), builtRow("b", 2, "x")];
 
-    const requests = splitIngestRequests(group, 1_000_000);
+    const requests = splitIngestRequests(group, 1_000_000).unwrap();
 
     expect(requests).toHaveLength(1);
     expect(requests.at(0)?.entries).toHaveLength(2);
@@ -46,7 +50,7 @@ describe("splitIngestRequests", () => {
       builtRow("c", 4, "x".repeat(400)),
     ];
 
-    const requests = splitIngestRequests(group, 2000);
+    const requests = splitIngestRequests(group, 2000).unwrap();
 
     expect(requests.length).toBeGreaterThan(1);
     // No document dropped, none duplicated, document order preserved — the
@@ -66,54 +70,79 @@ describe("splitIngestRequests", () => {
     );
     const maxBytes = 4000;
 
-    for (const { ndjson } of splitIngestRequests(group, maxBytes)) {
+    for (const { ndjson } of splitIngestRequests(group, maxBytes).unwrap()) {
       expect(utf8Bytes(ndjson)).toBeLessThanOrEqual(maxBytes);
     }
   });
 
-  test("a row is never cut across two requests", () => {
+  test("an oversized row is split across bounded requests with row metadata on each part", () => {
     const group = [builtRow("a", 20, "x".repeat(100)), builtRow("b", 1, "x")];
 
-    const requests = splitIngestRequests(group, 500);
+    const requests = splitIngestRequests(group, 500).unwrap();
 
+    expect(requests.length).toBeGreaterThan(2);
     for (const { entries, ndjson } of requests) {
-      const documentIds = new Set(
-        ndjson.split("\n").map((line) => {
-          const doc: Record<string, unknown> = JSON.parse(line);
-          return String(doc["document_id"]);
-        }),
+      expect(utf8Bytes(ndjson)).toBeLessThanOrEqual(500);
+      const ndjsonDocs = ndjson.split("\n").map((line) => JSON.parse(line));
+      expect(entries.flatMap(({ docs }) => docs)).toEqual(ndjsonDocs);
+      expect(entries.map(({ row }) => row.id)).toContain(
+        ndjsonDocs[0]?.document_id,
       );
-      // A row split across requests could be marked indexed while half its
-      // passages were still missing from the index.
-      expect([...documentIds].toSorted()).toEqual(
-        entries.map(({ row }) => row.id).toSorted(),
+    }
+    expect(ingestedIds(requests)).toEqual([
+      ...Array.from({ length: 20 }, (_, seq) => `a:${seq}`),
+      "b:0",
+    ]);
+  });
+
+  test("a single document larger than the budget fails explicitly", () => {
+    const group = [builtRow("huge", 1, "x".repeat(500))];
+
+    const outcome = splitIngestRequests(group, 100);
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error.message).toContain(
+        "exceeding the 100-byte document limit",
       );
     }
   });
 
-  test("a single oversized row is sent whole rather than cut", () => {
-    const group = [builtRow("huge", 40, "x".repeat(500))];
+  test("a larger allowed document occupies its own request", () => {
+    const oversized = builtRow("large", 1, "x".repeat(120));
+    const group = [
+      builtRow("before", 1, "x"),
+      oversized,
+      builtRow("after", 1, "x"),
+    ];
+    const requests = splitIngestRequests(group, 100, {
+      maxSingleDocumentBytes: 200,
+    }).unwrap();
 
-    const requests = splitIngestRequests(group, 100);
-
-    // Keeping the row's mark honest outweighs the budget here; one court
-    // decision bounds the overshoot.
-    expect(requests).toHaveLength(1);
-    expect(requests.at(0)?.ndjson.split("\n")).toHaveLength(40);
+    expect(
+      requests.map(({ entries }) => entries.map(({ row }) => row.id)),
+    ).toEqual([["before"], ["large"], ["after"]]);
+    expect(utf8Bytes(requests[1]?.ndjson ?? "")).toBeGreaterThan(100);
+    expect(ingestedIds(requests)).toEqual(["before:0", "large:0", "after:0"]);
   });
 
   test("the budget counts UTF-8 bytes, not code units", () => {
     // Czech/Slovak/Arabic legal text is multi-byte; sizing on `.length` would
     // under-count the wire body by up to 3x and defeat the bound.
     const group = [builtRow("cz", 1, "ř".repeat(300))];
-    const [request] = splitIngestRequests(group, 1_000_000);
+    const [request] = splitIngestRequests(group, 1_000_000).unwrap();
     const ndjson = request?.ndjson ?? "";
 
     expect(utf8Bytes(ndjson)).toBeGreaterThan(ndjson.length);
   });
 
   test("an empty group produces no requests", () => {
-    expect(splitIngestRequests([], 1000)).toEqual([]);
+    expect(splitIngestRequests([], 1000).unwrap()).toEqual([]);
+  });
+
+  test("a row without documents is rejected before building a request", () => {
+    expect(() =>
+      splitIngestRequests([{ row: { id: "empty" }, docs: [] }], 1000),
+    ).toThrow("An ingest row has no documents");
   });
 });
 

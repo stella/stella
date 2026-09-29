@@ -19,7 +19,12 @@ export const createTestCorrespondence = async (workspaceId: string) => {
         correspondenceId,
         CORRESPONDENCE_SMOKE_SUBJECT,
       ],
-      { cwd: API_ROOT, timeout: 30_000 },
+      {
+        cwd: API_ROOT,
+        // Seeds run only with local development access open.
+        env: { ...process.env, NODE_ENV: "development", STELLA_LOCAL_DEV: "1" },
+        timeout: 30_000,
+      },
       (error, _stdout, stderr) => {
         if (error !== null) {
           reject(

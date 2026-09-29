@@ -27,6 +27,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import createPlaybookFromRun from "@/api/handlers/playbooks/from-run/create";
 import getPlaybookDefinition from "@/api/handlers/playbooks/get";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -143,6 +144,7 @@ const orgContext = () => ({
       : null,
   memberRole: { role: "owner" as const },
   orgAIConfig: null,
+  orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/playbooks/from-run"),

@@ -30,6 +30,7 @@ import {
   normalizeObjectInputAtBoundary,
   withInputNotes,
 } from "@/api/mcp/input-normalization";
+import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import {
   getStaticMcpToolDefinition,
   getStaticMcpToolHandler,
@@ -222,6 +223,29 @@ export const listMcpTools = async (
   );
 };
 
+/**
+ * Whether this session could call a static tool: the surface lists it, its
+ * feature is on, and the credential holds every scope it requires (the same
+ * checks `tools/call` applies before dispatch).
+ */
+const isStaticToolCallable = ({
+  grantedScopes,
+  mode,
+  toolName,
+}: {
+  grantedScopes: readonly string[];
+  mode: McpMode;
+  toolName: string;
+}): boolean => {
+  const definition = getStaticMcpToolDefinition(toolName, mode);
+  if (!definition || !isMcpToolFeatureEnabled(definition.feature)) {
+    return false;
+  }
+  return [definition.scope, ...(definition.additionalScopes ?? [])].every(
+    (scope) => grantedScopes.includes(scope),
+  );
+};
+
 export const handleMcpToolCall = async ({
   args,
   context,
@@ -346,6 +370,22 @@ export const handleMcpToolCall = async ({
   }
   const normalizedArgs = normalized.value;
   const inputNotes = normalized.notes;
+
+  // Before confirmation: asking a human to approve a call that cannot run
+  // would only defer the same answer.
+  const needsMatter = matterRequiredResult({
+    args: normalizedArgs,
+    context,
+    saveMatterCallable: isStaticToolCallable({
+      grantedScopes: context.grantedScopes,
+      mode,
+      toolName: "save_matter",
+    }),
+    toolName,
+  });
+  if (needsMatter !== null) {
+    return serializeForSurface(needsMatter);
+  }
 
   // Resolve confirmation from the registry's canonical behavior.
   // Capability-catalog and upstream tools defer the final decision to their

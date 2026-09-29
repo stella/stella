@@ -12,12 +12,12 @@ import {
   useMatch,
   useNavigate,
 } from "@tanstack/react-router";
-import { HistoryIcon, TrashIcon } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { HistoryIcon, TrashIcon } from "@stll/ui/icons";
 import { InputGroup, InputGroupInput } from "@stll/ui/input-group";
 import {
   Sheet,

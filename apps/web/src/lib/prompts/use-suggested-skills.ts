@@ -5,6 +5,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/lib/knowledge/queries";
+import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
 
 import type { ChatPrompt } from "./types";
 
@@ -42,7 +43,11 @@ export const useSuggestedSkills = (): ChatPrompt[] => {
     }
     detached(fetchNextPage(), "use-suggested-skills.fetch-next-page");
   }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
-  const rows = commandShortcutRowsFromSkillPages(skillPages?.pages);
+  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
+  const rows = commandShortcutRowsFromSkillPages(
+    skillPages?.pages,
+    unavailableSkillIds,
+  );
 
   return rows.slice(0, MAX_SUGGESTIONS).map<ChatPrompt>((row) => ({
     id: row.id,

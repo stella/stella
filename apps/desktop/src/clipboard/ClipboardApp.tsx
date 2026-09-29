@@ -27,6 +27,23 @@ import { invoke } from "@tauri-apps/api/core";
 import { TauriEvent } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
+
+import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
+import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
+import { ContextMenu } from "@stll/ui/context-menu";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
 import {
   Building2Icon,
   ChevronsUpDownIcon,
@@ -52,25 +69,8 @@ import {
   Trash2Icon,
   VideoIcon,
   XIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
-
-import { getUiLocaleDirection, isUiLocale } from "@stll/locales";
-import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
-import { ContextMenu } from "@stll/ui/context-menu";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   InputGroup,
@@ -92,6 +92,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { RegistrySearch } from "../registry/RegistrySearch";
@@ -538,12 +539,9 @@ const ClipboardCard = ({
           ) : null}
           {highlightedText.map((segment) =>
             segment.match ? (
-              <mark
-                className="bg-foreground/16 text-foreground rounded-[3px] box-decoration-clone px-0.5"
-                key={segment.start}
-              >
+              <TextMark {...SEARCH_HIT_MARK} key={segment.start}>
                 {segment.text}
-              </mark>
+              </TextMark>
             ) : (
               <span key={segment.start}>{segment.text}</span>
             ),

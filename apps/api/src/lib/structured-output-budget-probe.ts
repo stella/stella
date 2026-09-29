@@ -143,7 +143,9 @@ export const buildBudgetEdgeSchema = ({
   for (let index = 0; ; index += 1) {
     const candidateProperties = [...properties, syntheticProperty(index)];
     const outputSchema = buildBatchSchema(candidateProperties, []);
+    // The probe measures a real provider's grammar budget.
     const wireSchema = structuredOutputWireJsonSchema({
+      mock: false,
       outputSchema,
       provider,
     });

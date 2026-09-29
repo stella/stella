@@ -1,13 +1,18 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2Icon, LockIcon, LockOpenIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { isReviewFlag, REVIEW_FLAG } from "@stll/api-contract";
 import type { ReviewFlag } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
+import {
+  CheckCircle2Icon,
+  LockIcon,
+  LockOpenIcon,
+  XIcon,
+} from "@stll/ui/icons";
 import {
   MenuGroup,
   MenuGroupLabel,

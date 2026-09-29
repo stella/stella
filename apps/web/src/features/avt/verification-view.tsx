@@ -7,17 +7,19 @@
 import * as React from "react";
 
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
   CircleAlertIcon,
   EyeIcon,
   FilterIcon,
   FlagIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { textMarkClass } from "@stll/ui/text-mark";
+import type { TextMarkState } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
@@ -463,6 +465,23 @@ const matchStepper = ({
   };
 };
 
+type ClaimMarkStateArgs = {
+  selected: boolean;
+  highlight: boolean;
+};
+
+/** The selected claim is the one being pointed at; a claim the active
+ *  filter matches is picked out with a wash of its verdict's hue. */
+const claimMarkState = ({
+  selected,
+  highlight,
+}: ClaimMarkStateArgs): TextMarkState => {
+  if (selected) {
+    return "active";
+  }
+  return highlight ? "matched" : "rest";
+};
+
 type ClaimSpanProps = {
   claim: VerificationClaim;
   state: ClaimState;
@@ -486,24 +505,21 @@ const ClaimSpan = ({
 }: ClaimSpanProps) => {
   const t = useTranslations();
   const reviewStatus = claim.review?.status ?? null;
-  const color = STATE_COLOR[state];
+  const { mark, markTextClass } = STATE_COLOR[state];
   return (
     <button
       aria-pressed={selected}
       className={cn(
-        "inline cursor-pointer box-decoration-clone text-start whitespace-pre-wrap underline decoration-2 underline-offset-3 hover:decoration-4 focus-visible:outline-2 focus-visible:outline-offset-2",
-        color.decorationClass,
-        highlight && color.highlightClass,
+        "inline cursor-pointer text-start whitespace-pre-wrap hover:decoration-4 focus-visible:outline-2 focus-visible:outline-offset-2",
+        textMarkClass({
+          ...mark,
+          state: claimMarkState({ selected, highlight }),
+        }),
+        markTextClass,
         dim && "opacity-40",
-        selected && color.selectedClass,
       )}
       id={claimDomId(claim.id)}
       onClick={() => onSelect(claim.id)}
-      style={{
-        ...color.decorationStyle,
-        ...(highlight ? color.highlightStyle : undefined),
-        ...(selected ? color.selectedStyle : undefined),
-      }}
       type="button"
     >
       {text}

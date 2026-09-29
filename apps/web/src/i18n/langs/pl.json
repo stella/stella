@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "np. Standard 2025"
     },
     "revertToDraft": "Przywróć do wersji roboczej",
+    "savedNarratives": {
+      "empty": "Zapisz opis, aby użyć go ponownie.",
+      "save": "Zapisz opis",
+      "title": "Zapisane opisy"
+    },
     "selectMatter": "Wybierz sprawę...",
     "selectMatterToStart": "Wybierz sprawę, aby rozpocząć mierzenie czasu",
     "selectedCount": "{count, plural, one {# zaznaczony} few {# zaznaczone} many {# zaznaczonych} other {# zaznaczonego}}",
@@ -884,6 +889,7 @@
       "apiKey": "Klucz API",
       "none": "Bez konfiguracji"
     },
+    "skillNeedsUnavailableTools": "Niedostępna w czacie. Wymaga narzędzia, które nie jest tam dostępne: {tools}",
     "toolNames": {
       "anonymize": "Anonimizuj",
       "createDocx": "Utwórz DOCX",
@@ -977,7 +983,15 @@
       "searchFiles": "Szukaj plików",
       "searchMatters": "Szukaj spraw",
       "searchMcpServers": "Szukaj serwerów MCP...",
-      "searchSkills": "Szukaj umiejętności"
+      "searchSkills": "Szukaj umiejętności",
+      "skillNeeds": {
+        "browserExtension": "Połącz rozszerzenie przeglądarki, aby użyć tej umiejętności",
+        "document": "Otwórz dokument, aby użyć tej umiejętności",
+        "matter": "Rozpocznij czat w sprawie, aby użyć tej umiejętności",
+        "rawSendMode": "Niedostępne w zanonimizowanych czatach",
+        "reviewEdits": "Przełącz edycje na ręczną weryfikację, aby użyć tej umiejętności",
+        "webSearch": "Włącz wyszukiwanie w sieci, aby użyć tej umiejętności"
+      }
     },
     "contextMeter": {
       "attachments": "Załączone dokumenty",
@@ -1062,6 +1076,10 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "mockModel": {
+      "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
+      "label": "Symulowane AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
@@ -1624,6 +1642,7 @@
     "profile": "Profil",
     "properties": "Właściwości",
     "queued": "W kolejce",
+    "reason": "Powód",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
@@ -1949,6 +1968,19 @@
     "deliveredBy": "Dostarczone przez <address>{sender}</address>",
     "deliveredByAuthenticated": "Dostarczone przez <address>{sender}</address> · uwierzytelniono",
     "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
+    "drops": {
+      "authenticationHint": "Poproś administratora poczty nadawcy o skonfigurowanie <protocol>SPF</protocol>, <protocol>DKIM</protocol> i <protocol>DMARC</protocol> dla domeny nadawczej.",
+      "reasons": {
+        "attachmentRejected": "Załącznik został odrzucony",
+        "authenticationFailed": "Uwierzytelnienie dostarczenia nie powiodło się",
+        "malformedMessage": "Nie udało się odczytać wiadomości",
+        "messageTooLarge": "Wiadomość jest zbyt duża",
+        "revokedAddress": "Adres e-mail został unieważniony",
+        "unauthorizedSender": "Nadawca nie ma uprawnień",
+        "unknownRecipient": "Nieznany odbiorca"
+      },
+      "title": "Odrzucone wiadomości"
+    },
     "empty": "Brak korespondencji.",
     "filers": "Nadawcy",
     "forwardedBy": "Przekazane przez <address>{sender}</address>",
@@ -5182,7 +5214,6 @@
         "signedDescriptionNoVersion": "Podpis zapisano jako nową wersję.",
         "signedTitle": "PDF podpisany",
         "stampLocation": "Miejsce",
-        "stampReason": "Powód",
         "stampRejectedDescription": "Nie można umieścić pieczęci w tym miejscu. Umieść ją ponownie i spróbuj jeszcze raz.",
         "stampSignedBy": "Podpisany cyfrowo przez",
         "stampTextUnrenderableDescription": "Powodu lub miejsca nie można pokazać w widocznej pieczęci. Zmień tekst albo użyj niewidocznego podpisu.",

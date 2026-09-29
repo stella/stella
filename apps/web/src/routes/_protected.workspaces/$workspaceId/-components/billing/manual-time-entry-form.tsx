@@ -21,6 +21,7 @@ export type ManualTimeEntryValues = {
   dateWorked: string;
   durationMinutes: number;
   narrative: string;
+  narrativeLanguage: string | null;
   billable: boolean;
 };
 
@@ -51,6 +52,9 @@ export const ManualTimeEntryForm = ({
     defaultValues.durationMinutes,
   );
   const [narrative, setNarrative] = useState(defaultValues.narrative);
+  const [narrativeLanguage, setNarrativeLanguage] = useState(
+    defaultValues.narrativeLanguage,
+  );
   const [billable, setBillable] = useState(defaultValues.billable);
 
   const valid =
@@ -73,6 +77,7 @@ export const ManualTimeEntryForm = ({
             dateWorked,
             durationMinutes,
             narrative: narrative.trim(),
+            narrativeLanguage,
             billable,
           }),
           "manual-time-entry-form.submit",
@@ -123,6 +128,8 @@ export const ManualTimeEntryForm = ({
       <TimeEntryNarrativeField
         id="time-entry-narrative"
         onChange={setNarrative}
+        onLanguageChange={setNarrativeLanguage}
+        narrativeLanguage={narrativeLanguage}
         value={narrative}
         workspaceId={workspaceId}
       />

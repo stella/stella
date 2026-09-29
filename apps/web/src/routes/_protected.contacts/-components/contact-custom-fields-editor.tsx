@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { PlusIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PlusIcon, Trash2Icon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 

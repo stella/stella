@@ -14,6 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { detectReviewParties } from "@/api/lib/document-review/parties";
 import type { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
@@ -137,6 +138,7 @@ const createHarness = ({
     },
     user: { id: USER_ID },
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
   });
 

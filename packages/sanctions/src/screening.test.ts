@@ -52,6 +52,7 @@ const listed = ({
   name,
 }: ListedOptions): SanctionsEntry => ({
   source: "eu",
+  issuer: "EU",
   sourceId,
   referenceNumber: null,
   entityType,
@@ -83,6 +84,54 @@ const scoreOf = (query: ScreeningQuery, key: string) =>
   )?.score ?? 0;
 
 describe("name screening", () => {
+  test("does not penalise an unknown-quality alias and keeps strong duplicate quality", () => {
+    const name = "North Star Holdings";
+    const entry = listed({
+      sourceId: "quality",
+      entityType: "organisation",
+      name,
+    });
+    const variants: ParsedList = {
+      version: EXTRA_VERSION,
+      entries: [
+        { ...entry, sourceId: "strong", names: [{ name, quality: "strong" }] },
+        {
+          ...entry,
+          sourceId: "unknown",
+          names: [{ name, quality: "unknown" }],
+        },
+        { ...entry, sourceId: "weak", names: [{ name, quality: "weak" }] },
+        {
+          ...entry,
+          sourceId: "unknown-then-weak",
+          names: [
+            { name, quality: "unknown" },
+            { name, quality: "weak" },
+          ],
+        },
+        {
+          ...entry,
+          sourceId: "weak-then-strong",
+          names: [
+            { name, quality: "weak" },
+            { name, quality: "strong" },
+          ],
+        },
+      ],
+    };
+    const results = screen(
+      buildScreeningIndex([variants]),
+      { name, entityType: "organisation" },
+      { cutoff: 0 },
+    ).unwrap().possibleMatches;
+    const score = (sourceId: string) =>
+      results.find(({ entry: hit }) => hit.sourceId === sourceId)?.score;
+    expect(score("unknown")).toBe(score("strong"));
+    expect(score("unknown-then-weak")).toBe(score("strong"));
+    expect(score("weak-then-strong")).toBe(score("strong"));
+    expect(score("weak")).toBeLessThan(score("strong") ?? 0);
+  });
+
   test("matches a listed person however the name is written", () => {
     for (const name of [
       "Vladimir Putin",
@@ -353,6 +402,26 @@ describe("name screening", () => {
     expect(found("Ahmed Mohamed Sa")).toContain("trailing");
     // The organisation reading still strips a real legal form.
     expect(found("Korea Samma Shipping Co")).toContain("6908678");
+  });
+
+  test("does not count an unclassified listed entity as a type conflict", () => {
+    const entry = {
+      ...listedPerson("unclassified", "Jana Example"),
+      entityType: "unknown" as const,
+    };
+    const unclassifiedIndex = buildScreeningIndex([
+      { version: EXTRA_VERSION, entries: [entry] },
+    ]);
+    const result = screen(
+      unclassifiedIndex,
+      { name: "Jana Example", entityType: "person" },
+      { cutoff: 0 },
+    ).unwrap();
+    expect(result.possibleMatches[0]?.evidence.entityType).toBe("not-compared");
+    expect(result.possibleMatches[0]?.evidence.conflicts).toEqual([]);
+    expect(result.possibleMatches[0]?.score).toBe(
+      result.possibleMatches[0]?.evidence.nameScore,
+    );
   });
 
   test("reports how many entries qualified when the limit cuts them", () => {

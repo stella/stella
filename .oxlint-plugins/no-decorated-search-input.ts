@@ -17,7 +17,8 @@
 //   an addon holding a different glyph, or an icon beside a non-search input.
 //
 // `Input` / `InputGroupInput` / `InputGroupAddon` resolve through their
-// `@stll/ui` import, and `SearchIcon` through `lucide-react`, so a local
+// `@stll/ui` import, and `SearchIcon` through `@stll/ui/icons` (or
+// `lucide-react` itself), so a local
 // component that happens to share a name is out of scope.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
@@ -33,6 +34,7 @@ import type { AstNode } from "./utils.ts";
 
 const UI_MODULE_PREFIX = "@stll/ui";
 const LUCIDE_MODULE = "lucide-react";
+const ICON_MODULE = "@stll/ui/icons";
 
 const SEARCH_INPUT_IMPORTS = new Set(["Input", "InputGroupInput"]);
 const ADDON_IMPORTS = new Set(["InputGroupAddon"]);
@@ -140,7 +142,8 @@ export default eslintCompatPlugin({
             }
             const source = statement.source.value;
             const fromUi = source.startsWith(UI_MODULE_PREFIX);
-            const fromLucide = source === LUCIDE_MODULE;
+            const fromLucide =
+              source === LUCIDE_MODULE || source === ICON_MODULE;
             if (!fromUi && !fromLucide) {
               continue;
             }

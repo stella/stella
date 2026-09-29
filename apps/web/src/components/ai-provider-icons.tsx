@@ -1,7 +1,8 @@
 import type { ComponentProps, ComponentType } from "react";
 
 import { panic } from "better-result";
-import { BlocksIcon, SparklesIcon, WindIcon } from "lucide-react";
+
+import { BlocksIcon, SparklesIcon, WindIcon } from "@stll/ui/icons";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 

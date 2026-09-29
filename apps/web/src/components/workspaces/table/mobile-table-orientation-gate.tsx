@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
-import { TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { TableIcon } from "@stll/ui/icons";
 
 /**
  * The gate is for a phone held upright, not for a narrow window: it needs the

@@ -1,12 +1,13 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { SEARCH_HIT_MARK, textMarkHighlightRule } from "@stll/ui/text-mark";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -337,16 +338,18 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
   return (
     <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2">
       <style>
-        {`
-          ::highlight(stella-inspector-find-${highlightKey}) {
-            background-color: color-mix(in oklab, var(--color-primary) 22%, transparent);
-            color: inherit;
-          }
-          ::highlight(stella-inspector-find-active-${highlightKey}) {
-            background-color: color-mix(in oklab, var(--color-primary) 45%, transparent);
-            color: inherit;
-          }
-        `}
+        {[
+          textMarkHighlightRule({
+            name: `stella-inspector-find-${highlightKey}`,
+            tone: SEARCH_HIT_MARK.tone,
+            state: "rest",
+          }),
+          textMarkHighlightRule({
+            name: `stella-inspector-find-active-${highlightKey}`,
+            tone: SEARCH_HIT_MARK.tone,
+            state: "active",
+          }),
+        ].join("\n")}
       </style>
       <Input
         aria-label={t("folio.findReplace.findText")}

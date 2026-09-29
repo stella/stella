@@ -499,6 +499,8 @@ const expectationFor = (
     case "refusal":
     case "server-error":
     case "text-terminal-only":
+    case "unlisted-stop":
+    case "unusable-stop":
       return panic(`${scenario} is not recordable`);
     default: {
       scenario satisfies never;

@@ -1,11 +1,11 @@
 import { panic } from "better-result";
-import { GitBranchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
   CHAT_THREAD_ORIGIN,
   type ChatThreadOrigin,
 } from "@stll/api-contract/chat";
+import { GitBranchIcon } from "@stll/ui/icons";
 
 /** Localized provenance shown beside titles in compact thread lists. */
 export const ChatThreadOriginPrefix = ({

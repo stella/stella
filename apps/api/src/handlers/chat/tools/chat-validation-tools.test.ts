@@ -75,6 +75,7 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   editable: true,
   id: toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666"),
   origin: "authored",
+  requiredTools: [],
   resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
   toolName: "closing-review",
   version: null,

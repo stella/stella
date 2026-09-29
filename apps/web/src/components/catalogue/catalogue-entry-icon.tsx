@@ -1,5 +1,4 @@
-import { EyeOffIcon, GlobeIcon, type LucideIcon } from "lucide-react";
-
+import { EyeOffIcon, GlobeIcon, type LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { getCatalogueIconImageSrc } from "@/components/catalogue/catalogue-entry-icon.logic";

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { resolveCaching } from "@/api/lib/ai-config";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -66,10 +67,15 @@ const autocompleteStream = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     promptCachingEnabled,
     session,
     request,
   }) {
+    const accessError = memberAIAccessError(orgAIConfigStatus);
+    if (accessError) {
+      return Result.err(accessError);
+    }
     const stream = yield* Result.try({
       try: () =>
         streamTanStackTextForRole({

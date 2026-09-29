@@ -10,9 +10,8 @@ import {
   ListChecksIcon,
   TextIcon,
   UserIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { FieldContent } from "./types";

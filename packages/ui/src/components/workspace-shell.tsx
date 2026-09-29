@@ -3,9 +3,8 @@
 import { useEffect } from "react";
 import type { ReactElement, ReactNode } from "react";
 
-import { MessageSquarePlusIcon } from "lucide-react";
-
 import { useIsMobile } from "../hooks/use-mobile";
+import { MessageSquarePlusIcon } from "../icons";
 import {
   InspectorRail,
   InspectorRailCell,

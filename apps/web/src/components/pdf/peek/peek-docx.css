@@ -51,3 +51,22 @@
   box-shadow: none !important;
   outline: 0 !important;
 }
+
+/* Find hits and cited passages wear the search-hit mark of `@stll/ui/text-mark`.
+   Folio hoists its passage fill into this property so a host can retint it;
+   `folio-passage-highlight.test.ts` holds it to the mark's fill. */
+:root .folio-passage-highlight {
+  --folio-passage-highlight-color: color-mix(
+    in oklab,
+    var(--warning) 30%,
+    transparent
+  );
+}
+
+.dark .folio-passage-highlight {
+  --folio-passage-highlight-color: color-mix(
+    in oklab,
+    var(--warning) 20%,
+    transparent
+  );
+}

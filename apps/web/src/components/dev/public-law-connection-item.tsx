@@ -7,8 +7,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { CableIcon, CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
 
+import { CableIcon, CircleCheckIcon, TriangleAlertIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MenuItem } from "@stll/ui/menu";
 import { cn } from "@stll/ui/utils";

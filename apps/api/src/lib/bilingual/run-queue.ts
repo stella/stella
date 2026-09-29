@@ -443,13 +443,13 @@ const executeRun = async (
     return "document_changed";
   }
 
-  const config = await Result.tryPromise({
-    try: async () =>
-      await actor.scopedDb(
-        async (tx) => await loadOrgAISettings(tx, actor.organizationId),
-      ),
-    catch: (cause) => cause,
-  });
+  const config = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await actor.scopedDb(async (tx) => await loadOrgAISettings(tx, actor)),
+      catch: (cause) => cause,
+    }),
+  );
   if (Result.isError(config)) {
     captureError(config.error, {
       runId: actor.runId,

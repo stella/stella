@@ -1,7 +1,7 @@
-import { ShieldCheckIcon, ShieldIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ShieldCheckIcon, ShieldIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 type ChatAnonymizedToggleProps = {

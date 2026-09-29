@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { scanMarkers } from "@stll/template-conditions";
+import { TextMark } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
@@ -25,17 +26,13 @@ export const HighlightedText = ({ text }: { text: string }) => {
     const isField = marker.meta.kind === "placeholder";
 
     parts.push(
-      <mark
-        className={cn(
-          "rounded-sm px-0.5",
-          isField
-            ? "bg-warning/15 dark:bg-warning/15"
-            : "bg-muted dark:bg-muted",
-        )}
+      <TextMark
         key={marker.start}
+        tone={isField ? "warning" : "muted"}
+        variant="fill"
       >
         {marker.raw}
-      </mark>,
+      </TextMark>,
     );
     lastIndex = marker.end;
   }

@@ -14,6 +14,7 @@ import {
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
+import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import {
@@ -33,14 +34,17 @@ import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/fi
 import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
 import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
+import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { RECONCILE_LIST_VERIFICATION_RUNS_TASK } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
 import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
+import { RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import { RECONCILE_REPORT_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { REFRESH_STATUTE_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/tasks/style-set-package-cleanup-reconcile";
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
@@ -218,6 +222,29 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   },
   {
+    description:
+      "Record organizations created without an access state as self-managed-keys while the state is not enforced",
+    id: "organizations.recordMissingAccessStates.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
+  },
+  {
+    description: "Refresh the Postgres case-law browse facet counts",
+    enabled: envBase.LEGAL_SEARCH_PROVIDER === "pg-fts",
+    id: "caseLaw.refreshBrowseFacets.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
+  },
+  {
+    description: "Recount the shards the public statute sitemap index lists",
+    id: "legislation.refreshSitemapShards.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
+  },
+  {
     description: "Delete raw objects of erased or never-written decisions",
     id: "caseLaw.reconcileRawSweeps.minutely",
     mode: "recurring",
@@ -257,6 +284,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+  },
+  {
+    description:
+      "Attach publisher expression ids to legislation rows stored without one",
+    id: "legislation.backfillExpressionIds.fiveMinute",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   },
   {
     description:

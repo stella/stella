@@ -45,11 +45,9 @@ import {
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  corpusIndexRoute,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -78,6 +76,7 @@ import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
+const NO_HITS: readonly CorpusIndexHit[] = [];
 
 export type ResearchRunColumn = ResearchQuestion & {
   columnId: SafeId<"caseLawResearchColumn">;
@@ -626,24 +625,31 @@ const retrievePassages = async (
     return [];
   }
   const searched = await Result.tryPromise(async () => {
-    const serving = await caseLawDb(
-      async (tx) => await readServingCorpusIndexGenerationTx(tx, "case_law"),
+    const target = await caseLawDb(
+      async (tx) =>
+        await readServingCorpusIndexTargetTx(tx, {
+          family: "case_law",
+          jurisdiction: decision.country,
+        }),
     );
-    const { indexId } = corpusIndexRoute(
-      requireCorpusIndexManifest("case_law", serving.generation),
-      decision.country,
-    );
-    return await getCorpusIndexClient(serving.cluster).search({
+    // An unready index group reads as no passages, as a failed search does.
+    if (Result.isError(target)) {
+      return NO_HITS;
+    }
+    const { serving, manifest } = target.value;
+    const { indexId } = corpusIndexRoute(manifest, decision.country);
+    const response = await getCorpusIndexClient(serving.cluster).search({
       indexId,
       query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
       maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
       sortBy: "_score",
     });
+    return Result.isError(response) ? NO_HITS : response.value.hits;
   });
-  if (Result.isError(searched) || Result.isError(searched.value)) {
+  if (Result.isError(searched)) {
     return [];
   }
-  return searched.value.value.hits.flatMap((hit) => {
+  return searched.value.flatMap((hit) => {
     const anchorId = hit["anchor_id"];
     const text = hit["text"];
     return typeof anchorId === "string" &&

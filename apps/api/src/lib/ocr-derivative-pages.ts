@@ -45,6 +45,7 @@ export const ocrDerivativeCursorFilter = (
     return undefined;
   }
   const boundaryCreatedAt = sql`(select b.created_at from document_processing_runs b where b.id = ${cursor})`;
+  // sql-perf-allow: bounded by one document_processing_runs primary-key cursor lookup per page
   return or(
     lt(documentProcessingRuns.createdAt, boundaryCreatedAt),
     and(

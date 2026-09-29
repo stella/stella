@@ -1,10 +1,10 @@
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { GlobeIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 import { Button } from "@stll/ui/button";
+import { GlobeIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuPopup,

@@ -2,11 +2,11 @@ import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
+import { SparklesIcon, UploadIcon, AiActionIcon } from "@stll/ui/icons";
 import { TextSeparator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -210,7 +210,7 @@ export const TemplateUpload = ({
               size="sm"
               variant="outline"
             >
-              <WandSparklesIcon />
+              <AiActionIcon />
               {t("templates.studio.prepareWithAi")}
             </Button>
           </div>

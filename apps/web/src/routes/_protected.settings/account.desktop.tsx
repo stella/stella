@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { Frame, FramePanel } from "@stll/ui/frame";
 import {
   ClipboardListIcon,
   FileTextIcon,
   LinkIcon,
   LockKeyholeIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
+} from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";

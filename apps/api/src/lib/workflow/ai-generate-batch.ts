@@ -20,6 +20,7 @@ import {
   streamTanStackObjectForRole,
   structuredOutputWireJsonSchema,
 } from "@/api/lib/tanstack-ai-generate";
+import { isMockTextAdapter } from "@/api/lib/tanstack-ai-models";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import {
   buildBatchSchema,
@@ -325,6 +326,7 @@ export const generateWorkflowData = async ({
     return Result.err(model.error);
   }
   const { provider, modelId } = model.value;
+  const mock = isMockTextAdapter(model.value.adapter);
 
   const chunks = splitPropertiesForBudget({
     provider,
@@ -332,6 +334,7 @@ export const generateWorkflowData = async ({
     properties: generativeProperties,
     buildSchema: (chunkProperties) =>
       structuredOutputWireJsonSchema({
+        mock,
         outputSchema: buildBatchSchema(chunkProperties, filenames),
         provider,
       }),

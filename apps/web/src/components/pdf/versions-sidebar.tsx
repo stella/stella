@@ -2,15 +2,6 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import {
-  CheckIcon,
-  DownloadIcon,
-  FileDiffIcon,
-  HistoryIcon,
-  Loader2Icon,
-  PlusIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -25,6 +16,15 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  CheckIcon,
+  DownloadIcon,
+  FileDiffIcon,
+  HistoryIcon,
+  Loader2Icon,
+  PlusIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";

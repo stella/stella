@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { ComponentProps } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -17,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/dialog";
+import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 

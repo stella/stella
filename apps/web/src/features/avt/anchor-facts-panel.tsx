@@ -10,10 +10,10 @@ import * as React from "react";
 
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { PencilIcon, ShieldAlertIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PencilIcon, ShieldAlertIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,

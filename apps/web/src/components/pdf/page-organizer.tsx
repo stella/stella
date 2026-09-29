@@ -14,20 +14,6 @@ import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import {
-  CopyIcon,
-  CropIcon,
-  DownloadIcon,
-  GripVerticalIcon,
-  PlusIcon,
-  Redo2Icon,
-  RotateCcwIcon,
-  RotateCwIcon,
-  SaveIcon,
-  Trash2Icon,
-  TriangleAlertIcon,
-  Undo2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -51,6 +37,20 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
+import {
+  CopyIcon,
+  CropIcon,
+  DownloadIcon,
+  GripVerticalIcon,
+  PlusIcon,
+  Redo2Icon,
+  RotateCcwIcon,
+  RotateCwIcon,
+  SaveIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+  Undo2Icon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { ScrollArea } from "@stll/ui/scroll-area";

@@ -886,6 +886,7 @@ export const buildFindConditions = ({
  * The creator's name, as the entity list shows it: read only for a member of
  * `organizationId`, or for a deleted account kept for attribution.
  */
+// sql-perf-allow: bounded by one user.id and one member for that user and organization
 export const createdByNameSortExpr = (
   organizationId: SafeId<"organization">,
 ): SQL => sql`(

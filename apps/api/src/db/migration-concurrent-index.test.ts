@@ -91,6 +91,9 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   "20260902100000_case_law_decision_date_ceiling/migration.sql:d799f99eb97532f1f3819aae3e325fcc65d123f2a3bc7b98d4e9f41e417f8491",
   // The same tiered retry around the swap to a per-jurisdiction floor.
   "20260927200300_case_law_decision_date_floor_by_jurisdiction/migration.sql:c300312bf7d8af42fb76119b2f09fd4a372d9d836809e69198f5de811b2bb4f4",
+  // The same tiered retry around adding the court id and its NOT VALID check,
+  // refusing to run while a USA row lacks an id.
+  "20261002120400_case_law_decision_court_id/migration.sql:fdc516be9eef4487a1cb269ae34793d2ed281e9ae55aeb91f6305005c5d6f3b5",
   // Acquires the two hot corpus tables in writer order before installing the
   // citation-count triggers. The static body retries only lock_not_available
   // under a bounded statement budget and changes no rows.
@@ -99,6 +102,12 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // and its triggers. The same static retry body: only lock_not_available,
   // under a bounded statement budget, changing no rows.
   "20260926150000_legislation_payload_revision/migration.sql:e0b0bda4c5afe7b5e214268b05745e54eda8580496a5d5bb904349e2e0d4ab9b",
+  // Acquires legislation_documents and legislation_sources in writer order
+  // before the expression identity columns, CHECKs and triggers. Static body:
+  // retries only lock_not_available, each attempt waiting at most one second
+  // and a failed attempt releasing what it took, a bounded number of times
+  // under a bounded statement budget, changing no rows.
+  "20261003120000_legislation_expression_identity/migration.sql:290e5e1b0593059ef05e22ec0e35f168abd9d235e7aa933143b676b6a6726a7c",
   // Acquires the decisions and the provision rows in writer order before the
   // provision span columns, the state foreign key and the enqueue trigger.
   // Same static retry body as above; it changes no rows.

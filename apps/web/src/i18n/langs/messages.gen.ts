@@ -556,6 +556,11 @@ type Messages = {
       "tableNamePlaceholder": "e.g. Standard 2025";
     };
     "revertToDraft": "Revert to draft";
+    "savedNarratives": {
+      "empty": "Save a narrative to use it again.";
+      "save": "Save narrative";
+      "title": "Saved narratives";
+    };
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
@@ -887,6 +892,7 @@ type Messages = {
       "apiKey": "API key";
       "none": "No setup";
     };
+    "skillNeedsUnavailableTools": "Not offered in chat. It needs a tool that isn't available there: {tools}";
     "toolNames": {
       "anonymize": "Anonymise";
       "createDocx": "Create DOCX";
@@ -981,6 +987,14 @@ type Messages = {
       "searchMatters": "Search matters";
       "searchMcpServers": "Search MCP servers...";
       "searchSkills": "Search skills";
+      "skillNeeds": {
+        "browserExtension": "Connect the browser extension to use this skill";
+        "document": "Open a document to use this skill";
+        "matter": "Start a chat in a matter to use this skill";
+        "rawSendMode": "Not available in anonymized chats";
+        "reviewEdits": "Switch edits to manual review to use this skill";
+        "webSearch": "Turn on web search to use this skill";
+      };
     };
     "contextMeter": {
       "attachments": "Attached documents";
@@ -1065,6 +1079,10 @@ type Messages = {
       "loadError": "Failed to load items";
     };
     "messageTimestampToday": "Today, {time}";
+    "mockModel": {
+      "description": "Canned replies from the local mock model";
+      "label": "Mock AI";
+    };
     "modelSelector": {
       "autoDescription": "Automatically chooses the model and effort.";
       "autoLabel": "Auto";
@@ -1627,6 +1645,7 @@ type Messages = {
     "profile": "Profile";
     "properties": "Properties";
     "queued": "Queued";
+    "reason": "Reason";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
     "refresh": "Refresh";
@@ -1952,6 +1971,19 @@ type Messages = {
     "deliveredBy": "Delivered by <address>{sender}</address>";
     "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated";
     "deliveryAuthentication": "Delivery authentication";
+    "drops": {
+      "authenticationHint": "Ask the sender’s email administrator to configure <protocol>SPF</protocol>, <protocol>DKIM</protocol>, and <protocol>DMARC</protocol> for the sending domain.";
+      "reasons": {
+        "attachmentRejected": "Attachment rejected";
+        "authenticationFailed": "Delivery authentication failed";
+        "malformedMessage": "Message could not be read";
+        "messageTooLarge": "Message too large";
+        "revokedAddress": "Email address revoked";
+        "unauthorizedSender": "Sender not authorized";
+        "unknownRecipient": "Unknown recipient";
+      };
+      "title": "Rejected deliveries";
+    };
     "empty": "No correspondence yet.";
     "filers": "Filers";
     "forwardedBy": "Forwarded by <address>{sender}</address>";
@@ -5185,7 +5217,6 @@ type Messages = {
         "signedDescriptionNoVersion": "The signature was saved as a new version.";
         "signedTitle": "PDF signed";
         "stampLocation": "Location";
-        "stampReason": "Reason";
         "stampRejectedDescription": "The stamp could not be placed there. Place it again and retry.";
         "stampSignedBy": "Digitally signed by";
         "stampTextUnrenderableDescription": "The reason or location can't be shown in a visible stamp. Change the text or use an invisible signature.";

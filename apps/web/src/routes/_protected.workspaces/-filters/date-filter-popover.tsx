@@ -1,7 +1,7 @@
-import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { CheckIcon, XIcon } from "@stll/ui/icons";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 

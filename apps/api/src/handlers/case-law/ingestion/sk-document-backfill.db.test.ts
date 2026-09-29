@@ -20,12 +20,16 @@ import {
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
   claimDocumentFetch,
+  DOCUMENT_FETCH_FAILURE,
+  fetchDecisionDocument,
   loadPendingDocuments,
   loadRemainingDocuments,
   markDocumentUnavailable,
+  MAX_DOCUMENT_FETCH_ATTEMPTS,
   MAX_PRIORITY_FETCH_ATTEMPTS,
   recordDocumentFetchRequest,
   storeBackfilledDocument,
@@ -69,6 +73,17 @@ const onlyThese = (
 
   return queue.map((row) => row.id).filter((id) => wanted.has(id));
 };
+
+/**
+ * What the promise rejected with; a resolution comes back wrapped so it can
+ * never pass for the expected error. bun-types declares `.rejects.toX` as
+ * void, so awaiting it trips type-aware lint; capture the rejection instead.
+ */
+const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
+    (value: unknown) => ({ resolved: value }),
+    (error: unknown) => error,
+  );
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -286,7 +301,12 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/bad.pdf",
       });
 
-      await markDocumentUnavailable(id, scopedDb);
+      await markDocumentUnavailable({
+        // The fixture rows carry no source hash.
+        claimedSourceHash: null,
+        decisionId: id,
+        scopedDb,
+      });
 
       const pending = await loadPendingDocuments(scopedDb, 100);
       expect(pending.map((row) => row.id)).not.toContain(id);
@@ -313,7 +333,12 @@ if (!databaseUrl || !runPostgresTests) {
         sourceObservationOrder: 7n,
       });
 
-      await markDocumentUnavailable(id, scopedDb);
+      await markDocumentUnavailable({
+        // The fixture rows carry no source hash.
+        claimedSourceHash: null,
+        decisionId: id,
+        scopedDb,
+      });
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -374,7 +399,12 @@ if (!databaseUrl || !runPostgresTests) {
         },
         scopedDb,
       });
-      await markDocumentUnavailable(id, scopedDb);
+      await markDocumentUnavailable({
+        // The fixture rows carry no source hash.
+        claimedSourceHash: null,
+        decisionId: id,
+        scopedDb,
+      });
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -533,7 +563,11 @@ if (!databaseUrl || !runPostgresTests) {
 
       const claim = await claimDocumentFetch(id, scopedDb);
 
-      expect(claim).toEqual({ status: "claimed", sourceHash: "hash-at-claim" });
+      expect(claim).toEqual({
+        status: "claimed",
+        sourceHash: "hash-at-claim",
+        attempts: 1,
+      });
     });
 
     test("a run just attempted is left alone until its cooldown passes", async () => {
@@ -575,8 +609,9 @@ if (!databaseUrl || !runPostgresTests) {
               // Newest decisions, so date order puts them first.
               decisionDate: `2026-08-0${n}`,
               documentFetchAttempts: MAX_PRIORITY_FETCH_ATTEMPTS,
+              // Past the longest cooldown, which grows with attempts.
               documentFetchAttemptedAt: new Date(
-                Date.now() - 24 * 60 * 60 * 1000,
+                Date.now() - 5 * 24 * 60 * 60 * 1000,
               ),
             }),
         ),
@@ -669,6 +704,120 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       expect(onlyThese(page, [first, second])).toEqual([second]);
+    });
+
+    describe("one decision's failure", () => {
+      const PUBLISHER_URL =
+        "https://obcan.justice.sk/content/public/item/0b7e8a8e-2f55-4b5a-9d5e-2f3f6d1c0a11";
+
+      const fetchWith = async (
+        id: SafeId<"caseLawDecision">,
+        answer: () => Promise<Response>,
+      ) =>
+        await fetchDecisionDocument({
+          decision: { ...pendingFor(id), documentUrl: PUBLISHER_URL },
+          fetchDocument: answer,
+          scopedDb,
+          signal: new AbortController().signal,
+        });
+
+      const insertPending = async (
+        label: string,
+        documentFetchAttempts = 0,
+      ): Promise<SafeId<"caseLawDecision">> =>
+        await insertDecision({
+          caseNumber: `failure-${label}-${suffix}`,
+          fulltext: null,
+          documentUrl: PUBLISHER_URL,
+          documentFetchAttempts,
+        });
+
+      test("an unreadable download parks the decision instead of throwing", async () => {
+        const id = await insertPending("unparseable");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(new TextEncoder().encode("%PDF-1.7 not a pdf")),
+            ),
+        );
+
+        expect(outcome).toEqual({
+          status: "parked",
+          failure: DOCUMENT_FETCH_FAILURE.UNPARSEABLE,
+          detail: "UnrecoverableParseError",
+        });
+        const row = await readFetchState(id);
+        expect(row?.documentFetchAttempts).toBe(MAX_DOCUMENT_FETCH_ATTEMPTS);
+        // Still pending: a parser fix and a requeue can still read it.
+        const [text] = await db
+          .select({ fulltext: caseLawDecisions.fulltext })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, id));
+        expect(text?.fulltext).toBeNull();
+      });
+
+      test("a refused download defers the decision behind its own cooldown", async () => {
+        const id = await insertPending("refused");
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(new Response(null, { status: 400 })),
+        );
+
+        expect(outcome).toEqual({
+          status: "deferred",
+          failure: DOCUMENT_FETCH_FAILURE.PUBLISHER_STATUS,
+          detail: "http-400",
+        });
+        const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+        expect(onlyThese(queue, [id])).toEqual([]);
+      });
+
+      test("the attempt that reaches the threshold parks the decision", async () => {
+        const id = await insertPending(
+          "last-attempt",
+          MAX_DOCUMENT_FETCH_ATTEMPTS - 1,
+        );
+
+        const outcome = await fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(
+              new Response(
+                new ReadableStream<Uint8Array>({
+                  start: (controller) => {
+                    controller.error(
+                      Object.assign(new TypeError("reset"), {
+                        code: "ECONNRESET",
+                      }),
+                    );
+                  },
+                }),
+              ),
+            ),
+        );
+
+        expect(outcome).toEqual({
+          status: "parked",
+          failure: DOCUMENT_FETCH_FAILURE.NETWORK,
+          detail: "TypeError:ECONNRESET",
+        });
+      });
+
+      test("a publisher asking the walk to slow down still throws", async () => {
+        const id = await insertPending("throttled");
+
+        const outcome = fetchWith(
+          id,
+          async () =>
+            await Promise.resolve(new Response(null, { status: 429 })),
+        );
+
+        expect(await rejectionOf(outcome)).toBeInstanceOf(AdapterFetchError);
+      });
     });
   });
 }

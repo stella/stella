@@ -64,6 +64,7 @@ const insertedRowValues = (
   slug,
   ecli: result.ecli,
   court: result.court,
+  courtId: result.courtId ?? null,
   country: result.country,
   language: result.language,
   languageGroupKey,

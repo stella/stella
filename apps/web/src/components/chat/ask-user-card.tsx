@@ -1,16 +1,16 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
+import { Streamdown } from "streamdown";
+import type { PluggableList } from "unified";
+import { useTranslations } from "use-intl";
+
 import {
   CheckIcon,
   HelpCircleIcon,
   LoaderIcon,
   PencilIcon,
-} from "lucide-react";
-import { Streamdown } from "streamdown";
-import type { PluggableList } from "unified";
-import { useTranslations } from "use-intl";
-
+} from "@stll/ui/icons";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 

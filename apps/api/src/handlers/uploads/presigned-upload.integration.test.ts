@@ -19,6 +19,7 @@ import { ATTACHED_TEMPLATE_SECURITY_RULE } from "@stll/docx-utils";
 import { pendingUploads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { legacyTmpUploadKey } from "@/api/lib/uploads/runtime";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -403,6 +404,7 @@ const createContext = ({
     createAuditRecorder: () => async () => undefined,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     params,
     promptCachingEnabled: false,
     recordAuditEvent: async () => undefined,

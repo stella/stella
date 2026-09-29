@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, desc, eq, notExists, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -13,7 +13,10 @@ import { isUuid } from "@stll/uuid-codec";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import {
   courtPresentation,
   readCourtRegistry,
@@ -159,6 +162,69 @@ const decisionFilterConditions = (
   return conditions;
 };
 
+type ListDecisionsPageQueryOptions = {
+  query: ListDecisionsQuery;
+  limit: number;
+  cursor: DecisionDateCursor | undefined;
+  tx: CaseLawPublicReadTransaction;
+};
+
+/** The browse read, exposed so its access path can be checked on the real builder. */
+export const listDecisionsPageQuery = ({
+  query,
+  limit,
+  cursor,
+  tx,
+}: ListDecisionsPageQueryOptions) => {
+  const conditions: SQL[] = [
+    redistributableCaseLawSource,
+    publishedCaseLawDecision,
+    ...decisionFilterConditions(query, caseLawDecisions),
+  ];
+  if (cursor !== undefined) {
+    conditions.push(decisionDateKeysetAfter(cursor));
+  }
+
+  return tx
+    .select(publicDecisionRowColumns())
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(
+      and(
+        ...conditions,
+        // A multilingual decision is listed once, by its oldest listable
+        // version. Rows only ever arrive with newer timestamps, so no later
+        // ingested translation can displace the representative between two
+        // pages of one walk, and the keyset cursor stays valid. Siblings are
+        // held to the same filters and the same redistribution gate as the
+        // row itself.
+        // Equality against a null group key matches no sibling, so the
+        // anti-join also keeps ungrouped decisions without a separate OR arm.
+        notExists(
+          tx
+            .select({ one: sql`1` })
+            .from(sibling)
+            .innerJoin(siblingSource, eq(siblingSource.id, sibling.sourceId))
+            .where(
+              and(
+                eq(sibling.languageGroupKey, caseLawDecisions.languageGroupKey),
+                // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
+                sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
+                redistributableCaseLawSourceFor(siblingSource.descriptor),
+                publishedCaseLawDecisionFor(sibling.metadata),
+                ...decisionFilterConditions(query, sibling),
+              ),
+            ),
+        ),
+      ),
+    )
+    .orderBy(
+      desc(decisionDateSortKeySql(caseLawDecisions.decisionDate)),
+      desc(caseLawDecisions.id),
+    )
+    .limit(limit + 1);
+};
+
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
@@ -181,69 +247,15 @@ export const listDecisionsHandler = async (
   }
   const scopedQuery = { ...query, country };
   const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const conditions: SQL[] = [
-    redistributableCaseLawSource,
-    publishedCaseLawDecision,
-    ...decisionFilterConditions(scopedQuery, caseLawDecisions),
-  ];
-
-  if (query.cursor) {
-    const cursor = decodeDecisionDateCursor(query.cursor);
-    if (cursor === null) {
-      return status(400, { message: "Invalid cursor" });
-    }
-    conditions.push(decisionDateKeysetAfter(cursor));
+  const cursor = query.cursor
+    ? decodeDecisionDateCursor(query.cursor)
+    : undefined;
+  if (cursor === null) {
+    return status(400, { message: "Invalid cursor" });
   }
 
   const decisions = await caseLawDb((tx) =>
-    tx
-      .select(publicDecisionRowColumns())
-      .from(caseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
-      )
-      .where(
-        and(
-          ...conditions,
-          // A multilingual decision is listed once, by its oldest listable
-          // version. Rows only ever arrive with newer timestamps, so no later
-          // ingested translation can displace the representative between two
-          // pages of one walk, and the keyset cursor stays valid. Siblings are
-          // held to the same filters and the same redistribution gate as the
-          // row itself.
-          or(
-            isNull(caseLawDecisions.languageGroupKey),
-            notExists(
-              tx
-                .select({ one: sql`1` })
-                .from(sibling)
-                .innerJoin(
-                  siblingSource,
-                  eq(siblingSource.id, sibling.sourceId),
-                )
-                .where(
-                  and(
-                    eq(
-                      sibling.languageGroupKey,
-                      caseLawDecisions.languageGroupKey,
-                    ),
-                    // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- column against column inside one statement, nothing round-trips through a JS Date
-                    sql`(${sibling.createdAt}, ${sibling.id}) < (${caseLawDecisions.createdAt}, ${caseLawDecisions.id})`,
-                    redistributableCaseLawSourceFor(siblingSource.descriptor),
-                    publishedCaseLawDecisionFor(sibling.metadata),
-                    ...decisionFilterConditions(scopedQuery, sibling),
-                  ),
-                ),
-            ),
-          ),
-        ),
-      )
-      .orderBy(
-        desc(decisionDateSortKeySql(caseLawDecisions.decisionDate)),
-        desc(caseLawDecisions.id),
-      )
-      .limit(limit + 1),
+    listDecisionsPageQuery({ query: scopedQuery, limit, cursor, tx }),
   );
 
   const languageGroupKeys = [

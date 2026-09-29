@@ -19,6 +19,7 @@ import {
   timeEntrySuggestions,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -35,6 +36,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import splitEntry from "../split";
 import createTimeSuggestionDecision from "./decisions/create";
 import listTimeSuggestions from "./list";
 
@@ -42,6 +44,7 @@ setDefaultTimeout(120_000);
 
 type ListCtx = Parameters<typeof listTimeSuggestions.handler>[0];
 type DecisionCtx = Parameters<typeof createTimeSuggestionDecision.handler>[0];
+type SplitCtx = Parameters<typeof splitEntry.handler>[0];
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -209,6 +212,7 @@ const baseContext = (userId: SafeId<"user">) => ({
   createAuditRecorder: () => async () => {},
   memberRole: { role: "owner" },
   orgAIConfig: null,
+  orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   params: { workspaceId: ids.wsA1 },
   promptCachingEnabled: false,
   recordAuditEvent: async () => {},
@@ -321,6 +325,7 @@ describe("time entry suggestions integration", () => {
       type: "accept",
       durationMinutes: 18,
       narrative: "Lease negotiation: reviewed the draft and replied",
+      narrativeLanguage: "cs-CZ",
       billable: false,
     });
     if (!isDecisionResponse(accepted) || accepted.timeEntryId === null) {
@@ -341,6 +346,7 @@ describe("time entry suggestions integration", () => {
         durationMinutes: true,
         billedMinutes: true,
         dateWorked: true,
+        narrativeLanguage: true,
         userId: true,
       },
     });
@@ -349,6 +355,7 @@ describe("time entry suggestions integration", () => {
       durationMinutes: 18,
       billedMinutes: 18,
       dateWorked: DAY,
+      narrativeLanguage: "cs-CZ",
       userId: ids.userA1,
     });
 
@@ -389,6 +396,31 @@ describe("time entry suggestions integration", () => {
       status: "accepted",
       timeEntryId,
     });
+
+    const split = await splitEntry.handler(
+      asTestRaw<SplitCtx>({
+        ...baseContext(ids.userA1),
+        body: {
+          id: timeEntryId,
+          splits: [
+            { workItemId: ids.entityA1, percentage: 50 },
+            { workItemId: ids.entityA1, percentage: 50 },
+          ],
+        },
+      }),
+    );
+    if (!("splitGroupId" in split)) {
+      throw new Error("split did not return a group id");
+    }
+    expect(typeof split.splitGroupId).toBe("string");
+    const splitRows = await testDb.query.timeEntries.findMany({
+      where: { splitGroupId: { eq: split.splitGroupId } },
+      columns: { narrativeLanguage: true },
+    });
+    expect(splitRows).toEqual([
+      { narrativeLanguage: "cs-CZ" },
+      { narrativeLanguage: "cs-CZ" },
+    ]);
   });
 
   test("dismissing hides a suggestion and repeats idempotently", async () => {

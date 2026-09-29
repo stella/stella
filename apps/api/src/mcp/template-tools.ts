@@ -1200,20 +1200,40 @@ const previewList = (items: readonly string[]): string => {
   return `${preview.join(", ")}${omitted > 0 ? ` (${omitted} more omitted)` : ""}`;
 };
 
+type OrgAIConfigRead = Awaited<ReturnType<typeof loadOrgAIConfig>>;
+
 /**
  * Read the org AI config at most once, and only when the fill service actually
  * asks for a usage preflight or AI collaborators. A deterministic template
  * declares no AI field, so it must not pay for that read.
  */
 const deferOrgAIConfig = (context: McpRequestContext) => {
-  let pending: Promise<OrgAIConfig | null> | undefined;
-  return async (): Promise<OrgAIConfig | null> => {
-    const organizationId = context.organizationId;
+  let pending: Promise<OrgAIConfigRead> | undefined;
+  return async (): Promise<OrgAIConfigRead> => {
+    const reader = {
+      organizationId: context.organizationId,
+      userId: context.userId,
+    };
     pending ??=
-      context.testDependencies?.loadOrgAIConfig?.(organizationId) ??
-      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, organizationId));
+      context.testDependencies?.loadOrgAIConfig?.(reader) ??
+      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, reader));
     return await pending;
   };
+};
+
+/**
+ * The config an AI collaborator builder runs on. The fill service builds
+ * collaborators only after the preflight passed, and the preflight returns
+ * this same refusal, so an error here is a broken call order.
+ */
+const readConfigPastPreflight = async (
+  readOrgAIConfig: () => Promise<OrgAIConfigRead>,
+): Promise<OrgAIConfig | null> => {
+  const config = await readOrgAIConfig();
+  if (Result.isError(config)) {
+    return panic("template fill AI collaborators built past a refusal");
+  }
+  return config.value;
 };
 
 /**
@@ -1230,10 +1250,14 @@ const assertTemplateFillUsage = async ({
   workspaceId,
 }: {
   context: McpRequestContext;
-  readOrgAIConfig: () => Promise<OrgAIConfig | null>;
+  readOrgAIConfig: () => Promise<OrgAIConfigRead>;
   workspaceId: SafeId<"workspace"> | null;
 }) => {
-  const orgAIConfig = await readOrgAIConfig();
+  const config = await readOrgAIConfig();
+  if (Result.isError(config)) {
+    return config.error;
+  }
+  const orgAIConfig = config.value;
   if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return null;
   }
@@ -1271,7 +1295,7 @@ const handleFillTemplateTool: McpToolHandler<
   // opens no metered trace. fill_template is org-scoped (no matter binding),
   // so there is no workspace id to redact tenant ids against.
   const aiCollaborators = async () => {
-    const orgAIConfig = await readOrgAIConfig();
+    const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
       organizationId: context.organizationId,
@@ -1712,7 +1736,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   // Built only when the manifest declares an AI field: the fill service defers
   // this, so a deterministic fill opens no metered trace.
   const aiCollaborators = async () => {
-    const orgAIConfig = await readOrgAIConfig();
+    const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
       organizationId: context.organizationId,
@@ -2785,7 +2809,9 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
   const decideConditions =
     context.testDependencies?.templateDecideConditionsLogic ??
     templateDecideConditionsLogic;
-  const orgAIConfig = await deferOrgAIConfig(context)();
+  // Preview never falls back to the instance provider (see `client` below),
+  // so an org barred from it previews on its own config, which is none.
+  const orgAIConfig = (await deferOrgAIConfig(context)()).unwrapOr(null);
   const decided = await decideConditions({
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,

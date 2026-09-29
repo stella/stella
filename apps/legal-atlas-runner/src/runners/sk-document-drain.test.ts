@@ -71,6 +71,16 @@ const OUTCOMES = {
   unavailable: { status: "unavailable" },
   claimed: { status: "claimed" },
   superseded: { status: "superseded" },
+  deferred: {
+    status: "deferred",
+    failure: "publisher-status",
+    detail: "http-400",
+  },
+  parked: {
+    status: "parked",
+    failure: "unparseable",
+    detail: "UnrecoverableParseError",
+  },
 } as const satisfies Record<
   DecisionDocumentOutcome["status"],
   DecisionDocumentOutcome
@@ -117,7 +127,8 @@ type DrainRun = {
 };
 
 type RunDrainOptions = {
-  queue: PendingDocumentQueue;
+  /** A queue, or one built over the run's fake clock. */
+  queue: PendingDocumentQueue | ((now: () => number) => PendingDocumentQueue);
   /** Answers one fetch; throwing stands in for a transient failure. */
   respond: (decision: PendingDocument) => DecisionDocumentOutcome;
   /** Queue polls to allow before the walk is asked to drain. */
@@ -139,6 +150,7 @@ const runDrain = async ({
   let clock = 0;
   let polled = 0;
   let draining = false;
+  const source = typeof queue === "function" ? queue(() => clock) : queue;
 
   await runSkDocumentDrain({
     queue: {
@@ -146,7 +158,7 @@ const runDrain = async ({
         events.push({ type: "poll" });
         polled += 1;
         draining ||= polled >= polls;
-        return await queue.next();
+        return await source.next();
       },
     },
     fetchDocument: async (decision) => {
@@ -192,7 +204,160 @@ const gapsBetween = (
   return gaps;
 };
 
+/** Fake-clock time at which the walk fetched this document. */
+const fetchedAt = ({ events }: DrainRun, caseNumber: string): number => {
+  let clock = 0;
+  for (const event of events) {
+    if (event.type === "sleep") {
+      clock += event.ms;
+    }
+    if (event.type === "fetch" && event.caseNumber === caseNumber) {
+      return clock;
+    }
+  }
+  return Number.POSITIVE_INFINITY;
+};
+
+type BacklogRow = {
+  caseNumber: string;
+  failing: boolean;
+  attemptedAt: number | undefined;
+  done: boolean;
+};
+
+type BacklogOptions = {
+  rows: BacklogRow[];
+  now: () => number;
+  cooldownMs: number;
+};
+
+/**
+ * The queue's contract in miniature: newest first, and a decision handed
+ * out is not handed out again until its own cooldown has passed.
+ */
+const backlogQueue = ({
+  cooldownMs,
+  now,
+  rows,
+}: BacklogOptions): PendingDocumentQueue => ({
+  next: async () => {
+    const row = rows.find(
+      ({ attemptedAt, done }) =>
+        !done &&
+        (attemptedAt === undefined || now() - attemptedAt >= cooldownMs),
+    );
+    if (row === undefined) {
+      return undefined;
+    }
+    row.attemptedAt = now();
+    return await Promise.resolve({
+      tier: DOCUMENT_TIER.REMAINING,
+      decision: pending(row.caseNumber),
+    });
+  },
+});
+
+type BacklogRunOptions = {
+  failingFront: number;
+  behind: number;
+  /** How a failing document answers: as an outcome, or by throwing. */
+  failure: "outcome" | "throw";
+};
+
+type BacklogRun = { run: DrainRun; behindCaseNumbers: string[] };
+
+/**
+ * A backlog whose newest `failingFront` documents always fail, with
+ * `behind` fetchable ones after them. The cooldown outlasts one pass
+ * over the whole backlog, as the real one does by orders of magnitude.
+ */
+const runBacklog = async ({
+  behind,
+  failingFront,
+  failure,
+}: BacklogRunOptions): Promise<BacklogRun> => {
+  const rows: BacklogRow[] = Array.from(
+    { length: failingFront + behind },
+    (_, i) => ({
+      caseNumber: `doc-${i}`,
+      failing: i < failingFront,
+      attemptedAt: undefined,
+      done: false,
+    }),
+  );
+  const byCaseNumber = new Map(rows.map((row) => [row.caseNumber, row]));
+  const run = await runDrain({
+    queue: (now) =>
+      backlogQueue({
+        rows,
+        now,
+        cooldownMs: (rows.length + 1) * TIMING.failureBackoffMaxMs,
+      }),
+    respond: ({ caseNumber }) => {
+      const row =
+        byCaseNumber.get(caseNumber) ?? panic(`unknown ${caseNumber}`);
+      if (!row.failing) {
+        row.done = true;
+        return OUTCOMES.filled;
+      }
+      if (failure === "throw") {
+        throw new Error("refused");
+      }
+      return OUTCOMES.deferred;
+    },
+    polls: rows.length,
+  });
+  return {
+    run,
+    behindCaseNumbers: rows.slice(failingFront).map((row) => row.caseNumber),
+  };
+};
+
 describe("sk document drain", () => {
+  test("a failing front of any size cannot starve the documents behind it", async () => {
+    // Every document behind the front is fetched within one fetch gap per
+    // document ahead of it, whatever the front's size: a document's own
+    // failure costs the walk one gap and nothing more.
+    for (const failingFront of [0, 1, 2, 5, 13, 40, 100]) {
+      for (const behind of [1, 3, 10]) {
+        const { behindCaseNumbers, run } = await runBacklog({
+          behind,
+          failingFront,
+          failure: "outcome",
+        });
+
+        for (const [i, caseNumber] of behindCaseNumbers.entries()) {
+          expect({
+            failingFront,
+            caseNumber,
+            at: fetchedAt(run, caseNumber),
+          }).toEqual({
+            failingFront,
+            caseNumber,
+            at: (failingFront + i) * TIMING.fetchDelayMs,
+          });
+        }
+      }
+    }
+  });
+
+  test("the same front, answered by throwing, would starve them", async () => {
+    // Guards the property above against going vacuous: a walk that backs
+    // off on every failure pays the ceiling per failing document, so the
+    // same backlog reaches the documents behind it far later.
+    const failingFront = 40;
+    const { behindCaseNumbers, run } = await runBacklog({
+      behind: 1,
+      failingFront,
+      failure: "throw",
+    });
+    const first = behindCaseNumbers.at(0) ?? panic("backlog has no rows");
+
+    expect(fetchedAt(run, first)).toBeGreaterThan(
+      failingFront * TIMING.fetchDelayMs * 2,
+    );
+  });
+
   test("every outcome is followed by the same fetch gap", async () => {
     // A burst is what happens when some outcome is treated as "no
     // download happened": an unavailable document and a store the source
@@ -349,6 +514,29 @@ describe("sk document drain", () => {
       claimed: 0,
       superseded: 0,
       failed: 0,
+    });
+  });
+
+  test("a document's own failure is tallied by class, not as a walk failure", async () => {
+    const run = await runDrain({
+      queue: queueOf(["doc-1", "doc-2", "doc-3"]),
+      respond: ({ caseNumber }) => {
+        if (caseNumber === "doc-1") {
+          return OUTCOMES.deferred;
+        }
+        return caseNumber === "doc-2" ? OUTCOMES.parked : OUTCOMES.filled;
+      },
+      polls: 3,
+    });
+
+    expect(run.summaries.at(0)).toMatchObject({
+      attempted: 3,
+      deferred: 1,
+      parked: 1,
+      filled: 1,
+      failed: 0,
+      failures: { "publisher-status": 1, network: 0, unparseable: 1 },
+      lastFailureDetail: OUTCOMES.parked.detail,
     });
   });
 

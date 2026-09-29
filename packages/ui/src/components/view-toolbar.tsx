@@ -1,7 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { FilterIcon } from "lucide-react";
-
+import { FilterIcon } from "../icons";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 
