@@ -3432,8 +3432,28 @@ const readBaseline = (): Baseline => {
   return inspection.baseline;
 };
 
-const writeBaseline = (snapshot: Baseline): void => {
-  writeFileSync(BASELINE_PATH, `${JSON.stringify(snapshot, null, 2)}\n`);
+const serializeBaseline = (
+  snapshot: Baseline,
+  existingOrder: readonly string[],
+): string => {
+  const ordered: Baseline = {};
+  for (const id of new Set([...existingOrder, ...Object.keys(snapshot)])) {
+    const entry = snapshot[id];
+    if (entry !== undefined) {
+      ordered[id] = entry;
+    }
+  }
+  return `${JSON.stringify(ordered, null, 2)}\n`;
+};
+
+const readBaselineOrder = (): string[] => {
+  const parsed = Result.try((): unknown =>
+    JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+  );
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return panic(`ratchet baseline ${BASELINE_REL} is not a JSON object`);
+  }
+  return Object.keys(parsed.value);
 };
 
 type RebaseSnapshotOptions = {
@@ -3643,6 +3663,7 @@ const runReport = (): number => {
 };
 
 const runWrite = (all: boolean): number => {
+  const existingOrder = readBaselineOrder();
   const head = scanAll(REPO_ROOT);
   let snapshot = head;
   if (!all) {
@@ -3677,7 +3698,7 @@ const runWrite = (all: boolean): number => {
       });
     }
   }
-  writeBaseline(snapshot);
+  writeFileSync(BASELINE_PATH, serializeBaseline(snapshot, existingOrder));
   console.log(`Wrote ratchet baseline to ${BASELINE_REL}:`);
   for (const metric of RATCHET_METRICS) {
     const snap = requireSnapshot(snapshot, metric.id);
@@ -5302,6 +5323,52 @@ const countText = (count: number | undefined) =>
 
 const deltaWriteSelfTestFailures = (): string[] => {
   const failures: string[] = [];
+  const existing = {
+    second: { count: 2, files: { "b.ts": 2 } },
+    first: { count: 1, files: { "a.ts": 1 } },
+  };
+  const existingText = `${JSON.stringify(existing, null, 2)}\n`;
+  const parsed = Result.try((): unknown => JSON.parse(existingText));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return panic("write-order fixture is not a JSON object");
+  }
+  const orderInspection = inspectConfiguration(
+    [{ id: "first" }, { id: "second" }],
+    parsed.value,
+  );
+  if (orderInspection.status === "invalid") {
+    return panic(orderInspection.errors.join("\n"));
+  }
+  const existingOrder = Object.keys(parsed.value);
+  if (
+    serializeBaseline(orderInspection.baseline, existingOrder) !== existingText
+  ) {
+    failures.push("write order: no delta changed baseline bytes");
+  }
+  const changed = { count: 3, files: { "a.ts": 3 } };
+  const changedSnapshot = { ...orderInspection.baseline, first: changed };
+  if (
+    serializeBaseline(changedSnapshot, existingOrder) !==
+    `${JSON.stringify({ ...existing, first: changed }, null, 2)}\n`
+  ) {
+    failures.push("write order: metric change reordered unrelated lines");
+  }
+  const added = { count: 0, files: {} };
+  if (
+    serializeBaseline(
+      { third: added, ...changedSnapshot, fourth: added },
+      existingOrder,
+    ) !==
+    `${JSON.stringify({ ...existing, first: changed, third: added, fourth: added }, null, 2)}\n`
+  ) {
+    failures.push("write order: new metrics did not append in registry order");
+  }
+  if (
+    serializeBaseline({ first: existing.first }, existingOrder) !==
+    `${JSON.stringify({ first: existing.first }, null, 2)}\n`
+  ) {
+    failures.push("write order: removed metric remained in baseline");
+  }
   const deltaCases = [
     {
       name: "unchanged metric retains headroom",
