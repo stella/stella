@@ -11729,15 +11729,15 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "contacts.business-registries.check",
                 description:
-                  "Screen a company or person against an official source, such as the Czech insolvency or VAT register. Returns one outcome: clear (the source answered and holds nothing adverse), found (with the adverse records), not-registered (the source holds no record of the subject), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type).",
+                  "Screen a company or person against an official source, such as the Czech insolvency or VAT register, or against every sanctions list. A register check returns one outcome: clear (the source answered and holds nothing adverse), found (with the adverse records), not-registered (the source holds no record of the subject), unavailable (the source could not answer; never read this as clear), or not-covered (the source cannot answer for this subject type). The sanctions check returns one outcome per list (clear, possible-match or unavailable) with the edition screened, and is clear only when every list is.",
                 access: "read",
                 flags: [
                   {
                     kind: "enum",
-                    enum: ["cz-insolvency", "cz-vat-reliability"],
+                    enum: ["cz-insolvency", "cz-vat-reliability", "sanctions"],
                     repeatable: false,
                     description:
-                      "Which official source to screen the subject against",
+                      "Which official source to screen the subject against; 'sanctions' screens every sanctions list and answers per list",
                     flag: "--check",
                     prop: "check",
                     required: true,
@@ -11746,10 +11746,10 @@ export const generatedRouteMap: RouteNode = {
                   },
                   {
                     kind: "enum",
-                    enum: ["company-id", "tax-id", "person"],
+                    enum: ["company-id", "tax-id", "person", "organization"],
                     repeatable: false,
                     description:
-                      "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date",
+                      "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date; 'organization' an organization by name (sanctions only)",
                     flag: "--subject-type",
                     prop: "subjectType",
                     required: true,
@@ -11779,6 +11779,17 @@ export const generatedRouteMap: RouteNode = {
                   {
                     kind: "string",
                     repeatable: false,
+                    description:
+                      "Organization name, for the 'organization' subject type",
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
                     flag: "--first-name",
                     prop: "firstName",
                     required: false,
@@ -11804,8 +11815,17 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "birthDate",
                   },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--nationality-codes",
+                    prop: "nationalityCodes",
+                    required: false,
+                    part: "body",
+                    partPath: "nationalityCodes",
+                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.country", "body.dateOfBirth"],
                 paginated: false,
                 destructive: false,
                 scope: "read",
@@ -11820,16 +11840,25 @@ export const generatedRouteMap: RouteNode = {
                         check: {
                           default: "cz-insolvency",
                           description:
-                            "Which official source to screen the subject against",
+                            "Which official source to screen the subject against; 'sanctions' screens every sanctions list and answers per list",
                           type: "string",
-                          enum: ["cz-insolvency", "cz-vat-reliability"],
+                          enum: [
+                            "cz-insolvency",
+                            "cz-vat-reliability",
+                            "sanctions",
+                          ],
                         },
                         subjectType: {
                           default: "company-id",
                           description:
-                            "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date",
+                            "'company-id' screens a registered business by its national ID; 'tax-id' a taxpayer by its tax ID; 'person' a natural person by name and birth date; 'organization' an organization by name (sanctions only)",
                           type: "string",
-                          enum: ["company-id", "tax-id", "person"],
+                          enum: [
+                            "company-id",
+                            "tax-id",
+                            "person",
+                            "organization",
+                          ],
                         },
                         companyId: {
                           minLength: 1,
@@ -11837,10 +11866,31 @@ export const generatedRouteMap: RouteNode = {
                           description: "National business ID",
                           type: "string",
                         },
+                        country: {
+                          description:
+                            "Country that issued the company ID; defaults to CZ. The register checks cover CZ only",
+                          anyOf: [
+                            {
+                              const: "CZ",
+                              type: "string",
+                            },
+                            {
+                              const: "SK",
+                              type: "string",
+                            },
+                          ],
+                        },
                         taxId: {
                           minLength: 1,
                           maxLength: 32,
                           description: "Tax ID",
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 512,
+                          description:
+                            "Organization name, for the 'organization' subject type",
                           type: "string",
                         },
                         firstName: {
@@ -11857,6 +11907,82 @@ export const generatedRouteMap: RouteNode = {
                           format: "date",
                           description: "Birth date, YYYY-MM-DD",
                           type: "string",
+                        },
+                        dateOfBirth: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year"],
+                              properties: {
+                                precision: {
+                                  const: "year",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year", "month"],
+                              properties: {
+                                precision: {
+                                  const: "month",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                                month: {
+                                  minimum: 1,
+                                  maximum: 12,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year", "month", "day"],
+                              properties: {
+                                precision: {
+                                  const: "day",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                                month: {
+                                  minimum: 1,
+                                  maximum: 12,
+                                  type: "integer",
+                                },
+                                day: {
+                                  minimum: 1,
+                                  maximum: 31,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                        nationalityCodes: {
+                          maxItems: 250,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            pattern: "^[A-Z]{2}$",
+                            type: "string",
+                          },
                         },
                       },
                     },
