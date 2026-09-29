@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 
 import {
   resolveUsCourt,
-  resolveWritableUsCourt,
   US_COURT_BY_CANONICAL_NAME,
   US_COURT_DIRECTORY,
   US_COURT_IDS,
@@ -17,7 +16,6 @@ import {
   US_SCOPE_REGIONS,
   US_STATE_REGIONS,
   US_TERRITORY_REGIONS,
-  US_WRITABLE_COURT_IDS,
 } from "./us-courts";
 import type { UsCourt, UsCourtSystem } from "./us-courts";
 
@@ -99,29 +97,6 @@ describe("the United States court directory", () => {
       type: "rejected",
       courtId: "kingsbench",
       reason: "outside-jurisdiction",
-    });
-  });
-
-  test("acceptance is not write enrollment: only scotus is writable", () => {
-    expect([...US_WRITABLE_COURT_IDS]).toEqual(["scotus"]);
-    expect(resolveWritableUsCourt("scotus")).toMatchObject({
-      type: "writable",
-      court: { id: "scotus" },
-    });
-    expect(resolveWritableUsCourt("ca9")).toEqual({
-      type: "rejected",
-      courtId: "ca9",
-      reason: "not-writable",
-    });
-    expect(resolveWritableUsCourt("test")).toEqual({
-      type: "rejected",
-      courtId: "test",
-      reason: "testing",
-    });
-    expect(resolveWritableUsCourt("Scotus")).toEqual({
-      type: "rejected",
-      courtId: "Scotus",
-      reason: "unknown",
     });
   });
 

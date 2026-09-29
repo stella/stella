@@ -3184,6 +3184,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Wbudowane umiejętności",
       "deleteFile": "Usuń plik",
       "deleteFileConfirm": "Usunąć plik? Tej operacji nie można cofnąć.",
       "disableSkill": "Wyłącz umiejętność",

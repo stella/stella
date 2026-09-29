@@ -3184,6 +3184,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Integrierte Skills",
       "deleteFile": "Datei löschen",
       "deleteFileConfirm": "Datei löschen? Dies kann nicht rückgängig gemacht werden.",
       "disableSkill": "Skill deaktivieren",

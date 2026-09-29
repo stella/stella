@@ -7,6 +7,7 @@ import {
   CHAT_SKILL_DOCUMENT,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
+import { listSkillMetadata } from "@stll/skills";
 
 import { AGENT_SKILL_SCOPES, agentSkills } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
@@ -15,6 +16,7 @@ import {
   resolveCallerChatSkillAvailability,
   type ChatSkillContext,
 } from "@/api/handlers/chat/skill-availability/offered-tools";
+import { resolvesToBuiltInSkill } from "@/api/lib/agent-skills/skills";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -79,8 +81,11 @@ const badRequest = (message: string) =>
  * cannot run although another could, with what it would have to change.
  */
 export const createListUnavailableChatSkills = ({
+  listBuiltInSkills = listSkillMetadata,
   loadWebSearchProviders,
 }: {
+  /** The shipped skills; a test swaps in declarations chat cannot meet. */
+  listBuiltInSkills?: typeof listSkillMetadata;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
 }) =>
   createSafeRootHandler(
@@ -190,10 +195,15 @@ export const createListUnavailableChatSkills = ({
         };
       }
 
-      const skills = yield* Result.await(
+      const installedSkills = yield* Result.await(
         safeDb((tx) =>
           tx
-            .select({ id: agentSkills.id, metadata: agentSkills.metadata })
+            .select({
+              enabled: agentSkills.enabled,
+              id: agentSkills.id,
+              metadata: agentSkills.metadata,
+              slug: agentSkills.slug,
+            })
             .from(agentSkills)
             .where(
               and(
@@ -207,6 +217,19 @@ export const createListUnavailableChatSkills = ({
             .limit(VISIBLE_SKILLS_MAX),
         ),
       );
+      // A built-in is decided under its slug, the id the skill list gives it,
+      // unless an enabled row with that slug shadows it.
+      const enabledInstalledSlugs = new Set(
+        installedSkills.flatMap(({ enabled, slug }) => (enabled ? [slug] : [])),
+      );
+      const skills = [
+        ...installedSkills,
+        ...listBuiltInSkills().flatMap(({ metadata, name }) =>
+          resolvesToBuiltInSkill(name, enabledInstalledSlugs)
+            ? [{ id: name, metadata: metadata ?? null }]
+            : [],
+        ),
+      ];
       const availability = yield* Result.await(
         resolveCallerChatSkillAvailability({
           chatContext,

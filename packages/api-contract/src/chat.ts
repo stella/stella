@@ -135,7 +135,8 @@ type ChatSendRequestBase = {
     supportsDocxEdits?: boolean;
   };
   activeSkill?: {
-    skillId: SafeId<"agentSkill">;
+    /** Absent for a built-in skill, which has no row: `skillName` names it. */
+    skillId?: SafeId<"agentSkill">;
     skillName: string;
   };
   activeStatute?: {

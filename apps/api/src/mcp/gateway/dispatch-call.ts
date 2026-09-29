@@ -12,6 +12,7 @@ import {
   SKILL_READ_SURFACE,
 } from "@/api/lib/agent-skills/skill-read-audit";
 import type { SkillReadOutcome } from "@/api/lib/agent-skills/skill-read-audit";
+import { chatSkillId, chatSkillOrigin } from "@/api/lib/agent-skills/skills";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -188,7 +189,7 @@ export const dispatchGatewayToolCall = async ({
         {
           outcome,
           path: resourcePath,
-          skillId: skill.id,
+          skill,
           slug: skill.name,
           surface: SKILL_READ_SURFACE.mcp,
         },
@@ -235,11 +236,11 @@ export const dispatchGatewayToolCall = async ({
           type: SKILL_TOOL_OUTPUT_TYPE.skill,
           body: read.skill.body,
           compatibility: read.skill.compatibility,
-          id: read.skill.id,
+          id: chatSkillId(read.skill),
           license: read.skill.license,
           metadata: read.skill.metadata,
           name: read.skill.name,
-          origin: read.skill.origin,
+          origin: chatSkillOrigin(read.skill),
           resources: read.skill.resources,
           version: read.skill.version,
         } satisfies SkillToolOutput),
@@ -251,7 +252,7 @@ export const dispatchGatewayToolCall = async ({
         result: toolDataResult({
           type: SKILL_TOOL_OUTPUT_TYPE.resource,
           content: read.content,
-          id: read.skill.id,
+          id: chatSkillId(read.skill),
           kind: read.kind,
           name: read.skill.name,
           path: read.path,

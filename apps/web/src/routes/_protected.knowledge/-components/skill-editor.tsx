@@ -263,7 +263,8 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   };
 
   const safeSkillId = toSafeId<"agentSkill">(skillId);
-  const skillName = detail.data?.name ?? "";
+  // The slug identifies the skill in tab ids; the name is only its title.
+  const skillName = detail.data?.slug ?? "";
   const bodyContent = detail.data?.body ?? "";
 
   const openResourceInInspector = (resource: {
@@ -276,6 +277,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
     openSkillResourceTab({
       skillName,
+      skillDisplayName: detail.data.name,
       skillId,
       origin: detail.data.origin,
       target: "resource",
@@ -300,6 +302,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
       openSkillResourceTab({
         skillName,
+        skillDisplayName: detail.data.name,
         skillId,
         origin: detail.data.origin,
         target: "body",
@@ -619,7 +622,8 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
           onOpen={() => {
             setSelected({ type: "body" });
             openSkillResourceTab({
-              skillName: detail.data.name,
+              skillName: detail.data.slug,
+              skillDisplayName: detail.data.name,
               skillId,
               origin: detail.data.origin,
               target: "body",
@@ -666,7 +670,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 aria-label={t("chat.newChat")}
                 onClick={() =>
                   openChat({
-                    activeSkill: { skillId, skillName: detail.data.name },
+                    activeSkill: {
+                      skillDisplayName: detail.data.name,
+                      skillId,
+                      skillName: detail.data.slug,
+                    },
                     label: detail.data.name,
                   })
                 }

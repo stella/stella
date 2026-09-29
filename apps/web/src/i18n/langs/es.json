@@ -3184,6 +3184,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Habilidades integradas",
       "deleteFile": "Eliminar archivo",
       "deleteFileConfirm": "¿Eliminar el archivo? No se puede deshacer.",
       "disableSkill": "Desactivar habilidad",
