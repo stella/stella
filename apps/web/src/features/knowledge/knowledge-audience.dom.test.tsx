@@ -345,6 +345,8 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
+  // Let React's scheduled work drain before the DOM goes away.
+  await settle();
   globalThis.fetch = originalFetch;
   await GlobalRegistrator.unregister();
 });

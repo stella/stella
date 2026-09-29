@@ -258,7 +258,14 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
 const INTENTIONALLY_NOT_SMOKED = new Set([
   // Requires a connected desktop registry account and a real company record.
   "/knowledge/company-formats/$registry/$companyId",
+  // Visitor knowledge pages behind their flag; smoked once the flag is permanent.
+  "/knowledge/templates/catalogue",
+  "/knowledge/templates/catalogue/$packId/$templateId",
   "/knowledge/tools/$entry",
+  // A file download handler, not a page.
+  "/knowledge/tools/$entry/download",
+  // Visitor knowledge pages behind their flag; smoked once the flag is permanent.
+  "/knowledge/tools/contribute",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
 ]);
