@@ -63,6 +63,7 @@ const myTimeEntriesEden = createStellaEdenClient<
 >(browserApiBaseUrl(), clientOptions);
 
 export const api = eden.v1;
+export const publicFeedbackApi = eden.public.feedback;
 export const memoriesApi = memoriesEden.v1.memories;
 export const correspondenceApi = correspondenceEden.v1;
 export const myTimeEntriesApi = myTimeEntriesEden.v1["time-entries"].me;

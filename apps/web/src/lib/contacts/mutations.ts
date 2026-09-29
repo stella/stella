@@ -4,9 +4,16 @@ import type { ContactType } from "@stll/api-contract";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import type { contactOptions } from "@/lib/contacts/queries";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
+
+type ContactDetail = NonNullable<
+  Awaited<ReturnType<NonNullable<ReturnType<typeof contactOptions>["queryFn"]>>>
+>;
+
+export type PersonDateOfBirth = NonNullable<ContactDetail["dateOfBirth"]>;
 
 type BankAccount = {
   iban?: string;
@@ -80,6 +87,8 @@ type CreateContactVars = {
   paymentTermDays?: number;
   originatingAttorneyId?: SafeId<"user">;
   responsibleAttorneyId?: SafeId<"user">;
+  dateOfBirth?: PersonDateOfBirth;
+  nationalityCodes?: string[];
 };
 
 export const useCreateContact = () => {
@@ -120,6 +129,8 @@ export type ContactUpdateFields = {
   paymentTermDays: number | null;
   originatingAttorneyId: SafeId<"user"> | null;
   responsibleAttorneyId: SafeId<"user"> | null;
+  dateOfBirth: PersonDateOfBirth | null;
+  nationalityCodes: string[] | null;
 };
 
 export type ContactUpdate = NonEmptyPatch<ContactUpdateFields>;

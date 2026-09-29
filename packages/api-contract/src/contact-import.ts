@@ -30,6 +30,8 @@ export const CONTACT_IMPORT_FIELDS = [
   "tags",
   "registration_number",
   "tax_id",
+  "date_of_birth",
+  "nationality_codes",
 ] as const;
 
 export type ContactImportField = (typeof CONTACT_IMPORT_FIELDS)[number];
@@ -61,6 +63,8 @@ export const CONTACT_IMPORT_ISSUE_CODE = {
   INVALID_PHONE: "invalid_phone",
   INVALID_TAGS: "invalid_tags",
   INVALID_TAX_ID: "invalid_tax_id",
+  INVALID_DATE_OF_BIRTH: "invalid_date_of_birth",
+  INVALID_NATIONALITY_CODES: "invalid_nationality_codes",
   INVALID_TYPE: "invalid_type",
   ROW_LENGTH_MISMATCH: "row_length_mismatch",
   TAX_ID_REQUIRED: "tax_id_required",

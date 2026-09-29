@@ -21,6 +21,7 @@ import {
   taxIdSchemeSchema,
 } from "@/api/handlers/contacts/contact-import-schema";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
+import { dateOfBirthToColumns } from "@/api/handlers/contacts/person-details";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -275,6 +276,10 @@ const importContacts = createSafeRootHandler(
                     tags: contact.tags,
                     registrationNumber: contact.registrationNumber,
                     taxId: contact.taxId,
+                    ...(contact.dateOfBirth === undefined
+                      ? {}
+                      : dateOfBirthToColumns(contact.dateOfBirth)),
+                    nationalityCodes: contact.nationalityCodes,
                     metadata: normalizeContactMetadata(contact.metadata),
                   })),
                 )

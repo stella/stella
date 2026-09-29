@@ -357,6 +357,29 @@ export const READ_CONTACT_PROJECTION = v.strictObject({
   organizationName: v.nullable(v.string()),
   emails: v.array(contactEmailProjection),
   phones: v.array(contactPhoneProjection),
+  dateOfBirth: v.nullable(
+    v.variant("precision", [
+      projectionBranch(
+        v.strictObject({ precision: v.literal("year"), year: v.number() }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("month"),
+          year: v.number(),
+          month: v.number(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("day"),
+          year: v.number(),
+          month: v.number(),
+          day: v.number(),
+        }),
+      ),
+    ]),
+  ),
+  nationalityCodes: v.array(v.string()),
 });
 
 /**

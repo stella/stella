@@ -19,7 +19,7 @@ import {
 } from "@/features/case-law/queries/decision-analysis";
 import { detached } from "@/lib/detached";
 
-type AnalysisState =
+export type AnalysisState =
   | { status: "idle" }
   | { status: "generating"; tree: DecisionAnalysis["tree"] }
   | { status: "done"; analysis: DecisionAnalysis }

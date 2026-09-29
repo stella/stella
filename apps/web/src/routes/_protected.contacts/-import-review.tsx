@@ -72,6 +72,8 @@ export const IMPORT_FIELD_LABELS = {
   middle_name: "contacts.importStudio.fields.middle_name",
   last_name: "contacts.importStudio.fields.last_name",
   suffix: "contacts.importStudio.fields.suffix",
+  date_of_birth: "common.anonymizationLabels.dateOfBirth",
+  nationality_codes: "contacts.fields.nationalities",
   organization_name: "common.organizationName",
   primary_email: "contacts.importStudio.fields.primary_email",
   primary_phone: "contacts.importStudio.fields.primary_phone",
@@ -94,6 +96,10 @@ const IMPORT_ISSUE_LABELS = {
     "contacts.importStudio.issue.display_name_required",
   [CONTACT_IMPORT_ISSUE_CODE.INVALID_EMAIL]:
     "contacts.importStudio.issue.invalid_email",
+  [CONTACT_IMPORT_ISSUE_CODE.INVALID_DATE_OF_BIRTH]:
+    "contacts.invalidDateOfBirth",
+  [CONTACT_IMPORT_ISSUE_CODE.INVALID_NATIONALITY_CODES]:
+    "contacts.invalidNationalityCodes",
   [CONTACT_IMPORT_ISSUE_CODE.INVALID_PHONE]:
     "contacts.importStudio.issue.invalid_phone",
   [CONTACT_IMPORT_ISSUE_CODE.INVALID_TAGS]:

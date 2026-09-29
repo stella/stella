@@ -11,9 +11,9 @@ import {
 } from "./sidebar";
 import {
   deriveSidebarState,
-  isSidebarMenuButtonTooltipVisible,
   nextOpenMobile,
   nextRequestedOpen,
+  resolveSidebarLayout,
   resolveSidebarOpen,
 } from "./sidebar.logic";
 
@@ -24,20 +24,22 @@ describe("sidebar width constants", () => {
   });
 });
 
-describe("isSidebarMenuButtonTooltipVisible", () => {
-  test("shows the tooltip only on desktop while icon-collapsed", () => {
-    expect(
-      isSidebarMenuButtonTooltipVisible({
-        isMobile: false,
-        state: "collapsed",
-      }),
-    ).toBe(true);
-    expect(
-      isSidebarMenuButtonTooltipVisible({ isMobile: false, state: "expanded" }),
-    ).toBe(false);
-    expect(
-      isSidebarMenuButtonTooltipVisible({ isMobile: true, state: "collapsed" }),
-    ).toBe(false);
+describe("the sidebar's layout", () => {
+  // Collapse state set on desktop survives into the mobile sheet; the sheet
+  // must still draw labels, tooltips off, and the full avatar trigger.
+  test("is the icon rail only on desktop while collapsed", () => {
+    expect(resolveSidebarLayout({ isMobile: false, state: "collapsed" })).toBe(
+      "rail",
+    );
+    expect(resolveSidebarLayout({ isMobile: false, state: "expanded" })).toBe(
+      "full",
+    );
+    expect(resolveSidebarLayout({ isMobile: true, state: "collapsed" })).toBe(
+      "full",
+    );
+    expect(resolveSidebarLayout({ isMobile: true, state: "expanded" })).toBe(
+      "full",
+    );
   });
 });
 

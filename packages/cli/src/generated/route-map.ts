@@ -2175,8 +2175,16 @@ export const generatedRouteMap: RouteNode = {
                 description: "Free-text notes; pass null to clear",
                 required: false,
               },
+              {
+                flag: "--nationality-codes",
+                prop: "nationality_codes",
+                kind: "string-array",
+                repeatable: true,
+                description: "Nationality countries; pass [] to clear",
+                required: false,
+              },
             ],
-            inputOnly: [],
+            inputOnly: ["date_of_birth"],
             paginated: false,
             followable: true,
             windowedText: false,
@@ -2250,6 +2258,100 @@ export const generatedRouteMap: RouteNode = {
                     },
                   ],
                   description: "Free-text notes; pass null to clear",
+                },
+                date_of_birth: {
+                  anyOf: [
+                    {
+                      anyOf: [
+                        {
+                          type: "object",
+                          properties: {
+                            precision: {
+                              enum: ["year"],
+                              type: "string",
+                            },
+                            year: {
+                              type: "integer",
+                              minimum: 1000,
+                              maximum: 9999,
+                            },
+                          },
+                          required: ["precision", "year"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            precision: {
+                              enum: ["month"],
+                              type: "string",
+                            },
+                            year: {
+                              type: "integer",
+                              minimum: 1000,
+                              maximum: 9999,
+                            },
+                            month: {
+                              type: "integer",
+                              minimum: 1,
+                              maximum: 12,
+                            },
+                          },
+                          required: ["precision", "year", "month"],
+                          additionalProperties: false,
+                        },
+                        {
+                          type: "object",
+                          properties: {
+                            precision: {
+                              enum: ["day"],
+                              type: "string",
+                            },
+                            year: {
+                              type: "integer",
+                              minimum: 1000,
+                              maximum: 9999,
+                            },
+                            month: {
+                              type: "integer",
+                              minimum: 1,
+                              maximum: 12,
+                            },
+                            day: {
+                              type: "integer",
+                              minimum: 1,
+                              maximum: 31,
+                            },
+                          },
+                          required: ["precision", "year", "month", "day"],
+                          additionalProperties: false,
+                        },
+                      ],
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description:
+                    "Date of birth with known year, month, or day precision; pass null to clear",
+                },
+                nationality_codes: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    maxLength: 64,
+                    description:
+                      "Nationality country. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.",
+                    "x-stella-agent-input": {
+                      kind: "country",
+                      country: {
+                        spelling: "alpha-2",
+                        tool: "save_contact",
+                      },
+                    },
+                  },
+                  maxItems: 250,
+                  description: "Nationality countries; pass [] to clear",
                 },
               },
             },
@@ -11772,6 +11874,15 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "suffix",
                   },
                   {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--nationality-codes",
+                    prop: "nationalityCodes",
+                    required: false,
+                    part: "body",
+                    partPath: "nationalityCodes",
+                  },
+                  {
                     kind: "string",
                     repeatable: false,
                     flag: "--organization-name",
@@ -11939,6 +12050,7 @@ export const generatedRouteMap: RouteNode = {
                   },
                 ],
                 inputOnly: [
+                  "body.dateOfBirth",
                   "body.emails",
                   "body.phones",
                   "body.addresses",
@@ -11988,6 +12100,82 @@ export const generatedRouteMap: RouteNode = {
                         suffix: {
                           maxLength: 32,
                           type: "string",
+                        },
+                        dateOfBirth: {
+                          anyOf: [
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year"],
+                              properties: {
+                                precision: {
+                                  const: "year",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year", "month"],
+                              properties: {
+                                precision: {
+                                  const: "month",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                                month: {
+                                  minimum: 1,
+                                  maximum: 12,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                            {
+                              additionalProperties: false,
+                              type: "object",
+                              required: ["precision", "year", "month", "day"],
+                              properties: {
+                                precision: {
+                                  const: "day",
+                                  type: "string",
+                                },
+                                year: {
+                                  minimum: 1000,
+                                  maximum: 9999,
+                                  type: "integer",
+                                },
+                                month: {
+                                  minimum: 1,
+                                  maximum: 12,
+                                  type: "integer",
+                                },
+                                day: {
+                                  minimum: 1,
+                                  maximum: 31,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                        nationalityCodes: {
+                          maxItems: 250,
+                          uniqueItems: true,
+                          type: "array",
+                          items: {
+                            pattern: "^[A-Z]{2}$",
+                            type: "string",
+                          },
                         },
                         organizationName: {
                           maxLength: 512,
@@ -12595,6 +12783,74 @@ export const generatedRouteMap: RouteNode = {
                                 maxLength: 50000,
                                 type: "string",
                               },
+                              dateOfBirth: {
+                                anyOf: [
+                                  {
+                                    additionalProperties: false,
+                                    type: "object",
+                                    required: ["precision", "year"],
+                                    properties: {
+                                      precision: {
+                                        const: "year",
+                                        type: "string",
+                                      },
+                                      year: {
+                                        type: "integer",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    additionalProperties: false,
+                                    type: "object",
+                                    required: ["precision", "year", "month"],
+                                    properties: {
+                                      precision: {
+                                        const: "month",
+                                        type: "string",
+                                      },
+                                      year: {
+                                        type: "integer",
+                                      },
+                                      month: {
+                                        type: "integer",
+                                      },
+                                    },
+                                  },
+                                  {
+                                    additionalProperties: false,
+                                    type: "object",
+                                    required: [
+                                      "precision",
+                                      "year",
+                                      "month",
+                                      "day",
+                                    ],
+                                    properties: {
+                                      precision: {
+                                        const: "day",
+                                        type: "string",
+                                      },
+                                      year: {
+                                        type: "integer",
+                                      },
+                                      month: {
+                                        type: "integer",
+                                      },
+                                      day: {
+                                        type: "integer",
+                                      },
+                                    },
+                                  },
+                                ],
+                              },
+                              nationalityCodes: {
+                                maxItems: 250,
+                                type: "array",
+                                items: {
+                                  maxLength: 50000,
+                                  type: "string",
+                                },
+                              },
                               metadata: {
                                 type: "object",
                                 properties: {
@@ -12919,6 +13175,8 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 inputOnly: [
                   "body.type",
+                  "body.dateOfBirth",
+                  "body.nationalityCodes",
                   "body.emails",
                   "body.phones",
                   "body.addresses",
@@ -13003,6 +13261,103 @@ export const generatedRouteMap: RouteNode = {
                             {
                               maxLength: 32,
                               type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        dateOfBirth: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              anyOf: [
+                                {
+                                  additionalProperties: false,
+                                  type: "object",
+                                  required: ["precision", "year"],
+                                  properties: {
+                                    precision: {
+                                      const: "year",
+                                      type: "string",
+                                    },
+                                    year: {
+                                      minimum: 1000,
+                                      maximum: 9999,
+                                      type: "integer",
+                                    },
+                                  },
+                                },
+                                {
+                                  additionalProperties: false,
+                                  type: "object",
+                                  required: ["precision", "year", "month"],
+                                  properties: {
+                                    precision: {
+                                      const: "month",
+                                      type: "string",
+                                    },
+                                    year: {
+                                      minimum: 1000,
+                                      maximum: 9999,
+                                      type: "integer",
+                                    },
+                                    month: {
+                                      minimum: 1,
+                                      maximum: 12,
+                                      type: "integer",
+                                    },
+                                  },
+                                },
+                                {
+                                  additionalProperties: false,
+                                  type: "object",
+                                  required: [
+                                    "precision",
+                                    "year",
+                                    "month",
+                                    "day",
+                                  ],
+                                  properties: {
+                                    precision: {
+                                      const: "day",
+                                      type: "string",
+                                    },
+                                    year: {
+                                      minimum: 1000,
+                                      maximum: 9999,
+                                      type: "integer",
+                                    },
+                                    month: {
+                                      minimum: 1,
+                                      maximum: 12,
+                                      type: "integer",
+                                    },
+                                    day: {
+                                      minimum: 1,
+                                      maximum: 31,
+                                      type: "integer",
+                                    },
+                                  },
+                                },
+                              ],
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        nationalityCodes: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxItems: 250,
+                              uniqueItems: true,
+                              type: "array",
+                              items: {
+                                pattern: "^[A-Z]{2}$",
+                                type: "string",
+                              },
                             },
                             {
                               type: "null",
