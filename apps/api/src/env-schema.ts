@@ -329,6 +329,7 @@ export const envApiServerSchema = {
 
   // Launch feature flags. Keep default-off; deployment must opt in.
   FEATURE_CHAT: featureFlagSchema,
+  CHAT_RUN_LOG_SHADOW: v.optional(v.pipe(v.string(), v.parseBoolean())),
   FEATURE_USAGE: featureFlagSchema,
   FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
   FEATURE_CASE_LAW: featureFlagSchema,

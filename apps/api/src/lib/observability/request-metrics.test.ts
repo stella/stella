@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildRequestDurationRecord } from "@/api/lib/observability/request-metrics";
+import {
+  buildRequestDurationRecord,
+  emitChatRunLogMetric,
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 
 describe("buildRequestDurationRecord", () => {
   const base = {
@@ -44,4 +49,32 @@ describe("buildRequestDurationRecord", () => {
       buildRequestDurationRecord({ ...base, requestClass: "crud" }).class,
     ).toBe("crud");
   });
+});
+
+test("chat shadow metrics emit append latency and per-turn write volume without identifier dimensions", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    emitChatRunLogMetric({ type: "append", durationMs: 12.5 });
+    emitChatRunLogMetric({ type: "turn", rows: 3, bytes: 512 });
+    expect(lines).toHaveLength(2);
+    for (const line of lines) {
+      expect(JSON.parse(line)).toMatchObject({
+        _aws: {
+          CloudWatchMetrics: [{ Namespace: "Stella/Api", Dimensions: [[]] }],
+        },
+      });
+    }
+    expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
+      ChatRunLogAppendDuration: 12.5,
+    });
+    expect(JSON.parse(lines.at(1) ?? "null")).toMatchObject({
+      ChatRunLogRows: 3,
+      ChatRunLogBytes: 512,
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
 });
