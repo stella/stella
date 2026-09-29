@@ -1,4 +1,9 @@
-import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import {
+  chat,
+  convertMessagesToModelMessages,
+  maxIterations,
+  toolDefinition,
+} from "@tanstack/ai";
 import type { AnyTextAdapter, ModelMessage } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -6,7 +11,10 @@ import * as v from "valibot";
 
 import { isChatPart } from "@/api/handlers/chat/chat-message-parts";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
-import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
+import {
+  guardProviderHistory,
+  withoutRepeatedCalls,
+} from "@/api/handlers/chat/provider-history";
 import { answerCallsInTheirStep } from "@/api/handlers/chat/step-answers";
 import {
   processServerChatStream,
@@ -28,6 +36,7 @@ import {
   scriptedTurnChunks,
 } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
+import { findTranscriptProblems } from "@/api/tests/helpers/provider-request-transcript";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 
@@ -286,6 +295,50 @@ describe("a call the user answered, in every later provider request", () => {
     ];
 
     expect(answerCallsInTheirStep(parts)).toBe(parts);
+  });
+});
+
+// Some stored threads repeat a call in later messages of the thread (an
+// earlier release copied a denied call into each later answer of its turn).
+describe("a call a stored thread repeats", () => {
+  const history: ChatMessage[] = [
+    user("user-1", "Delete the memo."),
+    assistant([text("Kept."), approvalCall("call-memo", false)]),
+    user("user-2", "Delete the lease."),
+    {
+      ...assistant([
+        text("Kept."),
+        approvalCall("call-memo", false),
+        approvalCall("call-lease", true),
+      ]),
+      id: "assistant-2",
+    },
+  ];
+  const requestOf = (messages: readonly ChatMessage[]) => ({
+    earlierSteps: [],
+    format: "model-messages" as const,
+    messages: convertMessagesToModelMessages([...messages]),
+  });
+
+  test("is sent once, in the first message holding it", () => {
+    // The fixture must reach the fault: as stored, the id repeats.
+    expect(
+      findTranscriptProblems(requestOf(history)).map(({ problem }) => problem),
+    ).toContain("a tool call id repeats");
+
+    const sent = guardProviderHistory({ messages: history, workspaceIds: [] });
+
+    expect(findTranscriptProblems(requestOf(sent))).toEqual([]);
+    expect(sent[1]?.parts).toEqual(history[1]?.parts);
+    expect(sent[3]?.parts).toEqual([
+      text("Kept."),
+      approvalCall("call-lease", true),
+    ]);
+  });
+
+  test("leaves a thread whose calls occur once alone", () => {
+    const once = history.slice(0, 2);
+    expect(withoutRepeatedCalls(once)).toBe(once);
   });
 });
 

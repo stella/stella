@@ -34,7 +34,6 @@ import {
 } from "@/api/handlers/clauses/routes";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
-import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -85,7 +84,9 @@ import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
+import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
+import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
@@ -163,6 +164,7 @@ import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
+import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
   shutdownApiServices,
@@ -213,9 +215,9 @@ const startMemoryPressureHandler = () => {
 const allowedBrowserOrigins = (): (string | RegExp)[] => {
   const origins: (string | RegExp)[] = frontendOrigins({
     frontendUrl: env.FRONTEND_URL,
-    isDev: env.isDev,
+    runtimeMode: runtimeMode(),
   });
-  if (env.isDev) {
+  if (isLocalDevOpen()) {
     origins.push(/^chrome-extension:\/\//u);
     origins.push(...DEV_INSPECTOR_ORIGINS);
   }
@@ -226,6 +228,18 @@ const allowedBrowserOrigins = (): (string | RegExp)[] => {
 };
 
 const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
+
+// Local development routes exist only in an open runtime. The module is
+// imported on demand because it loads seeding and search maintenance; the
+// browser contract names the routes in eden-contract.ts.
+const localDevPublicRoutes = new Elysia();
+const localDevVersionedRoutes = new Elysia();
+if (isLocalDevOpen()) {
+  const { devPublicRoute, devRoute } =
+    await import("@/api/handlers/dev/routes");
+  localDevPublicRoutes.use(devPublicRoute);
+  localDevVersionedRoutes.use(devRoute);
+}
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
@@ -373,7 +387,7 @@ const api = new Elysia()
   .use(feedbackPublicRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
-  .use(devPublicRoute)
+  .use(localDevPublicRoutes)
   .use(smokeRoute)
   .use(operatorRoute)
   .mount(getAuth().handler)
@@ -462,6 +476,7 @@ const api = new Elysia()
       .use(ratesRoute)
       .use(expensesRoute)
       .use(invoicesRoute)
+      .use(sellerProfilesRoute)
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
       .use(sharepointRoute)
@@ -478,6 +493,7 @@ const api = new Elysia()
       .use(publicLegislationRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)
+      .use(savedTimeNarrativesRoute)
       .use(auditLogsRoute)
       .use(caseLawRoute)
       .use(legalReaderRoute)
@@ -493,7 +509,7 @@ const api = new Elysia()
       .use(workObligationsRoute)
       .use(myWorkRoute)
       .use(meRoute)
-      .use(devRoute)
+      .use(localDevVersionedRoutes)
       .use(verifyAuthRoute),
   )
   // Mounted after the versioned group on purpose: a route added before it
@@ -590,9 +606,9 @@ const startServer = async (): Promise<void> => {
 
   const backgroundWorkers = initApiBackgroundWorkers();
 
-  // Deployed processes only; local runs and tests never start it. Same URL as
-  // the pools in `db/root.ts`.
-  const closeDatabaseLoginProbe = envBase.isDev
+  // Every process outside local development starts it. Same URL as the pools
+  // in `db/root.ts`.
+  const closeDatabaseLoginProbe = isLocalDevOpen()
     ? undefined
     : startDatabaseLoginProbe({
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),

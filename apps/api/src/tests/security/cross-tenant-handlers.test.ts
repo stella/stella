@@ -27,7 +27,9 @@ import {
   legalLists,
   legalReaderAnnotations,
   notifications,
+  savedTimeNarratives,
   savedSearches,
+  sellerProfiles,
   signals,
   WORK_OBLIGATION_STATUS,
   workObligations,
@@ -54,6 +56,9 @@ import listMemories from "@/api/handlers/memories/list";
 import listNotifications from "@/api/handlers/notifications/list";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
+import listSavedTimeNarratives from "@/api/handlers/saved-time-narratives/list";
+import getSellerProfile from "@/api/handlers/seller-profiles/get";
+import listSellerProfiles from "@/api/handlers/seller-profiles/list";
 import listSignals from "@/api/handlers/signals/list";
 import readTaskById from "@/api/handlers/tasks/get";
 import getTemplate from "@/api/handlers/templates/get";
@@ -130,6 +135,12 @@ const savedSearchA = toSafeId<"savedSearch">(
 );
 const savedSearchB = toSafeId<"savedSearch">(
   "22222222-2222-4222-8222-222222222245",
+);
+const sellerProfileB = toSafeId<"sellerProfile">(
+  "22222222-2222-4222-8222-222222222257",
+);
+const savedTimeNarrativeB = toSafeId<"savedTimeNarrative">(
+  "22222222-2222-4222-8222-222222222258",
 );
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
@@ -521,6 +532,29 @@ const isolationCases: IsolationCase[] = [
       expectRecordFieldEquals(result, "id", testIds.invoiceB1),
   },
   {
+    name: "seller profile read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getSellerProfile, workspaceA, {
+        params: { sellerProfileId: sellerProfileB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(getSellerProfile, workspaceB, {
+        params: { sellerProfileId: sellerProfileB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", sellerProfileB),
+  },
+  {
+    name: "seller profile list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSellerProfiles, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listSellerProfiles, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, sellerProfileB),
+    expectPositive: (result) => expectPageContainsId(result, sellerProfileB),
+  },
+  {
     name: "time entry read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(readTimeEntryById, workspaceA, {
@@ -610,6 +644,20 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: (result) => expectPageExcludesId(result, savedSearchB),
     expectPositive: (result) => expectPageContainsId(result, savedSearchB),
+  },
+  {
+    name: "saved time narrative list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSavedTimeNarratives, workspaceA, {
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listSavedTimeNarratives, sameUserWorkspaceB, {
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, savedTimeNarrativeB),
+    expectPositive: (result) =>
+      expectPageContainsId(result, savedTimeNarrativeB),
   },
   {
     name: "personal cross-matter view list",
@@ -793,6 +841,12 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(sellerProfiles).values({
+    id: sellerProfileB,
+    organizationId: ids.orgB,
+    legalName: "Seller profile B",
+    defaultCurrency: "CZK",
+  });
   await testDb.insert(entityVersions).values({
     id: compareTargetVersionB,
     workspaceId: ids.wsB1,
@@ -846,6 +900,14 @@ beforeAll(async () => {
       criteria: savedSearchCriteria(ids.wsB1),
     },
   ]);
+  await testDb.insert(savedTimeNarratives).values({
+    id: savedTimeNarrativeB,
+    organizationId: ids.orgB,
+    userId: ids.userA1,
+    name: "Workspace B narrative",
+    narrative: "Research and drafting",
+    narrativeLanguage: "en",
+  });
   await testDb.insert(entityViews).values({
     id: entityViewB,
     organizationId: ids.orgB,

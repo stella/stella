@@ -7,20 +7,6 @@ import {
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import {
-  BotIcon,
-  ChevronDownIcon,
-  Clock3Icon,
-  DownloadIcon,
-  LanguagesIcon,
-  LandmarkIcon,
-  ListChecksIcon,
-  ListIcon,
-  ListFilterIcon,
-  MailIcon,
-  UsersIcon,
-  WorkflowIcon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -35,6 +21,20 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import {
+  BotIcon,
+  ChevronDownIcon,
+  Clock3Icon,
+  DownloadIcon,
+  LanguagesIcon,
+  LandmarkIcon,
+  ListChecksIcon,
+  ListIcon,
+  ListFilterIcon,
+  MailIcon,
+  UsersIcon,
+  WorkflowIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,

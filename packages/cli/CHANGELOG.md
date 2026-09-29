@@ -1,5 +1,37 @@
 # @stll/cli
 
+## 2.2.3
+
+### Patch Changes
+
+- [#4061](https://github.com/stella/stella/pull/4061) [`df37af8`](https://github.com/stella/stella/commit/df37af8b6dc697c9ff45e3c43ab28769c657c796) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The AI availability command's description also covers whether a local development stack answers with canned replies.
+
+## 2.2.2
+
+### Patch Changes
+
+- [#3992](https://github.com/stella/stella/pull/3992) [`525b1ee`](https://github.com/stella/stella/commit/525b1ee8fb98324a8f425301aa7adc53fd20de20) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search cursor accepts the longer continuation cursors a search now issues.
+
+- [#4075](https://github.com/stella/stella/pull/4075) [`a85e17b`](https://github.com/stella/stella/commit/a85e17b17a1a7e3f550bf6d89ae8d60f175f4b69) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ingestion status reports an estimated event total
+
+## 2.2.1
+
+### Patch Changes
+
+- [#4031](https://github.com/stella/stella/pull/4031) [`1005aef`](https://github.com/stella/stella/commit/1005aefe1a9fc73311c34e120c781946cf0ba6cb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add saved time narrative capabilities to the CLI route catalog.
+
+## 2.2.0
+
+### Minor Changes
+
+- [#4060](https://github.com/stella/stella/pull/4060) [`9f1fdc2`](https://github.com/stella/stella/commit/9f1fdc270698327ffee100b0ff3141b413023514) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add issuer profile commands and IBAN validation for billing account details.
+
+## 2.1.2
+
+### Patch Changes
+
+- [#4024](https://github.com/stella/stella/pull/4024) [`feffab3`](https://github.com/stella/stella/commit/feffab369d1e8c336b8dbe08b95e550df53990dc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose organization time policy fields through the generated capability catalog.
+
 ## 2.1.1
 
 ### Patch Changes

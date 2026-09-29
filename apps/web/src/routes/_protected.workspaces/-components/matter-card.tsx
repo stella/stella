@@ -3,11 +3,11 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { FileIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal, DAY_IN_MS } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
+import { FileIcon } from "@stll/ui/icons";
 import {
   PreviewCard,
   PreviewCardPopup,

@@ -28,6 +28,10 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+export const brandPersistedSavedTimeNarrativeId = (
+  id: string,
+): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
+
 export const brandPersistedTemplateId = (
   templateId: string,
 ): SafeId<"template"> => toSafeId<"template">(templateId);
@@ -35,6 +39,10 @@ export const brandPersistedTemplateId = (
 export const brandPersistedStyleSetId = (
   styleSetId: string,
 ): SafeId<"styleSet"> => toSafeId<"styleSet">(styleSetId);
+
+export const brandPersistedSellerProfileId = (
+  sellerProfileId: string,
+): SafeId<"sellerProfile"> => toSafeId<"sellerProfile">(sellerProfileId);
 
 export const brandPersistedAiMemoryId = (
   aiMemoryId: string,

@@ -1,3 +1,5 @@
+import { mockAnswersForOrganization } from "@/api/lib/tanstack-ai-models";
+
 import { generateBatch } from "./generate-batch";
 
 type BatchGenerator = typeof generateBatch;
@@ -15,5 +17,18 @@ export const registerBatchGenerator = (generator: BatchGenerator): void => {
   override = generator;
 };
 
-export const getBatchGenerator = (): BatchGenerator =>
-  override ?? generateBatch;
+/**
+ * The generator for one batch. The mock answers only where the chat mock
+ * would (`mockAnswersRequest`): an organization that configured its own key
+ * gets its real provider, unless `USE_MOCK_AI` is `"force"`.
+ */
+export const getBatchGenerator =
+  (): BatchGenerator =>
+  async (...args) => {
+    const [options] = args;
+    const generator =
+      override !== undefined && mockAnswersForOrganization(options.orgAIConfig)
+        ? override
+        : generateBatch;
+    return await generator(...args);
+  };

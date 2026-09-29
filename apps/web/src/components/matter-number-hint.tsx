@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -8,6 +7,7 @@ import {
   renderMatterReference,
 } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
+import { AlertTriangleIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 

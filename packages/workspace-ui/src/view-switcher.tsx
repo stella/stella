@@ -11,9 +11,9 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { EllipsisVerticalIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/button";
+import { EllipsisVerticalIcon } from "@stll/ui/icons";
 import { TOOLBAR_ROW_HEIGHT } from "@stll/ui/inspector";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";

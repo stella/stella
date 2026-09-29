@@ -28,10 +28,12 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawStatuteCitationCountState: "case_law_statute_citation_count_state",
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
+  corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
   legislationSearchDocuments: "legislation_search_documents",
   legislationSources: "legislation_sources",
+  statuteSitemapShards: "statute_sitemap_shards",
 } as const;
 
 export type PublicLawRelation =
@@ -161,6 +163,7 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     ecli: "required",
     citation_key: "required",
     court: "required",
+    court_id: "required",
     country: "required",
     language: "required",
     language_group_key: "required",
@@ -297,6 +300,16 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     manifest_digest: "required",
     status: "required",
   },
+  // Whether a serving group under its own contract is ready to be read: the
+  // bound digest and the readiness. The physical id and the timestamps are
+  // operator bookkeeping.
+  corpus_index_group_enrollments: {
+    family: "required",
+    generation: "required",
+    index_group: "required",
+    effective_digest: "required",
+    provisioning_status: "required",
+  },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The applied revision, the work schedule and the failure detail are
   // operator state and stay on the owning service side.
@@ -326,6 +339,9 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     effective_date: "required",
     version_valid_from: "required",
     version_valid_to: "required",
+    expression_kind: "required",
+    window_disposition: "required",
+    window_disposition_basis: "required",
     fulltext: "required",
     sections: "required",
     document_ast: "required",
@@ -350,6 +366,12 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     tsv: "required",
     searchable_text: "required",
     retry_after: "required",
+  },
+  statute_sitemap_shards: {
+    country: "required",
+    bucket: "required",
+    lastmod: "required",
+    total: "required",
   },
   legislation_sources: {
     id: "required",

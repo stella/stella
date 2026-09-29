@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { cents, currencyMinorUnitDigits, type CentsAmount } from "@stll/money";
 
 import { invalidInput, type InvoicingResult } from "./errors";
+import { parseIban } from "./iban";
 import type { InvoiceDocumentType } from "./types";
 
 export type CzechQrPaymentInput = {
@@ -21,7 +22,6 @@ export type CzechQrPaymentResult =
 
 const QR_PAYMENT_VERSION = "1.0";
 const MAX_MESSAGE_LENGTH = 60;
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 export const buildCzechQrPaymentPayload = ({
   documentType,
@@ -44,9 +44,13 @@ export const buildCzechQrPaymentPayload = ({
     return invalidInput("QR payment requires an ISO currency code");
   }
 
-  const account = normalizeIban(iban);
+  const account = parseIban(iban);
   if (account.isErr()) {
-    return Result.err(account.error);
+    return invalidInput(
+      account.error.message === "IBAN checksum is invalid"
+        ? "QR payment requires a valid IBAN checksum"
+        : "QR payment requires a valid IBAN",
+    );
   }
 
   const fields = [
@@ -79,28 +83,6 @@ export const buildCzechQrPaymentPayload = ({
   }
 
   return Result.ok({ status: "payable", payload: fields.join("*") });
-};
-
-const normalizeIban = (iban: string): InvoicingResult<string> => {
-  const normalized = iban.replaceAll(/\s/gu, "").toUpperCase();
-  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/u.test(normalized)) {
-    return invalidInput("QR payment requires a valid IBAN");
-  }
-
-  const rearranged = `${normalized.slice(4)}${normalized.slice(0, 4)}`;
-  let remainder = 0;
-  for (const character of rearranged) {
-    const digits = /\d/u.test(character)
-      ? character
-      : String(ALPHABET.indexOf(character) + 10);
-    for (const digit of digits) {
-      remainder = (remainder * 10 + Number(digit)) % 97;
-    }
-  }
-  if (remainder !== 1) {
-    return invalidInput("QR payment requires a valid IBAN checksum");
-  }
-  return Result.ok(normalized);
 };
 
 const formatMinorAmount = (

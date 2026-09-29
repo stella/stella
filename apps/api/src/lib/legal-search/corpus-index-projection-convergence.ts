@@ -19,7 +19,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 export const CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS = {
   empty: "empty",
-  blocked: "blocked",
+  knownBlocked: "known_blocked",
   pending: "pending",
   intentOutstanding: "intent_outstanding",
   /**
@@ -86,6 +86,7 @@ const readOutstandingCorpusProjectionIntentTx = async (
   tx: Transaction,
   target: CorpusIndexProjectionConvergenceTarget,
 ): Promise<boolean> => {
+  // sql-perf-allow: index corpus_index_projection_intents_work_idx and corpus_index_projection_states_applied_census_idx for one family/generation
   const result: unknown = await tx.execute(sql`
     SELECT EXISTS (
       SELECT 1
@@ -162,14 +163,14 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   if (!observation["hasState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.empty;
   }
-  if (observation["hasBlockedState"]) {
-    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.blocked;
-  }
   if (observation["hasPendingState"]) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.pending;
   }
   if (await readOutstandingCorpusProjectionIntentTx(tx, target)) {
     return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.intentOutstanding;
+  }
+  if (observation["hasBlockedState"]) {
+    return CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.knownBlocked;
   }
   const manifest = await readRegisteredCorpusProjectionManifestForCleanup(
     tx,

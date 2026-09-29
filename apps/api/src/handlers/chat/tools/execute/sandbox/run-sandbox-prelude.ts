@@ -28,6 +28,25 @@ export const SANDBOX_CONSOLE_METHODS = [
   "debug",
 ] as const;
 
+/**
+ * Guest-visible name of the synchronous QuickJS function that answers what a
+ * guided name stands for (see {@link buildNameGuidePrelude}).
+ */
+export const SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL = "__nameGuideCall" as const;
+
+/** Local alias in emitted prelude for the captured name-guide bridge. */
+export const SANDBOX_NAME_GUIDE_LOCAL_ALIAS = "__nameGuideBridge" as const;
+
+/**
+ * `name` of the error a guided name throws when it stands for no script
+ * function. The host maps it onto the `not-a-script-function` reason.
+ */
+export const SANDBOX_NAME_GUIDE_ERROR_NAME =
+  "SandboxNotAScriptFunction" as const;
+
+/** A name the guest can declare as a global binding. */
+export const SANDBOX_IDENTIFIER_PATTERN = /^[A-Za-z_$][\w$]*$/u;
+
 /** Property names the `read` proxy must not expose so `read` is not a thenable. */
 export const SANDBOX_THENABLE_PROPERTY_NAMES = [
   "then",
@@ -90,5 +109,46 @@ ${blockedDeletes}
       };
     },
   });
+`;
+};
+
+/**
+ * JavaScript run after {@link buildHostBridgePrelude} when the host guides
+ * names. Each name becomes a global function unless the global already
+ * exists, so a script's own declaration of the name still shadows it. Calling
+ * one asks the host (synchronously) what the name stands for: a read function
+ * to run through the same `read` bridge every script call uses, or a message
+ * explaining the call to make instead, thrown as the guided error. A name the
+ * host no longer recognizes throws the ReferenceError the script would have
+ * got without the guide.
+ */
+export const buildNameGuidePrelude = (names: readonly string[]): string => {
+  const guided = names.filter((name) => SANDBOX_IDENTIFIER_PATTERN.test(name));
+  if (guided.length === 0) {
+    return "";
+  }
+  return `
+  const ${SANDBOX_NAME_GUIDE_LOCAL_ALIAS} = globalThis.${SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL};
+  delete globalThis.${SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL};
+  const __guideRead = globalThis.${SANDBOX_READ_GLOBAL};
+  for (const __guidedName of ${JSON.stringify(guided)}) {
+    if (__guidedName in globalThis) continue;
+    Object.defineProperty(globalThis, __guidedName, {
+      configurable: true,
+      writable: true,
+      value: (input) => {
+        const verdict = JSON.parse(${SANDBOX_NAME_GUIDE_LOCAL_ALIAS}(__guidedName));
+        if (typeof verdict.run === "string") {
+          return __guideRead[verdict.run](input);
+        }
+        if (typeof verdict.explain === "string") {
+          const error = new Error(verdict.explain);
+          error.name = "${SANDBOX_NAME_GUIDE_ERROR_NAME}";
+          throw error;
+        }
+        throw new ReferenceError(__guidedName + " is not defined");
+      },
+    });
+  }
 `;
 };

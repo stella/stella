@@ -5,12 +5,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { ArrowLeftIcon, PlayIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowLeftIcon, PlayIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
 

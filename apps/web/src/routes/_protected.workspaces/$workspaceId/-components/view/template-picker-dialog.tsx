@@ -2,16 +2,6 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import {
-  CalendarIcon,
-  FileCheckIcon,
-  FolderTreeIcon,
-  GanttChartIcon,
-  KanbanIcon,
-  LayoutDashboardIcon,
-  TableIcon,
-  Trash2Icon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -34,6 +24,16 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import {
+  CalendarIcon,
+  FileCheckIcon,
+  FolderTreeIcon,
+  GanttChartIcon,
+  KanbanIcon,
+  LayoutDashboardIcon,
+  TableIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";

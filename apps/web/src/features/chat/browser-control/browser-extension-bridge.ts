@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
@@ -45,6 +47,14 @@ type BrowserExtensionBridgeRuntime = {
 };
 
 let bridgeRuntime: BrowserExtensionBridgeRuntime | null = null;
+
+/** Fires whenever whether a browser client is connected may have changed. */
+const connectionEvents = new EventTarget();
+const CONNECTION_CHANGED = "connection-changed";
+
+const notifyConnectionListeners = (): void => {
+  connectionEvents.dispatchEvent(new Event(CONNECTION_CHANGED));
+};
 
 const getBridgeRuntime = (): BrowserExtensionBridgeRuntime => {
   bridgeRuntime ??= {
@@ -134,6 +144,7 @@ const handleMessage = ({ data, origin, source }: MessageEvent): void => {
   if (response.type === "pong") {
     runtime.allSitesGranted = response.allSitesGranted;
     runtime.controllerId = response.controllerId;
+    notifyConnectionListeners();
     // The content script announces itself before it knows the pairing.
     if (response.requestId === "extension-ready") {
       ping();
@@ -198,6 +209,7 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     }
     runtime.pendingRequests.clear();
     bridgeRuntime = null;
+    notifyConnectionListeners();
   };
 };
 
@@ -207,6 +219,27 @@ export const getBrowserClientCapability = ():
   bridgeRuntime?.allSitesGranted && bridgeRuntime.controllerId
     ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
     : undefined;
+
+const isBrowserClientConnected = (): boolean =>
+  getBrowserClientCapability() !== undefined;
+
+const subscribeBrowserClientConnection = (listener: () => void) => {
+  connectionEvents.addEventListener(CONNECTION_CHANGED, listener);
+  return () => {
+    connectionEvents.removeEventListener(CONNECTION_CHANGED, listener);
+  };
+};
+
+/**
+ * Whether the next send carries a browser client, so the chat registers the
+ * browser tool. Re-renders when the extension answers or the bridge unmounts.
+ */
+export const useBrowserClientConnected = (): boolean =>
+  useSyncExternalStore(
+    subscribeBrowserClientConnection,
+    isBrowserClientConnected,
+    () => false,
+  );
 
 /** Stops the controller's queued or running command of `turnId` in the extension. */
 const postCancel = (controllerId: string, turnId: string): void => {

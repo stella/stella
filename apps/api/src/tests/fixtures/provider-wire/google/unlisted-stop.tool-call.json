@@ -1,0 +1,103 @@
+{
+  "format": 1,
+  "provider": "google",
+  "scenario": "unlisted-stop",
+  "variant": "tool-call",
+  "source": "synthetic",
+  "basis": "The google/tool-call cassette with the last candidate's finishReason set to one no SDK lists: a call left to run has no answer to stand on",
+  "model": "gemini-3.8-flash",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse",
+        "shape": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "[prompt]"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "serviceTier": "standard",
+            "safetySettings": [
+              {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+              },
+              {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_ONLY_HIGH"
+              },
+              {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_ONLY_HIGH"
+              },
+              {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+              }
+            ],
+            "tools": [
+              {
+                "functionDeclarations": [
+                  {
+                    "name": "mcp__external__delete",
+                    "description": "Delete a draft by name.",
+                    "parametersJsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["name"],
+                      "additionalProperties": false
+                    }
+                  }
+                ]
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 65536,
+              "thinkingConfig": {
+                "includeThoughts": false,
+                "thinkingLevel": "LOW"
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "data: {\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"mcp__external__delete\",\"args\":{\"name\":\"draft\"},\"id\":\"call_530074\"},\"thoughtSignature\":\"EoYCCoMCAWkUfRMPz4kj7ATOG+uuK9GNYBE29abzlFbXaBgAvPCS10tXXPNhRkLDTclfduVMydUWPnCclK83pnDBnX2BACvr6TiHAqnRmIm7okNvda28Pupxu1oJXXMK3iO+sdGUg8B4gv7LYDAlY3D+RNV4d9mf1EOC9cGgkp5vWxzUwchfAGSjZP9398VbFxvOdGo3R1KnzCNGUcHZ5gyUx9jULnf49cKqZU3atFzfw714CgAhcsUhfcrBM9iOaYm0lYbsWmf3LM61c8RQIpH86EBLMC1N+TBZFrtUO7bxUPdKOx1S60Rcn48R0DEwxDCLK1BwZTA5HDUkE+KyJp9Q0mUGVDvqgQ==\"}],\"role\":\"model\"},\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":76,\"candidatesTokenCount\":19,\"totalTokenCount\":128,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":76}],\"thoughtsTokenCount\":33,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\",\"responseId\":\"[responseId]\"}\r\n\r\ndata: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"\"}],\"role\":\"model\"},\"finishReason\":\"UNLISTED_STOP\",\"index\":0,\"safetyRatings\":[{\"category\":\"HARM_CATEGORY_HARASSMENT\",\"probability\":\"NEGLIGIBLE\"},{\"category\":\"HARM_CATEGORY_HATE_SPEECH\",\"probability\":\"NEGLIGIBLE\"},{\"category\":\"HARM_CATEGORY_SEXUALLY_EXPLICIT\",\"probability\":\"NEGLIGIBLE\"},{\"category\":\"HARM_CATEGORY_DANGEROUS_CONTENT\",\"probability\":\"NEGLIGIBLE\"}]}],\"usageMetadata\":{\"promptTokenCount\":76,\"candidatesTokenCount\":19,\"totalTokenCount\":128,\"promptTokensDetails\":[{\"modality\":\"TEXT\",\"tokenCount\":76}],\"thoughtsTokenCount\":33,\"serviceTier\":\"standard\"},\"modelVersion\":\"gemini-3.8-flash\",\"responseId\":\"[responseId]\"}\r\n\r\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "error",
+    "errorKind": "unknown",
+    "usage": {
+      "promptTokens": 76,
+      "completionTokens": 19,
+      "totalTokens": 128
+    }
+  }
+}

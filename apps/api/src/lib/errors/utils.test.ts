@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
 
@@ -8,9 +9,49 @@ import {
   errorSystemFields,
   unredactedErrorFields,
 } from "@/api/lib/errors/utils";
+import { errorFields } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { sanitizeLogAttributes } from "@/api/lib/observability/logger";
 
 describe("errorSystemFields", () => {
+  test("logs Bun's Postgres idle code through a wrapped error", () => {
+    const driver = new SQL.PostgresError("idle", {
+      code: "ERR_POSTGRES_IDLE_TIMEOUT",
+    });
+    const wrapped = new DrizzleQueryError("query failed", [], driver);
+    const fields = errorSystemFields(wrapped);
+    expect(fields["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_IDLE_TIMEOUT",
+    );
+    expect(sanitizeLogAttributes(fields)?.["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_IDLE_TIMEOUT",
+    );
+    expect(errorFingerprint(wrapped)["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_IDLE_TIMEOUT",
+    );
+    expect(
+      errorFields(readEvidence(wrapped))["error.cause.pg_driver_code"],
+    ).toBe("ERR_POSTGRES_IDLE_TIMEOUT");
+  });
+
+  test("logs the SQLSTATE alongside Bun's server-error code", () => {
+    const driver = new SQL.PostgresError("canceled", {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      errno: "57014",
+    });
+    const fields = errorSystemFields(
+      new DrizzleQueryError("query failed", [], driver),
+    );
+    expect(fields["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_SERVER_ERROR",
+    );
+    expect(fields["error.cause.pg_code"]).toBe("57014");
+    const emitted = sanitizeLogAttributes(fields);
+    expect(emitted?.["error.cause.pg_driver_code"]).toBe(
+      "ERR_POSTGRES_SERVER_ERROR",
+    );
+    expect(emitted?.["error.cause.pg_code"]).toBe("57014");
+  });
   test("extracts the structural type and non-PII system codes", () => {
     const error = Object.assign(
       new Error("connect ECONNREFUSED 10.0.0.5:6379"),

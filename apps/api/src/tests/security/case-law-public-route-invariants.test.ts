@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import type { ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import type {
@@ -9,6 +12,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   apiSourceRoot,
   collectApiModuleGraph,
@@ -195,6 +199,9 @@ const PUBLIC_DECISION_READ_GATES = {
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [LIST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/lookup-by-identity.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
   [PUBLIC_SUBJECT_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [SEARCH_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/shelf-courts.ts": {
@@ -220,6 +227,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law-public-read-db.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The read handle the gated reads run through.",
+  },
+  "apps/api/src/lib/case-law/decision-court-id-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "The court-id CHECK fragment and the jurisdictions it covers; no query.",
   },
   "apps/api/src/lib/case-law/decision-row-columns.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -251,6 +263,10 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Ingestion-side mirror upload intents; not a public read.",
+  },
+  "apps/api/src/lib/legal-search/case-law-legacy-reference-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Predicate fragment only; issues no query.",
   },
   "apps/api/src/lib/legal-search/case-law-search-index.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
@@ -297,10 +313,21 @@ const publicRouteBlock = (source: string): string => {
 
 describe("public case-law route boundary", () => {
   test("public case-law API is dark-launched outside local development", async () => {
-    const source = await readRoutesSource();
+    const previousFeature = env.FEATURE_PUBLIC_LAW;
+    env.FEATURE_PUBLIC_LAW = false;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
+    try {
+      const response = await publicCaseLawRoute.handle(
+        new Request("http://localhost/case/coverage"),
+      );
 
-    expect(source).toContain("env.isDev || env.FEATURE_PUBLIC_LAW");
-    expect(source).toContain("set.status = 404");
+      expect(response.status).toBe(404);
+    } finally {
+      restoreRuntimeMode();
+      env.FEATURE_PUBLIC_LAW = previousFeature;
+    }
   });
 
   test("public read transaction cannot mutate data", () => {

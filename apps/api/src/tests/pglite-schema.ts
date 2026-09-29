@@ -45,6 +45,11 @@ const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
   "20260926150000_legislation_payload_revision",
   "migration.sql",
 );
+const LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120000_legislation_expression_identity",
+  "migration.sql",
+);
 const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260926160000_case_law_provision_extraction_state",
@@ -403,6 +408,27 @@ export const installPgliteLegislationPayloadRevision = async (
     LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH,
   ).filter((statement) =>
     LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES = [
+  "CREATE OR REPLACE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the namespace and expression-id guards that schema push omits. */
+export const installPgliteLegislationExpressionIdentity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
       executableSql(statement).startsWith(prefix),
     ),
   );

@@ -11,7 +11,8 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-import { buildChatCodeMode } from "./chat-code-mode";
+import { buildChatCodeMode, chatScriptCallCatalog } from "./chat-code-mode";
+import { classifyScriptName } from "./script-call-guide";
 
 // Drives the real QuickJS sandbox through execute_typescript: share the sandbox
 // suite's 15s ceiling and drain the process-global admission state after each
@@ -66,6 +67,10 @@ const buildProps = (scopedDb: ScopedDb) => {
       pinnedIds: [],
     }),
     userId: toSafeId<"user">(`user_${userCounter}`),
+    scriptCallTools: () => ({
+      directTools: ["execute_typescript", "discover_tools", "save_playbook"],
+      unavailableReasons: new Map<string, string>(),
+    }),
   };
 };
 
@@ -251,5 +256,107 @@ describe("buildChatCodeMode", () => {
       typescriptCode: `return await external_list_matters({});`,
     });
     expect(good).toMatchObject({ success: true });
+  });
+});
+
+describe("a chat script that calls something other than a script function", () => {
+  const MATTER_ROWS = [
+    {
+      id: WS_UUID,
+      name: "Acme",
+      reference: "REF-1",
+      status: "active",
+      lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ];
+
+  const executeOf = (scopedDb: ScopedDb) => {
+    const execute = buildChatCodeMode(buildProps(scopedDb)).tool.execute;
+    return execute ?? expect.unreachable("execute_typescript has no execute");
+  };
+
+  test("is told to call a registry write as a direct tool, which never runs", async () => {
+    let selects = 0;
+    const execute = executeOf(
+      selectScopedDb(MATTER_ROWS, () => {
+        selects += 1;
+      }),
+    );
+
+    const output = await execute({
+      typescriptCode: `const { matters } = await external_list_matters({});
+await save_playbook({ name: "NDA review", matter_id: matters[0].id });
+return "saved";`,
+    });
+
+    expect(output).toMatchObject({
+      success: false,
+      error: {
+        name: "not-a-script-function",
+        message:
+          "`save_playbook` is a direct tool, not a script function. Call it as its own tool call outside execute_typescript. Do the reads in the script, return the data, then call `save_playbook` with it.",
+      },
+    });
+    // Only the read ran.
+    expect(selects).toBe(1);
+  });
+
+  test("runs an unprefixed read through the registry read path, refs and all", async () => {
+    const execute = executeOf(selectScopedDb(MATTER_ROWS));
+
+    const output = await execute({
+      typescriptCode: `const r = await list_matters({}); return r.matters;`,
+    });
+
+    expect(output).toMatchObject({
+      success: true,
+      logs: [
+        "WARN: Ran `external_list_matters` for `list_matters`; use the external_ name in scripts.",
+      ],
+    });
+    const serialized = JSON.stringify(output);
+    expect(serialized).toContain("mat_1");
+    expect(serialized).not.toContain(WS_UUID);
+  });
+
+  test("offers only registry reads as functions to run in place of a call", () => {
+    const catalog = chatScriptCallCatalog({
+      bindingNames: [
+        "external_list_matters",
+        "external_save_playbook",
+        "external_delete_matter",
+      ],
+      turnTools: {
+        directTools: ["save_playbook"],
+        unavailableReasons: new Map(),
+      },
+    });
+
+    expect(catalog.readFunctions).toEqual(["external_list_matters"]);
+    for (const write of ["save_playbook", "savePlaybook", "delete_matter"]) {
+      expect(classifyScriptName(write, catalog).kind).not.toBe("run-read");
+    }
+  });
+
+  test("names a registry tool this chat does not offer as unavailable", () => {
+    const catalog = chatScriptCallCatalog({
+      bindingNames: ["external_list_matters"],
+      turnTools: {
+        directTools: [],
+        unavailableReasons: new Map([
+          ["counterparty_check", "anonymized mode is on"],
+        ]),
+      },
+    });
+
+    expect(classifyScriptName("delete_matter", catalog)).toMatchObject({
+      kind: "unavailable",
+      tool: "delete_matter",
+    });
+    expect(classifyScriptName("counterparty_check", catalog)).toMatchObject({
+      kind: "unavailable",
+      reason: "anonymized mode is on",
+    });
   });
 });

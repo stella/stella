@@ -12,6 +12,8 @@ import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contr
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
+import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
+import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import {
   cassetteFor,
   cassetteKey,
@@ -63,7 +65,7 @@ const {
 } = CHAT_ORACLE;
 
 let replay: ProviderWireReplay;
-let previousMockAI: boolean;
+let previousMockAI: typeof env.USE_MOCK_AI;
 let previousBedrockEndpoint: string | undefined;
 
 beforeAll(() => {
@@ -107,6 +109,19 @@ const expectContract = (
   expect(violatedOracles(violations)).toEqual(unmet.oracles.toSorted());
 };
 
+/** The transcript check reads every request the adapter sent, and each one
+ *  is settled. */
+const expectSettledTranscripts = ({
+  requests,
+  transcripts,
+}: {
+  requests: number;
+  transcripts: readonly ProviderRequest[];
+}) => {
+  expect(transcripts).toHaveLength(requests);
+  expect(findTranscriptViolations(transcripts)).toEqual([]);
+};
+
 /** Every request the adapter sent is the one its exchange pins, shown as a
  *  diff of the two when it is not. */
 const expectPinnedRequests = (
@@ -125,19 +140,21 @@ const expectPinnedRequests = (
 };
 
 const checkCassette = async (cassette: ProviderWireCassette) => {
-  const { findings, run, sent } = await replayWireScenario({
-    cassette,
-    replay,
-  });
+  const { findings, requests, run, sent, transcripts } =
+    await replayWireScenario({
+      cassette,
+      replay,
+    });
   expectContract(
     cassetteKey(cassette),
     findWireContractViolations({ cassette, replay: findings, run }),
   );
+  expectSettledTranscripts({ requests, transcripts });
   expectPinnedRequests(cassette, sent);
 };
 
 const checkCancel = async (provider: ProviderWireProvider) => {
-  const { findings, requests, run } = await replayWireScenario({
+  const { findings, requests, run, transcripts } = await replayWireScenario({
     cancelAfterFirstDelta: true,
     cassette: cassetteFor(cassettes, provider, "text"),
     replay,
@@ -146,6 +163,7 @@ const checkCancel = async (provider: ProviderWireProvider) => {
     `${provider}/cancel`,
     findWireCancelViolations({ replay: findings, requests, run }),
   );
+  expectSettledTranscripts({ requests, transcripts });
 };
 
 /** Retried failures wait out each SDK's backoff. */

@@ -2,14 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactElement, ReactNode, RefObject } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
-import {
-  Building2Icon,
-  ChevronDownIcon,
-  CircleAlertIcon,
-  PlusIcon,
-  StarIcon,
-  StarOffIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { DESKTOP_REGISTRY_DEFAULT_FORMAT_SOURCE } from "@stll/api-contract/desktop-registry";
@@ -24,6 +16,14 @@ import {
 } from "@stll/business-registries/default-formats";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import {
+  Building2Icon,
+  ChevronDownIcon,
+  CircleAlertIcon,
+  PlusIcon,
+  StarIcon,
+  StarOffIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,

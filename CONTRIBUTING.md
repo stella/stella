@@ -152,7 +152,6 @@ it:
 - `@stll/conditions`
 - `@stll/country-codes`
 - `@stll/docx-utils`
-- `@stll/invoicing`
 - `@stll/money`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`

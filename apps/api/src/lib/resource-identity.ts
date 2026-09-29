@@ -253,10 +253,18 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   propertyDependency: { type: "non_resource", reason: "association" },
   rateEntry: { type: "resource", resourceType: RESOURCE_TYPE.RATE_ENTRY },
   rateTable: { type: "resource", resourceType: RESOURCE_TYPE.RATE_TABLE },
-  savedSearch: { type: "resource", resourceType: RESOURCE_TYPE.SAVED_SEARCH },
   reportExport: {
     type: "resource",
     resourceType: RESOURCE_TYPE.REPORT_EXPORT,
+  },
+  savedSearch: { type: "resource", resourceType: RESOURCE_TYPE.SAVED_SEARCH },
+  savedTimeNarrative: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.SAVED_TIME_NARRATIVE,
+  },
+  sellerProfile: {
+    type: "resource",
+    resourceType: RESOURCE_TYPE.SELLER_PROFILE,
   },
   schedulerJobRun: { type: "non_resource", reason: "job" },
   sharepointConnection: { type: "non_resource", reason: "credential" },

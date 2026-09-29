@@ -3,11 +3,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
+import { Trash2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";

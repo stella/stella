@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
+import { readSkillRequiredTools } from "@stll/skills";
 import type { SkillMetadata, SkillResource } from "@stll/skills";
 import type { SkillResourceKind } from "@stll/skills/resource-kinds";
 
@@ -47,6 +48,8 @@ export type ActiveChatSkillContext = {
   editable: boolean;
   id: SafeId<"agentSkill">;
   origin: AgentSkillOrigin;
+  /** `stella-required-tools`, as declared. */
+  requiredTools: readonly string[];
   resources: SkillResource[];
   toolName: string;
   version: string | null;
@@ -96,6 +99,7 @@ const resolveInstalledActiveSkill = async ({
         body: agentSkills.body,
         description: agentSkills.description,
         enabled: agentSkills.enabled,
+        metadata: agentSkills.metadata,
         name: agentSkills.name,
         origin: agentSkills.origin,
         scope: agentSkills.scope,
@@ -169,6 +173,7 @@ const resolveInstalledActiveSkill = async ({
     }),
     id: skill.id,
     origin: skill.origin,
+    requiredTools: readSkillRequiredTools(skill.metadata),
     resources: resources.value,
     toolName: skill.slug,
     version: skill.version,

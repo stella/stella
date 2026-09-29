@@ -10,10 +10,10 @@ import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { panic } from "better-result";
-import { Building2Icon, LockIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Building2Icon, LockIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";

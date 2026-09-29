@@ -2,13 +2,13 @@ import { useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { prorateHourlyCents } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
+import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
@@ -99,6 +99,7 @@ export const TimesheetDayView = ({
         timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
         durationMinutes: values.durationMinutes,
         narrative: values.narrative,
+        narrativeLanguage: values.narrativeLanguage,
         billable: values.billable,
         taskCode: values.taskCode || null,
         activityCode: values.activityCode || null,
@@ -128,6 +129,7 @@ export const TimesheetDayView = ({
         timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
         durationMinutes: values.durationMinutes,
         narrative: values.narrative,
+        narrativeLanguage: values.narrativeLanguage,
         invoiceNarrative: values.invoiceNarrative || null,
         billable: values.billable,
         taskCode: values.taskCode || null,
@@ -288,6 +290,7 @@ export const TimesheetDayView = ({
                   dateWorked: editingEntry.dateWorked,
                   durationMinutes: editingEntry.durationMinutes,
                   narrative: editingEntry.narrative,
+                  narrativeLanguage: editingEntry.narrativeLanguage,
                   invoiceNarrative: editingEntry.invoiceNarrative ?? "",
                   billable: editingEntry.billable,
                   taskCode: editingEntry.taskCode ?? "",

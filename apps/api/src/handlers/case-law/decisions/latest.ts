@@ -169,9 +169,7 @@ export const readLatestDecisionsByCourt = async ({
           WHERE d.country = ${country}
             AND d.court = shelf.court
             AND ${sql.raw(publishedCaseLawDecisionSqlFor("d"))}
-            AND (
-              d.language_group_key IS NULL
-              OR NOT EXISTS (
+            AND NOT EXISTS (
                 SELECT 1
                 FROM case_law_decisions sibling
                 JOIN case_law_sources sibling_source
@@ -183,7 +181,6 @@ export const readLatestDecisionsByCourt = async ({
                   AND sibling.court = d.court
                   AND (sibling.created_at, sibling.id) < (d.created_at, d.id)
               )
-            )
           ORDER BY ${decisionDateSortKeySql(sql.raw("d.decision_date"))} DESC, d.id DESC
           LIMIT ${LIMITS.caseLawLatestPerCourt}
         ) d

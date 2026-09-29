@@ -195,11 +195,13 @@ describe("organization settings under the request scope", () => {
 
     expect(
       providerKeys(
-        await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgA)),
+        (
+          await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgA))
+        ).unwrap(),
       ),
     ).toEqual(["model-a-key"]);
     expect(
-      await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgB)),
+      (await scope(async (tx) => await loadOrgAIConfig(tx, ids.orgB))).unwrap(),
     ).toBeNull();
   });
 
@@ -208,26 +210,30 @@ describe("organization settings under the request scope", () => {
 
     // orgB stores `true`; orgA stores `false`. Under orgB's scope the orgA row
     // is invisible, so the read falls back to the default rather than false.
-    const own = await scope(
-      async (tx) => await loadOrgAISettings(tx, ids.orgB),
-    );
+    const own = (
+      await scope(async (tx) => await loadOrgAISettings(tx, ids.orgB))
+    ).unwrap();
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-b-key"]);
     expect(own.promptCachingEnabled).toBe(true);
     expect(
-      await scope(async (tx) => await loadOrgAISettings(tx, ids.orgA)),
+      (
+        await scope(async (tx) => await loadOrgAISettings(tx, ids.orgA))
+      ).unwrap(),
     ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
   });
 
   test("loadOrgAISettings reads both values in one select", async () => {
     const scope = requestScope(ids.orgA, ids.userA1);
 
-    const own = await scope(
-      async (tx) => await loadOrgAISettings(tx, ids.orgA),
-    );
+    const own = (
+      await scope(async (tx) => await loadOrgAISettings(tx, ids.orgA))
+    ).unwrap();
     expect(providerKeys(own.orgAIConfig)).toEqual(["model-a-key"]);
     expect(own.promptCachingEnabled).toBe(false);
     expect(
-      await scope(async (tx) => await loadOrgAISettings(tx, ids.orgB)),
+      (
+        await scope(async (tx) => await loadOrgAISettings(tx, ids.orgB))
+      ).unwrap(),
     ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
   });
 
@@ -298,7 +304,9 @@ describe("absent and unreadable settings", () => {
       promptCachingEnabled: true,
     });
     expect(
-      await scope(async (tx) => await loadOrgAISettings(tx, unsetOrgId)),
+      (
+        await scope(async (tx) => await loadOrgAISettings(tx, unsetOrgId))
+      ).unwrap(),
     ).toEqual({ orgAIConfig: null, promptCachingEnabled: true });
     expect(
       await scope(async (tx) => await loadWebSearchKeys(tx, unsetOrgId)),

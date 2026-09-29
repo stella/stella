@@ -15,12 +15,13 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
-import { resolveRate } from "@/api/lib/billing-rates";
 import {
   getTimePolicyViolation,
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
+import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
+import { resolveRate } from "@/api/lib/billing/rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -36,6 +37,7 @@ const updateTimeEntryBodySchema = t.Object({
   timezoneId: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
   durationMinutes: t.Optional(t.Integer({ minimum: 1 })),
   narrative: t.Optional(t.String({ minLength: 0, maxLength: 10_000 })),
+  narrativeLanguage: t.Optional(narrativeLanguageSchema),
   invoiceNarrative: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   billable: t.Optional(t.Boolean()),
   noCharge: t.Optional(t.Boolean()),
@@ -88,6 +90,7 @@ export const updateTimeEntryHandler = async function* ({
           durationMinutes: true,
           billedMinutes: true,
           narrative: true,
+          narrativeLanguage: true,
           invoiceNarrative: true,
           billable: true,
           noCharge: true,
@@ -259,6 +262,7 @@ export const updateTimeEntryHandler = async function* ({
       "dateWorked",
       "durationMinutes",
       "narrative",
+      "narrativeLanguage",
       "invoiceNarrative",
       "billable",
       "noCharge",
@@ -299,6 +303,9 @@ export const updateTimeEntryHandler = async function* ({
             eq(timeEntries.durationMinutes, existing.durationMinutes),
             eq(timeEntries.billedMinutes, existing.billedMinutes),
             eq(timeEntries.narrative, existing.narrative),
+            existing.narrativeLanguage === null
+              ? isNull(timeEntries.narrativeLanguage)
+              : eq(timeEntries.narrativeLanguage, existing.narrativeLanguage),
             existing.invoiceNarrative === null
               ? isNull(timeEntries.invoiceNarrative)
               : eq(timeEntries.invoiceNarrative, existing.invoiceNarrative),

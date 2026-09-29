@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
+import { CopyIcon } from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,

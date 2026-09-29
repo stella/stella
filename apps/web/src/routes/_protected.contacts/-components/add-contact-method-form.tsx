@@ -1,8 +1,7 @@
 import { useFormStatus } from "react-dom";
 
-import { PlusIcon } from "lucide-react";
-
 import { Button } from "@stll/ui/button";
+import { PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 export const AddContactMethodForm = ({

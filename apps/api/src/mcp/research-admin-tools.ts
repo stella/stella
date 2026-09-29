@@ -85,7 +85,7 @@ const isBoeOffsetCursor = (value: string): boolean =>
   BOE_OFFSET_CURSOR.test(value);
 
 /** Discriminator for the manage_organization admin write tool. */
-const MANAGE_ORG_ACTIONS = [
+export const MANAGE_ORG_ACTIONS = [
   "add_member",
   "remove_member",
   "update_org_settings",

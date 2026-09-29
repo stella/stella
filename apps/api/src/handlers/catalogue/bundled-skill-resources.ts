@@ -10,6 +10,7 @@ import {
 } from "@stll/skills";
 import { SKILL_NAME_PATTERN } from "@stll/skills/package-limits";
 
+import { validateSkillRequiredTools } from "@/api/lib/agent-skills/required-tools-validation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -241,5 +242,12 @@ const assertFrontmatterMetadata = (
         message: "Bundled skill metadata value is too large",
       });
     }
+  }
+  const requiredTools = validateSkillRequiredTools(metadata);
+  if (Result.isError(requiredTools)) {
+    throw new HandlerError({
+      status: 500,
+      message: `Bundled skill: ${requiredTools.error.message}`,
+    });
   }
 };

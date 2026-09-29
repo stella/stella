@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
-import { Link2Icon, PlusIcon } from "lucide-react";
 import type { Node as ProseMirrorNode } from "prosemirror-model";
 import type { EditorView } from "prosemirror-view";
 import { useDebouncedCallback } from "use-debounce";
@@ -17,6 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { Link2Icon, PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 

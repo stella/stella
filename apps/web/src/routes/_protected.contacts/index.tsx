@@ -23,15 +23,6 @@ import {
 } from "@tanstack/react-table";
 import type { Column, ReactTable, Row } from "@tanstack/react-table";
 import { Result } from "better-result";
-import {
-  BuildingIcon,
-  DownloadIcon,
-  EllipsisVerticalIcon,
-  PlusIcon,
-  SearchIcon,
-  UploadIcon,
-  UserIcon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -51,6 +42,15 @@ import {
 } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
+import {
+  BuildingIcon,
+  DownloadIcon,
+  EllipsisVerticalIcon,
+  PlusIcon,
+  SearchIcon,
+  UploadIcon,
+  UserIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   InputGroup,

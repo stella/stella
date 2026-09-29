@@ -1,7 +1,6 @@
 import { useDeferredValue, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -14,6 +13,7 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { SearchIcon } from "@stll/ui/icons";
 
 import { detached } from "@/lib/detached";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";

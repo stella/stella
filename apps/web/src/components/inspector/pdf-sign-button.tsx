@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import { SignatureIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup, DialogTrigger } from "@stll/ui/dialog";
+import { SignatureIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
 import { PdfSignPlacement } from "@/components/inspector/pdf-sign-placement";

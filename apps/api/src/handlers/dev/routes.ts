@@ -14,7 +14,6 @@ import {
   workspaceContacts,
   workspaces,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
 import {
@@ -23,6 +22,7 @@ import {
 } from "@/api/lib/dev-seed-session-store";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 import {
   type FirmKnowledgeJob,
@@ -81,7 +81,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   .guard({
     validateAuth: true,
     beforeHandle: () => {
-      if (!env.isDev) {
+      if (!isLocalDevOpen()) {
         return new Response("Not available", {
           status: 404,
         });
@@ -311,13 +311,13 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   .get("/public-law-connection", readPublicLawConnection)
   .post("/public-law-connection", startPublicLawConnection);
 
-// Public dev-only routes (no auth — needed for the unauthenticated
-// email-OTP flow). Returns 404 outside dev so this never exists in
-// the production API surface.
+// Public local development routes (no auth: the unauthenticated email-OTP
+// flow needs them). server.ts registers them only when local development
+// access is open; the guard answers 404 for any other caller of the module.
 export const devPublicRoute = new Elysia({ prefix: "/dev-public" })
   .guard({
     beforeHandle: () => {
-      if (!env.isDev) {
+      if (!isLocalDevOpen()) {
         return new Response("Not available", { status: 404 });
       }
       return undefined;

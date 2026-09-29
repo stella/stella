@@ -80,6 +80,10 @@ import {
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
 import {
+  BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+  backfillLegislationExpressionIds,
+} from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
+import {
   RECONCILE_LIST_VERIFICATION_RUNS_TASK,
   reconcileListVerificationRuns,
 } from "@/api/lib/scheduler/tasks/list-verification-run-reconcile";
@@ -91,6 +95,10 @@ import {
   MEMORY_EXTRACTOR_TASK,
   extractMemoriesFromCompactions,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
+import {
+  RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
+  recordMissingOrganizationAccessStatesTask,
+} from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
 import {
   RECONCILE_REPORT_EXPORTS_TASK,
   reconcileReportExports,
@@ -107,6 +115,10 @@ import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import {
+  REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
+  refreshStatuteSitemapShardsTask,
+} from "@/api/lib/scheduler/tasks/statute-sitemap-shard-refresh";
 import {
   RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK,
   reconcileStyleSetPackageCleanups,
@@ -150,16 +162,20 @@ const SCHEDULER_TASKS = {
   [CENSUS_CASE_LAW_RAW_OBJECTS_TASK]: censusCaseLawRawObjectsTask,
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
+  [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [SWEEP_FILE_COMPARISON_UPLOADS_TASK]: sweepFileComparisonUploads,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
+  [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
   [MEMORY_CURATOR_TASK]: curateAiMemories,
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
+  [RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK]:
+    recordMissingOrganizationAccessStatesTask,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
   [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,

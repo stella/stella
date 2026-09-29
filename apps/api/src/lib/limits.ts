@@ -161,6 +161,8 @@ export const LIMITS = {
   styleSetsCount: 100,
   styleSetsPageSizeDefault: 50,
   styleSetsPageSizeMax: 100,
+  sellerProfilesPageSizeDefault: 50,
+  sellerProfilesPageSizeMax: 100,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
   templateRecipesCount: 100,
@@ -359,6 +361,7 @@ export const LIMITS = {
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
+  savedTimeNarrativesPerUser: 100,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
    *  cannot blow up the index; the headline only reads the first

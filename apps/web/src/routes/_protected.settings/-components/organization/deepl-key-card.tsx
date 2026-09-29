@@ -10,11 +10,11 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
+import { Trash2Icon } from "@stll/ui/icons";
 
 import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";

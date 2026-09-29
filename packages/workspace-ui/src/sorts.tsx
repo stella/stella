@@ -1,11 +1,10 @@
+import { Button } from "@stll/ui/button";
 import {
   ArrowDownIcon,
   ArrowUpDownIcon,
   ArrowUpIcon,
   XIcon,
-} from "lucide-react";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 
 import { PropertyIcon } from "./property-icon";

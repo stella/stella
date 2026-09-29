@@ -1,10 +1,10 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRoundIcon, LoaderIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { KeyRoundIcon, LoaderIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Sheet,

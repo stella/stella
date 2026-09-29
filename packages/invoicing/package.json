@@ -1,47 +1,22 @@
 {
   "name": "@stll/invoicing",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "private": true,
   "description": "Invoice document totals and Czech payment payloads.",
-  "keywords": [
-    "invoice",
-    "money",
-    "payment",
-    "typescript"
-  ],
-  "homepage": "https://github.com/stella/stella/tree/main/packages/invoicing",
-  "bugs": {
-    "url": "https://github.com/stella/stella/issues"
-  },
   "license": "Apache-2.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/stella/stella.git",
-    "directory": "packages/invoicing"
-  },
-  "files": [
-    "dist",
-    "src",
-    "README.md"
-  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
-    "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "tsdown",
-    "pack:dry-run": "bun pm pack --dry-run",
+    "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/invoicing",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/invoicing",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
-    "prepack": "bun run build"
+    "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
     "@stll/money": "workspace:*",
@@ -51,7 +26,6 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
-    "fast-check": "catalog:",
-    "tsdown": "catalog:"
+    "fast-check": "catalog:"
   }
 }

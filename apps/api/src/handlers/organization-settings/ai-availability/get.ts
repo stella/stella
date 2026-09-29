@@ -5,6 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   hasTanStackInstanceProvider,
   isDeferredServiceTierAvailableForRole,
+  mockAnswersForOrganization,
 } from "@/api/lib/tanstack-ai-models";
 
 const config = {
@@ -12,7 +13,9 @@ const config = {
     "Report whether AI is usable in this organization: whether the " +
     "deployment provides a model, whether the organization has configured " +
     "its own provider, whether either of those makes AI available at all, " +
-    "and whether the reduced-cost deferred service tier can be used. " +
+    "whether the reduced-cost deferred service tier can be used, and " +
+    "whether a local development stack answers with canned replies " +
+    "instead of a model. " +
     "Booleans only, so any member may read it.",
   // Any org member needs to know whether AI is usable; the answer
   // is just two booleans, so it does not require admin scope.
@@ -35,6 +38,9 @@ const readAIAvailability = createSafeRootHandler(
         "pdf",
         orgAIConfig,
       ),
+      // Always false outside local development and tests: deployed runtimes
+      // refuse USE_MOCK_AI at boot.
+      mockAnswers: mockAnswersForOrganization(orgAIConfig),
     });
   },
 );

@@ -11,6 +11,10 @@ import {
   toAPIError,
   unwrapEden,
 } from "@/lib/errors/api";
+import {
+  chatSkillAvailabilityKey,
+  type ChatSkillAvailabilityQuery,
+} from "@/lib/prompts/chat-skill-availability.logic";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import {
   agentSkillsQueryRoot,
@@ -68,6 +72,15 @@ export const knowledgeKeys = {
       ...knowledgeKeys.skills.all(organizationId),
       skillId,
       "detail",
+    ],
+    // Under `all` so every skill change refreshes it with the list.
+    chatUnavailable: (
+      organizationId: string,
+      chat?: ChatSkillAvailabilityQuery,
+    ) => [
+      ...knowledgeKeys.skills.all(organizationId),
+      "chat-unavailable",
+      chatSkillAvailabilityKey(chat),
     ],
     revisions: (organizationId: string, skillId: string) => [
       ...knowledgeKeys.skills.all(organizationId),
@@ -793,6 +806,29 @@ export const skillsOptions = (organizationId: string) =>
     },
     initialPageParam: "",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+/**
+ * The caller's skills chat cannot offer, with the tools each lacks. The
+ * server decides this over chat's own tool set; the composer menus only read
+ * it. Without `chat` it answers for the widest chat the caller could open;
+ * with it, also which skills that chat cannot run and what it lacks. Cached
+ * per chat, so flipping a switch back reuses the earlier answer.
+ */
+export const chatUnavailableSkillsOptions = (
+  organizationId: string,
+  chat?: ChatSkillAvailabilityQuery,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.skills.chatUnavailable(organizationId, chat),
+    queryFn: async ({ signal }) => {
+      const response = await api.chat["skill-availability"].get({
+        fetch: { signal },
+        ...(chat === undefined ? {} : { query: chat }),
+      });
+      return unwrapEden(response);
+    },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

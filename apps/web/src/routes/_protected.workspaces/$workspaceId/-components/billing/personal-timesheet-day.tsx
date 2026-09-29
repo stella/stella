@@ -5,7 +5,6 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { PencilIcon, PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
@@ -22,6 +21,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
+import { PencilIcon, PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
@@ -125,7 +125,7 @@ export const PersonalTimesheetDay = ({
     suggestion: TimeEntrySuggestion,
     values: Pick<
       ManualTimeEntryValues,
-      "durationMinutes" | "narrative" | "billable"
+      "durationMinutes" | "narrative" | "narrativeLanguage" | "billable"
     >,
   ) => {
     markBusy(suggestion.fingerprint);
@@ -139,6 +139,7 @@ export const PersonalTimesheetDay = ({
           type: "accept",
           durationMinutes: values.durationMinutes,
           narrative: values.narrative,
+          narrativeLanguage: values.narrativeLanguage,
           billable: values.billable,
         },
       });
@@ -211,12 +212,14 @@ export const PersonalTimesheetDay = ({
           dateWorked: date,
           durationMinutes: dialog.suggestion.durationMinutes,
           narrative: dialog.narrative,
+          narrativeLanguage: null,
           billable: false,
         }
       : {
           dateWorked: editingEntry?.dateWorked ?? date,
           durationMinutes: editingEntry?.durationMinutes ?? 0,
           narrative: editingEntry?.narrative ?? "",
+          narrativeLanguage: editingEntry?.narrativeLanguage ?? null,
           billable: editingEntry?.billable ?? false,
         };
 
@@ -249,6 +252,7 @@ export const PersonalTimesheetDay = ({
               acceptSuggestion(suggestion, {
                 durationMinutes: suggestion.durationMinutes,
                 narrative,
+                narrativeLanguage: null,
                 billable: false,
               }).catch(reportFailure),
               "personal-timesheet-day.accept-suggestion",

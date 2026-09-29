@@ -33,6 +33,7 @@ const context = asTestRaw<McpRequestContext>({
 });
 
 const resolvedSkill = asTestRaw<ResolvedSkillTool>({
+  availability: { status: "available" },
   id: toSafeId<"agentSkill">("skill_alpha"),
   name: "alpha",
   exposedName: "skill__alpha",
@@ -112,6 +113,36 @@ describe("dispatchGatewayToolCall", () => {
     expect(result).toBeNull();
     expect(resolveSkillToolMock).not.toHaveBeenCalled();
     expect(callGatewayExternalMcpToolMock).not.toHaveBeenCalled();
+  });
+
+  test("refuses a skill the session lacks tools for, naming the scope to grant", async () => {
+    resolveSkillToolMock.mockResolvedValue({
+      ...resolvedSkill,
+      availability: { status: "unavailable", missingTools: ["save_playbook"] },
+    });
+
+    const result = await dispatchGatewayToolCall({
+      args: {},
+      context: asTestRaw<McpRequestContext>({
+        ...context,
+        grantedScopes: ["stella:skills"],
+      }),
+      mode: "default",
+      toolName: "skill__alpha",
+      dependencies,
+    });
+
+    expect(result?.type).toBe("internal");
+    if (result?.type !== "internal" || result.result.status !== "error") {
+      throw new Error("expected an internal gateway error");
+    }
+    expect(result.result.error).toMatchObject({
+      code: "missing_scope",
+      message: expect.stringContaining("save_playbook"),
+      hint: expect.stringContaining("stella:knowledge_write"),
+    });
+    expect(readSkillToolMock).not.toHaveBeenCalled();
+    expect(recordSkillReadAuditMock).not.toHaveBeenCalled();
   });
 
   test("returns the structured unknown_tool envelope for an unresolved skill", async () => {

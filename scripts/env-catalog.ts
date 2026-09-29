@@ -117,6 +117,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MCP",
+  "FEATURE_ORG_ACCESS_STATE",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_TOOLS",
   "FEATURE_SHAREPOINT",
@@ -136,6 +137,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
+  "ORG_EVALUATION_PERIOD_DAYS",
   "PORT",
   "POSTHOG_HOST",
   "POSTHOG_KEY",
@@ -267,9 +269,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   DATABASE_STATEMENT_TIMEOUT_MS:
     "Statement timeout in milliseconds set on each root and RLS pool connection; zero keeps the server default.",
   DATABASE_RLS_POOL_MAX:
-    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check in deployed processes, within the process connection budget.",
+    "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
-    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check in deployed processes, within the process connection budget.",
+    "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX, plus one connection for the periodic login check outside local development, within the process connection budget.",
   PUBLIC_LAW_DATABASE_POOL_MAX:
     "Maximum connections in the optional local read-only public-law pool.",
   PUBLIC_LAW_DATABASE_URL:
@@ -313,6 +315,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enable governed work obligations and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
     "Enable first-class legal lists across REST, agents, and task UI.",
+  FEATURE_ORG_ACCESS_STATE:
+    "Enforce the per-organization access state before a model call falls back to the instance provider.",
+  ORG_EVALUATION_PERIOD_DAYS:
+    "Length in days of the evaluation period a new organization starts.",
   FEATURE_PUBLIC_TOOLS:
     "Enable GitHub-sourced public skills in the authenticated catalogue.",
   FEATURE_TEMPLATE_PACKS:
@@ -423,7 +429,7 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   TYPESAFE_MODEL:
     'System One model id sent to TypeSafe. Defaults to "jev-latest"; pin a versioned id to hold calibrated thresholds.',
   USE_MOCK_AI:
-    "Return canned AI responses in local development and tests. Deployed runtimes reject this setting.",
+    'Return canned AI responses in local development and tests. An organization\'s own AI key still answers for real; "force" mocks those requests too. Deployed runtimes reject this setting.',
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
   VITE_BROWSER_API_URL:
     "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
@@ -459,12 +465,13 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_HARNESS_MODEL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
-  CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
+  CONTENT_ENCRYPTION_KEY: "the process runs without local development access",
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
+  ORG_EVALUATION_PERIOD_DAYS: "FEATURE_ORG_ACCESS_STATE is true",
   REDIS_URL: "the API server or the document-processing worker runs",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',
   S3_SECRET_ACCESS_KEY: 'S3_CREDENTIALS_PROVIDER is "env"',
@@ -512,7 +519,6 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
 const HIDDEN_SCHEMA_KEYS = new Set([
   "CASE_LAW_DATABASE_POOL_MAX",
   "CASE_LAW_DATABASE_URL",
-  "isDev",
 ]);
 
 const humanizeEnvName = (name: string) => {
@@ -657,7 +663,7 @@ export const API_ENV_SCHEMA = {
   ...envApiServerSchema,
 };
 
-export type ApiEnvironmentName = Exclude<keyof typeof API_ENV_SCHEMA, "isDev">;
+export type ApiEnvironmentName = keyof typeof API_ENV_SCHEMA;
 
 export const WEB_ENV_SCHEMA = envWebClientSchema;
 export const COLLAB_ENV_SCHEMA = envCollabServerSchema;
@@ -844,9 +850,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  "RELAY_EVENT",
+  "RELAY_HEAD_SHA",
+  "RELAY_PULL_REQUESTS",
   "RELEASE_REF",
   "REPO",
   "RETRY_ATTEMPTS",
+  "REVIEW_GATE_BASE",
   "RETRY_DELAYS_SECONDS",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
@@ -861,6 +871,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
   "STELLA_PORT_OFFSET",
+  "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
@@ -869,6 +880,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_TEST_LATEST_TAG",
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
+  "STELLA_UPDATE_PLAN_CONTRACTS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_SCM_BASE",
   "WXT_STELLA_ORIGINS",
@@ -890,6 +902,7 @@ export const AMBIENT_ENV_KEYS = new Set([
   "NODE_ENV",
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
+  "STELLA_LOCAL_DEV",
   "TMPDIR",
   "TZ",
 ]);

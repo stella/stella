@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "pvz. Standartinis 2025"
     },
     "revertToDraft": "Grąžinti į juodraštį",
+    "savedNarratives": {
+      "empty": "Išsaugokite aprašymą, kad galėtumėte jį naudoti dar kartą.",
+      "save": "Išsaugoti aprašymą",
+      "title": "Išsaugoti aprašymai"
+    },
     "selectMatter": "Pasirinkite bylą...",
     "selectMatterToStart": "Pasirinkite bylą, kad pradėtumėte fiksuoti laiką",
     "selectedCount": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinkto} other {# pasirinktų}}",
@@ -884,6 +889,7 @@
       "apiKey": "API raktas",
       "none": "Nereikia nustatyti"
     },
+    "skillNeedsUnavailableTools": "Pokalbyje nesiūloma. Reikia įrankio, kuris ten nepasiekiamas: {tools}",
     "toolNames": {
       "anonymize": "Anonimizuoti",
       "createDocx": "Sukurti DOCX",
@@ -977,7 +983,15 @@
       "searchFiles": "Ieškoti failų",
       "searchMatters": "Ieškoti bylų",
       "searchMcpServers": "Ieškoti MCP serverių...",
-      "searchSkills": "Ieškoti įgūdžių"
+      "searchSkills": "Ieškoti įgūdžių",
+      "skillNeeds": {
+        "browserExtension": "Norėdami naudoti šį įgūdį, prijunkite naršyklės plėtinį",
+        "document": "Norėdami naudoti šį įgūdį, atidarykite dokumentą",
+        "matter": "Norėdami naudoti šį įgūdį, pradėkite pokalbį byloje",
+        "rawSendMode": "Neprieinama anonimizuotuose pokalbiuose",
+        "reviewEdits": "Norėdami naudoti šį įgūdį, perjunkite pakeitimus į rankinę peržiūrą",
+        "webSearch": "Norėdami naudoti šį įgūdį, įjunkite paiešką internete"
+      }
     },
     "contextMeter": {
       "attachments": "Pridėti dokumentai",
@@ -1062,6 +1076,10 @@
       "loadError": "Nepavyko įkelti elementų"
     },
     "messageTimestampToday": "Šiandien, {time}",
+    "mockModel": {
+      "description": "Iš anksto paruošti vietinio imituojamo modelio atsakymai",
+      "label": "Imituojamas DI"
+    },
     "modelSelector": {
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",

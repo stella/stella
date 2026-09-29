@@ -47,6 +47,11 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import {
+  CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
+  DECISION_COURT_ID_MAX_LENGTH,
+  decisionCourtIdByCountrySql,
+} from "@/api/lib/case-law/decision-court-id-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -61,6 +66,7 @@ import {
   CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
+import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
 import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
@@ -460,6 +466,12 @@ export const caseLawDecisions = p.pgTable(
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
+    /**
+     * The court directory's id for `court`, in a jurisdiction that identifies
+     * courts by directory id (`decision-court-identity.ts`); null everywhere
+     * else. `court` is then the directory's canonical name for it.
+     */
+    courtId: p.varchar("court_id", { length: DECISION_COURT_ID_MAX_LENGTH }),
     // A migration-owned trigger validates inserts and actual country changes,
     // while permitting unrelated updates that repair legacy malformed rows.
     country: p.varchar({ length: 3 }).notNull(),
@@ -637,6 +649,12 @@ export const caseLawDecisions = p.pgTable(
       CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
       sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate, t.country)}`,
     ),
+    // Added NOT VALID: enforced on every insert and update, so a directory
+    // jurisdiction's row cannot be written or changed without its court id.
+    p.check(
+      CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
+      decisionCourtIdByCountrySql(t.country, t.courtId),
+    ),
     // The byte budget `case_law_decisions_search_candidate_idx` needs its
     // variable-width columns to stay inside; `varchar(n)` bounds characters,
     // and a B-tree tuple is bounded in bytes.
@@ -710,6 +728,18 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
+    p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
+    p
+      .index("case_law_decisions_live_legacy_raw_source_idx")
+      .on(t.sourceId, t.id)
+      .where(
+        liveCaseLawLegacyReferenceSql({
+          decisionId: t.id,
+          redactedAt: t.redactedAt,
+          sourceId: t.sourceId,
+          sourceRawS3Key: t.sourceRawS3Key,
+        }),
+      ),
     // The coverage page's week of one source's arrivals, answered from the
     // index alone. The cursor index above finds the same range and then
     // fetches every row in it to evaluate the publication gate, which reads
@@ -2727,6 +2757,9 @@ export const caseLawIngestionEvents = p.pgTable(
   (t) => [
     p.index("case_law_ingestion_events_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_events_finished_idx").on(t.finishedAt),
+    p
+      .index("case_law_ingestion_events_source_finished_idx")
+      .on(t.sourceId, t.finishedAt.desc(), t.id.desc()),
     ...globalCaseLawPolicies(),
   ],
 );

@@ -1,20 +1,28 @@
 import { expect, test } from "bun:test";
 
+import { resolveUsCourt } from "@stll/api-contract/us-courts";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  corpusIndexGroupConfig,
+  corpusIndexGroupContractForJurisdiction,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   buildCaseLawProjectionDocuments,
   buildCorpusProjectionDocuments,
   buildLegislationV2ProjectionDocuments,
+  LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES,
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type {
   CaseLawProjectionInput,
   LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import { LIMITS } from "@/api/lib/limits";
 
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
@@ -36,6 +44,7 @@ const CASE_LAW_INPUT = {
     { type: "docket", value: "4 As 3/2008" },
   ],
   court: "Nejvyšší správní soud",
+  courtId: null,
   decisionDate: null,
   ecli: null,
   metadata: null,
@@ -94,6 +103,9 @@ test("case-law v5 emits exact attempt identity and one opening passage", () => {
   });
   for (const [index, document] of documents.entries()) {
     expect(document.projection_revision).toBe(REVISION);
+    expect(
+      Buffer.byteLength(JSON.stringify(document), "utf-8") + 1,
+    ).toBeLessThanOrEqual(LIMITS.corpusIndexIngestMaxBytes);
     expect("title" in document).toBe(index === 0);
     expect("decision_year" in document).toBe(index === 0);
     expect(
@@ -119,11 +131,16 @@ test("case-law v5 omits a year for an undated decision", () => {
 });
 
 test("legislation v2 emits one strict pointer-free document", () => {
-  const documents = buildLegislationV2ProjectionDocuments({
+  const built = buildLegislationV2ProjectionDocuments({
     input: LEGISLATION_INPUT,
     payload: { text: "§ 1 Předmět úpravy", ast: null },
     revision: REVISION,
   });
+  expect(built.isOk()).toBe(true);
+  if (built.isErr()) {
+    return;
+  }
+  const documents = built.value;
 
   expect(documents).toEqual([
     {
@@ -143,10 +160,181 @@ test("legislation v2 emits one strict pointer-free document", () => {
     },
   ]);
   expect(
-    Object.keys(documents[0]).every((key) =>
+    Object.keys(documents.at(0) ?? {}).every((key) =>
       manifestFields("legislation_v2").has(key),
     ),
   ).toBe(true);
+});
+
+test("under-cap legislation keeps the v2 wire documents from main", () => {
+  const fixtures = [
+    { input: LEGISLATION_INPUT, text: "§ 1 Předmět úpravy" },
+    {
+      input: {
+        ...LEGISLATION_INPUT,
+        documentId: "0198e331-e578-7000-8000-000000000006",
+        title: "Act / Zákon / قانون",
+        effectiveDate: null,
+        versionValidFrom: null,
+        versionValidTo: "2025-01-01",
+      } satisfies LegislationV2ProjectionInput,
+      text: "Článek 1, § 2, القانون",
+    },
+  ];
+  const built = fixtures.map(({ input, text }) =>
+    buildLegislationV2ProjectionDocuments({
+      input,
+      payload: { text, ast: null },
+      revision: REVISION,
+    }),
+  );
+  expect(built.every((result) => result.isOk())).toBe(true);
+  expect(
+    built.map((result) => JSON.stringify(result.isOk() ? result.value : [])),
+  ).toEqual(
+    [
+      [
+        {
+          document_id: "0198e331-e578-7000-8000-000000000004",
+          projection_revision: REVISION,
+          jurisdiction: "CZE",
+          source: LEGISLATION_INPUT.sourceId,
+          language: "cs",
+          document_type: "act",
+          title: "Občanský zákoník",
+          text: "§ 1 Předmět úpravy",
+          is_opening: true,
+          status: "current",
+          eli: "eli/cz/sb/2012/89",
+          effective_date: "2014-01-01",
+          version_valid_from: "2014-01-01",
+        },
+      ],
+      [
+        {
+          document_id: "0198e331-e578-7000-8000-000000000006",
+          projection_revision: REVISION,
+          jurisdiction: "CZE",
+          source: LEGISLATION_INPUT.sourceId,
+          language: "cs",
+          document_type: "act",
+          title: "Act / Zákon / قانون",
+          text: "Článek 1, § 2, القانون",
+          is_opening: true,
+          status: "current",
+          eli: "eli/cz/sb/2012/89",
+          version_valid_to: "2025-01-01",
+        },
+      ],
+    ].map((documents) => JSON.stringify(documents)),
+  );
+});
+
+test("oversized legislation becomes exact consecutive v2 passages", () => {
+  const text = Array.from(
+    { length: 12 },
+    (_, index) => `§ ${index + 1}\n${"ustanovení řádu ".repeat(55_000)}`,
+  ).join("\n\n");
+  const built = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+  expect(built.isOk()).toBe(true);
+  if (built.isErr()) {
+    return;
+  }
+  const documents = built.value;
+  expect(documents.length).toBeGreaterThan(1);
+  expect(documents.map(({ text: passage }) => passage).join("")).toBe(text);
+  expect(documents.filter(({ is_opening }) => is_opening)).toHaveLength(1);
+  for (const [index, document] of documents.entries()) {
+    expect("title" in document).toBe(index === 0);
+    expect(document.document_id).toBe(LEGISLATION_INPUT.documentId);
+    expect(document.projection_revision).toBe(REVISION);
+    expect(
+      Object.keys(document).every((key) =>
+        manifestFields("legislation_v2").has(key),
+      ),
+    ).toBe(true);
+  }
+});
+
+test("one legislation document above 8 MiB stays whole below the engine cap", () => {
+  const text = "x".repeat(LIMITS.corpusIndexIngestMaxBytes + 1024);
+  const built = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+  expect(built.isOk()).toBe(true);
+  if (built.isErr()) {
+    return;
+  }
+  const documents = built.value;
+
+  expect(documents).toHaveLength(1);
+  expect(documents.at(0)?.text).toBe(text);
+  expect(
+    Buffer.byteLength(JSON.stringify(documents.at(0)), "utf-8"),
+  ).toBeGreaterThan(LIMITS.corpusIndexIngestMaxBytes);
+});
+
+test("serialized single-document cap is inclusive and cap plus one splits", () => {
+  const empty = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text: "", ast: null },
+    revision: REVISION,
+  });
+  expect(empty.isOk()).toBe(true);
+  if (empty.isErr()) {
+    return;
+  }
+  expect(empty.value).toHaveLength(1);
+  const overhead = Buffer.byteLength(JSON.stringify(empty.value[0]), "utf-8");
+  const exactText = "x".repeat(
+    LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES - overhead,
+  );
+  const exact = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text: exactText, ast: null },
+    revision: REVISION,
+  });
+  expect(exact.isOk()).toBe(true);
+  if (exact.isOk()) {
+    expect(exact.value).toHaveLength(1);
+    expect(Buffer.byteLength(JSON.stringify(exact.value[0]), "utf-8")).toBe(
+      LEGISLATION_SINGLE_DOCUMENT_MAX_BYTES,
+    );
+  }
+  const over = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text: `${exactText}x`, ast: null },
+    revision: REVISION,
+  });
+  expect(over.isOk()).toBe(true);
+  if (over.isOk()) {
+    expect(over.value.length).toBeGreaterThan(1);
+    expect(over.value.map(({ text }) => text).join("")).toBe(`${exactText}x`);
+  }
+});
+
+test("serialized revision budget rejects escaped text under the raw byte ceiling", () => {
+  const text = "\u0000".repeat(
+    Math.ceil(CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES / 6),
+  );
+  expect(Buffer.byteLength(text, "utf-8")).toBeLessThan(
+    CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+  );
+  const built = buildLegislationV2ProjectionDocuments({
+    input: LEGISLATION_INPUT,
+    payload: { text, ast: null },
+    revision: REVISION,
+  });
+  expect(built.isErr()).toBe(true);
+  if (built.isErr()) {
+    expect(built.error.message).toContain("append safety ceiling");
+  }
 });
 
 test("builder dispatch is exhaustive over manifest-owned versions", () => {
@@ -157,8 +345,8 @@ test("builder dispatch is exhaustive over manifest-owned versions", () => {
       input: CASE_LAW_INPUT,
       payload: { text: "Rozsudek", ast: null },
       revision: REVISION,
-    }),
-  ).toHaveLength(1);
+    }).isOk(),
+  ).toBe(true);
   expect(
     buildCorpusProjectionDocuments({
       family: "legislation",
@@ -166,8 +354,8 @@ test("builder dispatch is exhaustive over manifest-owned versions", () => {
       input: LEGISLATION_INPUT,
       payload: { text: "Zákon", ast: null },
       revision: REVISION,
-    }),
-  ).toHaveLength(1);
+    }).isOk(),
+  ).toBe(true);
 });
 
 const SUMMARY_AST = {
@@ -512,4 +700,71 @@ test("a revision projects to the same documents whatever preceded it", () => {
 
   expect<string[]>(reversed.toReversed()).toEqual(first);
   expect<string[]>(revisions.map(project)).toEqual(first);
+});
+
+test("a court-partitioned decision carries its partition on every passage", () => {
+  const input = {
+    ...DATED_CASE_LAW_INPUT,
+    jurisdiction: "USA",
+    language: "en",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+  } as const satisfies CaseLawProjectionInput;
+  const scotus = resolveUsCourt("scotus");
+  if (scotus.type !== "accepted") {
+    throw new Error("scotus is not an accepted court");
+  }
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    const documents = buildCaseLawProjectionDocuments({
+      manifest,
+      input,
+      payload: {
+        text: `${"first ".repeat(400)}\n\n${"second ".repeat(400)}`,
+        ast: null,
+      },
+      revision: REVISION,
+    });
+    expect(documents.length).toBeGreaterThan(1);
+    // Every passage, not only the opening one: the partition routes splits,
+    // so a passage without it would sit outside every pruned read.
+    expect(documents.map((document) => document.court_partition)).toEqual(
+      documents.map(() => scotus.court.courtPartition),
+    );
+    // Strict mapping: every emitted field is one the group's effective
+    // contract maps, not merely the manifest.
+    const mapped = new Set(
+      corpusIndexGroupConfig(
+        corpusIndexGroupContractForJurisdiction(manifest, "USA"),
+      ).doc_mapping.field_mappings.map(({ name }) => name),
+    );
+    for (const document of documents) {
+      expect(Object.keys(document).filter((key) => !mapped.has(key))).toEqual(
+        [],
+      );
+    }
+  }
+});
+
+test("a group under its manifest's contract writes the documents it wrote before", () => {
+  // The court partition is the contract's addition, and nothing else is: a
+  // decision of a base group carries no partition key at all, so its NDJSON
+  // bytes are unchanged.
+  for (const manifest of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    const documents = buildCaseLawProjectionDocuments({
+      manifest,
+      input: DATED_CASE_LAW_INPUT,
+      payload: { text: "Právní věta", ast: null },
+      revision: REVISION,
+    });
+    for (const document of documents) {
+      expect("court_partition" in document).toBe(false);
+    }
+  }
 });

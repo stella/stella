@@ -2,7 +2,6 @@ import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { CopyIcon, Settings2Icon } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -15,6 +14,7 @@ import {
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import { CopyIcon, Settings2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";

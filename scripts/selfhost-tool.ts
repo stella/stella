@@ -16,6 +16,7 @@ import {
   renderEnvironmentEntries,
   validateDoctorEnvironment,
 } from "./env-tool";
+import { formattedLikeRepository } from "./generated-artifacts";
 import {
   RELEASE_ARTIFACT,
   RELEASE_DOC_MARKERS,
@@ -204,11 +205,23 @@ const renderReleaseDoc = () =>
     renderReleaseDocsContract(),
   );
 
-const generatedArtifacts = () => [
-  { content: renderSelfhostCompose(), path: SELFHOST_COMPOSE_PATH },
+// The compose file and both docs are laid out as the repository formatter
+// would, so formatting them after generation changes nothing and `check`
+// stays an exact comparison.
+const generatedArtifacts = async () => [
+  {
+    content: await formattedLikeRepository(renderSelfhostCompose(), "yml"),
+    path: SELFHOST_COMPOSE_PATH,
+  },
   { content: renderSelfhostEnvExample(), path: SELFHOST_ENV_EXAMPLE_PATH },
-  { content: renderSelfhostDoc(), path: SELFHOST_DOC_PATH },
-  { content: renderReleaseDoc(), path: RELEASE_DOC_PATH },
+  {
+    content: await formattedLikeRepository(renderSelfhostDoc(), "md"),
+    path: SELFHOST_DOC_PATH,
+  },
+  {
+    content: await formattedLikeRepository(renderReleaseDoc(), "md"),
+    path: RELEASE_DOC_PATH,
+  },
 ];
 
 export const productionEnvironmentIssues = (text: string) => {
@@ -380,8 +393,8 @@ const repositoryWorkflowSources = () =>
     }),
   );
 
-const generate = () => {
-  for (const artifact of generatedArtifacts()) {
+const generate = async () => {
+  for (const artifact of await generatedArtifacts()) {
     const absolutePath = path.join(REPO_ROOT, artifact.path);
     mkdirSync(path.dirname(absolutePath), { recursive: true });
     writeFileSync(absolutePath, artifact.content);
@@ -389,9 +402,9 @@ const generate = () => {
   }
 };
 
-const check = () => {
+const check = async () => {
   const issues: string[] = [];
-  for (const artifact of generatedArtifacts()) {
+  for (const artifact of await generatedArtifacts()) {
     const absolutePath = path.join(REPO_ROOT, artifact.path);
     if (
       !existsSync(absolutePath) ||
@@ -440,14 +453,14 @@ const doctor = (envPath = SELFHOST_ENV_PATH) => {
   return false;
 };
 
-const main = () => {
+const main = async () => {
   const command = process.argv.at(2);
   if (command === "generate") {
-    generate();
+    await generate();
     return;
   }
   if (command === "check") {
-    if (!check()) {
+    if (!(await check())) {
       process.exitCode = 1;
     }
     return;
@@ -463,5 +476,5 @@ const main = () => {
 };
 
 if (import.meta.main) {
-  main();
+  await main();
 }
