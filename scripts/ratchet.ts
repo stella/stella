@@ -17,7 +17,7 @@
 //     `{ count, files }`, for a property no single file carries: the same
 //     helper copied into two apps, one name defined in two workspaces, the
 //     size of a flat bucket.
-// Then run `bun scripts/ratchet.ts --write` to seed its baseline, and commit
+// Then run `bun scripts/ratchet.ts --write --all` to seed its baseline, and commit
 // both files. The counter must count exactly what its description claims —
 // the `--self-test` fixtures enforce that.
 //
@@ -31,7 +31,9 @@
 // Modes:
 //   bun scripts/ratchet.ts            report current counts vs baseline
 //   bun scripts/ratchet.ts --check    CI gate (exit 1 only when a count rose)
-//   bun scripts/ratchet.ts --write    regenerate the baseline
+//   bun scripts/ratchet.ts --write    record this change's delta from origin/main
+//     --base <ref>                    use an explicit base commit instead
+//     --all                           regenerate every baseline entry
 //   bun scripts/ratchet.ts --self-test prove each counter counts what it claims
 //
 // CI-only wiring lives in .github/workflows/ci.yml and scripts/verify.sh
@@ -84,7 +86,7 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_REL = BASELINE_PATHS.ratchet;
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
-const WRITE_HINT = "bun scripts/ratchet.ts --write";
+const WRITE_HINT = "bun scripts/ratchet.ts --write [--all]";
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
 
@@ -3434,6 +3436,100 @@ const writeBaseline = (snapshot: Baseline): void => {
   writeFileSync(BASELINE_PATH, `${JSON.stringify(snapshot, null, 2)}\n`);
 };
 
+type RebaseSnapshotOptions = {
+  allowlist?: true | undefined;
+  mergeBaseEntry: MetricSnapshot | undefined;
+  base: MetricSnapshot;
+  head: MetricSnapshot;
+};
+
+// Preserve unused budget in unrelated files; zero entries are omitted because
+// configuration validation requires every stored file count to be positive.
+const rebaseSnapshot = ({
+  allowlist,
+  mergeBaseEntry,
+  base,
+  head,
+}: RebaseSnapshotOptions): MetricSnapshot => {
+  if (allowlist === true || mergeBaseEntry === undefined) {
+    return head;
+  }
+  const files: Record<string, number> = {};
+  let count = 0;
+  const paths = new Set([
+    ...Object.keys(mergeBaseEntry.files),
+    ...Object.keys(base.files),
+    ...Object.keys(head.files),
+  ]);
+  for (const file of paths) {
+    const value = Math.max(
+      0,
+      (mergeBaseEntry.files[file] ?? 0) +
+        (head.files[file] ?? 0) -
+        (base.files[file] ?? 0),
+    );
+    if (value > 0) {
+      files[file] = value;
+      count += value;
+    }
+  }
+  return sortedSnapshot({ count, files });
+};
+
+const readGit = (args: readonly string[]): string => {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    return panic(
+      `git ${args.at(0) ?? panic("git command is missing")} failed: ${result.stderr.toString().trim()}`,
+    );
+  }
+  return result.stdout.toString().trim();
+};
+
+const readMergeBaseBaseline = (ref: string): Baseline => {
+  const raw = readGit(["show", `${ref}:${BASELINE_REL}`]);
+  const parsed = Result.try((): unknown => JSON.parse(raw));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return panic(`ratchet baseline at ${ref} is not a JSON object`);
+  }
+  // Historical registries may lack new metrics or contain removed metrics.
+  // Validate the historical entries, then the writer uses the current registry.
+  const inspection = inspectConfiguration(
+    Object.keys(parsed.value).map((id) => ({ id })),
+    parsed.value,
+  );
+  if (inspection.status === "invalid") {
+    return panic(inspection.errors.join("\n"));
+  }
+  return inspection.baseline;
+};
+
+const scanMergeBase = (ref: string): Baseline => {
+  const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-merge-base-"));
+  try {
+    const archive = path.join(temporary, "base.tar");
+    const root = path.join(temporary, "tree");
+    mkdirSync(root);
+    readGit(["archive", "--format=tar", "--output", archive, ref]);
+    const extracted = Bun.spawnSync(["tar", "-xf", archive, "-C", root], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (extracted.exitCode !== 0) {
+      return panic(
+        `ratchet base extraction failed: ${extracted.stderr.toString().trim()}`,
+      );
+    }
+    return scanAll(root);
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
+};
+
 // --- Diffing ----------------------------------------------------------------
 
 // `stale`: an allowlist metric fell in some file and its baseline has not
@@ -3546,8 +3642,41 @@ const runReport = (): number => {
   return 0;
 };
 
-const runWrite = (): number => {
-  const snapshot = scanAll(REPO_ROOT);
+const runWrite = (all: boolean): number => {
+  const head = scanAll(REPO_ROOT);
+  let snapshot = head;
+  if (!all) {
+    const baseIndex = process.argv.indexOf("--base");
+    const baseRef =
+      baseIndex === -1 ? undefined : process.argv.at(baseIndex + 1);
+    if (
+      baseIndex !== -1 &&
+      (baseRef === undefined || baseRef.startsWith("--"))
+    ) {
+      return panic("--base requires a commit reference");
+    }
+    const mergeBase =
+      baseRef === undefined
+        ? readGit(["merge-base", "origin/main", "HEAD"])
+        : readGit([
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            `${baseRef}^{commit}`,
+          ]);
+    const baseline = readMergeBaseBaseline(mergeBase);
+    const base = scanMergeBase(mergeBase);
+    snapshot = {};
+    for (const metric of RATCHET_METRICS) {
+      const current = requireSnapshot(head, metric.id);
+      snapshot[metric.id] = rebaseSnapshot({
+        allowlist: metricGate(metric).allowlist,
+        mergeBaseEntry: baseline[metric.id],
+        base: requireSnapshot(base, metric.id),
+        head: current,
+      });
+    }
+  }
   writeBaseline(snapshot);
   console.log(`Wrote ratchet baseline to ${BASELINE_REL}:`);
   for (const metric of RATCHET_METRICS) {
@@ -3556,7 +3685,11 @@ const runWrite = (): number => {
       `  ${metric.id.padEnd(30)} ${String(snap.count).padStart(5)} across ${Object.keys(snap.files).length} file(s)`,
     );
   }
-  return 0;
+  const status = runCheck();
+  if (status !== 0) {
+    console.error("ratchet --write: rebase onto main, or run `--write --all`.");
+  }
+  return status;
 };
 
 const runCheck = (): number => {
@@ -3596,7 +3729,7 @@ const runCheck = (): number => {
 
   for (const diff of drops) {
     console.log(
-      `ratchet: ${diff.id} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to lock it in.`,
+      `ratchet: ${diff.id} dropped ${diff.baseline} -> ${diff.current}. Nice — run \`${WRITE_HINT}\` and commit ${BASELINE_REL} to record this change's own improvement; --all locks in every drop.`,
     );
   }
 
@@ -5167,6 +5300,103 @@ const repoScopeSelfTestFailures = (snapshot: Baseline): string[] => {
 const countText = (count: number | undefined) =>
   count === undefined ? "absent" : String(count);
 
+const deltaWriteSelfTestFailures = (): string[] => {
+  const failures: string[] = [];
+  const deltaCases = [
+    {
+      name: "unchanged metric retains headroom",
+      mergeBaseEntry: { count: 902, files: { "a.ts": 902 } },
+      base: { count: 888, files: { "a.ts": 888 } },
+      head: { count: 888, files: { "a.ts": 888 } },
+      expected: { count: 902, files: { "a.ts": 902 } },
+    },
+    {
+      name: "removal lowers only its own entry",
+      mergeBaseEntry: { count: 12, files: { "a.ts": 7, "b.ts": 5 } },
+      base: { count: 9, files: { "a.ts": 4, "b.ts": 5 } },
+      head: { count: 7, files: { "a.ts": 2, "b.ts": 5 } },
+      expected: { count: 10, files: { "a.ts": 5, "b.ts": 5 } },
+    },
+    {
+      name: "addition raises only its own entry",
+      mergeBaseEntry: { count: 12, files: { "a.ts": 7, "b.ts": 5 } },
+      base: { count: 9, files: { "a.ts": 4, "b.ts": 5 } },
+      head: { count: 11, files: { "a.ts": 6, "b.ts": 5 } },
+      expected: { count: 14, files: { "a.ts": 9, "b.ts": 5 } },
+    },
+    {
+      name: "allowlist entries match head without stale budget",
+      allowlist: true,
+      mergeBaseEntry: { count: 12, files: { "a.ts": 7, "b.ts": 5 } },
+      base: { count: 9, files: { "a.ts": 4, "b.ts": 5 } },
+      head: { count: 2, files: { "a.ts": 2 } },
+      expected: { count: 2, files: { "a.ts": 2 } },
+    },
+    {
+      name: "rename moves the count to the new path",
+      mergeBaseEntry: { count: 4, files: { "old.ts": 4 } },
+      base: { count: 4, files: { "old.ts": 4 } },
+      head: { count: 4, files: { "new.ts": 4 } },
+      expected: { count: 4, files: { "new.ts": 4 } },
+    },
+    {
+      name: "deletion clamps an overspent entry to zero",
+      mergeBaseEntry: { count: 2, files: { "deleted.ts": 2 } },
+      base: { count: 4, files: { "deleted.ts": 4 } },
+      head: { count: 0, files: {} },
+      expected: { count: 0, files: {} },
+    },
+    {
+      name: "new metric is seeded from head",
+      mergeBaseEntry: undefined,
+      base: { count: 0, files: {} },
+      head: { count: 3, files: { "a.ts": 3 } },
+      expected: { count: 3, files: { "a.ts": 3 } },
+    },
+  ] satisfies (RebaseSnapshotOptions & {
+    name: string;
+    expected: MetricSnapshot;
+  })[];
+  for (const fixture of deltaCases) {
+    const first = rebaseSnapshot(fixture);
+    const second = rebaseSnapshot(fixture);
+    if (JSON.stringify(first) !== JSON.stringify(fixture.expected)) {
+      failures.push(`delta write: ${fixture.name}: ${JSON.stringify(first)}`);
+    }
+    if (JSON.stringify(first) !== JSON.stringify(second)) {
+      failures.push(`delta write: ${fixture.name} changed on a second write`);
+    }
+    const inspection = inspectConfiguration([{ id: "test-metric" }], {
+      "test-metric": first,
+    });
+    if (inspection.status !== "valid") {
+      failures.push(
+        `delta write: ${fixture.name} produced an invalid snapshot`,
+      );
+    }
+    if (
+      fixture.allowlist === true &&
+      diffMetric("test-metric", fixture.head, first, { allowlist: true })
+        .status !== "ok"
+    ) {
+      failures.push("delta write left a stale allowlist entry");
+    }
+  }
+  // A concurrent +1 on main remains below the original budget even when
+  // this branch writes an unchanged metric. A full snapshot write fails it.
+  const replayCase =
+    deltaCases.at(0) ?? panic("delta replay fixture is missing");
+  const replay = rebaseSnapshot(replayCase);
+  const merged = { count: 889, files: { "a.ts": 889 } };
+  if (
+    diffMetric("test-metric", merged, replayCase.head).status !== "regressed" ||
+    diffMetric("test-metric", merged, replay).status === "regressed"
+  ) {
+    failures.push("delta write lost headroom for a concurrent main addition");
+  }
+  return failures;
+};
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
@@ -5993,6 +6223,8 @@ const runSelfTest = (): number => {
       }
     }
 
+    failures.push(...deltaWriteSelfTestFailures());
+
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.
     const equal = diffMetric(
       "as-casts",
@@ -6042,7 +6274,7 @@ const main = (): number => {
     return runSelfTest();
   }
   if (process.argv.includes("--write")) {
-    return runWrite();
+    return runWrite(process.argv.includes("--all"));
   }
   if (process.argv.includes("--check")) {
     return runCheck();

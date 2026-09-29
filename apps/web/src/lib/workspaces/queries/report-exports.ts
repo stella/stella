@@ -11,11 +11,13 @@ const REPORT_EXPORT_HISTORY_POLL_INTERVAL_MS = 2000;
 
 type ReportExportsHistoryKey = {
   limit: number;
+  userId: string;
   workspaceId: string;
 };
 
 type ReportExportDetailKey = {
   exportId: string;
+  userId: string;
   workspaceId: string;
 };
 
@@ -23,11 +25,13 @@ export const reportExportsKeys = {
   all: (workspaceId: string) => ["report-exports", workspaceId],
   history: (key: ReportExportsHistoryKey) => [
     ...reportExportsKeys.all(key.workspaceId),
+    key.userId,
     "history",
     { limit: key.limit },
   ],
   detail: (key: ReportExportDetailKey) => [
     ...reportExportsKeys.all(key.workspaceId),
+    key.userId,
     "detail",
     key.exportId,
   ],

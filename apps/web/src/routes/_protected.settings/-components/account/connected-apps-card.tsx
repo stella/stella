@@ -35,6 +35,7 @@ import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import {
   toOAuthScopeDisplayEntries,
@@ -50,7 +51,8 @@ import {
 
 export const ConnectedAppsCard = () => {
   const t = useTranslations();
-  const { data } = useSuspenseQuery(connectedAppsOptions);
+  const { id: userId } = useAuthenticatedUser();
+  const { data } = useSuspenseQuery(connectedAppsOptions(userId));
   const connections = data.connections;
 
   return (

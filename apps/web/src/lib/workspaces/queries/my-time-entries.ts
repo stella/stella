@@ -8,18 +8,20 @@ const MY_TIME_ENTRIES_PAGE_SIZE = 50;
 
 export const myTimeEntriesKeys = {
   all: (organizationId: string) => ["myTimeEntries", organizationId],
-  day: (organizationId: string, date: string) => [
+  day: (organizationId: string, userId: string, date: string) => [
     ...myTimeEntriesKeys.all(organizationId),
+    userId,
     { date },
   ],
 };
 
 export const myTimeEntriesInfiniteOptions = (
   organizationId: string,
+  userId: string,
   date: string,
 ) =>
   infiniteQueryOptions({
-    queryKey: myTimeEntriesKeys.day(organizationId, date),
+    queryKey: myTimeEntriesKeys.day(organizationId, userId, date),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
       unwrapEden(

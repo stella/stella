@@ -26,6 +26,7 @@ type AuthoringProposalStatus = Extract<
 type SkillHistoryActionsOptions = {
   organizationId: string;
   skillId: string;
+  userId: string;
 };
 
 type AddCommentInput = {
@@ -50,6 +51,7 @@ type ReviewProposalInput = {
 export const useSkillHistoryActions = ({
   organizationId,
   skillId,
+  userId,
 }: SkillHistoryActionsOptions) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -72,10 +74,10 @@ export const useSkillHistoryActions = ({
   };
 
   const invalidateComments = () => {
-    invalidate(knowledgeKeys.skills.comments(organizationId, skillId));
+    invalidate(knowledgeKeys.skills.comments(organizationId, userId, skillId));
   };
   const invalidateProposals = () => {
-    invalidate(knowledgeKeys.skills.proposals(organizationId, skillId));
+    invalidate(knowledgeKeys.skills.proposals(organizationId, userId, skillId));
   };
 
   const addComment = async ({
@@ -144,7 +146,12 @@ export const useSkillHistoryActions = ({
     }
     invalidateProposals();
     invalidate(
-      knowledgeKeys.skills.proposal(organizationId, skillId, proposalId),
+      knowledgeKeys.skills.proposal(
+        organizationId,
+        userId,
+        skillId,
+        proposalId,
+      ),
     );
   };
 
@@ -173,10 +180,15 @@ export const useSkillHistoryActions = ({
     }
     invalidateProposals();
     invalidate(
-      knowledgeKeys.skills.proposal(organizationId, skillId, proposalId),
+      knowledgeKeys.skills.proposal(
+        organizationId,
+        userId,
+        skillId,
+        proposalId,
+      ),
     );
-    invalidate(knowledgeKeys.skills.revisions(organizationId, skillId));
-    invalidate(knowledgeKeys.skills.detail(organizationId, skillId));
+    invalidate(knowledgeKeys.skills.revisions(organizationId, userId, skillId));
+    invalidate(knowledgeKeys.skills.detail(organizationId, userId, skillId));
     return true;
   };
 
@@ -190,7 +202,12 @@ export const useSkillHistoryActions = ({
         return;
       }
       invalidate(
-        knowledgeKeys.skills.proposal(organizationId, skillId, proposalId),
+        knowledgeKeys.skills.proposal(
+          organizationId,
+          userId,
+          skillId,
+          proposalId,
+        ),
       );
     },
   );

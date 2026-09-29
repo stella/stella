@@ -65,6 +65,7 @@ type SidebarUserMenuProps = {
   user: {
     activeOrganizationId: string;
     email: string;
+    id: string;
     image: string | null | undefined;
     name: string | undefined;
   };
@@ -160,6 +161,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
           <OrganizationMenuSection
             activeOrganizationId={user.activeOrganizationId}
             role={role}
+            userId={user.id}
           />
           <MenuItem
             onClick={() => {
@@ -276,6 +278,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
 type OrganizationMenuSectionProps = {
   activeOrganizationId: string;
   role: Role | undefined;
+  userId: string;
 };
 
 /** Active organization block at the top of the user menu: a plain label for
@@ -287,12 +290,15 @@ type OrganizationMenuSectionProps = {
 const OrganizationMenuSection = ({
   activeOrganizationId,
   role,
+  userId,
 }: OrganizationMenuSectionProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
-  const { data: organizations } = useChromeQuery(organizationListOptions);
+  const { data: organizations } = useChromeQuery(
+    organizationListOptions(userId),
+  );
 
   const { isPending: isSwitchPending, mutate: switchOrganization } =
     useMutation({

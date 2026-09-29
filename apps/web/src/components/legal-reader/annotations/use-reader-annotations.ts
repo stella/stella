@@ -34,6 +34,7 @@ import {
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useSessionStorage } from "@/hooks/use-session-storage";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -165,6 +166,7 @@ export const useReaderAnnotations = (
 
   const annotationsQuery = readerAnnotationsOptions({
     activeOrganizationId: user?.activeOrganizationId ?? "",
+    userId: user?.id ?? SIGNED_OUT_QUERY_OWNER,
     ...targetKey,
   });
   const queryKey = annotationsQuery.queryKey;

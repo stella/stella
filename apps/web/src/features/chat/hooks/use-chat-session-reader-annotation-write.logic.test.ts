@@ -9,6 +9,7 @@ const ANNOTATIONS_KEY = readerAnnotationKeys.forTarget({
   activeOrganizationId: "org-1",
   targetId: "decision-1",
   targetType: "decision",
+  userId: "user-1",
 });
 const UNRELATED_KEY = ["legal-reader", "document"];
 

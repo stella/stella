@@ -220,6 +220,7 @@ const seededReaderCache = () => {
       activeOrganizationId: "org-1",
       targetId: "decision-1",
       targetType: "decision",
+      userId: "user-1",
     }),
     READER_ROWS,
   );
