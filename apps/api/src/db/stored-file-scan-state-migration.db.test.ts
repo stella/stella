@@ -12,7 +12,7 @@ import nodePath from "node:path";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../drizzle/20261003120300_stored_file_scan_state/migration.sql",
+  "../../drizzle/20261003120500_stored_file_scan_state/migration.sql",
 );
 
 const TABLES = ["templates", "template_versions", "style_sets"] as const;
