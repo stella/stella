@@ -41,14 +41,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
+import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
 const WEB_ROOT = path.resolve(API_ROOT, "../web");
 /** A path relative to apps/api that lies in the web app. */
 const WEB_PREFIX = "../web/";
-/** The recorder of the conversations the web scenarios replay. */
-const RECORDER_FILE =
-  "src/handlers/chat/recorded-conversations.integration.test.ts";
 const RECORDINGS_DIR = path.join(
   WEB_ROOT,
   "src/components/chat/__fixtures__/recorded-conversations",
@@ -296,10 +294,12 @@ const withRecordingsFromTree = async <T>(
     }
   };
   try {
-    await runProcess(["bun", "run", "test", RECORDER_FILE], {
-      cwd: API_ROOT,
-      env: { ...process.env, CHAT_TRANSCRIPTS_WRITE: "1" },
-    });
+    for (const recorder of Object.values(RECORDED_CONVERSATION_SUITES)) {
+      await runProcess(["bun", "run", "test", recorder], {
+        cwd: API_ROOT,
+        env: { ...process.env, CHAT_TRANSCRIPTS_WRITE: "1" },
+      });
+    }
     return await body();
   } finally {
     restoreRecordings();
