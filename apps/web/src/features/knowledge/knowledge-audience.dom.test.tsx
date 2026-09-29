@@ -138,12 +138,18 @@ const sessionBody = () => {
   return null;
 };
 
+/** Why the caller gave up on a request, as the Error fetch rejects with. */
+const abortReason = (signal: AbortSignal): Error =>
+  signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The operation was aborted.", "AbortError");
+
 /** A response that never comes, unless the caller gives up, as a real
  *  request would let it. */
 const unanswered = async (signal: AbortSignal | null | undefined) =>
   await new Promise<Response>((_resolve, reject) => {
     signal?.addEventListener("abort", () => {
-      reject(signal.reason);
+      reject(abortReason(signal));
     });
   });
 
@@ -186,7 +192,7 @@ globalThis.fetch = Object.assign(
         // the organization it was asked for.
         return await new Promise<Response>((resolve, reject) => {
           signal?.addEventListener("abort", () => {
-            reject(signal.reason);
+            reject(abortReason(signal));
           });
           heldResponses.push(() => resolve(Response.json(body)));
         });

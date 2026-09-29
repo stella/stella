@@ -37,10 +37,10 @@ describe("resetKnowledgeCache", () => {
     const queryClient = new QueryClient();
     const key = knowledgeKeys.templates.all(ORG_A);
     let resolveRead: (value: string) => void = () => undefined;
-    const read = queryClient.fetchQuery({
+    const read = queryClient.query({
       queryKey: key,
-      queryFn: () =>
-        new Promise<string>((resolve) => {
+      queryFn: async () =>
+        await new Promise<string>((resolve) => {
           resolveRead = resolve;
         }),
     });
