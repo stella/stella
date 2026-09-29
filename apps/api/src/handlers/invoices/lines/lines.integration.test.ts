@@ -21,11 +21,13 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createInvoice from "@/api/handlers/invoices/create";
+import addEntries from "@/api/handlers/invoices/entries/add";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -436,6 +438,39 @@ describe("invoice lines", () => {
     ]);
   });
 
+  test("attaching entries cannot take an invoice past its line limit", async () => {
+    const invoiceId = await seedInvoice();
+    await testDb.insert(invoiceLines).values(
+      Array.from({ length: LIMITS.invoiceLinesPerInvoice - 1 }, (_, index) => ({
+        ...lineRowValues(invoiceId, { source: "manual", timeEntryId: null }),
+        position: index,
+      })),
+    );
+    const first = await seedTimeEntry({ billedMinutes: 60 });
+    const second = await seedTimeEntry({ billedMinutes: 30 });
+
+    expect(await runAddEntries(invoiceId, [first, second])).toEqual({
+      code: 400,
+      response: {
+        message: `An invoice holds at most ${LIMITS.invoiceLinesPerInvoice} lines`,
+      },
+    });
+    expect(
+      await testDb.query.timeEntries.findMany({
+        where: { id: { in: [first, second] } },
+        columns: { invoiceId: true },
+      }),
+    ).toEqual([{ invoiceId: null }, { invoiceId: null }]);
+
+    // One more still fits: the limit is inclusive.
+    expect(await runAddEntries(invoiceId, [first])).toMatchObject({
+      totalAmount: expect.any(Number),
+    });
+    expect(
+      await testDb.$count(invoiceLines, eq(invoiceLines.invoiceId, invoiceId)),
+    ).toBe(LIMITS.invoiceLinesPerInvoice);
+  });
+
   test("row-level security keeps another organization's lines out of reach", async () => {
     const invoiceId = await seedInvoice();
     await expectCreated(
@@ -533,6 +568,17 @@ const runDelete = async (
 ) =>
   await deleteInvoiceLine.handler(
     contextFor({ params: { workspaceId: ids.wsA1, invoiceId, lineId } }),
+  );
+
+const runAddEntries = async (
+  invoiceId: SafeId<"invoice">,
+  timeEntryIds: SafeId<"timeEntry">[],
+) =>
+  await addEntries.handler(
+    contextFor({
+      body: { timeEntryIds },
+      params: { workspaceId: ids.wsA1, invoiceId },
+    }),
   );
 
 /** The body the handler receives after Elysia validates the request. */

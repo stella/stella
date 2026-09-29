@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import {
   ATTACHED_ENTRY_LINE_VAT,
+  checkInvoiceLineCapacity,
   expenseLineDraft,
   insertInvoiceLines,
   lockDraftInvoiceForLines,
@@ -294,7 +295,16 @@ const addEntries = createSafeHandler(
         workspaceId,
       });
       if (!invoiceCheck) {
-        return { ok: false as const };
+        return { ok: false as const, refusal: null };
+      }
+      // Refused before any entry is claimed, so nothing partial commits.
+      const capacity = await checkInvoiceLineCapacity(
+        tx,
+        { invoiceId: params.invoiceId, workspaceId },
+        (timeEntryIds?.length ?? 0) + (expenseIds?.length ?? 0),
+      );
+      if (capacity.isErr()) {
+        return { ok: false as const, refusal: capacity.error };
       }
 
       let attachedTimeEntries: {
@@ -420,10 +430,11 @@ const addEntries = createSafeHandler(
 
     if (!txResult.value.ok) {
       return Result.err(
-        new HandlerError({
-          status: 409,
-          message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-        }),
+        txResult.value.refusal ??
+          new HandlerError({
+            status: 409,
+            message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+          }),
       );
     }
 

@@ -88,6 +88,8 @@ describe("addEntries currency enforcement", () => {
       },
     ]);
     const { safeDb } = createScopedDbMock({
+      // The invoice holds no lines yet, so the line limit leaves room.
+      $count: async () => 0,
       query: {
         invoices: {
           findFirst: async () => ({
