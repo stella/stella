@@ -34,7 +34,7 @@ const config = {
 } satisfies HandlerConfig;
 
 const settledWithin = async (
-  settled: Promise<undefined>,
+  settled: Promise<unknown>,
   timeoutMs: number,
 ): Promise<void> => {
   let timer: ReturnType<typeof setTimeout> | undefined;

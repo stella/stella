@@ -14,7 +14,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
   SchedulerDb,
@@ -51,7 +50,7 @@ type RunSchedulerOnceOptions = {
   maxRuntimeMs?: number;
   maxSweepDurationMs?: number;
   now?: () => number;
-  registry?: SchedulerTaskRegistry;
+  registry: SchedulerTaskRegistry;
   signal?: AbortSignal;
 };
 
@@ -81,10 +80,10 @@ export const runSchedulerOnce = async ({
   maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
   maxSweepDurationMs = DEFAULT_SWEEP_DURATION_MS,
   now = () => Temporal.Now.instant().epochMilliseconds,
-  registry = createSchedulerTaskRegistry(),
+  registry,
   runnerId = defaultRunnerId(),
   signal,
-}: RunSchedulerOnceOptions = {}): Promise<RunSchedulerOnceResult> => {
+}: RunSchedulerOnceOptions): Promise<RunSchedulerOnceResult> => {
   if (!Number.isInteger(limit) || limit < 1) {
     return panic("Scheduler job limit must be a positive integer");
   }
@@ -167,7 +166,7 @@ export const startSchedulerLoop = ({
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
   runnerId = defaultRunnerId(),
   ...options
-}: StartSchedulerLoopOptions = {}): SchedulerLoop => {
+}: StartSchedulerLoopOptions): SchedulerLoop => {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let running = false;
