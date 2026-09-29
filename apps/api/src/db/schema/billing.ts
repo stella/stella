@@ -620,7 +620,9 @@ const INVOICE_LINE_SOURCE_SQL_VALUES = INVOICE_LINE_SOURCES.map((source) =>
  * A time entry or expense is billed by at most one line whose invoice is not
  * void. Voiding an invoice stamps `releasedAt` on its lines, which keeps them
  * on the voided document and takes them out of the partial unique indexes,
- * so the entry can be billed again.
+ * so the entry can be billed again. A released line may lose its source
+ * reference when that entry is later deleted; a line that still bills its
+ * entry must keep it, so deleting a billed entry is refused.
  */
 export const invoiceLines = p.pgTable(
   "invoice_lines",
@@ -646,10 +648,15 @@ export const invoiceLines = p.pgTable(
     vatAmount: centsColumn("vat_amount").notNull(),
     grossAmount: centsColumn("gross_amount").notNull(),
     source: p.text("source", { enum: INVOICE_LINE_SOURCES }).notNull(),
+    // A released line outlives its source: once the entry is back in the
+    // ledger it may be deleted, and the voided document keeps the line.
     timeEntryId: safeUuid<"timeEntry">("time_entry_id").references(
       () => timeEntries.id,
+      { onDelete: "set null" },
     ),
-    expenseId: safeUuid<"expense">("expense_id").references(() => expenses.id),
+    expenseId: safeUuid<"expense">("expense_id").references(() => expenses.id, {
+      onDelete: "set null",
+    }),
     releasedAt: timestamptz("released_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
@@ -685,7 +692,7 @@ export const invoiceLines = p.pgTable(
     ),
     p.check(
       "invoice_lines_source_reference_check",
-      sql`(${table.source} = 'manual' AND ${table.timeEntryId} IS NULL AND ${table.expenseId} IS NULL) OR (${table.source} = 'time_entry' AND ${table.timeEntryId} IS NOT NULL AND ${table.expenseId} IS NULL) OR (${table.source} = 'expense' AND ${table.expenseId} IS NOT NULL AND ${table.timeEntryId} IS NULL)`,
+      sql`(${table.source} = 'manual' AND ${table.timeEntryId} IS NULL AND ${table.expenseId} IS NULL) OR (${table.source} = 'time_entry' AND (${table.timeEntryId} IS NOT NULL OR ${table.releasedAt} IS NOT NULL) AND ${table.expenseId} IS NULL) OR (${table.source} = 'expense' AND (${table.expenseId} IS NOT NULL OR ${table.releasedAt} IS NOT NULL) AND ${table.timeEntryId} IS NULL)`,
     ),
     p.check(
       "invoice_lines_vat_treatment_check",

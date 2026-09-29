@@ -20,10 +20,14 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import deleteExpense from "@/api/handlers/expenses/delete";
+import updateExpense from "@/api/handlers/expenses/update";
 import createInvoice from "@/api/handlers/invoices/create";
 import addEntries from "@/api/handlers/invoices/entries/add";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import transitionInvoice from "@/api/handlers/invoices/transition";
+import batchUpdateTimeEntries from "@/api/handlers/time-entries/batch/update";
+import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -196,6 +200,24 @@ describe("invoice lines", () => {
       insertLineRow(invoiceId, { source: "expense", timeEntryId }),
       "invoice_lines_source_reference_check",
     );
+    await expectFailure(
+      insertLineRow(invoiceId, { source: "expense", timeEntryId: null }),
+      "invoice_lines_source_reference_check",
+    );
+    // Only a released line may outlive its source.
+    await insertLineRow(invoiceId, {
+      source: "time_entry",
+      timeEntryId: null,
+      releasedAt: new Date(),
+    });
+    await expectFailure(
+      insertLineRow(invoiceId, {
+        source: "manual",
+        timeEntryId,
+        releasedAt: new Date(),
+      }),
+      "invoice_lines_source_reference_check",
+    );
   });
 
   test("a time entry is billed on at most one line until its invoice is voided", async () => {
@@ -239,6 +261,99 @@ describe("invoice lines", () => {
     const voided = readLines(await runGet(firstInvoiceId));
     expect(voided).toHaveLength(1);
     expect(voided[0]?.releasedAt).not.toBeNull();
+  });
+
+  test("a voided invoice keeps its lines when their entries are later deleted", async () => {
+    const invoiceId = await seedInvoice();
+    const timeEntryId = await seedTimeEntry({ billedMinutes: 60 });
+    const expenseId = await seedExpense({ amount: 10_000, markup: 10 });
+    await expectCreated(invoiceId, {
+      source: { type: "time_entry", timeEntryId },
+      vatRateBps: STANDARD_RATE,
+      vatTreatment: "domestic_vat",
+    });
+    await expectCreated(invoiceId, {
+      source: { type: "expense", expenseId },
+      vatRateBps: STANDARD_RATE,
+      vatTreatment: "domestic_vat",
+    });
+    const readRows = async () =>
+      await testDb
+        .select({
+          source: invoiceLines.source,
+          timeEntryId: invoiceLines.timeEntryId,
+          expenseId: invoiceLines.expenseId,
+          releasedAt: invoiceLines.releasedAt,
+          description: invoiceLines.description,
+          netAmount: invoiceLines.netAmount,
+          vatAmount: invoiceLines.vatAmount,
+          grossAmount: invoiceLines.grossAmount,
+        })
+        .from(invoiceLines)
+        .where(eq(invoiceLines.invoiceId, invoiceId))
+        .orderBy(invoiceLines.position);
+
+    // While the invoice bills them, neither entry can go: the handlers refuse
+    // a billed source, and the database refuses to orphan a live line.
+    expect(
+      await deleteTimeEntryById.handler(
+        contextFor({
+          body: { id: timeEntryId },
+          params: { workspaceId: ids.wsA1 },
+        }),
+      ),
+    ).toMatchObject({ code: 400 });
+    await expectFailure(
+      testDb.delete(expenses).where(eq(expenses.id, expenseId)),
+      "invoice_lines_source_reference_check",
+    );
+
+    await setStatus(invoiceId, INVOICE_STATUS.FINALIZED);
+    expect(await runTransition(invoiceId, "void")).toEqual({ id: invoiceId });
+    const released = await readRows();
+    expect(released.map((row) => row.releasedAt)).not.toContain(null);
+
+    // Back to draft the way the product does it, then deleted outright.
+    expect(
+      await batchUpdateTimeEntries.handler(
+        contextFor({
+          body: { ids: [timeEntryId], action: "revert_to_draft" },
+          params: { workspaceId: ids.wsA1 },
+        }),
+      ),
+    ).toEqual({ updated: 1 });
+    expect(
+      await updateExpense.handler(
+        contextFor({
+          body: { id: expenseId, status: BILLING_STATUS.DRAFT },
+          params: { workspaceId: ids.wsA1 },
+        }),
+      ),
+    ).toEqual({ id: expenseId });
+    expect(
+      await deleteTimeEntryById.handler(
+        contextFor({
+          body: { id: timeEntryId },
+          params: { workspaceId: ids.wsA1 },
+        }),
+      ),
+    ).toEqual({ deleted: true });
+    expect(
+      await deleteExpense.handler(
+        contextFor({
+          body: { id: expenseId },
+          params: { workspaceId: ids.wsA1 },
+        }),
+      ),
+    ).toEqual({ deleted: true });
+
+    expect(await readRows()).toEqual(
+      released.map((row) => ({ ...row, timeEntryId: null, expenseId: null })),
+    );
+    expect(released.map((row) => row.netAmount)).toEqual([
+      cents(20_000),
+      cents(11_000),
+    ]);
   });
 
   test("lines of a non-draft invoice cannot change", async () => {
@@ -824,9 +939,11 @@ const lineRowValues = (
   {
     source,
     timeEntryId,
+    releasedAt = null,
   }: {
     source: "manual" | "time_entry" | "expense";
     timeEntryId: SafeId<"timeEntry"> | null;
+    releasedAt?: Date | null;
   },
 ) => ({
   organizationId: ids.orgA,
@@ -843,6 +960,7 @@ const lineRowValues = (
   grossAmount: cents(100),
   source,
   timeEntryId,
+  releasedAt,
 });
 
 const insertLineRow = async (

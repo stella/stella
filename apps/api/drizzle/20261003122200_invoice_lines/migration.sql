@@ -44,7 +44,7 @@ CREATE TABLE "invoice_lines" (
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "invoice_lines_source_check" CHECK ("source" in ('manual', 'time_entry', 'expense')),
-  CONSTRAINT "invoice_lines_source_reference_check" CHECK (("source" = 'manual' AND "time_entry_id" IS NULL AND "expense_id" IS NULL) OR ("source" = 'time_entry' AND "time_entry_id" IS NOT NULL AND "expense_id" IS NULL) OR ("source" = 'expense' AND "expense_id" IS NOT NULL AND "time_entry_id" IS NULL)),
+  CONSTRAINT "invoice_lines_source_reference_check" CHECK (("source" = 'manual' AND "time_entry_id" IS NULL AND "expense_id" IS NULL) OR ("source" = 'time_entry' AND ("time_entry_id" IS NOT NULL OR "released_at" IS NOT NULL) AND "expense_id" IS NULL) OR ("source" = 'expense' AND ("expense_id" IS NOT NULL OR "released_at" IS NOT NULL) AND "time_entry_id" IS NULL)),
   CONSTRAINT "invoice_lines_vat_treatment_check" CHECK ("vat_treatment" in ('domestic_vat', 'not_vat_payer', 'reverse_charge', 'exempt')),
   CONSTRAINT "invoice_lines_vat_rate_check" CHECK ("vat_rate_bps" between 0 and 10000),
   CONSTRAINT "invoice_lines_amounts_check" CHECK ("quantity" >= 0 AND "unit_price" >= 0 AND "net_amount" >= 0 AND "vat_amount" >= 0 AND "gross_amount" = "net_amount" + "vat_amount"),
@@ -54,15 +54,17 @@ CREATE TABLE "invoice_lines" (
 ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_invoice_id_invoices_id_fk" FOREIGN KEY ("invoice_id") REFERENCES "public"."invoices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_time_entry_id_time_entries_id_fk" FOREIGN KEY ("time_entry_id") REFERENCES "public"."time_entries"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_expense_id_expenses_id_fk" FOREIGN KEY ("expense_id") REFERENCES "public"."expenses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_time_entry_id_time_entries_id_fk" FOREIGN KEY ("time_entry_id") REFERENCES "public"."time_entries"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_expense_id_expenses_id_fk" FOREIGN KEY ("expense_id") REFERENCES "public"."expenses"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "invoice_lines" ADD CONSTRAINT "invoice_lines_workspace_organization_fk" FOREIGN KEY ("workspace_id","organization_id") REFERENCES "public"."workspaces"("id","organization_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "invoice_lines_invoice_position_idx" ON "invoice_lines" USING btree ("invoice_id","position","id");--> statement-breakpoint
 CREATE INDEX "invoice_lines_time_entry_idx" ON "invoice_lines" USING btree ("time_entry_id");--> statement-breakpoint
 CREATE INDEX "invoice_lines_expense_idx" ON "invoice_lines" USING btree ("expense_id");--> statement-breakpoint
 
 -- A time entry or expense is billed by at most one line whose invoice is not
--- void; voiding stamps released_at on the invoice's lines.
+-- void; voiding stamps released_at on the invoice's lines. A released line
+-- keeps its snapshot when its source is later deleted (ON DELETE SET NULL);
+-- the check keeps an unreleased line tied to its source.
 CREATE UNIQUE INDEX "invoice_lines_time_entry_billed_uidx" ON "invoice_lines" USING btree ("time_entry_id") WHERE "time_entry_id" IS NOT NULL AND "released_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "invoice_lines_expense_billed_uidx" ON "invoice_lines" USING btree ("expense_id") WHERE "expense_id" IS NOT NULL AND "released_at" IS NULL;--> statement-breakpoint
 
