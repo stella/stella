@@ -329,6 +329,7 @@ export const activeTimerOptions = (workspaceId: string, userId: string) =>
       const page = await fetchTimeEntries({
         workspaceId,
         query: {
+          scope: "me",
           source: "timer",
           status: "draft",
           hasActiveTimer: true,
