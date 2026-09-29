@@ -1,8 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, lt } from "drizzle-orm";
 import { status } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateVersions } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -10,12 +11,17 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
+import {
+  readStoredTemplateFile,
+  STORED_TEMPLATE_FILE_COLUMNS,
+} from "@/api/lib/templates/stored-template-file";
 
 /** Presigned download URLs expire after 15 minutes, matching every
  *  other read path (`templates/get.ts`, `files/read-by-id.ts`). */
@@ -230,6 +236,7 @@ export const getTemplateVersionHandler = async ({
 
 type TemplateVersionDiffSources =
   | { type: "not-found" }
+  | { type: "unreadable"; error: HandlerError<422 | 500 | 503> }
   | { type: "ok"; prevText: string; currentText: string };
 
 type DiffSourcesProps = {
@@ -239,8 +246,8 @@ type DiffSourcesProps = {
   versionId: SafeId<"templateVersion">;
 };
 
-const extractDocxText = async (buffer: ArrayBuffer): Promise<string> => {
-  const extracted = await extractDocxDocument(new Uint8Array(buffer));
+const extractDocxText = async (file: ScannedFile): Promise<string> => {
+  const extracted = await extractDocxDocument(file);
   return extracted.paragraphs.map((p) => p.text).join("\n");
 };
 
@@ -268,7 +275,7 @@ export const loadTemplateVersionDiffSources = async ({
   const version = await scopedDb((tx) =>
     tx.query.templateVersions.findFirst({
       where: { id: { eq: versionId }, templateId: { eq: templateId } },
-      columns: { version: true, s3Key: true },
+      columns: { ...STORED_TEMPLATE_FILE_COLUMNS, version: true },
     }),
   );
   if (!version) {
@@ -277,7 +284,10 @@ export const loadTemplateVersionDiffSources = async ({
 
   const previous = await scopedDb((tx) =>
     tx
-      .select({ s3Key: templateVersions.s3Key })
+      .select({
+        s3Key: templateVersions.s3Key,
+        scanState: templateVersions.scanState,
+      })
       .from(templateVersions)
       .where(
         and(
@@ -288,18 +298,25 @@ export const loadTemplateVersionDiffSources = async ({
       .orderBy(desc(templateVersions.version))
       .limit(1),
   );
-  const previousS3Key = previous.at(0)?.s3Key ?? null;
+  const previousRow = previous.at(0) ?? null;
 
-  const [currentBuffer, prevBuffer] = await Promise.all([
-    readS3ArrayBuffer(version.s3Key),
-    previousS3Key === null
+  const safeDb = safeDbFromScoped(scopedDb);
+  const [currentFile, prevFile] = await Promise.all([
+    readStoredTemplateFile({ safeDb, organizationId, row: version }),
+    previousRow === null
       ? Promise.resolve(null)
-      : readS3ArrayBuffer(previousS3Key),
+      : readStoredTemplateFile({ safeDb, organizationId, row: previousRow }),
   ]);
+  if (Result.isError(currentFile)) {
+    return { type: "unreadable", error: currentFile.error };
+  }
+  if (prevFile !== null && Result.isError(prevFile)) {
+    return { type: "unreadable", error: prevFile.error };
+  }
 
   const [currentText, prevText] = await Promise.all([
-    extractDocxText(currentBuffer),
-    prevBuffer === null ? Promise.resolve("") : extractDocxText(prevBuffer),
+    extractDocxText(currentFile.value),
+    prevFile === null ? Promise.resolve("") : extractDocxText(prevFile.value),
   ]);
 
   return { type: "ok", prevText, currentText };

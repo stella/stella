@@ -27,12 +27,15 @@ import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileText } from "@/api/lib/search/extract-content";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import {
+  readStoredTemplateFile,
+  STORED_TEMPLATE_FILE_COLUMNS,
+} from "@/api/lib/templates/stored-template-file";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_PASTED_TEXT_CHARS = 100_000;
@@ -226,7 +229,7 @@ const prefillTemplate = createSafeRootHandler(
             id: { eq: params.templateId },
             organizationId: { eq: organizationId },
           },
-          columns: { s3Key: true },
+          columns: { ...STORED_TEMPLATE_FILE_COLUMNS, fileName: true },
         }),
       ),
     );
@@ -372,11 +375,18 @@ const prefillTemplate = createSafeRootHandler(
 
     // The template's fillable shape, merged from the embedded manifest and
     // marker discovery — the same field set the fill form renders.
+    const templateFile = yield* Result.await(
+      readStoredTemplateFile({
+        safeDb,
+        organizationId,
+        row: template,
+        fileName: template.fileName,
+      }),
+    );
     const targets = yield* Result.await(
       Result.tryPromise({
         try: async () => {
-          const buffer = Buffer.from(await readS3ArrayBuffer(template.s3Key));
-          const discovered = await discoverTemplate(buffer);
+          const discovered = await discoverTemplate(templateFile);
           return buildPrefillTargets(
             mergeManifestWithDiscovery(deriveManifest(discovered), discovered),
           );

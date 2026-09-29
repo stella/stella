@@ -58,6 +58,9 @@ const templateVersionDiff = createSafeRootHandler(
         new HandlerError({ status: 404, message: "Version not found" }),
       );
     }
+    if (sources.type === "unreadable") {
+      return Result.err(sources.error);
+    }
 
     return Result.ok({
       segments: buildLineDiffSegments(sources.prevText, sources.currentText),

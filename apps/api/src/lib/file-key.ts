@@ -43,7 +43,8 @@ type CreateFileKeyProps = {
  * An object key under which only scanned uploads or server-built output are
  * stored. Reading one back is how `readStoredFile` proves bytes may reach a
  * parser, so presigned staging keys must never be minted as a `FileKey`. The
- * key builders below and `tests/helpers/file-key.ts` are the only modules the
+ * key builders below, `file-scan/stored-object.ts` (keys whose row records a
+ * scanned file), and `tests/helpers/file-key.ts` are the only modules the
  * `scanned-file-boundary` lint rule lets parse with this schema.
  */
 export const fileKeySchema = v.pipe(v.string(), v.brand("FileKey"));
