@@ -138,6 +138,7 @@ export type SafeIdType =
   | "rateEntry"
   | "rateTable"
   | "sanctionsEdition"
+  | "sanctionsScreeningEvent"
   | "savedSearch"
   | "sellerProfile"
   | "numberSeries"

@@ -12,6 +12,7 @@ export * from "./schema/case-law-provision-extraction";
 export * from "./schema/legal-reader";
 export * from "./schema/legislation";
 export * from "./schema/sanctions";
+export * from "./schema/sanctions-monitoring";
 export * from "./schema/corpus-index-generations";
 export * from "./schema/corpus-index-projections";
 export * from "./schema/lists";

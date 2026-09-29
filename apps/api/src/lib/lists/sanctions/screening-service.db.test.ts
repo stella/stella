@@ -665,3 +665,29 @@ describe("sanctions screening service", () => {
     expect(reads).toBe(0);
   });
 });
+
+test(
+  "complete monitoring results include every hit beyond the interactive cap",
+  async () => {
+    const screened = await screenSanctionsSubject({
+      db: requestDb,
+      subject: {
+        type: "organization",
+        name: "Acme Trading Company",
+        identifiers: [],
+      },
+      practiceJurisdictions: [],
+      now: FRESH_NOW,
+      resultMode: "complete",
+    });
+    expect(screened.isOk()).toBe(true);
+    if (screened.isErr()) {
+      return;
+    }
+    const list = screened.value.lists.find(({ source }) => source === "un");
+    expect(list?.status).toBe("possible-match");
+    expect(list?.truncated).toBe(false);
+    expect(list?.possibleMatches).toHaveLength(TRUNCATED_ENTRIES);
+  },
+  DB_TEST_TIMEOUT_MS,
+);

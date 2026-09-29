@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
+import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import {
   centsColumn,
@@ -65,6 +66,11 @@ export const contacts = p.pgTable(
       length: 512,
     }),
 
+    sanctionsMonitoringMode: p
+      .text("sanctions_monitoring_mode", { enum: SANCTIONS_CONTACT_MODES })
+      .notNull()
+      .default("included"),
+
     // Shared fields
     displayName: p.varchar("display_name", { length: 512 }).notNull(),
     notes: p.text(),
@@ -104,6 +110,7 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.unique("contacts_org_id_unique").on(table.organizationId, table.id),
     p.index("contacts_organization_id_idx").on(table.organizationId),
     p.index("contacts_org_type_idx").on(table.organizationId, table.type),
     p
@@ -144,6 +151,13 @@ export const contacts = p.pgTable(
     p.check(
       "contacts_nationality_codes_check",
       sql`array_position(${table.nationalityCodes}, NULL) IS NULL AND (cardinality(${table.nationalityCodes}) = 0 OR (array_to_string(${table.nationalityCodes}, ',') ~ '^([A-Z]{2})(,[A-Z]{2})*$' AND char_length(array_to_string(${table.nationalityCodes}, '')) = 2 * cardinality(${table.nationalityCodes})))`,
+    ),
+    p.check(
+      "contacts_sanctions_monitoring_mode_check",
+      sql`${table.sanctionsMonitoringMode} IN (${sql.join(
+        SANCTIONS_CONTACT_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
     ),
     ...orgPolicies(),
   ],
