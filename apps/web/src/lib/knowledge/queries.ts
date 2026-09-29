@@ -232,7 +232,8 @@ export const knowledgeKeys = {
     ],
   },
   playbooks: {
-    all: (organizationId: string) => ["playbooks", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "playbooks"),
     list: (organizationId: string, { limit }: PlaybooksPageKey) => [
       ...knowledgeKeys.playbooks.all(organizationId),
       "list",
@@ -258,7 +259,8 @@ export const knowledgeKeys = {
     ],
   },
   playbookStarters: {
-    all: (organizationId: string) => ["playbook-starters", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "playbook-starters"),
   },
   flows: {
     all: (organizationId: string) => ["flows", organizationId],

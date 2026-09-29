@@ -15,6 +15,7 @@ import type {
   KnowledgeActions,
   KnowledgeSource,
 } from "@/features/knowledge/views/knowledge-seam";
+import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import type { TemplateDensity } from "@/features/knowledge/views/templates/template-row-view";
 import type {
   KnowledgeTemplate,
@@ -303,13 +304,6 @@ const TemplateListSkeleton = () => (
   </div>
 );
 
-/** A one-line status in place of the list: loading, or a failed load. */
-export const TemplateListMessage = ({ children }: { children: ReactNode }) => (
-  <div className="flex flex-1 items-center justify-center p-8">
-    <p className="text-muted-foreground text-sm">{children}</p>
-  </div>
-);
-
 /**
  * The template library as one view: a skeleton while the source loads, a
  * message when it fails, then the list.
@@ -322,7 +316,9 @@ export const TemplateLibraryView = (props: TemplateListViewProps) => {
   }
   if (props.source.status === "error") {
     return (
-      <TemplateListMessage>{t("templates.loadFailed")}</TemplateListMessage>
+      <KnowledgeStatusMessage>
+        {t("templates.loadFailed")}
+      </KnowledgeStatusMessage>
     );
   }
   return <TemplateListView {...props} />;

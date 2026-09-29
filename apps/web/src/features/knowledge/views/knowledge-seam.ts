@@ -1,4 +1,8 @@
 import type {
+  PlaybooksActions,
+  PlaybooksSource,
+} from "@/features/knowledge/views/playbooks/playbooks-seam";
+import type {
   TemplatesActions,
   TemplatesSource,
 } from "@/features/knowledge/views/templates/templates-seam";
@@ -10,10 +14,12 @@ import type {
  */
 type KnowledgeSourceBySection = {
   templates: TemplatesSource;
+  playbooks: PlaybooksSource;
 };
 
 type KnowledgeActionsBySection = {
   templates: TemplatesActions;
+  playbooks: PlaybooksActions;
 };
 
 type KnowledgeSection = keyof KnowledgeSourceBySection;

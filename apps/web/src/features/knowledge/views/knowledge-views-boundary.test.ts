@@ -105,8 +105,11 @@ const relative = (module: string) => nodePath.relative(webSourceRoot, module);
 
 describe("shared Knowledge views", () => {
   test("exist for the sections moved so far", () => {
-    expect(sharedViewFiles.map(relative)).toContain(
-      "features/knowledge/views/templates/template-list-view.tsx",
+    expect(sharedViewFiles.map(relative)).toEqual(
+      expect.arrayContaining([
+        "features/knowledge/views/templates/template-list-view.tsx",
+        "features/knowledge/views/playbooks/playbooks-page-view.tsx",
+      ]),
     );
   });
 

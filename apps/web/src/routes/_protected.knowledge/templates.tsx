@@ -8,8 +8,8 @@ import { stellaToast } from "@stll/ui/toast";
 import {
   memberKnowledgeActions,
   memberKnowledgeSource,
-} from "@/features/knowledge/member/member-templates";
-import { TemplateListMessage } from "@/features/knowledge/views/templates/template-list-view";
+} from "@/features/knowledge/member/member-knowledge";
+import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -190,7 +190,9 @@ function RouteComponent() {
   // Loading and failed loads belong to the list view; an upload in flight
   // holds the page only once the list itself is ready.
   if (uploading && templatesSource.status === "ready") {
-    return <TemplateListMessage>{t("common.loading")}</TemplateListMessage>;
+    return (
+      <KnowledgeStatusMessage>{t("common.loading")}</KnowledgeStatusMessage>
+    );
   }
 
   return (

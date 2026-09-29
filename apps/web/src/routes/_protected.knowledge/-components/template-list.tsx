@@ -50,7 +50,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
-import { memberKnowledgeActions } from "@/features/knowledge/member/member-templates";
+import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
 import { TemplateLibraryView } from "@/features/knowledge/views/templates/template-list-view";
 import {
   languageDisplayName,

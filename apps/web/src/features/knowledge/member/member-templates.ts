@@ -69,8 +69,8 @@ const useTemplates = (
 const useTemplateDetail = (organizationId: string, templateId: string) =>
   useQuery(templateDetailOptions(organizationId, templateId));
 
-/** Reads of the organization's Knowledge, for member routes only. */
-export const memberKnowledgeSource = {
+/** Reads of the organization's templates. */
+export const memberTemplatesSource = {
   useTemplates,
   useTemplateDetail,
 };
@@ -120,7 +120,7 @@ const useTemplateActions = (organizationId: string) => {
   };
 };
 
-/** Writes to the organization's Knowledge, for member routes only. */
-export const memberKnowledgeActions = {
+/** Writes to the organization's templates. */
+export const memberTemplatesActions = {
   useTemplateActions,
 };
