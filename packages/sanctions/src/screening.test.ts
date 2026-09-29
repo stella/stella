@@ -9,7 +9,7 @@ import { MAX_SCREENING_WORK } from "./name-match";
 import {
   MAX_QUERY_TOKENS,
   hasExcessQueryTokens,
-  distinctNameTokens,
+  nameReading,
 } from "./normalise";
 import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "./screening";
 import type { ScreeningQuery } from "./screening";
@@ -631,7 +631,7 @@ test("repeated normalized query tokens keep exact-name equality", () => {
     ).unwrap();
     expect(result.possibleMatches.at(0)?.evidence.nameScore).toBe(1);
     expect(result.totalMatches).toBe(1);
-    expect(distinctNameTokens(name, entityType)).toHaveLength(1);
+    expect(nameReading(name, entityType).tokens).toHaveLength(1);
   }
 });
 
@@ -651,7 +651,7 @@ test("query token bounds use normalized input order and count before deduplicati
     expect(rejected.isErr() && rejected.error.code).toBe("excess-query-tokens");
   }
   expect(
-    distinctNameTokens("Émile EMILE Emile Antoine", "person").map(
+    nameReading("Émile EMILE Emile Antoine", "person").tokens.map(
       (token) => token.raw,
     ),
   ).toEqual(["emile", "antoine"]);
@@ -667,7 +667,7 @@ test("query token bounds use normalized input order and count before deduplicati
       "organisation",
     ),
   ).toBe(true);
-  expect(distinctNameTokens("Émile EMILE Emile", "person")).toHaveLength(1);
+  expect(nameReading("Émile EMILE Emile", "person").tokens).toHaveLength(1);
 });
 
 test("identifier traversal shares the screening budget and cannot report clear on exhaustion", () => {

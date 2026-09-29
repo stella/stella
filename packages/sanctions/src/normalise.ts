@@ -301,8 +301,3 @@ export const nameReading = (
   }
   return { tokens, adjacent };
 };
-
-export const distinctNameTokens = (
-  name: string,
-  entityType: EntityType,
-): NameToken[] => nameReading(name, entityType).tokens;

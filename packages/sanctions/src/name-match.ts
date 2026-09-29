@@ -821,6 +821,7 @@ type MatchNamesOptions = {
   index: NameIndex;
   reading: NameReading;
   ceiling: (queryShare: number) => number;
+  rankEntry: (entry: number, nameScore: number) => number | undefined;
   cutoff: number;
   work: ScreeningWorkBudget;
 };
@@ -831,6 +832,7 @@ type RankCandidateGroupsOptions = {
   initialWeight: number;
   totalWeight: number;
   ceiling: (share: number) => number;
+  rankEntry: MatchNamesOptions["rankEntry"];
   cutoff: number;
   work: ScreeningWorkBudget;
 };
@@ -842,6 +844,7 @@ const rankCandidateGroups = ({
   initialWeight,
   totalWeight,
   ceiling,
+  rankEntry,
   cutoff,
   work,
 }: RankCandidateGroupsOptions): CandidateGroup[] | undefined => {
@@ -878,17 +881,25 @@ const rankCandidateGroups = ({
       continue;
     }
     estimates.set(alias.patternKey, estimate);
+    const rank = rankEntry(
+      alias.entry,
+      estimate.rank * (alias.quality === "weak" ? WEAK_ALIAS_FACTOR : 1),
+    );
+    if (rank === undefined) {
+      return undefined;
+    }
     const groupKey = `${alias.patternKey}|${alias.quality}`;
     const group = byPattern.get(groupKey);
     if (group === undefined) {
       byPattern.set(groupKey, {
         aliasIndices: [aliasIndex],
         bound,
-        rank: estimate.rank,
+        rank,
         exact,
       });
     } else {
       group.aliasIndices.push(aliasIndex);
+      group.rank = Math.max(group.rank, rank);
     }
   }
   const candidates = [...byPattern.values()];
@@ -914,6 +925,7 @@ export const matchNames = ({
   index,
   reading,
   ceiling,
+  rankEntry,
   cutoff,
   work,
 }: MatchNamesOptions): NameMatches | undefined => {
@@ -971,6 +983,7 @@ export const matchNames = ({
     initialWeight,
     totalWeight,
     ceiling,
+    rankEntry,
     cutoff,
     work,
   });

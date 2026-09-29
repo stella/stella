@@ -275,10 +275,13 @@ const nationalityComparison = (
   query: readonly CountryCode[] | undefined,
   entry: SanctionsEntry,
 ): FieldComparison => {
+  if (query === undefined || query.length === 0) {
+    return "not-compared";
+  }
   const known = entry.nationalities.flatMap((country) =>
     country.code === null ? [] : [country.code],
   );
-  if (query === undefined || query.length === 0 || known.length === 0) {
+  if (known.length === 0) {
     return "not-compared";
   }
   return query.some((country) => known.includes(country))
@@ -332,19 +335,21 @@ type EntryEvidenceInput = {
   identifierMatch: boolean;
 };
 
-const scoreEntry = ({
-  cutoff,
-  entry,
-  query,
-  nameScore,
-  matchedName,
-  identifierMatch,
-}: EntryEvidenceInput): PossibleMatch => {
-  const birth = compareBirthDates(query.birthDate, entry.birthDates);
-  const nationality = nationalityComparison(query.nationality, entry);
-  const entityType = entityTypeComparison(query.entityType, entry);
-  const identifier = identifierComparison({ query, entry, identifierMatch });
+type NameEvidenceScoreOptions = {
+  cutoff: number;
+  nameScore: number;
+  birth: BirthDateComparison;
+  nationality: FieldComparison;
+  entityType: FieldComparison;
+};
 
+const scoreNameEvidence = ({
+  cutoff,
+  nameScore,
+  birth,
+  nationality,
+  entityType,
+}: NameEvidenceScoreOptions): number => {
   let score = nameScore;
   switch (birth) {
     case "exact":
@@ -371,6 +376,37 @@ const scoreEntry = ({
   if (entityType === "mismatch") {
     score *= ENTITY_TYPE_MISMATCH_FACTOR;
   }
+  if (
+    (birth === "mismatch" ||
+      nationality === "mismatch" ||
+      entityType === "mismatch") &&
+    nameScore >= STRONG_NAME_SCORE
+  ) {
+    score = Math.max(score, Math.min(cutoff, nameScore));
+  }
+  return score;
+};
+
+const scoreEntry = ({
+  cutoff,
+  entry,
+  query,
+  nameScore,
+  matchedName,
+  identifierMatch,
+}: EntryEvidenceInput): PossibleMatch => {
+  const birth = compareBirthDates(query.birthDate, entry.birthDates);
+  const nationality = nationalityComparison(query.nationality, entry);
+  const entityType = entityTypeComparison(query.entityType, entry);
+  const identifier = identifierComparison({ query, entry, identifierMatch });
+
+  let score = scoreNameEvidence({
+    cutoff,
+    nameScore,
+    birth,
+    nationality,
+    entityType,
+  });
   const birthDate =
     birth === "exact" || birth === "approximate" ? "match" : birth;
   const conflicts = (
@@ -382,9 +418,6 @@ const scoreEntry = ({
   ).flatMap(([field, comparison]) =>
     comparison === "mismatch" ? [field] : [],
   );
-  if (conflicts.length > 0 && nameScore >= STRONG_NAME_SCORE) {
-    score = Math.max(score, Math.min(cutoff, nameScore));
-  }
   // A shared document number identifies the entry regardless of the name.
   if (identifier === "match") {
     score = 1;
@@ -408,6 +441,7 @@ type ScreenNameReadingsOptions = {
   index: NameIndex;
   readings: readonly NameReading[];
   ceiling: (queryShare: number) => number;
+  rankEntry: (entry: number, nameScore: number) => number | undefined;
   cutoff: number;
   work: ScreeningWorkBudget;
 };
@@ -417,6 +451,7 @@ const screenNameReadings = ({
   index,
   readings,
   ceiling,
+  rankEntry,
   cutoff,
   work,
 }: ScreenNameReadingsOptions): Result<NameMatches, ScreeningWorkLimitError> => {
@@ -436,6 +471,7 @@ const screenNameReadings = ({
       index,
       reading,
       ceiling,
+      rankEntry,
       cutoff,
       work,
     });
@@ -552,6 +588,27 @@ export const screen = (
     index: index.names,
     readings,
     ceiling,
+    rankEntry: (entryIndex, nameScore) => {
+      const entry = index.entries[entryIndex] ?? panic("Missing ranked entry");
+      if (
+        !spendScreeningWork(
+          work,
+          entry.birthDates.length +
+            entry.nationalities.length +
+            entry.identifiers.length +
+            1,
+        )
+      ) {
+        return undefined;
+      }
+      return scoreNameEvidence({
+        cutoff,
+        nameScore,
+        birth: compareBirthDates(query.birthDate, entry.birthDates),
+        nationality: nationalityComparison(query.nationality, entry),
+        entityType: entityTypeComparison(query.entityType, entry),
+      });
+    },
     cutoff,
     work,
   });

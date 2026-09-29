@@ -78,7 +78,9 @@ names bypass this input cap because callers cannot correct a publisher's name.
 Repeated query and alias spellings retain their original adjacency graph.
 
 A cheap optimistic score filters candidates that cannot reach the cutoff and
-ranks the rest, with exact names first. Equivalent aliases share a score, so
+ranks the rest using the entry's birth-date, nationality and entity-type
+evidence, with exact names first. Equivalent aliases share a score; their
+group uses its best entry's evidence for selection, so
 a frequent spelling never consumes the candidate allowance repeatedly. Each
 query unit retains its exact vocabulary token and at most 64 fuzzy spellings,
 ranked by shared bigrams before edit distance. Exact name patterns bypass the

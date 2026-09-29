@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import type { EntityType, SanctionsEntry } from "./entry";
 import { nameReading } from "./normalise";
+import type { ScreeningIndex, ScreeningQuery } from "./screening";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
 
 const version = {
@@ -273,4 +274,112 @@ test("long names remain screenable and register names cannot become input errors
     { cutoff: DEFAULT_CUTOFF },
   );
   expect(rejected.isErr() && rejected.error.code).toBe("excess-query-tokens");
+});
+
+test("identity evidence preserves the exhaustive top matches among dense decoys", () => {
+  const birthDate = {
+    precision: "day",
+    year: 1988,
+    month: 7,
+    day: 17,
+  } as const;
+  const fillers = Array.from({ length: 20_000 }, (_, position) =>
+    entry(`Distant Enterprise ${position}`, "organisation"),
+  );
+  const decoys = ["Mohammed", "Sergey"].flatMap((given) =>
+    Array.from({ length: 2000 }, (_, position) => ({
+      ...entry(
+        `${given} Q${position}z ${given === "Mohammed" ? "Ali" : "Ivanov"}`,
+        "person",
+      ),
+      birthDates: [
+        {
+          precision: "day",
+          year: 1960 + ((position * 17) % 21),
+          month: 1 + ((position * 7) % 12),
+          day: 1 + ((position * 11) % 28),
+          circa: false,
+        } as const,
+      ],
+      nationalities: [{ code: "US", name: "United States" } as const],
+    })),
+  );
+  const planted = ["Mohammed Abdallah Ali", "Ivanov Sergey Petrovich"].map(
+    (name) => {
+      const listed = entry(name, "person");
+      listed.birthDates = [{ ...birthDate, circa: false }];
+      listed.nationalities = [{ code: "RU", name: "Russia" }];
+      return listed;
+    },
+  );
+  const index = buildScreeningIndex([
+    { version, entries: [...fillers, ...decoys, ...planted] },
+  ]);
+  // Partition postings, retaining the full vocabulary and IDF weights. Each
+  // relevant partition has fewer patterns than the cap; fillers share an
+  // irrelevant partition. Their union is exhaustive for these queries.
+  const partitions: ScreeningIndex[] = [];
+  for (let start = 0; start < index.names.aliases.length;) {
+    const end = start === 0 ? fillers.length : start + 128;
+    const keep = (alias: number) => alias >= start && alias < end;
+    const restrict = (vocabulary: typeof index.names.raw) => ({
+      ...vocabulary,
+      postings: vocabulary.postings.map((aliases) => aliases.filter(keep)),
+      joinPostings: vocabulary.joinPostings.map((aliases) =>
+        aliases.filter(keep),
+      ),
+    });
+    partitions.push({
+      ...index,
+      names: {
+        ...index.names,
+        raw: restrict(index.names.raw),
+        folded: restrict(index.names.folded),
+      },
+    });
+    start = end;
+  }
+  for (const [name, expectedName] of [
+    ["Mohammed Ali", "Mohammed Abdallah Ali"],
+    ["Mokhammed Ali", "Mohammed Abdallah Ali"],
+    ["Sergey Ivanov", "Ivanov Sergey Petrovich"],
+  ] as const) {
+    for (const entityType of ["person", undefined] as const) {
+      for (const identity of [
+        { birthDate },
+        { nationality: ["RU"] as const },
+        { birthDate, nationality: ["RU"] as const },
+      ]) {
+        const query = {
+          name,
+          ...identity,
+          ...(entityType === undefined ? {} : { entityType }),
+        } satisfies ScreeningQuery;
+        const exhaustive = partitions
+          .flatMap((partition) => {
+            const result = screen(partition, query, {
+              cutoff: DEFAULT_CUTOFF,
+              limit: 128,
+            }).unwrap();
+            expect(result.truncated).toBe(false);
+            return result.possibleMatches;
+          })
+          .toSorted(
+            (left, right) =>
+              right.score - left.score ||
+              left.entry.sourceId.localeCompare(right.entry.sourceId),
+          )
+          .slice(0, 25);
+        expect(
+          exhaustive.map(({ entry: listed }) => listed.sourceId),
+        ).toContain(expectedName);
+        const bounded = screen(index, query, {
+          cutoff: DEFAULT_CUTOFF,
+          limit: 25,
+        }).unwrap();
+        expect(bounded.truncated).toBe(true);
+        expect(bounded.possibleMatches).toEqual(exhaustive);
+      }
+    }
+  }
 });
