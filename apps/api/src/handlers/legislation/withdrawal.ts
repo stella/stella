@@ -204,9 +204,10 @@ export const withdrawLegislationVersions = async (
     // Found before the transaction that locks it, so a version removed in
     // between is a `missing` outcome rather than a failed batch.
     // db-await-in-loop: one lookup per version, bounded by the batch limit
-    const target = (
-      await scopedDb(async (tx) => await withdrawalTargetQuery(tx, withdrawal))
-    ).at(0);
+    const found = await scopedDb(
+      async (tx) => await withdrawalTargetQuery(tx, withdrawal),
+    );
+    const target = found.at(0);
     if (target === undefined) {
       outcomes.push({ type: "missing" });
       continue;
