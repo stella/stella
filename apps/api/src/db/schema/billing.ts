@@ -2,6 +2,7 @@ import {
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
+  NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_SUGGESTION_STATUSES,
   type InvoiceStatus,
 } from "@stll/api-contract";
@@ -301,11 +302,7 @@ export const sellerProfiles = p.pgTable(
   ],
 );
 
-export const NUMBER_SERIES_DOCUMENT_TYPES = [
-  "invoice",
-  "advance",
-  "credit_note",
-] as const;
+export { NUMBER_SERIES_DOCUMENT_TYPES };
 const NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES = NUMBER_SERIES_DOCUMENT_TYPES.map(
   (documentType) => sql.raw(`'${documentType}'`),
 );
@@ -550,7 +547,14 @@ export const invoices = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    invoiceNumber: p.varchar("invoice_number", { length: 64 }).notNull(),
+    invoiceNumber: p.varchar("invoice_number", { length: 64 }),
+    documentType: p
+      .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
+      .notNull()
+      .default("invoice"),
+    originalInvoiceId: safeUuid<"invoice">("original_invoice_id"),
+    // Retained on revert to draft so document type and original stay frozen.
+    finalizedAt: timestamptz("finalized_at"),
     reference: p.varchar({ length: 256 }),
     status: p
       .text("status", { enum: INVOICE_STATUSES })
@@ -596,6 +600,23 @@ export const invoices = p.pgTable(
         name: "invoices_workspace_organization_fk",
       })
       .onDelete("cascade"),
+    p.unique("invoices_id_workspace_unique").on(table.id, table.workspaceId),
+    p.foreignKey({
+      columns: [table.originalInvoiceId, table.workspaceId],
+      foreignColumns: [table.id, table.workspaceId],
+      name: "invoices_original_invoice_workspace_fk",
+    }),
+    p
+      .index("invoices_ws_original_idx")
+      .on(table.workspaceId, table.originalInvoiceId),
+    p.check(
+      "invoices_document_type_check",
+      sql`${table.documentType} in (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "invoices_original_invoice_check",
+      sql`(${table.documentType} = 'credit_note') = (${table.originalInvoiceId} IS NOT NULL) AND (${table.originalInvoiceId} IS NULL OR ${table.originalInvoiceId} <> ${table.id})`,
+    ),
     p.index("invoices_ws_status_idx").on(table.workspaceId, table.status),
     p
       .uniqueIndex("invoices_ws_number_uidx")
@@ -704,7 +725,7 @@ export const invoiceLines = p.pgTable(
     ),
     p.check(
       "invoice_lines_amounts_check",
-      sql`${table.quantity} >= 0 AND ${table.unitPrice} >= 0 AND ${table.netAmount} >= 0 AND ${table.vatAmount} >= 0 AND ${table.grossAmount} = ${table.netAmount} + ${table.vatAmount}`,
+      sql`${table.quantity} >= 0 AND ${table.unitPrice} >= 0 AND ((${table.netAmount} >= 0 AND ${table.vatAmount} >= 0) OR (${table.netAmount} <= 0 AND ${table.vatAmount} <= 0)) AND ${table.grossAmount} = ${table.netAmount} + ${table.vatAmount}`,
     ),
     p.check("invoice_lines_position_check", sql`${table.position} >= 0`),
     p.check(

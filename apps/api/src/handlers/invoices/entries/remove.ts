@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
+import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -151,13 +152,13 @@ const removeEntries = createSafeHandler(
     const now = new Date();
 
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      resultTx(safeDb, async (tx) => {
         // Lock the invoice row before touching any child rows: `delete.ts`
         // and other invoice mutation handlers lock the invoice first, then
         // mutate `time_entries`/`expenses`, so this handler must follow the
         // same order or a concurrent transaction can deadlock (see
         // `lockInvoiceInStatus`'s doc comment).
-        const invoiceCheck = await lockDraftInvoiceForLines(
+        const invoiceResult = await lockDraftInvoiceForLines(
           tx,
           {
             invoiceId: params.invoiceId,
@@ -166,8 +167,17 @@ const removeEntries = createSafeHandler(
           },
           recordAuditEvent,
         );
+        if (invoiceResult.isErr()) {
+          return Result.err(invoiceResult.error);
+        }
+        const invoiceCheck = invoiceResult.value;
         if (!invoiceCheck) {
-          return { ok: false as const };
+          return Result.err(
+            new HandlerError({
+              status: 409,
+              message: "Invoice status changed concurrently; please retry",
+            }),
+          );
         }
 
         const timeEntryIds = body.timeEntryIds;
@@ -235,12 +245,16 @@ const removeEntries = createSafeHandler(
             );
         }
 
-        await recalculateInvoiceTotals(
+        const totals = await recalculateInvoiceTotals(
           tx,
           { invoiceId: params.invoiceId, workspaceId },
           now,
           recordAuditEvent,
         );
+
+        if (totals.isErr()) {
+          return Result.err(totals.error);
+        }
 
         await recordAuditEvent(
           tx,
@@ -251,20 +265,11 @@ const removeEntries = createSafeHandler(
           }),
         );
 
-        return { ok: true as const };
+        return Result.ok({ success: true });
       }),
     );
 
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Invoice status changed concurrently; please retry",
-        }),
-      );
-    }
-
-    return Result.ok({ success: true });
+    return Result.ok(txResult);
   },
 );
 

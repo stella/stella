@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { InvoiceTotals } from "@stll/invoicing";
 
-import { abortableTx } from "@/api/db/safe-db";
+import { resultTx } from "@/api/db/safe-db";
 import { BILLING_STATUS, expenses, timeEntries } from "@/api/db/schema";
 import {
   checkInvoiceLineCapacity,
@@ -105,10 +105,10 @@ const createInvoiceLine = createSafeHandler(
         : null;
     const now = new Date();
 
-    const txResult = await abortableTx(
+    const txResult = await resultTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
-        const invoice = await lockDraftInvoiceForLines(
+        const invoiceResult = await lockDraftInvoiceForLines(
           tx,
           {
             invoiceId: params.invoiceId,
@@ -117,6 +117,10 @@ const createInvoiceLine = createSafeHandler(
           },
           recordAuditEvent,
         );
+        if (invoiceResult.isErr()) {
+          return Result.err(invoiceResult.error);
+        }
+        const invoice = invoiceResult.value;
         if (!invoice) {
           return Result.err(
             new HandlerError({
@@ -263,25 +267,24 @@ const createInvoiceLine = createSafeHandler(
           recordAuditEvent,
         );
 
+        if (totals.isErr()) {
+          return Result.err(totals.error);
+        }
+
         await recordAuditEvent(tx, events);
 
-        return Result.ok({ id: line.id, totals });
+        return Result.ok({ id: line.id, totals: totals.value });
       },
     );
 
-    if (Result.isError(txResult)) {
-      const error = txResult.error;
-      // The partial unique index is the last guard: the entry already sits on
-      // another invoice's line.
-      if (DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION) {
-        return Result.err(
-          new HandlerError({ status: 409, message: NOT_BILLABLE_MESSAGE }),
-        );
-      }
-      return Result.err(error);
-    }
-
-    return txResult.value;
+    return txResult.mapError((error) =>
+      DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION
+        ? new HandlerError({
+            status: 409,
+            message: NOT_BILLABLE_MESSAGE,
+          })
+        : error,
+    );
   },
 );
 

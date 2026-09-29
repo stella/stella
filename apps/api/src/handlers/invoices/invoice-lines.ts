@@ -11,6 +11,7 @@ import {
   calculateLineNetAmount,
 } from "@stll/invoicing";
 import type {
+  InvoiceDocumentType,
   InvoiceLineInput,
   InvoiceTotals,
   VatTreatment,
@@ -25,6 +26,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import { validateInvoiceDocument } from "@/api/handlers/invoices/document-type";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import {
   AUDIT_ACTION,
@@ -35,7 +37,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import type { CentsAmount } from "@/api/lib/money";
+import { cents, type CentsAmount } from "@/api/lib/money";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
 const QUANTITY_SCALE = 4;
@@ -232,7 +234,7 @@ type LineAmountInput = LineVat & {
 
 const toLineInput = (line: LineAmountInput): InvoiceLineInput => ({
   description: line.description,
-  netAmountMinor: line.netAmount,
+  netAmountMinor: cents(Math.abs(line.netAmount)),
   vatRateBps: line.vatRateBps,
   vatTreatment: line.vatTreatment,
 });
@@ -240,9 +242,10 @@ const toLineInput = (line: LineAmountInput): InvoiceLineInput => ({
 /** VAT and gross of each line, from `calculateDocumentTotals`. */
 export const priceLines = (
   drafts: readonly InvoiceLineDraft[],
+  documentType: InvoiceDocumentType = "invoice",
 ): Result<PricedLine[], HandlerError> => {
   const calculated = calculateDocumentTotals({
-    documentType: "invoice",
+    documentType,
     lines: drafts.map(toLineInput),
   });
   if (calculated.isErr()) {
@@ -260,6 +263,7 @@ export const priceLines = (
     }
     priced.push({
       ...draft,
+      netAmount: line.netAmountMinor,
       vatAmount: line.vatAmountMinor,
       grossAmount: line.grossAmountMinor,
     });
@@ -294,7 +298,17 @@ export const insertInvoiceLines = async (
   if (drafts.length === 0) {
     return [];
   }
-  const priced = priceLines(drafts);
+  const invoice = await tx.query.invoices.findFirst({
+    where: {
+      id: { eq: scope.invoiceId },
+      workspaceId: { eq: scope.workspaceId },
+    },
+    columns: { documentType: true },
+  });
+  if (!invoice) {
+    return panic("The locked invoice disappeared before line insertion");
+  }
+  const priced = priceLines(drafts, invoice.documentType);
   if (priced.isErr()) {
     return panic(
       `Validated invoice lines failed pricing: ${priced.error.message}`,
@@ -494,8 +508,8 @@ const materialiseAttachedEntryLines = async (
  * entries attached before lines existed (`materialiseAttachedEntryLines`), so
  * the edit and the `recalculateInvoiceTotals` after it see every billed
  * entry. Backfilled lines are totalled at once, so the invoice stays
- * consistent even when the caller then refuses its change. Every handler
- * that changes a draft's lines locks through here; returns `undefined` when
+ * consistent before the requested change. Every handler
+ * that changes a draft's lines locks through here; returns an empty success when
  * the invoice is missing or not a draft.
  *
  * Reads do not call this: a read never writes, so a legacy draft lists no
@@ -517,17 +531,26 @@ export const lockDraftInvoiceForLines = async (
     invoice &&
     (await materialiseAttachedEntryLines(tx, scope, recordAuditEvent)) > 0
   ) {
-    await recalculateInvoiceTotals(tx, scope, new Date(), recordAuditEvent);
+    const totals = await recalculateInvoiceTotals(
+      tx,
+      scope,
+      new Date(),
+      recordAuditEvent,
+    );
+    if (totals.isErr()) {
+      return Result.err(totals.error);
+    }
   }
-  return invoice;
+  return Result.ok(invoice);
 };
 
 /** Invoice totals and VAT breakdown over the given lines. */
 export const invoiceTotals = (
   lines: readonly LineAmountInput[],
+  documentType: InvoiceDocumentType = "invoice",
 ): Result<InvoiceTotals, HandlerError> => {
   const calculated = calculateDocumentTotals({
-    documentType: "invoice",
+    documentType,
     lines: lines.map(toLineInput),
   });
   if (calculated.isErr()) {
@@ -539,6 +562,7 @@ export const invoiceTotals = (
 };
 
 type InvoiceForReadTotals = {
+  documentType: InvoiceDocumentType;
   /** NULL marks totals written before invoice lines existed. */
   netAmount: CentsAmount | null;
   totalAmount: CentsAmount;
@@ -564,7 +588,7 @@ export const readInvoiceTotals = (
   invoice: InvoiceForReadTotals,
 ): Result<InvoiceTotals, HandlerError> => {
   if (invoice.netAmount !== null) {
-    return invoiceTotals(invoice.lines);
+    return invoiceTotals(invoice.lines, invoice.documentType);
   }
   const linedTimeEntries = new Set<string>();
   const linedExpenses = new Set<string>();
@@ -588,14 +612,14 @@ export const readInvoiceTotals = (
       .filter((expense) => !linedExpenses.has(expense.id))
       .map((expense) => expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT)),
   ];
-  if (lines.length === 0 && invoice.totalAmount > 0) {
+  if (lines.length === 0 && invoice.totalAmount !== 0) {
     lines.push({
       description: "-",
       netAmount: invoice.totalAmount,
       ...ATTACHED_ENTRY_LINE_VAT,
     });
   }
-  return invoiceTotals(lines);
+  return invoiceTotals(lines, invoice.documentType);
 };
 
 /**
@@ -603,15 +627,15 @@ export const readInvoiceTotals = (
  * invoice keeps its released lines, and its document keeps their totals).
  * It records the stored amounts that changed on the invoice's audit trail, so
  * callers record only what they changed themselves. Call inside the
- * transaction that changed the lines, after locking the invoice. Stored lines
- * were priced when written, so totalling them cannot fail.
+ * transaction that changed the lines, after locking the invoice. Credit-note
+ * limits are checked before totals are written; callers roll back any refusal.
  */
 export const recalculateInvoiceTotals = async (
   tx: Transaction,
   scope: Omit<InvoiceScope, "organizationId">,
   now: Date,
   recordAuditEvent: AuditRecorder,
-): Promise<InvoiceTotals> => {
+): Promise<Result<InvoiceTotals, HandlerError>> => {
   const lines = await tx
     .select({
       description: invoiceLines.description,
@@ -626,24 +650,38 @@ export const recalculateInvoiceTotals = async (
         eq(invoiceLines.workspaceId, scope.workspaceId),
       ),
     );
-  const totals = invoiceTotals(lines);
-  if (totals.isErr()) {
-    return panic(
-      `Stored invoice lines failed totalling: ${totals.error.message}`,
-    );
-  }
   const invoiceScope = and(
     eq(invoices.id, scope.invoiceId),
     eq(invoices.workspaceId, scope.workspaceId),
   );
   const [stored] = await tx
     .select({
+      documentType: invoices.documentType,
+      originalInvoiceId: invoices.originalInvoiceId,
+      currency: invoices.currency,
       netAmount: invoices.netAmount,
       vatAmount: invoices.vatAmount,
       totalAmount: invoices.totalAmount,
     })
     .from(invoices)
     .where(invoiceScope);
+  if (!stored) {
+    return panic("The locked invoice disappeared before recalculation");
+  }
+  const totals = invoiceTotals(lines, stored.documentType);
+  if (totals.isErr()) {
+    return Result.err(totals.error);
+  }
+  const valid = await validateInvoiceDocument(tx, {
+    workspaceId: scope.workspaceId,
+    documentType: stored.documentType,
+    originalInvoiceId: stored.originalInvoiceId,
+    currency: stored.currency,
+    totalAmount: totals.value.grossAmountMinor,
+  });
+  if (valid.isErr()) {
+    return Result.err(valid.error);
+  }
   const next = {
     netAmount: totals.value.netAmountMinor,
     vatAmount: totals.value.vatAmountMinor,
@@ -668,7 +706,7 @@ export const recalculateInvoiceTotals = async (
       changes,
     });
   }
-  return totals.value;
+  return Result.ok(totals.value);
 };
 
 /** Columns an invoice detail read returns for each line. */

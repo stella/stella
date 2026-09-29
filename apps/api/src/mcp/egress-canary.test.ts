@@ -1367,6 +1367,8 @@ describe("MCP anonymization canary corpus", () => {
             {
               id: "inv_1",
               invoiceNumber: "INV-1",
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: referenceSeed,
               status: "draft",
               invoiceDate: "2026-01-01",
@@ -1420,6 +1422,8 @@ describe("MCP anonymization canary corpus", () => {
               id: "00000000-0000-4000-8000-000000020002",
               workspaceId: "00000000-0000-4000-8000-0000000a0001",
               invoiceNumber: "INV-2",
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: referenceSeed,
               status: "draft",
               invoiceDate: "2026-01-01",

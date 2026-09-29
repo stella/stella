@@ -546,7 +546,7 @@ const InvoiceDetail = ({
             dueDate={invoice.dueDate ?? ""}
             invoiceDate={invoice.invoiceDate}
             invoiceId={invoiceId}
-            invoiceNumber={invoice.invoiceNumber}
+            invoiceNumber={invoice.invoiceNumber ?? ""}
             notes={invoice.notes ?? ""}
             onClose={() => setEditOpen(false)}
             reference={invoice.reference ?? ""}
