@@ -13,6 +13,7 @@ import {
   chatTurns,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
@@ -310,8 +311,47 @@ describe("chat run log database contract", () => {
     await own.close();
   });
 
-  test("settlement closes a run log, including a run with no chunks", async () => {
+  test("shadow stream delivers and stores chunks in order, then settlement closes the log", async () => {
     const run = await seedRunningTurn();
+    const log = logFor(run);
+    const chunks = [chunk("first"), chunk("second"), chunk("third")];
+    const shadow = shadowChatRun({
+      enabled: true,
+      createLog: () => log,
+      source: (async function* () {
+        yield* chunks;
+      })(),
+      observe: (error) => panic("Unexpected shadow failure", error),
+      measure: () => {},
+    });
+    const delivered = [];
+    for await (const entry of shadow.source) {
+      delivered.push(entry);
+    }
+    await shadow.flush();
+    expect(delivered).toEqual(chunks);
+    expect((await log.snapshot()).map(({ chunk: entry }) => entry)).toEqual(
+      chunks,
+    );
+    await scopedDbA(
+      async (tx) =>
+        await settleChatTurnOnTx({
+          assistantMessageId: null,
+          execution: run.execution,
+          outcome: USER_STOP_OUTCOME,
+          tx,
+        }),
+    );
+    const [header] = await testDb
+      .select({ closedAt: chatRunLogs.closedAt })
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("settlement closes an existing run log", async () => {
+    const run = await seedRunningTurn();
+    await logFor(run).append([chunk("before settlement")]);
     const settled = await scopedDbA(
       async (tx) =>
         await settleChatTurnOnTx({
@@ -327,6 +367,29 @@ describe("chat run log database contract", () => {
       .from(chatRunLogs)
       .where(eq(chatRunLogs.runId, run.runId));
     expect(header?.closedAt).toBeInstanceOf(Date);
+  });
+
+  test("settlement without shadow logging creates no log rows", async () => {
+    const run = await seedRunningTurn();
+    await scopedDbA(
+      async (tx) =>
+        await settleChatTurnOnTx({
+          assistantMessageId: null,
+          execution: run.execution,
+          outcome: USER_STOP_OUTCOME,
+          tx,
+        }),
+    );
+    const headers = await testDb
+      .select()
+      .from(chatRunLogs)
+      .where(eq(chatRunLogs.runId, run.runId));
+    const entries = await testDb
+      .select()
+      .from(chatRunLogEntries)
+      .where(eq(chatRunLogEntries.runId, run.runId));
+    expect(headers).toEqual([]);
+    expect(entries).toEqual([]);
   });
 
   test("reaping closes a run log after its execution lease expires", async () => {

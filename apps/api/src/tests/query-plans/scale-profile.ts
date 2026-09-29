@@ -256,6 +256,89 @@ export const injectScaleProfile = async (
   await assertScaleProfileApplied(db, profile);
 };
 
+/**
+ * Scale one seeded table, with its indexes, to the profile's size, for a test
+ * that seeds only that table (`injectScaleProfile` needs every guarded table).
+ * Partial indexes keep the share of rows they cover. The planner still takes a
+ * full index's page count from its file, so a small index looks cheap to read
+ * whole: the query's shape, not these numbers, has to keep a path bounded.
+ */
+export const scaleTableToProfile = async (
+  db: ScaleDb,
+  table: GuardedTable,
+  profile: ScaleProfile,
+): Promise<void> => {
+  const scale = profile.tables[table];
+  const stats = await relationStats(db, table);
+  if (stats.relpages < 1 || stats.reltuples < 1) {
+    panic(`Scale profile requires physical rows before scaling: ${table}`);
+  }
+  const growth = scale.reltuples / stats.reltuples;
+  const indexes = executedRows(
+    await db.execute(sql`
+      SELECT c.relname, c.relpages, c.reltuples
+        FROM pg_index AS i
+        JOIN pg_class AS c ON c.oid = i.indexrelid
+       WHERE i.indrelid = ${table}::regclass
+    `),
+  );
+  if (indexes.length === 0) {
+    panic(`Scale profile table has no indexes: ${table}`);
+  }
+  for (const index of indexes) {
+    if (
+      !isRecord(index) ||
+      typeof index["relname"] !== "string" ||
+      typeof index["relpages"] !== "number" ||
+      typeof index["reltuples"] !== "number"
+    ) {
+      return panic(`Scale profile index statistics are malformed: ${table}`);
+    }
+    restored(
+      await db.execute(sql`
+        SELECT pg_restore_relation_stats(
+          'schemaname', 'public', 'relname', ${index["relname"]}::text,
+          'relpages', ${Math.ceil(index["relpages"] * growth)}::integer,
+          'reltuples', ${Math.max(index["reltuples"], 0) * growth}::real
+        ) AS restored
+      `),
+      index["relname"],
+    );
+  }
+  restored(
+    await db.execute(sql`
+      SELECT pg_restore_relation_stats(
+        'schemaname', 'public', 'relname', ${table}::text,
+        'reltuples', ${scale.reltuples}::real,
+        'relallvisible', ${Math.round(stats.relpages * scale.allVisibleFraction)}::integer
+      ) AS restored
+    `),
+    table,
+  );
+  for (const attribute of profile.attributes) {
+    if (attribute.table !== table) {
+      continue;
+    }
+    // The fixture's own distribution would otherwise survive the restore.
+    await db.execute(sql`
+      SELECT pg_clear_attribute_stats(
+        'public', ${table}::text, ${attribute.column}::text, false
+      )
+    `);
+    restored(
+      await db.execute(sql`
+        SELECT pg_restore_attribute_stats(
+          'schemaname', 'public', 'relname', ${table}::text,
+          'attname', ${attribute.column}::text, 'inherited', false,
+          'null_frac', ${attribute.nullFraction}::real,
+          'n_distinct', ${attribute.distinctValues}::real
+        ) AS restored
+      `),
+      `${table}.${attribute.column}`,
+    );
+  }
+};
+
 /** Detect an ANALYZE or incomplete seed before any plan is judged. */
 export const assertScaleProfileApplied = async (
   db: ScaleDb,
