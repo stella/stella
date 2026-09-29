@@ -7,11 +7,13 @@ import {
   parseCzList,
   parseEuList,
   parseOfacList,
+  parseSecoList,
   parseUkList,
   parseUnList,
   readCzListVersion,
   readEuListVersion,
   readOfacListVersion,
+  readSecoListVersion,
   readSourceEditionMarker,
   readUkListVersion,
   readUnListVersion,
@@ -449,6 +451,14 @@ const loadMarkerOnce = async (
         options,
         readVersion: readUkListVersion,
       });
+    // The SECO list states its edition date on the XML root element.
+    case "ch":
+      return await loadStreamedMarker({
+        source,
+        downloadUrl: SANCTIONS_SOURCES.ch.download.urls[0],
+        options,
+        readVersion: readSecoListVersion,
+      });
     case "cz": {
       const page = await fetchBytes({
         signal: options.signal,
@@ -537,6 +547,8 @@ const parseStreamedList = async (
       return await parseOfacList(source, input);
     case "uk":
       return await parseUkList(input);
+    case "ch":
+      return await parseSecoList(input);
     default: {
       source satisfies never;
       return panic("Unknown streamed sanctions source");

@@ -43,3 +43,4 @@ export type {
 } from "./screening";
 export { parseUnList, readUnListVersion } from "./un";
 export { parseUkList, readUkListVersion } from "./uk";
+export { parseSecoList, readSecoListVersion } from "./seco";

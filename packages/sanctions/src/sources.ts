@@ -22,6 +22,7 @@ type Download =
 
 type EditionMarker =
   | { kind: "http-last-modified"; url: string }
+  | { kind: "http-content-disposition"; url: string }
   | { kind: "publisher-checksum"; url: string }
   | { kind: "publisher-page-date"; url: string }
   | { kind: "dated-file-name"; pageUrl: string; fileNamePattern: string };
@@ -49,6 +50,8 @@ const OFAC_EXPORT =
 const SDN_XML = `${OFAC_EXPORT}SDN.XML`;
 const NON_SDN_XML = `${OFAC_EXPORT}CONSOLIDATED.XML`;
 const UK_XML = "https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml";
+const CH_XML =
+  "https://www.sesam.search.admin.ch/sesam-search-web/pages/downloadXmlGesamtliste.xhtml?action=downloadXmlGesamtlisteAction&lang=de";
 
 /** Publisher locations, reuse terms, and inexpensive checks for new editions. */
 export const SANCTIONS_SOURCES = {
@@ -112,6 +115,15 @@ export const SANCTIONS_SOURCES = {
     },
     editionMarker: { kind: "http-last-modified", url: UK_XML },
   },
+  ch: {
+    id: "ch",
+    issuer: "CH",
+    download: { kind: "direct", urls: [CH_XML] },
+    licence: {
+      url: "https://www.admin.ch/en/terms-and-conditions",
+    },
+    editionMarker: { kind: "http-content-disposition", url: CH_XML },
+  },
 } as const satisfies {
   [Source in SanctionsSource]: SourceMetadata & { id: Source };
 };
@@ -119,6 +131,8 @@ export const SANCTIONS_SOURCES = {
 type MarkerResponse = {
   /** The value from an HTTP HEAD response, for sources that publish it. */
   lastModified?: string | null;
+  /** The filename header from a SECO consolidated-list HEAD response. */
+  contentDisposition?: string | null;
   /** A small checksum response or publisher page, for GET-based markers. */
   body?: string;
 };
@@ -165,6 +179,34 @@ const UN_DATE = /last updated on\s+(\d{1,2})\s+([A-Z][a-z]+)\s+(\d{4})/iu;
 const CZ_DOWNLOAD =
   /\/file\/\d+\/Vnitrostatni_sankcni_seznam_(\d{4})_(\d{2})_(\d{2})\.csv/gu;
 const CHECKSUM = /^[a-f\d]{40,128}$/iu;
+const CH_FILENAME =
+  /^attachment;\s*filename="consolidated-list_(\d{4}-\d{2}-\d{2})\.xml"$/iu;
+
+const httpLastModified = (
+  source: SanctionsSource,
+  stamp: string | null | undefined,
+): Result<string, SanctionsListParseError> => {
+  const match =
+    stamp === undefined || stamp === null ? null : HTTP_DATE.exec(stamp);
+  const day = match?.[1];
+  const month = HTTP_MONTHS.get(match?.[2] ?? "");
+  const year = match?.[3];
+  const clock = match?.[4];
+  const instant =
+    day === undefined ||
+    month === undefined ||
+    year === undefined ||
+    clock === undefined
+      ? null
+      : stampInstant(
+          `${year}-${String(month).padStart(2, "0")}-${day}T${clock}Z`,
+        );
+  return instant === null
+    ? Result.err(
+        missingField(source, "HTTP Last-Modified is missing or invalid"),
+      )
+    : Result.ok(instant.toString());
+};
 
 const pageText = (html: string): string => {
   const text: string[] = [];
@@ -192,28 +234,32 @@ export const readSourceEditionMarker = (
   let downloadUrl: string | null = null;
   switch (marker.kind) {
     case "http-last-modified": {
-      const stamp = response.lastModified;
-      const match =
-        stamp === undefined || stamp === null ? null : HTTP_DATE.exec(stamp);
-      const day = match?.[1];
-      const month = HTTP_MONTHS.get(match?.[2] ?? "");
-      const year = match?.[3];
-      const clock = match?.[4];
-      const instant =
-        day === undefined ||
-        month === undefined ||
-        year === undefined ||
-        clock === undefined
-          ? null
-          : stampInstant(
-              `${year}-${String(month).padStart(2, "0")}-${day}T${clock}Z`,
-            );
-      if (instant === null) {
+      const stamp = httpLastModified(source, response.lastModified);
+      if (stamp.isErr()) {
+        return Result.err(stamp.error);
+      }
+      value = stamp.value;
+      break;
+    }
+    case "http-content-disposition": {
+      const header = response.contentDisposition;
+      const date =
+        header === undefined || header === null
+          ? undefined
+          : CH_FILENAME.exec(header)?.[1];
+      if (date === undefined) {
         return Result.err(
-          missingField(source, "HTTP Last-Modified is missing or invalid"),
+          missingField(
+            source,
+            "HTTP Content-Disposition has no dated list filename",
+          ),
         );
       }
-      value = instant.toString();
+      const checked = parseIsoDate(source, date);
+      if (checked.isErr()) {
+        return Result.err(checked.error);
+      }
+      value = date;
       break;
     }
     case "publisher-checksum": {
