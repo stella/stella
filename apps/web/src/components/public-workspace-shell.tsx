@@ -223,6 +223,7 @@ const PublicSidebar = ({
     includeInbox: inboxEntryEnabled,
     includePublicLaw: isPublicLawSsrRouteEnabled(),
     includePublicTools: isPublicToolsRouteEnabled(),
+    includeTimesheets: false,
   });
 
   const requestPrivateFeature = (redirectTo: string) => {

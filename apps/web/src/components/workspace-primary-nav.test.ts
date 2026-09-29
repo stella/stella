@@ -6,6 +6,7 @@ const ALL_GATES_OPEN = {
   includeInbox: true,
   includePublicLaw: true,
   includePublicTools: true,
+  includeTimesheets: true,
 };
 
 const navIds = (overrides: Partial<typeof ALL_GATES_OPEN>) =>
@@ -22,12 +23,13 @@ describe("workspace primary nav", () => {
     expect(publicNavIds).toEqual(["caseLaw", "tools"]);
   });
 
-  test("keeps every entry while all three gates are open", () => {
+  test("keeps every entry while all gates are open", () => {
     expect(navIds({})).toEqual([
       "search",
       "chat",
       "inbox",
       "matters",
+      "timesheets",
       "caseLaw",
       "tools",
       "knowledge",
@@ -43,6 +45,7 @@ describe("workspace primary nav", () => {
     expect(navIds({ includeInbox: false })).toContain("tools");
     expect(navIds({ includePublicLaw: false })).toContain("inbox");
     expect(navIds({ includePublicTools: false })).toContain("inbox");
+    expect(navIds({ includeTimesheets: false })).not.toContain("timesheets");
   });
 
   test("leaves the ungated entries alone when every gate closes", () => {
@@ -51,6 +54,7 @@ describe("workspace primary nav", () => {
         includeInbox: false,
         includePublicLaw: false,
         includePublicTools: false,
+        includeTimesheets: false,
       }),
     ).toEqual(["search", "chat", "matters", "knowledge", "contacts"]);
   });
