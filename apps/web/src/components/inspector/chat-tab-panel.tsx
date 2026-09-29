@@ -71,6 +71,7 @@ import {
 } from "@/components/inspector/chat-context-label.logic";
 import { useDecisionChatPrompts } from "@/components/inspector/decision-chat-prompts";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { skillLabel } from "@/components/inspector/inspector-store-types";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -737,7 +738,8 @@ const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
     .filter((name): name is string => name !== undefined);
 
   return chatContextLabel({
-    activeSkillName: tab.activeSkill?.skillName,
+    activeSkillName:
+      tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
     boundDocumentLabel,
     matterNames,
     newChatLabel: t("chat.newChat"),

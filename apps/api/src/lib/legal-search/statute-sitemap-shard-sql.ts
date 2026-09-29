@@ -9,6 +9,10 @@ import {
 } from "@/api/db/schema";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import {
+  legislationVersionRef,
+  notWithdrawn,
+} from "@/api/lib/legal-search/legislation-validity-window";
 
 export const SITEMAP_ALL_BUCKET = "all";
 
@@ -26,7 +30,8 @@ const statuteLastmodSql = sql<string>`to_char(max(${legislationDocuments.updated
 /**
  * One published Work per row, shared by the refresh and bounded shard read.
  * Grouping by source, ELI and language keeps consolidations together; the
- * bucket is a function of that grouped ELI, so it cannot split a Work.
+ * bucket is a function of that grouped ELI, so it cannot split a Work. Only
+ * listed versions count, so a Work whose every version was withdrawn drops out.
  */
 export const statuteWorksQuery = (
   db: Pick<Transaction, "select">,
@@ -48,6 +53,9 @@ export const statuteWorksQuery = (
       and(
         ...conditions,
         isNotNull(legislationDocuments.slug),
+        // A withdrawn version is a tombstone: it neither lists its Work nor
+        // owns the Work's canonical slug.
+        notWithdrawn(legislationVersionRef(legislationDocuments)),
         publishedLegislationDocument,
       ),
     )

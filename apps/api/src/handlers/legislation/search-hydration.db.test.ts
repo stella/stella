@@ -43,9 +43,11 @@ const unheldId = createSafeId<"legislationDocument">();
 const projectedId = createSafeId<"legislationDocument">();
 const queuedId = createSafeId<"legislationDocument">();
 const movedId = createSafeId<"legislationDocument">();
+const withdrawnId = createSafeId<"legislationDocument">();
 const projectedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const queuedIntentId = createSafeId<"corpusIndexProjectionIntent">();
 const movedIntentId = createSafeId<"corpusIndexProjectionIntent">();
+const withdrawnIntentId = createSafeId<"corpusIndexProjectionIntent">();
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -88,6 +90,18 @@ beforeAll(
         contentHash: `hash-${index}`,
       })),
     );
+    // Withdrawn by its publisher; nothing has erased it from the index yet.
+    await db.insert(legislationDocuments).values({
+      id: withdrawnId,
+      sourceId,
+      eli: "CZ/2020/5",
+      title: "Withdrawn act",
+      country: "CZE",
+      language: "cs",
+      contentHash: "hash-withdrawn",
+      windowDisposition: "withdrawn",
+      windowDispositionBasis: "publisher-unlisted",
+    });
 
     await db.insert(corpusIndexGenerations).values({
       family: "legislation",
@@ -108,6 +122,11 @@ beforeAll(
         },
         { id: queuedIntentId, entityId: queuedId, indexId: PROJECTED_INDEX_ID },
         { id: movedIntentId, entityId: movedId, indexId: OTHER_INDEX_ID },
+        {
+          id: withdrawnIntentId,
+          entityId: withdrawnId,
+          indexId: PROJECTED_INDEX_ID,
+        },
       ].map(({ id, entityId, indexId }) => ({
         id,
         family: "legislation" as const,
@@ -174,6 +193,24 @@ beforeAll(
         appliedIndexId: OTHER_INDEX_ID,
         appliedAt: new Date(),
       },
+      // Converged on an upsert in the routed index, exactly as the first
+      // document is: the erase its withdrawal calls for has not been asked
+      // of the index yet, so the engine still holds and returns it.
+      {
+        family: "legislation",
+        generation: PROJECTED_GENERATION,
+        entityId: withdrawnId,
+        desiredAction: "upsert",
+        desiredEpoch: 1n,
+        desiredFingerprint: APPLIED_FINGERPRINT,
+        desiredIndexId: PROJECTED_INDEX_ID,
+        appliedAction: "upsert",
+        appliedEpoch: 1n,
+        appliedRevision: withdrawnIntentId,
+        appliedFingerprint: APPLIED_FINGERPRINT,
+        appliedIndexId: PROJECTED_INDEX_ID,
+        appliedAt: new Date(),
+      },
     ]);
   },
   { timeout: DB_TEST_TIMEOUT_MS },
@@ -208,4 +245,18 @@ test("the request filters still bind on the projection state", async () => {
   });
 
   expect(result.ranked).toEqual([]);
+});
+
+test("a withdrawn version is dropped while its erase is still pending", async () => {
+  // The first document holds the same converged state in the same index, so
+  // the projection state alone would admit both: only the withdrawal differs.
+  const result = await rehydrateLegislationCandidates({
+    body: { query: "smlouva" },
+    candidates: candidatesOf(withdrawnId, projectedId),
+    generation: PROJECTED_GENERATION,
+    legislationDb,
+  });
+
+  expect(result.ranked.map((hit) => hit.id)).toEqual([projectedId]);
+  expect([...result.context.byId.keys()]).toEqual([projectedId]);
 });

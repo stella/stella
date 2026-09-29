@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { SKILL_RESOURCE_KINDS } from "@stll/skills/resource-kinds";
 
 import { AGENT_SKILL_ORIGINS } from "@/api/db/schema";
+import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
 import { LIMITS } from "@/api/lib/limits";
 import {
   dynamicToolNamespaceOf,
@@ -48,9 +49,8 @@ export const SKILL_TOOL_INPUT = defineMcpToolInput(
 );
 
 const skillIdSchema = v.pipe(
-  v.string(),
-  v.uuid(),
-  v.description("Stored skill id"),
+  v.nullable(v.pipe(v.string(), v.uuid())),
+  v.description("Stored skill id; null for a skill shipped with stella"),
 );
 const skillNameSchema = v.pipe(v.string(), v.description("Skill slug"));
 const resourceKindSchema = v.pipe(
@@ -82,8 +82,10 @@ const SKILL_TOOL_OUTPUT_SCHEMA = v.variant("type", [
     ),
     name: skillNameSchema,
     origin: v.pipe(
-      v.picklist(AGENT_SKILL_ORIGINS),
-      v.description("How the skill entered the workspace"),
+      v.picklist([...AGENT_SKILL_ORIGINS, CHAT_SKILL_SOURCE.builtIn]),
+      v.description(
+        "How the skill entered the workspace; built-in skills ship with stella",
+      ),
     ),
     resources: v.pipe(
       v.array(

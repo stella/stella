@@ -3182,6 +3182,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Iebūvētās prasmes",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
       "disableSkill": "Atspējot prasmi",

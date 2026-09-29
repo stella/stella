@@ -415,10 +415,6 @@ export const closeChatRunLogOnTx = async ({
     return;
   }
   await tx
-    .insert(chatRunLogs)
-    .values({ organizationId, runId, turnId, closedAt: sql`now()` })
-    .onConflictDoNothing();
-  await tx
     .update(chatRunLogs)
     .set({ closedAt: sql`now()` })
     .where(

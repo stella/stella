@@ -14,8 +14,9 @@ describe("getToolDetailPayload", () => {
     );
 
     expect(payload.activeSkill).toEqual({
+      skillDisplayName: "Review Skill",
       skillId: "skill-team",
-      skillName: "Review Skill",
+      skillName: "review",
     });
   });
 
