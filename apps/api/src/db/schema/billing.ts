@@ -714,3 +714,37 @@ export const invoiceLines = p.pgTable(
     ...wsOrganizationPolicies("invoice_lines"),
   ],
 );
+
+export const vatRates = p.pgTable(
+  "vat_rates",
+  {
+    id: pUuid<"vatRate">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    code: p.varchar({ length: 64 }).notNull(),
+    name: p.varchar({ length: 128 }).notNull(),
+    rateBps: p.integer("rate_bps").notNull(),
+    validFrom: p.date("valid_from").notNull(),
+    validTo: p.date("valid_to"),
+    archivedAt: timestamptz("archived_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("vat_rates_org_created_idx")
+      .on(table.organizationId, table.createdAt, table.id)
+      .where(sql`${table.archivedAt} IS NULL`),
+    p
+      .index("vat_rates_org_code_valid_idx")
+      .on(table.organizationId, table.code, table.validFrom)
+      .where(sql`${table.archivedAt} IS NULL`),
+    p.check("vat_rates_rate_bps_check", sql`${table.rateBps} >= 0`),
+    p.check(
+      "vat_rates_validity_check",
+      sql`${table.validTo} IS NULL OR ${table.validTo} > ${table.validFrom}`,
+    ),
+    ...orgPolicies(),
+  ],
+);

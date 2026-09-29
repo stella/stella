@@ -24,6 +24,7 @@ beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
   connection = {
+    setTransactionBudget: async () => undefined,
     execute: async (query, params = []) => {
       await client.query(query, [...params]);
     },
@@ -446,6 +447,8 @@ describe("provision state backfill", () => {
     // this run's first unit commits.
     let commits = 0;
     const racing: ProvisionBackfillSession = {
+      setTransactionBudget: async (budget) =>
+        await connection.setTransactionBudget(budget),
       execute: async (query, params = []) => {
         await connection.execute(query, params);
         if (query === "COMMIT") {

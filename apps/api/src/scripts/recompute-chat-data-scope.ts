@@ -20,6 +20,7 @@ import { asc, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { chatMessages, chatThreads, workspaces } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   collectMessageWorkspaceIds,
@@ -35,7 +36,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 const THREAD_BATCH_SIZE = 50;
-const STATEMENT_TIMEOUT = "60000ms";
+const STATEMENT_TIMEOUT_MS = 60_000;
 
 type Cursor = { organizationId: string; userId: string; threadId: string };
 
@@ -308,9 +309,7 @@ const recomputeBatch = async ({
   );
 
   const outcome = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, true)`,
-    );
+    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
 
     let widenedThreads = 0;
     if (planned.length > 0) {

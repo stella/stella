@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import {
+  CITATION_SUMMARY_SCAN_LIMIT,
   CITATION_TIMELINE_MAX_YEARS,
   listDecisionCitationsHandler,
   listLeadingCitationsHandler,
@@ -396,6 +398,60 @@ test("incoming citations roll up by the citing decision's year within the bounde
   expect(beyondSpan.incoming).toEqual(summary.incoming);
   expect(beyondSpan.incomingByYear).toEqual([]);
 });
+
+test("citation summary marks the first unseen row without counting it", async () => {
+  const cappedSubjectId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    caseNumber: "capped-subject",
+    country: "CZE",
+    court: "Court",
+    id: cappedSubjectId,
+    language: "cs",
+    sourceId: openSourceId,
+  });
+  try {
+    await db.execute(sql`
+      INSERT INTO ${caseLawCitations}
+        (id, citing_decision_id, cited_decision_id, citation_text, kind, polarity)
+      SELECT
+        ('00000000-0000-7000-8000-' || lpad((10000 + n)::text, 12, '0'))::uuid,
+        ${openRelatedId}::uuid,
+        ${cappedSubjectId}::uuid,
+        'summary-bound-' || n::text,
+        CASE WHEN n = 1 THEN ${CITATION_KIND.PROCEDURAL} ELSE ${CITATION_KIND.PRECEDENT} END,
+        ${POLARITY.POSITIVE}
+      FROM generate_series(1, ${CITATION_SUMMARY_SCAN_LIMIT}) AS generated(n)
+    `);
+    const atLimit = await withSubject(
+      cappedSubjectId,
+      async (subject) => await summaryOf({ currentYear: 2026, subject }),
+    );
+    expect(atLimit.capped).toEqual({ incoming: false, outgoing: false });
+    expect(atLimit.incoming.positive).toBe(CITATION_SUMMARY_SCAN_LIMIT - 1);
+
+    await db.insert(caseLawCitations).values({
+      citedDecisionId: cappedSubjectId,
+      citingDecisionId: openRelatedId,
+      citationText: "first-unseen-citation",
+      id: citationId(10_000 + CITATION_SUMMARY_SCAN_LIMIT + 1),
+      polarity: POLARITY.POSITIVE,
+    });
+    const beyondLimit = await withSubject(
+      cappedSubjectId,
+      async (subject) => await summaryOf({ currentYear: 2026, subject }),
+    );
+    expect(beyondLimit.capped).toEqual({ incoming: true, outgoing: false });
+    expect(beyondLimit.incoming).toEqual(atLimit.incoming);
+    expect(beyondLimit.incomingByYear).toEqual(atLimit.incomingByYear);
+  } finally {
+    await db
+      .delete(caseLawCitations)
+      .where(eq(caseLawCitations.citedDecisionId, cappedSubjectId));
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, cappedSubjectId));
+  }
+}, 120_000);
 
 test("a restricted subject decision cannot be resolved as a subject", async () => {
   // The closed decision cites the subject, so it has an outgoing edge that

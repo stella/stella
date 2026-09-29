@@ -23,6 +23,10 @@ import type { DocumentSource } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import type { EntityVersionTargetErrorCode } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+} from "@/api/lib/files/organization-file-usage";
 import { loadPdfSigningBaseBytes } from "@/api/lib/files/pdf-signing/base-bytes";
 import { chainReachesRoot } from "@/api/lib/files/pdf-signing/certificate-chain";
 import type { AuthorizedPdfSigningSession } from "@/api/lib/files/pdf-signing/sessions";
@@ -340,6 +344,21 @@ export const finalizeSignature = async (
   }
   if (Result.isError(written.value)) {
     const rejection = written.value.error;
+    if (rejection instanceof OrganizationFileUsageError) {
+      return Result.err(
+        rejection.reason === "storage_unavailable" ||
+          rejection.reason === "reservation_busy"
+          ? retryable(
+              "pdf_signing_finalize_unavailable",
+              "The signed document could not be stored. Try again.",
+              rejection,
+            )
+          : terminal(
+              "signing_failed",
+              organizationFileUsageHandlerError(rejection),
+            ),
+      );
+    }
     const outcome = VERSION_WRITE_OUTCOME[rejection.code];
     return Result.err(
       outcome === null

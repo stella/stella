@@ -14800,7 +14800,10 @@ export type WebRoutes = {
                 readonly message: "Desktop edit session is already closed.";
               } | {
                 readonly message: "Desktop edit session file type changed while checkpointing.";
+              } | {
+                readonly message: string;
               };
+              413: T04724ee5f4;
               422: {
                 readonly message: `File validation failed: ${string}`;
               } | {
@@ -14816,6 +14819,7 @@ export type WebRoutes = {
                 property?: string;
                 expected?: string;
               };
+              503: T04724ee5f4;
             };
           };
         };
@@ -14861,20 +14865,18 @@ export type WebRoutes = {
               404: {
                 readonly message: "Desktop edit session not found.";
               } | {
-                readonly message: T2e1b9ec514;
+                readonly message: string;
                 readonly code?: "desktop_edit_session_taken_over";
               };
               409: {
                 readonly code: "desktop_edit_session_taken_over";
                 readonly message: "Desktop editing moved to another device. This local copy is preserved.";
               } | {
-                readonly message: T2e1b9ec514;
+                readonly message: string;
                 readonly code?: "desktop_edit_session_taken_over";
               };
-              422: {
-                readonly message: T2e1b9ec514;
-                readonly code?: "desktop_edit_session_taken_over";
-              } | {
+              413: T85d205c577;
+              422: (T85d205c577 | {
                 type: "validation";
                 on: string;
                 summary?: string;
@@ -14882,7 +14884,8 @@ export type WebRoutes = {
                 found?: unknown;
                 property?: string;
                 expected?: string;
-              };
+              });
+              503: T85d205c577;
             };
           };
         };
@@ -17708,6 +17711,173 @@ export type WebRoutes = {
         };
       };
     };
+    "vat-rates": {
+      get: {
+        body: Record<never, never>;
+        params: T5e3ac29766;
+        query: {
+          on?: string;
+          cursor?: string;
+          limit?: number;
+        };
+        headers: Record<never, never>;
+        response: {
+          200: {
+            items: Array<{
+              id: Tc2e180208d;
+              code: string;
+              name: string;
+              rateBps: number;
+              validFrom: string;
+              validTo: Tbe0400fa4c;
+              createdAt: string;
+              updatedAt: string;
+            }>;
+            nextCursor: Tbe0400fa4c;
+            limit: number;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      post: {
+        body: {
+          validTo?: string | null;
+          name: string;
+          code: string;
+          rateBps: number;
+          validFrom: string;
+        };
+        params: T5e3ac29766;
+        query: Record<never, never>;
+        headers: Record<never, never>;
+        response: {
+          200: {
+            id: Tc2e180208d;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      ":vatRateId": {
+        patch: {
+          body: {
+            name?: string;
+            code?: string;
+            rateBps?: number;
+            validFrom?: string;
+            validTo?: string | null;
+          };
+          params: T6a2cafc623;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: Tc2e180208d;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":vatRateId": {
+        archive: {
+          post: {
+            body: Record<never, never>;
+            params: T6a2cafc623;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tc2e180208d;
+                archived: Tfddd645dc8;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    };
     "external-preview": {
       get: {
         body: Record<never, never>;
@@ -20453,6 +20623,10 @@ export type WebRoutes = {
                   200: (T12163e1f6a | {
                     incoming: T2b15184b07;
                     outgoing: T2b15184b07;
+                    capped: {
+                      incoming: Tfddd645dc8;
+                      outgoing: Tfddd645dc8;
+                    };
                     incomingByYear: Array<(T2b15184b07 & {
                       year: number;
                     })>;
@@ -33932,6 +34106,10 @@ type T03c381f302 = {
   url: string;
 };
 
+type T04724ee5f4 = {
+  readonly message: string;
+};
+
 type T0487b0001f = {
   text: string;
   id: string;
@@ -35248,8 +35426,6 @@ type T2d6eece830 = {
 };
 
 type T2df478253f = "approved" | "draft" | "ephemeral";
-
-type T2e1b9ec514 = `File validation failed: ${string}` | "Base entity version not found." | "Desktop edit session file type changed while finalizing." | "Desktop edit session is already closed." | "Desktop edit session not found." | "Desktop edit session source file is no longer available." | "Desktop editing moved to another device. This local copy is preserved." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Workspace is not active";
 
 type T2e2021adee = {
   readonly input: Taeaa3ad44e;
@@ -37121,6 +37297,10 @@ type T69ec7580d1 = {
   dependsOnPropertyId: T173eec1550;
 };
 
+type T6a2cafc623 = {
+  vatRateId: Tc2e180208d;
+};
+
 type T6a8b8e209a = {
   readonly value: Te099fcc103;
   readonly issues?: undefined;
@@ -37763,6 +37943,11 @@ type T84b2a2edb5 = {
 };
 
 type T85c0da56d3 = "banking-finance" | "capital-markets" | "commercial" | "competition" | "corporate" | "criminal" | "data-protection" | "dispute-resolution" | "employment" | "energy" | "environmental" | "family" | "immigration" | "insolvency" | "intellectual-property" | "litigation" | "mergers-acquisitions" | "private-client" | "public-administrative" | "real-estate" | "regulatory" | "tax" | "technology" | "white-collar-crime";
+
+type T85d205c577 = {
+  readonly message: string;
+  readonly code?: "desktop_edit_session_taken_over";
+};
 
 type T85f803b281 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "anonymizationBlacklistEntry";
@@ -39335,6 +39520,10 @@ type Tc23cfaebea = {
   country: Tbe0400fa4c;
   textAddress: Tbe0400fa4c;
 } | null;
+
+type Tc2e180208d = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "vatRate";
+};
 
 type Tc38488b75b = {
   code: T00b5a3f4ca;

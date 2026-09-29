@@ -1,15 +1,16 @@
-import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import { detached } from "@/api/lib/analytics/capture";
+import {
+  withDedicatedReservedSession,
+  withLongRunningConnection,
+} from "@/api/db/long-running-connection";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
-import { isRecord } from "@/api/lib/type-guards";
 
 export const BACKFILL_CASE_LAW_PROVISION_STATE_TASK =
   "caseLaw.backfillProvisionState" as const;
@@ -21,6 +22,8 @@ export const BACKFILL_CASE_LAW_PROVISION_STATE_TASK =
  * its own statement budget.
  */
 const RUN_BUDGET_MS = 5 * 60_000;
+const VALIDATE_STATEMENT_TIMEOUT_MS = 25 * 60_000;
+const CONNECTION_LOCK_TIMEOUT_MS = 30_000;
 
 const backfillUnitFailed = failureSink({
   event: "scheduler.case_law_provision_state_backfill_failed",
@@ -59,44 +62,21 @@ export const withReservedSession = async <T>({
   cancelBackend,
   signal,
   work,
-}: ReservedSessionOptions<T>): Promise<T> => {
-  const reserved = await reserve();
-  let cancelling: Promise<unknown> | undefined;
-  let cancelInFlight: (() => void) | undefined;
-  const body = (async () => {
-    const pid = readRows(
-      await reserved.unsafe("SELECT pg_backend_pid() AS pid"),
-    ).find(isRecord)?.["pid"];
-    if (typeof pid !== "number") {
-      return panic("Expected the reserved session's PostgreSQL backend pid");
-    }
-    cancelInFlight = () => {
-      cancelling = cancelBackend(pid);
-      detached(cancelling, "provision-state-backfill.cancel-statement");
-    };
-    signal.addEventListener("abort", cancelInFlight, { once: true });
-    return await work({
-      execute: async (query, params = []) => {
-        await reserved.unsafe(query, [...params]);
-      },
-      query: async (query, params = []) =>
-        readRows(await reserved.unsafe(query, [...params])),
-    });
-  })();
-  // The connection goes back however the body ends; its outcome, value or
-  // rejection, is returned only after that.
-  await Promise.allSettled([body]);
-  if (cancelInFlight !== undefined) {
-    signal.removeEventListener("abort", cancelInFlight);
-  }
-  if (cancelling === undefined) {
-    reserved.release();
-  } else {
-    await Promise.allSettled([cancelling]);
-    await reserved.close();
-  }
-  return await body;
-};
+}: ReservedSessionOptions<T>): Promise<T> =>
+  await withDedicatedReservedSession({
+    reserve,
+    cancelBackend,
+    signal,
+    work: async (reserved, setTransactionBudget) =>
+      await work({
+        setTransactionBudget,
+        execute: async (query, params = []) => {
+          await reserved.unsafe(query, [...params]);
+        },
+        query: async (query, params = []) =>
+          readRows(await reserved.unsafe(query, [...params])),
+      }),
+  });
 
 /**
  * The provision state backfill: scope rows for every decision key, the
@@ -109,40 +89,69 @@ export const withReservedSession = async <T>({
  * profile that gains or loses a scope in a later release is applied by the
  * next run.
  */
-export const backfillCaseLawProvisionState: SchedulerTask = async ({
-  db,
-  logger,
-  signal,
-}) => {
-  signal.throwIfAborted();
-  const run = await withReservedSession({
-    reserve: async () => await db.$client.reserve(),
-    cancelBackend: async (pid) =>
-      await db.execute(sql`SELECT pg_cancel_backend(${pid})`),
-    signal,
-    work: async (connection) =>
-      await runProvisionStateBackfill({
-        connection,
-        deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
-        signal,
-      }),
-  });
-  if (run.isErr()) {
-    // A cancelled statement is the abort itself, not a failure; either way
-    // the unit rolled back and the next run retries it from its cursor.
-    if (signal.aborted) {
-      logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
+export const createCaseLawProvisionStateBackfillTask =
+  ({
+    withConnection = withLongRunningConnection,
+  }: {
+    withConnection?: typeof withLongRunningConnection;
+  } = {}): SchedulerTask =>
+  async ({ logger, signal }) => {
+    signal.throwIfAborted();
+    // The connection helper rejects once the signal aborts, even after the work
+    // has returned, so an abort is settled here rather than left to reject.
+    const settled = await Result.tryPromise({
+      try: async () =>
+        await withConnection(
+          {
+            lockTimeout: CONNECTION_LOCK_TIMEOUT_MS,
+            statementTimeout: VALIDATE_STATEMENT_TIMEOUT_MS,
+            signal,
+          },
+          async ({ connection, setTransactionBudget }) =>
+            await runProvisionStateBackfill({
+              connection: {
+                setTransactionBudget,
+                execute: async (query, params = []) => {
+                  await connection.unsafe(query, [...params]);
+                },
+                query: async (query, params = []) =>
+                  readRows(await connection.unsafe(query, [...params])),
+              },
+              deadline:
+                Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
+              signal,
+            }),
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(settled)) {
+      if (signal.aborted) {
+        logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
+        return;
+      }
+      observeFailure(settled.error, { sink: backfillUnitFailed });
       return;
     }
-    observeFailure(run.error, { sink: backfillUnitFailed });
-    return;
-  }
-  logger.info("scheduler.case_law_provision_state_backfill", {
-    // The step still owed, "complete", "aborted", or "superseded" when a
-    // newer release has applied its admission.
-    "caseLawProvisionStateBackfill.pending":
-      run.value.type === "progress" || run.value.type === "aborted"
-        ? run.value.step
-        : run.value.type,
-  });
-};
+    const run = settled.value;
+    if (run.isErr()) {
+      // A cancelled statement is the abort itself, not a failure; either way
+      // the unit rolled back and the next run retries it from its cursor.
+      if (signal.aborted) {
+        logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
+        return;
+      }
+      observeFailure(run.error, { sink: backfillUnitFailed });
+      return;
+    }
+    logger.info("scheduler.case_law_provision_state_backfill", {
+      // The step still owed, "complete", "aborted", or "superseded" when a
+      // newer release has applied its admission.
+      "caseLawProvisionStateBackfill.pending":
+        run.value.type === "progress" || run.value.type === "aborted"
+          ? run.value.step
+          : run.value.type,
+    });
+  };
+
+export const backfillCaseLawProvisionState: SchedulerTask =
+  createCaseLawProvisionStateBackfillTask();

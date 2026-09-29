@@ -15,7 +15,7 @@ export const OnboardingProgress = ({
   const labels = [
     t("onboarding.stepOrganization"),
     t("onboarding.stepJurisdiction"),
-    t("onboarding.stepCatalogue"),
+    t("common.catalogue"),
     t("onboarding.stepAi"),
     t("onboarding.stepTeam"),
     t("onboarding.stepApps"),

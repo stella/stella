@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
@@ -11,6 +11,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AUDIT_ACTION,
@@ -39,11 +40,16 @@ import {
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
 } from "@/api/lib/files/file-object-ids";
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
+import {
+  organizationFileUsageResponseStatus,
+  writeOrganizationFile,
+} from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -117,14 +123,27 @@ export const finalizeDesktopEditSessionHandler = async ({
   let shouldRollbackUploadedKeys = true;
 
   const deleteCheckpointKey = async (checkpointKey: string) => {
-    await getS3()
-      .delete(checkpointKey)
-      .catch((error: unknown) => {
-        captureError(error, {
-          checkpointKey,
-          sessionId,
-        });
+    const result = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          if (env.FEATURE_FILE_USAGE_LIMITS) {
+            return await deleteOrganizationFileWithSignal(
+              checkpointKey,
+              AbortSignal.timeout(10_000),
+            );
+          }
+          await getS3().delete(checkpointKey);
+          return Result.ok(undefined);
+        },
+        catch: (error: unknown) => error,
+      }),
+    );
+    if (Result.isError(result)) {
+      captureError(result.error, {
+        checkpointKey,
+        sessionId,
       });
+    }
   };
 
   const deleteCheckpointKeyIfPresent = async (checkpointKey: string | null) => {
@@ -135,14 +154,27 @@ export const finalizeDesktopEditSessionHandler = async ({
   };
 
   const deleteUploadedKey = async (uploadedKey: string) => {
-    await getS3()
-      .delete(uploadedKey)
-      .catch((error: unknown) => {
-        captureError(error, {
-          rollbackKey: uploadedKey,
-          sessionId,
-        });
+    const result = Result.flatten(
+      await Result.tryPromise({
+        try: async () => {
+          if (env.FEATURE_FILE_USAGE_LIMITS) {
+            return await deleteOrganizationFileWithSignal(
+              uploadedKey,
+              AbortSignal.timeout(10_000),
+            );
+          }
+          await getS3().delete(uploadedKey);
+          return Result.ok(undefined);
+        },
+        catch: (error: unknown) => error,
+      }),
+    );
+    if (Result.isError(result)) {
+      captureError(result.error, {
+        rollbackKey: uploadedKey,
+        sessionId,
       });
+    }
   };
 
   const recordAuditEvent = createAuditRecorder({
@@ -477,11 +509,35 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
       uploadedKeys.push(sourceKey);
 
-      await writeS3ObjectWithRetry({
-        contentType: canonicalMimeType,
-        data: storedBytes,
-        key: sourceKey,
-      });
+      if (!env.FEATURE_FILE_USAGE_LIMITS) {
+        await writeS3ObjectWithRetry({
+          contentType: canonicalMimeType,
+          data: storedBytes,
+          key: sourceKey,
+        });
+      } else {
+        const fileWrite = await writeOrganizationFile({
+          organizationId: authorizedSession.value.organizationId,
+          objectKey: sourceKey,
+          sizeBytes: storedSizeBytes,
+          write: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: canonicalMimeType,
+              data: storedBytes,
+              key: sourceKey,
+            }),
+        });
+        if (Result.isError(fileWrite)) {
+          return {
+            error: {
+              message: fileWrite.error.message,
+              statusCode: organizationFileUsageResponseStatus(
+                fileWrite.error.reason,
+              ),
+            },
+          } as const;
+        }
+      }
 
       await insertEntityVersion(tx, {
         entityId: editSession.entityId,

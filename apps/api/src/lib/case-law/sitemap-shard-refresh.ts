@@ -11,6 +11,10 @@ import {
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
+import {
+  setSharedLockTimeout,
+  setSharedStatementTimeout,
+} from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
@@ -88,11 +92,7 @@ type RefreshTransaction = Parameters<
   Parameters<RefreshDb["transaction"]>[0]
 >[0];
 
-/**
- * Both budgets, set LOCAL so they end with the transaction. Written as raw
- * statements because `SET LOCAL` takes a literal, not a bind parameter; the
- * values are integers computed here.
- */
+/** Both budgets end with the transaction. */
 const setTransactionBudget = async (
   tx: RefreshTransaction,
   { lockTimeoutMs, statementTimeoutMs }: SitemapRefreshBudget,
@@ -103,10 +103,8 @@ const setTransactionBudget = async (
   ) {
     return panic("Sitemap refresh budgets must be integer milliseconds");
   }
-  await tx.execute(sql.raw(`SET LOCAL lock_timeout = '${lockTimeoutMs}ms'`));
-  await tx.execute(
-    sql.raw(`SET LOCAL statement_timeout = '${statementTimeoutMs}ms'`),
-  );
+  await setSharedLockTimeout(tx, lockTimeoutMs);
+  await setSharedStatementTimeout(tx, statementTimeoutMs);
 };
 
 /**

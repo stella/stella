@@ -1979,6 +1979,13 @@ jobs:
           bun test scripts/db-await-in-loop.test.ts
           bun run check:db-await-in-loop
 
+      - name: API timeout mutation guard
+        # Shared-pool timeout changes must go through the budget-owning setter.
+        # Dedicated work and online migrations have their own connection owner.
+        run: |
+          bun test scripts/check-api-timeout-mutations.test.ts
+          bun run check:api-timeout-mutations
+
   collab-redis:
     needs: ci-plan
     if: >-

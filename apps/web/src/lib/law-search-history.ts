@@ -5,6 +5,10 @@ import { createStore } from "zustand/vanilla";
 
 import { Temporal } from "@stll/time";
 
+import {
+  onStorageOwnerChange,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 const STORAGE_KEY = "law_search_history";
@@ -32,8 +36,10 @@ type HistoryState = {
 
 /**
  * What this browser searched for lately, newest first. Local to the
- * browser: the home is public, so there is no account to hang it on, and a
- * signed-in reader's history stays theirs.
+ * browser: the home is public, so there is no account to hang it on. It is
+ * kept per owner: a signed-in reader's history is theirs alone, and a
+ * visitor's (which is also what is read until the session is known) is
+ * dropped once someone signs in.
  */
 const historyStore = createStore<HistoryState>(() => ({
   entries: EMPTY,
@@ -50,7 +56,10 @@ const hydrate = (): void => {
   }
   historyStore.setState({
     entries:
-      readStoredJson(localStorage.getItem(STORAGE_KEY), HistorySchema) ?? EMPTY,
+      readStoredJson(
+        localStorage.getItem(userStorageKey(STORAGE_KEY)),
+        HistorySchema,
+      ) ?? EMPTY,
     hydrated: true,
   });
 };
@@ -70,9 +79,17 @@ export const recordLawSearch = (query: string): void => {
       .getState()
       .entries.filter((entry) => entry.query !== trimmed),
   ].slice(0, HISTORY_LIMIT);
-  writeStoredJson(localStorage, STORAGE_KEY, next);
+  writeStoredJson(localStorage, userStorageKey(STORAGE_KEY), next);
   historyStore.setState({ entries: next });
 };
+
+// A new owner has their own history: read it afresh.
+onStorageOwnerChange(() => {
+  if (historyStore.getState().hydrated) {
+    historyStore.setState({ entries: EMPTY, hydrated: false });
+    hydrate();
+  }
+});
 
 const subscribe = (onChange: () => void) => {
   const unsubscribe = historyStore.subscribe(onChange);

@@ -6,6 +6,9 @@
 
 import { gt, gte, lt, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { pgTable, date as pgDate, check } from "drizzle-orm/pg-core";
+
+import { vatRates as importedVatRates } from "@/api/db/schema";
 
 declare const column: SQL;
 declare const asOf: SQL;
@@ -126,4 +129,24 @@ export const __legislationWindowFixture = {
   _viaConst,
   _viaDestructuring,
   _viaParameter,
+};
+
+// Proven unrelated table imports and their stable aliases remain valid.
+const vatAlias = importedVatRates;
+const _vatComparison = lte(vatAlias.validFrom, date);
+const _vatSql = sql`${importedVatRates.validTo} > ${date}`;
+const _billingTable = pgTable(
+  "vat_fixture",
+  {
+    validFrom: pgDate("valid_from"),
+    validTo: pgDate("valid_to"),
+  },
+  (table) => [
+    check("vat_fixture_window", sql`${table.validTo} > ${table.validFrom}`),
+  ],
+);
+export const __unrelatedValidityFixture = {
+  _vatComparison,
+  _vatSql,
+  _billingTable,
 };

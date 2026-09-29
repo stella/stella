@@ -96,14 +96,21 @@ export const DecisionCitations = ({
 
   const incomingTotal = totalCitations(summary.incoming);
   const outgoingTotal = totalCitations(summary.outgoing);
-  if (incomingTotal === 0 && outgoingTotal === 0 && !isError) {
+  if (
+    incomingTotal === 0 &&
+    outgoingTotal === 0 &&
+    !summary.capped.incoming &&
+    !summary.capped.outgoing &&
+    !isError
+  ) {
     return null;
   }
 
   return (
     <>
-      {incomingTotal > 0 && (
+      {(incomingTotal > 0 || summary.capped.incoming) && (
         <CitationDirectionSection
+          capped={summary.capped.incoming}
           counts={summary.incoming}
           decision={decision}
           decisionId={decisionId}
@@ -112,8 +119,9 @@ export const DecisionCitations = ({
           key={`${decisionId}-incoming`}
         />
       )}
-      {outgoingTotal > 0 && (
+      {(outgoingTotal > 0 || summary.capped.outgoing) && (
         <CitationDirectionSection
+          capped={summary.capped.outgoing}
           counts={summary.outgoing}
           decision={decision}
           decisionId={decisionId}
@@ -126,15 +134,18 @@ export const DecisionCitations = ({
 };
 
 const CitationDirectionSection = ({
+  capped,
   counts,
   decision,
   decisionId,
   direction,
 }: DecisionCitationsProps & {
+  capped: boolean;
   counts: CitationTreatmentCounts;
   direction: CitationDirection;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   // Collapsed on arrival: the decision opens beside a chat or a results list
   // to be read, and the header already carries the count and the treatments.
   const [open, setOpen] = useState(false);
@@ -152,12 +163,20 @@ const CitationDirectionSection = ({
         />
         <span>{t(DIRECTION_TITLE[direction])}</span>
         <span className="text-muted-foreground font-normal">
-          {t("caseLaw.citation.decisionCount", {
-            count: totalCitations(counts),
-          })}
+          {capped
+            ? `${format.number(totalCitations(counts))}+`
+            : t("caseLaw.citation.decisionCount", {
+                count: totalCitations(counts),
+              })}
         </span>
       </button>
-      <TreatmentRollup counts={counts} />
+      {capped ? (
+        <p className="text-muted-foreground px-3 ps-8 pb-2 text-xs">
+          {t("caseLaw.citation.partialSummary")}
+        </p>
+      ) : (
+        <TreatmentRollup counts={counts} />
+      )}
       {open && (
         <CitationList
           decision={decision}

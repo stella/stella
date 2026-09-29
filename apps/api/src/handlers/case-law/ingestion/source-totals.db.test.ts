@@ -12,7 +12,10 @@ import {
   SOURCE_TOTAL_ORIGIN,
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
+import { markRlsDatabase } from "@/api/db/scoped";
+import type { TransactionOf } from "@/api/db/scoped";
 import {
+  countSourceThroughIngestionRole,
   readSourceReportedTotals,
   refreshSourceStoredTotal,
   setSourceReportedTotal,
@@ -21,7 +24,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The trio is nullable in the schema and only this module keeps it whole, so
 // what is asserted here is the writer's invariant rather than the columns:
@@ -319,10 +321,26 @@ const readStoredPair = async (sourceId: SafeId<"caseLawSource">) =>
       .limit(1)
   ).at(0);
 
+const countInTest = async (sourceId: SafeId<"caseLawSource">) =>
+  (
+    await db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId))
+  ).at(0)?.total ?? 0;
+
+const refreshForTest = async (
+  options: Parameters<typeof refreshSourceStoredTotal>[0],
+) =>
+  await refreshSourceStoredTotal({
+    ...options,
+    countSource: options.countSource ?? countInTest,
+  });
+
 test("the first cycle counts the source and stamps the pair", async () => {
   const sourceId = await seedCountedSource(3);
 
-  expect(await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW })).toBe(
+  expect(await refreshForTest({ scopedDb, sourceId, now: NOW })).toBe(
     "refreshed",
   );
   expect(await readStoredPair(sourceId)).toEqual({
@@ -333,7 +351,7 @@ test("the first cycle counts the source and stamps the pair", async () => {
 
 test("a source counted within the interval is not recounted", async () => {
   const sourceId = await seedCountedSource(2);
-  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  await refreshForTest({ scopedDb, sourceId, now: NOW });
 
   // The corpus grows, but the interval has not elapsed.
   await db.insert(caseLawDecisions).values({
@@ -348,7 +366,7 @@ test("a source counted within the interval is not recounted", async () => {
   );
 
   expect(
-    await refreshSourceStoredTotal({ scopedDb, sourceId, now: withinInterval }),
+    await refreshForTest({ scopedDb, sourceId, now: withinInterval }),
   ).toBe("fresh");
   // Proven by the figure, not by the return value: the old count stands.
   expect(await readStoredPair(sourceId)).toEqual({
@@ -359,7 +377,7 @@ test("a source counted within the interval is not recounted", async () => {
 
 test("the interval's own boundary recounts", async () => {
   const sourceId = await seedCountedSource(1);
-  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  await refreshForTest({ scopedDb, sourceId, now: NOW });
   await db.insert(caseLawDecisions).values({
     caseNumber: `${sourceId}-second`,
     country: "CZE",
@@ -371,9 +389,9 @@ test("the interval's own boundary recounts", async () => {
     NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
   );
 
-  expect(
-    await refreshSourceStoredTotal({ scopedDb, sourceId, now: atBoundary }),
-  ).toBe("refreshed");
+  expect(await refreshForTest({ scopedDb, sourceId, now: atBoundary })).toBe(
+    "refreshed",
+  );
   expect(await readStoredPair(sourceId)).toEqual({
     storedTotal: 2,
     storedTotalAsOf: atBoundary,
@@ -382,52 +400,34 @@ test("the interval's own boundary recounts", async () => {
 
 test("replaying a refresh is a fixed point", async () => {
   const sourceId = await seedCountedSource(4);
-  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  await refreshForTest({ scopedDb, sourceId, now: NOW });
   const first = await readStoredPair(sourceId);
 
-  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  await refreshForTest({ scopedDb, sourceId, now: NOW });
 
   expect(await readStoredPair(sourceId)).toEqual(first);
 });
 
 test("a count that cannot finish leaves the previous figure standing", async () => {
   const sourceId = await seedCountedSource(2);
-  await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW });
+  await refreshForTest({ scopedDb, sourceId, now: NOW });
   const past = new Date(
     NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS * 2,
   );
 
-  // A handle whose count throws, standing in for the statement timeout: the
-  // caller must see "unavailable" rather than an exception, and the stored
-  // pair must be exactly what the successful cycle wrote.
-  const failing: ScopedDb = async (callback) =>
-    await callback(
-      // Only the two members below are reached before the throw, which is
-      // what the refresh has to survive; `asTestRaw` owns the cast.
-      asTestRaw<Transaction>({
-        select: () => ({
-          from: () => ({
-            where: () => ({
-              limit: async () => [{ asOf: NOW }],
-            }),
-          }),
-        }),
-        execute: async () => {
+  const warn = spyOn(logger, "warn");
+  try {
+    expect(
+      await refreshForTest({
+        scopedDb,
+        sourceId,
+        now: past,
+        countSource: async () => {
           throw Object.assign(
             new Error("canceling statement due to statement timeout"),
             { code: "57014" },
           );
         },
-      }),
-    );
-
-  const warn = spyOn(logger, "warn");
-  try {
-    expect(
-      await refreshSourceStoredTotal({
-        scopedDb: failing,
-        sourceId,
-        now: past,
       }),
     ).toBe("unavailable");
     // The warning is the only trace the failure leaves, so it has to say
@@ -467,10 +467,20 @@ test("the ingestion role counts a source and writes the stored pair", async () =
   const countedAt = new Date("2026-09-22T08:00:00.000Z");
 
   expect(
-    await refreshSourceStoredTotal({
+    await refreshForTest({
       scopedDb: ingestionScopedDb,
       sourceId,
       now: countedAt,
+      countSource: async (id) =>
+        await ingestionScopedDb(
+          async (tx) =>
+            (
+              await tx
+                .select({ total: sql<number>`count(*)::int` })
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.sourceId, id))
+            ).at(0)?.total ?? 0,
+        ),
     }),
   ).toBe("refreshed");
   // A refused UPDATE would surface as "unavailable", and one that matched no
@@ -479,6 +489,29 @@ test("the ingestion role counts a source and writes the stored pair", async () =
     storedTotal: 3,
     storedTotalAsOf: countedAt,
   });
+});
+
+test("the exact count bridge reads under the ingestion role", async () => {
+  const sourceId = await seedCountedSource(3);
+  const observedRoles: string[] = [];
+  const dedicatedDb = markRlsDatabase({
+    transaction: async <T>(
+      fn: (tx: TransactionOf<typeof db>) => Promise<T>,
+    ): Promise<T> =>
+      await db.transaction(async (tx) => {
+        const value = await fn(tx);
+        const role = (
+          await tx.execute(sql`SELECT current_user AS role`)
+        ).rows.at(0)?.["role"];
+        if (typeof role === "string") {
+          observedRoles.push(role);
+        }
+        return value;
+      }),
+  });
+
+  expect(await countSourceThroughIngestionRole(dedicatedDb, sourceId)).toBe(3);
+  expect(observedRoles).toEqual(["stella_ingestion"]);
 });
 
 test("the ingestion role writes the reported trio", async () => {
@@ -536,16 +569,37 @@ test("a worker holding a stale as-of loses to the one that already wrote", async
     NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS * 3,
   );
   // The winner stamps a fresh as-of first.
-  await refreshSourceStoredTotal({ scopedDb, sourceId, now: fresher });
+  await refreshForTest({ scopedDb, sourceId, now: fresher });
 
   // The loser started its cycle earlier and carries an older `now`. Its
   // compare-and-set matches no row, so it writes nothing rather than moving
   // the figure backwards.
-  expect(await refreshSourceStoredTotal({ scopedDb, sourceId, now: NOW })).toBe(
-    "fresh",
-  );
+  expect(await refreshForTest({ scopedDb, sourceId, now: NOW })).toBe("fresh");
   expect(await readStoredPair(sourceId)).toEqual({
     storedTotal: 5,
     storedTotalAsOf: fresher,
+  });
+});
+
+test("a concurrent refresh cannot replace a count observed before its write", async () => {
+  const sourceId = await seedCountedSource(2);
+  const later = new Date(
+    NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  );
+
+  const result = await refreshForTest({
+    scopedDb,
+    sourceId,
+    now: NOW,
+    countSource: async (id) => {
+      await refreshForTest({ scopedDb, sourceId: id, now: later });
+      return 1;
+    },
+  });
+
+  expect(result).toBe("fresh");
+  expect(await readStoredPair(sourceId)).toEqual({
+    storedTotal: 2,
+    storedTotalAsOf: later,
   });
 });

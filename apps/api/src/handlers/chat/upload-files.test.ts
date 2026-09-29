@@ -6,7 +6,9 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
@@ -19,6 +21,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import type { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
   DOCX_MIME_TYPE,
@@ -598,4 +601,63 @@ describe("chat attachment hydration", () => {
     expect(storedName).toBe(sanitizeFilename(hostileName));
     expect(storedName).not.toBe(hostileName);
   });
+
+  test.each([
+    ["capacity_exceeded", 413],
+    ["key_conflict", 409],
+  ] as const)(
+    "keeps the %s ledger refusal status instead of a server error",
+    async (reservationStatus, expectedStatus) => {
+      const organizationId = toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111115",
+      );
+      const testTx = asTestRaw<Transaction>({
+        query: {
+          chatThreads: { findFirst: async () => ({ organizationId }) },
+        },
+      });
+      const safeDb: SafeDb = async (callback) =>
+        await Result.tryPromise(async () => await callback(testTx));
+      // The ledger answers the reservation itself, so no object is written.
+      const organizationFileUsageDb = asTestRaw<
+        NonNullable<Parameters<typeof writeOrganizationFile>[0]["db"]>
+      >({ transaction: async () => ({ status: reservationStatus }) });
+      const settleIntents = mock(async () => Result.ok(undefined));
+      const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+      const priorWorkerFlag =
+        envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+      env.FEATURE_FILE_USAGE_LIMITS = true;
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = true;
+      try {
+        const result = await uploadUserFile({
+          dependencies: {
+            ...uploadDependencies,
+            organizationFileUsageDb,
+            settleObjectCleanupIntentsAfterWriter: settleIntents,
+          },
+          file: {
+            bytes: new TextEncoder().encode("confidential text"),
+            fileName: "notes.txt",
+            mimeType: TEXT_PLAIN_MIME_TYPE,
+          },
+          recordAuditEvent: mock(async () => undefined),
+          safeDb,
+          threadId: toSafeId<"chatThread">(
+            "11111111-1111-4111-8111-111111111112",
+          ),
+          userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+          workspaceId,
+        });
+
+        if (Result.isOk(result)) {
+          panic("Expected the ledger to refuse the chat attachment");
+        }
+        expect(result.error).toMatchObject({ status: expectedStatus });
+        expect(requestKeys("PUT")).toHaveLength(0);
+      } finally {
+        env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+        envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+      }
+    },
+  );
 });

@@ -5,7 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { fileComparisonUploads } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -14,8 +14,15 @@ export const FILE_COMPARISON_SWEEP_LIMIT = 50;
 
 const FILE_COMPARISON_DELETE_TIMEOUT_MS = 30 * 1000;
 
+type DeleteObject = (
+  key: string,
+  signal: AbortSignal,
+) => Promise<
+  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+>;
+
 type SweepOptions = {
-  deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteObject?: DeleteObject;
   limit?: number;
   safeDb: SafeDb;
   signal?: AbortSignal | undefined;
@@ -37,7 +44,7 @@ type ExpiredRow = {
  * several ticks rather than in one long sweep.
  */
 export const sweepExpiredFileComparisonUploads = async ({
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteOrganizationFileWithSignal,
   limit = FILE_COMPARISON_SWEEP_LIMIT,
   safeDb,
   signal,
@@ -79,9 +86,12 @@ export const sweepExpiredFileComparisonUploads = async ({
           ),
         catch: (cause) => cause,
       });
-      if (Result.isError(deleted)) {
+      const deletion = Result.flatten(
+        deleted.map((value) => value ?? Result.ok(undefined)),
+      );
+      if (Result.isError(deletion)) {
         // The row stays, so the next tick retries this key.
-        captureError(deleted.error, {
+        captureError(deletion.error, {
           fileComparisonUploadId: row.id,
           objectKey: key,
           stage: "file-comparison-sweep",

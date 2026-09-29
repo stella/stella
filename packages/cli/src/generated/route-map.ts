@@ -52196,6 +52196,341 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
+        "vat-rates": {
+          kind: "route",
+          children: {
+            archive: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "vat-rates", "archive"],
+                capabilityId: "vat-rates.archive",
+                description:
+                  "Archive a VAT rate period in the active organization.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--vat-rate-id",
+                    prop: "vatRateId",
+                    required: true,
+                    part: "params",
+                    partPath: "vatRateId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["vatRateId"],
+                      properties: {
+                        vatRateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            create: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "vat-rates", "create"],
+                capabilityId: "vat-rates.create",
+                description:
+                  "Create a VAT rate validity period in the active organization. validFrom is inclusive; validTo is exclusive.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--code",
+                    prop: "code",
+                    required: true,
+                    part: "body",
+                    partPath: "code",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: true,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 2147483647,
+                    repeatable: false,
+                    flag: "--rate-bps",
+                    prop: "rateBps",
+                    required: true,
+                    part: "body",
+                    partPath: "rateBps",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--valid-from",
+                    prop: "validFrom",
+                    required: true,
+                    part: "body",
+                    partPath: "validFrom",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--valid-to",
+                    prop: "validTo",
+                    required: false,
+                    part: "body",
+                    partPath: "validTo",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["code", "name", "rateBps", "validFrom"],
+                      properties: {
+                        code: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        rateBps: {
+                          minimum: 0,
+                          maximum: 2147483647,
+                          type: "integer",
+                        },
+                        validFrom: {
+                          format: "date",
+                          type: "string",
+                        },
+                        validTo: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            list: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "vat-rates", "list"],
+                capabilityId: "vat-rates.list",
+                description:
+                  "List active VAT rates in the active organization.",
+                access: "read",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--on",
+                    prop: "on",
+                    required: false,
+                    part: "query",
+                    partPath: "on",
+                  },
+                ],
+                inputOnly: [],
+                paginated: true,
+                paginationPart: "query",
+                itemsKey: "items",
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        on: {
+                          format: "date",
+                          type: "string",
+                        },
+                        limit: {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                        cursor: {
+                          maxLength: 512,
+                          description:
+                            "Opaque cursor from a previous page to fetch the next page",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            update: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "vat-rates", "update"],
+                capabilityId: "vat-rates.update",
+                description:
+                  "Update an active VAT rate validity period without overlapping another period for its code.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--vat-rate-id",
+                    prop: "vatRateId",
+                    required: true,
+                    part: "params",
+                    partPath: "vatRateId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--code",
+                    prop: "code",
+                    required: false,
+                    part: "body",
+                    partPath: "code",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--name",
+                    prop: "name",
+                    required: false,
+                    part: "body",
+                    partPath: "name",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 2147483647,
+                    repeatable: false,
+                    flag: "--rate-bps",
+                    prop: "rateBps",
+                    required: false,
+                    part: "body",
+                    partPath: "rateBps",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--valid-from",
+                    prop: "validFrom",
+                    required: false,
+                    part: "body",
+                    partPath: "validFrom",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--valid-to",
+                    prop: "validTo",
+                    required: false,
+                    part: "body",
+                    partPath: "validTo",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        code: {
+                          minLength: 1,
+                          maxLength: 64,
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 128,
+                          type: "string",
+                        },
+                        rateBps: {
+                          minimum: 0,
+                          maximum: 2147483647,
+                          type: "integer",
+                        },
+                        validFrom: {
+                          format: "date",
+                          type: "string",
+                        },
+                        validTo: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["vatRateId"],
+                      properties: {
+                        vatRateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         "view-templates": {
           kind: "route",
           children: {

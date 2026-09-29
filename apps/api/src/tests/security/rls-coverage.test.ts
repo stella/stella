@@ -148,7 +148,11 @@ describe("policy coverage", () => {
     "legislation_sources",
     "legislation_index_jobs",
   ]);
-  const INGESTION_MUTABLE_CASE_LAW_TABLES = GLOBAL_CASE_LAW_TABLES.filter(
+  const INGESTION_CASE_LAW_TABLES = [
+    ...GLOBAL_CASE_LAW_TABLES,
+    "case_law_search_backfill_failures",
+  ];
+  const INGESTION_MUTABLE_CASE_LAW_TABLES = INGESTION_CASE_LAW_TABLES.filter(
     (table) => !CONFIG_OR_APPEND_ONLY.has(table),
   );
 
@@ -793,7 +797,7 @@ describe("policy coverage", () => {
     const tablePrivileges = await fetchStellaIngestionTablePrivileges(testDb);
     const columnPrivileges = await fetchStellaIngestionColumnPrivileges(testDb);
 
-    for (const table of GLOBAL_CASE_LAW_TABLES) {
+    for (const table of INGESTION_CASE_LAW_TABLES) {
       const ingestionPolicy = policies.find(
         (p) =>
           p.table_name === table &&

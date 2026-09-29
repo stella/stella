@@ -18,6 +18,8 @@ import {
   createCaseLawLanguageAlternateLinks,
 } from "@/lib/case-law-language-alternates";
 import { ClientOperationError } from "@/lib/errors/client";
+import { isPublicKnowledgeCrawlAllowed } from "@/lib/knowledge/public-knowledge-launch";
+import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import {
   isPublicLawCrawlAllowed,
   isPublicLawSitemapEnabled,
@@ -372,10 +374,15 @@ ${serializedEntries}
 };
 
 type RobotsTxtOptions = {
+  publicKnowledgeCrawlAllowed?: boolean;
   publicLawCrawlAllowed?: boolean;
   publicToolsCrawlAllowed?: boolean;
   seoIndexable?: boolean;
 };
+
+// The published template catalogue's pages; the rest of Knowledge is either
+// an organization's own or a page that only points to them.
+const KNOWLEDGE_TEMPLATE_CATALOGUE_PATH = "/knowledge/templates/catalogue";
 
 // The ONLY crawlable path prefixes on the app host. The indexable robots.txt
 // allow-lists exactly these (boundary-anchored, see below) and then
@@ -391,6 +398,7 @@ export const PUBLIC_CRAWL_PATH_PREFIXES = [
 ] as const;
 
 export const createRobotsTxt = ({
+  publicKnowledgeCrawlAllowed = isPublicKnowledgeCrawlAllowed(),
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
   publicToolsCrawlAllowed = isPublicToolsCrawlAllowed(),
   seoIndexable = env.VITE_SEO_INDEXABLE,
@@ -426,7 +434,10 @@ Disallow: /
     ? [...PUBLIC_CRAWL_PATH_PREFIXES]
     : [];
   if (publicToolsCrawlAllowed) {
-    crawlPrefixes.push("/tools");
+    crawlPrefixes.push(publicToolsBasePath());
+  }
+  if (publicKnowledgeCrawlAllowed) {
+    crawlPrefixes.push(KNOWLEDGE_TEMPLATE_CATALOGUE_PATH);
   }
   const allowLines = crawlPrefixes.flatMap((prefix) =>
     prefix.includes(".")

@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -22,6 +21,7 @@ import { cn } from "@stll/ui/utils";
 
 import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 export type StyleSelection =
@@ -35,8 +35,6 @@ type StyleSetPickerDialogProps = {
   title: string;
   onCreate: (name: string, style: StyleSelection) => Promise<boolean>;
 };
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 export const StyleSetPickerDialog = ({
   open,
@@ -64,9 +62,7 @@ const StyleSetPickerDialogBody = ({
   title,
 }: Omit<StyleSetPickerDialogProps, "open">) => {
   const t = useTranslations();
-  const organizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const organizationId = useAuthenticatedUser().activeOrganizationId;
   const { data, isLoading, isError } = useQuery(
     styleSetsOptions(organizationId),
   );

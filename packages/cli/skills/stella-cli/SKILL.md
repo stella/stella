@@ -163,13 +163,14 @@ requires (request it at `stella auth login --scopes`).
 Required: `--flag — description (type)`. Optional: one `optional: --a,
 --b (enum1|enum2)` line, names only (`--help` has full descriptions).
 Global flags (output/cursor/limit/all/yes/input; see Conventions above)
-are omitted here.
+are omitted here. Input union keys are required unless marked `?`.
 
 - `stella annotation create`
   - `--target-type` — decision (case law) or statute (legislation). (enum: decision, statute)
   - `--target-id` — The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
   - optional: --visibility (private|shared)
   - via `--input` only: mark, passages
+  - mark: kind="highlight": none; kind="comment": body:string. Example: `--input '{"mark":{"kind":"highlight"}}'`
 - `stella annotation delete`
   - `--annotation-id` — The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
 - `stella annotation list`
@@ -178,6 +179,7 @@ are omitted here.
 - `stella annotation update`
   - `--annotation-id` — The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
   - via `--input` only: change
+  - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
   - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
@@ -210,6 +212,7 @@ are omitted here.
 - `stella contact check-counterparty`
   - `--check` — Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability)
   - via `--input` only: subject
+  - subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, birth_date:string. Example: `--input '{"subject":{"type":"company-id","company_id":"x"}}'`
 - `stella contact delete`
   - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
@@ -223,12 +226,14 @@ are omitted here.
 - `stella contact save`
   - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
   - via `--input` only: date_of_birth
+  - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1000}}'`
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--output-mode` — preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source. (enum: preview, download, version)
   - optional: --mode (strict|best-effort), --granularity (word|character)
   - via `--input` only: source
+  - source: type="versions": document_id:string, base_version_id:string, target_version_ids:string[]; type="previous": document_id:string, target_version_id:string; type="uploads": base_upload_id:string, target_upload_id:string. Example: `--input '{"source":{"type":"versions","document_id":"00000000-0000-4000-8000-000000000000","base_version_id":"00000000-0000-4000-8000-000000000000","target_version_ids":["00000000-0000-4000-8000-000000000000"]}}'`
 - `stella document comparison prepare`
   - `--base.name` — File name to show the user, including the .docx suffix. (string)
   - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
@@ -249,6 +254,7 @@ are omitted here.
   - `--entity-id` — Document entity ID whose cell to set (string)
   - `--property-id` — Property ID, as returned by list_properties (string)
   - via `--input` only: content
+  - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`
   - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
@@ -314,6 +320,7 @@ are omitted here.
 - `stella playbook save`
   - optional: --playbook-id, --expected-updated-at, --name, --description, --scope.document-type-key, --scope.perspective (buyer|seller|neutral), --remove-source-ids
   - via `--input` only: positions
+  - positions[]: mode="extract": issue:string, ask:{question}; mode="graded": issue:string, severity:"blocker" | "high" | "medium" | "low", tiers:object, negotiation?:object. Example: `--input '{"positions":[{"mode":"extract","issue":"x","ask":{"question":"x"}}]}'`
 - `stella rate resolve`
   - `--matter-id` — Matter ID to resolve the rate in. (string)
   - `--user-id` — User ID to resolve the rate for (string)
@@ -385,7 +392,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 381
+Beyond the curated commands above, the CLI generates 385
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;
@@ -408,7 +415,7 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.

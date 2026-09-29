@@ -6,6 +6,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+} from "@/api/lib/files/organization-file-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type CreateBlankDocumentOptions = {
@@ -55,11 +59,15 @@ export const createBlankDocument = async ({
 
 const toHandlerError = (
   error:
+    | OrganizationFileUsageError
     | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError"; message: string }
     | { _tag: "MissingFilePropertyError" },
 ): HandlerError => {
+  if (error instanceof OrganizationFileUsageError) {
+    return organizationFileUsageHandlerError(error);
+  }
   switch (error._tag) {
     case "DocumentTooLargeError":
       return new HandlerError({

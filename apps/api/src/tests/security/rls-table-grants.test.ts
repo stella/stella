@@ -52,6 +52,10 @@ const BOOTSTRAP_COVERED_RLS_MIGRATIONS = new Set([
 // tables and derived preview passages are maintained by privileged background
 // writers, so the request role correctly receives SELECT only, not full DML.
 const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
+  // File usage is written through the owner transaction; scoped requests may
+  // read only their organization's counter and object records.
+  "organization_file_usage",
+  "organization_file_objects",
   // History written only by the record_agent_skill_revision trigger.
   "agent_skill_revisions",
   "search_document_preview_passages",
@@ -154,6 +158,8 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Search backfill retries are ingestion control state, not request data.
+  "case_law_search_backfill_failures",
   "agent_registration",
   "agent_trusted_issuer",
   "agent_delegation",

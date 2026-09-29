@@ -6,17 +6,28 @@ import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+} from "@/api/lib/files/organization-file-usage";
+import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
   storeFolioCollabSnapshot,
 } from "@/api/lib/folio-collab-rooms";
 import { resolveFolioCollabServiceRoom } from "@/api/lib/folio-collab-service-room";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   permissiveBodySchema,
   validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
 
 import { authorizeFolioCollabService } from "./service-credentials";
+
+const SNAPSHOT_STORE_FAILURE_SINK = failureSink({
+  event: "folio_collab.snapshot_store",
+  expected: [],
+});
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -69,13 +80,36 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
       );
     }
 
-    const stored = await storeFolioCollabSnapshot({
+    const storedResult = await storeFolioCollabSnapshot({
       authority: { type: "collab-service" },
       expectedGeneration,
       expectedSnapshotRevision,
       snapshotBytes,
       value,
     });
+
+    if (Result.isError(storedResult)) {
+      if (storedResult.error instanceof OrganizationFileUsageError) {
+        return Result.err(
+          organizationFileUsageHandlerError(storedResult.error),
+        );
+      }
+      observeFailure(storedResult.error, {
+        sink: SNAPSHOT_STORE_FAILURE_SINK,
+        ctx: {
+          organizationId: value.organizationId,
+          workspaceId: value.workspaceId,
+        },
+      });
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: storedResult.error.message,
+          cause: storedResult.error,
+        }),
+      );
+    }
+    const stored = storedResult.value;
 
     if (stored.status === "room-missing") {
       return Result.err(

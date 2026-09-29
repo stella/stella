@@ -11,6 +11,7 @@ import { featureFlagSchema } from "@/api/env-base-schema";
  */
 export const envDocumentProcessingWorkerServerSchema = {
   FEATURE_INBOX_DOCUMENT_SCOUTS: featureFlagSchema,
+  FEATURE_FILE_USAGE_LIMITS: featureFlagSchema,
   DOCUMENT_OCR_MODEL_DIR: v.optional(v.string()),
   /**
    * Batch mode: exit once the processing queue has been empty this many

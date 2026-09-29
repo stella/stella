@@ -24,7 +24,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveLocalFtsConfig } from "@/api/lib/case-law/local-case-law-config";
 import { errorSystemFields } from "@/api/lib/errors/utils";
-import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import {
+  setCorpusBackfillStatementTimeout,
+  withDedicatedCorpusBackfillDb,
+} from "@/api/lib/legal-search/backfill-statement-timeout";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { redistributableLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
@@ -41,6 +44,13 @@ import { pgErrorFields } from "@/api/lib/pg-error";
 
 const SEARCH_INDEX_CONCURRENCY = 4;
 const CORPUS_READ_RETRY_DELAY_MS = 5 * 60_000;
+
+type ProjectionWriteScope =
+  | { type: "shared"; scopedDb: ScopedDb }
+  | {
+      type: "dedicated";
+      withProjectionDb: typeof withDedicatedCorpusBackfillDb;
+    };
 
 class LegislationCorpusReadError extends TaggedError(
   "LegislationCorpusReadError",
@@ -70,7 +80,11 @@ export const indexLegislationDocument = async (
     readText,
     resolveConfig,
   }: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
+  writeScope?: ProjectionWriteScope,
 ): Promise<Result<void, unknown>> => {
+  const projectionWriteScope =
+    writeScope ??
+    ({ type: "shared", scopedDb } as const satisfies ProjectionWriteScope);
   const [document] = await scopedDb((tx) =>
     tx
       .select({
@@ -143,10 +157,13 @@ export const indexLegislationDocument = async (
       : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${indexedText}, ''))`;
     const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
-    await scopedDb(async (tx) => {
-      // audit: skip — search index maintenance; rebuilds derived state
-      await setCorpusBackfillStatementTimeout(tx);
-      await tx.execute(sql`
+    const persist = async (writeDb: ScopedDb): Promise<void> => {
+      await writeDb(async (tx) => {
+        // audit: skip — search index maintenance; rebuilds derived state
+        if (projectionWriteScope.type === "shared") {
+          await setCorpusBackfillStatementTimeout(tx);
+        }
+        await tx.execute(sql`
     INSERT INTO legislation_search_documents (
       document_id, title, searchable_text,
       language, regconfig, updated_at, retry_after, tsv
@@ -169,7 +186,13 @@ export const indexLegislationDocument = async (
       retry_after = EXCLUDED.retry_after,
       tsv = EXCLUDED.tsv
   `);
-    });
+      });
+    };
+    if (projectionWriteScope.type === "dedicated") {
+      await projectionWriteScope.withProjectionDb(persist);
+    } else {
+      await persist(projectionWriteScope.scopedDb);
+    }
   };
 
   const projection = await writeProjectionWithinTsvectorCeiling(
@@ -207,6 +230,7 @@ export const backfillLegislationSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
   dependencies: LegislationSearchIndexDependencies = DEFAULT_DEPENDENCIES,
+  withProjectionDb: typeof withDedicatedCorpusBackfillDb = withDedicatedCorpusBackfillDb,
 ): Promise<LegislationSearchIndexBackfillResult> => {
   const staleReserved = Math.max(1, Math.floor(batchSize / 4));
   const missingLimit = Math.max(1, batchSize - staleReserved);
@@ -289,7 +313,10 @@ export const backfillLegislationSearchIndex = async (
     const indexed = (
       await Result.tryPromise({
         try: async () =>
-          await indexLegislationDocument(row.id, scopedDb, dependencies),
+          await indexLegislationDocument(row.id, scopedDb, dependencies, {
+            type: "dedicated",
+            withProjectionDb,
+          }),
         catch: (cause) => cause,
       })
     ).andThen((result) => result);

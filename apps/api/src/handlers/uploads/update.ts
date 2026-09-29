@@ -44,6 +44,10 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import {
+  commitOrganizationFileBytes,
+  reserveOrganizationFileBytes,
+} from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
@@ -83,6 +87,70 @@ const config = {
 } satisfies WorkspaceHandlerConfig;
 
 type ClaimedRow = typeof pendingUploads.$inferSelect;
+
+type PromoteTmpObjectOptions = {
+  organizationId: SafeId<"organization">;
+  tmpKey: string;
+  finalKey: string;
+  storedBytes: Uint8Array;
+  declaredMime: string;
+  promotion: "copy" | "write";
+};
+
+const promoteTmpObjectWithUsage = async ({
+  organizationId,
+  tmpKey,
+  finalKey,
+  storedBytes,
+  declaredMime,
+  promotion,
+}: PromoteTmpObjectOptions) => {
+  const reservation = await reserveOrganizationFileBytes({
+    organizationId,
+    objectKey: finalKey,
+    sizeBytes: storedBytes.byteLength,
+  });
+  if (Result.isError(reservation)) {
+    return Result.err(
+      new UploadFinalizeError({
+        status: reservation.error.reason === "capacity_exceeded" ? 409 : 500,
+        message: reservation.error.message,
+        rejectReason: reservation.error.reason,
+      }),
+    );
+  }
+  const promoted =
+    promotion === "copy"
+      ? await copyObject(tmpKey, finalKey)
+      : await Result.tryPromise(
+          async () =>
+            await writeS3ObjectWithRetry({
+              contentType: declaredMime,
+              data: storedBytes,
+              key: finalKey,
+            }),
+        );
+  if (promoted.status === "error") {
+    return Result.err(
+      new UploadFinalizeError({
+        status: 500,
+        message: "Failed to promote tmp object",
+        rejectReason: promotion === "copy" ? "copy-failed" : "write-failed",
+      }),
+    );
+  }
+  const committed = await commitOrganizationFileBytes(reservation.value);
+  if (Result.isError(committed)) {
+    return Result.err(
+      new UploadFinalizeError({
+        status: 500,
+        message: committed.error.message,
+        rejectReason: "usage-commit-failed",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
 
 const fileSecurityRejectionDetails = (
   error: UploadFinalizeError,
@@ -503,30 +571,15 @@ const runFinalize = async function* ({
 
   // A server-side copy is the cheap promotion, but it would publish the bytes
   // the client staged. Stripped bytes exist only here, so they are written.
-  const promoteTmpObject = async (finalKey: string) => {
-    const promoted =
-      strippedArchive === null
-        ? await copyObject(tmpKey, finalKey)
-        : await Result.tryPromise(
-            async () =>
-              await writeS3ObjectWithRetry({
-                contentType: claimed.declaredMime,
-                data: storedBytes,
-                key: finalKey,
-              }),
-          );
-    if (promoted.status === "error") {
-      return Result.err(
-        new UploadFinalizeError({
-          status: 500,
-          message: "Failed to promote tmp object",
-          rejectReason:
-            strippedArchive === null ? "copy-failed" : "write-failed",
-        }),
-      );
-    }
-    return Result.ok(undefined);
-  };
+  const promoteTmpObject = async (finalKey: string) =>
+    await promoteTmpObjectWithUsage({
+      organizationId,
+      tmpKey,
+      finalKey,
+      storedBytes,
+      declaredMime: claimed.declaredMime,
+      promotion: strippedArchive === null ? "copy" : "write",
+    });
 
   // 5. Purpose finalization. File-backed purposes promote the tmp
   //    object before committing DB rows that reference the final key.

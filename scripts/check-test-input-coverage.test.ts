@@ -240,6 +240,19 @@ describe("test input coverage", () => {
     expect(checkTestInputCoverage(root)).toEqual([]);
   });
 
+  test("counts a read a shared test helper makes on a test's behalf", () => {
+    const root = createRoot({
+      files: { "apps/alpha/src/tests/helpers/fixtures.ts": reading },
+      tasks: {},
+    });
+    const errors = checkTestInputCoverage(root);
+
+    expect(errors).toHaveLength(1);
+    expect(errors.at(0)).toContain(
+      "apps/alpha/src/tests/helpers/fixtures.ts:1",
+    );
+  });
+
   test("ignores a read of a workspace dependency, which Turbo already selects", () => {
     const root = createRoot({
       files: {

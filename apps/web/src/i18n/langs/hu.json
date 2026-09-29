@@ -622,6 +622,7 @@
       }
     },
     "citation": {
+      "citedAtLeast": "Legalább {count} alkalommal idézték",
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
       "lastNegative": "utolsó elutasító hivatkozás: {year}",
@@ -629,6 +630,7 @@
       "none": "Még nincs rögzített hivatkozás.",
       "openAtCitation": "Megnyitás a hivatkozásnál",
       "openDecision": "Határozat megnyitása",
+      "partialSummary": "Az idézettségi összesítések és az idővonal hiányosak.",
       "passageNotFound": "A hivatkozó szövegrész nem található a szövegben",
       "positiveCount": "{count, plural, one {# támogató} other {# támogató}}",
       "showAll": "{count, plural, one {Mind a # határozat megjelenítése} other {Mind a # határozat megjelenítése}}",
@@ -1447,6 +1449,7 @@
     "back": "Vissza",
     "cancel": "Mégse",
     "caseLaw": "Ítélkezési gyakorlat",
+    "catalogue": "Katalógus",
     "category": "Kategória",
     "categoryName": "Kategória neve",
     "changeColor": "Szín módosítása",
@@ -3225,6 +3228,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Hozzáadás a könyvtárhoz",
+      "added": "{name} a könyvtárában van",
+      "confirmAddTitle": "Hozzáadja a(z) {name} sablont ehhez: {organization}?",
+      "confirmDescription": "A sablon egy példánya a(z) {organization} könyvtárába kerül.",
+      "confirmDownloadTitle": "Letölti a(z) {name} sablont ehhez: {organization}?",
+      "confirmStarterDescription": "A playbook egy példánya a(z) {organization} könyvtárába kerül.",
+      "confirmUseTitle": "Használja a(z) {name} sablont itt: {organization}?",
+      "installFailed": "A sablont nem sikerült hozzáadni",
+      "noPreview": "Ehhez a sablonhoz nem érhető el előnézet.",
+      "notFound": "Ez a sablon nincs a katalógusban.",
+      "unavailable": "A katalógus jelenleg nem érhető el."
+    },
+    "landing": {
+      "accountLine": "Ingyenes fiókkal szervezete saját sablonjait, záradékait és playbookjait is kezelheti.",
+      "withAccount": "Ingyenes fiókkal"
+    },
     "mcp": {
       "addAndConnect": "Hozzáadás és csatlakozás",
       "addServer": "Szerver hozzáadása",
@@ -3706,7 +3726,6 @@
     "someInvitesFailed": "{count, plural, one {# meghívó sikertelen} other {# meghívó sikertelen}}",
     "stepAi": "AI",
     "stepApps": "Alkalmazások és eszközök",
-    "stepCatalogue": "Katalógus",
     "stepJurisdiction": "Joghatóság",
     "stepOrganization": "Csapat",
     "stepTeam": "Meghívás",
