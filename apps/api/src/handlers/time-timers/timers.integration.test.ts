@@ -20,6 +20,8 @@ import {
   rateTables,
   timeEntries,
   timeTimers,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -286,6 +288,7 @@ describe("global timer lifecycle", () => {
       dateWorked: "2026-08-20",
       timezoneId: "Asia/Tokyo",
       durationMinutes: 0,
+      timerStartedAt: new Date(START),
       billedMinutes: 0,
       rateAtEntry: cents(12_345),
       currency: "CHF",
@@ -431,6 +434,110 @@ describe("global timer lifecycle", () => {
     expect(await readTimer(started.id)).toBeUndefined();
   });
 
+  test("a timer survives matter membership removal and confirms after reassignment", async () => {
+    const originalMatterId = createSafeId<"workspace">();
+    await db.insert(workspaces).values({
+      id: originalMatterId,
+      organizationId: ids.orgA,
+      name: "Timer matter",
+      reference: originalMatterId,
+      status: "active",
+    });
+    const membershipId = createSafeId<"workspaceMember">();
+    await db.insert(workspaceMembers).values({
+      id: membershipId,
+      workspaceId: originalMatterId,
+      userId: ids.userA1,
+    });
+    const originalContext = {
+      ...context(),
+      safeDb: createSafeDb(
+        db,
+        [originalMatterId, ids.wsA1],
+        ids.orgA,
+        ids.userA1,
+      ),
+      scopedDb: createScopedDb(
+        db,
+        [originalMatterId, ids.wsA1],
+        ids.orgA,
+        ids.userA1,
+      ),
+    };
+    const started = await startTimer.handler(
+      createTestHandlerContext<Parameters<typeof startTimer.handler>[0]>({
+        ...originalContext,
+        body: checkedBody(startTimer.config.body, {
+          matterId: originalMatterId,
+          description: "Research after reassignment",
+        }),
+      }),
+    );
+    if ("code" in started) {
+      throw new Error(`Timer start failed: ${JSON.stringify(started)}`);
+    }
+    const originalTimer = await readTimer(started.id);
+    expect(originalTimer).toMatchObject({
+      workspaceId: originalMatterId,
+      legacyTimeEntryId: null,
+      state: "running",
+    });
+    const removed = await db
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.id, membershipId))
+      .returning({ id: workspaceMembers.id });
+    expect(removed).toEqual([{ id: membershipId }]);
+    const beforeEntries = await db
+      .select({ id: timeEntries.id })
+      .from(timeEntries)
+      .where(eq(timeEntries.organizationId, ids.orgA));
+    const auditCount = auditEvents.length;
+    setSystemTime(new Date("2026-09-02T00:01:00.000Z"));
+    const refused = await confirmTimer.handler(
+      createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+        ...originalContext,
+        params: { id: started.id },
+        body: checkedBody(confirmTimer.config.body, { timezoneId: "UTC" }),
+      }),
+    );
+    expect(refused).toMatchObject({
+      code: 404,
+      response: { message: "Matter not found or not accessible" },
+    });
+    expect(await readTimer(started.id)).toEqual(originalTimer);
+    expect(
+      await db
+        .select({ id: timeEntries.id })
+        .from(timeEntries)
+        .where(eq(timeEntries.organizationId, ids.orgA)),
+    ).toEqual(beforeEntries);
+    expect(auditEvents).toHaveLength(auditCount);
+    const reassigned = await updateTimer.handler(
+      createTestHandlerContext<Parameters<typeof updateTimer.handler>[0]>({
+        ...context(),
+        params: { id: started.id },
+        body: checkedBody(updateTimer.config.body, { matterId: ids.wsA1 }),
+      }),
+    );
+    expect(reassigned).toMatchObject({ id: started.id, matterId: ids.wsA1 });
+    const completed = await confirm(started.id);
+    if ("code" in completed) {
+      throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+    }
+    expect(await readTimer(started.id)).toBeUndefined();
+    expect(
+      await db.query.timeEntries.findFirst({
+        where: { id: { eq: completed.id } },
+      }),
+    ).toMatchObject({
+      workspaceId: ids.wsA1,
+      source: TIME_ENTRY_SOURCE.TIMER,
+      status: BILLING_STATUS.DRAFT,
+      durationMinutes: 2,
+    });
+    await db.delete(workspaces).where(eq(workspaces.id, originalMatterId));
+  });
+
   test("confirm rejects invalid timezone before creating an entry", async () => {
     const timer = await start();
     expect(await confirm(timer.id, "Not/A_Real_Zone")).toMatchObject({
@@ -477,6 +584,7 @@ describe("global timer lifecycle", () => {
       dateWorked: "2026-09-01",
       timezoneId: "UTC",
       durationMinutes: 0,
+      timerStartedAt: new Date(START),
       billedMinutes: 0,
       rateAtEntry: cents(0),
       currency: "XXX",

@@ -1,7 +1,10 @@
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { isRecord } from "@/api/lib/type-guards";
 
 export const hasCurrentTimerMatterAccess = async ({
   organizationId,
@@ -15,7 +18,8 @@ export const hasCurrentTimerMatterAccess = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<boolean> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
-  const [access] = await tx.execute(sql<{ hasAccess: boolean }>`
+  const rows = executedRows(
+    await tx.execute(sql`
     SELECT true AS "hasAccess"
     FROM workspaces AS workspace
     INNER JOIN member AS organization_member
@@ -35,6 +39,12 @@ export const hasCurrentTimerMatterAccess = async ({
       END
     LIMIT 1
     FOR SHARE OF workspace, organization_member
-  `);
-  return access?.["hasAccess"] === true;
+  `),
+  );
+  const access = rows.at(0);
+  if (access === undefined) {return false;}
+  if (!isRecord(access) || access["hasAccess"] !== true) {
+    return panic("Invalid timer matter access result");
+  }
+  return true;
 };
