@@ -9,6 +9,7 @@ import {
 } from "./generate-capability-tree.js";
 import { generateRouteMap } from "./generate-route-map.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
+import { validateAgainstSchema } from "./json-schema-validate.js";
 import type { RegistryToolListing } from "./route-types.js";
 
 const snapshotUrl = new URL(
@@ -37,6 +38,111 @@ const CAPABILITY = {
 };
 
 describe("generateCliSkill (TanStack Intent)", () => {
+  for (const keyword of ["oneOf", "anyOf"] as const) {
+    for (const withFlags of [true, false]) {
+      test(`describes ${keyword} input variants ${withFlags ? "with" : "without"} flags`, () => {
+        const subject = {
+          [keyword]: [
+            {
+              type: "object",
+              required: ["kind", "identifier", "country"],
+              properties: {
+                kind: { const: "company" },
+                identifier: { type: "string", minLength: 1 },
+                country: { type: "string", enum: ["CZ", "SK"] },
+              },
+            },
+            {
+              type: "object",
+              required: ["kind", "first_name", "last_name", "birth_date"],
+              properties: {
+                kind: { type: "string", enum: ["person"] },
+                first_name: { type: "string" },
+                last_name: { type: "string" },
+                birth_date: {
+                  type: "object",
+                  required: ["year"],
+                  properties: { year: { type: "integer" } },
+                },
+              },
+            },
+          ],
+        };
+        const skill = generateCliSkill(
+          [
+            {
+              name: "inspect_subject",
+              description: "Inspect a subject",
+              inputSchema: {
+                type: "object",
+                required: ["subject"],
+                properties: withFlags
+                  ? { subject, query: { type: "string" } }
+                  : { subject },
+              },
+            },
+          ],
+          TOOL_ANNOTATIONS,
+          CAPABILITY,
+        );
+        expect(skill).toContain(
+          'kind="company": required kind, identifier, country ("CZ"|"SK")',
+        );
+        expect(skill).toContain(
+          'kind="person": required kind, first_name, last_name, birth_date {year}',
+        );
+        const json = skill.match(/Example: `--input '([^']+)'`/u)?.at(1);
+        expect(json).toBeDefined();
+        const input: unknown = JSON.parse(json ?? "null");
+        expect(input).toEqual({
+          subject: {
+            kind: "company",
+            identifier: expect.any(String),
+            country: "CZ",
+          },
+        });
+        expect(
+          validateAgainstSchema(
+            {
+              type: "object",
+              required: ["subject"],
+              properties: { subject },
+            },
+            input,
+          ).valid,
+        ).toBe(true);
+      });
+    }
+  }
+
+  test("preserves the input-only hint for a plain object", () => {
+    const skill = generateCliSkill(
+      [
+        {
+          name: "inspect_subject",
+          description: "Inspect a subject",
+          inputSchema: {
+            type: "object",
+            properties: {
+              subject: {
+                type: "object",
+                required: ["name"],
+                properties: { name: { type: "string" } },
+              },
+            },
+          },
+        },
+      ],
+      TOOL_ANNOTATIONS,
+      CAPABILITY,
+    );
+    expect(skill).toContain(
+      "- `stella inspect subject` — no flags; pass `--input` with subject\n\n",
+    );
+    expect(skill).not.toContain("subject: variant");
+    expect(skill).not.toContain("Example: `--input");
+  });
+
   test("is deterministic across calls and input clones", () => {
     const once = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);
     const twice = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);

@@ -17,6 +17,7 @@ import {
 } from "./generate-route-map.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
 import {
+  buildCompactInputUnionHints,
   buildInputContractHelp,
   formatInputExample,
 } from "./input-contract-help.js";
@@ -174,13 +175,24 @@ const requiredFlagLine = (flag: FlagSpec): string => {
  */
 const commandFlagsBlock = (spec: LeafCommandSpec): string => {
   const command = `stella ${spec.commandPath.join(" ")}`;
+  const unionHints = buildCompactInputUnionHints({
+    schema: spec.inputSchema,
+    inputOnly: spec.inputOnly,
+  }).map(({ path, variants, example }) => {
+    if (example.status !== "complete") {
+      throw new RouteGenerationError(
+        `generateCliSkill: no valid first-variant example for ${command} input ${path}`,
+      );
+    }
+    return `  - ${path}: ${variants}. Example: \`${formatInputExample(example.value)}\``;
+  });
   const flags = spec.flags.filter((flag) => !CONVENTION_FLAGS.has(flag.flag));
   if (flags.length === 0) {
     const hint =
       spec.inputOnly.length > 0
         ? `no flags; pass \`--input\` with ${spec.inputOnly.join(", ")}`
         : "no arguments";
-    return `- \`${command}\` — ${hint}`;
+    return [`- \`${command}\` — ${hint}`, ...unionHints].join("\n");
   }
   const required = flags.filter((flag) => flag.required);
   const optional = flags
@@ -203,6 +215,7 @@ const commandFlagsBlock = (spec: LeafCommandSpec): string => {
   if (spec.inputOnly.length > 0) {
     lines.push(`  - via \`--input\` only: ${spec.inputOnly.join(", ")}`);
   }
+  lines.push(...unionHints);
   return lines.join("\n");
 };
 

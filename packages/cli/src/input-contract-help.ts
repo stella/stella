@@ -1104,3 +1104,105 @@ export const buildInputContractHelp = ({
       : { status: "unavailable" },
   };
 };
+
+const discriminatorValue = (schema: JsonSchema): unknown => {
+  if (schema["const"] !== undefined) {
+    return schema["const"];
+  }
+  const values = schema["enum"];
+  return Array.isArray(values) && values.length === 1
+    ? values.at(0)
+    : undefined;
+};
+
+const compactRequiredKeys = (
+  schema: JsonSchema,
+  discriminator: string | undefined,
+): string =>
+  [...requiredOf(schema)]
+    .map((name) => {
+      const child = propertiesOf(schema)[name];
+      if (child === undefined || name === discriminator) {
+        return name;
+      }
+      const values = child["enum"];
+      const choices = Array.isArray(values)
+        ? values.map((value) => JSON.stringify(value)).join("|")
+        : "";
+      if (choices.length > 0 && choices.length <= 48) {
+        return `${name} (${choices})`;
+      }
+      const nested = [...requiredOf(child)];
+      return nested.length === 0 ? name : `${name} {${nested.join(", ")}}`;
+    })
+    .join(", ") || "none";
+
+type CompactInputUnionHint = {
+  path: string;
+  variants: string;
+  example: InputContractExample;
+};
+
+/** One-level union summaries for the always-loaded skill; full help stays verbose. */
+export const buildCompactInputUnionHints = ({
+  schema,
+  inputOnly,
+}: {
+  schema: JsonSchema;
+  inputOnly: readonly string[];
+}): CompactInputUnionHint[] => {
+  const hints: CompactInputUnionHint[] = [];
+  for (const path of inputOnly) {
+    const field = schemaAtPath(schema, path);
+    if (field === undefined) {
+      continue;
+    }
+    const group = alternativeGroupsOf(field).at(0);
+    const first = group?.variants.at(0);
+    if (group === undefined || first === undefined) {
+      continue;
+    }
+    const discriminator = [...requiredOf(first)].find((name) =>
+      group.variants.every((variant) => {
+        const child = propertiesOf(variant)[name];
+        return (
+          requiredOf(variant).has(name) &&
+          child !== undefined &&
+          discriminatorValue(child) !== undefined
+        );
+      }),
+    );
+    const variants = group.variants
+      .map((variant, index) => {
+        const child =
+          discriminator === undefined
+            ? undefined
+            : propertiesOf(variant)[discriminator];
+        const label =
+          child === undefined
+            ? `variant ${index + 1}`
+            : `${discriminator}=${JSON.stringify(discriminatorValue(child))}`;
+        return `${label}: required ${compactRequiredKeys(variant, discriminator)}`;
+      })
+      .join("; ");
+    const value = exampleFor(
+      combineSchemasForExample(
+        { ...field, anyOf: undefined, oneOf: undefined },
+        first,
+      ),
+    );
+    let payload = value;
+    for (const segment of path.split(".").toReversed()) {
+      payload = { [segment]: payload };
+    }
+    hints.push({
+      path,
+      variants,
+      example:
+        isRecord(payload) && validateAgainstSchema(field, value).valid
+          ? { status: "complete", value: payload }
+          : { status: "unavailable" },
+    });
+  }
+  return hints;
+};
