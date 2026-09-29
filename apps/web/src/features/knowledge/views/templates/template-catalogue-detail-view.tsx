@@ -162,7 +162,7 @@ const CataloguePreview = ({
       );
     default: {
       preview satisfies never;
-      return panic(`Unhandled preview state: ${String(preview.status)}`);
+      return panic(`Unhandled preview state: ${String(preview)}`);
     }
   }
 };

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -11,7 +11,11 @@ import { knowledgeSections } from "@/lib/knowledge/navigation";
 
 /** Knowledge for a visitor without an account: the public shell with a
  *  Knowledge breadcrumb in its top bar. */
-export const KnowledgePublicFrame = ({ children }: { children: ReactNode }) => (
+export const KnowledgePublicFrame = ({
+  children,
+}: {
+  children: ReactElement;
+}) => (
   <PublicWorkspaceShell content={children} topBar={<KnowledgePublicTopBar />} />
 );
 

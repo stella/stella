@@ -1,5 +1,5 @@
 import { lazy, Suspense, useLayoutEffect } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -60,7 +60,7 @@ const routeUserOf = (
  * user, so a page change never remounts it and an organization switch always
  * does.
  */
-export const AppFrameHost = ({ children }: { children: ReactNode }) => {
+export const AppFrameHost = ({ children }: { children: ReactElement }) => {
   const routeIdKey = useRouterState({
     select: (state) =>
       state.matches.map((match) => match.routeId).join(ROUTE_ID_SEPARATOR),

@@ -42,7 +42,7 @@ export const KnowledgeAudienceGate = ({
     }
     default: {
       authStatus satisfies never;
-      return panic(`Unhandled session state: ${String(authStatus.status)}`);
+      return panic(`Unhandled session state: ${String(authStatus)}`);
     }
   }
 };

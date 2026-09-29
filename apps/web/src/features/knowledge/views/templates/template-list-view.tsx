@@ -39,7 +39,7 @@ type TemplateListViewProps = {
   renderRow: (
     template: KnowledgeTemplate,
     row: TemplateRowContext,
-  ) => ReactElement;
+  ) => ReactElement | null;
   /** Shown instead of the list when there is nothing to list and no filter. */
   emptyState?: ReactElement | undefined;
   /** Desktop navigation beside the list. */

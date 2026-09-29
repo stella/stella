@@ -30,7 +30,7 @@ const toKnowledgeTemplate = (
   fieldCount: template.fields.length,
   categoryId: null,
   tags: template.legalArea === null ? null : [template.legalArea],
-  languages: template.languages,
+  languages: [...template.languages],
   whenToUse: null,
   whenNotToUse: null,
 });
