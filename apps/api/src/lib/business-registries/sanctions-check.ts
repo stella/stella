@@ -56,7 +56,7 @@ export type SanctionsCheckSubject =
     };
 
 /** The subject as screened, so a reader sees which name was used. */
-export type SanctionsCheckedSubject =
+type SanctionsCheckedSubject =
   | {
       type: "organization";
       name: string;
@@ -106,7 +106,7 @@ const invalidSubject = (message: string, hint?: string) =>
   );
 
 /** The countries the firm practises in, as stored codes. */
-export const loadPracticeJurisdictions = async ({
+const loadPracticeJurisdictions = async ({
   scopedDb,
   organizationId,
 }: {
