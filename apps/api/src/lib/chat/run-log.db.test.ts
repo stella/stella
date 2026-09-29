@@ -208,7 +208,7 @@ describe("chat run log database contract", () => {
   test("a reader drains stored chunks and waits for the close marker", async () => {
     const run = await seedRunningTurn();
     const log = logFor(run);
-    const reader = log.read("-1");
+    const reader = log.read("-1")[Symbol.asyncIterator]();
     const firstRead = reader.next();
     const finished = {
       type: EventType.RUN_FINISHED,
@@ -337,14 +337,14 @@ describe("chat run log database contract", () => {
   test("retry after an ambiguous commit matches canonical persisted JSON", async () => {
     const run = await seedRunningTurn();
     let injectPostCommitFailure = true;
-    const flakyDb = asTestRaw<ScopedDb>(async (fn) => {
+    const flakyDb: ScopedDb = async (fn) => {
       const result = await scopedDbA(fn);
       if (injectPostCommitFailure) {
         injectPostCommitFailure = false;
         throw new Error("injected response loss after commit");
       }
       return result;
-    });
+    };
     const log = logFor(run, flakyDb);
     const withUndefined = {
       type: EventType.CUSTOM,

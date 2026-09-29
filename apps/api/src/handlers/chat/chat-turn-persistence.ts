@@ -281,12 +281,12 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       organizationId: chatTurns.organizationId,
       runId: chatTurns.runId,
     });
-  if (stopped.length > 0) {
-    const turn = stopped[0];
+  const [stoppedTurn] = stopped;
+  if (stoppedTurn !== undefined) {
     await closeChatRunLogOnTx({
-      organizationId: turn.organizationId,
-      runId: turn.runId,
-      turnId: turn.id,
+      organizationId: stoppedTurn.organizationId,
+      runId: stoppedTurn.runId,
+      turnId: stoppedTurn.id,
       tx,
     });
     await settleInterruptedContinuationOnTx({
@@ -311,12 +311,12 @@ const interruptExpiredRunningChatTurnOnTx = async ({
       organizationId: chatTurns.organizationId,
       runId: chatTurns.runId,
     });
-  if (interrupted.length > 0) {
-    const turn = interrupted[0];
+  const [interruptedTurn] = interrupted;
+  if (interruptedTurn !== undefined) {
     await closeChatRunLogOnTx({
-      organizationId: turn.organizationId,
-      runId: turn.runId,
-      turnId: turn.id,
+      organizationId: interruptedTurn.organizationId,
+      runId: interruptedTurn.runId,
+      turnId: interruptedTurn.id,
       tx,
     });
     await settleInterruptedContinuationOnTx({
@@ -1378,12 +1378,12 @@ export const settleChatTurnOnTx = async ({
       organizationId: chatTurns.organizationId,
       runId: chatTurns.runId,
     });
-  if (updated.length === 1) {
-    const turn = updated[0];
+  const [settled, ...others] = updated;
+  if (settled !== undefined && others.length === 0) {
     await closeChatRunLogOnTx({
-      organizationId: turn.organizationId,
-      runId: turn.runId,
-      turnId: turn.id,
+      organizationId: settled.organizationId,
+      runId: settled.runId,
+      turnId: settled.id,
       tx,
     });
     return "settled";
