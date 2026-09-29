@@ -631,6 +631,46 @@ describe("public sanctions search parity", () => {
             warmMs: Number(warmMs.toFixed(2)),
           }),
         );
+        for (const name of [
+          "Registered Entity Holdings",
+          "Registered a b c d e f g h i j k l m n o p q r s t u v z",
+        ]) {
+          const adversarialRequest = () =>
+            new Request("http://localhost/sanctions/search", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ subject: { type: "organization", name } }),
+            });
+          expect((await route.handle(adversarialRequest())).status).toBe(200);
+          const began = performance.now();
+          let lastTick = began;
+          let maximumTurnMs = 0;
+          let ticks = 0;
+          const heartbeat = setInterval(() => {
+            const current = performance.now();
+            maximumTurnMs = Math.max(maximumTurnMs, current - lastTick);
+            lastTick = current;
+            ticks += 1;
+          }, 1);
+          try {
+            const response = await route.handle(adversarialRequest());
+            expect(response.status).toBe(200);
+            expect(ticks).toBeGreaterThan(0);
+            maximumTurnMs = Math.max(
+              maximumTurnMs,
+              performance.now() - lastTick,
+            );
+            console.info(
+              JSON.stringify({
+                adversarialService: name,
+                totalMs: Number((performance.now() - began).toFixed(2)),
+                maximumTurnMs: Number(maximumTurnMs.toFixed(2)),
+              }),
+            );
+          } finally {
+            clearInterval(heartbeat);
+          }
+        }
         const parityCaches = {
           product: createSanctionsIndexCache(),
           public: createSanctionsIndexCache(),

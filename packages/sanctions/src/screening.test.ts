@@ -576,6 +576,26 @@ test("warm screening work stays bounded for repeated common query tokens", () =>
       expect(result.error.code).toBe("excess-query-tokens");
     }
   }
+  for (const name of [
+    "Registered Entity Holdings",
+    "Registered a b c d e f g h i j k l m n o p q r s t u v z",
+  ]) {
+    const query = { name, entityType: "organisation" } as const;
+    screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
+    const started = performance.now();
+    const result = screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
+    const milliseconds = performance.now() - started;
+    console.info(
+      JSON.stringify({
+        adversarial: name,
+        milliseconds,
+        result: result.isErr() ? result.error.code : "ok",
+      }),
+    );
+    if (result.isErr()) {
+      expect(result.error.code).toBe("work-limit");
+    }
+  }
   // Valid names retain an answer after the revised ranking bounds.
   for (const name of ["Registered", "Registered Entity 42 Holdings"]) {
     for (const entityType of ["organisation", undefined] as const) {

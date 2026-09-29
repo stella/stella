@@ -430,23 +430,26 @@ export const screenSanctionsSubject = async ({
       }),
     );
   }
-  // db-await-in-loop: one concurrent read per sanctions source (a small fixed set); each list's index is cached per edition, so a warm screening reads nothing
-  const lists = await Promise.all(
-    freshness.value.map(
-      async (sourceFreshness) =>
-        await screenList({
-          db,
-          freshness: sourceFreshness,
-          query,
-          base: listBase({
-            source: sourceFreshness.source,
-            practiceJurisdictions,
-            heldUpdate: sourceFreshness.heldUpdate,
-          }),
-          indexCache,
+  const lists: SanctionsListOutcome[] = [];
+  // db-await-in-loop: one bounded read per sanctions source; sequential macrotask yields prevent warm indexes from monopolizing the event loop
+  for (const sourceFreshness of freshness.value) {
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    lists.push(
+      await screenList({
+        db,
+        freshness: sourceFreshness,
+        query,
+        base: listBase({
+          source: sourceFreshness.source,
+          practiceJurisdictions,
+          heldUpdate: sourceFreshness.heldUpdate,
         }),
-    ),
-  );
+        indexCache,
+      }),
+    );
+  }
   return Result.ok({
     status: aggregateSanctionsStatus(lists),
     checkedAt,

@@ -95,6 +95,10 @@ report the affected list unavailable with the existing `load-failed` reason.
 `totalMatches` is then the number found, a lower bound. Partial results retain
 possible matches for review. A truncated search with no possible matches is
 unavailable, never clear. Index construction remains cached separately.
+The shared API service yields to the event loop between list screenings;
+anonymous screenings additionally allow at most two active requests per API
+process and reject excess work before database reads. The work budget is a
+backstop, not a wall-clock deadline.
 
 ## Evaluation
 

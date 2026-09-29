@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { SanctionsPublicRoleError } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import { SanctionsSubjectError } from "@/api/lib/lists/sanctions/screening-service";
@@ -180,6 +181,96 @@ describe("anonymous sanctions search", () => {
     expect(
       (await app.handle(new Request("http://localhost/other"))).status,
     ).toBe(200);
+  });
+
+  test("refuses excess public screenings before database work and releases capacity", async () => {
+    const maximum = API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent;
+    const held = Promise.withResolvers();
+    const allStarted = Promise.withResolvers();
+    let started = 0;
+    const screen = mock<typeof screenSanctionsSubject>(async () => {
+      started += 1;
+      if (started === maximum) {
+        allStarted.resolve(undefined);
+      }
+      if (started <= maximum) {
+        await held.promise;
+      }
+      return Result.ok({ ...screening, lists: [] });
+    });
+    const validateRole = mock<SanctionsPublicReadDb["validateRole"]>(async () =>
+      Result.ok(undefined),
+    );
+    const db = testDb(validateRole);
+    // Different handler instances share the per-process admission ceiling.
+    const requests = Array.from({ length: maximum }, () =>
+      appWith(screen, db).app.handle(
+        request({ type: "organization", name: "Held" }),
+      ),
+    );
+    try {
+      await allStarted.promise;
+      const { app } = appWith(screen, db);
+      const began = performance.now();
+      const rejected = await app.handle(
+        request({ type: "organization", name: "Private Admission Sentinel" }),
+      );
+      expect(rejected.status).toBe(503);
+      expect(performance.now() - began).toBeLessThan(50);
+      expect(await rejected.text()).not.toContain("Private Admission Sentinel");
+      expect(validateRole.mock.calls).toHaveLength(maximum);
+      expect(screen.mock.calls).toHaveLength(maximum);
+      held.resolve(undefined);
+      expect((await Promise.all(requests)).map(({ status }) => status)).toEqual(
+        Array.from({ length: maximum }, () => 200),
+      );
+      expect(
+        (await app.handle(request({ type: "organization", name: "Released" })))
+          .status,
+      ).toBe(200);
+    } finally {
+      held.resolve(undefined);
+      await Promise.all(requests);
+    }
+  });
+
+  test("releases public screening capacity after role and matcher failures", async () => {
+    for (const failure of ["role", "matcher"] as const) {
+      const screen =
+        failure === "matcher"
+          ? async () => {
+              throw new TypeError("Private failure sentinel");
+            }
+          : clearScreen();
+      const db =
+        failure === "role"
+          ? testDb(async () =>
+              Result.err(
+                new SanctionsPublicRoleError({
+                  message: "Private failure sentinel",
+                }),
+              ),
+            )
+          : testDb();
+      const { app } = appWith(screen, db);
+      for (
+        let count = 0;
+        count < API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent + 1;
+        count += 1
+      ) {
+        expect(
+          (await app.handle(request({ type: "organization", name: "Example" })))
+            .status,
+        ).toBe(500);
+      }
+      expect(
+        (
+          await appWith(clearScreen()).app.handle(
+            request({ type: "organization", name: "Recovered" }),
+          )
+        ).status,
+      ).toBe(200);
+    }
   });
 
   test("rejects oversized identity input without returning it in validation errors", async () => {

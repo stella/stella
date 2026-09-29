@@ -11,6 +11,7 @@ import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import { personDateOfBirth } from "@/api/lib/business-registries/entity-checks";
 import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import {
@@ -114,6 +115,9 @@ const screeningUnavailable = () =>
     message: "Could not screen the sanctions lists",
   });
 
+// CPU admission is per API process, shared by all mounted public handlers.
+let activePublicScreenings = 0;
+
 /** Anonymous name screening: no practice jurisdictions, so every list is informational. */
 export const createPublicSanctionsSearchHandler = ({
   db = sanctionsPublicReadDb,
@@ -138,35 +142,52 @@ export const createPublicSanctionsSearchHandler = ({
           `The name to screen must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
         );
       }
-      const role = yield* Result.await(
-        Result.tryPromise({
-          try: async () => await db.validateRole(),
-          catch: screeningUnavailable,
-        }),
-      );
-      yield* role.mapError(screeningUnavailable);
-      // Never retain the rejected operation's cause: it may contain identity input.
-      const result = yield* Result.await(
-        Result.tryPromise({
-          try: async () =>
-            await screen({
-              db,
-              subject,
-              practiceJurisdictions: [],
-              now,
-              indexCache,
-            }),
-          catch: screeningUnavailable,
-        }),
-      );
-      return result.mapError(
-        (error) =>
+      if (
+        activePublicScreenings >=
+        API_RATE_LIMITS.publicSanctionsSearch.maxConcurrent
+      ) {
+        return Result.err(
           new HandlerError({
-            status: 400,
-            code: "validation_error",
-            message: SANCTIONS_SUBJECT_ERROR_MESSAGES[error.code],
+            status: 503,
+            code: "service_unavailable",
+            message: "Sanctions screening is busy; try again shortly",
           }),
-      );
+        );
+      }
+      activePublicScreenings += 1;
+      try {
+        const role = yield* Result.await(
+          Result.tryPromise({
+            try: async () => await db.validateRole(),
+            catch: screeningUnavailable,
+          }),
+        );
+        yield* role.mapError(screeningUnavailable);
+        // Never retain the rejected operation's cause: it may contain identity input.
+        const result = yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await screen({
+                db,
+                subject,
+                practiceJurisdictions: [],
+                now,
+                indexCache,
+              }),
+            catch: screeningUnavailable,
+          }),
+        );
+        return result.mapError(
+          (error) =>
+            new HandlerError({
+              status: 400,
+              code: "validation_error",
+              message: SANCTIONS_SUBJECT_ERROR_MESSAGES[error.code],
+            }),
+        );
+      } finally {
+        activePublicScreenings -= 1;
+      }
     },
   );
 
