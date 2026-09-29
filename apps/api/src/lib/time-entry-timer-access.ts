@@ -42,7 +42,9 @@ export const hasCurrentTimerMatterAccess = async ({
   `),
   );
   const access = rows.at(0);
-  if (access === undefined) {return false;}
+  if (access === undefined) {
+    return false;
+  }
   if (!isRecord(access) || access["hasAccess"] !== true) {
     return panic("Invalid timer matter access result");
   }

@@ -12926,6 +12926,258 @@ export type WebRoutes = {
         };
       };
     };
+    "time-timers": {
+      get: {
+        body: Record<never, never>;
+        params: T5e3ac29766;
+        query: {
+          cursor?: string;
+          limit?: number;
+        };
+        headers: Record<never, never>;
+        response: {
+          200: {
+            items: Array<T177a854d0e>;
+            nextCursor: Tbe0400fa4c;
+            limit: number;
+          };
+          400: T9a51b7d2bc;
+          401: T9a51b7d2bc;
+          402: T9a51b7d2bc;
+          403: Tddfcdef857;
+          404: T9a51b7d2bc;
+          409: T9a51b7d2bc;
+          413: T9a51b7d2bc;
+          422: (T9a51b7d2bc | {
+            type: "validation";
+            on: string;
+            summary?: string;
+            message?: string;
+            found?: unknown;
+            property?: string;
+            expected?: string;
+          });
+          428: T9a51b7d2bc;
+          429: T9a51b7d2bc;
+          500: T9a51b7d2bc;
+          502: T9a51b7d2bc;
+          503: T9a51b7d2bc;
+        };
+      };
+    } & {
+      start: {
+        post: {
+          body: T6b880dac0c;
+          params: T5e3ac29766;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T177a854d0e;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":id": {
+        pause: {
+          post: {
+            body: Record<never, never>;
+            params: T32313cfbba;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: T177a854d0e;
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":id": {
+        resume: {
+          post: {
+            body: Record<never, never>;
+            params: T32313cfbba;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: T177a854d0e;
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":id": {
+        patch: {
+          body: T6b880dac0c;
+          params: T32313cfbba;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: T177a854d0e;
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    } & {
+      ":id": {
+        confirm: {
+          post: {
+            body: {
+              billable?: false | true;
+              timezoneId: string;
+            };
+            params: T32313cfbba;
+            query: Record<never, never>;
+            headers: Record<never, never>;
+            response: {
+              200: {
+                id: Tdb05f01858;
+                durationMinutes: number;
+                billedMinutes: number;
+              };
+              400: T9a51b7d2bc;
+              401: T9a51b7d2bc;
+              402: T9a51b7d2bc;
+              403: Tddfcdef857;
+              404: T9a51b7d2bc;
+              409: T9a51b7d2bc;
+              413: T9a51b7d2bc;
+              422: (T9a51b7d2bc | {
+                type: "validation";
+                on: string;
+                summary?: string;
+                message?: string;
+                found?: unknown;
+                property?: string;
+                expected?: string;
+              });
+              428: T9a51b7d2bc;
+              429: T9a51b7d2bc;
+              500: T9a51b7d2bc;
+              502: T9a51b7d2bc;
+              503: T9a51b7d2bc;
+            };
+          };
+        };
+      };
+    } & {
+      ":id": {
+        delete: {
+          body: Record<never, never>;
+          params: T32313cfbba;
+          query: Record<never, never>;
+          headers: Record<never, never>;
+          response: {
+            200: {
+              id: T058aa8b860;
+            };
+            400: T9a51b7d2bc;
+            401: T9a51b7d2bc;
+            402: T9a51b7d2bc;
+            403: Tddfcdef857;
+            404: T9a51b7d2bc;
+            409: T9a51b7d2bc;
+            413: T9a51b7d2bc;
+            422: (T9a51b7d2bc | {
+              type: "validation";
+              on: string;
+              summary?: string;
+              message?: string;
+              found?: unknown;
+              property?: string;
+              expected?: string;
+            });
+            428: T9a51b7d2bc;
+            429: T9a51b7d2bc;
+            500: T9a51b7d2bc;
+            502: T9a51b7d2bc;
+            503: T9a51b7d2bc;
+          };
+        };
+      };
+    };
     playbooks: {
       get: {
         body: Record<never, never>;
@@ -34118,6 +34370,10 @@ type T0548b5740f = {
   output?: unknown;
 } & T4d73965770;
 
+type T058aa8b860 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "timeTimer";
+};
+
 type T059c285743 = {
   skillName: string;
   path: string;
@@ -34778,6 +35034,18 @@ type T16f65ff3fd = "at" | "cz" | "de" | "eu" | "global" | "sk";
 
 type T173eec1550 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "property";
+};
+
+type T177a854d0e = {
+  id: T058aa8b860;
+  matterId: T63854f81c6;
+  description: Tbe0400fa4c;
+  state: ("paused" | "running");
+  startedAt: string;
+  accumulatedSeconds: number;
+  lastResumedAt: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type T1791c676c5 = {
@@ -36051,6 +36319,10 @@ type T3217a347d4 = {
     key: string;
     template: string;
   }>;
+};
+
+type T32313cfbba = {
+  id: T058aa8b860;
 };
 
 type T32a2c3700a = string & valibot_Brand<"SafeId"> & {
@@ -37352,6 +37624,11 @@ type T6b718d91dc = {
       parentToolCallId?: string;
     };
   })>;
+};
+
+type T6b880dac0c = {
+  description?: string | null;
+  matterId?: T9e07a7d6cd | null;
 };
 
 type T6bbfe677bd = "daily" | "monthly" | "weekly";
