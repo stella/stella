@@ -1,5 +1,9 @@
 import type { Result } from "better-result";
 
+import type {
+  LEGISLATION_WINDOW_DISPOSITION_BASES,
+  LegislationExpressionKind,
+} from "@stll/api-contract/legislation-expression";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -55,11 +59,41 @@ export type VersionWindowEnd =
   /** The last day this text applied; the corpus bound is the day after. */
   | { type: "last-day-in-force"; on: string };
 
-/** The consolidation a row holds, as the publisher states it. */
+/** Why a version the publisher states never applied carries that reading. */
+export type NeverInForceBasis =
+  (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)["never-in-force"][number];
+
+/** Which way a publisher's stated window fails to place a single day. */
+export type InvalidWindowBasis =
+  (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)["invalid-window"][number];
+
+/**
+ * The consolidation a row holds, as the publisher states it.
+ *
+ * The last two carry a window that answers no point-in-time read, stated with
+ * why, so a connector passes the publisher's dates through as they are and
+ * never repairs them from a neighbour. Their dates are converted like any
+ * other (`storedWindow`) but not required to hold a day: a version that
+ * cannot apply has no window to validate, only a basis its dates must match.
+ */
 export type VersionWindow =
   /** A work kept as one text with no consolidation history. */
   | { type: "unversioned" }
-  | { type: "consolidation"; validFrom: string; end: VersionWindowEnd };
+  | { type: "consolidation"; validFrom: string; end: VersionWindowEnd }
+  /** The publisher states the version never took effect. */
+  | {
+      type: "never-in-force";
+      validFrom: string | null;
+      end: VersionWindowEnd;
+      basis: NeverInForceBasis;
+    }
+  /** The publisher's window is reversed, empty, or has no start. */
+  | {
+      type: "invalid-window";
+      validFrom: string | null;
+      end: VersionWindowEnd;
+      basis: InvalidWindowBasis;
+    };
 
 /**
  * The publisher's own identity for the version a row holds.
@@ -74,10 +108,24 @@ export type VersionWindow =
  */
 export type LegislationExpressionIdentity = {
   publisherId: string;
+  /**
+   * The kind of text the version holds. Omitted, it follows the window: a
+   * work declared `unversioned` is one, anything else a consolidation. A
+   * connector states `promulgated` for the text as first published.
+   */
+  kind?: LegislationExpressionKind | undefined;
 };
 
-/** How an observation reached the writer. */
-type LegislationObservationOrigin = "live" | "stored-raw-replay";
+/**
+ * How an observation reached the writer. Only a `live` fetch shows what the
+ * publisher lists now. A `bulk-snapshot` (a publisher's dump, read whenever it
+ * was produced) and a `stored-raw-replay` (a reparse of a payload stored
+ * earlier) show what it listed then.
+ */
+type LegislationObservationOrigin =
+  | "live"
+  | "bulk-snapshot"
+  | "stored-raw-replay";
 
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {
@@ -104,14 +152,17 @@ export type LegislationDocumentInput = {
   /**
    * Optional while writers built against the earlier contract drain; their
    * rows are matched by version window and given an id later. A connector
-   * that can name the publisher's version supplies it.
+   * that can name the publisher's version supplies it, and must for any
+   * version other than an effective consolidation or an unversioned work:
+   * the window cannot tell two versions opening the same day apart, so a
+   * typed version without an id is refused.
    */
   expression?: LegislationExpressionIdentity | undefined;
   /**
-   * Where the observation comes from. A reparse of a payload stored earlier
-   * (`stored-raw-replay`) proves what the publisher served then, not that it
-   * still lists the version, so it never restores a withdrawn one; only a
-   * live fetch does. Omitted means live.
+   * Where the observation comes from; omitted means live. Only a live one
+   * restores a withdrawn version, and only one withdrawn for no longer being
+   * listed: an observation of what the publisher listed earlier does not
+   * prove it lists the version now.
    */
   origin?: LegislationObservationOrigin | undefined;
   fulltext?: string | null;

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -17,8 +17,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import type {
   LegislationDocumentInput,
+  VersionWindow,
   VersionWindowEnd,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
+import { logger } from "@/api/lib/observability/logger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -103,6 +105,7 @@ const rowsOf = async (act: string) =>
       title: legislationDocuments.title,
       validFrom: legislationDocuments.versionValidFrom,
       validTo: legislationDocuments.versionValidTo,
+      kind: legislationDocuments.expressionKind,
       disposition: legislationDocuments.windowDisposition,
       basis: legislationDocuments.windowDispositionBasis,
     })
@@ -491,6 +494,188 @@ describe("legislation writer identity", () => {
         sql`DROP TRIGGER test_writer_fence ON legislation_documents`,
       );
     }
+  });
+
+  test("a version that cannot apply is stored as stated, and each correction lands on its row", async () => {
+    const act = "2005/78";
+    const iri = iriOf(act, "v1");
+    const typed = (window: VersionWindow) => ({
+      ...version({ act, validFrom: "2006-01-01", iri }),
+      version: window,
+    });
+    // Closed the day before it opened: replaced before it took effect.
+    const neverInForce = typed({
+      type: "never-in-force",
+      validFrom: "2006-01-01",
+      end: { type: "last-day-in-force", on: "2005-12-31" },
+      basis: "replaced-same-day",
+    });
+
+    const first = await store(neverInForce);
+    const asStated = await rowsOf(act);
+    const corrected = await store(
+      typed({
+        type: "consolidation",
+        validFrom: "2006-01-01",
+        end: { type: "open" },
+      }),
+    );
+    const effective = await rowsOf(act);
+    const reverted = await store(neverInForce);
+    const replayed = await store(neverInForce);
+
+    expect(asStated).toEqual([
+      expect.objectContaining({
+        id: first.id,
+        publisherId: `${NAMESPACE}:${iri}`,
+        validFrom: "2006-01-01",
+        validTo: "2006-01-01",
+        kind: "consolidation",
+        disposition: "never-in-force",
+        basis: "replaced-same-day",
+      }),
+    ]);
+    expect([corrected.id, reverted.id]).toEqual([first.id, first.id]);
+    expect(effective).toEqual([
+      expect.objectContaining({
+        validTo: null,
+        disposition: "effective",
+        basis: null,
+      }),
+    ]);
+    expect(await rowsOf(act)).toEqual(asStated);
+    expect(replayed).toMatchObject({ id: first.id, skipped: true });
+  });
+
+  test("a promulgated text carries its own kind", async () => {
+    const act = "2012/89-promulgated";
+    const input = version({ act, validFrom: "2012-03-22" });
+    const promulgated = {
+      ...input,
+      expression: {
+        publisherId: `${NAMESPACE}:${iriOf(act, "0000-00-00")}`,
+        kind: "promulgated",
+      },
+    } as const satisfies LegislationDocumentInput;
+
+    const first = await store(promulgated);
+    const replayed = await store(promulgated);
+
+    expect(await rowsOf(act)).toEqual([
+      expect.objectContaining({
+        id: first.id,
+        kind: "promulgated",
+        disposition: "effective",
+        basis: null,
+      }),
+    ]);
+    expect(replayed).toMatchObject({ id: first.id, skipped: true });
+  });
+
+  test("a typed version without the publisher's id, or a kind its window contradicts, is refused", async () => {
+    const act = "2013/90-refused";
+    const input = version({ act, validFrom: "2014-01-01" });
+    const refusal = async (refused: LegislationDocumentInput) =>
+      await store(refused).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    const withoutId = await refusal({
+      ...version({ act, validFrom: "2014-01-01", withId: false }),
+      version: {
+        type: "invalid-window",
+        validFrom: "2014-01-01",
+        end: { type: "exclusive", on: "2013-01-01" },
+        basis: "reversed",
+      },
+    });
+    // A dated version declared a work kept as one text.
+    const contradicted = await refusal({
+      ...input,
+      expression: {
+        publisherId: input.expression?.publisherId ?? "",
+        kind: "unversioned",
+      },
+    });
+
+    expect(String(withoutId)).toContain("needs the publisher's id");
+    expect(String(contradicted)).toContain("contradicts its window");
+    expect(await rowsOf(act)).toEqual([]);
+  });
+
+  test("a version that cannot apply is no neighbour at ingest", async () => {
+    const act = "2020/97";
+    const reported = spyOn(logger, "error");
+    try {
+      await store(
+        version({
+          act,
+          validFrom: "2020-01-01",
+          end: { type: "exclusive", on: "2021-01-01" },
+        }),
+      );
+      // Opens the day after its predecessor closes, which between two
+      // versions that apply is an inclusive end passed through unshifted.
+      await store({
+        ...version({ act, validFrom: "2021-01-02" }),
+        version: {
+          type: "invalid-window",
+          validFrom: "2021-01-02",
+          end: { type: "last-day-in-force", on: "2020-12-31" },
+          basis: "reversed",
+        },
+      });
+
+      expect(reported).not.toHaveBeenCalled();
+      expect(await rowsOf(act)).toHaveLength(2);
+    } finally {
+      reported.mockRestore();
+    }
+  });
+
+  test("a live listing lifts only a withdrawal for being unlisted; a snapshot or a replay lifts none", async () => {
+    const origins = ["live", "bulk-snapshot", "stored-raw-replay"] as const;
+    const bases = [
+      "publisher-unlisted",
+      "listed-not-stored",
+      "deferred-promulgated",
+    ] as const;
+    const outcomes: Record<string, string> = {};
+    let act = 0;
+    for (const basis of bases) {
+      for (const origin of origins) {
+        act += 1;
+        const input = version({ act: `2031/${act}`, validFrom: "2031-01-01" });
+        const stored = await store(input);
+        await db
+          .update(legislationDocuments)
+          .set({
+            windowDisposition: "withdrawn",
+            windowDispositionBasis: basis,
+          })
+          .where(eq(legislationDocuments.id, stored.id));
+
+        // The same content: only the observation's origin varies.
+        await store({ ...input, origin });
+        const [after] = await rowsOf(`2031/${act}`);
+        outcomes[`${basis} ${origin}`] =
+          `${after?.disposition ?? "missing"} ${after?.basis ?? ""}`.trim();
+      }
+    }
+
+    expect(outcomes).toEqual({
+      "publisher-unlisted live": "effective",
+      "publisher-unlisted bulk-snapshot": "withdrawn publisher-unlisted",
+      "publisher-unlisted stored-raw-replay": "withdrawn publisher-unlisted",
+      "listed-not-stored live": "effective",
+      "listed-not-stored bulk-snapshot": "withdrawn listed-not-stored",
+      "listed-not-stored stored-raw-replay": "withdrawn listed-not-stored",
+      "deferred-promulgated live": "withdrawn deferred-promulgated",
+      "deferred-promulgated bulk-snapshot": "withdrawn deferred-promulgated",
+      "deferred-promulgated stored-raw-replay":
+        "withdrawn deferred-promulgated",
+    });
   });
 
   // Last: it retires the version-window key the other tests still rely on,

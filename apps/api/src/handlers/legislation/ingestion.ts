@@ -3,6 +3,8 @@ import { and, asc, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
+import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
 
 import type { Transaction } from "@/api/db/root";
@@ -13,6 +15,7 @@ import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/inge
 import {
   defectiveJunctions,
   storedWindow,
+  windowDisposition,
 } from "@/api/handlers/legislation/version-windows";
 import type { StoredWindow } from "@/api/handlers/legislation/version-windows";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -48,10 +51,7 @@ import {
   MAX_SYNC_PAGES,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
-import {
-  EFFECTIVE_CONSOLIDATION,
-  typedLegislationClassification,
-} from "@/api/lib/legal-search/legislation-expression-classification";
+import { typedLegislationClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type {
   LegislationDocumentInput,
@@ -120,7 +120,10 @@ const sanitizeInput = (
   expression:
     input.expression === undefined
       ? undefined
-      : { publisherId: stripDangerousChars(input.expression.publisherId) },
+      : {
+          ...input.expression,
+          publisherId: stripDangerousChars(input.expression.publisherId),
+        },
 });
 
 /**
@@ -327,6 +330,7 @@ export const legislationSourceHash = (
 type ReportWindowJunctionsArgs = {
   input: Pick<LegislationDocumentInput, "sourceId" | "eli" | "language">;
   window: StoredWindow;
+  classification: LegislationExpressionClassification;
   documentId: SafeId<"legislationDocument">;
   scopedDb: ScopedDb;
 };
@@ -334,11 +338,14 @@ type ReportWindowJunctionsArgs = {
 const reportWindowJunctions = async ({
   input,
   window,
+  classification,
   documentId,
   scopedDb,
 }: ReportWindowJunctionsArgs): Promise<void> => {
   const validFrom = window.versionValidFrom;
-  if (validFrom === null) {
+  // A version that cannot apply meets no neighbour: its dates are the
+  // publisher's as stated, not a window any read would cross.
+  if (validFrom === null || !isEligibleLegislationExpression(classification)) {
     return;
   }
   // Only versions that can apply are neighbours: a version that never took
@@ -467,35 +474,80 @@ const storeSourceRaw = async ({
 };
 
 /**
- * What the input says the version is. The contract can only express a
- * version with a placeable window, so every write states it effective; its
- * kind follows the input's version shape. A row that says otherwise is a
- * changed row, not an unchanged one.
+ * What the input says the version is: the kind its connector states, or the
+ * one its window implies, and the disposition its window declares.
  *
- * Except a withdrawal a replay cannot lift: a payload stored earlier proves
- * what the publisher served then, not that it lists the version now, so a
- * reparse of it keeps a withdrawn version exactly as stored: its kind, its
- * disposition and its basis. Only a live observation restores one.
+ * A typed version (anything but an effective consolidation or unversioned
+ * work) must carry the publisher's id. Without one it is found by its start
+ * date, which two versions opening the same day share, so its classification
+ * could land on the other one; that is a connector defect, named here.
+ */
+const statedClassification = (
+  input: LegislationDocumentInput,
+): LegislationExpressionClassification => {
+  const unversioned = input.version.type === "unversioned";
+  const expressionKind =
+    input.expression?.kind ?? (unversioned ? "unversioned" : "consolidation");
+  if ((expressionKind === "unversioned") !== unversioned) {
+    return panic("legislation expression kind contradicts its window", {
+      eli: input.eli,
+      kind: expressionKind,
+      window: input.version.type,
+    });
+  }
+  const classification = {
+    expressionKind,
+    ...windowDisposition(input.version),
+  };
+  if (
+    input.expression === undefined &&
+    typedLegislationClassification(classification) !== null
+  ) {
+    return panic("a typed legislation version needs the publisher's id", {
+      eli: input.eli,
+      ...classification,
+    });
+  }
+  return classification;
+};
+
+/**
+ * The withdrawals a live listing of the version lifts: those that say only
+ * that the publisher stopped listing it (or kept it out of the corpus), which
+ * a listing now answers. A withdrawal for any other reason is the census's to
+ * lift, whatever a writer sees.
+ */
+const LIFTED_BY_A_LIVE_LISTING: readonly LegislationWindowDispositionBasis[] = [
+  "publisher-unlisted",
+  "listed-not-stored",
+];
+
+/**
+ * What the row will say the version is: what the input states, unless the
+ * stored row is a withdrawal this observation cannot lift. Then the row keeps
+ * exactly what it holds (kind, disposition and basis), and only its payload is
+ * refreshed. A snapshot or a replay of a stored payload proves what the
+ * publisher listed then, not now, so it lifts none.
  */
 const storedClassification = (
   input: LegislationDocumentInput,
+  stated: LegislationExpressionClassification,
   existing: StoredVersion | undefined,
 ): LegislationExpressionClassification => {
-  if (
-    input.origin === "stored-raw-replay" &&
-    existing?.windowDisposition === "withdrawn"
-  ) {
-    return {
-      expressionKind: existing.expressionKind,
-      windowDisposition: existing.windowDisposition,
-      windowDispositionBasis: existing.windowDispositionBasis,
-    };
+  if (existing?.windowDisposition !== "withdrawn") {
+    return stated;
   }
-  return {
-    ...EFFECTIVE_CONSOLIDATION,
-    expressionKind:
-      input.version.type === "unversioned" ? "unversioned" : "consolidation",
-  };
+  const lifted =
+    (input.origin ?? "live") === "live" &&
+    existing.windowDispositionBasis !== null &&
+    LIFTED_BY_A_LIVE_LISTING.includes(existing.windowDispositionBasis);
+  return lifted
+    ? stated
+    : {
+        expressionKind: existing.expressionKind,
+        windowDisposition: existing.windowDisposition,
+        windowDispositionBasis: existing.windowDispositionBasis,
+      };
 };
 
 const hasStoredClassification = (
@@ -786,10 +838,11 @@ export const processLegislationDocument = async (
   const sections = input.sections ?? null;
   const ast = input.ast ?? null;
   const window = storedWindow(input.version);
+  const stated = statedClassification(input);
   const expectedContentHash = corpusContentHash({ text, sections, ast });
 
   let existing = await findStoredVersion({ input, window, scopedDb });
-  const classification = storedClassification(input, existing);
+  const classification = storedClassification(input, stated, existing);
   const sourceHash = legislationSourceHash(input, window, classification);
   const existingCorpusPlan =
     existing === undefined
@@ -903,7 +956,13 @@ export const processLegislationDocument = async (
   const inserted = written.row === undefined;
   existing = written.row;
 
-  await reportWindowJunctions({ input, window, documentId: id, scopedDb });
+  await reportWindowJunctions({
+    input,
+    window,
+    classification,
+    documentId: id,
+    scopedDb,
+  });
 
   let corpusWriteFailed = false;
   // Legislation mirrors the payload whenever corpus storage is on and never

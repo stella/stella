@@ -2,7 +2,11 @@ import { panic } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import type { VersionWindow } from "@/api/lib/legal-search/legislation-ingestion-types";
+import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
+import type {
+  VersionWindow,
+  VersionWindowEnd,
+} from "@/api/lib/legal-search/legislation-ingestion-types";
 
 /** A window in the corpus's own terms: half-open, closing date exclusive. */
 export type StoredWindow = {
@@ -26,48 +30,138 @@ const calendarDay = (isoDate: string): Temporal.PlainDate => {
   return Temporal.PlainDate.from(isoDate);
 };
 
+/** The corpus's exclusive close for a publisher's stated end. */
+const closingDay = (end: VersionWindowEnd): Temporal.PlainDate | null => {
+  switch (end.type) {
+    case "open":
+      return null;
+    case "exclusive":
+      return calendarDay(end.on);
+    case "last-day-in-force":
+      return calendarDay(end.on).add({ days: 1 });
+    default:
+      end satisfies never;
+      return panic("legislation version window end has no stored form", {
+        end,
+      });
+  }
+};
+
+/**
+ * How a stated window's two bounds relate, once converted: whether it has a
+ * start at all, and whether it holds a day, none, or runs backwards.
+ */
+const windowShape = (
+  opens: Temporal.PlainDate | null,
+  closes: Temporal.PlainDate | null,
+): "missing-start" | "open" | "positive" | "zero-length" | "reversed" => {
+  if (opens === null) {
+    return "missing-start";
+  }
+  if (closes === null) {
+    return "open";
+  }
+  const order = Temporal.PlainDate.compare(closes, opens);
+  if (order > 0) {
+    return "positive";
+  }
+  return order === 0 ? "zero-length" : "reversed";
+};
+
+/**
+ * The shape each basis names. A basis is the connector's reading of the dates
+ * it passes, so one the dates contradict (a `reversed` window that holds a
+ * day, a `missing-start` one with a start) is a connector defect, named here
+ * rather than stored. A publisher's own never-in-force flag names no shape.
+ */
+const BASIS_SHAPES = {
+  "zero-length-window": ["zero-length"],
+  reversed: ["reversed"],
+  "missing-start": ["missing-start"],
+  // The publisher closes the version the day before it opens, because the
+  // next one opens that day instead.
+  "replaced-same-day": ["zero-length"],
+  "publisher-flag": null,
+} as const satisfies Record<
+  Extract<VersionWindow, { basis: string }>["basis"],
+  readonly ReturnType<typeof windowShape>[] | null
+>;
+
 /**
  * The publisher's window in the corpus's terms. The one place a publisher's
  * closing-date convention is converted: a connector declares it on
  * `VersionWindow` and never shifts a date itself, so every connector, present
  * and future, stores the same half-open bound.
+ *
+ * Only a window that can apply has to hold a day. One the connector declares
+ * never in force or invalid is stored exactly as stated, and only has to be
+ * the shape its basis names.
  */
 export const storedWindow = (version: VersionWindow): StoredWindow => {
   if (version.type === "unversioned") {
     return { versionValidFrom: null, versionValidTo: null };
   }
-  const { end } = version;
-  const opens = calendarDay(version.validFrom);
-  const closes = ((): Temporal.PlainDate | null => {
-    switch (end.type) {
-      case "open":
-        return null;
-      case "exclusive":
-        return calendarDay(end.on);
-      case "last-day-in-force":
-        return calendarDay(end.on).add({ days: 1 });
-      default:
-        end satisfies never;
-        return panic("legislation version window end has no stored form", {
-          end,
-        });
+  const opens =
+    version.validFrom === null ? null : calendarDay(version.validFrom);
+  const closes = closingDay(version.end);
+  const shape = windowShape(opens, closes);
+  if (version.type === "consolidation") {
+    // A finite window closes after it opens, or it holds no day at all: an
+    // empty or reversed window is a connector reading its publisher wrong,
+    // and the junction check would not see it (it compares neighbours, not a
+    // window with itself). One the publisher really states that way is
+    // declared `invalid-window`.
+    if (shape === "zero-length" || shape === "reversed") {
+      return panic("legislation version window closes on or before it opens", {
+        validFrom: opens?.toString(),
+        validTo: closes?.toString(),
+        end: version.end,
+      });
     }
-  })();
-  // A finite window closes after it opens, or it holds no day at all: an
-  // empty or reversed window is a connector reading its publisher wrong, and
-  // the junction check would not see it (it compares neighbours, not a
-  // window with itself).
-  if (closes !== null && Temporal.PlainDate.compare(closes, opens) <= 0) {
-    return panic("legislation version window closes on or before it opens", {
-      validFrom: opens.toString(),
-      validTo: closes.toString(),
-      end,
-    });
+  } else {
+    const shapes: readonly string[] | null = BASIS_SHAPES[version.basis];
+    if (shapes !== null && !shapes.includes(shape)) {
+      return panic("legislation version window does not match its basis", {
+        type: version.type,
+        basis: version.basis,
+        shape,
+        validFrom: opens?.toString() ?? null,
+        validTo: closes?.toString() ?? null,
+      });
+    }
   }
   return {
-    versionValidFrom: opens.toString(),
+    versionValidFrom: opens?.toString() ?? null,
     versionValidTo: closes?.toString() ?? null,
   };
+};
+
+/**
+ * Whether the publisher's window can answer a point-in-time read, and why not
+ * when it cannot: what the connector declared, as the corpus stores it.
+ */
+export const windowDisposition = (
+  version: VersionWindow,
+): Pick<
+  LegislationExpressionClassification,
+  "windowDisposition" | "windowDispositionBasis"
+> => {
+  switch (version.type) {
+    case "unversioned":
+    case "consolidation":
+      return { windowDisposition: "effective", windowDispositionBasis: null };
+    case "never-in-force":
+    case "invalid-window":
+      return {
+        windowDisposition: version.type,
+        windowDispositionBasis: version.basis,
+      };
+    default:
+      version satisfies never;
+      return panic("legislation version window has no disposition", {
+        version,
+      });
+  }
 };
 
 /**
