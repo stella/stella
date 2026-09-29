@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { LEGISLATION_WINDOW_DISPOSITION_BASES } from "@stll/api-contract/legislation-expression";
 
@@ -9,6 +9,7 @@ import { legislationDocuments } from "@/api/db/schema";
 import { declareWriterContract } from "@/api/handlers/legislation/ingestion";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  CorpusIndexProjectionSubjectMissingError,
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -23,7 +24,7 @@ import { stripDangerousChars } from "@/api/lib/legal-search/corpus-sanitize";
  */
 
 /** Why a stored version is withdrawn. */
-export type LegislationWithdrawalBasis =
+type LegislationWithdrawalBasis =
   (typeof LEGISLATION_WINDOW_DISPOSITION_BASES)["withdrawn"][number];
 
 /** The most withdrawals one call applies. */
@@ -38,14 +39,18 @@ export type LegislationWithdrawal = {
   publisherId: string;
   basis: LegislationWithdrawalBasis;
   /**
-   * The row's `payload_revision` when the census decided. The withdrawal
-   * applies only while the row still carries it, so a census that read the
-   * row before a newer observation cannot tombstone that observation.
+   * The row's `payload_revision` and `source_hash` when the census read it.
+   * The withdrawal applies only while the row still carries both, so it
+   * cannot overwrite a write that changed the row after that read: a changed
+   * payload or window moves the revision, and a changed field of any other
+   * kind moves the hash. A re-observation that changed nothing writes nothing
+   * and cannot be told apart; the census's own listing has to exclude it.
    */
   observedPayloadRevision: bigint;
+  observedSourceHash: string | null;
 };
 
-export type LegislationWithdrawalOutcome =
+type LegislationWithdrawalOutcome =
   /** Withdrawn now; its search projection is erased with it. */
   | { type: "withdrawn"; id: SafeId<"legislationDocument"> }
   /** Already withdrawn on this basis: a replayed withdrawal. */
@@ -55,6 +60,7 @@ export type LegislationWithdrawalOutcome =
       type: "stale";
       id: SafeId<"legislationDocument">;
       payloadRevision: bigint;
+      sourceHash: string | null;
     }
   /** No stored version carries the id. */
   | { type: "missing" };
@@ -86,50 +92,60 @@ export const withdrawalTargetQuery = (
     .limit(1);
 
 /**
- * Withdraw one version, and bring its desired search projection to the
- * erase in the same transaction: nothing later re-derives it, so a
- * withdrawal committed without it would stay searchable.
+ * Withdraw the version the lookup found, and bring its desired search
+ * projection to the erase in the same transaction: nothing later re-derives
+ * it, so a withdrawal committed without it would stay searchable. A version
+ * gone since the lookup is `missing`, like one never stored.
  */
-const withdrawOne = async (
+const withdrawTarget = async (
   tx: Transaction,
-  raw: LegislationWithdrawal,
+  id: SafeId<"legislationDocument">,
+  withdrawal: LegislationWithdrawal,
 ): Promise<LegislationWithdrawalOutcome> => {
-  const withdrawal = {
-    ...raw,
-    eli: stripDangerousChars(raw.eli),
-    publisherId: stripDangerousChars(raw.publisherId),
-  };
   await declareWriterContract(tx);
-  const target = (await withdrawalTargetQuery(tx, withdrawal)).at(0);
-  if (target === undefined) {
-    return { type: "missing" };
-  }
-  const subject = { family: "legislation", entityId: target.id } as const;
+  const subject = { family: "legislation", entityId: id } as const;
   // The source before the row, in the order every legislation writer takes
   // them.
-  const projectionLock = await lockActiveCorpusProjectionSourceTx(tx, subject);
+  const projectionLock = await lockActiveCorpusProjectionSourceTx(
+    tx,
+    subject,
+  ).catch((error: unknown) => {
+    if (error instanceof CorpusIndexProjectionSubjectMissingError) {
+      return "missing" as const;
+    }
+    throw error;
+  });
+  if (projectionLock === "missing") {
+    return { type: "missing" };
+  }
   const row = (
     await tx
       .select({
         payloadRevision: legislationDocuments.payloadRevision,
+        sourceHash: legislationDocuments.sourceHash,
         windowDisposition: legislationDocuments.windowDisposition,
         windowDispositionBasis: legislationDocuments.windowDispositionBasis,
       })
       .from(legislationDocuments)
-      .where(eq(legislationDocuments.id, target.id))
+      .where(eq(legislationDocuments.id, id))
       .for("update")
   ).at(0);
   if (row === undefined) {
-    return panic("locked legislation version disappeared", { id: target.id });
+    return { type: "missing" };
   }
   const replayed =
     row.windowDisposition === "withdrawn" &&
     row.windowDispositionBasis === withdrawal.basis;
-  if (!replayed && row.payloadRevision !== withdrawal.observedPayloadRevision) {
+  if (
+    !replayed &&
+    (row.payloadRevision !== withdrawal.observedPayloadRevision ||
+      row.sourceHash !== withdrawal.observedSourceHash)
+  ) {
     return {
       type: "stale",
-      id: target.id,
+      id,
       payloadRevision: row.payloadRevision,
+      sourceHash: row.sourceHash,
     };
   }
   if (!replayed) {
@@ -144,17 +160,18 @@ const withdrawOne = async (
       })
       .where(
         and(
-          eq(legislationDocuments.id, target.id),
+          eq(legislationDocuments.id, id),
           eq(
             legislationDocuments.payloadRevision,
             withdrawal.observedPayloadRevision,
           ),
+          sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${withdrawal.observedSourceHash}`,
         ),
       )
       .returning({ id: legislationDocuments.id });
     if (written.length !== 1) {
       return panic("locked legislation version refused its withdrawal", {
-        id: target.id,
+        id,
       });
     }
   }
@@ -166,15 +183,14 @@ const withdrawOne = async (
       subject,
     });
   }
-  return { type: replayed ? "unchanged" : "withdrawn", id: target.id };
+  return { type: replayed ? "unchanged" : "withdrawn", id };
 };
 
 /**
  * Withdraw stored versions by the publisher's id, each under a
- * compare-and-set on the payload revision the census observed. Idempotent: a
- * replayed withdrawal is `unchanged`, and a stale one writes nothing. One
- * short transaction per version, so one version's failure leaves the others'
- * outcomes durable.
+ * compare-and-set on what the census read. Idempotent: a replayed withdrawal
+ * is `unchanged`, and a stale one writes nothing. One short transaction per
+ * version, so one version's outcome never depends on another's.
  */
 export const withdrawLegislationVersions = async (
   withdrawals: readonly LegislationWithdrawal[],
@@ -187,11 +203,27 @@ export const withdrawLegislationVersions = async (
     });
   }
   const outcomes: LegislationWithdrawalOutcome[] = [];
-  for (const withdrawal of withdrawals) {
+  for (const raw of withdrawals) {
+    const withdrawal = {
+      ...raw,
+      eli: stripDangerousChars(raw.eli),
+      publisherId: stripDangerousChars(raw.publisherId),
+    };
+    // Found before the transaction that locks it, so a version removed in
+    // between is a `missing` outcome rather than a failed batch.
+    // db-await-in-loop: one lookup per version, bounded by the batch limit
+    const target = (
+      await scopedDb(async (tx) => await withdrawalTargetQuery(tx, withdrawal))
+    ).at(0);
+    if (target === undefined) {
+      outcomes.push({ type: "missing" });
+      continue;
+    }
     // db-await-in-loop: one short transaction per version, bounded by the batch limit
-    outcomes.push(
-      await scopedDb(async (tx) => await withdrawOne(tx, withdrawal)),
+    const outcome = await scopedDb(
+      async (tx) => await withdrawTarget(tx, target.id, withdrawal),
     );
+    outcomes.push(outcome);
   }
   return outcomes;
 };

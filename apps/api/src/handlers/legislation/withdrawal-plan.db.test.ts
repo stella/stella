@@ -20,14 +20,15 @@ import {
   type LegislationWithdrawal,
 } from "@/api/handlers/legislation/withdrawal";
 import { toSafeId } from "@/api/lib/branded-types";
-import { executedRows } from "@/api/lib/db/executed-rows";
-import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
-import { SYNTHETIC_SCALE_PROFILE } from "@/api/tests/query-plans/scale-profile";
+import {
+  scaleTableToProfile,
+  SYNTHETIC_SCALE_PROFILE,
+} from "@/api/tests/query-plans/scale-profile";
 
 const DB_TEST_TIMEOUT_MS = 120_000;
 const TABLE = "legislation_documents";
@@ -153,87 +154,6 @@ const expectWorkSeek = async () => {
   expect(scan?.indexCond ?? "").toContain("eli");
 };
 
-/** Physical statistics restored at the synthetic profile's size. */
-const scaleDocumentsToProfile = async () => {
-  const scale = SYNTHETIC_SCALE_PROFILE.tables.legislation_documents;
-  const restored = (result: unknown, what: string) => {
-    const [row] = executedRows(result);
-    if (!isRecord(row) || row["restored"] !== true) {
-      panic(`could not scale ${what}`);
-    }
-  };
-  const [pages] = executedRows(
-    await db.execute(
-      sql`SELECT relpages, reltuples FROM pg_class WHERE oid = ${TABLE}::regclass`,
-    ),
-  );
-  const relpages = isRecord(pages) ? pages["relpages"] : undefined;
-  const reltuples = isRecord(pages) ? pages["reltuples"] : undefined;
-  if (typeof relpages !== "number" || typeof reltuples !== "number") {
-    return panic("the documents table has no physical pages");
-  }
-  const growth = scale.reltuples / reltuples;
-  const indexes = executedRows(
-    await db.execute(sql`
-      SELECT c.relname, c.relpages, c.reltuples
-        FROM pg_index AS i
-        JOIN pg_class AS c ON c.oid = i.indexrelid
-       WHERE i.indrelid = ${TABLE}::regclass
-    `),
-  );
-  for (const index of indexes) {
-    if (
-      !isRecord(index) ||
-      typeof index["relname"] !== "string" ||
-      typeof index["relpages"] !== "number" ||
-      typeof index["reltuples"] !== "number"
-    ) {
-      return panic("index statistics are malformed");
-    }
-    restored(
-      await db.execute(sql`
-        SELECT pg_restore_relation_stats(
-          'schemaname', 'public', 'relname', ${index["relname"]}::text,
-          'relpages', ${Math.ceil(index["relpages"] * growth)}::integer,
-          'reltuples', ${Math.max(index["reltuples"], 0) * growth}::real
-        ) AS restored
-      `),
-      index["relname"],
-    );
-  }
-  restored(
-    await db.execute(sql`
-      SELECT pg_restore_relation_stats(
-        'schemaname', 'public', 'relname', ${TABLE}::text,
-        'reltuples', ${scale.reltuples}::real,
-        'relallvisible', ${Math.round(relpages * scale.allVisibleFraction)}::integer
-      ) AS restored
-    `),
-    TABLE,
-  );
-  for (const attribute of SYNTHETIC_SCALE_PROFILE.attributes) {
-    if (attribute.table !== TABLE) {
-      continue;
-    }
-    await db.execute(sql`
-      SELECT pg_clear_attribute_stats(
-        'public', ${TABLE}::text, ${attribute.column}::text, false
-      )
-    `);
-    restored(
-      await db.execute(sql`
-        SELECT pg_restore_attribute_stats(
-          'schemaname', 'public', 'relname', ${TABLE}::text,
-          'attname', ${attribute.column}::text, 'inherited', false,
-          'null_frac', ${attribute.nullFraction}::real,
-          'n_distinct', ${attribute.distinctValues}::real
-        ) AS restored
-      `),
-      `${TABLE}.${attribute.column}`,
-    );
-  }
-};
-
 test(
   "the lookup answers with the one version the id names",
   async () => {
@@ -249,7 +169,7 @@ test(
   "the lookup seeks the work by its identifier, and still does at scale",
   async () => {
     await expectWorkSeek();
-    await scaleDocumentsToProfile();
+    await scaleTableToProfile(db, TABLE, SYNTHETIC_SCALE_PROFILE);
     await expectWorkSeek();
   },
   DB_TEST_TIMEOUT_MS,

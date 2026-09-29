@@ -110,7 +110,7 @@ const stateOf = async (id: SafeId<"legislationDocument">) =>
 
 const withdrawalOf = (
   input: ReturnType<typeof version>,
-  observedPayloadRevision: bigint,
+  observed: { payloadRevision: bigint; sourceHash: string | null },
   basis: LegislationWithdrawal["basis"] = "publisher-unlisted",
 ): LegislationWithdrawal => ({
   sourceId: input.sourceId,
@@ -118,7 +118,8 @@ const withdrawalOf = (
   language: input.language,
   publisherId: input.expression.publisherId,
   basis,
-  observedPayloadRevision,
+  observedPayloadRevision: observed.payloadRevision,
+  observedSourceHash: observed.sourceHash,
 });
 
 beforeAll(async () => {
@@ -153,19 +154,19 @@ test("a withdrawal erases the projection in its own transaction, replays as a no
   const listed = await stateOf(stored.id);
 
   const [withdrawn] = await withdrawLegislationVersions(
-    [withdrawalOf(input, listed.payloadRevision)],
+    [withdrawalOf(input, listed)],
     scopedDb,
   );
   const tombstone = await stateOf(stored.id);
   // The census re-sends what it decided; the row has moved on since.
   const [replayed] = await withdrawLegislationVersions(
-    [withdrawalOf(input, listed.payloadRevision)],
+    [withdrawalOf(input, listed)],
     scopedDb,
   );
   const afterReplay = await stateOf(stored.id);
-  const relisted = await store(input);
+  const relisted = await store({ ...input, origin: "live" });
   const restored = await stateOf(stored.id);
-  const relistedAgain = await store(input);
+  const relistedAgain = await store({ ...input, origin: "live" });
 
   expect(listed).toMatchObject({ disposition: "effective", action: "upsert" });
   expect(withdrawn).toEqual({ type: "withdrawn", id: stored.id });
@@ -197,26 +198,71 @@ test("a withdrawal erases the projection in its own transaction, replays as a no
   expect(await stateOf(stored.id)).toEqual(restored);
 });
 
-test("a withdrawal decided before a newer observation writes nothing", async () => {
-  const input = version("2018/95");
-  const stored = await store(input);
-  const observed = await stateOf(stored.id);
-  await store(version("2018/95", "§ 1 Amended wording."));
-  const newer = await stateOf(stored.id);
+test("a withdrawal decided before a newer observation writes nothing, whatever the observation changed", async () => {
+  // A new wording moves the payload revision; a new title alone moves only
+  // the source hash.
+  const newerObservations = [
+    ["2018/95", { fulltext: "§ 1 Amended wording." }, true],
+    ["2018/96", { title: "Retitled act" }, false],
+  ] as const;
+  for (const [act, change, revisionMoves] of newerObservations) {
+    const input = version(act);
+    const stored = await store(input);
+    const observed = await stateOf(stored.id);
+    await store({ ...input, ...change, rawHash: `${input.rawHash}-newer` });
+    const newer = await stateOf(stored.id);
 
-  const [stale] = await withdrawLegislationVersions(
-    [withdrawalOf(input, observed.payloadRevision)],
-    scopedDb,
+    const [stale] = await withdrawLegislationVersions(
+      [withdrawalOf(input, observed)],
+      scopedDb,
+    );
+
+    // The fixture reaches both halves of the compare-and-set.
+    expect(newer.sourceHash).not.toBe(observed.sourceHash);
+    expect(newer.payloadRevision !== observed.payloadRevision).toBe(
+      revisionMoves,
+    );
+    expect(stale).toEqual({
+      type: "stale",
+      id: stored.id,
+      payloadRevision: newer.payloadRevision,
+      sourceHash: newer.sourceHash,
+    });
+    expect(await stateOf(stored.id)).toEqual(newer);
+  }
+});
+
+test("a version removed after its lookup is missing, and the rest of the batch still applies", async () => {
+  const removed = version("2021/98");
+  const kept = version("2021/99");
+  const removedId = (await store(removed)).id;
+  const keptId = (await store(kept)).id;
+  const [removedState, keptState] = [
+    await stateOf(removedId),
+    await stateOf(keptId),
+  ];
+  // The row goes right after the first lookup, before its transaction.
+  let calls = 0;
+  const removing: ScopedDb = async (fn) => {
+    const result = await scopedDb(fn);
+    calls += 1;
+    if (calls === 1) {
+      await db
+        .delete(legislationDocuments)
+        .where(eq(legislationDocuments.id, removedId));
+    }
+    return result;
+  };
+
+  const outcomes = await withdrawLegislationVersions(
+    [withdrawalOf(removed, removedState), withdrawalOf(kept, keptState)],
+    removing,
   );
 
-  // The fixture reaches the fault: the observation really moved the row.
-  expect(newer.payloadRevision).toBeGreaterThan(observed.payloadRevision);
-  expect(stale).toEqual({
-    type: "stale",
-    id: stored.id,
-    payloadRevision: newer.payloadRevision,
-  });
-  expect(await stateOf(stored.id)).toEqual(newer);
+  expect(outcomes).toEqual([
+    { type: "missing" },
+    { type: "withdrawn", id: keptId },
+  ]);
 });
 
 test("a withdrawal recorded without its projection is erased by the next one", async () => {
@@ -234,7 +280,7 @@ test("a withdrawal recorded without its projection is erased by the next one", a
   const unsynced = await stateOf(stored.id);
 
   const [replayed] = await withdrawLegislationVersions(
-    [withdrawalOf(input, unsynced.payloadRevision)],
+    [withdrawalOf(input, unsynced)],
     scopedDb,
   );
 
@@ -255,9 +301,9 @@ test("a withdrawal names its version by id only, in bounded batches", async () =
   const outcomes = await withdrawLegislationVersions(
     [
       // Another language of the same work, and an id no row carries.
-      { ...withdrawalOf(input, listed.payloadRevision), language: "en" },
+      { ...withdrawalOf(input, listed), language: "en" },
       {
-        ...withdrawalOf(input, listed.payloadRevision),
+        ...withdrawalOf(input, listed),
         publisherId: `${NAMESPACE}:${iriOf("2020/97-other")}`,
       },
     ],
@@ -265,7 +311,7 @@ test("a withdrawal names its version by id only, in bounded batches", async () =
   );
   const oversized = Array.from(
     { length: LEGISLATION_WITHDRAWAL_BATCH_LIMIT + 1 },
-    () => withdrawalOf(input, listed.payloadRevision),
+    () => withdrawalOf(input, listed),
   );
 
   expect(outcomes).toEqual([{ type: "missing" }, { type: "missing" }]);
