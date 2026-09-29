@@ -61,6 +61,21 @@ export type VersionWindow =
   | { type: "unversioned" }
   | { type: "consolidation"; validFrom: string; end: VersionWindowEnd };
 
+/**
+ * The publisher's own identity for the version a row holds.
+ *
+ * `publisherId` is `<namespace>:<native id>`: the source's declared
+ * `legislation_sources.expression_namespace`, a colon, then the id the
+ * publisher gives this version (a version IRI, say). It is the row's identity
+ * within `(source, eli, language)`, so two versions that open on the same day
+ * stay two rows, and a later correction of a version's dates or disposition
+ * updates the same row. `<namespace>:work:<eli>` is reserved for a work the
+ * adapter declares `unversioned`.
+ */
+export type LegislationExpressionIdentity = {
+  publisherId: string;
+};
+
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {
   /**
@@ -83,6 +98,12 @@ export type LegislationDocumentInput = {
    * its publisher closes a window (see `VersionWindowEnd`).
    */
   version: VersionWindow;
+  /**
+   * Optional while writers built against the earlier contract drain; their
+   * rows are matched by version window and given an id later. A connector
+   * that can name the publisher's version supplies it.
+   */
+  expression?: LegislationExpressionIdentity | undefined;
   fulltext?: string | null;
   sections?: DecisionSection[] | null;
   ast?: DocumentAst | EmptyAst | null;

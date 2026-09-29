@@ -11,6 +11,7 @@ import { Result } from "better-result";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { CHAT_SKILL_CONTEXT_NEED } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
@@ -73,6 +74,7 @@ import {
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
+import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -86,7 +88,14 @@ import {
   mcpConnectorsOptions,
   skillsOptions,
 } from "@/lib/knowledge/queries";
-import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
+import {
+  chatSkillRowState,
+  oneClickSkillNeeds,
+  slashItemSkillId,
+  type ChatSkillRowState,
+  type ComposerSkillChatContext,
+} from "@/lib/prompts/chat-skill-availability.logic";
+import { useComposerSkillAvailability } from "@/lib/prompts/use-chat-unavailable-skills";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -97,6 +106,10 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
  *  chip content as the composer's `/` slash menu. */
 export type ComposerSkillsMenuProps = {
   activeOrganizationId: string;
+  /** The chat this composer sends in. With it, a skill that chat cannot
+   *  run shows disabled with what it lacks; without it, the menu answers
+   *  for the widest chat. */
+  chat?: ComposerSkillChatContext | undefined;
   editor: Editor | null;
   reservedCommands?: ReservedChatCommandContext | null | undefined;
 };
@@ -383,6 +396,144 @@ const itemSecondary = (item: SlashItem): string => {
   return item.command.command;
 };
 
+const ComposerSkillItemBody = ({
+  blocked,
+  item,
+  secondary,
+}: {
+  /** A skill this chat cannot run: muted, and the second line says why. */
+  blocked: boolean;
+  item: SlashItem;
+  secondary: string;
+}) => (
+  <>
+    <SkillIcon
+      className={cn("mt-0.5 self-start", blocked && "text-muted-foreground")}
+    />
+    <span className="min-w-0 flex-1">
+      <BidiText
+        as="span"
+        className={cn(
+          "block truncate text-sm",
+          blocked && "text-muted-foreground",
+        )}
+      >
+        {itemName(item)}
+      </BidiText>
+      <BidiText
+        as="span"
+        className={cn(
+          "text-muted-foreground block text-xs",
+          // The reason is the row's point; let it wrap rather than clip.
+          !blocked && "truncate",
+        )}
+      >
+        {secondary}
+      </BidiText>
+    </span>
+  </>
+);
+
+/**
+ * A blocked row whose one click turns web search on and, once the thread
+ * has stored it, inserts the skill: a send reads the stored switch, so an
+ * insert before then could still be refused.
+ */
+const WebSearchFixSkillItem = ({
+  item,
+  message,
+  onSelect,
+  threadRef,
+}: {
+  item: SlashItem;
+  message: string;
+  onSelect: (item: SlashItem) => void;
+  threadRef: ChatThreadRef;
+}) => {
+  const setWebSearch = useSetChatWebSearch(threadRef);
+  return (
+    <MenuItem
+      onClick={() => {
+        setWebSearch(true, {
+          onSaved: () => {
+            onSelect(item);
+          },
+        });
+      }}
+    >
+      <ComposerSkillItemBody blocked item={item} secondary={message} />
+    </MenuItem>
+  );
+};
+
+/**
+ * One row of the Skills submenu. A skill this chat cannot run stays listed,
+ * disabled, with what the chat lacks; where the composer can meet that need
+ * in one click, the row does so and inserts the skill.
+ */
+const ComposerSkillMenuItem = ({
+  chat,
+  item,
+  onSelect,
+  state,
+}: {
+  chat: ComposerSkillChatContext | undefined;
+  item: SlashItem;
+  onSelect: (item: SlashItem) => void;
+  state: ChatSkillRowState;
+}) => {
+  const t = useTranslations();
+  if (state.status === "offered") {
+    return (
+      <MenuItem
+        onClick={() => {
+          onSelect(item);
+        }}
+      >
+        <ComposerSkillItemBody
+          blocked={false}
+          item={item}
+          secondary={itemSecondary(item)}
+        />
+      </MenuItem>
+    );
+  }
+  const message = t(state.messageKey);
+  if (state.fixable && chat !== undefined) {
+    if (state.need === CHAT_SKILL_CONTEXT_NEED.webSearch) {
+      return (
+        <WebSearchFixSkillItem
+          item={item}
+          message={message}
+          onSelect={onSelect}
+          threadRef={chat.threadRef}
+        />
+      );
+    }
+    const { onReviewEdits } = chat;
+    if (
+      state.need === CHAT_SKILL_CONTEXT_NEED.reviewEdits &&
+      onReviewEdits !== undefined
+    ) {
+      return (
+        <MenuItem
+          onClick={() => {
+            onReviewEdits();
+            onSelect(item);
+          }}
+        >
+          <ComposerSkillItemBody blocked item={item} secondary={message} />
+        </MenuItem>
+      );
+    }
+  }
+  return (
+    <MenuItem disabled>
+      <ComposerSkillItemBody blocked item={item} secondary={message} />
+    </MenuItem>
+  );
+};
+
 const ComposerSkillsSubmenu = ({
   enabled,
   guideAnchorsEnabled,
@@ -400,7 +551,7 @@ const ComposerSkillsSubmenu = ({
 }) => {
   const t = useTranslations();
   const navigate = useNavigate();
-  const { activeOrganizationId, editor, reservedCommands } = skills;
+  const { activeOrganizationId, chat, editor, reservedCommands } = skills;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
@@ -415,7 +566,15 @@ const ComposerSkillsSubmenu = ({
     enabled,
   });
 
-  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
+  const availability = useComposerSkillAvailability({
+    chat,
+    enabled,
+    organizationId: activeOrganizationId,
+  });
+  // Only skills no chat can run leave the menu; one this chat alone cannot
+  // run stays, disabled, with what the chat lacks.
+  const unavailableSkillIds = availability?.hidden;
+  const oneClickNeeds = oneClickSkillNeeds(chat);
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages, unavailableSkillIds),
     [data?.pages, unavailableSkillIds],
@@ -478,25 +637,17 @@ const ComposerSkillsSubmenu = ({
     );
   } else {
     skillItemsContent = filteredItems.map((item) => (
-      <MenuItem
+      <ComposerSkillMenuItem
+        chat={chat}
+        item={item}
         key={itemKey(item)}
-        onClick={() => {
-          handleSelect(item);
-        }}
-      >
-        <SkillIcon className="mt-0.5 self-start" />
-        <span className="min-w-0 flex-1">
-          <BidiText as="span" className="block truncate text-sm">
-            {itemName(item)}
-          </BidiText>
-          <BidiText
-            as="span"
-            className="text-muted-foreground block truncate text-xs"
-          >
-            {itemSecondary(item)}
-          </BidiText>
-        </span>
-      </MenuItem>
+        onSelect={handleSelect}
+        state={chatSkillRowState({
+          availability,
+          oneClickNeeds,
+          skillId: slashItemSkillId(item),
+        })}
+      />
     ));
   }
 

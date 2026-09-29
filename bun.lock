@@ -702,7 +702,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "2.2.2",
+      "version": "2.2.3",
       "bin": {
         "stella": "./dist/cli.js",
       },
