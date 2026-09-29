@@ -133,6 +133,24 @@ describe("provision state backfill", () => {
     ).toEqual([{ count: 0 }]);
   });
 
+  test("a run stops after its unit budget with the cursor committed", async () => {
+    await db.execute(sql`DELETE FROM case_law_provision_repair_cursors`);
+    const outcome = (
+      await runProvisionStateBackfill({
+        connection,
+        deadline: Number.POSITIVE_INFINITY,
+        maxUnits: 1,
+        signal: new AbortController().signal,
+      })
+    ).unwrap();
+    expect(outcome).toEqual({ type: "progress", step: "scope-bootstrap" });
+    expect(
+      await rows(`SELECT cursor_decision_id IS NOT NULL AS advanced,
+        completed_at IS NULL AS pending
+        FROM case_law_provision_repair_cursors WHERE name = 'scope-bootstrap'`),
+    ).toEqual([{ advanced: true, pending: true }]);
+  });
+
   test("bootstraps missing rows and seeds state with durable cursors", async () => {
     // Walk again from the start; the cursors of the test above are complete.
     await db.execute(sql`DELETE FROM case_law_provision_repair_cursors`);
