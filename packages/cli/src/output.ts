@@ -161,7 +161,7 @@ type GatheredRow = { row: unknown; parent: unknown };
  */
 const gatherRows = (payload: unknown, rows: string): GatheredRow[] => {
   const segments = rows.split(".");
-  const last = segments.pop() ?? rows;
+  const last = (segments.pop() ?? rows).replace(/\[\]$/u, "");
   let holders: readonly unknown[] = [payload];
   for (const segment of segments) {
     holders = segment.endsWith("[]")
