@@ -3255,6 +3255,7 @@ export default defineConfig({
       // fiber. See apps/web/src/hooks/use-chrome-query.ts.
       files: [
         "apps/web/src/routes/_protected.tsx",
+        "apps/web/src/routes/-protected-app.tsx",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/sidebar-user-menu.tsx",
         "apps/web/src/components/require-ai-key.tsx",
