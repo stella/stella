@@ -62,7 +62,6 @@ import type { FeedbackReportSource } from "@/lib/analytics/types";
 import { api, publicFeedbackApi } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
-import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
@@ -85,11 +84,12 @@ const submitFeedbackReport = async (
       );
       const receipt = v.safeParse(feedbackReceiptSchema, data);
       if (!receipt.success) {
-        throw new ClientOperationError({
-          action: "feedback.submit_public",
-          message: "Feedback intake answered without a receipt",
-          cause: receipt.issues,
-        });
+        // `unwrapEden` has already turned every refusal into an `APIError`;
+        // a success without a receipt breaks the intake's own contract.
+        return panic(
+          "Feedback intake answered without a receipt",
+          receipt.issues,
+        );
       }
       return receipt.output;
     }
