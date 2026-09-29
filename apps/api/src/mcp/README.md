@@ -280,16 +280,20 @@ pointer, because neither surface carries the tools).
 
 ## Surface size
 
-`apps/api/mcp-surface-baseline.json` holds, per audience, the tool count, the
-UTF-16 length of each advertised part (name, title, description, input schema,
-output schema, annotations, instructions), the UTF-8 size of the `tools/list`
-array, and the largest description, input schema and output schema. It
-measures the unfiltered static first-party registry, an upper bound for the
-first-party tools any session is served; the skill and connector tools the
-gateway adds per organization are not included.
-`registry-quality.test.ts` fails when a row moves past its tolerance in either
-direction; `bun run mcp:surface-baseline --write` (from `apps/api`) rewrites
-the file, so a pull request that grows a surface shows the numbers it moved.
+`apps/api/mcp-surface-baseline.json` holds one row per tool and audience (the
+UTF-16 length of the tool's title, description, input schema, output schema
+and annotations, and its UTF-8 size in `tools/list`) and each audience's
+instructions length. It stores no totals: the tool count, the per-part sums,
+the size of the `tools/list` array, and the largest description, input schema
+and output schema are derived from the rows, so changes to different tools
+touch different lines. It measures the unfiltered static first-party registry,
+an upper bound for the first-party tools any session is served; the skill and
+connector tools the gateway adds per organization are not included.
+`registry-quality.test.ts` fails when a derived total moves past its tolerance
+in either direction or the set of tools changes. From `apps/api`,
+`bun run mcp:surface-baseline --write` rewrites the file, so a pull request
+that grows a surface shows the rows it moved; `--check` also rejects a file
+that is not in its sorted one-row-per-line format.
 Without a flag the script prints the parts and three views built from them:
 
 - anthropic: name + description + input schema;
