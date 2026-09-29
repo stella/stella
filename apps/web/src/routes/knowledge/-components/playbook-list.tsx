@@ -24,6 +24,7 @@ import { PlaybooksPageView } from "@/features/knowledge/views/playbooks/playbook
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { roleOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { organizationListOptions } from "@/lib/organization/queries";
@@ -60,7 +61,8 @@ export const PlaybookList = ({
   const t = useTranslations();
   const canCreate = usePermissions({ playbook: ["create"] });
   const { isPending: rolePending } = useQuery(roleOptions);
-  const { data: organizations } = useQuery(organizationListOptions);
+  const { id: userId } = useAuthenticatedUser();
+  const { data: organizations } = useQuery(organizationListOptions(userId));
   const organizationName =
     organizations?.find(({ id }) => id === organizationId)?.name ?? "";
   const recent = memberKnowledgeSource.useRecentPlaybooks(organizationId);

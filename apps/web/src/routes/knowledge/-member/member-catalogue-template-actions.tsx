@@ -17,6 +17,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { TemplateIntent } from "@/lib/knowledge/catalogue-intent";
@@ -58,7 +59,8 @@ export const MemberCatalogueTemplateActions = ({
   onIntentSettled,
 }: MemberCatalogueTemplateActionsProps) => {
   const t = useTranslations();
-  const { data: organizations } = useQuery(organizationListOptions);
+  const { id: userId } = useAuthenticatedUser();
+  const { data: organizations } = useQuery(organizationListOptions(userId));
   const organizationName =
     organizations?.find(({ id }) => id === activeOrganizationId)?.name ?? "";
   const templateActions =
