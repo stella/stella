@@ -38,6 +38,10 @@ test("the portable export field set roundtrips through import preview", () => {
     tags: ["client", "priority"],
     registrationNumber: null,
     taxId: null,
+    dateOfBirthYear: 2000,
+    dateOfBirthMonth: 2,
+    dateOfBirthDay: 29,
+    nationalityCodes: ["CZ", "BR"],
   });
 
   expect(Object.keys(portable)).toEqual([...CONTACT_IMPORT_FIELDS]);
@@ -77,6 +81,8 @@ test("the portable export field set roundtrips through import preview", () => {
           emails: [{ address: "jane@example.com" }],
           phones: [{ number: "+420123456789" }],
           tags: ["client", "priority"],
+          dateOfBirth: { precision: "day", year: 2000, month: 2, day: 29 },
+          nationalityCodes: ["CZ", "BR"],
         },
       },
     ],

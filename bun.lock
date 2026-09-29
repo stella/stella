@@ -110,6 +110,7 @@
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/runtime-mode": "workspace:*",
+        "@stll/sanctions": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/stable-stringify": "workspace:*",
         "@stll/template-conditions": "workspace:*",
@@ -514,7 +515,7 @@
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/template-conditions": "workspace:^",
@@ -703,7 +704,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "2.2.3",
+      "version": "2.2.5",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1057,7 +1058,7 @@
     },
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
@@ -1067,7 +1068,7 @@
     },
     "packages/time": {
       "name": "@stll/time",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "better-result": "catalog:",
         "temporal-polyfill": "catalog:",
@@ -1247,7 +1248,7 @@
     "brace-expansion": "5.0.9",
     "expo-constants": "57.0.19",
     "expo-modules-core": "57.0.18",
-    "fast-uri": "3.1.6",
+    "fast-uri": "3.1.8",
     "fast-xml-parser": "5.11.1",
     "ip-address": "10.7.2",
     "lucide-react": "1.41.0",
@@ -4179,7 +4180,7 @@
 
     "fast-string-width": ["fast-string-width@3.0.2", "", { "dependencies": { "fast-string-truncated-width": "^3.0.2" } }, "sha512-gX8LrtNEI5hq8DVUfRQMbr5lpaS4nMIWV+7XEbXk2b8kiQIizgnlr12B4dA3ZEx3308ze0O4Q1R+cHts8kyUJg=="],
 
-    "fast-uri": ["fast-uri@3.1.6", "", {}, "sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q=="],
+    "fast-uri": ["fast-uri@3.1.8", "", {}, "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg=="],
 
     "fast-wrap-ansi": ["fast-wrap-ansi@0.2.2", "", { "dependencies": { "fast-string-width": "^3.0.2" } }, "sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q=="],
 

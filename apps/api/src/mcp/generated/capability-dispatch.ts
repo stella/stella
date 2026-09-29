@@ -1181,6 +1181,9 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.list": {
     load: async () => await import("@/api/handlers/time-entries/list"),
   },
+  "time-entries.me.list": {
+    load: async () => await import("@/api/handlers/time-entries/me/list"),
+  },
   "time-entries.pdf.export": {
     load: async () => await import("@/api/handlers/time-entries/pdf/export"),
   },

@@ -6879,6 +6879,23 @@ describe("OpenAI-compatible MCP tools", () => {
     );
   });
 
+  test("save_contact returns a structured error for invalid person details", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        type: "person",
+        display_name: "Example Person",
+        date_of_birth: { precision: "day", year: 2001, month: 2, day: 31 },
+      },
+      context: createContext(),
+      toolName: "save_contact",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      issues: [{ path: "dateOfBirth", message: "Invalid date of birth" }],
+    });
+  });
+
   describe("deriveContactDisplayName", () => {
     test("prefers an explicit display name", () => {
       expect(

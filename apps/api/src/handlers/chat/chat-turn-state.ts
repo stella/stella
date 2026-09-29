@@ -55,9 +55,12 @@ export type ChatTurnCancellationReason =
 
 export const CHAT_TURN_INTERRUPTION_REASONS = [
   "client-disconnected",
+  // The turn's owner stopped producing: its lease expired, or its process
+  // shut down.
+  "owner-lost",
   "timeout",
 ] as const;
-type ChatTurnInterruptionReason =
+export type ChatTurnInterruptionReason =
   (typeof CHAT_TURN_INTERRUPTION_REASONS)[number];
 
 export type ChatTurnState =

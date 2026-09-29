@@ -15,6 +15,7 @@ import { agentSkills, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -82,6 +83,7 @@ const streamChatMock = mock(
 );
 
 const sendMessage = createSendMessage({
+  compactMessagesForContext,
   createRefRegistry: createChatRefRegistry,
   indexThread: async () => undefined,
   loadExternalMcpTools: async () => {

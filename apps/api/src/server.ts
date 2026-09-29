@@ -27,6 +27,8 @@ import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translation
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
 import { catalogueRoute } from "@/api/handlers/catalogue/routes";
+import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
+import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import { chatRoute } from "@/api/handlers/chat/routes";
 import {
   clauseCategoriesRoute,
@@ -102,6 +104,7 @@ import {
   templateCategoriesRoute,
   templatesRoute,
 } from "@/api/handlers/templates/routes";
+import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
 import { usageRoute } from "@/api/handlers/usage/routes";
@@ -158,7 +161,9 @@ import {
   refreshStaleS3,
 } from "@/api/lib/s3";
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
+import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
+import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
@@ -387,6 +392,7 @@ const api = new Elysia()
   .use(feedbackPublicRoute)
   .use(memoriesRoute)
   .use(notificationsRoute)
+  .use(myTimeEntriesRoute)
   .use(localDevPublicRoutes)
   .use(smokeRoute)
   .use(operatorRoute)
@@ -661,6 +667,7 @@ const startServer = async (): Promise<void> => {
           "error.type": errorTag(error),
         });
       },
+      relinquishChatTurnRuns,
       stopHttp: async () => {
         await api.stop();
       },
@@ -708,7 +715,11 @@ const startServer = async (): Promise<void> => {
   // and a deploy landing inside that window would otherwise find no shutdown
   // path for the SSE loop, the S3 refresh loop and the listening socket.
   await ensureDefaultSchedulerJobs();
-  scheduler.loop = startSchedulerLoop();
+  scheduler.loop = startSchedulerLoop({
+    registry: createSchedulerTaskRegistry(
+      createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+    ),
+  });
   markScheduledJobsReady();
   logger.info("scheduler.started", {
     "scheduler.runner_id": scheduler.loop.runnerId,
