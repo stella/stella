@@ -308,6 +308,26 @@ export const exits = async () => {
   }
 };
 
+export const returnWithContinue = async () => {
+  for (const id of ids) {
+    if (id === 0) continue;
+    return await saveOne(id);
+  }
+};
+export const immediateExitWithContinue = async () => {
+  for (const id of ids) {
+    if (id === 0) continue;
+    await saveOne(id);
+    return;
+  }
+};
+export const nonExitWithContinue = async () => {
+  for (const id of ids) {
+    if (id === 0) continue;
+    await saveOne(id); // expect: helper
+  }
+};
+
 export const bypassedExits = async (skip: (id: number) => boolean) => {
   for (const id of ids) {
     try {

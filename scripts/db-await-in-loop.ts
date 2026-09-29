@@ -48,8 +48,9 @@
 // literal array (`Promise.all([a(tx), b(tx)])`) has a fixed length and is not
 // fan-out. A site whose statement is a `return`/`throw`, or is followed in its
 // statement list by an exit from the loop, runs once per loop and is not
-// flagged, but only where nothing can bypass that exit: no `continue` targets
-// the loop, and no `try` with a `catch` or `finally` sits in between.
+// flagged when no `try` with a `catch` or `finally` can override the exit.
+// A return-site or an immediately following exit is independent of unrelated
+// continues; a later exit still requires no `continue` targeting the loop.
 // One DB hit per constant-bounded round is exempt: canonical chunked inputs
 // (literal/const size >= 2), array slice-step loops with that stride, fixed
 // sets of at most 16 elements, and nonnegative constant-start counters bounded by <= 16.
@@ -429,9 +430,8 @@ const continueTarget = (jump: ts.ContinueStatement): ts.Node | null => {
   return null;
 };
 
-// Can anything in `loop` go round it again early? Any `continue` targeting it,
-// labelled or not, and wherever it sits, can bypass an exit that follows a
-// site, so its presence voids the exemption for the whole loop.
+// A continue targeting this loop can bypass a later exit when another
+// statement intervenes. It cannot bypass the site's own or immediate exit.
 const isContinuedAnywhere = (loop: ts.Node): boolean => {
   let found = false;
   const visit = (node: ts.Node): void => {
@@ -457,13 +457,10 @@ const isLoopExit = (statement: ts.Statement, loop: ts.Node): boolean =>
 // statement list by an exit from `loop`? Then it runs at most once per run of
 // the loop, however many iterations came before it:
 // `if (failed) { await flush(); return; }`. Exempted only where nothing can
-// bypass or override that exit: no `continue` targets the loop anywhere in
-// it, and no `try` between the site and the loop has a `catch` (a retry) or a
-// `finally` (which can replace the exit).
+// bypass or override that exit: an intervening statement needs the absence
+// of a loop-targeting continue, and a surrounding try cannot have a catch
+// (a retry) or finally (which can replace the exit).
 const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
-  if (isContinuedAnywhere(loop)) {
-    return false;
-  }
   let statement: ts.Node = site;
   while (
     statement.parent !== loop &&
@@ -502,11 +499,16 @@ const leavesLoopAfter = (site: ts.Node, loop: ts.Node): boolean => {
     return false;
   }
   let after = false;
+  let immediate = true;
   for (const entry of owner.statements) {
-    if (after && isLoopExit(entry, loop)) {
+    if (!after) {
+      after = entry === statement;
+      continue;
+    }
+    if (isLoopExit(entry, loop) && (immediate || !isContinuedAnywhere(loop))) {
       return true;
     }
-    after ||= entry === statement;
+    immediate = false;
   }
   return false;
 };
