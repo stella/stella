@@ -126,7 +126,7 @@ export const repairSearchSemanticTimestamps = async ({
         ) AS has_preview_passage
       FROM entities e
       LEFT JOIN search_documents sd ON sd.entity_id = e.id
-      WHERE (${state.cursor}::uuid IS NULL OR e.id > ${state.cursor}::uuid)
+      WHERE ${state.cursor === null ? sql`TRUE` : sql`e.id > ${state.cursor}::uuid`}
         AND e.current_version_id IS NOT NULL
         -- A parked repair (next_attempt_at = infinity) is a permanently
         -- failing projection; retrying it inline every pass would loop

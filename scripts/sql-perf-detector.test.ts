@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
 
 import {
+  analyzeMigrationSqlPerf,
   analyzeSqlPerf,
+  isBaselinedSqlPerfKind,
   listSqlPerfAllowComments,
   reportSqlPerfOrColumns,
 } from "./sql-perf-detector.ts";
+import { isSqlPerfMigration } from "./sql-perf-scope.ts";
 
 /* oxlint-disable eslint/no-template-curly-in-string -- test inputs contain literal template syntax */
 
@@ -359,4 +362,227 @@ test("reports SQL-text cross-column OR but leaves a keyset continuation alone", 
       (hit) => hit.line,
     ),
   ).toEqual([1]);
+});
+
+test.each([
+  [
+    "a plain string",
+    "connection.query(`SELECT id FROM case_law_decisions WHERE ($1::uuid IS NULL OR id > $1::uuid) ORDER BY id LIMIT $2`, [cursor, size]);",
+  ],
+  [
+    "a quoted string",
+    "connection.query('SELECT id FROM decisions WHERE $1 IS NULL OR id >= $1 ORDER BY id LIMIT 50', [cursor]);",
+  ],
+  [
+    "a sql template",
+    "sql`SELECT e.id FROM entities e WHERE (${state.cursor}::uuid IS NULL OR e.id > ${state.cursor}::uuid) ORDER BY e.id LIMIT ${size}`",
+  ],
+  [
+    "the reverse order across lines",
+    "sql`SELECT id FROM jobs\n  WHERE (created_at < ${before}::timestamptz\n     OR ${before}::timestamptz IS NULL)\n  ORDER BY created_at DESC LIMIT 20`",
+  ],
+  [
+    "each operand parenthesized",
+    "connection.query(`SELECT id FROM case_law_decisions WHERE (($1::uuid IS NULL) OR (id > $1::uuid)) ORDER BY id LIMIT 50`, [cursor]);",
+  ],
+  [
+    "each operand parenthesized, in the reverse order",
+    "sql`SELECT id FROM jobs WHERE ( ( id > ${cursor}::uuid ) OR ( ${cursor}::uuid IS NULL ) ) ORDER BY id LIMIT 20`",
+  ],
+  [
+    "operands in doubled parentheses",
+    "connection.query('SELECT id FROM t WHERE (($1 IS NULL)) OR ((id > $1)) LIMIT 10', [cursor]);",
+  ],
+  [
+    "a schema-qualified cast",
+    "connection.query('SELECT id FROM t WHERE $1::pg_catalog.uuid IS NULL OR id > $1::pg_catalog.uuid LIMIT 10', [cursor]);",
+  ],
+  [
+    "a schema-qualified cast, in the reverse order",
+    "connection.query('SELECT id FROM t WHERE id > $1::pg_catalog.uuid OR $1::pg_catalog.uuid IS NULL LIMIT 10', [cursor]);",
+  ],
+])("flags an optional keyset bound in %s", (_, source) => {
+  expect(kinds(source)).toEqual(["optional-keyset"]);
+});
+
+test.each([
+  [
+    "separate first and later pages",
+    "connection.query(`SELECT id FROM case_law_decisions WHERE id > $1::uuid ORDER BY id LIMIT 50`, [cursor]);",
+  ],
+  [
+    "a nullable column rather than a parameter",
+    "sql`SELECT id FROM versions WHERE valid_from IS NULL OR valid_from <= ${asOf} ORDER BY id LIMIT 10`",
+  ],
+  [
+    "a different parameter in the range",
+    "sql`SELECT id FROM decisions WHERE ${from}::date IS NULL OR decision_date >= ${to}::date ORDER BY id LIMIT 10`",
+  ],
+  [
+    "an unpaged optional filter",
+    "sql`UPDATE citations SET status = 'pending' WHERE ${date}::date IS NULL OR decision_date >= ${date}::date`",
+  ],
+  [
+    "a placeholder interpolated into a plain string",
+    "const text = `SELECT id FROM t WHERE ${cursor} IS NULL OR id > ${cursor} LIMIT 5`;",
+  ],
+  [
+    "the shape inside a SQL string",
+    "sql`SELECT 'x IS NULL OR id > x' AS note FROM t WHERE id > ${cursor} LIMIT 5`",
+  ],
+])("accepts %s", (_, source) => {
+  expect(kinds(source)).toEqual([]);
+});
+
+test("an optional keyset bound takes a reason and is never baselined", () => {
+  const source = [
+    "// sql-perf-allow: small table sessions",
+    "const page = sql`SELECT id FROM sessions WHERE ${cursor}::uuid IS NULL OR id > ${cursor}::uuid LIMIT 10`;",
+  ].join("\n");
+  expect(analyzeSqlPerf(source, "apps/api/src/handlers/example.ts")).toEqual({
+    hits: [],
+    commentErrors: [],
+  });
+  expect(isBaselinedSqlPerfKind("optional-keyset")).toBe(false);
+  expect(isBaselinedSqlPerfKind("leading-wildcard")).toBe(true);
+});
+
+const migrationHitLines = (source: string) =>
+  analyzeMigrationSqlPerf(source).hits.map(({ line }) => line);
+
+const ROUTINE_PAGE = (predicate: string) =>
+  [
+    "CREATE FUNCTION page(job_country varchar) RETURNS void LANGUAGE plpgsql AS $$",
+    "BEGIN",
+    "  SELECT array_agg(id) INTO page_ids FROM (",
+    '    SELECT "id" FROM "decisions"',
+    `    WHERE "country" = job_country AND ${predicate}`,
+    '    ORDER BY "id" LIMIT 50',
+    "  ) page;",
+    "END;",
+    "$$;--> statement-breakpoint",
+  ].join("\n");
+
+test.each([
+  ["a record field", '(job."cursor_id" IS NULL OR "id" > job."cursor_id")'],
+  ["a variable", "(after_id IS NULL OR id >= after_id)"],
+  ["a parameter", "($1::uuid IS NULL OR id > $1::uuid)"],
+  ["the reverse order", "(id > after_id OR after_id IS NULL)"],
+])("flags an optional keyset bound on %s in a routine body", (_, predicate) => {
+  expect(migrationHitLines(ROUTINE_PAGE(predicate))).toEqual([5]);
+});
+
+test.each([
+  ["a required bound", '"id" > job."cursor_id"'],
+  ["a different variable in the range", "(after_id IS NULL OR id > before_id)"],
+  ["a bound in a comment", "true -- (after_id IS NULL OR id > after_id)"],
+])("accepts %s in a routine body", (_, predicate) => {
+  expect(migrationHitLines(ROUTINE_PAGE(predicate))).toEqual([]);
+});
+
+test.each([
+  ["an unquoted name in another case", "(after_id IS NULL OR id > AFTER_ID)"],
+  [
+    "an unquoted record and field in another case",
+    "(job.cursor_id IS NULL OR id > JOB.Cursor_Id)",
+  ],
+  [
+    "a quoted field and its unquoted lower-case name",
+    '(job."cursor_id" IS NULL OR id > job.cursor_id)',
+  ],
+])("names one cursor through %s", (_, predicate) => {
+  expect(migrationHitLines(ROUTINE_PAGE(predicate))).toEqual([5]);
+});
+
+test.each([
+  [
+    "quoted names that differ in case",
+    '(job."Cursor" IS NULL OR id > job."cursor")',
+  ],
+  [
+    "a quoted mixed-case name and its unquoted spelling",
+    '(job."Cursor" IS NULL OR id > job.cursor)',
+  ],
+])("tells apart %s", (_, predicate) => {
+  expect(migrationHitLines(ROUTINE_PAGE(predicate))).toEqual([]);
+});
+
+test("an apostrophe in a migration comment hides no statement", () => {
+  expect(
+    migrationHitLines(
+      `-- The function's page read.\n${ROUTINE_PAGE("(after_id IS NULL OR id > after_id)")}\nSELECT 'x';`,
+    ),
+  ).toEqual([6]);
+});
+
+test("accepts optional bounds outside a paged statement", () => {
+  const source = [
+    'ALTER TABLE "runs" ADD CONSTRAINT "within_total"',
+    "  CHECK (progress_total IS NULL OR progress_completed <= progress_total);--> statement-breakpoint",
+    "CREATE FUNCTION guard() RETURNS trigger LANGUAGE plpgsql AS $$",
+    "BEGIN",
+    "  IF NEW.applied IS NULL OR NEW.applied < OLD.applied THEN",
+    "    RAISE EXCEPTION 'applied epoch cannot decrease';",
+    "  END IF;",
+    "  SELECT id INTO next_id FROM runs ORDER BY id LIMIT 1;",
+    "  RETURN NEW;",
+    "END;",
+    "$$;",
+  ].join("\n");
+  expect(migrationHitLines(source)).toEqual([]);
+});
+
+test("a migration hit takes a reason, and an unused reason is an error", () => {
+  expect(
+    analyzeMigrationSqlPerf(
+      ROUTINE_PAGE("(after_id IS NULL OR id > after_id)").replace(
+        "    WHERE",
+        "    -- sql-perf-allow: small table queue_heads\n    WHERE",
+      ),
+    ),
+  ).toEqual({ hits: [], commentErrors: [] });
+  expect(
+    analyzeMigrationSqlPerf(
+      `-- sql-perf-allow: small table queue_heads\n${ROUTINE_PAGE("id > after_id")}`,
+    ).commentErrors,
+  ).toEqual([
+    {
+      line: 1,
+      message: "sql-perf-allow suppresses no SQL performance finding.",
+    },
+  ]);
+});
+
+test("reads every migration but the exempt ones, whatever its date", async () => {
+  expect(
+    isSqlPerfMigration(
+      "apps/api/drizzle/20260929180100_case_law_provision_scope_transition_keyset/migration.sql",
+    ),
+  ).toBe(true);
+  // Migrations are not ordered, so an older date is no exemption.
+  expect(
+    isSqlPerfMigration("apps/api/drizzle/20200101000000_rebased/migration.sql"),
+  ).toBe(true);
+  expect(
+    isSqlPerfMigration(
+      "apps/api/drizzle/20260926170000_case_law_provision_backfill/migration.sql",
+    ),
+  ).toBe(false);
+  expect(isSqlPerfMigration("apps/api/drizzle/meta/_journal.json")).toBe(false);
+  // The shape the check exists for: the applied migration it replaces has it,
+  // the replacement does not.
+  expect(
+    migrationHitLines(
+      await Bun.file(
+        "apps/api/drizzle/20260926170000_case_law_provision_backfill/migration.sql",
+      ).text(),
+    ),
+  ).toHaveLength(1);
+  expect(
+    migrationHitLines(
+      await Bun.file(
+        "apps/api/drizzle/20260929180100_case_law_provision_scope_transition_keyset/migration.sql",
+      ).text(),
+    ),
+  ).toEqual([]);
 });

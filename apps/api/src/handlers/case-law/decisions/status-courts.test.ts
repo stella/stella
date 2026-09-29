@@ -1,10 +1,11 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
   caseLawCourtStatusRows,
   type CourtActivity,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { logger } from "@/api/lib/observability/logger";
 import type { FacetBucket } from "@/api/lib/search/types";
 
 /**
@@ -192,4 +193,31 @@ test("a total the buckets account for adds no row for the rest", () => {
   });
 
   expect(rows.map(({ type }) => type)).toEqual(["court"]);
+});
+
+test("a stale directory court name is listed unranked and reported, beside its peers", () => {
+  const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+  try {
+    const rows = courtStatusRows({
+      activity: activity({}),
+      buckets: [
+        bucket("Supreme Court of the United States", 50),
+        bucket("Stale court name", 2),
+      ],
+      country: "USA",
+      courtWeights,
+    });
+    expect(rows.map((row) => row.tier)).toEqual(["supreme", "other"]);
+    expect(warn).toHaveBeenCalledWith(
+      "case_law.court_rank.invalid_directory_identity",
+      {
+        country: "USA",
+        lookup: "court_name",
+        "court.identity": "Stale court name",
+        effect: "unranked",
+      },
+    );
+  } finally {
+    warn.mockRestore();
+  }
 });

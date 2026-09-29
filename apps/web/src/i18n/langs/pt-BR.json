@@ -3183,6 +3183,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Habilidades integradas",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
       "disableSkill": "Desativar habilidade",

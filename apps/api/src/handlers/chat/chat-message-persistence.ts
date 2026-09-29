@@ -16,6 +16,7 @@ import {
 import {
   canAcceptChatTurnOnTx,
   cutShortAssistantMessage,
+  ChatTurnNotOwnedError,
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
@@ -137,7 +138,9 @@ const applyChatTurnWritesOnTx = async ({
         message: "The user stopped the chat turn before it settled",
       });
     case "not-owned":
-      return panic("Chat turn settlement lost execution ownership");
+      throw new ChatTurnNotOwnedError({
+        message: "Another execution settled the chat turn first",
+      });
     default:
       settled satisfies never;
       return panic(`Unhandled settlement: ${String(settled)}`);

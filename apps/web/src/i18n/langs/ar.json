@@ -3183,6 +3183,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "المهارات المُدمَجة",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",
       "disableSkill": "تعطيل المهارة",

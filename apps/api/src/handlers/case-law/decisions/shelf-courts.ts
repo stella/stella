@@ -1,7 +1,11 @@
 import { sql } from "drizzle-orm";
 
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
+import {
+  type CourtWeightEntry,
+  directoryCourtRankByName,
+} from "@/api/lib/case-law/court-weights";
+import { isCourtDirectoryJurisdiction } from "@/api/lib/case-law/decision-court-id-sql";
 import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
@@ -12,7 +16,8 @@ import type { FacetBucket } from "@/api/lib/search/types";
 /**
  * Which courts the entry shelf shows: the jurisdiction's apex courts by
  * declared rank, never its busiest courts by volume. Rank comes from the
- * seeded court weights (`constitutional` above `supreme` above `regional`);
+ * seeded court weights, or a directory jurisdiction's court directory
+ * (`constitutional` above `supreme` above `regional`);
  * the shelf keeps the top two labels, so a first-instance court with the
  * largest docket cannot own the page.
  */
@@ -127,16 +132,25 @@ export const courtDocketSizes = ({
 
 type SelectShelfCourtsOptions = {
   counts: readonly CourtCount[];
+  country: string;
   /** Sorted by tier descending, the order the court-weight cache guarantees. */
   entries: readonly CourtWeightEntry[];
   limit: number;
 };
 
+/**
+ * A directory jurisdiction's court ranks by the directory entry its canonical
+ * name names; any other court by the first seeded entry it matches. A name
+ * the directory does not carry is reported and, unranked, left off the shelf.
+ */
 const rankOf = (
   court: string,
+  country: string,
   entries: readonly CourtWeightEntry[],
-): CourtWeightEntry | undefined =>
-  entries.find((entry) => entry.pattern.test(court));
+): { tier: number; tierLabel: string } | undefined =>
+  isCourtDirectoryJurisdiction(country)
+    ? (directoryCourtRankByName(country, court) ?? undefined)
+    : entries.find((entry) => entry.pattern.test(court));
 
 /** A deterministic tie-break on the stored name; display order is not linguistic here. */
 const byCodePoint = (a: string, b: string): number => {
@@ -154,12 +168,13 @@ const byCodePoint = (a: string, b: string): number => {
  */
 export const selectShelfCourts = ({
   counts,
+  country,
   entries,
   limit,
 }: SelectShelfCourtsOptions): ShelfCourt[] =>
   counts
     .flatMap(({ court, count }) => {
-      const rank = rankOf(court, entries);
+      const rank = rankOf(court, country, entries);
       return rank !== undefined && SHELF_TIER_LABELS.has(rank.tierLabel)
         ? [{ court, count, tier: rank.tier, tierLabel: rank.tierLabel }]
         : [];
@@ -218,6 +233,7 @@ export const readShelfCourts = async ({
   // before the caller caps what it shows.
   const shelf = selectShelfCourts({
     counts,
+    country,
     entries,
     limit: LIMITS.caseLawLatestCourts * SHELF_SPELLINGS_PER_COURT,
   });

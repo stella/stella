@@ -282,7 +282,37 @@ export const listDecisionCitationsHandler = async ({
     return status(400, { message: "Invalid cursor" });
   }
   const pageSize = Math.min(limit, LIMITS.caseLawDecisionCitationPageSize);
-  const spec = DIRECTION_SPECS[query.direction];
+  const rows = await decisionCitationPageQuery({
+    cursorId,
+    decisionId,
+    direction: query.direction,
+    limit: pageSize,
+    tx,
+  });
+  const toRelatedDecision = await withLanguageAlternates(
+    tx,
+    rows.map((row) => (row.visible ? row.decision : null)),
+  );
+
+  return createScannedPage({ rows, limit: pageSize, toRelatedDecision });
+};
+
+type DecisionCitationPageQueryOptions = {
+  cursorId: SafeId<"caseLawCitation"> | undefined;
+  decisionId: SafeId<"caseLawDecision">;
+  direction: CitationDirection;
+  limit: number;
+  tx: CaseLawPublicReadTransaction;
+};
+
+export const decisionCitationPageQuery = ({
+  cursorId,
+  decisionId,
+  direction,
+  limit,
+  tx,
+}: DecisionCitationPageQueryOptions) => {
+  const spec = DIRECTION_SPECS[direction];
 
   const candidates = tx
     .select({
@@ -295,15 +325,15 @@ export const listDecisionCitationsHandler = async ({
     .from(caseLawCitations)
     .where(
       and(
-        eq(spec.anchor, decisionId),
+        sql`${spec.anchor} = ${decisionId}`,
         precedentOnly,
         cursorId === undefined ? undefined : gt(caseLawCitations.id, cursorId),
       ),
     )
     .orderBy(asc(caseLawCitations.id))
-    .limit(pageSize + 1)
+    .limit(limit + 1)
     .as("citation_graph_candidates");
-  const rows = await tx
+  return tx
     .select({
       id: candidates.id,
       citationText: candidates.citationText,
@@ -332,13 +362,7 @@ export const listDecisionCitationsHandler = async ({
     .leftJoin(relatedDecision, eq(relatedDecision.id, candidates.relatedId))
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     .orderBy(asc(candidates.id))
-    .limit(pageSize + 1);
-  const toRelatedDecision = await withLanguageAlternates(
-    tx,
-    rows.map((row) => (row.visible ? row.decision : null)),
-  );
-
-  return createScannedPage({ rows, limit: pageSize, toRelatedDecision });
+    .limit(limit + 1);
 };
 
 export type CitationTreatmentCounts = Record<CitationTreatment, number>;
@@ -407,6 +431,49 @@ export const summarizeDecisionCitationsHandler = async ({
   subject: { id: decisionId, tx },
   currentYear = Temporal.Now.plainDateISO("UTC").year,
 }: SummarizeDecisionCitationsOptions) => {
+  const rows = await decisionCitationSummaryQuery({
+    currentYear,
+    decisionId,
+    tx,
+  });
+
+  const totals: Record<CitationDirection, CitationTreatmentCounts> = {
+    incoming: emptyTreatmentCounts(),
+    outgoing: emptyTreatmentCounts(),
+  };
+  const byYear = new Map<number, CitationYearCounts>();
+  for (const row of rows satisfies readonly SummaryRow[]) {
+    const treatment = treatmentOf(row.polarity);
+    totals[row.direction][treatment] += row.count;
+    if (row.year === null) {
+      continue;
+    }
+    const counts = byYear.get(row.year) ?? {
+      ...emptyTreatmentCounts(),
+      year: row.year,
+    };
+    counts[treatment] += row.count;
+    byYear.set(row.year, counts);
+  }
+
+  return {
+    incoming: totals.incoming,
+    outgoing: totals.outgoing,
+    incomingByYear: [...byYear.values()].toSorted((a, b) => a.year - b.year),
+  };
+};
+
+type DecisionCitationSummaryQueryOptions = {
+  currentYear: number;
+  decisionId: SafeId<"caseLawDecision">;
+  tx: CaseLawPublicReadTransaction;
+};
+
+export const decisionCitationSummaryQuery = ({
+  currentYear,
+  decisionId,
+  tx,
+}: DecisionCitationSummaryQueryOptions) => {
   const scopeFor = (direction: CitationDirection) => {
     const spec = DIRECTION_SPECS[direction];
     return and(
@@ -463,34 +530,9 @@ export const summarizeDecisionCitationsHandler = async ({
 
   // One row per (direction, year-or-null, stored polarity): the span and
   // the polarity check constraint already cap it, this states the cap.
-  const rows = await unionAll(incoming, outgoing).limit(
+  return unionAll(incoming, outgoing).limit(
     (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
   );
-
-  const totals: Record<CitationDirection, CitationTreatmentCounts> = {
-    incoming: emptyTreatmentCounts(),
-    outgoing: emptyTreatmentCounts(),
-  };
-  const byYear = new Map<number, CitationYearCounts>();
-  for (const row of rows satisfies readonly SummaryRow[]) {
-    const treatment = treatmentOf(row.polarity);
-    totals[row.direction][treatment] += row.count;
-    if (row.year === null) {
-      continue;
-    }
-    const counts = byYear.get(row.year) ?? {
-      ...emptyTreatmentCounts(),
-      year: row.year,
-    };
-    counts[treatment] += row.count;
-    byYear.set(row.year, counts);
-  }
-
-  return {
-    incoming: totals.incoming,
-    outgoing: totals.outgoing,
-    incomingByYear: [...byYear.values()].toSorted((a, b) => a.year - b.year),
-  };
 };
 
 /** How many decisions each treatment shows before the reader asks for all. */

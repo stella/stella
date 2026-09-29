@@ -22,6 +22,8 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
+import { BUILT_IN_SKILL_ORIGIN, skillLabel } from "./inspector-store-types";
+import type { InstalledSkillResourceTab } from "./inspector-store-types";
 import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-tabs-store";
 import { useInspectorTabsStore } from "./inspector-tabs-store";
@@ -57,7 +59,60 @@ type SkillResourcePanelProps = {
 export const SkillResourcePanel = ({
   tab,
   onClose,
+}: SkillResourcePanelProps) =>
+  tab.origin === BUILT_IN_SKILL_ORIGIN ? (
+    <BuiltInSkillResourcePanel onClose={onClose} tab={tab} />
+  ) : (
+    <InstalledSkillResourcePanel onClose={onClose} tab={tab} />
+  );
+
+type SkillResourceTabMatterProps = {
+  tab: SkillResourceTab;
+};
+
+/** The skill's title; the tooltip keeps its slug and the resource path. */
+const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => (
+  <Tooltip
+    content={`${tab.skillName} · ${tab.resourcePath}`}
+    render={
+      <span className="text-muted-foreground text-3xs truncate">
+        {skillLabel(tab)}
+      </span>
+    }
+  />
+);
+
+/** A built-in skill ships with Stella and has no row, so it is read-only. */
+const BuiltInSkillResourcePanel = ({
+  tab,
+  onClose,
 }: SkillResourcePanelProps) => {
+  const t = useTranslations();
+  return (
+    <div className="bg-background flex h-full min-h-0 min-w-0 flex-1 flex-col">
+      <InspectorTabHeader
+        label={basenameOf(tab.resourcePath)}
+        matter={<SkillResourceTabMatter tab={tab} />}
+        onClose={onClose}
+      />
+      <SkillResourcePreview
+        content={tab.content}
+        pdfPlaceholder={t("knowledge.agentSkills.pdfPreviewSoon")}
+        renderMode={detectRenderMode(tab.mimeType, tab.resourcePath)}
+      />
+    </div>
+  );
+};
+
+type InstalledSkillResourcePanelProps = {
+  tab: InstalledSkillResourceTab;
+  onClose: () => void;
+};
+
+const InstalledSkillResourcePanel = ({
+  tab,
+  onClose,
+}: InstalledSkillResourcePanelProps) => {
   const t = useTranslations();
   const updateSkillResourceTabContent = useInspectorTabsStore(
     (s) => s.updateSkillResourceTabContent,
@@ -296,16 +351,7 @@ export const SkillResourcePanel = ({
           ) : null
         }
         label={basenameOf(tab.resourcePath)}
-        matter={
-          <Tooltip
-            content={`${tab.skillName} · ${tab.resourcePath}`}
-            render={
-              <span className="text-muted-foreground text-3xs truncate font-mono">
-                {tab.skillName}
-              </span>
-            }
-          />
-        }
+        matter={<SkillResourceTabMatter tab={tab} />}
         onClose={onClose}
       />
       {renderContentPane()}
@@ -332,16 +378,7 @@ const SkillResourceBody = ({
   pdfPlaceholder,
   renderMode,
 }: SkillResourceBodyProps) => {
-  if (renderMode === "pdf") {
-    return (
-      <div className="flex flex-1 items-center justify-center p-6">
-        <p className="text-muted-foreground max-w-sm text-center text-sm">
-          {pdfPlaceholder}
-        </p>
-      </div>
-    );
-  }
-  if (editing) {
+  if (editing && renderMode !== "pdf") {
     return (
       <div className="flex min-h-0 flex-1 flex-col p-3">
         <Textarea
@@ -350,6 +387,35 @@ const SkillResourceBody = ({
           onChange={(event) => onDraftChange(event.currentTarget.value)}
           value={draft}
         />
+      </div>
+    );
+  }
+  return (
+    <SkillResourcePreview
+      content={content}
+      pdfPlaceholder={pdfPlaceholder}
+      renderMode={renderMode}
+    />
+  );
+};
+
+type SkillResourcePreviewProps = {
+  content: string;
+  pdfPlaceholder: string;
+  renderMode: RenderMode;
+};
+
+const SkillResourcePreview = ({
+  content,
+  pdfPlaceholder,
+  renderMode,
+}: SkillResourcePreviewProps) => {
+  if (renderMode === "pdf") {
+    return (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <p className="text-muted-foreground max-w-sm text-center text-sm">
+          {pdfPlaceholder}
+        </p>
       </div>
     );
   }

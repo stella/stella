@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   compareAgainstMergeBase,
@@ -6,6 +9,7 @@ import {
   countSqlPerfHits,
   lowerSqlPerfBaseline,
   parseSqlPerfCounts,
+  scanSqlPerfMigrations,
 } from "./sql-perf-baseline";
 import {
   isSqlPerfSource,
@@ -126,5 +130,61 @@ describe("SQL performance baseline reconciliation", () => {
       "apps/api/src/a.ts": 2,
       "apps/api/src/b.ts": 1,
     });
+  });
+});
+
+describe("SQL performance migration scan", () => {
+  const PAGE_WITH_OPTIONAL_CURSOR = [
+    "CREATE FUNCTION page() RETURNS void LANGUAGE plpgsql AS $$",
+    "BEGIN",
+    "  SELECT id INTO next_id FROM decisions",
+    "  WHERE (after_id IS NULL OR id > after_id) ORDER BY id LIMIT 50;",
+    "END;",
+    "$$;",
+  ].join("\n");
+
+  const withMigrations = (
+    migrations: Record<string, string>,
+    check: (root: string) => void,
+  ) => {
+    const root = mkdtempSync(path.join(tmpdir(), "sql-perf-migrations-"));
+    try {
+      for (const [directory, source] of Object.entries(migrations)) {
+        const folder = path.join(root, "apps/api/drizzle", directory);
+        mkdirSync(folder, { recursive: true });
+        writeFileSync(path.join(folder, "migration.sql"), source);
+      }
+      check(root);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  test("flags a migration dated before existing ones and skips the exempt one", () => {
+    withMigrations(
+      {
+        "20200101000000_rebased_page": PAGE_WITH_OPTIONAL_CURSOR,
+        "20260926170000_case_law_provision_backfill": PAGE_WITH_OPTIONAL_CURSOR,
+      },
+      (root) => {
+        expect(scanSqlPerfMigrations(root)).toEqual([
+          "apps/api/drizzle/20200101000000_rebased_page/migration.sql:4:10: optional keyset bound (<param> IS NULL OR <column> > <param>)",
+        ]);
+      },
+    );
+  });
+
+  test("an exemption for a missing migration is a finding", () => {
+    withMigrations({ "20200101000000_clean": "SELECT 1;" }, (root) => {
+      expect(scanSqlPerfMigrations(root)).toEqual([
+        "20260926170000_case_law_provision_backfill: exempt from the SQL performance check but not a migration",
+      ]);
+    });
+  });
+
+  test("the repository's migrations have no finding", () => {
+    expect(scanSqlPerfMigrations(path.resolve(import.meta.dir, ".."))).toEqual(
+      [],
+    );
   });
 });

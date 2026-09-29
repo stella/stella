@@ -54,6 +54,7 @@ const answer = (
 
 const PAGES = [
   {
+    builtIn: [],
     installed: [WEB_SKILL, NOWHERE_SKILL, PLAIN_SKILL].map((id, index) => ({
       description: `Skill ${String(index)}.`,
       enabled: true,

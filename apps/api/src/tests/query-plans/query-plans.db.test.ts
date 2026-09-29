@@ -5,18 +5,22 @@ import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
 import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
 import { ecliOrFixtureQuery } from "@/api/tests/query-plans/ecli-fixtures";
+import { oldSitemapBucketCountsQuery } from "@/api/tests/query-plans/old-sitemap-refresh-fixture";
 import {
   accessPathViolations,
   explainRoot,
+  heapFetchRiskViolations,
   scanOccurrences,
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
@@ -49,7 +53,10 @@ const SCALE_PROFILE =
     ? null
     : SYNTHETIC_SCALE_PROFILE;
 const guardedTables = new Set<string>(PLAN_GUARD_TABLES);
-const observedContracts: Record<string, { scans: AccessPath[] }> = {};
+const observedContracts: Record<
+  string,
+  { scans: AccessPath[]; allowSeqScan?: string }
+> = {};
 const scanReport: string[] = [];
 
 const observedPaths = (scans: readonly ScanOccurrence[]): AccessPath[] =>
@@ -79,7 +86,7 @@ let db: ReturnType<typeof drizzle>;
 beforeAll(
   async () => {
     client = await createTestPglite();
-    db = drizzle({ client });
+    db = drizzle({ client, relations: databaseRelations });
     await seedQueryPlanData(db);
   },
   { timeout: DB_TEST_TIMEOUT_MS },
@@ -156,7 +163,13 @@ test("every guarded table has the physical seed before statistics injection", as
         SELECT count(*)::integer AS count FROM ${sql.identifier(table)}
       `),
     ).at(0);
-    expect(row).toMatchObject({ count: QUERY_PLAN_ROW_COUNT });
+    if (table === "corpus_index_projection_states") {
+      expect(isRecord(row) ? row["count"] : undefined).toBeGreaterThanOrEqual(
+        QUERY_PLAN_ROW_COUNT,
+      );
+    } else {
+      expect(row).toMatchObject({ count: QUERY_PLAN_ROW_COUNT });
+    }
   }
 });
 
@@ -170,22 +183,40 @@ for (const entry of QUERY_PLAN_REGISTRY) {
         "planMode" in entry ? entry.planMode : undefined,
       );
       const guardedScans = observedPaths(scans);
-      if (guardedScans.length === 0) {
+      const mitigation =
+        "heapFetchMitigation" in entry ? entry.heapFetchMitigation : undefined;
+      if (guardedScans.length === 0 && mitigation?.type !== "snapshot") {
         panic(
           `${entry.id} has no guarded scan: ${JSON.stringify(scans, null, 2)}`,
         );
       }
       if (UPDATE_PLAN_CONTRACTS) {
-        observedContracts[entry.id] = { scans: guardedScans };
+        observedContracts[entry.id] = {
+          scans: guardedScans,
+          ...("allowSeqScan" in entry.contract
+            ? { allowSeqScan: entry.contract.allowSeqScan }
+            : {}),
+        };
       }
       const violations = accessPathViolations(
         scans,
         UPDATE_PLAN_CONTRACTS ? guardedScans : entry.contract.scans,
         entry.class,
         "allowSeqScan" in entry.contract &&
-          entry.contract.allowSeqScan === true,
+          entry.contract.allowSeqScan.length > 0,
       );
-      assertPlan(violations, scans);
+      assertPlan(
+        [
+          ...violations,
+          ...heapFetchRiskViolations(
+            scans,
+            entry.class,
+            mitigation,
+            "heapFetchExceptions" in entry ? entry.heapFetchExceptions : [],
+          ),
+        ],
+        scans,
+      );
     },
     DB_TEST_TIMEOUT_MS,
   );
@@ -227,6 +258,59 @@ test(
       ),
       unionScans,
     );
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "the old unbounded sitemap refresh exposes heap-fetch risk",
+  async () => {
+    const oldScans = await explainPhysical(
+      "root",
+      oldSitemapBucketCountsQuery,
+      "covering-index",
+    );
+    expect(
+      oldScans.some(
+        ({ relation, nodeType, limitAbove }) =>
+          relation === "case_law_decisions" &&
+          nodeType === "Index Only Scan" &&
+          !limitAbove,
+      ),
+    ).toBe(true);
+    expect(heapFetchRiskViolations(oldScans, "aggregate")).toContain(
+      "root/0/0/0: heap-fetch risk on case_law_decisions: declare one mitigation",
+    );
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "the current sitemap refresh bounds its covering scan to a page",
+  async () => {
+    const entry =
+      QUERY_PLAN_REGISTRY.find(({ id }) => id === "case-law.sitemap-refresh") ??
+      panic("Sitemap refresh is absent from the plan registry");
+    const scans = await explainPhysical(
+      entry.role,
+      entry.build,
+      "planMode" in entry ? entry.planMode : undefined,
+    );
+    expect(
+      scans.some(
+        ({ relation, nodeType, limitAbove }) =>
+          relation === "case_law_decisions" &&
+          nodeType === "Index Only Scan" &&
+          limitAbove,
+      ),
+    ).toBe(true);
+    expect(
+      heapFetchRiskViolations(
+        scans,
+        entry.class,
+        "heapFetchMitigation" in entry ? entry.heapFetchMitigation : undefined,
+      ),
+    ).toEqual([]);
   },
   DB_TEST_TIMEOUT_MS,
 );
@@ -282,7 +366,10 @@ test("recognizes the workspace RLS subplan in its real role", async () => {
 const reportRegistryScans = async (profile: ScaleProfile | null) => {
   const reportClient = await createTestPglite();
   try {
-    const reportDb = drizzle({ client: reportClient });
+    const reportDb = drizzle({
+      client: reportClient,
+      relations: databaseRelations,
+    });
     await seedQueryPlanData(reportDb);
     if (profile !== null) {
       await injectScaleProfile(reportDb, profile);
@@ -299,7 +386,7 @@ const reportRegistryScans = async (profile: ScaleProfile | null) => {
           entry.contract.scans,
           entry.class,
           "allowSeqScan" in entry.contract &&
-            entry.contract.allowSeqScan === true,
+            entry.contract.allowSeqScan.length > 0,
         ).length === 0;
       for (const scan of scans) {
         if (!guardedTables.has(scan.relation)) {

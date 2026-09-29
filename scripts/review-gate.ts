@@ -43,7 +43,15 @@ export type ReviewerConfig = {
   done: {
     // A status or check run in one of these states/conclusions is a report;
     // any other terminal state is the reviewer erroring, not reviewing.
-    commitStatus: { context: string; states: readonly string[] } | null;
+    // `notReviewed`: lower-cased fragments of a reporting status's
+    // description that say the reviewer declined instead (rate limited,
+    // paused, skipped). Some reviewers set the same success state either
+    // way, and only the description tells the two apart.
+    commitStatus: {
+      context: string;
+      states: readonly string[];
+      notReviewed: readonly string[];
+    } | null;
     checkRun: { name: string; conclusions: readonly string[] } | null;
     reviewBy: string | null;
     reaction: { by: string; content: string } | null;
@@ -148,7 +156,7 @@ const parseDone = (raw: unknown, where: string): ReviewerConfig["done"] => {
   const status = optionalMapping(
     raw,
     "commit_status",
-    ["context", "states"],
+    ["context", "states", "not_reviewed"],
     where,
   );
   const check = optionalMapping(
@@ -165,6 +173,9 @@ const parseDone = (raw: unknown, where: string): ReviewerConfig["done"] => {
         : {
             context: requiredString(status, "context", where),
             states: upperList(stringList(status, "states", where)),
+            notReviewed: stringList(status, "not_reviewed", where).map(
+              (fragment) => fragment.toLowerCase(),
+            ),
           },
     checkRun:
       check === null
@@ -297,7 +308,11 @@ export type PullRequestSnapshot = {
     body: string;
   }[];
   // Latest state per name on the head commit, as GitHub's rollup reports it.
-  statuses: readonly { context: string; state: string }[];
+  statuses: readonly {
+    context: string;
+    state: string;
+    description: string | null;
+  }[];
   checkRuns: readonly {
     name: string;
     status: string;
@@ -326,8 +341,13 @@ const sameLogin = (a: string, b: string): boolean =>
 
 // --- Evaluation ---------------------------------------------------------------
 
+// `not-reviewed`: the reviewer reported that it declined to review (rate
+// limited, paused, skipped). Waiting cannot change that, so it waives the
+// wait at once, and it is never shown as a review: distinct from `done`
+// (reviewed) and from `timed-out` (never reported).
 export type ReviewerState =
   | "done"
+  | "not-reviewed"
   | "waiting"
   | "errored"
   | "timed-out"
@@ -412,7 +432,7 @@ export const reviewerClockStart = (
   return latest;
 };
 
-type Signal = { kind: "done" | "errored"; detail: string };
+type Signal = { kind: "done" | "not-reviewed" | "errored"; detail: string };
 
 const TERMINAL_STATUS_STATES = new Set(["SUCCESS", "FAILURE", "ERROR"]);
 
@@ -460,13 +480,28 @@ const findSignal = (
   // Statuses and check runs are read from the head commit, so they are
   // per-commit signals whatever the scope.
   if (done.commitStatus !== null) {
-    const { context, states } = done.commitStatus;
+    const { context, states, notReviewed } = done.commitStatus;
     const status = pullRequest.statuses.find(
       (candidate) => candidate.context === context,
     );
     const state = status?.state.toUpperCase();
+    const description = status?.description?.trim() ?? "";
     if (state !== undefined && states.includes(state)) {
-      return { kind: "done", detail: `${state.toLowerCase()} on ${shortHead}` };
+      // Matched leniently: a fragment anywhere, in any case. A description
+      // no fragment matches (or none at all) stays a review, as it was
+      // before descriptions were read: an unrecognised wording must not
+      // turn every report into a waiver.
+      const lower = description.toLowerCase();
+      if (notReviewed.some((fragment) => lower.includes(fragment))) {
+        return {
+          kind: "not-reviewed",
+          detail: `did not review (${description}) on ${shortHead}`,
+        };
+      }
+      return {
+        kind: "done",
+        detail: `${state.toLowerCase()} on ${shortHead}${description === "" ? "" : ` (${description})`}`,
+      };
     }
     if (state !== undefined && TERMINAL_STATUS_STATES.has(state)) {
       return {
@@ -509,6 +544,15 @@ const evaluateReviewer = (
   const signal = findSignal(reviewer, pullRequest, clockStart);
   if (signal?.kind === "done") {
     return { name: reviewer.name, state: "done", detail: signal.detail };
+  }
+  // The reviewer said it will not review this commit: waiting out its
+  // timeout would only delay, so the wait is waived now, and said so.
+  if (signal?.kind === "not-reviewed") {
+    return {
+      name: reviewer.name,
+      state: "not-reviewed",
+      detail: `${signal.detail}; review waived`,
+    };
   }
   const deadline = new Date(
     Date.parse(clockStart) + minutesToMs(reviewer.timeoutMinutes),
@@ -593,17 +637,30 @@ export const evaluatePullRequest = (
       `Waiting for ${blocking.map(({ name }) => name).join(", ")}`,
     );
   }
-  const waived = reviewers.filter(({ state }) => state === "timed-out");
+  const namesIn = (state: ReviewerState): string =>
+    reviewers
+      .filter((reviewer) => reviewer.state === state)
+      .map(({ name }) => name)
+      .join(", ");
+  const waivedAs = (state: ReviewerState, why: string): readonly string[] => {
+    const names = namesIn(state);
+    return names === "" ? [] : [`${names} ${why}`];
+  };
+  const waived = [
+    ...waivedAs("not-reviewed", "did not review"),
+    ...waivedAs("timed-out", "timed out"),
+  ];
   return verdict(
     "success",
     waived.length > 0
-      ? `Passed with review waived: ${waived.map(({ name }) => name).join(", ")} timed out`
+      ? `Passed with review waived: ${waived.join("; ")}`
       : "Reviews complete, no unresolved threads",
   );
 };
 
 const REVIEWER_MARK: Record<ReviewerState, string> = {
   done: "✅",
+  "not-reviewed": "🚫",
   waiting: "⏳",
   errored: "⚠️",
   "timed-out": "⌛",

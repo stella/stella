@@ -3183,6 +3183,7 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtInSection": "Integruoti įgūdžiai",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
       "disableSkill": "Išjungti įgūdį",
