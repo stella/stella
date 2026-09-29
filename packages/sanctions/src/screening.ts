@@ -162,7 +162,7 @@ export type ScreeningQuery = {
   /** Omit when the kind of party is unknown. */
   entityType?: EntityType;
   birthDate?: QueryBirthDate;
-  nationality?: CountryCode;
+  nationality?: readonly CountryCode[];
   /** Passport, national id, registration or tax numbers, in any formatting. */
   identifiers?: readonly string[];
 };
@@ -230,16 +230,18 @@ const moveToward = (score: number, share: number) =>
   score + (1 - score) * share;
 
 const nationalityComparison = (
-  query: CountryCode | undefined,
+  query: readonly CountryCode[] | undefined,
   entry: SanctionsEntry,
 ): FieldComparison => {
   const known = entry.nationalities.flatMap((country) =>
     country.code === null ? [] : [country.code],
   );
-  if (query === undefined || known.length === 0) {
+  if (query === undefined || query.length === 0 || known.length === 0) {
     return "not-compared";
   }
-  return known.includes(query) ? "match" : "mismatch";
+  return query.some((country) => known.includes(country))
+    ? "match"
+    : "mismatch";
 };
 
 const entityTypeComparison = (
@@ -415,7 +417,7 @@ export const screen = (
     if (query.birthDate !== undefined) {
       score = moveToward(score, BIRTH_DATE_EXACT_BOOST);
     }
-    if (query.nationality !== undefined) {
+    if (query.nationality !== undefined && query.nationality.length > 0) {
       score = moveToward(score, NATIONALITY_MATCH_BOOST);
     }
     return score;

@@ -91,6 +91,12 @@ import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { downloadFile } from "@/lib/utils";
+import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
+import {
+  birthDateDraft,
+  parseBirthDateDraft,
+} from "@/routes/_protected.contacts/-components/person-details-fields.logic";
+import type { BirthDateDraft } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 import {
   ProcuracaoDropZone,
   ProcuracaoReview,
@@ -829,6 +835,10 @@ const CreateContactDialog = ({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const [isAresLoading, setIsAresLoading] = useState(false);
+  const [birthDate, setBirthDate] = useState<BirthDateDraft>(() =>
+    birthDateDraft(null),
+  );
+  const [nationalityCodes, setNationalityCodes] = useState<string[]>([]);
   const [aresBillingAddress, setAresBillingAddress] =
     useState<BillingAddress | null>(null);
   const createContact = useCreateContact();
@@ -847,6 +857,19 @@ const CreateContactDialog = ({
       defaultValues: CREATE_CONTACT_DEFAULT_VALUES,
       submitValues: "schema-output",
       onSubmit: async ({ value, formApi }) => {
+        const dateOfBirth =
+          value.type === "person" ? parseBirthDateDraft(birthDate) : null;
+        if (
+          value.type === "person" &&
+          (birthDate.year || birthDate.month || birthDate.day) &&
+          !dateOfBirth
+        ) {
+          stellaToast.add({
+            title: t("contacts.invalidDateOfBirth"),
+            type: "error",
+          });
+          return;
+        }
         const firstName =
           value.type === "person" ? value.firstName || undefined : undefined;
         const lastName =
@@ -868,6 +891,11 @@ const CreateContactDialog = ({
           ...(lastName && { lastName }),
           ...(organizationName && { organizationName }),
           ...(registrationNumber && { registrationNumber }),
+          ...(value.type === "person" && dateOfBirth && { dateOfBirth }),
+          ...(value.type === "person" &&
+            nationalityCodes.length > 0 && {
+              nationalityCodes,
+            }),
           ...(value.type === "organization" &&
             aresBillingAddress && { billingAddress: aresBillingAddress }),
         });
@@ -881,6 +909,8 @@ const CreateContactDialog = ({
         });
         onOpenChange(false);
         formApi.reset();
+        setBirthDate(birthDateDraft(null));
+        setNationalityCodes([]);
         setAresBillingAddress(null);
         setIsAresLoading(false);
       },
@@ -945,6 +975,8 @@ const CreateContactDialog = ({
         onOpenChange(nextOpen);
         if (!nextOpen) {
           form.reset();
+          setBirthDate(birthDateDraft(null));
+          setNationalityCodes([]);
           setAresBillingAddress(null);
           setIsAresLoading(false);
           extraction.reset();
@@ -1194,6 +1226,14 @@ const CreateContactDialog = ({
                   </Field>
                 )}
               </form.Field>
+              {contactType === "person" && (
+                <PersonDetailsFields
+                  birthDate={birthDate}
+                  nationalityCodes={nationalityCodes}
+                  onBirthDateChange={setBirthDate}
+                  onNationalityCodesChange={setNationalityCodes}
+                />
+              )}
             </DialogPanel>
           ) : (
             <DialogPanel className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">

@@ -20,6 +20,11 @@ const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   "20260803120000_chat_thread_turn_workspace_cascade",
   "migration.sql",
 );
+const CHAT_TURN_RUN_OWNERSHIP_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003121500_chat_turn_run_ownership",
+  "migration.sql",
+);
 const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260827120000_docx_suggestion_source_matters",
@@ -45,6 +50,11 @@ const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
   "20260926150000_legislation_payload_revision",
   "migration.sql",
 );
+const LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120000_legislation_expression_identity",
+  "migration.sql",
+);
 const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260926160000_case_law_provision_extraction_state",
@@ -58,6 +68,11 @@ const PROVISION_BACKFILL_MIGRATION_PATH = nodePath.join(
 const PROVISION_READ_STATUS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260927090000_case_law_provision_read_status",
+  "migration.sql",
+);
+const PROVISION_READER_GRANTS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120300_case_law_provision_reader_grants",
   "migration.sql",
 );
 const CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH = nodePath.join(
@@ -301,6 +316,28 @@ export const installPglitePdfSigningTokenScopes = async (
   }
 };
 
+/** Schema push omits the scoped, owner-executed run-id collision lookup. */
+export const installPgliteChatTurnRunIdLookup = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const prefixes = [
+    "CREATE OR REPLACE FUNCTION public.chat_turn_run_id_taken",
+    "REVOKE ALL ON FUNCTION public.chat_turn_run_id_taken",
+    "GRANT EXECUTE ON FUNCTION public.chat_turn_run_id_taken",
+  ] as const;
+  const statements = readMigrationStatements(
+    CHAT_TURN_RUN_OWNERSHIP_MIGRATION_PATH,
+  ).filter((statement) =>
+    prefixes.some((prefix) => executableSql(statement).startsWith(prefix)),
+  );
+  if (statements.length !== prefixes.length) {
+    panic("Chat turn run-id lookup migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
   'INSERT INTO "case_law_statute_citation_count_state"',
   "CREATE FUNCTION",
@@ -351,6 +388,7 @@ export const installPgliteProvisionExtractionState = async (
     PROVISION_EXTRACTION_STATE_MIGRATION_PATH,
     PROVISION_BACKFILL_MIGRATION_PATH,
     PROVISION_READ_STATUS_MIGRATION_PATH,
+    PROVISION_READER_GRANTS_MIGRATION_PATH,
   ]) {
     const statements = readMigrationStatements(migrationPath).filter(
       (statement) =>
@@ -411,6 +449,27 @@ export const installPgliteLegislationPayloadRevision = async (
   }
 };
 
+const LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES = [
+  "CREATE OR REPLACE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the namespace and expression-id guards that schema push omits. */
+export const installPgliteLegislationExpressionIdentity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /**
  * Install the fence that rejects a write of a decision's publisher hash that
  * does not advance its observation order.
@@ -421,6 +480,34 @@ export const installPgliteCaseLawObservationFence = async (
   const statements = readMigrationStatements(
     CASE_LAW_OBSERVATION_FENCE_MIGRATION_PATH,
   ).filter((statement) => !executableSql(statement).startsWith("SET "));
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120100_organization_member_capacity",
+  "migration.sql",
+);
+
+const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the member capacity function and guard omitted by schema push. */
+export const installPgliteOrganizationMemberCapacity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }

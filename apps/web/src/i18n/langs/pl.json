@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Moja organizacja",
     "password": "Hasło",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
-    "requireAccount": {
-      "askAboutDocument": "Utwórz bezpłatne konto, aby zapytać o ten dokument",
-      "askInChat": "Utwórz bezpłatne konto, aby zadać to pytanie na czacie",
-      "description": "Po utworzeniu konta wrócisz na tę stronę.",
-      "generateHeadnotes": "Utwórz bezpłatne konto, aby AI ułożyła tezy",
-      "refineSearch": "Utwórz bezpłatne konto, aby ulepszyć wyszukiwanie za pomocą AI",
-      "writeResearchQuestion": "Utwórz bezpłatne konto, aby zadać pytanie tym wynikom"
-    },
     "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
@@ -604,6 +596,7 @@
       },
       "generate": "Ułóż tezy w AI",
       "holdingAnchor": "Przejdź do akapitu",
+      "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
       "topics": "Tematy",
       "treatment": "Późniejsze orzecznictwo"
     },
@@ -889,6 +882,7 @@
       "apiKey": "Klucz API",
       "none": "Bez konfiguracji"
     },
+    "skillNeedsUnavailableTools": "Niedostępna w czacie. Wymaga narzędzia, które nie jest tam dostępne: {tools}",
     "toolNames": {
       "anonymize": "Anonimizuj",
       "createDocx": "Utwórz DOCX",
@@ -982,7 +976,15 @@
       "searchFiles": "Szukaj plików",
       "searchMatters": "Szukaj spraw",
       "searchMcpServers": "Szukaj serwerów MCP...",
-      "searchSkills": "Szukaj umiejętności"
+      "searchSkills": "Szukaj umiejętności",
+      "skillNeeds": {
+        "browserExtension": "Połącz rozszerzenie przeglądarki, aby użyć tej umiejętności",
+        "document": "Otwórz dokument, aby użyć tej umiejętności",
+        "matter": "Rozpocznij czat w sprawie, aby użyć tej umiejętności",
+        "rawSendMode": "Niedostępne w zanonimizowanych czatach",
+        "reviewEdits": "Przełącz edycje na ręczną weryfikację, aby użyć tej umiejętności",
+        "webSearch": "Włącz wyszukiwanie w sieci, aby użyć tej umiejętności"
+      }
     },
     "contextMeter": {
       "attachments": "Załączone dokumenty",
@@ -1067,6 +1069,10 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "mockModel": {
+      "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
+      "label": "Symulowane AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
@@ -1796,6 +1802,7 @@
       "title": "Pola niestandardowe",
       "value": "Wartość pola"
     },
+    "datePrecision": "Dokładność daty",
     "deleteContact": "Usuń klienta",
     "deleteContactBlockedByMatters": "Ten kontakt nadal jest przypisany jako klient w sprawach. Przypisz te sprawy ponownie albo usuń je przed usunięciem kontaktu.",
     "deleteContactConfirmDescription": "Czy na pewno chcesz usunąć ten kontakt? Tej operacji nie można cofnąć.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "Kod pocztowy",
       "billingAddressState": "Województwo / stan",
       "color": "Kolor",
+      "day": "Dzień",
       "defaultHourlyRate": "Domyślna stawka godzinowa",
       "firstName": "Imię",
       "lastName": "Nazwisko",
       "middleName": "Drugie imię",
+      "month": "Miesiąc",
+      "nationalities": "Obywatelstwa",
       "paymentTermDays": "Termin płatności (dni)",
       "prefix": "Prefiks",
       "registrationNumber": "Numer KRS",
       "suffix": "Sufiks",
-      "taxId": "NIP"
+      "taxId": "NIP",
+      "year": "Rok"
     },
     "filterOrganizations": "Organizacje",
     "filterPersons": "Osoby",
@@ -1923,11 +1934,14 @@
       "title": "Import kontaktów",
       "validateFailed": "Nie udało się sprawdzić tych kontaktów."
     },
+    "invalidDateOfBirth": "Wprowadź prawidłową datę urodzenia.",
+    "invalidNationalityCodes": "Wprowadź prawidłowe kody narodowości.",
     "mattersAsClient": "Sprawy jako klient",
     "newContact": "Nowy klient",
     "noContactsDescription": "Utwórz pierwszego klienta, aby zacząć przypisywać go do spraw.",
     "noContactsFound": "Nie znaleziono klientów",
     "noMattersAsClient": "Ten kontakt nie jest klientem w żadnej sprawie.",
+    "personalDetails": "Dane osobowe",
     "phoneTypes": {
       "fax": "Faks",
       "home": "Domowy",
@@ -1935,7 +1949,14 @@
       "office": "Biurowy",
       "other": "Inny"
     },
+    "precision": {
+      "day": "Pełna data",
+      "month": "Miesiąc i rok",
+      "year": "Tylko rok"
+    },
+    "saved": "Zapisano dane kontaktu.",
     "search": "Szukaj kontaktów...",
+    "searchCountries": "Szukaj krajów",
     "title": "Klienci",
     "type": {
       "organization": "Organizacja",

@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Mana organizācija",
     "password": "Parole",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
-    "requireAccount": {
-      "askAboutDocument": "Izveidojiet bezmaksas kontu, lai jautātu par šo dokumentu",
-      "askInChat": "Izveidojiet bezmaksas kontu, lai jautātu to tērzēšanā",
-      "description": "Kad konts būs gatavs, atgriezīsieties šajā lapā.",
-      "generateHeadnotes": "Izveidojiet bezmaksas kontu, lai AI sagatavotu kopsavilkumus",
-      "refineSearch": "Izveidojiet bezmaksas kontu, lai uzlabotu meklēšanu ar AI",
-      "writeResearchQuestion": "Izveidojiet bezmaksas kontu, lai uzdotu jautājumu šiem rezultātiem"
-    },
     "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
@@ -604,6 +596,7 @@
       },
       "generate": "Sagatavot AI kopsavilkumus",
       "holdingAnchor": "Pāriet uz rindkopu",
+      "invitation": "Ar bezmaksas kontu AI sagatavo darba piezīmes par šo nolēmumu.",
       "topics": "Tēmas",
       "treatment": "Vēlākā judikatūra"
     },
@@ -889,6 +882,7 @@
       "apiKey": "API atslēga",
       "none": "Nav jāiestata"
     },
+    "skillNeedsUnavailableTools": "Tērzēšanā netiek piedāvāta. Nepieciešams rīks, kas tur nav pieejams: {tools}",
     "toolNames": {
       "anonymize": "Anonimizēt",
       "createDocx": "Izveidot DOCX",
@@ -982,7 +976,15 @@
       "searchFiles": "Meklēt failus",
       "searchMatters": "Meklēt lietas",
       "searchMcpServers": "Meklēt MCP serverus...",
-      "searchSkills": "Meklēt prasmes"
+      "searchSkills": "Meklēt prasmes",
+      "skillNeeds": {
+        "browserExtension": "Lai izmantotu šo prasmi, pievienojiet pārlūka paplašinājumu",
+        "document": "Lai izmantotu šo prasmi, atveriet dokumentu",
+        "matter": "Lai izmantotu šo prasmi, sāciet tērzēšanu lietā",
+        "rawSendMode": "Nav pieejams anonimizētās tērzēšanās",
+        "reviewEdits": "Lai izmantotu šo prasmi, pārslēdziet labojumus uz manuālu pārskatīšanu",
+        "webSearch": "Lai izmantotu šo prasmi, ieslēdziet meklēšanu tīmeklī"
+      }
     },
     "contextMeter": {
       "attachments": "Pievienotie dokumenti",
@@ -1067,6 +1069,10 @@
       "loadError": "Neizdevās ielādēt vienumus"
     },
     "messageTimestampToday": "Šodien, {time}",
+    "mockModel": {
+      "description": "Iepriekš sagatavotas lokālā simulētā modeļa atbildes",
+      "label": "Simulēts AI"
+    },
     "modelSelector": {
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
@@ -1796,6 +1802,7 @@
       "title": "Pielāgotie lauki",
       "value": "Lauka vērtība"
     },
+    "datePrecision": "Datuma precizitāte",
     "deleteContact": "Dzēst klientu",
     "deleteContactBlockedByMatters": "Šī kontaktpersona joprojām ir norādīta kā klients lietās. Pirms kontaktpersonas dzēšanas pārpiešķiriet vai dzēsiet šīs lietas.",
     "deleteContactConfirmDescription": "Vai tiešām vēlaties dzēst šo kontaktu? Šo darbību nevar atsaukt.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "Pasta indekss",
       "billingAddressState": "Novads / reģions",
       "color": "Krāsa",
+      "day": "Diena",
       "defaultHourlyRate": "Noklusējuma stundas likme",
       "firstName": "Vārds",
       "lastName": "Uzvārds",
       "middleName": "Otrais vārds",
+      "month": "Mēnesis",
+      "nationalities": "Pilsonības",
       "paymentTermDays": "Apmaksas termiņš (dienas)",
       "prefix": "Priedēklis",
       "registrationNumber": "Reģistrācijas numurs",
       "suffix": "Piedēklis",
-      "taxId": "PVN numurs"
+      "taxId": "PVN numurs",
+      "year": "Gads"
     },
     "filterOrganizations": "Organizācijas",
     "filterPersons": "Personas",
@@ -1923,11 +1934,14 @@
       "title": "Kontaktpersonu importēšana",
       "validateFailed": "Neizdevās pārbaudīt šīs kontaktpersonas."
     },
+    "invalidDateOfBirth": "Ievadiet derīgu dzimšanas datumu.",
+    "invalidNationalityCodes": "Ievadiet derīgus valstspiederības kodus.",
     "mattersAsClient": "Lietas kā klients",
     "newContact": "Jauns klients",
     "noContactsDescription": "Izveidojiet savu pirmo klientu, lai sāktu tos saistīt ar lietām.",
     "noContactsFound": "Klienti nav atrasti",
     "noMattersAsClient": "Šis kontakts nav klients nevienā lietā.",
+    "personalDetails": "Personas dati",
     "phoneTypes": {
       "fax": "Fakss",
       "home": "Mājas",
@@ -1935,7 +1949,14 @@
       "office": "Birojs",
       "other": "Cits"
     },
+    "precision": {
+      "day": "Pilns datums",
+      "month": "Mēnesis un gads",
+      "year": "Tikai gads"
+    },
+    "saved": "Kontaktinformācija saglabāta.",
     "search": "Meklēt kontaktos...",
+    "searchCountries": "Meklēt valstis",
     "title": "Klienti",
     "type": {
       "organization": "Organizācija",

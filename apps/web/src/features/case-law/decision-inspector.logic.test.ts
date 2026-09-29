@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import {
   caseDecisionTabId,
   createCaseDecisionViewTab,
@@ -13,6 +15,7 @@ import {
 const decision: Decision = {
   id: "decision-1",
   caseNumber: "9 A 34/2025",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   slug: "9-a-34-2025",
   ecli: null,
   court: "Městský soud v Praze",

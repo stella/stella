@@ -237,6 +237,7 @@ export const describeRowUpdateTx = async (
       storesUnpublishedWithoutDocument,
     },
     plan: {
+      caseNumberType,
       corpusPlan,
       incomingCitationKey,
       languageGroupKey,
@@ -271,10 +272,12 @@ export const describeRowUpdateTx = async (
     ? {}
     : {
         caseNumber: result.caseNumber,
+        caseNumberType,
         citationKey: incomingCitationKey,
         sourceDocumentId: persistedSourceDocumentId,
         ecli: result.ecli,
         court: result.court,
+        courtId: result.courtId ?? null,
         country: result.country,
         language: result.language,
         sheetNumber: result.sheetNumber,

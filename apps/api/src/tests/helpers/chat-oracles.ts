@@ -19,6 +19,8 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A turn that streamed holds the id of the run its request started. */
+  persistedRunIdentity: "chat.persisted.run-identity",
   /** A thread an earlier release stored loads on the current code, serves
    *  every message, part and answer it held, and keeps them once continued;
    *  and what the current code stores has a fixture. */
@@ -47,6 +49,9 @@ export const CHAT_ORACLE = {
   liveEqualsReload: "chat.live.equals-reload",
   /** (d) Every tool call and result appears exactly once, live and reloaded. */
   liveToolPartsOnce: "chat.live.tool-parts-once",
+  /** The skills the composer offers in a chat are exactly the ones a send
+   *  from that chat runs rather than names unavailable. */
+  skillsMenuMatchesSend: "chat.skills.menu-matches-send",
   /** The route accepts every request the web client builds for its own
    *  thread. */
   clientRequestsAccepted: "chat.client.requests-accepted",
@@ -77,6 +82,10 @@ export const CHAT_ORACLE = {
   /** Every action the page offers on the live view is one the conversation
    *  model's commands may take there. */
   modelCoversPageActions: "chat.model.covers-page-actions",
+  /** A code-mode script that calls a direct tool gets back that tool's name
+   *  and the instruction to call it outside the script, never a bare
+   *  "not defined" the model reads as a missing tool. */
+  codeModeMisplacedCallExplained: "chat.code-mode.misplaced-call-explained",
   // Reported by the web app's rendered replay of recorded conversations
   // (`apps/web/src/components/chat/recorded-conversations.dom.test.tsx`).
   /** The rendered page shows what the stored thread says: open cards,

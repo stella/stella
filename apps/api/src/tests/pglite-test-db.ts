@@ -11,19 +11,20 @@ import * as schema from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
-  PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
-  publicLawColumnPairs,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
   ROLLOUT_CASE_LAW_SOURCE_RELATION,
   ROLLOUT_CASE_LAW_WHOLE_RELATIONS,
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
@@ -172,6 +173,9 @@ export const CORPUS_SAMPLE_READER_SELECT_COLUMNS = {
     "document_url",
     "metadata",
     "text_s3_key",
+    "expression_kind",
+    "window_disposition",
+    "window_disposition_basis",
   ],
   legislation_sources: ["id", "adapter_key"],
 } as const;
@@ -251,12 +255,6 @@ const CORPUS_PROJECTION_HISTORY_TABLES_SQL = [
 
 const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
   getTableName(schema.corpusIndexProjectionRevisions),
-);
-
-const PREGRANT_PROVISION_LINK_STATUS_COLUMNS = new Set(
-  publicLawColumnPairs(PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION)
-    .filter(({ grant }) => grant === "permitted")
-    .map(({ relation, column }) => `${relation}.${column}`),
 );
 
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
@@ -433,6 +431,23 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_citation_reviews"
     FROM stella
   `,
+  // Global sanctions lists are readable by requests and writable by ingestion.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE
+      "sanctions_sources", "sanctions_editions",
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT, UPDATE ON TABLE
+      "sanctions_sources", "sanctions_editions"
+    TO stella_ingestion
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE
+      "sanctions_entry_payloads", "sanctions_edition_entries"
+    TO stella_ingestion
+  `,
   // Legislation corpus — same global model as case law.
   `
     REVOKE INSERT, UPDATE, DELETE ON TABLE
@@ -509,6 +524,20 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (status, updated_at)
       ON TABLE "corpus_index_generations" TO stella_ingestion
   `,
+  // A group's contract binding is written once; ingestion may insert it and
+  // move only its readiness.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE "corpus_index_group_enrollments"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_group_enrollments"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (provisioning_status, attested_at, updated_at)
+      ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
@@ -541,22 +570,12 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).flatMap(
-    ([relation, columns]) => {
-      const grantedColumns = Object.keys(columns).filter(
-        (column) =>
-          !PREGRANT_PROVISION_LINK_STATUS_COLUMNS.has(`${relation}.${column}`),
-      );
-      return grantedColumns.length === 0
-        ? []
-        : [
-            `
-      GRANT SELECT (${grantedColumns.map(quoteSqlIdentifier).join(", ")})
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
+    ([relation, columns]) => `
+      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-          ];
-    },
   ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
@@ -636,9 +655,12 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
+  await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteChatTurnRunIdLookup(db);
+  await installPgliteOrganizationMemberCapacity(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

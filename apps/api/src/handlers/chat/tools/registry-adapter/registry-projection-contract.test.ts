@@ -10,6 +10,7 @@ import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { contacts } from "@/api/db/schema";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
@@ -28,6 +29,7 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -595,23 +597,35 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         query: {
           contacts: {
-            findFirst: async () => ({
-              id: uid(13),
-              type: "person",
-              displayName: "Jan Novák",
-              firstName: "Jan",
-              lastName: "Novák",
-              organizationName: null,
-              // Production-shaped jsonb (`contactEmailSchema`/
-              // `contactPhoneSchema`): the strict projection parse refuses a
-              // thinned stand-in.
-              emails: [
-                { type: "work", address: "jan@example.test", isPrimary: true },
-              ],
-              phones: [
-                { type: "mobile", number: "+420123456789", isPrimary: true },
-              ],
-            }),
+            findFirst: async () =>
+              ({
+                id: toSafeId<"contact">(uid(13)),
+                type: "person",
+                displayName: "Jan Novák",
+                firstName: "Jan",
+                lastName: "Novák",
+                organizationName: null,
+                // Production-shaped jsonb (`contactEmailSchema`/
+                // `contactPhoneSchema`): the strict projection parse refuses a
+                // thinned stand-in.
+                emails: [
+                  {
+                    type: "work",
+                    address: "jan@example.test",
+                    isPrimary: true,
+                  },
+                ],
+                phones: [
+                  { type: "mobile", number: "+420123456789", isPrimary: true },
+                ],
+                dateOfBirthYear: null,
+                dateOfBirthMonth: null,
+                dateOfBirthDay: null,
+                nationalityCodes: [],
+              }) satisfies Pick<
+                typeof contacts.$inferSelect,
+                keyof typeof READ_CONTACT_COLUMNS
+              >,
           },
         },
       }),
@@ -1277,6 +1291,7 @@ const CONTRACT_CORPUS = {
             {
               anchorId: null,
               caseNumber: "22 Cdo 1000/2020",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
               citationAuthority: 1.4,
               citationCount: 3,
               country: "CZ",
@@ -1330,12 +1345,18 @@ const CONTRACT_CORPUS = {
         lookupDecisionsByIdentityMock.mockResolvedValue([
           {
             caseNumber: "22 Cdo 1000/2020",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
             country: "CZ",
             court: "Nejvyšší soud",
             decisionDate: "2020-05-01",
             ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
             id: toSafeId<"caseLawDecision">(uid(53)),
-            identifiers: [{ value: "22 Cdo 1000/2020" }],
+            identifiers: [
+              {
+                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                value: "22 Cdo 1000/2020",
+              },
+            ],
             language: "cs",
             languageAlternates: [],
             slug: "ns-22-cdo-1000-2020",
@@ -1357,6 +1378,7 @@ const CONTRACT_CORPUS = {
           id: toSafeId<"caseLawDecision">(uid(54)),
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
           caseNumber: "22 Cdo 1000/2020",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationsFrom: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -1446,6 +1468,7 @@ const CONTRACT_CORPUS = {
                 decision: {
                   id: toSafeId<"caseLawDecision">(uid(58)),
                   caseNumber: "23 Cdo 200/2021",
+                  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
                   citationAuthority: 2.5,
                   country: "CZ",
                   court: "Nejvyšší soud",

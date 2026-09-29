@@ -17,7 +17,9 @@ import JSZip from "jszip";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { W_NS } from "@/api/lib/docx/ooxml";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { partitionFieldConfiguration } from "@/api/lib/templates/configure-field-input";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 type Block =
   | { type: "paragraph"; text: string }
@@ -41,7 +43,7 @@ const blockXml = (block: Block): string =>
         .map((row) => `<w:tr>${row.map(cell).join("")}</w:tr>`)
         .join("")}</w:tbl>`;
 
-const buildDocx = async (blocks: readonly Block[]): Promise<Buffer> => {
+const buildDocx = async (blocks: readonly Block[]): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file(
     "word/document.xml",
@@ -63,7 +65,7 @@ const buildDocx = async (blocks: readonly Block[]): Promise<Buffer> => {
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
       "</Relationships>",
   );
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 /** The bilingual power of attorney: one `{% for %}` per language section,

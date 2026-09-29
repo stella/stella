@@ -49,7 +49,11 @@ import {
   CHAT_RUN_MODE,
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
-import { USER_STOP_OUTCOME } from "@/api/handlers/chat/chat-turn-persistence";
+import {
+  OWNER_LOST_OUTCOME,
+  USER_STOP_OUTCOME,
+} from "@/api/handlers/chat/chat-turn-persistence";
+import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
 import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
@@ -1457,7 +1461,8 @@ type ProcessServerChatStreamProps = {
 
 /**
  * Which abort cut this run. A stop aborts the run's controller with
- * upstream's explicit-cancel reason. The deadline fires on its own timer and
+ * upstream's explicit-cancel reason, and a run that no longer owns its turn
+ * with its own owner-lost reason. The deadline fires on its own timer and
  * reaches the controller through the signal it derives from, so the deadline
  * itself has to be asked. Any other abort is the response stream's cancel,
  * which is how a dropped connection arrives.
@@ -1471,6 +1476,9 @@ const chatCutShortOutcome = ({
 }): CutShortOutcome => {
   if (abortSignal.reason === RUN_CANCEL_REASON) {
     return USER_STOP_OUTCOME;
+  }
+  if (abortSignal.reason === CHAT_TURN_OWNER_LOST_REASON) {
+    return OWNER_LOST_OUTCOME;
   }
   return {
     type: "interrupted",

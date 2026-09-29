@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Meine Organisation",
     "password": "Passwort",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
-    "requireAccount": {
-      "askAboutDocument": "Erstellen Sie ein kostenloses Konto, um Fragen zu diesem Dokument zu stellen",
-      "askInChat": "Erstellen Sie ein kostenloses Konto, um das im Chat zu fragen",
-      "description": "Sobald Ihr Konto bereit ist, kehren Sie auf diese Seite zurück.",
-      "generateHeadnotes": "Erstellen Sie ein kostenloses Konto, um KI-Leitsätze zu erzeugen",
-      "refineSearch": "Erstellen Sie ein kostenloses Konto, um Ihre Suche mit KI zu verbessern",
-      "writeResearchQuestion": "Erstellen Sie ein kostenloses Konto, um diesen Ergebnissen eine Frage zu stellen"
-    },
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
@@ -604,6 +596,7 @@
       },
       "generate": "KI-Leitsätze erzeugen",
       "holdingAnchor": "Zum Absatz",
+      "invitation": "Mit einem kostenlosen Konto erstellt die KI Arbeitsnotizen zu dieser Entscheidung.",
       "topics": "Themen",
       "treatment": "Spätere Rezeption"
     },
@@ -889,6 +882,7 @@
       "apiKey": "API-Schlüssel",
       "none": "Keine Einrichtung"
     },
+    "skillNeedsUnavailableTools": "Wird im Chat nicht angeboten. Benötigt ein Tool, das dort nicht verfügbar ist: {tools}",
     "toolNames": {
       "anonymize": "Anonymisieren",
       "createDocx": "DOCX erstellen",
@@ -982,7 +976,15 @@
       "searchFiles": "Dateien suchen",
       "searchMatters": "Akten suchen",
       "searchMcpServers": "MCP-Server suchen...",
-      "searchSkills": "Skills suchen"
+      "searchSkills": "Skills suchen",
+      "skillNeeds": {
+        "browserExtension": "Verbinden Sie die Browsererweiterung, um diesen Skill zu nutzen",
+        "document": "Öffnen Sie ein Dokument, um diesen Skill zu nutzen",
+        "matter": "Starten Sie einen Chat in einer Akte, um diesen Skill zu nutzen",
+        "rawSendMode": "In anonymisierten Chats nicht verfügbar",
+        "reviewEdits": "Stellen Sie Bearbeitungen auf manuelle Prüfung um, um diesen Skill zu nutzen",
+        "webSearch": "Schalten Sie die Websuche ein, um diesen Skill zu nutzen"
+      }
     },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
@@ -1067,6 +1069,10 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "mockModel": {
+      "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
+      "label": "Simulierte KI"
+    },
     "modelSelector": {
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
@@ -1796,6 +1802,7 @@
       "title": "Benutzerdefinierte Felder",
       "value": "Feldwert"
     },
+    "datePrecision": "Datumsgenauigkeit",
     "deleteContact": "Klient löschen",
     "deleteContactBlockedByMatters": "Dieser Kontakt ist noch als Klient in Akten zugeordnet. Weisen Sie diese Akten neu zu oder löschen Sie sie, bevor Sie den Kontakt löschen.",
     "deleteContactConfirmDescription": "Möchten Sie diesen Kontakt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "Postleitzahl",
       "billingAddressState": "Bundesland",
       "color": "Farbe",
+      "day": "Tag",
       "defaultHourlyRate": "Standard-Stundensatz",
       "firstName": "Vorname",
       "lastName": "Nachname",
       "middleName": "Zweiter Vorname",
+      "month": "Monat",
+      "nationalities": "Staatsangehörigkeiten",
       "paymentTermDays": "Zahlungsziel (Tage)",
       "prefix": "Titel (vorangestellt)",
       "registrationNumber": "Registernummer",
       "suffix": "Titel (nachgestellt)",
-      "taxId": "Steuer-ID"
+      "taxId": "Steuer-ID",
+      "year": "Jahr"
     },
     "filterOrganizations": "Organisationen",
     "filterPersons": "Personen",
@@ -1923,11 +1934,14 @@
       "title": "Kontakte importieren",
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden."
     },
+    "invalidDateOfBirth": "Geben Sie ein gültiges Geburtsdatum ein.",
+    "invalidNationalityCodes": "Geben Sie gültige Staatsangehörigkeitscodes ein.",
     "mattersAsClient": "Akten als Klient",
     "newContact": "Neuer Klient",
     "noContactsDescription": "Erstellen Sie Ihren ersten Klienten, um ihn mit Akten zu verknüpfen.",
     "noContactsFound": "Keine Klienten gefunden",
     "noMattersAsClient": "Dieser Kontakt ist bei keiner Akte als Klient zugeordnet.",
+    "personalDetails": "Persönliche Angaben",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Privat",
@@ -1935,7 +1949,14 @@
       "office": "Büro",
       "other": "Sonstige"
     },
+    "precision": {
+      "day": "Vollständiges Datum",
+      "month": "Monat und Jahr",
+      "year": "Nur Jahr"
+    },
+    "saved": "Kontaktdaten gespeichert.",
     "search": "Kontakte suchen...",
+    "searchCountries": "Länder suchen",
     "title": "Klienten",
     "type": {
       "organization": "Organisation",

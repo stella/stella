@@ -13,9 +13,11 @@ import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { W_NS } from "@/api/lib/docx/ooxml";
 import type { FieldMeta } from "@/api/lib/docx/types";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { partitionFieldConfiguration } from "@/api/lib/templates/configure-field-input";
 import { configureTemplateDocument } from "@/api/lib/templates/configure-template-document";
 import { toFieldMetaToolInput } from "@/api/mcp/template-field-input";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 const escapeXml = (text: string): string =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -23,7 +25,9 @@ const escapeXml = (text: string): string =>
 const paragraph = (text: string): string =>
   `<w:p><w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
 
-const buildDocx = async (paragraphs: readonly string[]): Promise<Buffer> => {
+const buildDocx = async (
+  paragraphs: readonly string[],
+): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file(
     "word/document.xml",
@@ -45,7 +49,7 @@ const buildDocx = async (paragraphs: readonly string[]): Promise<Buffer> => {
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
       "</Relationships>",
   );
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 /** A statement of work with a plain field, a loop and its item fields, and a
@@ -62,8 +66,8 @@ const SOURCE_PARAGRAPHS = [
 
 /** What `create_template` hands back: one bare person entry per configurable
  *  path, loop item paths included. */
-const documentText = async (docx: Buffer): Promise<string> => {
-  const zip = await JSZip.loadAsync(docx);
+const documentText = async (docx: ScannedFile): Promise<string> => {
+  const zip = await JSZip.loadAsync(docx.bytes);
   return (await zip.file("word/document.xml")?.async("string")) ?? "";
 };
 
@@ -116,7 +120,7 @@ describe("the configure skeleton is a fixed point", () => {
     ]);
 
     const configured = await configureTemplateDocument({
-      buffer: document,
+      file: document,
       entries: skeleton,
     });
 
@@ -124,7 +128,7 @@ describe("the configure skeleton is a fixed point", () => {
     // has no marker to restate that in: an entry that asks for what the
     // document already says must not be refused for having nowhere to write it.
     expect(configured.issues).toEqual([]);
-    expect(configured.buffer).toBe(document);
+    expect(configured.file).toBe(document);
     expect(configured.manifest).toEqual(created);
   });
 
@@ -139,11 +143,11 @@ describe("the configure skeleton is a fixed point", () => {
     ]);
 
     const configured = await configureTemplateDocument({
-      buffer: document,
+      file: document,
       entries: [{ path: "is_registered", label: "Registered?" }],
     });
 
-    expect(configured.buffer).toBe(document);
+    expect(configured.file).toBe(document);
     expect(configured.issues.map(({ message }) => message)).toEqual([
       '"is_registered" has nothing in the document to carry its configuration.',
     ]);
@@ -153,7 +157,7 @@ describe("the configure skeleton is a fixed point", () => {
     const document = await buildDocx(SOURCE_PARAGRAPHS);
 
     const configured = await configureTemplateDocument({
-      buffer: document,
+      file: document,
       entries: [
         {
           path: "expenses_reimbursed",
@@ -164,7 +168,7 @@ describe("the configure skeleton is a fixed point", () => {
     });
 
     expect(configured.issues).toEqual([]);
-    expect(await documentText(configured.buffer)).toContain(
+    expect(await documentText(configured.file)).toContain(
       '{% if expenses_reimbursed | checkbox | label("Reimbursed?") | ' +
         'ai("Does the agreement reimburse expenses?") %}',
     );
@@ -183,19 +187,19 @@ describe("the configure skeleton is a fixed point", () => {
     const document = await buildDocx(SOURCE_PARAGRAPHS);
 
     const configured = await configureTemplateDocument({
-      buffer: document,
+      file: document,
       entries: [
         { path: "expenses_reimbursed", condition: 'client_name == "ACME"' },
       ],
     });
 
     expect(configured.issues).toEqual([]);
-    expect(await documentText(configured.buffer)).toContain(
+    expect(await documentText(configured.file)).toContain(
       '{% if client_name == "ACME" %}',
     );
     // The rule is the tag's now, so the name it used to hang on is gone and
     // the paths the expression reads are what gates the block.
-    const discovered = await discoverTemplate(configured.buffer);
+    const discovered = await discoverTemplate(configured.file);
     expect(discovered.conditionPaths).toEqual(["client_name"]);
     expect(configured.manifest.fields.map(({ path }) => path)).not.toContain(
       "expenses_reimbursed",
@@ -208,7 +212,7 @@ describe("the configure skeleton is a fixed point", () => {
     ]);
 
     const configured = await configureTemplateDocument({
-      buffer: document,
+      file: document,
       entries: [
         {
           path: "company",
@@ -226,7 +230,7 @@ describe("the configure skeleton is a fixed point", () => {
     expect(configured.issues).toEqual([]);
     // Written onto both renderings, and read back as the one field the lookup
     // fills: the dotted markers are how it prints, not fields of their own.
-    expect(await documentText(configured.buffer)).toContain(
+    expect(await documentText(configured.file)).toContain(
       'lookup("krs", name="[name]", krs="[krs]")',
     );
     const company = configured.manifest.fields.find(
@@ -242,7 +246,7 @@ describe("the configure skeleton is a fixed point", () => {
     const document = await buildDocx(["Buyer: {{ company.name }}"]);
 
     const configured = await configureTemplateDocument({
-      buffer: document,
+      file: document,
       entries: [
         {
           path: "company",
@@ -254,7 +258,7 @@ describe("the configure skeleton is a fixed point", () => {
       ],
     });
 
-    expect(configured.buffer).toBe(document);
+    expect(configured.file).toBe(document);
     expect(configured.issues.map(({ message }) => message)).toEqual([
       '"company" has no marker to carry its lookup: the DOCX groups ' +
         "{{company.name}} under it, and none of them is a format the lookup renders.",

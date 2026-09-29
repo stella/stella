@@ -647,6 +647,34 @@
       "oracle": "chat.run.outlives-request"
     },
     {
+      "id": "run-binds-its-id",
+      "fix": "#3975",
+      "behaviour": "A run binds the run id its request posted to its turn when it starts.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-persistence.ts",
+      "search": "...(runId === undefined ? {} : { runId }),",
+      "replace": "...(runId === undefined ? {} : {}),",
+      "scenario": {
+        "file": "src/handlers/chat/chat-turn-run.integration.test.ts",
+        "test": "runs an approved call to completion after its request is torn down, with nobody reading"
+      },
+      "oracle": "chat.persisted.run-identity"
+    },
+    {
+      "id": "reaper-settles-dead-owner",
+      "fix": "#3975",
+      "behaviour": "The reaper ends a turn whose owner stopped renewing its lease, without waiting for a next message.",
+      "status": "active",
+      "file": "src/lib/scheduler/tasks/chat-turn-reaper.ts",
+      "search": "async (tx) => await reapOwnerlessChatTurnOnTx({ threadId, tx }),",
+      "replace": "async () => await Promise.resolve(),",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "settles a dead owner's turn without waiting for the next message"
+      },
+      "oracle": "chat.persisted.turn-settles"
+    },
+    {
       "id": "snapshot-serves-stored-history",
       "fix": "#3957",
       "behaviour": "Every stored message a messages snapshot carries, other than the one the run continues, is the message as the thread's page serves it.",
@@ -997,6 +1025,20 @@
       "oracle": "chat.provider.transcript-settled"
     },
     {
+      "id": "skill-menu-follows-edit-mode",
+      "fix": "#4086",
+      "behaviour": "The composer's skill availability decides over the chat's own edit mode, as a send does, instead of assuming an open document always queues edits for review.",
+      "status": "active",
+      "file": "src/handlers/chat/skill-availability/offered-tools.ts",
+      "search": "    editApplyMode: chatContext.editApplyMode,",
+      "replace": "    editApplyMode: CHAT_EDIT_APPLY_MODE.manual,",
+      "scenario": {
+        "file": "src/handlers/chat/skill-availability/send-parity.integration.test.ts",
+        "test": "an anonymized global chat over a file, in the default edit mode"
+      },
+      "oracle": "chat.skills.menu-matches-send"
+    },
+    {
       "id": "stored-result-content-stable",
       "fix": "#4007",
       "behaviour": "The result that closes a call of a turn that already ended exists only for the model and is rebuilt on every request, so it reads the same each time instead of changing an earlier turn's result.",
@@ -1009,6 +1051,20 @@
         "test": "lets a new message replace an ask-user card that still waits"
       },
       "oracle": "chat.provider.results-stable"
+    },
+    {
+      "id": "code-mode-misplaced-call-explained",
+      "fix": "#4083",
+      "behaviour": "A code-mode script that calls a direct tool gets back the tool's name and the instruction to call it outside the script, instead of a bare ReferenceError.",
+      "status": "active",
+      "file": "src/handlers/chat/tools/execute/chat-code-mode.ts",
+      "search": "      nameGuide: (bindingNames) =>\n        buildScriptCallGuide(\n          chatScriptCallCatalog({ bindingNames, turnTools: scriptCallTools() }),\n        ),\n",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/code-mode-misplaced-call.integration.test.ts",
+        "test": "is told to call it directly, and the turn completes with the direct call"
+      },
+      "oracle": "chat.code-mode.misplaced-call-explained"
     }
   ]
 }

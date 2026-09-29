@@ -40,6 +40,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/lib/knowledge/queries";
+import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -122,9 +123,11 @@ export const AIPromptInput = ({
     hasNextPage: hasNextSkillPage,
     isFetchingNextPage: isFetchingNextSkillPage,
   } = useInfiniteQuery(skillsOptions(activeOrganizationId));
+  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
   const slashShortcutRows = useMemo(
-    () => commandShortcutRowsFromSkillPages(skillPages?.pages),
-    [skillPages],
+    () =>
+      commandShortcutRowsFromSkillPages(skillPages?.pages, unavailableSkillIds),
+    [skillPages, unavailableSkillIds],
   );
   useExternalSyncEffect(() => {
     if (!hasNextSkillPage || isFetchingNextSkillPage) {
@@ -138,8 +141,9 @@ export const AIPromptInput = ({
         shortcuts: slashShortcutRows,
         skillPages:
           skillPages && skillPagesForChips(skillPages.pages, skillChips),
+        unavailableSkillIds,
       }),
-    [slashShortcutRows, skillChips, skillPages],
+    [slashShortcutRows, skillChips, skillPages, unavailableSkillIds],
   );
   const getSlashItems = useLatestCallback(() => slashItems);
 

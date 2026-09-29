@@ -33,10 +33,12 @@ import type { TemplateWarning } from "@/api/lib/docx/template-warnings";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import type { DocxValidationFailure } from "@/api/lib/entity-versions/validate-docx-buffer";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -1210,10 +1212,13 @@ type OrgAIConfigRead = Awaited<ReturnType<typeof loadOrgAIConfig>>;
 const deferOrgAIConfig = (context: McpRequestContext) => {
   let pending: Promise<OrgAIConfigRead> | undefined;
   return async (): Promise<OrgAIConfigRead> => {
-    const organizationId = context.organizationId;
+    const reader = {
+      organizationId: context.organizationId,
+      userId: context.userId,
+    };
     pending ??=
-      context.testDependencies?.loadOrgAIConfig?.(organizationId) ??
-      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, organizationId));
+      context.testDependencies?.loadOrgAIConfig?.(reader) ??
+      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, reader));
     return await pending;
   };
 };
@@ -1346,7 +1351,9 @@ const handleFillTemplateTool: McpToolHandler<
     return errorResult(filled.usageRejection.message);
   }
   if ("error" in filled) {
-    return errorResult(filled.error);
+    return filled.storedTemplateError === undefined
+      ? errorResult(filled.error)
+      : storedTemplateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
@@ -1408,7 +1415,7 @@ const handleFillTemplateTool: McpToolHandler<
         ? filled.text.slice(0, TEMPLATE_FILL_TEXT_MAX_CHARS)
         : filled.text,
       truncated,
-      docxBase64: filled.buffer.toString("base64"),
+      docxBase64: Buffer.from(filled.file.bytes).toString("base64"),
       unmatchedPlaceholders: filled.unmatchedPlaceholders,
       unusedValues: filled.unusedValues,
       structureErrors: filled.structureErrors,
@@ -1424,7 +1431,7 @@ const handleFillTemplateTool: McpToolHandler<
   // The shared preview reader the template preview routes use: it flattens
   // table cells into their own entries, so an agent reading the result sees
   // the same text a human reviewing the preview does.
-  const { paragraphs, charCount } = await extractTextForPreview(filled.buffer);
+  const { paragraphs, charCount } = await extractTextForPreview(filled.file);
   const rendered: string[] = [];
   let renderedChars = 0;
   let truncated = false;
@@ -1801,7 +1808,9 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
   if ("error" in filled) {
     await releaseClaim();
-    return errorResult(filled.error);
+    return filled.storedTemplateError === undefined
+      ? errorResult(filled.error)
+      : storedTemplateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     await releaseClaim();
@@ -1889,7 +1898,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
           workspaceId,
           userId: context.userId,
           recordAuditEvent,
-          buffer: filled.buffer,
+          buffer: filled.file.bytes,
           fileName,
           mimeType: DOCX_MIME_TYPE,
           parentId:
@@ -1932,7 +1941,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         entityId,
         userId: context.userId,
         recordAuditEvent,
-        buffer: filled.buffer,
+        buffer: filled.file.bytes,
         fileName,
         mimeType: DOCX_MIME_TYPE,
         source: null,
@@ -2142,10 +2151,10 @@ const resolveTemplateDocx = async ({
   }
 };
 
-/** The validated DOCX bytes a create or upsert call carries, or the failure
- *  that stopped them from being read. */
+/** The validated, scanned DOCX a create or upsert call carries, or the
+ *  failure that stopped it from being read. */
 type CreateTemplateDocx =
-  | { status: "ok"; buffer: Buffer }
+  | { status: "ok"; file: ScannedFile }
   | { status: "error"; result: InternalToolErrorResult };
 
 const readCreateTemplateDocx = async ({
@@ -2222,7 +2231,7 @@ const readCreateTemplateDocx = async ({
       }),
     };
   }
-  return { status: "ok", buffer: Buffer.from(scanned.value.bytes) };
+  return { status: "ok", file: scanned.value };
 };
 
 /**
@@ -2251,17 +2260,17 @@ const createTemplateDocxSource = (input: {
  * transaction.
  */
 const upsertStoredTemplate = async ({
-  buffer,
+  file,
   context,
   name,
   templateId,
 }: {
-  buffer: Buffer | null;
+  file: ScannedFile | null;
   context: McpRequestContext;
   name: string | undefined;
   templateId: SafeId<"template">;
 }): Promise<InternalToolErrorResult | { fieldCount: number }> => {
-  if (buffer === null) {
+  if (file === null) {
     const renamed = await Result.gen(() =>
       (context.testDependencies?.renameStoredTemplate ?? renameStoredTemplate)({
         safeDb: context.safeDb,
@@ -2286,7 +2295,7 @@ const upsertStoredTemplate = async ({
       recordAuditEvent: context.recordAuditEvent,
       // The new document decides everything: the fields it carries are the
       // ones its markers declare.
-      prepare: () => Result.ok({ bytes: new Uint8Array(buffer) }),
+      prepare: () => Result.ok({ file }),
     }),
   );
   return Result.isError(written)
@@ -2321,13 +2330,13 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
   }
 
   const source = createTemplateDocxSource(input);
-  let buffer: Buffer | null = null;
+  let file: ScannedFile | null = null;
   if (source !== null) {
     const read = await readCreateTemplateDocx({ context, source });
     if (read.status === "error") {
       return read.result;
     }
-    buffer = read.buffer;
+    file = read.file;
   }
   // Reported with the template rather than refused, so a caller that sent
   // both learns which document was stored without losing the call.
@@ -2339,7 +2348,7 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
   if (input.template_id !== undefined) {
     const templateId = brandPersistedTemplateId(input.template_id);
     const upserted = await upsertStoredTemplate({
-      buffer,
+      file,
       context,
       name: input.name,
       templateId,
@@ -2367,7 +2376,7 @@ const handleCreateTemplateTool: TypedMcpToolHandler<
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       userId: context.userId,
-      buffer: buffer ?? panic("create branch reached without a DOCX"),
+      file: file ?? panic("create branch reached without a DOCX"),
       name,
       fileName: `${name}.docx`,
       recordAuditEvent: context.recordAuditEvent,
@@ -2420,7 +2429,9 @@ const describeTemplateForAgent = async ({
     scopedDb: context.scopedDb,
   });
   if ("error" in described) {
-    return errorResult(described.error);
+    return described.storedTemplateError === undefined
+      ? errorResult(described.error)
+      : storedTemplateFailureResult(described.storedTemplateError);
   }
   const payload = toTemplateDetailPayload(templateId, described);
   type DescribedTemplatePayload = AssertNoExtraFields<
@@ -2784,6 +2795,41 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   });
 };
 
+/** A stored template that could not be read: gone, its file refused by the
+ *  scan, the scanner unavailable, or the object unreadable. */
+const storedTemplateFailureResult = (
+  error: HandlerError<404 | 422 | 500 | 503>,
+): InternalToolErrorResult => {
+  switch (error.status) {
+    case 404:
+      return notFoundResult(
+        error.message,
+        "Call list_templates to find a template id in this organization.",
+      );
+    case 422:
+      return structuredErrorResult({
+        code: "validation_error",
+        message: error.message,
+        hint: error.hint,
+        issues: error.issues,
+      });
+    case 503:
+      return structuredErrorResult({
+        code: "internal_error",
+        message: error.message,
+        hint: error.hint,
+        retryable: true,
+      });
+    case 500:
+      return internalFailureResult(error);
+    default:
+      error.status satisfies never;
+      return panic(
+        `Unhandled stored template failure status: ${String(error.status)}`,
+      );
+  }
+};
+
 /**
  * `preview_template_conditions`: the decision model's answer for every
  * AI-decided condition of one template, over the values as they stand. Shares
@@ -2836,10 +2882,7 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
     },
   });
   if (Result.isError(decided)) {
-    return notFoundResult(
-      decided.error.message,
-      "Call list_templates to find a template id in this organization.",
-    );
+    return storedTemplateFailureResult(decided.error);
   }
 
   // Each condition's label is the org-authored field label; its path,

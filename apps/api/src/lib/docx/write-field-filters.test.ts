@@ -6,6 +6,9 @@ import {
   filtersFromFieldConfig,
 } from "@stll/template-conditions";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { discoverTemplate } from "./discover-template";
 import type { FieldMeta } from "./types";
 import { writeFieldFilters } from "./write-field-filters";
@@ -25,17 +28,17 @@ const splitP = (parts: readonly string[]) =>
 const makeDocx = async (
   paragraphs: readonly string[],
   extra: Readonly<Record<string, string>> = {},
-): Promise<Buffer> => {
+): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", WRAP(paragraphs.join("")));
   for (const [path, xml] of Object.entries(extra)) {
     zip.file(path, xml);
   }
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
-const documentXml = async (buffer: Buffer): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
+const documentXml = async (file: ScannedFile): Promise<string> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const entry = zip.file("word/document.xml");
   if (!entry) {
     throw new Error("no main document part");
@@ -51,7 +54,7 @@ const rewrite = (field: FieldMeta) => ({
 describe("writing a configuration into the document", () => {
   test("a plain marker gains the chain its field declares", async () => {
     const docx = await makeDocx([P("Deposit: {{ deposit }}")]);
-    const { buffer, written } = await writeFieldFilters(docx, [
+    const { file, written } = await writeFieldFilters(docx, [
       rewrite({
         path: "deposit",
         inputType: "number",
@@ -61,7 +64,7 @@ describe("writing a configuration into the document", () => {
     ]);
 
     expect(written).toEqual(new Set(["deposit"]));
-    expect(await documentXml(buffer)).toContain(
+    expect(await documentXml(file)).toContain(
       '{{ deposit | number | label("Kaution") | required }}',
     );
   });
@@ -75,12 +78,12 @@ describe("writing a configuration into the document", () => {
       "word/header1.xml": header,
     });
 
-    const { buffer } = await writeFieldFilters(docx, [
+    const { file } = await writeFieldFilters(docx, [
       rewrite({ path: "client", label: "Client" }),
     ]);
 
-    const zip = await JSZip.loadAsync(buffer);
-    const body = await documentXml(buffer);
+    const zip = await JSZip.loadAsync(file.bytes);
+    const body = await documentXml(file);
     const headerXml = await zip.file("word/header1.xml")?.async("string");
     expect(body.match(/label\("Client"\)/gu)).toHaveLength(2);
     expect(headerXml).toContain('{{ client | label("Client") }}');
@@ -88,14 +91,14 @@ describe("writing a configuration into the document", () => {
 
   test("a marker split across runs keeps its formatting", async () => {
     const docx = await makeDocx([splitP(["Fee: {{ fe", "e }} due"])]);
-    const { buffer } = await writeFieldFilters(docx, [
+    const { file } = await writeFieldFilters(docx, [
       rewrite({ path: "fee", inputType: "number" }),
     ]);
 
-    const xml = await documentXml(buffer);
+    const xml = await documentXml(file);
     expect(xml).toContain("{{ fee | number }}");
     expect(xml).toContain("<w:b/>");
-    const discovered = await discoverTemplate(buffer);
+    const discovered = await discoverTemplate(file);
     expect(discovered.documentFields).toEqual([
       { path: "fee", inputType: "number" },
     ]);
@@ -108,14 +111,14 @@ describe("writing a configuration into the document", () => {
       P("{% endfor %}"),
     ]);
 
-    const { buffer, written } = await writeFieldFilters(docx, [
+    const { file, written } = await writeFieldFilters(docx, [
       rewrite({ path: "attorneys.name", label: "Full name" }),
     ]);
 
     expect(written).toEqual(new Set(["attorneys.name"]));
     // The marker keeps the alias the body wrote: renaming it would move the
     // field out of the loop.
-    expect(await documentXml(buffer)).toContain(
+    expect(await documentXml(file)).toContain(
       '{{ attorney.name | label("Full name") }}',
     );
   });
@@ -127,7 +130,7 @@ describe("writing a configuration into the document", () => {
       P("{%p endfor %}"),
     ]);
 
-    const { buffer, written } = await writeFieldFilters(docx, [
+    const { file, written } = await writeFieldFilters(docx, [
       {
         path: "items",
         filters: arrayFiltersFromFieldConfig({
@@ -142,7 +145,7 @@ describe("writing a configuration into the document", () => {
     ]);
 
     expect(written).toEqual(new Set(["items"]));
-    expect(await documentXml(buffer)).toContain(
+    expect(await documentXml(file)).toContain(
       '{%p for item in items | label("Items") | min_items(1) | max_items(5) %}',
     );
   });
@@ -157,10 +160,10 @@ describe("writing a configuration into the document", () => {
       label: "Kaution",
     };
 
-    const { buffer, written } = await writeFieldFilters(docx, [rewrite(field)]);
+    const { file, written } = await writeFieldFilters(docx, [rewrite(field)]);
 
     expect(written).toEqual(new Set(["deposit"]));
-    expect(buffer).toBe(docx);
+    expect(file).toBe(docx);
   });
 
   test("a path the document does not carry is not reported as written", async () => {
@@ -189,8 +192,8 @@ describe("writing a configuration into the document", () => {
       { path: "attorneys.name", label: "Full name", hint: "As in the ID" },
     ];
 
-    const { buffer } = await writeFieldFilters(docx, fields.map(rewrite));
-    const discovered = await discoverTemplate(buffer);
+    const { file } = await writeFieldFilters(docx, fields.map(rewrite));
+    const discovered = await discoverTemplate(file);
 
     expect(discovered.structureErrors).toEqual([]);
     expect(discovered.documentFields).toEqual([
@@ -211,11 +214,11 @@ describe("writing a configuration into the document", () => {
 
   test("rewriting an already configured marker replaces its chain", async () => {
     const docx = await makeDocx([P('{{ deposit | text | label("Old") }}')]);
-    const { buffer } = await writeFieldFilters(docx, [
+    const { file } = await writeFieldFilters(docx, [
       rewrite({ path: "deposit", inputType: "number", label: "New" }),
     ]);
 
-    const xml = await documentXml(buffer);
+    const xml = await documentXml(file);
     expect(xml).toContain('{{ deposit | number | label("New") }}');
     expect(xml).not.toContain("Old");
   });
@@ -230,7 +233,7 @@ describe("writing a configuration into the document", () => {
       ],
     };
 
-    const { buffer, written } = await writeFieldFilters(docx, [
+    const { file, written } = await writeFieldFilters(docx, [
       {
         path: "company.name",
         declares: "company",
@@ -246,7 +249,7 @@ describe("writing a configuration into the document", () => {
     // The rewrite is reported against the field it configures, not the marker
     // that happens to carry it.
     expect(written).toEqual(new Set(["company"]));
-    const discovered = await discoverTemplate(buffer);
+    const discovered = await discoverTemplate(file);
     expect(discovered.structureErrors).toEqual([]);
     expect(discovered.documentFields).toEqual([{ path: "company", lookup }]);
   });
@@ -274,14 +277,14 @@ describe("writing a configuration into the document", () => {
       P("{% endif %}"),
     ]);
 
-    const { buffer, written } = await writeFieldFilters(
+    const { file, written } = await writeFieldFilters(
       docx,
       [],
       [{ path: "is_company", expression: "kind == 'company'", filters: [] }],
     );
 
     expect(written).toEqual(new Set(["is_company"]));
-    const xml = await documentXml(buffer);
+    const xml = await documentXml(file);
     expect(xml).toContain("{% if kind == 'company' %}");
     expect(xml).toContain("{% elif kind == 'company' %}");
   });
@@ -293,7 +296,7 @@ describe("writing a configuration into the document", () => {
       P("{% endif %}"),
     ]);
 
-    const { buffer, written } = await writeFieldFilters(
+    const { file, written } = await writeFieldFilters(
       docx,
       [],
       [
@@ -312,7 +315,7 @@ describe("writing a configuration into the document", () => {
     );
 
     expect(written).toEqual(new Set(["buyer_is_a_consumer"]));
-    expect(await documentXml(buffer)).toContain(
+    expect(await documentXml(file)).toContain(
       '{% if buyer_is_a_consumer | checkbox | label("Buyer is a consumer") %}',
     );
   });
@@ -323,13 +326,13 @@ describe("writing a configuration into the document", () => {
       P("{% endif %}"),
     ]);
 
-    const { buffer, written } = await writeFieldFilters(
+    const { file, written } = await writeFieldFilters(
       docx,
       [],
       [{ path: "is_company", expression: "kind == 'person'", filters: [] }],
     );
 
     expect(written).toEqual(new Set());
-    expect(buffer).toBe(docx);
+    expect(file).toBe(docx);
   });
 });

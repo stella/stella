@@ -557,6 +557,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `time-entries.get`                          | read               | stella:read          | FEATURE_TIME_BILLING | covered by `list_time_entries`                                                                                                                                                                                                                                              |
 | `time-entries.ledes.export`                 | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries ledes-export`                                                                                                                                                                                                              |
 | `time-entries.list`                         | read               | stella:read          | FEATURE_TIME_BILLING | curated tool `list_time_entries`                                                                                                                                                                                                                                            |
+| `time-entries.me.list`                      | read               | stella:read          | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-list`                                                                                                                                                                                                                   |
 | `time-entries.pdf.export`                   | read               | stella:read          | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.csv.export covers part of this: returns the same entries as CSV text (time-entries.ledes.export returns LEDES instead); the rendered PDF is not produced |
 | `time-entries.split`                        | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split`                                                                                                                                                                                                                     |
 | `time-entries.suggestions.decisions.create` | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries suggestions-decisions-create`                                                                                                                                                                                              |
@@ -618,7 +619,7 @@ mechanics, and similar), not gaps in coverage.
 | Reason                 | Count |
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
-| assistant_chat         | 15    |
+| assistant_chat         | 16    |
 | auth_plumbing          | 9     |
 | billing_ui             | 1     |
 | chat_thread_ui         | 2     |
@@ -638,4 +639,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 14    |
 | url_preview            | 2     |
 
-Total: 183
+Total: 184

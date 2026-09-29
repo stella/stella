@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "مؤسستي",
     "password": "كلمة المرور",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
-    "requireAccount": {
-      "askAboutDocument": "أنشئ حسابًا مجانيًا لطرح سؤال عن هذا المستند",
-      "askInChat": "أنشئ حسابًا مجانيًا لطرح هذا السؤال في الدردشة",
-      "description": "ستعود إلى هذه الصفحة بمجرد أن يصبح حسابك جاهزًا.",
-      "generateHeadnotes": "أنشئ حسابًا مجانيًا لتوليد خلاصات الحكم بالذكاء الاصطناعي",
-      "refineSearch": "أنشئ حسابًا مجانيًا لتحسين بحثك بالذكاء الاصطناعي",
-      "writeResearchQuestion": "أنشئ حسابًا مجانيًا لطرح سؤال على هذه النتائج"
-    },
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",
@@ -604,6 +596,7 @@
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
       "holdingAnchor": "الانتقال إلى الفقرة",
+      "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
       "topics": "الموضوعات",
       "treatment": "المعالجة اللاحقة"
     },
@@ -889,6 +882,7 @@
       "apiKey": "مفتاح API",
       "none": "بدون إعداد"
     },
+    "skillNeedsUnavailableTools": "غير معروضة في الدردشة. تحتاج إلى أداة غير متوفرة هناك: {tools}",
     "toolNames": {
       "anonymize": "إخفاء الهوية",
       "createDocx": "إنشاء DOCX",
@@ -982,7 +976,15 @@
       "searchFiles": "البحث في المستندات",
       "searchMatters": "البحث في الملفات القانونية",
       "searchMcpServers": "البحث في خوادم MCP...",
-      "searchSkills": "البحث في المهارات"
+      "searchSkills": "البحث في المهارات",
+      "skillNeeds": {
+        "browserExtension": "صِل إضافة المتصفح لاستخدام هذه المهارة",
+        "document": "افتح مستندًا لاستخدام هذه المهارة",
+        "matter": "ابدأ دردشة في ملف قانوني لاستخدام هذه المهارة",
+        "rawSendMode": "غير متاحة في الدردشات المجهّلة",
+        "reviewEdits": "حوّل التعديلات إلى المراجعة اليدوية لاستخدام هذه المهارة",
+        "webSearch": "شغّل البحث على الويب لاستخدام هذه المهارة"
+      }
     },
     "contextMeter": {
       "attachments": "المستندات المرفقة",
@@ -1067,6 +1069,10 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "mockModel": {
+      "description": "ردود ثابتة من نموذج المحاكاة المحلي",
+      "label": "ذكاء اصطناعي مُحاكى"
+    },
     "modelSelector": {
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",
@@ -1796,6 +1802,7 @@
       "title": "الحقول المخصصة",
       "value": "قيمة الحقل"
     },
+    "datePrecision": "دقة التاريخ",
     "deleteContact": "حذف العميل",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "الرمز البريدي",
       "billingAddressState": "الولاية",
       "color": "اللون",
+      "day": "اليوم",
       "defaultHourlyRate": "السعر الافتراضي للساعة",
       "firstName": "الاسم الأول",
       "lastName": "اسم العائلة",
       "middleName": "الاسم الأوسط",
+      "month": "الشهر",
+      "nationalities": "الجنسيات",
       "paymentTermDays": "شروط الدفع (بالأيام)",
       "prefix": "اللقب",
       "registrationNumber": "رقم التسجيل",
       "suffix": "اللاحقة",
-      "taxId": "الرقم الضريبي"
+      "taxId": "الرقم الضريبي",
+      "year": "السنة"
     },
     "filterOrganizations": "المؤسسات",
     "filterPersons": "الأشخاص",
@@ -1923,11 +1934,14 @@
       "title": "استيراد جهات الاتصال",
       "validateFailed": "تعذّر التحقق من جهات الاتصال هذه."
     },
+    "invalidDateOfBirth": "أدخل تاريخ ميلاد صحيحًا.",
+    "invalidNationalityCodes": "أدخل رموز جنسية صالحة.",
     "mattersAsClient": "الملفات القانونية بصفة عميل",
     "newContact": "جهة اتصال جديدة",
     "noContactsDescription": "أنشئ أول جهة اتصال لك للبدء بربطها بالملفات القانونية.",
     "noContactsFound": "لم يُعثر على أي جهات اتصال",
     "noMattersAsClient": "جهة الاتصال هذه ليست عميلاً في أي ملف قانوني.",
+    "personalDetails": "التفاصيل الشخصية",
     "phoneTypes": {
       "fax": "فاكس",
       "home": "المنزل",
@@ -1935,7 +1949,14 @@
       "office": "المكتب",
       "other": "أخرى"
     },
+    "precision": {
+      "day": "التاريخ الكامل",
+      "month": "الشهر والسنة",
+      "year": "السنة فقط"
+    },
+    "saved": "تم حفظ بيانات جهة الاتصال.",
     "search": "البحث في جهات الاتصال...",
+    "searchCountries": "ابحث عن البلدان",
     "title": "العملاء",
     "type": {
       "organization": "مؤسسة",

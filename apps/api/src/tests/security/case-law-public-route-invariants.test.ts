@@ -199,6 +199,9 @@ const PUBLIC_DECISION_READ_GATES = {
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [LIST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/lookup-by-identity.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
   [PUBLIC_SUBJECT_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [SEARCH_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/shelf-courts.ts": {
@@ -224,6 +227,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law-public-read-db.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The read handle the gated reads run through.",
+  },
+  "apps/api/src/lib/case-law/decision-court-id-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "The court-id CHECK fragment and the jurisdictions it covers; no query.",
   },
   "apps/api/src/lib/case-law/decision-row-columns.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -284,6 +292,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/legal-search/sk-document-backfill.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Ingestion backfill of Slovak documents; not a public read.",
+  },
+  "apps/api/src/lib/legal-search/sk-document-parking-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "States the parking predicate the queue and its index share; issues no query.",
   },
   [PUBLIC_READ_DB_FILE]: {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,

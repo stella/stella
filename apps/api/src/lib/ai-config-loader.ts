@@ -23,13 +23,26 @@ import {
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
+import {
+  memberAssignmentRequiredError,
+  ownAIKeyRequiredError,
+} from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { memberMayUseAI } from "@/api/lib/usage/member-capacity";
 import { mayUseInstanceModels } from "@/api/lib/usage/organization-access-state";
 
 /** The one capability the loaders need: a single `organization_settings` select. */
 export type OrgSettingsReader = Pick<Transaction, "select">;
+
+/**
+ * Whose AI work the config is loaded for: the organization, and the member
+ * the work runs as (the requester, or the actor that queued a run).
+ */
+export type OrgAIConfigReader = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
 
 const selectAISettingsRow = async (
   db: OrgSettingsReader,
@@ -49,14 +62,19 @@ const selectAISettingsRow = async (
     .then((rows) => rows.at(0));
 
 /**
- * A null config means "run on the instance provider"; refuses when the org's
- * access state bars that, as a deployment without instance keys would.
+ * Refuses a member the organization does not admit to AI work, whichever key
+ * would serve it. A null config means "run on the instance provider"; refuses
+ * when the org's access state bars that, as a deployment without instance
+ * keys would.
  */
-const requireInstanceFallbackAllowed = async (
+const requireAIAccessAllowed = async (
   db: OrgSettingsReader,
-  organizationId: SafeId<"organization">,
+  { organizationId, userId }: OrgAIConfigReader,
   orgAIConfig: OrgAIConfig | null,
 ): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
+  if (!(await memberMayUseAI(db, organizationId, userId))) {
+    return Result.err(memberAssignmentRequiredError());
+  }
   if (
     orgAIConfig === null &&
     !(await mayUseInstanceModels(db, organizationId))
@@ -75,8 +93,9 @@ const requireInstanceFallbackAllowed = async (
  */
 export const loadOrgAIConfig = async (
   db: OrgSettingsReader,
-  organizationId: SafeId<"organization">,
+  reader: OrgAIConfigReader,
 ): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
+  const { organizationId } = reader;
   const rows = await db
     .select({
       aiConfigEncrypted: sql<
@@ -92,7 +111,7 @@ export const loadOrgAIConfig = async (
     organizationId,
     row: rows.at(0),
   });
-  return await requireInstanceFallbackAllowed(db, organizationId, orgAIConfig);
+  return await requireAIAccessAllowed(db, reader, orgAIConfig);
 };
 
 export type OrgAISettings = {
@@ -108,19 +127,16 @@ export type OrgAISettings = {
  */
 export const loadOrgAISettings = async (
   db: OrgSettingsReader,
-  organizationId: SafeId<"organization">,
+  reader: OrgAIConfigReader,
 ): Promise<Result<OrgAISettings, HandlerError<403>>> => {
+  const { organizationId } = reader;
   const row = await selectAISettingsRow(db, organizationId);
   const orgAIConfig = await decryptOrgAIConfigRowOrThrow({
     decrypt: decryptAIConfig,
     organizationId,
     row,
   });
-  const allowed = await requireInstanceFallbackAllowed(
-    db,
-    organizationId,
-    orgAIConfig,
-  );
+  const allowed = await requireAIAccessAllowed(db, reader, orgAIConfig);
   return allowed.map((config) => ({
     orgAIConfig: config,
     promptCachingEnabled: resolvePromptCachingPreference(row),
@@ -145,12 +161,13 @@ export type OrgSettingsForAuth = {
  * `decryptOrgAIConfigRow`) and reported as `orgAIConfigStatus:
  * "unreadable"`, which AI-invoking call sites must fail closed on rather
  * than reading the null as "this org has no config of its own". An org
- * whose access state bars the instance provider reports `own_key_required`
- * the same way, so non-AI requests keep working.
+ * whose access state bars the instance provider reports `own_key_required`,
+ * and a member it does not admit to AI work `member_assignment_required`, the
+ * same way, so non-AI requests keep working.
  */
 export const loadOrgSettingsForAuth = async (
   db: OrgSettingsReader,
-  organizationId: SafeId<"organization">,
+  { organizationId, userId }: OrgAIConfigReader,
 ): Promise<OrgSettingsForAuth> => {
   const row = await selectAISettingsRow(db, organizationId);
 
@@ -169,6 +186,13 @@ export const loadOrgSettingsForAuth = async (
   }
 
   const orgAIConfig = decryptResult.config;
+  if (!(await memberMayUseAI(db, organizationId, userId))) {
+    return {
+      orgAIConfig,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      promptCachingEnabled,
+    };
+  }
   const orgAIConfigStatus =
     orgAIConfig === null && !(await mayUseInstanceModels(db, organizationId))
       ? ORG_AI_CONFIG_STATUS.ownKeyRequired

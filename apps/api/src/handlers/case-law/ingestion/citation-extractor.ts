@@ -16,6 +16,10 @@ import {
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
 import {
+  canonicalUsReporterCitation,
+  readsUsReporterCitations,
+} from "@stll/api-contract/us-reporter-citation";
+import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
 } from "@stll/legal-ast/citation-prefix";
@@ -29,6 +33,7 @@ import type {
   DecisionIdentifier,
   DecisionIdentifiers,
   DecisionIdentifierType,
+  DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
 
 import { detectCitationCourtHint } from "@/api/handlers/case-law/citation-court-hint";
@@ -43,6 +48,11 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import { decisionIdentifiersFromPersistedMetadata } from "@/api/lib/legal-search/decision-identifier-metadata";
+import {
+  DEFAULT_PRIMARY_REFERENCE_TYPE,
+  primaryDecisionIdentifier,
+  primaryReferenceIsDocket,
+} from "@/api/lib/legal-search/decision-primary-reference";
 
 /**
  * Extracted citation reference found in decision text.
@@ -1299,13 +1309,25 @@ const canonicalizeDedupKey = (text: string): string => {
 
 type DecisionMetadata = {
   caseNumber: string;
+  /** Absent means a docket. */
+  caseNumberType?: DecisionPrimaryReferenceType | undefined;
   ecli?: string | null;
   identifiers?: DecisionIdentifiers | undefined;
+  /**
+   * The decision's country, required: a caller without one would silently
+   * compare reporter citations by a key the rows are not written under. Identifiers are told apart by the key
+   * `normalizeDecisionIdentifierIn` gives them there, the key the identifier
+   * rows are written under, so two spellings of one reference (`10 A. 5`,
+   * `10 Atl. 5`) become one row rather than a primary-key collision.
+   */
+  jurisdiction: string;
 };
 
 type StoredDecisionMetadata = {
   caseNumber: string;
+  caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
+  jurisdiction: string;
   metadata: Record<string, unknown>;
 };
 
@@ -1313,13 +1335,15 @@ const PUBLISHER_CASE_NUMBER_ALIASES_METADATA_KEY = "additionalCaseNumbers";
 
 export const decisionIdentifiersFromMetadata = ({
   caseNumber,
+  caseNumberType = DEFAULT_PRIMARY_REFERENCE_TYPE,
   ecli,
   identifiers,
+  jurisdiction,
 }: DecisionMetadata): DecisionIdentifiers => {
-  const caseNumberIdentifier = {
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value: caseNumber,
-  } as const;
+  const caseNumberIdentifier = primaryDecisionIdentifier({
+    caseNumber,
+    caseNumberType,
+  });
 
   const candidates: DecisionIdentifier[] = [
     caseNumberIdentifier,
@@ -1330,8 +1354,10 @@ export const decisionIdentifiersFromMetadata = ({
   if (identifiers !== undefined) {
     candidates.push(...identifiers);
   }
-  const normalizedCaseNumber =
-    normalizeDecisionIdentifier(caseNumberIdentifier);
+  const normalizedCaseNumber = normalizeDecisionIdentifierIn(
+    jurisdiction,
+    caseNumberIdentifier,
+  );
   if (!normalizedCaseNumber) {
     throw new UnpersistableDecisionFieldError({
       message: "Decision case number has no searchable content",
@@ -1342,7 +1368,10 @@ export const decisionIdentifiersFromMetadata = ({
     `${caseNumberIdentifier.type}:${normalizedCaseNumber}`,
   ]);
   const additional = candidates.slice(1).filter((identifier) => {
-    const normalized = normalizeDecisionIdentifier(identifier);
+    // The first spelling of a reference is kept (the primary before any
+    // other); a later spelling of the same reference stays in the stored
+    // publisher identifiers, not in the rows.
+    const normalized = normalizeDecisionIdentifierIn(jurisdiction, identifier);
     if (!normalized) {
       return false;
     }
@@ -1398,7 +1427,9 @@ const expandCompositeReporterIdentifier = (
 
 export const decisionIdentifiersFromStoredMetadata = ({
   caseNumber,
+  caseNumberType,
   ecli,
+  jurisdiction,
   metadata,
 }: StoredDecisionMetadata): DecisionIdentifiers => {
   const persistedIdentifiers =
@@ -1410,7 +1441,9 @@ export const decisionIdentifiersFromStoredMetadata = ({
     const [firstIdentifier, ...otherIdentifiers] = expandedIdentifiers;
     return decisionIdentifiersFromMetadata({
       caseNumber,
+      caseNumberType,
       ecli,
+      jurisdiction,
       identifiers:
         firstIdentifier === undefined
           ? undefined
@@ -1440,12 +1473,18 @@ export const decisionIdentifiersFromStoredMetadata = ({
   ];
   const capacity =
     DECISION_IDENTIFIER_MAX_COUNT - (ecli ? 2 : 1) - reporterIdentifiers.length;
-  const seen = new Set([
-    normalizeDecisionIdentifier({
-      type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-      value: caseNumber,
-    }),
-  ]);
+  // A docket alias that spells the primary docket again is dropped here; a
+  // non-docket primary has no docket spelling to collide with.
+  const seen = new Set(
+    primaryReferenceIsDocket(caseNumberType)
+      ? [
+          normalizeDecisionIdentifier({
+            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            value: caseNumber,
+          }),
+        ]
+      : [],
+  );
   const aliases: DecisionIdentifier[] = [];
   for (const value of storedAliases) {
     const candidate = {
@@ -1470,7 +1509,9 @@ export const decisionIdentifiersFromStoredMetadata = ({
   const [firstIdentifier, ...otherIdentifiers] = legacyIdentifiers;
   return decisionIdentifiersFromMetadata({
     caseNumber,
+    caseNumberType,
     ecli,
+    jurisdiction,
     identifiers:
       firstIdentifier === undefined
         ? undefined
@@ -1499,6 +1540,20 @@ export const bareCitationKey = (text: string): string =>
  */
 export const citationKeyOf = (text: string): string | null =>
   bareCitationKey(text) || null;
+
+/**
+ * A decision's own `citation_key`: its docket's key, and none where the
+ * primary reference is not a docket. Citations reach such a decision through
+ * its typed identifiers instead.
+ */
+export const decisionCitationKeyOf = ({
+  caseNumber,
+  caseNumberType,
+}: {
+  caseNumber: string;
+  caseNumberType: DecisionPrimaryReferenceType;
+}): string | null =>
+  primaryReferenceIsDocket(caseNumberType) ? citationKeyOf(caseNumber) : null;
 
 export const normalizeDecisionIdentifier = (
   identifier: DecisionIdentifier,
@@ -1543,6 +1598,38 @@ export const normalizeDecisionIdentifierValue = (
     }
   }
 };
+
+/**
+ * An identifier's stored key in the jurisdiction that holds it. Decision
+ * identifier rows are written through it, by ingestion and by the backfill,
+ * and exact lookup and search read through it, so writer and reader agree.
+ * In the reporter jurisdiction a reporter citation is keyed by its canonical
+ * volume, reporter and first page, so a variant abbreviation or a pin names
+ * the same decision. Everywhere else, and for every other type, the key is
+ * `normalizeDecisionIdentifier`'s, unchanged, so no stored key moves.
+ */
+export const normalizeDecisionIdentifierIn = (
+  jurisdiction: string | undefined,
+  identifier: DecisionIdentifier,
+): string =>
+  identifier.type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION &&
+  readsUsReporterCitations(jurisdiction)
+    ? normalizeStructuredDecisionIdentifier({
+        type: identifier.type,
+        value:
+          canonicalUsReporterCitation(identifier.value) ?? identifier.value,
+      })
+    : normalizeDecisionIdentifier(identifier);
+
+/** `normalizeDecisionIdentifierIn` for a value whose type is known apart. */
+export const normalizeDecisionIdentifierValueIn = (
+  jurisdiction: string | undefined,
+  type: DecisionIdentifierType,
+  value: string,
+): string =>
+  type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+    ? normalizeDecisionIdentifierIn(jurisdiction, { type, value })
+    : normalizeDecisionIdentifierValue(type, value);
 
 /**
  * Check whether a citation text refers to the same decision that

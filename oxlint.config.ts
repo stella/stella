@@ -243,6 +243,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-custom-account-modal.fixture.tsx", [
+    "no-custom-account-modal/no-custom-account-modal",
+  ]),
   fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
     "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
   ]),
@@ -1159,6 +1162,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
+    "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
@@ -2477,6 +2481,15 @@ export default defineConfig({
       ],
       rules: {
         "no-legal-cliche-glyph/no-legal-cliche-glyph": "error",
+      },
+    },
+    {
+      // One modal asks a reader for an account: `SignInDialog`, opened by the
+      // account gate or the public shell's sign-in request. A module that
+      // draws a modal and also reaches account entry is building a second.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-custom-account-modal/no-custom-account-modal": "error",
       },
     },
     {

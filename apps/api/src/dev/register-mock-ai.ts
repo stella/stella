@@ -12,6 +12,8 @@ import { panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { isMockAI } from "@/api/consts";
+import { env } from "@/api/env";
+import { logger } from "@/api/lib/observability/logger";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
 import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
@@ -21,14 +23,27 @@ import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provid
 // (rather than referencing it from the production handlers) keeps
 // `generate-batch-mock` and `@faker-js/faker` out of the production build — both
 // the compiled binary and the knip `--production` graph.
+//
+// Who the mock answers (`mockAnswersRequest` in lib/tanstack-ai-models.ts):
+// with `USE_MOCK_AI="true"` it answers every request that would run on the
+// deployment's own provider, and an organization that configured its own AI
+// key gets its real provider instead, so a key the user entered is never
+// silently answered by canned text. `USE_MOCK_AI="force"` mocks every request,
+// keys included, for runs that must stay deterministic whatever the database
+// holds (the scripted chat tests; a capture run against a database whose
+// seeded organization has a key). The e2e stack seeds no organization key, so
+// "true" keeps it on the mock. The web marks the composer while the mock
+// answers the active organization (`mockAnswers` on
+// `GET /organization-settings/ai-availability`), outside the reply text.
 
 // The reply every mocked chat turn streams. It carries no "mock"/"stub"
 // scaffolding prefix on purpose: the marketing captures film this text
 // verbatim whenever a scene sends a live message, so it has to read like a
 // plausible answer. Nothing asserts on the string — the chat specs key on the
 // assistant message's rendered affordances (its Copy/Retry actions) instead,
-// which is what actually proves a reply painted. `USE_MOCK_AI` remains the
-// only signal that the model is stubbed.
+// which is what actually proves a reply painted. The "Mock AI" composer badge
+// is the visible signal that the model is stubbed; captures hide it as dev
+// chrome (`data-dev-chrome`).
 const MOCK_REPLY =
   "Based on the documents in this workspace, the notice periods, governing " +
   "law, and liability caps are the provisions that differ most. Ask a " +
@@ -152,6 +167,7 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     systemPromptMetadata: undefined,
   },
   async *chatStream({ model, runId, threadId, messages }) {
+    logger.debug("mock_ai.turn_answered", { "ai.model": model });
     const resolvedRunId = runId ?? "mock-run";
     const resolvedThreadId = threadId ?? "mock-thread";
     const messageId = "mock-message";
@@ -691,4 +707,11 @@ const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
 if (isMockAI()) {
   registerBatchGenerator(generateBatchMock);
   registerTanStackMockTextAdapterFactory(createMockTextAdapter);
+  logger.warn("mock_ai.enabled", {
+    "mock_ai.mode": env.USE_MOCK_AI === "force" ? "force" : "true",
+    "mock_ai.rule":
+      env.USE_MOCK_AI === "force"
+        ? "every AI request gets a canned reply, organization keys included"
+        : "AI requests get canned replies unless the organization configured its own key",
+  });
 }

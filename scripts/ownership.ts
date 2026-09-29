@@ -676,6 +676,11 @@ export const OWNERSHIP = [
             "Rebuilds persisted bindings when expanding saved messages so refs from another turn are rebound or neutralized.",
         },
         {
+          path: "apps/api/src/handlers/chat/skill-availability/offered-tools.ts",
+          reason:
+            "Builds a new chat's tool set only to read its tool names for skill availability; no tool runs and the registry never leaves that build.",
+        },
+        {
           path: "apps/api/src/lib/scheduler/tasks/memory-extractor.ts",
           reason:
             "Rebuilds persisted bindings to turn saved transcript refs into durable links before storing memories.",

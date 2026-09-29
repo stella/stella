@@ -20,11 +20,8 @@ import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { currentCaseLawCorpusProjection } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
-import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
-import {
-  corpusIndexRoute,
-  requireCorpusIndexManifest,
-} from "@/api/lib/legal-search/corpus-index-manifest";
+import { courtPartitionsForCourtFilter } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { markCorpusFragment } from "@/api/lib/legal-search/corpus-passage-highlight";
@@ -120,6 +117,7 @@ export const rehydrateCorpusIndexProviderCandidates =
         .select({
           id: caseLawDecisions.id,
           caseNumber: caseLawDecisions.caseNumber,
+          caseNumberType: caseLawDecisions.caseNumberType,
           ecli: caseLawDecisions.ecli,
           identifiers: sql<unknown>`coalesce((
             SELECT jsonb_agg(
@@ -159,7 +157,7 @@ export const rehydrateCorpusIndexProviderCandidates =
 
 const searchResult = async (
   query: LegalSearchQuery,
-): Promise<Result<LegalSearchResult, InvalidLegalSearchCursorError>> => {
+): Promise<Result<LegalSearchResult, LegalSearchError>> => {
   const limit = query.limit;
   const family = query.documentFamily ?? "case_law";
 
@@ -178,18 +176,28 @@ const searchResult = async (
     );
   }
 
-  const serving = await caseLawPublicReadDb(
-    async (tx) => await readServingCorpusIndexGenerationTx(tx, family),
+  const target = await caseLawPublicReadDb(
+    async (tx) =>
+      await readServingCorpusIndexTargetTx(tx, {
+        family,
+        jurisdiction: query.jurisdiction,
+      }),
   );
+  if (Result.isError(target)) {
+    return Result.err(
+      new LegalSearchUnavailableError({
+        message: "Corpus index legal search reached an unready index group.",
+        cause: target.error,
+      }),
+    );
+  }
+  const { serving, route, contract, cursorTarget } = target.value;
   const generation = serving.generation;
 
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
-  // that index holds other jurisdictions; unscoped → the generation glob
-  // (corpus index multi-index search across all of the generation's indexes).
-  const { indexId, jurisdictionClause } = corpusIndexRoute(
-    requireCorpusIndexManifest(family, generation),
-    query.jurisdiction,
-  );
+  // that index holds other jurisdictions; unscoped → every index of the
+  // generation a read may reach (`corpusIndexReadTarget`).
+  const { indexId, jurisdictionClause } = route;
 
   // The jurisdiction also selects the expansion dictionary, which is why the
   // resolver takes it separately from the clause.
@@ -206,6 +214,7 @@ const searchResult = async (
         text: query.query,
         filters: {
           court: query.court,
+          courtPartitions: courtPartitionsForCourtFilter(contract, query.court),
           dateFrom: query.dateFrom,
           dateTo: query.dateTo,
           documentType: query.documentType,
@@ -226,19 +235,27 @@ const searchResult = async (
     return Result.ok({ hits: [], facets: null, nextCursor: null, limit });
   }
   // This boundary has no HTTP status to answer with, so a cursor from another
-  // dictionary fails the read rather than paging a different result set.
+  // dictionary or read target fails the read rather than paging a different
+  // result set.
   if (
+    parsedCursor !== null &&
     isStaleCorpusSearchCursor(parsedCursor, {
       dictionary: resolved.dictionary,
       sort: DEFAULT_SEARCH_SORT,
+      target: cursorTarget,
     })
   ) {
     return Result.err(
-      new InvalidLegalSearchCursorError({
-        message:
-          "Search cursor was built against a different expansion dictionary.",
-        reason: "dictionary_mismatch",
-      }),
+      parsedCursor.target === cursorTarget
+        ? new InvalidLegalSearchCursorError({
+            message:
+              "Search cursor was built against a different expansion dictionary.",
+            reason: "dictionary_mismatch",
+          })
+        : new InvalidLegalSearchCursorError({
+            message: "Search cursor was built against a different read target.",
+            reason: "target_mismatch",
+          }),
     );
   }
 
@@ -328,6 +345,7 @@ const searchResult = async (
       : encodeCorpusSearchCursor({
           ...searchPage.nextCursor,
           dictionary: resolved.dictionary,
+          target: cursorTarget,
         });
 
   const hits: LegalSearchHit[] = pageRanked.flatMap((hit) => {
@@ -342,6 +360,7 @@ const searchResult = async (
         ecli: toNullableString(row.ecli),
         identifiers: decisionIdentifierProjection(row.identifiers, {
           caseNumber: row.caseNumber,
+          caseNumberType: row.caseNumberType,
           ecli: toNullableString(row.ecli),
         }),
         court: row.court,

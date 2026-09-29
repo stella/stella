@@ -304,6 +304,49 @@ describe("name screening", () => {
     );
   });
 
+  test("compares nationality sets only when both sides have a known country", () => {
+    const entry = {
+      ...listedPerson("dual-national", "Jana Example"),
+      nationalities: [
+        { code: "CA" as const, name: "Canada" },
+        { code: "RU" as const, name: "Russian Federation" },
+      ],
+    };
+    const dualNationalIndex = buildScreeningIndex([
+      { version: EXTRA_VERSION, entries: [entry] },
+    ]);
+    const compare = (nationality: ScreeningQuery["nationality"]) =>
+      screen(
+        dualNationalIndex,
+        {
+          name: "Jana Example",
+          ...(nationality === undefined ? {} : { nationality }),
+        },
+        { cutoff: 0 },
+      ).unwrap().possibleMatches[0];
+
+    expect(compare(["CA"])?.evidence.nationality).toBe("match");
+    expect(compare(["DE", "RU"])?.evidence.nationality).toBe("match");
+    expect(compare(["DE"])?.evidence.nationality).toBe("mismatch");
+    expect(compare(["DE", "FR"])?.evidence.conflicts).toContain("nationality");
+    expect(compare([])?.evidence.nationality).toBe("not-compared");
+    expect(compare([])?.score).toBe(compare(undefined)?.score);
+
+    const unknownIndex = buildScreeningIndex([
+      {
+        version: EXTRA_VERSION,
+        entries: [{ ...entry, nationalities: [] }],
+      },
+    ]);
+    expect(
+      screen(
+        unknownIndex,
+        { name: "Jana Example", nationality: ["CA"] },
+        { cutoff: 0 },
+      ).unwrap().possibleMatches[0]?.evidence.nationality,
+    ).toBe("not-compared");
+  });
+
   test("treats a shared identifier as decisive", () => {
     const withPassport = lists
       .flatMap((list) => list.entries)

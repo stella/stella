@@ -9,6 +9,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { legalListVerificationRuns } from "@/api/db/schema";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import {
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
@@ -71,12 +72,17 @@ const createVerification = createSafeHandler(
   async function* ({
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     recordAuditEvent,
     safeDb,
     session,
     user,
     workspaceId,
   }) {
+    const accessError = memberAIAccessError(orgAIConfigStatus);
+    if (accessError) {
+      return Result.err(accessError);
+    }
     const organizationId = session.activeOrganizationId;
     const { listId, entityId, fileFieldId } = body;
 

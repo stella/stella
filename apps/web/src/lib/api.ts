@@ -1,1 +1,7 @@
-export { api, correspondenceApi, memoriesApi } from "@/lib/eden-client";
+export {
+  api,
+  correspondenceApi,
+  memoriesApi,
+  myTimeEntriesApi,
+  publicFeedbackApi,
+} from "@/lib/eden-client";

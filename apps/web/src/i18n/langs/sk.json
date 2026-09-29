@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Moja organizácia",
     "password": "Heslo",
     "rateLimitExceeded": "Príliš veľa pokusov. Skúste to znova neskôr.",
-    "requireAccount": {
-      "askAboutDocument": "Vytvorte si bezplatný účet a spýtajte sa na tento dokument",
-      "askInChat": "Vytvorte si bezplatný účet a spýtajte sa na to v chate",
-      "description": "Keď bude účet hotový, vrátite sa na túto stránku.",
-      "generateHeadnotes": "Vytvorte si bezplatný účet a nechajte AI zostaviť právne vety",
-      "refineSearch": "Vytvorte si bezplatný účet a vylepšite vyhľadávanie pomocou AI",
-      "writeResearchQuestion": "Vytvorte si bezplatný účet a položte týmto výsledkom otázku"
-    },
     "resendCode": "Poslať kód znova na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizáciu",
     "signIn": "Prihlásiť sa",
@@ -604,6 +596,7 @@
       },
       "generate": "Zostaviť právne vety pomocou AI",
       "holdingAnchor": "Prejsť na odsek",
+      "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
       "topics": "Témy",
       "treatment": "Neskoršia judikatúra"
     },
@@ -889,6 +882,7 @@
       "apiKey": "API kľúč",
       "none": "Bez nastavenia"
     },
+    "skillNeedsUnavailableTools": "V chate sa neponúka. Potrebuje nástroj, ktorý tam nie je k dispozícii: {tools}",
     "toolNames": {
       "anonymize": "Anonymizovať",
       "createDocx": "Vytvoriť DOCX",
@@ -982,7 +976,15 @@
       "searchFiles": "Hľadať súbory",
       "searchMatters": "Hľadať spisy",
       "searchMcpServers": "Hľadať MCP servery...",
-      "searchSkills": "Hľadať zručnosti"
+      "searchSkills": "Hľadať zručnosti",
+      "skillNeeds": {
+        "browserExtension": "Na túto zručnosť pripojte rozšírenie prehliadača",
+        "document": "Na túto zručnosť otvorte dokument",
+        "matter": "Na túto zručnosť založte chat v spise",
+        "rawSendMode": "Nie je k dispozícii v anonymizovaných chatoch",
+        "reviewEdits": "Na túto zručnosť prepnite úpravy na ručnú kontrolu",
+        "webSearch": "Na túto zručnosť zapnite vyhľadávanie na webe"
+      }
     },
     "contextMeter": {
       "attachments": "Pripojené dokumenty",
@@ -1067,6 +1069,10 @@
       "loadError": "Nepodarilo sa načítať položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "mockModel": {
+      "description": "Vopred pripravené odpovede lokálneho simulovaného modelu",
+      "label": "Simulovaná AI"
+    },
     "modelSelector": {
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
@@ -1796,6 +1802,7 @@
       "title": "Vlastné polia",
       "value": "Hodnota poľa"
     },
+    "datePrecision": "Presnosť dátumu",
     "deleteContact": "Vymazať klienta",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "PSČ",
       "billingAddressState": "Kraj",
       "color": "Farba",
+      "day": "Deň",
       "defaultHourlyRate": "Predvolená hodinová sadzba",
       "firstName": "Meno",
       "lastName": "Priezvisko",
       "middleName": "Stredné meno",
+      "month": "Mesiac",
+      "nationalities": "Štátne príslušnosti",
       "paymentTermDays": "Splatnosť (dni)",
       "prefix": "Titul pred",
       "registrationNumber": "IČO",
       "suffix": "Titul za",
-      "taxId": "DIČ"
+      "taxId": "DIČ",
+      "year": "Rok"
     },
     "filterOrganizations": "Organizácie",
     "filterPersons": "Osoby",
@@ -1923,11 +1934,14 @@
       "title": "Import kontaktov",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
     },
+    "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
+    "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",
     "mattersAsClient": "Spisy ako klient",
     "newContact": "Nový klient",
     "noContactsDescription": "Vytvorte svojho prvého klienta a začnite ho priraďovať k spisom.",
     "noContactsFound": "Žiadni klienti nenájdení",
     "noMattersAsClient": "Tento kontakt nie je klientom žiadneho spisu.",
+    "personalDetails": "Osobné údaje",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Domov",
@@ -1935,7 +1949,14 @@
       "office": "Kancelária",
       "other": "Iný"
     },
+    "precision": {
+      "day": "Úplný dátum",
+      "month": "Mesiac a rok",
+      "year": "Iba rok"
+    },
+    "saved": "Údaje kontaktu boli uložené.",
     "search": "Hľadať v kontaktoch...",
+    "searchCountries": "Hľadať krajiny",
     "title": "Klienti",
     "type": {
       "organization": "Organizácia",

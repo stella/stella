@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Mi Organización",
     "password": "Contraseña",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
-    "requireAccount": {
-      "askAboutDocument": "Cree una cuenta gratuita para preguntar sobre este documento",
-      "askInChat": "Cree una cuenta gratuita para preguntar esto en el chat",
-      "description": "Volverá a esta página en cuanto su cuenta esté lista.",
-      "generateHeadnotes": "Cree una cuenta gratuita para generar sumarios con IA",
-      "refineSearch": "Cree una cuenta gratuita para mejorar su búsqueda con IA",
-      "writeResearchQuestion": "Cree una cuenta gratuita para hacer una pregunta a estos resultados"
-    },
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
@@ -604,6 +596,7 @@
       },
       "generate": "Generar sumarios con IA",
       "holdingAnchor": "Ir al párrafo",
+      "invitation": "Con una cuenta gratuita, la IA prepara notas de trabajo sobre esta resolución.",
       "topics": "Temas",
       "treatment": "Tratamiento posterior"
     },
@@ -889,6 +882,7 @@
       "apiKey": "Clave de API",
       "none": "Sin configuración"
     },
+    "skillNeedsUnavailableTools": "No se ofrece en el chat. Necesita una herramienta que allí no está disponible: {tools}",
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Crear DOCX",
@@ -982,7 +976,15 @@
       "searchFiles": "Buscar archivos",
       "searchMatters": "Buscar asuntos",
       "searchMcpServers": "Buscar servidores MCP...",
-      "searchSkills": "Buscar habilidades"
+      "searchSkills": "Buscar habilidades",
+      "skillNeeds": {
+        "browserExtension": "Conecta la extensión del navegador para usar esta habilidad",
+        "document": "Abre un documento para usar esta habilidad",
+        "matter": "Inicia un chat en un asunto para usar esta habilidad",
+        "rawSendMode": "No disponible en chats anonimizados",
+        "reviewEdits": "Cambia las ediciones a revisión manual para usar esta habilidad",
+        "webSearch": "Activa la búsqueda web para usar esta habilidad"
+      }
     },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
@@ -1067,6 +1069,10 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "mockModel": {
+      "description": "Respuestas predefinidas del modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",
@@ -1796,6 +1802,7 @@
       "title": "Campos personalizados",
       "value": "Valor del campo"
     },
+    "datePrecision": "Precisión de la fecha",
     "deleteContact": "Eliminar cliente",
     "deleteContactBlockedByMatters": "Este contacto sigue asignado como cliente en asuntos. Reasigne o elimine esos asuntos antes de eliminar el contacto.",
     "deleteContactConfirmDescription": "¿Está seguro de que desea eliminar este contacto? Esta acción no se puede deshacer.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "Código postal",
       "billingAddressState": "Provincia",
       "color": "Color",
+      "day": "Día",
       "defaultHourlyRate": "Tarifa por hora predeterminada",
       "firstName": "Nombre",
       "lastName": "Apellido",
       "middleName": "Segundo nombre",
+      "month": "Mes",
+      "nationalities": "Nacionalidades",
       "paymentTermDays": "Plazo de pago (días)",
       "prefix": "Prefijo",
       "registrationNumber": "Número de registro",
       "suffix": "Sufijo",
-      "taxId": "NIF/CIF"
+      "taxId": "NIF/CIF",
+      "year": "Año"
     },
     "filterOrganizations": "Organizaciones",
     "filterPersons": "Personas",
@@ -1923,11 +1934,14 @@
       "title": "Importar contactos",
       "validateFailed": "No se han podido comprobar estos contactos."
     },
+    "invalidDateOfBirth": "Introduce una fecha de nacimiento válida.",
+    "invalidNationalityCodes": "Introduce códigos de nacionalidad válidos.",
     "mattersAsClient": "Asuntos como cliente",
     "newContact": "Nuevo cliente",
     "noContactsDescription": "Cree su primer cliente para empezar a vincularlo con asuntos.",
     "noContactsFound": "No se encontraron clientes",
     "noMattersAsClient": "Este contacto no es cliente en ningún asunto.",
+    "personalDetails": "Datos personales",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Casa",
@@ -1935,7 +1949,14 @@
       "office": "Oficina",
       "other": "Otro"
     },
+    "precision": {
+      "day": "Fecha completa",
+      "month": "Mes y año",
+      "year": "Solo el año"
+    },
+    "saved": "Se guardaron los datos del contacto.",
     "search": "Buscar contactos...",
+    "searchCountries": "Buscar países",
     "title": "Clientes",
     "type": {
       "organization": "Organización",

@@ -36,6 +36,7 @@ import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-compon
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
 import { ContactOwnersEditor } from "@/routes/_protected.contacts/-components/contact-owners-editor";
+import { ContactPersonDetailsEditor } from "@/routes/_protected.contacts/-components/contact-person-details-editor";
 import { EditableRow } from "@/routes/_protected.contacts/-components/editable-row";
 import { InfoRow } from "@/routes/_protected.contacts/-components/info-row";
 import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-matter-row";
@@ -290,6 +291,10 @@ function ContactDetailPage() {
             </div>
           )}
         </section>
+
+        {contact.type === "person" && (
+          <ContactPersonDetailsEditor contact={contact} key={contact.id} />
+        )}
 
         {/* Communication */}
         <section className="rounded-lg border p-4">

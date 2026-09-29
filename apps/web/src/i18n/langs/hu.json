@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Szervezetem",
     "password": "Jelszó",
     "rateLimitExceeded": "Túl sok próbálkozás. Kérjük, próbálja újra később.",
-    "requireAccount": {
-      "askAboutDocument": "Hozzon létre ingyenes fiókot, hogy kérdezhessen erről a dokumentumról",
-      "askInChat": "Hozzon létre ingyenes fiókot, hogy ezt megkérdezhesse a csevegésben",
-      "description": "Amint elkészül a fiókja, visszatér erre az oldalra.",
-      "generateHeadnotes": "Hozzon létre ingyenes fiókot az AI jogi tételek elkészítéséhez",
-      "refineSearch": "Hozzon létre ingyenes fiókot, hogy AI-val javíthassa a keresését",
-      "writeResearchQuestion": "Hozzon létre ingyenes fiókot, hogy kérdést tegyen fel ezeknek a találatoknak"
-    },
     "resendCode": "Kód újraküldése erre: <email>{emailAddress}</email>",
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
@@ -604,6 +596,7 @@
       },
       "generate": "AI jogi tételek elkészítése",
       "holdingAnchor": "Ugrás a bekezdésre",
+      "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
       "topics": "Témák",
       "treatment": "Későbbi megítélés"
     },
@@ -889,6 +882,7 @@
       "apiKey": "API-kulcs",
       "none": "Nincs beállítás"
     },
+    "skillNeedsUnavailableTools": "A csevegésben nem jelenik meg. Olyan eszközt igényel, amely ott nem érhető el: {tools}",
     "toolNames": {
       "anonymize": "Anonimizálás",
       "createDocx": "DOCX létrehozása",
@@ -982,7 +976,15 @@
       "searchFiles": "Fájlok keresése",
       "searchMatters": "Ügyek keresése",
       "searchMcpServers": "MCP-kiszolgálók keresése...",
-      "searchSkills": "Készségek keresése"
+      "searchSkills": "Készségek keresése",
+      "skillNeeds": {
+        "browserExtension": "A készség használatához csatlakoztassa a böngészőbővítményt",
+        "document": "A készség használatához nyisson meg egy dokumentumot",
+        "matter": "A készség használatához indítson csevegést egy ügyben",
+        "rawSendMode": "Anonimizált csevegésekben nem érhető el",
+        "reviewEdits": "A készség használatához állítsa a szerkesztéseket kézi ellenőrzésre",
+        "webSearch": "A készség használatához kapcsolja be a webes keresést"
+      }
     },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",
@@ -1067,6 +1069,10 @@
       "loadError": "Az elemek betöltése sikertelen"
     },
     "messageTimestampToday": "Ma, {time}",
+    "mockModel": {
+      "description": "Előre megírt válaszok a helyi szimulált modelltől",
+      "label": "Szimulált AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
@@ -1796,6 +1802,7 @@
       "title": "Egyéni mezők",
       "value": "Mező értéke"
     },
+    "datePrecision": "Dátum pontossága",
     "deleteContact": "Ügyfél törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
@@ -1832,15 +1839,19 @@
       "billingAddressPostalCode": "Irányítószám",
       "billingAddressState": "Megye/tartomány",
       "color": "Szín",
+      "day": "Nap",
       "defaultHourlyRate": "Alapértelmezett óradíj",
       "firstName": "Keresztnév",
       "lastName": "Vezetéknév",
       "middleName": "Középső név",
+      "month": "Hónap",
+      "nationalities": "Állampolgárságok",
       "paymentTermDays": "Fizetési határidő (nap)",
       "prefix": "Előtag",
       "registrationNumber": "Cégjegyzékszám",
       "suffix": "Utótag",
-      "taxId": "Adószám"
+      "taxId": "Adószám",
+      "year": "Év"
     },
     "filterOrganizations": "Szervezetek",
     "filterPersons": "Személyek",
@@ -1923,11 +1934,14 @@
       "title": "Kapcsolatok importálása",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat."
     },
+    "invalidDateOfBirth": "Adjon meg érvényes születési dátumot.",
+    "invalidNationalityCodes": "Adjon meg érvényes állampolgársági kódokat.",
     "mattersAsClient": "Ügyek ügyfélként",
     "newContact": "Új ügyfél",
     "noContactsDescription": "Hozza létre első ügyfelét, hogy ügyekhez rendelhesse.",
     "noContactsFound": "Nem található ügyfél",
     "noMattersAsClient": "Ez a kontakt nem ügyfél egyetlen ügyben sem.",
+    "personalDetails": "Személyes adatok",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Otthoni",
@@ -1935,7 +1949,14 @@
       "office": "Iroda",
       "other": "Egyéb"
     },
+    "precision": {
+      "day": "Teljes dátum",
+      "month": "Hónap és év",
+      "year": "Csak év"
+    },
+    "saved": "A kapcsolati adatok mentve.",
     "search": "Kapcsolatok keresése...",
+    "searchCountries": "Országok keresése",
     "title": "Ügyfelek",
     "type": {
       "organization": "Szervezet",

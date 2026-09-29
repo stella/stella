@@ -221,7 +221,8 @@ are omitted here.
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes
+  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
+  - via `--input` only: date_of_birth
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
   - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
@@ -384,7 +385,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 370
+Beyond the curated commands above, the CLI generates 371
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

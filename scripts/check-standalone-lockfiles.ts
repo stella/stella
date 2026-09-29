@@ -20,6 +20,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  readInstallPolicy,
+  type InstallPolicy,
+} from "./check-stll-quarantine-excludes";
+
 const SCRIPT_PATH = "scripts/check-standalone-lockfiles.ts";
 const ROOT_LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
@@ -67,11 +72,6 @@ export type LockfileContext = {
   readonly dependabot: readonly DependabotBunUpdate[];
   readonly installs: readonly InstallCommand[];
   readonly lockedPackages: ReadonlySet<string>;
-};
-
-type InstallPolicy = {
-  readonly excludes: ReadonlySet<string>;
-  readonly minimumReleaseAge: number | undefined;
 };
 
 export type SafetyNet = {
@@ -169,24 +169,6 @@ export const SAFETY_NETS: readonly SafetyNet[] = [
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-const readInstallPolicy = (source: string): InstallPolicy => {
-  const parsed: unknown = Bun.TOML.parse(source);
-  const install = isRecord(parsed) ? parsed["install"] : undefined;
-  if (!isRecord(install)) {
-    return { excludes: new Set(), minimumReleaseAge: undefined };
-  }
-  const age = install["minimumReleaseAge"];
-  const excludes = install["minimumReleaseAgeExcludes"];
-  return {
-    excludes: new Set(
-      Array.isArray(excludes)
-        ? excludes.filter((name) => typeof name === "string")
-        : [],
-    ),
-    minimumReleaseAge: typeof age === "number" ? age : undefined,
-  };
-};
 
 const normalizeQuotes = (value: string): string =>
   value.replaceAll(/^["']|["']$/gu, "");

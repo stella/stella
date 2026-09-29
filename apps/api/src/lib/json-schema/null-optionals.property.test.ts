@@ -2,7 +2,11 @@ import { Ajv } from "ajv";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
+import {
+  propertyConfig,
+  propertySeed,
+  propertyTestTimeout,
+} from "@stll/property-testing";
 
 import {
   withModelPlaceholdersOmitted,
@@ -370,7 +374,7 @@ test(
           expect(ajv.validate(widened, sent)).toBe(true);
         }
       }),
-      propertyConfig({ numRuns: 150 }),
+      propertyConfig({ numRuns: 150, seed: propertySeed() }),
     );
   },
   propertyTestTimeout(30_000),

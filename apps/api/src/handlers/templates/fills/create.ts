@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { templateFills } from "@/api/db/schema";
+import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   assertUsageAvailableForHandler,
@@ -25,7 +26,10 @@ import {
 } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
-import { fillStoredTemplateDocx } from "@/api/lib/templates/template-fill-service";
+import {
+  fillTemplateDocx,
+  loadStoredTemplateSource,
+} from "@/api/lib/templates/template-fill-service";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
@@ -91,6 +95,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     params,
     body,
     orgAIConfig,
+    orgAIConfigStatus,
     recordAuditEvent,
   }) {
     const organizationId = session.activeOrganizationId;
@@ -163,12 +168,15 @@ const fillTemplateToWorkspace = createSafeHandler(
     };
 
     // The fill service runs this only when the manifest declares AI fields,
-    // before any model call, so a deterministic fill never spends AI quota.
-    // Gated on a usable provider — org BYOK or the deployment's instance
-    // provider — because the generators below run the fast model in either
-    // case, so an instance-provider fill must still be quota-checked. A null
-    // org config flows through to the metering layer (instance-provider rate).
-    const assertUsageAvailable =
+    // before any model call, so a deterministic fill never spends AI quota
+    // and stays open to every member. A member the organization does not
+    // admit to AI work is refused here, whichever key would serve the
+    // fields. The usage check is gated on a usable provider — org BYOK or
+    // the deployment's instance provider — because the generators below run
+    // the fast model in either case, so an instance-provider fill must still
+    // be quota-checked. A null org config flows through to the metering
+    // layer (instance-provider rate).
+    const checkUsage =
       orgAIConfig || hasTanStackInstanceProvider()
         ? async () =>
             await assertUsageAvailableForHandler({
@@ -180,12 +188,25 @@ const fillTemplateToWorkspace = createSafeHandler(
               safeDb,
             })
         : undefined;
+    const accessError = memberAIAccessError(orgAIConfigStatus);
+    const assertUsageAvailable:
+      | (() => Promise<HandlerError<402 | 403 | 500> | null>)
+      | undefined =
+      accessError === null
+        ? checkUsage
+        : async () => await Promise.resolve(accessError);
+
+    // A missing template is a 404, and a stored file the scan refuses (or a
+    // scanner outage) answers as it would for an upload: 422 or 503.
+    const source = yield* Result.await(
+      loadStoredTemplateSource({ templateId, organizationId, scopedDb }),
+    );
 
     const filled = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await fillStoredTemplateDocx({
-            templateId,
+          await fillTemplateDocx({
+            source,
             values: body.values,
             scopedDb,
             organizationId,
@@ -205,8 +226,9 @@ const fillTemplateToWorkspace = createSafeHandler(
     );
 
     if ("usageRejection" in filled) {
-      // The preflight rejected the AI fill (over quota / no entitlement);
-      // surface the framework's exact 402/500 error body unchanged.
+      // The preflight rejected the AI fill (over quota / no entitlement, or
+      // a member not admitted to AI work); surface the framework's exact
+      // 402/403/500 error body unchanged.
       return Result.err(filled.usageRejection);
     }
 
@@ -247,7 +269,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             workspaceId,
             userId: user.id,
             recordAuditEvent,
-            buffer: filled.buffer,
+            buffer: filled.file.bytes,
             fileName,
             mimeType: DOCX_MIME_TYPE,
             parentId,

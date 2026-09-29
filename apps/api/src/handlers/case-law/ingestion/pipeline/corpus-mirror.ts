@@ -117,10 +117,12 @@ export const settleCaseLawCorpusMirrorTx = async ({
  */
 const REFRESH_COMPARED_COLUMN_TYPES = {
   caseNumber: "text",
+  caseNumberType: "text",
   citationKey: "text",
   sourceDocumentId: "text",
   ecli: "text",
   court: "text",
+  courtId: "text",
   country: "text",
   language: "text",
   sheetNumber: "text",

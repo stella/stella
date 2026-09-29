@@ -1,0 +1,15 @@
+name: Build production E2E web
+description: Build the web app with the feature flags used by production browser checks
+
+runs:
+  using: composite
+  steps:
+    - name: Build web
+      shell: bash
+      env:
+        VITE_FEATURE_INBOX: "true"
+        VITE_FEATURE_TIME_BILLING: "true"
+        VITE_PUBLIC_LAW_ENABLED: "true"
+        VITE_PUBLIC_TOOLS_ENABLED: "true"
+        VITE_WORKFLOWS_ENABLED: "true"
+      run: bun --filter @stll/web build

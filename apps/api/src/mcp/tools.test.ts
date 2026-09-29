@@ -34,6 +34,7 @@ import type {
   EntityCheckResult,
   runEntityCheck as runEntityCheckForTest,
 } from "@stll/business-registries/entity-checks";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
@@ -374,6 +375,10 @@ const featureDisabledHint = (feature: string): string =>
 const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
+  caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+  identifiers: [
+    { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "29 Cdo 123/2024" },
+  ],
   citationsFrom: [
     {
       citationText: "29 Odo 1/2001",
@@ -1106,7 +1111,7 @@ describe("OpenAI-compatible MCP tools", () => {
             "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
           // Derived from the engine cursor codec's own maximum times the query
           // cap, so the tool takes back the longest cursor it can emit.
-          maxLength: 1330,
+          maxLength: 1623,
           // An empty string is not a page boundary this tool ever issued, and
           // rejecting it is what makes the factory read it as absent.
           minLength: 1,
@@ -1863,6 +1868,7 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -1872,6 +1878,16 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "29 Cdo 123/2024",
+            },
+            {
+              type: DECISION_IDENTIFIER_TYPES.ECLI,
+              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            },
+          ],
           // The handler builds the headline for the web UI; the MCP snippet
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
@@ -1997,6 +2013,7 @@ describe("OpenAI-compatible MCP tools", () => {
       hits: [
         {
           caseNumber: "29 Cdo 123/2024",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           citationAuthority: 1.75,
           citationCount: 7,
           country: "CZE",
@@ -2006,6 +2023,16 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           decisionType: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+          identifiers: [
+            {
+              type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+              value: "29 Cdo 123/2024",
+            },
+            {
+              type: DECISION_IDENTIFIER_TYPES.ECLI,
+              value: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
+            },
+          ],
           headline: "Relevant <mark>holding</mark>",
           language: "cs",
           matchingPassages: 1,
@@ -2092,12 +2119,15 @@ describe("OpenAI-compatible MCP tools", () => {
 
   const createLookupRow = (decisionId: string, court: string) => ({
     caseNumber: CZ_DOCKET,
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     country: "CZE",
     court,
     decisionDate: "2020-05-01",
     ecli: null,
     id: toSafeId<"caseLawDecision">(decisionId),
-    identifiers: [],
+    identifiers: [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: CZ_DOCKET },
+    ],
     language: "cs",
     languageAlternates: [],
     slug: `slug-${decisionId}`,
@@ -2144,6 +2174,23 @@ describe("OpenAI-compatible MCP tools", () => {
       locator: { kind: "docket", value: CZ_DOCKET },
     });
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("lookup_case_law names the kind of a primary reference that is not a docket", async () => {
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+        caseNumberType: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+      },
+    ]);
+
+    const payload = asTestRaw<{ items: { caseNumberType?: string }[] }>(
+      await lookup([CZ_DOCKET]),
+    );
+
+    expect(payload.items.at(0)?.caseNumberType).toBe(
+      DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+    );
   });
 
   test("lookup_case_law names the language of a multilingual decision in its appUrl", async () => {
@@ -2217,6 +2264,12 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
         caseNumber: "29 Cdo 7/2019",
+        identifiers: [
+          {
+            type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            value: "29 Cdo 7/2019",
+          },
+        ],
       },
     ]);
 
@@ -2331,6 +2384,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
   const createCaseLawHit = (decisionId: string, headline: string) => ({
     caseNumber: `case ${decisionId}`,
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
     citationAuthority: 1,
     citationCount: 0,
     country: "CZE",
@@ -2341,6 +2395,12 @@ describe("OpenAI-compatible MCP tools", () => {
     decisionType: "judgment",
     ecli: null,
     headline,
+    identifiers: [
+      {
+        type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        value: `case ${decisionId}`,
+      },
+    ],
     language: "cs",
     languageAlternates: [],
     matchingPassages: 1,
@@ -2712,6 +2772,7 @@ describe("OpenAI-compatible MCP tools", () => {
           hits: [
             {
               caseNumber: "29 Cdo 123/2024",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
               citationAuthority: 0,
               citationCount: 7,
               country: "CZE",
@@ -2722,6 +2783,12 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionType: "judgment",
               ecli: null,
               headline: null,
+              identifiers: [
+                {
+                  type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+                  value: "29 Cdo 123/2024",
+                },
+              ],
               language: "cs",
               matchingPassages: 1,
               slug: "stable-official-slug",
@@ -2771,6 +2838,7 @@ describe("OpenAI-compatible MCP tools", () => {
             decision: {
               id: CITING_DECISION_ID,
               caseNumber: "31 Cdo 900/2025",
+              caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
               citationAuthority: 2.5,
               country: "CZE",
               court: "Nejvyšší soud",
@@ -4116,6 +4184,43 @@ describe("OpenAI-compatible MCP tools", () => {
           message: `This id named written reasons that are now part of decision ${DECISION_ID}, returned here. Cite ${DECISION_ID} from now on.`,
           status: "found",
           decision: { decisionId: DECISION_ID },
+        },
+      ],
+    });
+  });
+
+  test("read_case_law_decision types a primary reference that is not a docket", async () => {
+    const identifiers = [
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "No. 1" },
+      {
+        type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        value: "347 U.S. 483",
+      },
+    ];
+    readDecisionHandlerMock.mockResolvedValue({
+      ...createReadDecisionResult(),
+      caseNumber: "347 U.S. 483",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      identifiers,
+    });
+
+    const result = await handleMcpToolCall({
+      args: { decision_ids: [DECISION_ID] },
+      context: createContext(),
+      toolName: "read_case_law_decision",
+    });
+
+    // A docket primary carries neither field (see the tests above); this one
+    // names its kind and the docket beside it.
+    expect(parseToolPayload(result)).toMatchObject({
+      items: [
+        {
+          status: "found",
+          decision: {
+            caseNumber: "347 U.S. 483",
+            caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+            identifiers,
+          },
         },
       ],
     });
@@ -6720,6 +6825,23 @@ describe("OpenAI-compatible MCP tools", () => {
       result,
       "display_name is required to create a contact, or first_name/last_name (person) or organization_name (organization) to derive it from",
     );
+  });
+
+  test("save_contact returns a structured error for invalid person details", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        type: "person",
+        display_name: "Example Person",
+        date_of_birth: { precision: "day", year: 2001, month: 2, day: 31 },
+      },
+      context: createContext(),
+      toolName: "save_contact",
+    });
+
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      issues: [{ path: "dateOfBirth", message: "Invalid date of birth" }],
+    });
   });
 
   describe("deriveContactDisplayName", () => {
