@@ -1,5 +1,29 @@
 # @stll/cli
 
+## 2.3.2
+
+### Patch Changes
+
+- [#4082](https://github.com/stella/stella/pull/4082) [`e146c1d`](https://github.com/stella/stella/commit/e146c1d08b7e5086028a668ac7393374e74fdef9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add document number series commands.
+
+## 2.3.1
+
+### Patch Changes
+
+- [#4109](https://github.com/stella/stella/pull/4109) [`8ca9142`](https://github.com/stella/stella/commit/8ca9142e42c50cd2bcdf2f32cbd67d9ba6e62a71) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe the reason returned when no version of a statute applies on the requested date.
+
+## 2.3.0
+
+### Minor Changes
+
+- [#4029](https://github.com/stella/stella/pull/4029) [`bcab39c`](https://github.com/stella/stella/commit/bcab39c2a58be121e96bf383abc8618386b190a4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add optional birth date and nationality fields for person contacts.
+
+## 2.2.5
+
+### Patch Changes
+
+- [#4030](https://github.com/stella/stella/pull/4030) [`86ad6e9`](https://github.com/stella/stella/commit/86ad6e90709141536d821970b69f649b23411834) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the personal day time-entry list in the CLI capability catalog.
+
 ## 2.2.4
 
 ### Patch Changes

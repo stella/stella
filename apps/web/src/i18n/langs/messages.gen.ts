@@ -109,14 +109,6 @@ type Messages = {
     "organizationNamePlaceholder": "My organization";
     "password": "Password";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
-    "requireAccount": {
-      "askAboutDocument": "Create a free account to ask about this document";
-      "askInChat": "Create a free account to ask this in chat";
-      "description": "You'll come back to this page once your account is ready.";
-      "generateHeadnotes": "Create a free account to generate AI headnotes";
-      "refineSearch": "Create a free account to improve your search with AI";
-      "writeResearchQuestion": "Create a free account to ask a question of these results";
-    };
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
@@ -607,6 +599,7 @@ type Messages = {
       };
       "generate": "Generate AI headnotes";
       "holdingAnchor": "Go to paragraph";
+      "invitation": "With a free account, AI drafts working notes on this decision.";
       "topics": "Topics";
       "treatment": "Later treatment";
     };
@@ -1812,6 +1805,7 @@ type Messages = {
       "title": "Custom fields";
       "value": "Field value";
     };
+    "datePrecision": "Date precision";
     "deleteContact": "Delete client";
     "deleteContactBlockedByMatters": "This contact is still assigned as a client on matters. Reassign or delete those matters before deleting the contact.";
     "deleteContactConfirmDescription": "Are you sure you want to delete this contact? This action cannot be undone.";
@@ -1848,15 +1842,19 @@ type Messages = {
       "billingAddressPostalCode": "Postal code";
       "billingAddressState": "State";
       "color": "Color";
+      "day": "Day of birth";
       "defaultHourlyRate": "Default hourly rate";
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
+      "month": "Month of birth";
+      "nationalities": "Nationalities";
       "paymentTermDays": "Payment terms (days)";
       "prefix": "Prefix";
       "registrationNumber": "Registration number";
       "suffix": "Suffix";
       "taxId": "Tax ID";
+      "year": "Year of birth";
     };
     "filterOrganizations": "Organizations";
     "filterPersons": "Persons";
@@ -1939,11 +1937,14 @@ type Messages = {
       "title": "Import contacts";
       "validateFailed": "Couldn't check these contacts.";
     };
+    "invalidDateOfBirth": "Enter a valid date of birth.";
+    "invalidNationalityCodes": "Enter valid nationality codes.";
     "mattersAsClient": "Matters as client";
     "newContact": "New contact";
     "noContactsDescription": "Create your first contact to start linking them to matters.";
     "noContactsFound": "No contacts found";
     "noMattersAsClient": "This contact is not a client on any matter.";
+    "personalDetails": "Personal details";
     "phoneTypes": {
       "fax": "Fax";
       "home": "Home";
@@ -1951,7 +1952,14 @@ type Messages = {
       "office": "Office";
       "other": "Other";
     };
+    "precision": {
+      "day": "Full date";
+      "month": "Month and year";
+      "year": "Year only";
+    };
+    "saved": "Contact details saved.";
     "search": "Search contacts...";
+    "searchCountries": "Search nationalities";
     "title": "Clients";
     "type": {
       "organization": "Organization";
@@ -4385,7 +4393,13 @@ type Messages = {
     "diffRemoved": "Deleted:";
     "emptyDocument": "This version has no text available.";
     "emptyState": "No statutes found.";
+    "expression": {
+      "invalidWindow": "Publisher dates inconsistent";
+      "promulgated": "Text as promulgated";
+      "withdrawn": "No longer listed by the publisher";
+    };
     "inForceSince": "In force since {date}";
+    "ineligibleVersion": "{range} ({label})";
     "leadingDecisions": "Leading decisions";
     "noVersionInForce": "No version of this act was in force on the selected date.";
     "openEnded": "present";
@@ -4405,18 +4419,22 @@ type Messages = {
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
+    "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
     "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
     "showInText": "Show in the text";
+    "statedWindow": "Dates stated by the publisher: {range}";
     "status": {
       "current": "In force";
       "draft": "Proposed";
       "ended": "No longer in force";
       "future": "Future";
       "historical": "Superseded";
+      "neverInForce": "Never in force";
       "repealed": "Repealed";
+      "unknown": "Status unclear";
     };
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";

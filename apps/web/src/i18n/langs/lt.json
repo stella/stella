@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
-    "requireAccount": {
-      "askAboutDocument": "Sukurkite nemokamą paskyrą, kad galėtumėte klausti apie šį dokumentą",
-      "askInChat": "Sukurkite nemokamą paskyrą, kad paklaustumėte to pokalbyje",
-      "description": "Kai paskyra bus paruošta, grįšite į šį puslapį.",
-      "generateHeadnotes": "Sukurkite nemokamą paskyrą, kad DI parengtų santraukas",
-      "refineSearch": "Sukurkite nemokamą paskyrą, kad patobulintumėte paiešką su DI",
-      "writeResearchQuestion": "Sukurkite nemokamą paskyrą, kad užduotumėte klausimą šiems rezultatams"
-    },
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
@@ -604,6 +596,7 @@
       },
       "generate": "Parengti DI santraukas",
       "holdingAnchor": "Pereiti prie pastraipos",
+      "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
       "topics": "Temos",
       "treatment": "Vėlesnis vertinimas"
     },
@@ -1809,6 +1802,7 @@
       "title": "Pasirinktiniai laukai",
       "value": "Lauko reikšmė"
     },
+    "datePrecision": "Datos tikslumas",
     "deleteContact": "Ištrinti klientą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
@@ -1845,15 +1839,19 @@
       "billingAddressPostalCode": "Pašto kodas",
       "billingAddressState": "Valstija / regionas",
       "color": "Spalva",
+      "day": "Diena",
       "defaultHourlyRate": "Numatytasis valandinis tarifas",
       "firstName": "Vardas",
       "lastName": "Pavardė",
       "middleName": "Antras vardas",
+      "month": "Mėnuo",
+      "nationalities": "Pilietybės",
       "paymentTermDays": "Mokėjimo terminas (dienos)",
       "prefix": "Priešdėlis",
       "registrationNumber": "Registracijos numeris",
       "suffix": "Priesaga",
-      "taxId": "PVM mokėtojo kodas"
+      "taxId": "PVM mokėtojo kodas",
+      "year": "Metai"
     },
     "filterOrganizations": "Organizacijos",
     "filterPersons": "Asmenys",
@@ -1936,11 +1934,14 @@
       "title": "Kontaktų importavimas",
       "validateFailed": "Nepavyko patikrinti šių kontaktų."
     },
+    "invalidDateOfBirth": "Įveskite tinkamą gimimo datą.",
+    "invalidNationalityCodes": "Įveskite galiojančius pilietybės kodus.",
     "mattersAsClient": "Bylos kaip klientas",
     "newContact": "Naujas klientas",
     "noContactsDescription": "Sukurkite pirmąjį klientą ir pradėkite jį susieti su bylomis.",
     "noContactsFound": "Klientų nerasta",
     "noMattersAsClient": "Šis kontaktas nėra klientas jokioje byloje.",
+    "personalDetails": "Asmens duomenys",
     "phoneTypes": {
       "fax": "Faksas",
       "home": "Namai",
@@ -1948,7 +1949,14 @@
       "office": "Biuras",
       "other": "Kitas"
     },
+    "precision": {
+      "day": "Visa data",
+      "month": "Mėnuo ir metai",
+      "year": "Tik metai"
+    },
+    "saved": "Kontaktiniai duomenys išsaugoti.",
     "search": "Ieškoti kontaktų...",
+    "searchCountries": "Ieškoti šalių",
     "title": "Klientai",
     "type": {
       "organization": "Organizacija",
@@ -4382,7 +4390,13 @@
     "diffRemoved": "Išbraukta:",
     "emptyDocument": "Ši redakcija neturi teksto.",
     "emptyState": "Teisės aktų nerasta.",
+    "expression": {
+      "invalidWindow": "Prieštaringos leidėjo datos",
+      "promulgated": "Paskelbtas tekstas",
+      "withdrawn": "Leidėjas jo nebeskelbia"
+    },
     "inForceSince": "Galioja nuo {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Pagrindiniai sprendimai",
     "noVersionInForce": "Pasirinktą dieną negaliojo nė viena šio akto redakcija.",
     "openEnded": "dabar",
@@ -4402,18 +4416,22 @@
     "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
     "resolvedAlias": "Atpažinta kaip {label}",
     "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
     "showInText": "Rodyti tekste",
+    "statedWindow": "Leidėjo nurodytos datos: {range}",
     "status": {
       "current": "Galiojantis",
       "draft": "Projektinis",
       "ended": "Nebegalioja",
       "future": "Būsimas",
       "historical": "Pakeistas",
-      "repealed": "Panaikintas"
+      "neverInForce": "Niekada neįsigaliojo",
+      "repealed": "Panaikintas",
+      "unknown": "Būsena neaiški"
     },
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}"

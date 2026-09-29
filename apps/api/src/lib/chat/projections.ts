@@ -15,6 +15,11 @@ import {
   READER_ANNOTATION_VISIBILITIES,
 } from "@stll/api-contract/legal-reader-annotations";
 import {
+  LEGISLATION_EXPRESSION_KINDS,
+  LEGISLATION_WINDOW_DISPOSITION_BASES,
+  LEGISLATION_WINDOW_DISPOSITIONS,
+} from "@stll/api-contract/legislation-expression";
+import {
   CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -357,6 +362,29 @@ export const READ_CONTACT_PROJECTION = v.strictObject({
   organizationName: v.nullable(v.string()),
   emails: v.array(contactEmailProjection),
   phones: v.array(contactPhoneProjection),
+  dateOfBirth: v.nullable(
+    v.variant("precision", [
+      projectionBranch(
+        v.strictObject({ precision: v.literal("year"), year: v.number() }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("month"),
+          year: v.number(),
+          month: v.number(),
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("day"),
+          year: v.number(),
+          month: v.number(),
+          day: v.number(),
+        }),
+      ),
+    ]),
+  ),
+  nationalityCodes: v.array(v.string()),
 });
 
 /**
@@ -1719,6 +1747,19 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
 });
 
 /**
+ * What a version's dates mean: its kind, and whether its window is one the
+ * text applied in. A window labelled anything but `effective` never applied,
+ * however its dates read.
+ */
+const statuteExpressionLabel = {
+  expressionKind: v.picklist(LEGISLATION_EXPRESSION_KINDS),
+  windowDisposition: v.picklist(LEGISLATION_WINDOW_DISPOSITIONS),
+  windowDispositionBasis: v.nullable(
+    v.picklist(Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES).flat()),
+  ),
+} as const;
+
+/**
  * The window of a Work's consolidated versions a statute read returns.
  * Newest validity window first, bounded by the versions page size: enough to
  * see which consolidations exist, not the whole amendment history.
@@ -1728,6 +1769,7 @@ const STATUTE_VERSION_PROJECTION = v.strictObject({
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
   versionValidTo: v.nullable(v.string()),
+  ...statuteExpressionLabel,
 });
 
 /**
@@ -1808,6 +1850,7 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     truncated: v.boolean(),
     versionValidFrom: v.nullable(v.string()),
     versionValidTo: v.nullable(v.string()),
+    ...statuteExpressionLabel,
     versions: v.array(STATUTE_VERSION_PROJECTION),
   }),
 });
@@ -1871,6 +1914,7 @@ const statuteProvisionVersion = {
   resourceName: passthroughId(),
   versionValidFrom: v.nullable(v.string()),
   versionValidTo: v.nullable(v.string()),
+  ...statuteExpressionLabel,
 } as const;
 
 /**

@@ -12,6 +12,7 @@ import { cn } from "@stll/ui/utils";
 
 import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
 import type { PublicStatuteVersion } from "@/features/statutes/queries/statutes";
+import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import {
   formatValidityDate,
   formatValidityRange,
@@ -144,16 +145,26 @@ export const StatuteVersionMenu = ({
           />
           {rows.map(({ displayStatus, version }) => {
             const selected = version.id === currentVersionId;
-            const inForce = version.isDefault;
-            const compareFrom = selected ? null : version.versionValidFrom;
+            // A version that cannot apply is labelled for what it is, even
+            // as the default of a Work with nothing else, and its dates are
+            // never offered as a window to compare by.
+            const ineligibleLabel = ineligibleExpressionLabelKey(version);
+            const inForce = version.isDefault && ineligibleLabel === null;
+            const compareFrom =
+              selected || ineligibleLabel !== null
+                ? null
+                : version.versionValidFrom;
             // The dot's colour says future or past; only the version in
             // force, and a status the colour cannot tell apart, get a label.
-            const rowLabel = rowStatusLabel({
-              displayStatus,
-              inForce,
-              label: (key) => t(STATUTE_STATUS_LABEL_KEYS[key]),
-              status: version.status,
-            });
+            const rowLabel =
+              ineligibleLabel === null
+                ? rowStatusLabel({
+                    displayStatus,
+                    inForce,
+                    label: (key) => t(STATUTE_STATUS_LABEL_KEYS[key]),
+                    status: version.status,
+                  })
+                : t(ineligibleLabel);
 
             return (
               <li className="relative" key={version.id}>
@@ -171,6 +182,7 @@ export const StatuteVersionMenu = ({
                 >
                   <span className="bg-popover relative z-10 mt-1 flex size-2 items-center justify-center">
                     <StatuteStatusDot
+                      expression={version}
                       status={version.status}
                       validFrom={version.versionValidFrom}
                     />

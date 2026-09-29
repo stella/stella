@@ -493,6 +493,8 @@ export type McpEgressPlan<TPayload = unknown> =
       egress: "structured";
       payload: TPayload;
       textFields: readonly McpStructuredTextField[];
+      /** Clear structured personal fields that text anonymization cannot rewrite. */
+      redactInAnonymized?: () => void;
       window?: McpStructuredWindow;
     };
 

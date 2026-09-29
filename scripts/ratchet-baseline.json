@@ -985,7 +985,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 117,
+    "count": 120,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -1023,6 +1023,7 @@
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/case-law/sitemap-shard-refresh.ts": 1,
       "apps/api/src/lib/cell-lock.ts": 1,
+      "apps/api/src/lib/chat/run-log.ts": 2,
       "apps/api/src/lib/email/inbound/persistence.ts": 1,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/flows/flow-executor.ts": 1,
@@ -1031,6 +1032,7 @@
       "apps/api/src/lib/legal-search/corpus-pack-batch.ts": 1,
       "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
+      "apps/api/src/lib/scheduler/tasks/chat-run-log-retention.ts": 1,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 6,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 5,
       "apps/api/src/lib/scheduler/tasks/memory-curator.ts": 1,
@@ -1118,7 +1120,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 293,
+    "count": 294,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1249,7 +1251,7 @@
       "apps/web/src/components/workspaces/workflow-start-confirmation-prompt.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts": 1,
-      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
+      "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 2,
       "apps/web/src/features/chat/hooks/use-chat-session.ts": 4,
       "apps/web/src/features/chat/queries.ts": 1,
       "apps/web/src/hooks/use-effect.ts": 2,

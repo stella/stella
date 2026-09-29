@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
+import type { IdleExitReason } from "@/api/lib/document-processing-idle-exit";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * The class these pin: an idle-exit decision driven by asynchronous
@@ -10,36 +12,75 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
  * directly.
  */
 
+/** Far enough off that only the tests about the cap ever reach it. */
+const UNREACHED_QUIET_CAP = 1000;
+/** Long enough that only a read built never to settle can miss it. */
+const GENEROUS_SAMPLE_TIMEOUT_MS = 60_000;
+/** Short enough to keep a test built on a read that never settles fast. */
+const SHORT_SAMPLE_TIMEOUT_MS = 5;
+
 const harness = (
   requiredIdleChecks: number,
   counts: () => Promise<number>,
   hasUnfinishedReconciliation: () => Promise<boolean> = async () => false,
+  {
+    maxQuietChecks = UNREACHED_QUIET_CAP,
+    sampleTimeoutMs = GENEROUS_SAMPLE_TIMEOUT_MS,
+  }: { maxQuietChecks?: number; sampleTimeoutMs?: number } = {},
 ) => {
-  let exits = 0;
-  let failures = 0;
-  const tick = createIdleExitCheck({
+  const exitReasons: IdleExitReason[] = [];
+  const failures: unknown[] = [];
+  let samples = 0;
+  const holdsAtSample: number[] = [];
+  const check = createIdleExitCheck({
     countPending: counts,
     hasUnfinishedReconciliation,
     isReconciliationInFlight: () => false,
+    maxQuietChecks,
     reconciliationGeneration: () => 0,
     requiredIdleChecks,
-    onIdleExit: () => {
-      exits += 1;
+    sampleTimeoutMs,
+    onIdleExit: (reason) => {
+      exitReasons.push(reason);
     },
-    onCheckFailure: () => {
-      failures += 1;
+    onCheckFailure: (error) => {
+      failures.push(error);
+    },
+    onReconciliationHold: () => {
+      holdsAtSample.push(samples);
     },
   });
-  return { tick, exits: () => exits, failures: () => failures };
+  const tick = async () => {
+    samples += 1;
+    return await check();
+  };
+  return {
+    tick,
+    exitReasons: () => exitReasons,
+    exits: () => exitReasons.length,
+    failureErrors: () => failures,
+    failures: () => failures.length,
+    holdsAtSample: () => holdsAtSample,
+  };
 };
 
-const sequence = (values: (number | Error)[]) => {
+/** A read that never settles, as a count on a dead connection would. */
+const HANG = Symbol("hang");
+
+const neverSettles = new Promise<never>(() => {});
+
+const hung = async <T>(): Promise<T> => await neverSettles;
+
+const sequence = (values: (number | Error | typeof HANG)[]) => {
   let index = 0;
   return async () => {
     const value = values[Math.min(index, values.length - 1)];
     index += 1;
     if (value instanceof Error) {
       throw value;
+    }
+    if (value === HANG) {
+      return await hung<number>();
     }
     return value ?? 0;
   };
@@ -135,12 +176,15 @@ describe("createIdleExitCheck", () => {
       },
       hasUnfinishedReconciliation: async () => unfinished,
       isReconciliationInFlight: () => false,
+      maxQuietChecks: UNREACHED_QUIET_CAP,
       reconciliationGeneration: () => 0,
       requiredIdleChecks: 2,
+      sampleTimeoutMs: GENEROUS_SAMPLE_TIMEOUT_MS,
       onIdleExit: () => {
         exits += 1;
       },
       onCheckFailure: () => undefined,
+      onReconciliationHold: () => undefined,
     });
 
     expect(await tick()).toBe("checked");
@@ -193,12 +237,15 @@ describe("createIdleExitCheck", () => {
         return unfinished;
       },
       isReconciliationInFlight: () => running,
+      maxQuietChecks: UNREACHED_QUIET_CAP,
       reconciliationGeneration: () => generation,
       requiredIdleChecks,
+      sampleTimeoutMs: GENEROUS_SAMPLE_TIMEOUT_MS,
       onIdleExit: () => {
         exits += 1;
       },
       onCheckFailure: () => undefined,
+      onReconciliationHold: () => undefined,
     });
     return { counts: () => counts, exits: () => exits, tick };
   };
@@ -256,6 +303,102 @@ describe("createIdleExitCheck", () => {
     expect(await h.tick()).toBe("exit");
     expect(await h.tick()).toBe("skipped");
     expect(await h.tick()).toBe("skipped");
-    expect(h.exits()).toBe(1);
+    expect(h.exitReasons()).toEqual(["idle"]);
+  });
+});
+
+/**
+ * The class these pin: no single read, and no reconciliation phase that
+ * never settles, can keep a batch worker alive indefinitely. A read that
+ * hangs ends at the sample deadline, and a queue that stays quiet for the
+ * cap ends the process however reconciliation answers, while the strict
+ * path keeps every guarantee it had.
+ */
+describe("idle exit under reads that never settle", () => {
+  test("a hung count is a failed sample that resets the strict streak", async () => {
+    const h = harness(2, sequence([0, HANG, 0, 0]), async () => false, {
+      sampleTimeoutMs: SHORT_SAMPLE_TIMEOUT_MS,
+    });
+
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("checked");
+    expect(h.failures()).toBe(1);
+    expect(TimeoutError.is(h.failureErrors()[0])).toBe(true);
+    // The streak restarts after the failure rather than counting it.
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("exit");
+    expect(h.exitReasons()).toEqual(["idle"]);
+  });
+
+  test("counts that keep hanging are quiet, so the cap still ends the process", async () => {
+    const h = harness(2, sequence([HANG]), async () => false, {
+      maxQuietChecks: 3,
+      sampleTimeoutMs: SHORT_SAMPLE_TIMEOUT_MS,
+    });
+
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("exit");
+    expect(h.failures()).toBe(3);
+    expect(h.exitReasons()).toEqual(["quiet_cap"]);
+  });
+
+  test("a hung reconciliation wait is unfinished work, not a failure, and the cap ends it once", async () => {
+    const h = harness(2, sequence([0]), hung<boolean>, {
+      maxQuietChecks: 3,
+      sampleTimeoutMs: SHORT_SAMPLE_TIMEOUT_MS,
+    });
+
+    expect(await h.tick()).toBe("checked");
+    // Not idle: a strict-path worker would have exited here.
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("exit");
+    expect(await h.tick()).toBe("skipped");
+    expect(h.failures()).toBe(0);
+    expect(h.exitReasons()).toEqual(["quiet_cap"]);
+  });
+
+  test("a pending job restarts the quiet streak", async () => {
+    const h = harness(2, sequence([0, 0, 5, 0, 0, 0]), async () => true, {
+      maxQuietChecks: 3,
+    });
+
+    for (let sample = 1; sample <= 5; sample += 1) {
+      expect(await h.tick()).toBe("checked");
+    }
+    // Without the reset, the fourth sample would already be past the cap.
+    expect(await h.tick()).toBe("exit");
+    expect(h.exitReasons()).toEqual(["quiet_cap"]);
+  });
+
+  test("the hold is reported once, on the sample the queue alone would have exited on", async () => {
+    const h = harness(2, sequence([0, 0, 5, 0, 0, 0]), async () => true, {
+      maxQuietChecks: 3,
+    });
+
+    for (let sample = 1; sample <= 6; sample += 1) {
+      await h.tick();
+    }
+    // The quiet streak reached the idle window on the second sample and
+    // again on the fifth; only the first is reported.
+    expect(h.holdsAtSample()).toEqual([2]);
+  });
+
+  test("the hold is never reported when the strict path exits first", async () => {
+    const h = harness(3, sequence([0]), async () => false, {
+      maxQuietChecks: 5,
+    });
+
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("exit");
+    expect(h.exitReasons()).toEqual(["idle"]);
+    expect(h.holdsAtSample()).toEqual([]);
+  });
+
+  test("a cap shorter than the idle window is refused", () => {
+    expect(() =>
+      harness(3, sequence([0]), async () => false, { maxQuietChecks: 2 }),
+    ).toThrow("maxQuietChecks (2) is below requiredIdleChecks (3)");
   });
 });

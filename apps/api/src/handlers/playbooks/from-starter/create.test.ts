@@ -16,7 +16,6 @@ import { createSafeDb } from "@/api/db/scoped";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter/create";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
-import { STARTER_PLAYBOOKS } from "@/api/handlers/playbooks/starters";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -24,6 +23,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { collectNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
+import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import {

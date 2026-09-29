@@ -12,6 +12,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
+import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
 import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
@@ -103,6 +104,7 @@ const loadExternalMcpToolsForTest = async () => {
 };
 
 const sendMessage = createSendMessage({
+  compactMessagesForContext,
   createRefRegistry: createChatRefRegistry,
   indexThread: async () => undefined,
   loadExternalMcpTools: loadExternalMcpToolsForTest,

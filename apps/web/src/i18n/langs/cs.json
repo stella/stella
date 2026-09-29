@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Moje organizace",
     "password": "Heslo",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
-    "requireAccount": {
-      "askAboutDocument": "Vytvořte si bezplatný účet a zeptejte se na tento dokument",
-      "askInChat": "Vytvořte si bezplatný účet a zeptejte se na to v chatu",
-      "description": "Až bude účet hotový, vrátíte se na tuto stránku.",
-      "generateHeadnotes": "Vytvořte si bezplatný účet a nechte AI sestavit právní věty",
-      "refineSearch": "Vytvořte si bezplatný účet a vylepšete hledání pomocí AI",
-      "writeResearchQuestion": "Vytvořte si bezplatný účet a položte těmto výsledkům otázku"
-    },
     "resendCode": "Poslat kód znovu na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
@@ -604,6 +596,7 @@
       },
       "generate": "Sestavit právní věty pomocí AI",
       "holdingAnchor": "Přejít na odstavec",
+      "invitation": "S bezplatným účtem vám AI k rozhodnutí připraví pracovní poznámky.",
       "topics": "Témata",
       "treatment": "Pozdější judikatura"
     },
@@ -1809,6 +1802,7 @@
       "title": "Vlastní pole",
       "value": "Hodnota pole"
     },
+    "datePrecision": "Přesnost data",
     "deleteContact": "Smazat klienta",
     "deleteContactBlockedByMatters": "Tento kontakt je stále přiřazen jako klient u spisů. Než kontakt smažete, přeřaďte nebo smažte tyto spisy.",
     "deleteContactConfirmDescription": "Opravdu chcete smazat tento kontakt? Tuto akci nelze vrátit.",
@@ -1845,15 +1839,19 @@
       "billingAddressPostalCode": "PSČ",
       "billingAddressState": "Kraj",
       "color": "Barva",
+      "day": "Den",
       "defaultHourlyRate": "Výchozí hodinová sazba",
       "firstName": "Jméno",
       "lastName": "Příjmení",
       "middleName": "Druhé jméno",
+      "month": "Měsíc",
+      "nationalities": "Státní příslušnosti",
       "paymentTermDays": "Splatnost (dny)",
       "prefix": "Titul před",
       "registrationNumber": "IČO",
       "suffix": "Titul za",
-      "taxId": "DIČ"
+      "taxId": "DIČ",
+      "year": "Rok"
     },
     "filterOrganizations": "Organizace",
     "filterPersons": "Osoby",
@@ -1936,11 +1934,14 @@
       "title": "Import kontaktů",
       "validateFailed": "Kontakty se nepodařilo zkontrolovat."
     },
+    "invalidDateOfBirth": "Zadejte platné datum narození.",
+    "invalidNationalityCodes": "Zadejte platné kódy státní příslušnosti.",
     "mattersAsClient": "Spisy jako klient",
     "newContact": "Nový kontakt",
     "noContactsDescription": "Vytvořte první kontakt a začněte ho přiřazovat ke spisům.",
     "noContactsFound": "Žádné kontakty nenalezeny",
     "noMattersAsClient": "Tento kontakt není klientem žádného spisu.",
+    "personalDetails": "Osobní údaje",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Domů",
@@ -1948,7 +1949,14 @@
       "office": "Kancelář",
       "other": "Jiný"
     },
+    "precision": {
+      "day": "Celé datum",
+      "month": "Měsíc a rok",
+      "year": "Pouze rok"
+    },
+    "saved": "Údaje kontaktu byly uloženy.",
     "search": "Hledat v kontaktech...",
+    "searchCountries": "Hledat země",
     "title": "Klienti",
     "type": {
       "organization": "Organizace",
@@ -4382,7 +4390,13 @@
     "diffRemoved": "Vypuštěno:",
     "emptyDocument": "Toto znění nemá dostupný text.",
     "emptyState": "Nenalezeny žádné předpisy.",
+    "expression": {
+      "invalidWindow": "Vydavatel uvádí rozporná data",
+      "promulgated": "Vyhlášené znění",
+      "withdrawn": "Vydavatel již neuvádí"
+    },
     "inForceSince": "Účinné od {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Klíčová rozhodnutí",
     "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
@@ -4402,18 +4416,22 @@
     "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
     "provisionPromptSubject": "{provision} předpisu {statute} ({eli}) ve znění účinném od {date}",
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
+    "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
     "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
     "showInText": "Zobrazit v textu",
+    "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {
       "current": "Účinné",
       "draft": "Navrhované",
       "ended": "Neúčinné",
       "future": "Budoucí",
       "historical": "Nahrazené",
-      "repealed": "Zrušené"
+      "neverInForce": "Nenabylo účinnosti",
+      "repealed": "Zrušené",
+      "unknown": "Stav nejasný"
     },
     "title": "Právní předpisy",
     "validity": "Platné od {from} do {to}"

@@ -106,14 +106,6 @@
     "organizationNamePlaceholder": "Moja organizácia",
     "password": "Heslo",
     "rateLimitExceeded": "Príliš veľa pokusov. Skúste to znova neskôr.",
-    "requireAccount": {
-      "askAboutDocument": "Vytvorte si bezplatný účet a spýtajte sa na tento dokument",
-      "askInChat": "Vytvorte si bezplatný účet a spýtajte sa na to v chate",
-      "description": "Keď bude účet hotový, vrátite sa na túto stránku.",
-      "generateHeadnotes": "Vytvorte si bezplatný účet a nechajte AI zostaviť právne vety",
-      "refineSearch": "Vytvorte si bezplatný účet a vylepšite vyhľadávanie pomocou AI",
-      "writeResearchQuestion": "Vytvorte si bezplatný účet a položte týmto výsledkom otázku"
-    },
     "resendCode": "Poslať kód znova na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizáciu",
     "signIn": "Prihlásiť sa",
@@ -604,6 +596,7 @@
       },
       "generate": "Zostaviť právne vety pomocou AI",
       "holdingAnchor": "Prejsť na odsek",
+      "invitation": "S bezplatným účtom vám AI k rozhodnutiu pripraví pracovné poznámky.",
       "topics": "Témy",
       "treatment": "Neskoršia judikatúra"
     },
@@ -1809,6 +1802,7 @@
       "title": "Vlastné polia",
       "value": "Hodnota poľa"
     },
+    "datePrecision": "Presnosť dátumu",
     "deleteContact": "Vymazať klienta",
     "deleteContactBlockedByMatters": "Tento kontakt je stále priradený ako klient v spisoch. Pred odstránením kontaktu tieto spisy priraďte inému klientovi alebo ich odstráňte.",
     "deleteContactConfirmDescription": "Naozaj chcete vymazať tento kontakt? Túto akciu nemožno vrátiť.",
@@ -1845,15 +1839,19 @@
       "billingAddressPostalCode": "PSČ",
       "billingAddressState": "Kraj",
       "color": "Farba",
+      "day": "Deň",
       "defaultHourlyRate": "Predvolená hodinová sadzba",
       "firstName": "Meno",
       "lastName": "Priezvisko",
       "middleName": "Stredné meno",
+      "month": "Mesiac",
+      "nationalities": "Štátne príslušnosti",
       "paymentTermDays": "Splatnosť (dni)",
       "prefix": "Titul pred",
       "registrationNumber": "IČO",
       "suffix": "Titul za",
-      "taxId": "DIČ"
+      "taxId": "DIČ",
+      "year": "Rok"
     },
     "filterOrganizations": "Organizácie",
     "filterPersons": "Osoby",
@@ -1936,11 +1934,14 @@
       "title": "Import kontaktov",
       "validateFailed": "Tieto kontakty sa nepodarilo skontrolovať."
     },
+    "invalidDateOfBirth": "Zadajte platný dátum narodenia.",
+    "invalidNationalityCodes": "Zadajte platné kódy štátnej príslušnosti.",
     "mattersAsClient": "Spisy ako klient",
     "newContact": "Nový klient",
     "noContactsDescription": "Vytvorte svojho prvého klienta a začnite ho priraďovať k spisom.",
     "noContactsFound": "Žiadni klienti nenájdení",
     "noMattersAsClient": "Tento kontakt nie je klientom žiadneho spisu.",
+    "personalDetails": "Osobné údaje",
     "phoneTypes": {
       "fax": "Fax",
       "home": "Domov",
@@ -1948,7 +1949,14 @@
       "office": "Kancelária",
       "other": "Iný"
     },
+    "precision": {
+      "day": "Úplný dátum",
+      "month": "Mesiac a rok",
+      "year": "Iba rok"
+    },
+    "saved": "Údaje kontaktu boli uložené.",
     "search": "Hľadať v kontaktoch...",
+    "searchCountries": "Hľadať krajiny",
     "title": "Klienti",
     "type": {
       "organization": "Organizácia",
@@ -4382,7 +4390,13 @@
     "diffRemoved": "Vypustené:",
     "emptyDocument": "Toto znenie nemá dostupný text.",
     "emptyState": "Nenašli sa žiadne predpisy.",
+    "expression": {
+      "invalidWindow": "Vydavateľ uvádza rozporné dátumy",
+      "promulgated": "Vyhlásené znenie",
+      "withdrawn": "Vydavateľ už neuvádza"
+    },
     "inForceSince": "Účinné od {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Kľúčové rozhodnutia",
     "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
@@ -4402,18 +4416,22 @@
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showInText": "Zobraziť v texte",
+    "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
       "current": "Účinné",
       "draft": "Navrhované",
       "ended": "Neúčinné",
       "future": "Budúce",
       "historical": "Nahradené",
-      "repealed": "Zrušené"
+      "neverInForce": "Nenadobudlo účinnosť",
+      "repealed": "Zrušené",
+      "unknown": "Stav nejasný"
     },
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}"

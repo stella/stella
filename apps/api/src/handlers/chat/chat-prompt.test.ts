@@ -161,6 +161,8 @@ describe("active statute prompt", () => {
     title: "89/2012 Sb., občanský zákoník",
     versionValidFrom: "2024-01-01",
     versionValidTo: null,
+    expressionKind: "consolidation",
+    windowDisposition: "effective",
   } as const;
 
   const provision = (anchor: string, chars: number) => [
@@ -212,6 +214,45 @@ describe("active statute prompt", () => {
     expect(prompt).toContain("/eli/cz/sb/2012/89");
     expect(prompt).toContain("This wording applies from: 2024-01-01");
     expect(prompt).toContain("This wording has no recorded end date.");
+  });
+
+  test("never presents the dates of a wording that cannot apply as a period it applied in", () => {
+    const selection = selectStatuteProvisions({
+      annotatedAnchorIds: [],
+      blocks: provision("par_1", 40),
+      maxChars: 5000,
+    });
+    const labelled = [
+      { windowDisposition: "never-in-force", line: "never took effect" },
+      {
+        windowDisposition: "invalid-window",
+        line: "dates for this wording are inconsistent",
+      },
+      { windowDisposition: "withdrawn", line: "no longer lists this wording" },
+    ] as const;
+    for (const { windowDisposition, line } of labelled) {
+      const prompt = buildActiveStatutePrompt({
+        ...ACT,
+        fulltext: "",
+        selection,
+        versionValidTo: "2023-12-31",
+        windowDisposition,
+      });
+      expect(prompt).toContain(line);
+      expect(prompt).toContain(
+        "The publisher states this window: 2024-01-01 to 2023-12-31.",
+      );
+      expect(prompt).not.toContain("This wording applies from");
+    }
+
+    const promulgated = buildActiveStatutePrompt({
+      ...ACT,
+      expressionKind: "promulgated",
+      fulltext: "",
+      selection,
+    });
+    expect(promulgated).toContain("as first promulgated");
+    expect(promulgated).not.toContain("This wording applies from");
   });
 
   test("says the act is complete only when the model has all of it", () => {

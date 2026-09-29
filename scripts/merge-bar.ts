@@ -27,7 +27,7 @@
 // hold, builds the base branch plus the pull request, runs CI on that commit,
 // and merges only if it passes. Nothing needs a rebase to land, a baseline or
 // lint rule measured on the branch is re-measured on the tree that lands, and
-// migration ordering is checked against the base as it stands at merge time.
+// migration identity is checked against the base as it stands at merge time.
 // Where there is no queue, the bar merges directly, and only once the
 // required checks have succeeded on the exact head.
 //
@@ -45,14 +45,12 @@
 
 import { panic } from "better-result";
 
-import { findMigrationOrderViolation } from "./check-migration-order";
+import { findMigrationIdentityViolation } from "./check-migration-order";
 
 const DEFAULT_REPO = "stella/stella";
 const MERGEABLE_POLL_ATTEMPTS = 8;
 const MERGEABLE_POLL_INTERVAL_MS = 2000;
 const MERGE_COMMIT_POLL_ATTEMPTS = 5;
-// GitHub's REST contents listing silently truncates past this many entries.
-const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
 
 // --- Repository policy --------------------------------------------------------
@@ -135,7 +133,7 @@ const GATE_IDS = [
   "mergeable",
   "required-check",
   "review-threads",
-  "migration-order",
+  "migration-identity",
   "head-stability",
 ] as const;
 type GateId = (typeof GATE_IDS)[number];
@@ -152,7 +150,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
   ciPlanSkipped: "CI_PLAN_SKIPPED",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
-  migrationOrder: "MIGRATION_ORDER_VIOLATION",
+  migrationIdentity: "MIGRATION_IDENTITY_VIOLATION",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
 } as const;
 type MergeBarReason =
@@ -184,10 +182,8 @@ type CheckRunSnapshot = {
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
 
 type MigrationSnapshot = {
-  // Migration directories present on the base branch right now.
-  baseDirectories: readonly string[];
-  // Migration directories this pull request adds.
   addedDirectories: readonly string[];
+  removedDirectories: readonly string[];
 };
 
 export type MergeBarSnapshot = {
@@ -418,34 +414,34 @@ const evaluateReviewThreads = (
 
 // Checked here for fast feedback and again by CI on the merge-group commit,
 // where the base is what the pull request actually lands on.
-const evaluateMigrationOrder = (migrations: MigrationSnapshot): GateVerdict => {
-  const violation = findMigrationOrderViolation({
-    baseDirectories: migrations.baseDirectories,
-    newDirectories: migrations.addedDirectories,
-  });
+const evaluateMigrationIdentity = (
+  migrations: MigrationSnapshot,
+): GateVerdict => {
+  const violation = findMigrationIdentityViolation(migrations);
   if (violation?.type === "invalid-name") {
     return {
-      gate: "migration-order",
+      gate: "migration-identity",
       status: "fail",
-      reason: MERGE_BAR_REASONS.migrationOrder,
+      reason: MERGE_BAR_REASONS.migrationIdentity,
       detail: `${violation.directory} does not start with a 14-digit timestamp`,
     };
   }
-  if (violation?.type === "not-after-base") {
+  if (violation?.type === "removed-base-migration") {
     return {
-      gate: "migration-order",
+      gate: "migration-identity",
       status: "fail",
-      reason: MERGE_BAR_REASONS.migrationOrder,
+      reason: MERGE_BAR_REASONS.migrationIdentity,
       detail:
-        `${violation.directory} (${violation.timestamp}) is not above ` +
-        `${violation.previousTimestamp}; rename it to a timestamp above ` +
-        `${violation.previousTimestamp} so already-migrated databases apply it`,
+        `${violation.directory} was removed; its folder name is the migration's ` +
+        `identity in the deployed ledger. Renaming a merged migration makes ` +
+        `deployed databases re-run it under the new name; deleting it removes ` +
+        `it from fresh databases. Add a new migration instead.`,
     };
   }
   return {
-    gate: "migration-order",
+    gate: "migration-identity",
     status: "pass",
-    detail: `${migrations.addedDirectories.length} added migration(s) ordered above the base branch`,
+    detail: `${migrations.addedDirectories.length} added and ${migrations.removedDirectories.length} removed migration(s)`,
   };
 };
 
@@ -486,7 +482,7 @@ export const evaluateMergeBar = (
       requiredCheckRuns: snapshot.requiredCheckRuns,
     }),
     evaluateReviewThreads(snapshot.reviewThreads),
-    evaluateMigrationOrder(snapshot.migrations),
+    evaluateMigrationIdentity(snapshot.migrations),
     evaluateHeadStability({
       headSha: snapshot.pullRequest.headSha,
       headShaBeforeMerge: snapshot.headShaBeforeMerge,
@@ -516,11 +512,13 @@ type GitHubGateway = {
   // GitHub did: enabled auto-merge, or added the pull request to the queue.
   merge: (input: { expectedHeadSha: string }) => string;
   armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
-  // Adds the pull request at the front of the queue; returns its position.
+  // Asks GitHub to add the pull request at the front of the queue; returns
+  // the position the mutation reported, which `readMergeQueue` must confirm.
   enqueueWithJump: (input: {
     pullRequestId: string;
     expectedHeadSha: string;
   }) => number;
+  readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -586,12 +584,17 @@ export const isReleasePullRequest = (
   !pullRequest.isCrossRepository;
 
 export type MergeWhenReadyAction =
-  // `jumpDeferred`: a jump was wanted, but the queue accepts one only once
-  // every required check has succeeded, so auto-merge is armed instead.
-  | { kind: "arm"; jumpDeferred: boolean }
+  | { kind: "arm" }
   | { kind: "enqueue-jump" }
-  | { kind: "already-armed"; enabledAt: string; jumpDeferred: boolean }
-  | { kind: "already-queued"; entryId: string };
+  // A jump was wanted, but the queue accepts one only once every required
+  // check has succeeded. Nothing is armed: auto-merge would enqueue at the
+  // back, which is the opposite of a jump. `armedSince` is set when an
+  // auto-merge armed earlier will do exactly that.
+  | { kind: "jump-waits-for-checks"; armedSince: string | null }
+  | { kind: "already-armed"; enabledAt: string }
+  // `verifyFront`: a jump was wanted, so the place it already holds must be
+  // the front of the queue.
+  | { kind: "already-queued"; entryId: string; verifyFront: boolean };
 
 /**
  * What a passing merge bar does on a merge-queue branch. A jump enqueues
@@ -609,20 +612,72 @@ export const mergeWhenReadyAction = ({
   checksSucceeded: boolean;
 }): MergeWhenReadyAction => {
   if (handoff.status === "queued") {
-    return { kind: "already-queued", entryId: handoff.entryId };
-  }
-  if (jump && checksSucceeded) {
-    return { kind: "enqueue-jump" };
-  }
-  const jumpDeferred = jump;
-  if (handoff.status === "armed") {
     return {
-      kind: "already-armed",
-      enabledAt: handoff.enabledAt,
-      jumpDeferred,
+      kind: "already-queued",
+      entryId: handoff.entryId,
+      verifyFront: jump,
     };
   }
-  return { kind: "arm", jumpDeferred };
+  if (jump) {
+    return checksSucceeded
+      ? { kind: "enqueue-jump" }
+      : {
+          kind: "jump-waits-for-checks",
+          armedSince: handoff.status === "armed" ? handoff.enabledAt : null,
+        };
+  }
+  if (handoff.status === "armed") {
+    return { kind: "already-armed", enabledAt: handoff.enabledAt };
+  }
+  return { kind: "arm" };
+};
+
+export type MergeQueueEntrySnapshot = { pullNumber: number; position: number };
+
+export type QueuePlacement =
+  | { status: "front"; position: number }
+  | { status: "absent"; queueLength: number }
+  | { status: "behind"; position: number; ahead: readonly number[] };
+
+/**
+ * Where a pull request actually sits, from a queue read taken after the
+ * enqueue. The enqueue response alone is not evidence: GitHub can accept a
+ * jump request and still place the entry behind others.
+ */
+export const evaluateQueuePlacement = ({
+  entries,
+  pullNumber,
+}: {
+  entries: readonly MergeQueueEntrySnapshot[];
+  pullNumber: number;
+}): QueuePlacement => {
+  const own = entries.find((entry) => entry.pullNumber === pullNumber);
+  if (own === undefined) {
+    return { status: "absent", queueLength: entries.length };
+  }
+  const ahead = entries
+    .filter((entry) => entry.position < own.position)
+    .toSorted((left, right) => left.position - right.position)
+    .map((entry) => entry.pullNumber);
+  // Positions are 1-based. A snapshot with a gap ahead of the entry (only it,
+  // at position 2) is not proof of the front, so it fails closed.
+  return own.position === 1 && ahead.length === 0
+    ? { status: "front", position: own.position }
+    : { status: "behind", position: own.position, ahead };
+};
+
+export const formatQueuePlacementFailure = (
+  placement: Exclude<QueuePlacement, { status: "front" }>,
+): string => {
+  if (placement.status === "absent") {
+    return `it is not among the ${placement.queueLength} merge queue entries`;
+  }
+  if (placement.ahead.length === 0) {
+    return `it is at position ${placement.position}, with no entry listed ahead of it`;
+  }
+  return `it is at position ${placement.position}, behind ${placement.ahead
+    .map((number) => `#${number}`)
+    .join(", ")}`;
 };
 
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
@@ -695,6 +750,22 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
     }
   }
 }`;
+
+const migrationDirectoryFromFile = ({
+  filename,
+  migrationDirectory,
+}: {
+  filename: string;
+  migrationDirectory: string;
+}): string | null => {
+  const prefix = `${migrationDirectory}/`;
+  const suffix = "/migration.sql";
+  if (!filename.startsWith(prefix) || !filename.endsWith(suffix)) {
+    return null;
+  }
+  const name = filename.slice(prefix.length, -suffix.length);
+  return name !== "" && !name.includes("/") ? `${prefix}${name}` : null;
+};
 
 const createGhGateway = ({
   repo,
@@ -861,70 +932,53 @@ const createGhGateway = ({
       }
     },
 
-    // Read both sides from the API rather than the local checkout: the local
-    // clone can be behind the base branch, which is the very staleness this
-    // gate exists to catch.
+    // Read the pull request's changed files from the API rather than the local
+    // checkout, which can be behind the base branch.
     readMigrationDirectories: () => {
       if (migrationDirectory === null) {
-        return { baseDirectories: [], addedDirectories: [] };
+        return { addedDirectories: [], removedDirectories: [] };
       }
-      const baseRefName = readString(
-        readRecord(
-          runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
-          "pr view",
-        ),
-        "baseRefName",
-      );
-      // Pin the listing to one commit so it provably describes one tree rather
-      // than whatever the branch pointed at between two separate requests.
-      const baseSha = readString(
-        readRecord(
-          runGhJson([
-            "api",
-            `repos/${repo}/commits/${baseRefName}`,
-            "--jq",
-            "{sha: .sha}",
-          ]),
-          "base commit",
-        ),
-        "sha",
-      );
-      const baseDirectories = runGh([
-        "api",
-        `repos/${repo}/contents/${migrationDirectory}?ref=${baseSha}`,
-        "--jq",
-        '.[] | select(.type == "dir") | .name',
-      ])
-        .split("\n")
-        .filter(Boolean);
-      // The contents endpoint truncates at 1000 entries without saying so. A
-      // truncated listing would drop the newest migrations and let the gate
-      // pass on the exact ordering it exists to catch, so refuse instead.
-      if (baseDirectories.length >= CONTENTS_ENDPOINT_ENTRY_LIMIT) {
-        panic(
-          `${migrationDirectory} has ${baseDirectories.length} entries at ` +
-            `${baseSha}, at or past the contents endpoint's ` +
-            `${CONTENTS_ENDPOINT_ENTRY_LIMIT}-entry limit. The listing may be ` +
-            "truncated; switch this gate to the git tree API before merging.",
-        );
-      }
-
-      const addedDirectories = runGh([
+      const changedFiles = runGh([
         "api",
         "--paginate",
         `repos/${repo}/pulls/${pullNumber}/files`,
         "--jq",
-        '.[] | select(.status == "added") | .filename',
+        '.[] | select(.status == "added" or .status == "removed" or .status == "renamed") | {status, filename, previous_filename} | @json',
       ])
         .split("\n")
-        .filter(
-          (filename) =>
-            filename.startsWith(`${migrationDirectory}/`) &&
-            filename.endsWith("/migration.sql"),
-        )
-        .map((filename) => filename.slice(0, filename.lastIndexOf("/")));
-
-      return { baseDirectories, addedDirectories };
+        .filter(Boolean)
+        .map((line) =>
+          readRecord(JSON.parse(line), "changed pull request file"),
+        );
+      const addedDirectories: string[] = [];
+      const removedDirectories: string[] = [];
+      for (const file of changedFiles) {
+        const status = readString(file, "status");
+        const filename = readString(file, "filename");
+        if (status === "added" || status === "renamed") {
+          const directory = migrationDirectoryFromFile({
+            filename,
+            migrationDirectory,
+          });
+          if (directory !== null) {
+            addedDirectories.push(directory);
+          }
+        }
+        if (status === "removed" || status === "renamed") {
+          const previousFilename =
+            status === "renamed"
+              ? readString(file, "previous_filename")
+              : filename;
+          const directory = migrationDirectoryFromFile({
+            filename: previousFilename,
+            migrationDirectory,
+          });
+          if (directory !== null) {
+            removedDirectories.push(directory);
+          }
+        }
+      }
+      return { addedDirectories, removedDirectories };
     },
 
     merge: ({ expectedHeadSha }) => {
@@ -1011,6 +1065,65 @@ const createGhGateway = ({
         return panic("Expected numeric merge queue position");
       }
       return position;
+    },
+
+    readMergeQueue: (branch) => {
+      const response = readRecord(
+        runGhJson([
+          "api",
+          "graphql",
+          "-f",
+          `query=query($owner:String!, $name:String!, $branch:String!) {
+            repository(owner:$owner, name:$name) {
+              mergeQueue(branch:$branch) {
+                entries(first:100) {
+                  totalCount
+                  nodes { position pullRequest { number } }
+                }
+              }
+            }
+          }`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-f",
+          `branch=${branch}`,
+        ]),
+        "merge queue response",
+      );
+      const entries = readRecord(
+        readRecord(
+          readRecord(
+            readRecord(response["data"], "data")["repository"],
+            "repository",
+          )["mergeQueue"],
+          "mergeQueue",
+        )["entries"],
+        "entries",
+      );
+      const nodes = entries["nodes"];
+      if (!Array.isArray(nodes)) {
+        return panic("Expected merge queue entry nodes");
+      }
+      // A partial listing could hide entries ahead of this one.
+      if (entries["totalCount"] !== nodes.length) {
+        return panic(
+          `Merge queue listing is partial (${nodes.length} of ${String(entries["totalCount"])} entries)`,
+        );
+      }
+      return nodes.map((node: unknown) => {
+        const record = readRecord(node, "merge queue entry");
+        const position = record["position"];
+        const entryNumber = readRecord(
+          record["pullRequest"],
+          "merge queue pull request",
+        )["number"];
+        if (typeof position !== "number" || typeof entryNumber !== "number") {
+          return panic("Expected numeric merge queue position and number");
+        }
+        return { pullNumber: entryNumber, position };
+      });
     },
   };
 };
@@ -1117,10 +1230,40 @@ if (import.meta.main) {
     options.repo,
     pullRequest.baseRefName,
   );
+  const jump = options.jump || isReleasePullRequest(pullRequest);
+  // A jump is only done once a fresh queue read shows the pull request first;
+  // anything else exits non-zero, because the entries ahead of it merge
+  // before it does.
+  const requireFrontOfQueue = (context: string): void => {
+    const placement = evaluateQueuePlacement({
+      entries: gateway.readMergeQueue(pullRequest.baseRefName),
+      pullNumber: pullRequest.number,
+    });
+    if (placement.status === "front") {
+      console.log(
+        `\nverdict: QUEUED AT THE FRONT — ${context}; verified first in the queue (position ${placement.position})${
+          options.jump ? "" : " (release pull request)"
+        }`,
+      );
+      return;
+    }
+    console.error(
+      `\nverdict: NOT AT THE FRONT — ${context}, but ${formatQueuePlacementFailure(placement)}. ` +
+        "The entries ahead of it merge first. Dequeue it, then run the bar " +
+        "again to jump.",
+    );
+    process.exit(1);
+  };
   if (
     policy.landing === "merge-when-ready" &&
     pullRequest.handoff.status === "queued"
   ) {
+    if (jump) {
+      requireFrontOfQueue(
+        `${options.repo}#${options.pullNumber} is already in the merge queue`,
+      );
+      process.exit(0);
+    }
     console.log(
       `verdict: QUEUED — ${options.repo}#${options.pullNumber} is already in the merge queue; nothing changed.`,
     );
@@ -1148,6 +1291,33 @@ if (import.meta.main) {
     process.exit(1);
   }
 
+  // Chosen before the dry-run return, so a dry run reports the same non-write
+  // failure a real run would.
+  const mergeWhenReady =
+    policy.landing === "merge-when-ready"
+      ? mergeWhenReadyAction({
+          handoff: pullRequest.handoff,
+          jump,
+          checksSucceeded: requiredChecksSucceeded({
+            checkRuns: snapshot.checkRuns,
+            requiredCheckRuns: snapshot.requiredCheckRuns,
+          }),
+        })
+      : null;
+  if (mergeWhenReady?.kind === "jump-waits-for-checks") {
+    const armed =
+      mergeWhenReady.armedSince === null
+        ? "Nothing was armed."
+        : `Auto-merge has been on since ${mergeWhenReady.armedSince} and will ` +
+          "enqueue it at the BACK when they pass; disable it to keep the jump.";
+    console.error(
+      "\nverdict: NOT JUMPED — required checks are still running, and " +
+        `the queue accepts a jump only once they pass. ${armed} ` +
+        "Run the bar again once the checks pass.",
+    );
+    process.exit(1);
+  }
+
   if (options.dryRun) {
     console.log("\nverdict: MERGE (dry run, nothing written).");
     process.exit(0);
@@ -1162,43 +1332,30 @@ if (import.meta.main) {
       break;
     }
     case "merge-when-ready": {
-      const jump = options.jump || isReleasePullRequest(pullRequest);
-      const action = mergeWhenReadyAction({
-        handoff: pullRequest.handoff,
-        jump,
-        checksSucceeded: requiredChecksSucceeded({
-          checkRuns: snapshot.checkRuns,
-          requiredCheckRuns: snapshot.requiredCheckRuns,
-        }),
-      });
-      const deferredNote =
-        "; required checks are still running, so it is armed rather than " +
-        "moved to the front: run the bar again once they pass to jump";
+      const action =
+        mergeWhenReady ??
+        panic("unreachable: chosen for merge-when-ready above");
       switch (action.kind) {
         case "already-queued":
-          console.log(
-            `\nverdict: QUEUED — ${action.entryId}${
-              jump
-                ? "; it keeps its place (dequeue it first to move it to the front)"
-                : ""
-            }`,
-          );
+          if (action.verifyFront) {
+            requireFrontOfQueue(`${action.entryId} is already queued`);
+            break;
+          }
+          console.log(`\nverdict: QUEUED — ${action.entryId}`);
           break;
         case "already-armed":
           console.log(
-            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}${action.jumpDeferred ? deferredNote : ""}`,
+            `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}`,
           );
           break;
         case "enqueue-jump": {
-          const position = gateway.enqueueWithJump({
+          const reported = gateway.enqueueWithJump({
             pullRequestId: pullRequest.id,
             expectedHeadSha: snapshot.headShaBeforeMerge,
           });
-          console.log(
-            `\nverdict: QUEUED AT THE FRONT — ${snapshot.headShaBeforeMerge} ` +
-              `is at position ${position}${
-                options.jump ? "" : " (release pull request)"
-              }`,
+          requireFrontOfQueue(
+            `${snapshot.headShaBeforeMerge} was enqueued with a jump ` +
+              `(GitHub reported position ${reported})`,
           );
           break;
         }
@@ -1207,7 +1364,7 @@ if (import.meta.main) {
             expectedHeadSha: snapshot.headShaBeforeMerge,
           });
           console.log(
-            `\nverdict: ARMED — ${outcome}; the queue merges ${snapshot.headShaBeforeMerge} once its checks pass${action.jumpDeferred ? deferredNote : ""}`,
+            `\nverdict: ARMED — ${outcome}; the queue merges ${snapshot.headShaBeforeMerge} once its checks pass`,
           );
           break;
         }

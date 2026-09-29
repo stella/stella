@@ -53,6 +53,10 @@ import type {
   LegislationSourceAdapter,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
 import {
+  eligibleExpression,
+  legislationVersionRef,
+} from "@/api/lib/legal-search/legislation-validity-window";
+import {
   RAW_SOURCE_FAMILY,
   writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
@@ -317,10 +321,14 @@ const reportWindowJunctions = async ({
   if (validFrom === null) {
     return;
   }
+  // Only versions that can apply are neighbours: a version that never took
+  // effect or carries an inconsistent publisher window is not a junction the
+  // point-in-time reads would ever cross.
   const work = and(
     eq(legislationDocuments.sourceId, input.sourceId),
     eq(legislationDocuments.eli, input.eli),
     eq(legislationDocuments.language, input.language),
+    eligibleExpression(legislationVersionRef(legislationDocuments)),
   );
   const neighbour = async (
     where: SQL,

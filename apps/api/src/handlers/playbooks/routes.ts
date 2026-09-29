@@ -14,9 +14,14 @@ import listPlaybookVersions from "@/api/handlers/playbooks/versions/list";
 import restorePlaybookVersion from "@/api/handlers/playbooks/versions/restore";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
+const TENANT_CACHE_CONTROL = "private, no-store";
+
 export const playbooksRoute = new Elysia({
   prefix: "/playbooks",
 })
+  .onRequest(({ set }) => {
+    set.headers["Cache-Control"] = TENANT_CACHE_CONTROL;
+  })
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })

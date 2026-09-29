@@ -1,9 +1,11 @@
 // Static SQL shapes that can scan an input larger than the returned page.
 //
 // Flagged: a leading LIKE wildcard, any LIKE on an S3-key column, a
-// function or cast in GROUP BY over a corpus relation, and OR with a subquery
-// operand. Prefix LIKE on other columns, SELECT-only expressions, schema
-// constraints, and plain strings pass.
+// function or cast in GROUP BY over a corpus relation, OR with a subquery
+// operand, and an optional keyset bound (`$1 IS NULL OR id > $1`), which no
+// generic plan can use as an index condition. Prefix LIKE on other columns,
+// SELECT-only expressions, schema constraints, and plain strings pass; the
+// optional bound is also read from plain strings, where `$n` is a parameter.
 // Analysis follows same-file const bindings; imported or runtime-built SQL is
 // opaque. This detector is shared by oxlint and the baseline counter.
 
@@ -16,7 +18,8 @@ export type SqlPerfHit = {
     | "leading-wildcard"
     | "s3-key-like"
     | "group-by-expression"
-    | "or-subquery";
+    | "or-subquery"
+    | "optional-keyset";
   line: number;
   column: number;
   /**
@@ -29,6 +32,13 @@ export type SqlPerfHit = {
 };
 
 export type SqlPerfCommentError = { line: number; message: string };
+
+/**
+ * Kinds the per-file baseline holds. The later kinds start at zero: every hit
+ * is reported whatever the file's baseline count.
+ */
+export const isBaselinedSqlPerfKind = (kind: SqlPerfHit["kind"]): boolean =>
+  kind !== "or-subquery" && kind !== "optional-keyset";
 
 const LIKE = /\b(?:NOT\s+)?I?LIKE\b/giu;
 const CORPUS =
@@ -45,6 +55,24 @@ const REASON =
 // The reason is trimmed where it is read.
 const COMMENT = /\/\/\s*sql-perf-allow:(.*)$/iu;
 const COMMENT_START = /\/\/\s*sql-perf-allow\b/iu;
+// `<param> IS NULL OR <col> > <param>` and the reverse order, for any range
+// operator; the parameter is `$n` or a template placeholder, with a cast.
+// Bounded repeats keep a long token from making the scan backtrack.
+const KEYSET_PARAMETER = String.raw`(\$\d{1,4}|__SQL_EXPR_\d{1,4}__)`;
+const KEYSET_CAST = String.raw`(?:\s{0,64}::\s{0,64}[a-z_]\w{0,63}(?:\.[a-z_]\w{0,63})?(?:\[\])?)?`;
+const KEYSET_COLUMN = String.raw`(?:__SQL_EXPR_\d{1,4}__|[a-z_"][\w."]{0,255})`;
+const KEYSET_RANGE = String.raw`\s{0,64}(?:<=|>=|<|>)\s{0,64}`;
+const KEYSET_NULL = String.raw`\s{1,64}IS\s{1,64}NULL`;
+const OPTIONAL_KEYSETS = [
+  new RegExp(
+    String.raw`${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}(?:\s{0,64}\)){0,4}\s{1,64}OR\s{1,64}(?:\(\s{0,64}){0,4}${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}`,
+    "giu",
+  ),
+  new RegExp(
+    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}(?:\s{0,64}\)){0,4}\s{1,64}OR\s{1,64}(?:\(\s{0,64}){0,4}${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}`,
+    "giu",
+  ),
+];
 
 type TemplateParts = {
   sql: string;
@@ -836,6 +864,55 @@ const statementOf = (node: ts.Node): ts.Node => {
   return current;
 };
 
+/**
+ * Offsets of optional keyset bounds in a page (a statement with a LIMIT): the
+ * parameter tested for NULL is the one the range compares against.
+ * Placeholders count as parameters only in a `sql` template (`expressions`);
+ * in a plain string only `$n` does.
+ */
+const optionalKeysetOffsets = (
+  text: string,
+  expressions: readonly ts.Expression[],
+  file: ts.SourceFile,
+): number[] => {
+  const visible = sqlWithoutLiterals(text);
+  if (!/\bLIMIT\b/iu.test(visible)) {
+    return [];
+  }
+  const parameterText = (parameter: string | undefined) =>
+    parameter?.startsWith("$") === true
+      ? parameter
+      : expressions[Number(parameter?.slice(11, -2))]?.getText(file);
+  return OPTIONAL_KEYSETS.flatMap((pattern) =>
+    [...visible.matchAll(pattern)].flatMap((match) => {
+      const tested = parameterText(match[1]);
+      return tested !== undefined && tested === parameterText(match[2])
+        ? [match.index]
+        : [];
+    }),
+  );
+};
+
+/** A string or untagged template: SQL text whose `$n` are parameters. */
+const plainSqlText = (node: ts.Node, file: ts.SourceFile) => {
+  if (ts.isStringLiteral(node)) {
+    const start = node.getStart(file) + 1;
+    return { sql: node.text, offsetAt: (index: number) => start + index };
+  }
+  if (
+    (ts.isNoSubstitutionTemplateLiteral(node) ||
+      ts.isTemplateExpression(node)) &&
+    !ts.isTaggedTemplateExpression(node.parent)
+  ) {
+    const { sql, offsets } = sqlParts(file, node);
+    return {
+      sql,
+      offsetAt: (index: number) => offsets[index] ?? node.getStart(file),
+    };
+  }
+  return undefined;
+};
+
 export const analyzeSqlPerf = (source: string, filename: string) => {
   const file = ts.createSourceFile(
     filename,
@@ -872,6 +949,9 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       return;
     }
     const { sql, offsets, expressions } = sqlParts(file, node.template);
+    for (const index of optionalKeysetOffsets(sql, expressions, file)) {
+      add("optional-keyset", offsets[index] ?? node.getStart(file), node);
+    }
     for (const index of sqlOrSubqueryOffsets(
       sqlWithoutLiterals(sql),
       expressions,
@@ -946,6 +1026,12 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
   const visit = (node: ts.Node) => {
     if (ts.isTaggedTemplateExpression(node)) {
       inspectSql(node);
+    }
+    const plain = plainSqlText(node, file);
+    if (plain !== undefined) {
+      for (const index of optionalKeysetOffsets(plain.sql, [], file)) {
+        add("optional-keyset", plain.offsetAt(index), node);
+      }
     }
     if (ts.isCallExpression(node)) {
       if (

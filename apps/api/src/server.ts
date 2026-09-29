@@ -77,11 +77,13 @@ import {
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
+import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
+import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { reportsRoute } from "@/api/handlers/reports/routes";
@@ -482,7 +484,9 @@ const api = new Elysia()
       .use(ratesRoute)
       .use(expensesRoute)
       .use(invoicesRoute)
-      .use(sellerProfilesRoute)
+      // Issuer settings share one link: every `.use` here deepens the
+      // app's type, and the chain sits at TypeScript's instantiation limit.
+      .use(new Elysia().use(sellerProfilesRoute).use(numberSeriesRoute))
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
       .use(sharepointRoute)
@@ -497,6 +501,7 @@ const api = new Elysia()
       .use(legislationRoute)
       .use(legislationCorpusRoute)
       .use(publicLegislationRoute)
+      .use(publicKnowledgeRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)
       .use(savedTimeNarrativesRoute)

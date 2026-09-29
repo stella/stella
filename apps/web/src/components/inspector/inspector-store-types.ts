@@ -113,9 +113,7 @@ const SKILL_RESOURCE_ORIGINS = {
   url: true,
 } as const satisfies Record<SkillResourceOrigin, true>;
 
-export const isSkillResourceOrigin = (
-  value: unknown,
-): value is SkillResourceOrigin =>
+const isSkillResourceOrigin = (value: unknown): value is SkillResourceOrigin =>
   typeof value === "string" && Object.hasOwn(SKILL_RESOURCE_ORIGINS, value);
 
 export const BUILT_IN_SKILL_ORIGIN = "built-in";

@@ -308,6 +308,14 @@ describe("MCP resources", () => {
     expect(content.text).toContain("`par_1729`");
     expect(content.text).toContain("`text_withheld`");
     expect(content.text).toContain("`textWithheldReason`");
+    // Applicability takes both fields, and a promulgated entry never applied.
+    expect(content.text).toContain(
+      "only when both hold: `windowDisposition` is `effective` and " +
+        "`expressionKind` is `consolidation` or `unversioned`",
+    );
+    expect(content.text).toContain(
+      "A `promulgated` entry is the text as first published",
+    );
     // Rendered from the enforced limits, never spelled by hand.
     expect(content.text).toContain(String(LIMITS.legislationProvisionBatchMax));
     expect(content.text).toContain(

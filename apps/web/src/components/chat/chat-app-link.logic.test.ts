@@ -12,9 +12,15 @@ import {
 
 import {
   classifyChatHttpLink,
+  createStatuteDayTarget,
   createStatuteLinkTab,
+  statuteLinkOpening,
 } from "@/components/chat/chat-app-link.logic";
 import { isStatuteViewPayload } from "@/features/statutes/statute-inspector.logic";
+import {
+  resolveStatuteRoute,
+  type StatuteRouteReads,
+} from "@/features/statutes/statute-route-resolution";
 
 const APP_ORIGIN = "https://app.example.test";
 const APP_ORIGINS = new Set([APP_ORIGIN]);
@@ -136,5 +142,87 @@ describe("the tab a statute link opens", () => {
 
     expect("anchorId" in tab.payload).toBe(false);
     expect(isStatuteViewPayload(tab.payload)).toBe(true);
+  });
+});
+
+describe("a statute link on a day the publisher's dates leave unanswered", () => {
+  const WORK = {
+    country: "CZE",
+    eli: "/eli/cz/sb/2012/89",
+    id: DOCUMENT_ID,
+    slug: "89-2012-sb-obcansky-zakonik",
+    title: "89/2012 Sb., občanský zákoník",
+    versionValidFrom: "2024-01-01",
+  };
+  const GAP = [
+    {
+      basis: "reversed",
+      id: "00000000-0000-4000-8000-000000000004",
+      language: "cs",
+      versionValidFrom: "2022-01-01",
+      versionValidTo: "2021-12-31",
+    },
+  ] as const;
+
+  /** A corpus whose every dated read lands in the gap. */
+  const gapReads: StatuteRouteReads<typeof WORK> = {
+    byId: async () => await Promise.resolve(WORK),
+    bySlug: async (key) =>
+      await Promise.resolve(key.asOf === undefined ? WORK : { windowGap: GAP }),
+  };
+
+  const openingFor = async (
+    href: string,
+    reads: StatuteRouteReads<typeof WORK>,
+  ) => {
+    const link = classifyChatHttpLink(new URL(href, APP_ORIGIN), APP_ORIGINS);
+    if (link.type !== "statute") {
+      return panic(`Expected a statute link, got ${link.type}`);
+    }
+    return statuteLinkOpening(
+      await resolveStatuteRoute(
+        { ...link.link.params, asOf: link.link.asOf ?? undefined },
+        reads,
+      ),
+    );
+  };
+
+  const bareStatutePath = createStatutePath(
+    createStatuteRouteParams({
+      country: "cze",
+      documentId: DOCUMENT_ID,
+      eli: WORK.eli,
+      slug: WORK.slug,
+      version: null,
+    }),
+  );
+
+  test.each([
+    ["an `?asOf` link", `${bareStatutePath}?asOf=2022-02-01`, "2022-02-01"],
+    ["a `/v/` link", statutePath, "2021-01-01"],
+  ])(
+    "%s opens the act's page on the requested day, not its default wording",
+    async (_, href, day) => {
+      const opening = await openingFor(href, gapReads);
+
+      expect(opening).toEqual({ type: "day", asOf: day, work: WORK });
+      expect(createStatuteDayTarget(WORK, day)).toEqual({
+        params: { country: "cze", slug: WORK.slug },
+        search: { asOf: day },
+        to: "/law/$country/statutes/$slug",
+      });
+    },
+  );
+
+  test("a day some version answers opens that wording", async () => {
+    const answered: StatuteRouteReads<typeof WORK> = {
+      ...gapReads,
+      bySlug: async () => await Promise.resolve(WORK),
+    };
+
+    expect(await openingFor(statutePath, answered)).toEqual({
+      type: "wording",
+      statute: WORK,
+    });
   });
 });
