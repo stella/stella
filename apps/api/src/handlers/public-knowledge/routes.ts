@@ -25,7 +25,7 @@ export const createPublicKnowledgeRoute = (
         set.status = 404;
         return { error: "Not Found" } as const;
       }
-      set.headers["cache-control"] = "public, max-age=300";
+      set.headers["Cache-Control"] = "public, max-age=300";
     })
     .get("/template-packs", listPacks.handler)
     .get("/template-packs/:packId", readPack.handler, {
