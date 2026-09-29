@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 
 import { envBase } from "@/api/env-base";
+import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
-import { getSanctionsIngestionDb } from "@/api/lib/lists/sanctions/ingestion-db";
 import {
   recordUnexpectedSanctionsFailure,
   refreshSanctionsSource,
@@ -17,7 +17,7 @@ export const refreshSanctionsSourcesTask: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  const db = getSanctionsIngestionDb();
+  const db = getCaseLawIngestionDb();
   const sources = sanctionsSourceIds();
   const refreshNextSource = async (index: number): Promise<void> => {
     const source = sources.at(index);
