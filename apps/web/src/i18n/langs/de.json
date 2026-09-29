@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
       "version": "Version: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Zur Bibliothek hinzufügen",
+      "added": "{name} ist in Ihrer Bibliothek",
+      "browse": "Katalog",
+      "confirm": "Weiter",
+      "confirmAddTitle": "{name} zu {organization} hinzufügen?",
+      "confirmDescription": "Eine Kopie dieser Vorlage wird in der Bibliothek von {organization} gespeichert.",
+      "confirmDownloadTitle": "{name} für {organization} herunterladen?",
+      "confirmUseTitle": "{name} in {organization} verwenden?",
+      "installFailed": "Die Vorlage konnte nicht hinzugefügt werden",
+      "jurisdictions": "Rechtsordnungen",
+      "legalArea": "Rechtsgebiet",
+      "license": "Lizenz",
+      "noPreview": "Für diese Vorlage ist keine Vorschau verfügbar.",
+      "notFound": "Diese Vorlage ist nicht im Katalog.",
+      "unavailable": "Der Katalog ist derzeit nicht verfügbar."
+    },
     "mcp": {
       "addAndConnect": "Hinzufügen und verbinden",
       "addServer": "Server hinzufügen",

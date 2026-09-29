@@ -116,6 +116,12 @@ const useTemplateActions = (organizationId: string) => {
       api.templates({ templateId }).post(patch),
     remove: async (templateId: string) =>
       api.templates({ templateId }).delete(),
+    /** Copies a catalogue template into the library, or reports the copy
+     *  already there; the server binds the organization and checks the role. */
+    installFromCatalogue: async (packId: string, templateSlug: string) =>
+      api["template-packs"]({ packId }).install.post({
+        templateSlugs: [templateSlug],
+      }),
     /**
      * The audited presigned URL of the template's source DOCX, read from its
      * detail; `null` when the detail could not be read.

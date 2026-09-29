@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Įtraukti į biblioteką",
+      "added": "{name} yra jūsų bibliotekoje",
+      "browse": "Katalogas",
+      "confirm": "Tęsti",
+      "confirmAddTitle": "Įtraukti {name} į {organization}?",
+      "confirmDescription": "Šio šablono kopija bus įrašyta į {organization} biblioteką.",
+      "confirmDownloadTitle": "Atsisiųsti {name} organizacijai {organization}?",
+      "confirmUseTitle": "Naudoti {name} organizacijoje {organization}?",
+      "installFailed": "Šablono pridėti nepavyko",
+      "jurisdictions": "Jurisdikcijos",
+      "legalArea": "Teisės sritis",
+      "license": "Licencija",
+      "noPreview": "Šio šablono peržiūra neprieinama.",
+      "notFound": "Šio šablono kataloge nėra.",
+      "unavailable": "Katalogas šiuo metu nepasiekiamas."
+    },
     "mcp": {
       "addAndConnect": "Pridėti ir prijungti",
       "addServer": "Pridėti serverį",

@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/ruta/a/la/habilidad",
       "version": "Versión: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Añadir a la biblioteca",
+      "added": "{name} está en tu biblioteca",
+      "browse": "Catálogo",
+      "confirm": "Continuar",
+      "confirmAddTitle": "¿Añadir {name} a {organization}?",
+      "confirmDescription": "Se guardará una copia de esta plantilla en la biblioteca de {organization}.",
+      "confirmDownloadTitle": "¿Descargar {name} para {organization}?",
+      "confirmUseTitle": "¿Usar {name} en {organization}?",
+      "installFailed": "No se pudo añadir la plantilla",
+      "jurisdictions": "Jurisdicciones",
+      "legalArea": "Área jurídica",
+      "license": "Licencia",
+      "noPreview": "No hay vista previa disponible para esta plantilla.",
+      "notFound": "Esta plantilla no está en el catálogo.",
+      "unavailable": "El catálogo no está disponible en este momento."
+    },
     "mcp": {
       "addAndConnect": "Añadir y conectar",
       "addServer": "Añadir servidor",

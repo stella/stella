@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
       "version": "Wersja: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Dodaj do biblioteki",
+      "added": "{name} jest w Twojej bibliotece",
+      "browse": "Katalog",
+      "confirm": "Dalej",
+      "confirmAddTitle": "Dodać {name} do {organization}?",
+      "confirmDescription": "Kopia tego szablonu trafi do biblioteki {organization}.",
+      "confirmDownloadTitle": "Pobrać {name} dla {organization}?",
+      "confirmUseTitle": "Użyć {name} w {organization}?",
+      "installFailed": "Nie udało się dodać szablonu",
+      "jurisdictions": "Jurysdykcje",
+      "legalArea": "Dziedzina prawa",
+      "license": "Licencja",
+      "noPreview": "Podgląd tego szablonu jest niedostępny.",
+      "notFound": "Tego szablonu nie ma w katalogu.",
+      "unavailable": "Katalog jest teraz niedostępny."
+    },
     "mcp": {
       "addAndConnect": "Dodaj i połącz",
       "addServer": "Dodaj serwer",

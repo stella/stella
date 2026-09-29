@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/dovednosti",
       "version": "Verze: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Přidat do knihovny",
+      "added": "{name} je ve vaší knihovně",
+      "browse": "Katalog",
+      "confirm": "Pokračovat",
+      "confirmAddTitle": "Přidat {name} do {organization}?",
+      "confirmDescription": "Kopie této šablony se uloží do knihovny {organization}.",
+      "confirmDownloadTitle": "Stáhnout {name} pro {organization}?",
+      "confirmUseTitle": "Použít {name} v {organization}?",
+      "installFailed": "Šablonu se nepodařilo přidat",
+      "jurisdictions": "Jurisdikce",
+      "legalArea": "Právní oblast",
+      "license": "Licence",
+      "noPreview": "Náhled této šablony není k dispozici.",
+      "notFound": "Tato šablona v katalogu není.",
+      "unavailable": "Katalog teď není k dispozici."
+    },
     "mcp": {
       "addAndConnect": "Přidat a připojit",
       "addServer": "Přidat server",

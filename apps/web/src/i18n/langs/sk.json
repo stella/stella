@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Pridať do knižnice",
+      "added": "{name} je vo vašej knižnici",
+      "browse": "Katalóg",
+      "confirm": "Pokračovať",
+      "confirmAddTitle": "Pridať {name} do {organization}?",
+      "confirmDescription": "Kópia tejto šablóny sa uloží do knižnice {organization}.",
+      "confirmDownloadTitle": "Stiahnuť {name} pre {organization}?",
+      "confirmUseTitle": "Použiť {name} v {organization}?",
+      "installFailed": "Šablónu sa nepodarilo pridať",
+      "jurisdictions": "Jurisdikcie",
+      "legalArea": "Právna oblasť",
+      "license": "Licencia",
+      "noPreview": "Náhľad tejto šablóny nie je k dispozícii.",
+      "notFound": "Táto šablóna v katalógu nie je.",
+      "unavailable": "Katalóg teraz nie je k dispozícii."
+    },
     "mcp": {
       "addAndConnect": "Pridať a pripojiť",
       "addServer": "Pridať server",

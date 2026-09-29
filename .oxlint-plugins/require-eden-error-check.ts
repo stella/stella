@@ -95,6 +95,7 @@ const APPROVED_RESPONSE_ADAPTERS: ReadonlyMap<
 > = new Map([
   ["@/lib/errors/api", new Set(["unwrapEden"])],
   ["@/lib/public-law-api", new Set(["unwrapPublicLawEden"])],
+  ["@/lib/public-knowledge-api", new Set(["unwrapPublicKnowledge"])],
 ]);
 const EDEN_HTTP_METHODS = new Set([
   "delete",

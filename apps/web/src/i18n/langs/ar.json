@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "إضافة إلى المكتبة",
+      "added": "{name} موجود في مكتبتك",
+      "browse": "الفهرس",
+      "confirm": "متابعة",
+      "confirmAddTitle": "إضافة {name} إلى {organization}؟",
+      "confirmDescription": "ستُحفظ نسخة من هذا القالب في مكتبة {organization}.",
+      "confirmDownloadTitle": "تنزيل {name} لـ {organization}؟",
+      "confirmUseTitle": "استخدام {name} في {organization}؟",
+      "installFailed": "تعذّرت إضافة القالب",
+      "jurisdictions": "الولايات القضائية",
+      "legalArea": "المجال القانوني",
+      "license": "الترخيص",
+      "noPreview": "لا تتوفر معاينة لهذا القالب.",
+      "notFound": "هذا القالب غير موجود في الفهرس.",
+      "unavailable": "الفهرس غير متاح حاليًا."
+    },
     "mcp": {
       "addAndConnect": "إضافة واتصال",
       "addServer": "إضافة خادم",

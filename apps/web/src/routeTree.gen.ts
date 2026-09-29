@@ -58,6 +58,7 @@ import { Route as ProtectedVerifyCodeRouteImport } from './routes/_protected.ver
 import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protected.workspaces/index'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
+import { Route as KnowledgeTemplatesCatalogueRouteImport } from './routes/knowledge/templates_.catalogue'
 import { Route as KnowledgeToolsSkillIdRouteImport } from './routes/knowledge/tools_.$skillId'
 import { Route as LawCasesIndexRouteImport } from './routes/law/cases/index'
 import { Route as SitemapsLawStatutesChar123countryChar125DotxmlRouteImport } from './routes/sitemaps/law-statutes/{$country}[.]xml'
@@ -96,6 +97,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from
 import { Route as ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
 import { Route as ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport } from './routes/_protected.workspaces/$workspaceId/reports/$exportId'
+import { Route as KnowledgeTemplatesCataloguePackIdTemplateIdRouteImport } from './routes/knowledge/templates_.catalogue.$packId.$templateId'
 import { Route as LawCountryCasesCourtSlugRouteImport } from './routes/law/$country/cases/$court/$slug'
 import { Route as LawCountryStatutesSlugIndexRouteImport } from './routes/law/$country/statutes/$slug/index'
 import { Route as SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/{$month}[.]xml'
@@ -353,6 +355,12 @@ const AuthAcceptInvitationInvitationIdRoute =
     path: '/accept-invitation/$invitationId',
     getParentRoute: () => AuthRouteRoute,
   } as any)
+const KnowledgeTemplatesCatalogueRoute =
+  KnowledgeTemplatesCatalogueRouteImport.update({
+    id: '/templates_/catalogue',
+    path: '/templates/catalogue',
+    getParentRoute: () => KnowledgeRouteRoute,
+  } as any)
 const KnowledgeToolsSkillIdRoute = KnowledgeToolsSkillIdRouteImport.update({
   id: '/tools_/$skillId',
   path: '/tools/$skillId',
@@ -577,6 +585,12 @@ const ProtectedWorkspacesWorkspaceIdReportsExportIdRoute =
     path: '/reports/$exportId',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const KnowledgeTemplatesCataloguePackIdTemplateIdRoute =
+  KnowledgeTemplatesCataloguePackIdTemplateIdRouteImport.update({
+    id: '/$packId/$templateId',
+    path: '/$packId/$templateId',
+    getParentRoute: () => KnowledgeTemplatesCatalogueRoute,
+  } as any)
 const LawCountryCasesCourtSlugRoute =
   LawCountryCasesCourtSlugRouteImport.update({
     id: '/$country/cases/$court/$slug',
@@ -658,6 +672,7 @@ export interface FileRoutesByFullPath {
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools/$skillId': typeof KnowledgeToolsSkillIdRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
@@ -700,6 +715,7 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/correspondence/$correspondenceId': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
+  '/knowledge/templates/catalogue/$packId/$templateId': typeof KnowledgeTemplatesCataloguePackIdTemplateIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
@@ -744,6 +760,7 @@ export interface FileRoutesByTo {
   '/dev/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools/$skillId': typeof KnowledgeToolsSkillIdRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
@@ -785,6 +802,7 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId/correspondence/$correspondenceId': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
+  '/knowledge/templates/catalogue/$packId/$templateId': typeof KnowledgeTemplatesCataloguePackIdTemplateIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
@@ -839,6 +857,7 @@ export interface FileRoutesById {
   '/_protected/dev_/autocomplete': typeof ProtectedDevAutocompleteRoute
   '/_protected/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/knowledge/templates_/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
   '/knowledge/tools_/$skillId': typeof KnowledgeToolsSkillIdRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug_/download': typeof ToolsSlugDownloadRoute
@@ -881,6 +900,7 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/correspondence/$correspondenceId': typeof ProtectedWorkspacesWorkspaceIdCorrespondenceCorrespondenceIdRoute
   '/_protected/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
   '/_protected/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
+  '/knowledge/templates_/catalogue/$packId/$templateId': typeof KnowledgeTemplatesCataloguePackIdTemplateIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/_protected/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
@@ -935,6 +955,7 @@ export interface FileRouteTypes {
     | '/dev/autocomplete'
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
+    | '/knowledge/templates/catalogue'
     | '/knowledge/tools/$skillId'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug/download'
@@ -977,6 +998,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/correspondence/$correspondenceId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/reports/$exportId'
+    | '/knowledge/templates/catalogue/$packId/$templateId'
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/workspaces/$workspaceId/$viewId/'
@@ -1021,6 +1043,7 @@ export interface FileRouteTypes {
     | '/dev/autocomplete'
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
+    | '/knowledge/templates/catalogue'
     | '/knowledge/tools/$skillId'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug/download'
@@ -1062,6 +1085,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/correspondence/$correspondenceId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
     | '/workspaces/$workspaceId/reports/$exportId'
+    | '/knowledge/templates/catalogue/$packId/$templateId'
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/workspaces/$workspaceId/$viewId'
@@ -1115,6 +1139,7 @@ export interface FileRouteTypes {
     | '/_protected/dev_/autocomplete'
     | '/_protected/verify/$code'
     | '/auth/accept-invitation/$invitationId'
+    | '/knowledge/templates_/catalogue'
     | '/knowledge/tools_/$skillId'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug_/download'
@@ -1157,6 +1182,7 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/correspondence/$correspondenceId'
     | '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
     | '/_protected/workspaces/$workspaceId/reports/$exportId'
+    | '/knowledge/templates_/catalogue/$packId/$templateId'
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/_protected/workspaces/$workspaceId/$viewId/'
@@ -1533,6 +1559,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAcceptInvitationInvitationIdRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/knowledge/templates_/catalogue': {
+      id: '/knowledge/templates_/catalogue'
+      path: '/templates/catalogue'
+      fullPath: '/knowledge/templates/catalogue'
+      preLoaderRoute: typeof KnowledgeTemplatesCatalogueRouteImport
+      parentRoute: typeof KnowledgeRouteRoute
+    }
     '/knowledge/tools_/$skillId': {
       id: '/knowledge/tools_/$skillId'
       path: '/tools/$skillId'
@@ -1799,6 +1832,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
+    '/knowledge/templates_/catalogue/$packId/$templateId': {
+      id: '/knowledge/templates_/catalogue/$packId/$templateId'
+      path: '/$packId/$templateId'
+      fullPath: '/knowledge/templates/catalogue/$packId/$templateId'
+      preLoaderRoute: typeof KnowledgeTemplatesCataloguePackIdTemplateIdRouteImport
+      parentRoute: typeof KnowledgeTemplatesCatalogueRoute
+    }
     '/law/$country/cases/$court/$slug': {
       id: '/law/$country/cases/$court/$slug'
       path: '/$country/cases/$court/$slug'
@@ -1866,6 +1906,21 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
   AuthRouteRouteChildren,
 )
 
+interface KnowledgeTemplatesCatalogueRouteChildren {
+  KnowledgeTemplatesCataloguePackIdTemplateIdRoute: typeof KnowledgeTemplatesCataloguePackIdTemplateIdRoute
+}
+
+const KnowledgeTemplatesCatalogueRouteChildren: KnowledgeTemplatesCatalogueRouteChildren =
+  {
+    KnowledgeTemplatesCataloguePackIdTemplateIdRoute:
+      KnowledgeTemplatesCataloguePackIdTemplateIdRoute,
+  }
+
+const KnowledgeTemplatesCatalogueRouteWithChildren =
+  KnowledgeTemplatesCatalogueRoute._addFileChildren(
+    KnowledgeTemplatesCatalogueRouteChildren,
+  )
+
 interface KnowledgeRouteRouteChildren {
   KnowledgeClausesRoute: typeof KnowledgeClausesRoute
   KnowledgePlaybooksRoute: typeof KnowledgePlaybooksRoute
@@ -1874,6 +1929,7 @@ interface KnowledgeRouteRouteChildren {
   KnowledgeToolsRoute: typeof KnowledgeToolsRoute
   KnowledgeWorkflowsRoute: typeof KnowledgeWorkflowsRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
+  KnowledgeTemplatesCatalogueRoute: typeof KnowledgeTemplatesCatalogueRouteWithChildren
   KnowledgeToolsSkillIdRoute: typeof KnowledgeToolsSkillIdRoute
   KnowledgeCompanyFormatsRegistryCompanyIdRoute: typeof KnowledgeCompanyFormatsRegistryCompanyIdRoute
 }
@@ -1886,6 +1942,8 @@ const KnowledgeRouteRouteChildren: KnowledgeRouteRouteChildren = {
   KnowledgeToolsRoute: KnowledgeToolsRoute,
   KnowledgeWorkflowsRoute: KnowledgeWorkflowsRoute,
   KnowledgeIndexRoute: KnowledgeIndexRoute,
+  KnowledgeTemplatesCatalogueRoute:
+    KnowledgeTemplatesCatalogueRouteWithChildren,
   KnowledgeToolsSkillIdRoute: KnowledgeToolsSkillIdRoute,
   KnowledgeCompanyFormatsRegistryCompanyIdRoute:
     KnowledgeCompanyFormatsRegistryCompanyIdRoute,

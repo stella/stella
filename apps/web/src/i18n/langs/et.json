@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Lisa teeki",
+      "added": "{name} on sinu teegis",
+      "browse": "Kataloog",
+      "confirm": "Jätka",
+      "confirmAddTitle": "Kas lisada {name} organisatsioonile {organization}?",
+      "confirmDescription": "Selle malli koopia salvestatakse organisatsiooni {organization} teeki.",
+      "confirmDownloadTitle": "Kas laadida {name} alla organisatsioonile {organization}?",
+      "confirmUseTitle": "Kas kasutada {name} organisatsioonis {organization}?",
+      "installFailed": "Malli lisamine ebaõnnestus",
+      "jurisdictions": "Jurisdiktsioonid",
+      "legalArea": "Õigusvaldkond",
+      "license": "Litsents",
+      "noPreview": "Selle malli eelvaade pole saadaval.",
+      "notFound": "Seda malli kataloogis ei ole.",
+      "unavailable": "Kataloog pole praegu saadaval."
+    },
     "mcp": {
       "addAndConnect": "Lisa ja ühenda",
       "addServer": "Lisa server",

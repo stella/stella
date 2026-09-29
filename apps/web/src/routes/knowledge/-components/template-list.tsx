@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -102,11 +103,14 @@ type TemplateListProps = {
   onLoadMore: () => void;
   onSelect: (template: KnowledgeTemplate) => void;
   onDeleted: () => void;
+  /** A tab after the list title leading to the published catalogue. */
+  catalogueTab?: ReactNode;
 };
 
 /** The organization's template library: the shared list view with the member
  *  category tools, upload, and row actions in its slots. */
 export const TemplateList = ({
+  catalogueTab,
   source,
   onCategorySelect,
   onCategoriesChanged,
@@ -184,6 +188,7 @@ export const TemplateList = ({
         loadMore: onLoadMore,
         dropFile: canCreateTemplate ? dropFile : undefined,
       }}
+      catalogueTab={catalogueTab}
       emptyState={
         <TemplateUpload
           onCreateBlank={onCreateBlank}

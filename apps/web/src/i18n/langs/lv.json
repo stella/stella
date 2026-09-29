@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Pievienot bibliotēkai",
+      "added": "{name} ir jūsu bibliotēkā",
+      "browse": "Katalogs",
+      "confirm": "Turpināt",
+      "confirmAddTitle": "Pievienot {name} organizācijai {organization}?",
+      "confirmDescription": "Šīs veidnes kopija tiks saglabāta organizācijas {organization} bibliotēkā.",
+      "confirmDownloadTitle": "Lejupielādēt {name} organizācijai {organization}?",
+      "confirmUseTitle": "Izmantot {name} organizācijā {organization}?",
+      "installFailed": "Veidni neizdevās pievienot",
+      "jurisdictions": "Jurisdikcijas",
+      "legalArea": "Tiesību joma",
+      "license": "Licence",
+      "noPreview": "Šai veidnei priekšskatījums nav pieejams.",
+      "notFound": "Šīs veidnes katalogā nav.",
+      "unavailable": "Katalogs pašlaik nav pieejams."
+    },
     "mcp": {
       "addAndConnect": "Pievienot un savienot",
       "addServer": "Pievienot serveri",

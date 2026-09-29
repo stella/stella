@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Adicionar à biblioteca",
+      "added": "{name} está na sua biblioteca",
+      "browse": "Catálogo",
+      "confirm": "Continuar",
+      "confirmAddTitle": "Adicionar {name} a {organization}?",
+      "confirmDescription": "Uma cópia deste modelo será salva na biblioteca de {organization}.",
+      "confirmDownloadTitle": "Baixar {name} para {organization}?",
+      "confirmUseTitle": "Usar {name} em {organization}?",
+      "installFailed": "Não foi possível adicionar o modelo",
+      "jurisdictions": "Jurisdições",
+      "legalArea": "Área do direito",
+      "license": "Licença",
+      "noPreview": "Nenhuma pré-visualização disponível para este modelo.",
+      "notFound": "Este modelo não está no catálogo.",
+      "unavailable": "O catálogo não está disponível no momento."
+    },
     "mcp": {
       "addAndConnect": "Adicionar e conectar",
       "addServer": "Adicionar servidor",

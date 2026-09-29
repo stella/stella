@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/chemin/vers/competence",
       "version": "Version : {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Ajouter à la bibliothèque",
+      "added": "{name} est dans votre bibliothèque",
+      "browse": "Catalogue",
+      "confirm": "Continuer",
+      "confirmAddTitle": "Ajouter {name} à {organization} ?",
+      "confirmDescription": "Une copie de ce modèle sera enregistrée dans la bibliothèque de {organization}.",
+      "confirmDownloadTitle": "Télécharger {name} pour {organization} ?",
+      "confirmUseTitle": "Utiliser {name} dans {organization} ?",
+      "installFailed": "Le modèle n'a pas pu être ajouté",
+      "jurisdictions": "Juridictions",
+      "legalArea": "Domaine juridique",
+      "license": "Licence",
+      "noPreview": "Aucun aperçu n'est disponible pour ce modèle.",
+      "notFound": "Ce modèle ne figure pas dans le catalogue.",
+      "unavailable": "Le catalogue n'est pas disponible pour le moment."
+    },
     "mcp": {
       "addAndConnect": "Ajouter et connecter",
       "addServer": "Ajouter un serveur",

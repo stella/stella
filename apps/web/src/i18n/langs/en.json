@@ -3224,6 +3224,23 @@
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "Version: {version}"
     },
+    "catalogue": {
+      "addToLibrary": "Add to library",
+      "added": "{name} is in your library",
+      "browse": "Catalogue",
+      "confirm": "Continue",
+      "confirmAddTitle": "Add {name} to {organization}?",
+      "confirmDescription": "A copy of this template goes into the {organization} library.",
+      "confirmDownloadTitle": "Download {name} for {organization}?",
+      "confirmUseTitle": "Use {name} in {organization}?",
+      "installFailed": "The template could not be added",
+      "jurisdictions": "Jurisdictions",
+      "legalArea": "Legal area",
+      "license": "License",
+      "noPreview": "No preview is available for this template.",
+      "notFound": "This template is not in the catalogue.",
+      "unavailable": "The catalogue is not available right now."
+    },
     "mcp": {
       "addAndConnect": "Add and connect",
       "addServer": "Add server",
