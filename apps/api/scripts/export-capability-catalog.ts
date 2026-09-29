@@ -211,6 +211,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   legislation: "stella:read",
   lists: "stella:matters_write",
   "number-series": "stella:billing_write",
+  "vat-rates": "stella:billing_write",
   "organization-settings": "stella:admin_write",
   playbooks: "stella:knowledge_write",
   // Now carries property create/update/delete capabilities, so it reuses the
