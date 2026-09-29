@@ -66,6 +66,23 @@ export type ToolAnnotation = {
    * `confirmation_required` envelope at a TTY, prompts and retries once.
    */
   confirmPassthrough?: true;
+  /** See the API-side annotation: summary lines plus tables for a record that holds tables. */
+  composite?: CompositeView;
+};
+
+/** One table of a composite result; see the API-side `McpCliCompositeSection`. */
+export type CompositeSection = {
+  title: string;
+  /** Dot path to an array of records; a `[]` segment spreads an array. */
+  rows: string;
+  /** Dot paths read from each row; `^.` reads the record it was gathered from. */
+  columns: readonly string[];
+};
+
+/** A record rendered as summary lines and tables; see the API-side `McpCliCompositeView`. */
+export type CompositeView = {
+  summary: readonly string[];
+  sections: readonly [CompositeSection, ...CompositeSection[]];
 };
 
 /** One generated CLI flag, derived from an `inputSchema` prop (spec S3). */
@@ -125,6 +142,8 @@ export type LeafCommandSpec = {
    */
   textPath?: string;
   itemsKey?: string;
+  /** See `ToolAnnotation.composite`. */
+  composite?: CompositeView;
   destructive: boolean;
   /** See `ToolAnnotation.confirmPassthrough`: --yes / prompt-retry confirm flow. */
   confirmPassthrough?: true;

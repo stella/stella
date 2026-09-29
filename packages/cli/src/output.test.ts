@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { TOOL_ANNOTATIONS } from "./annotations.js";
 import {
   buildRenderPlan,
   displayWidth,
@@ -380,5 +381,152 @@ describe("displayWidth and Unicode-aware truncation", () => {
       expect(displayWidth(line)).toBeLessThanOrEqual(30);
       expect(line).not.toContain("\uFFFD");
     }
+  });
+});
+
+describe("composite results", () => {
+  const view = TOOL_ANNOTATIONS["check_counterparty"]?.composite;
+  if (view === undefined) {
+    throw new Error("check_counterparty declares no composite view");
+  }
+  const list = (overrides: Record<string, unknown>) => ({
+    issuerName: "Issuer",
+    classification: "informational",
+    reason: null,
+    checkedAt: "2026-09-29T08:00:00.000Z",
+    editionId: "ed-1",
+    publishedAt: "2026-09-28",
+    verifiedAt: "2026-09-29T07:00:00.000Z",
+    pendingUpdate: null,
+    totalMatches: 0,
+    truncated: false,
+    possibleMatches: [],
+    ...overrides,
+  });
+  const sanctions = {
+    kind: "sanctions",
+    status: "possible-match",
+    subject: {
+      type: "organization",
+      name: "Acme Trading s.r.o.",
+      identifiers: ["26863154"],
+      resolvedFrom: {
+        type: "company-id",
+        value: "26863154",
+        country: "CZ",
+        registry: "ares",
+      },
+    },
+    checkedAt: "2026-09-29T08:00:00.000Z",
+    cutoff: 0.8,
+    lists: [
+      list({
+        source: "eu",
+        issuer: "EU",
+        classification: "binding",
+        status: "possible-match",
+        totalMatches: 1,
+        possibleMatches: [
+          {
+            sourceEntryId: "EU.123.45",
+            editionId: "ed-1",
+            score: 0.91,
+            sourceUrl: "https://lists.example/eu/123",
+            name: "ACME TRADING",
+            referenceNumber: null,
+            entityType: "organisation",
+            programme: null,
+            listedOn: "2022-03-15",
+            evidence: {
+              nameScore: 0.91,
+              matchedName: "ACME TRADING",
+              birthDate: "not-compared",
+              nationality: "not-compared",
+              entityType: "match",
+              identifier: "not-compared",
+              conflicts: ["entity-type"],
+            },
+          },
+        ],
+      }),
+      list({
+        source: "ch",
+        issuer: "CH",
+        status: "unavailable",
+        reason: "stale",
+        pendingUpdate: {
+          code: "contracted",
+          heldAt: "2026-09-28T06:00:00.000Z",
+          previousCount: 4000,
+          nextCount: 12,
+        },
+      }),
+    ],
+  };
+  const render = (payload: unknown, format: "table" | "json" | "jsonl") => {
+    const { out, writers } = capture();
+    renderResult({
+      plan: buildRenderPlan({
+        payload,
+        itemsKey: TOOL_ANNOTATIONS["check_counterparty"]?.itemsKey,
+        textPath: undefined,
+        singleReadActive: false,
+        columns: undefined,
+        composite: view,
+      }),
+      format,
+      writers,
+      allActive: false,
+    });
+    return out.join("");
+  };
+
+  test("a sanctions check shows its status, the subject screened, every list and every match", () => {
+    const [summary = "", lists = "", matches = ""] = render(
+      sanctions,
+      "table",
+    ).split("\n\n");
+    expect(summary).toMatch(/^status\s+possible-match$/mu);
+    expect(summary).toMatch(/^subject\.name\s+Acme Trading s\.r\.o\.$/mu);
+    expect(summary).toMatch(/^subject\.resolvedFrom\.registry\s+ares$/mu);
+    expect(lists.split("\n").at(0)).toBe("Lists");
+    expect(lists).toMatch(/^source\s+issuer\s+classification\s+status/mu);
+    expect(lists).toMatch(/^eu\s+EU\s+binding\s+possible-match/mu);
+    expect(lists).toMatch(/^ch\s+CH\s+informational\s+unavailable\s+stale/mu);
+    expect(lists).toMatch(/contracted$/mu);
+    expect(matches.split("\n").at(0)).toBe("Possible matches");
+    expect(matches).toMatch(
+      /^eu\s+ACME TRADING\s+0\.91\s+EU\.123\.45\s+entity-type/mu,
+    );
+  });
+
+  test("a clean sanctions check says there are no matches", () => {
+    const clear = {
+      ...sanctions,
+      status: "clear",
+      lists: [list({ source: "eu", issuer: "EU", status: "clear" })],
+    };
+    expect(render(clear, "table")).toContain("Possible matches: none");
+  });
+
+  test("JSON and JSONL print the whole result, not only the lists", () => {
+    expect(JSON.parse(render(sanctions, "json"))).toEqual(sanctions);
+    const lines = render(sanctions, "jsonl").trimEnd().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] ?? "")).toEqual(sanctions);
+  });
+
+  test("a register check of the same tool still renders as one record", () => {
+    const register = {
+      status: "clear",
+      kind: "cz-insolvency",
+      source: { name: "ISIR" },
+      checkedAt: "2026-09-29T08:00:00.000Z",
+    };
+    const table = render(register, "table");
+    expect(table).toMatch(/^status\s+clear$/mu);
+    expect(table).toMatch(/^source\.name\s+ISIR$/mu);
+    expect(table).not.toContain("Lists");
+    expect(JSON.parse(render(register, "json"))).toEqual(register);
   });
 });

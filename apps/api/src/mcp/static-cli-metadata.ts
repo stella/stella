@@ -47,22 +47,61 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     check_counterparty: {
       command: ["contact", "check-counterparty"],
       scope: "read",
-      // The sanctions check answers per list: a table shows one row per list
-      // with its edition and state. A register check has no `lists` and
-      // renders as one record.
-      itemsKey: "lists",
       paginationless: true,
-      columns: [
-        "source",
-        "status",
-        "classification",
-        "reason",
-        "editionId",
-        "publishedAt",
-        "verifiedAt",
-        "totalMatches",
-        "truncated",
-      ],
+      // The sanctions check answers per list: a table shows the overall
+      // status and the subject as screened (with the name a register gave),
+      // one row per list with its edition, and every possible match with its
+      // list. A register check has no `lists` and renders as one record.
+      composite: {
+        summary: [
+          "kind",
+          "status",
+          "subject.type",
+          "subject.name",
+          "subject.value",
+          "subject.country",
+          "subject.identifiers",
+          "subject.resolvedFrom.value",
+          "subject.resolvedFrom.registry",
+          "subject.dateOfBirth",
+          "subject.nationalityCodes",
+          "checkedAt",
+          "cutoff",
+        ],
+        sections: [
+          {
+            title: "Lists",
+            rows: "lists",
+            columns: [
+              "source",
+              "issuer",
+              "classification",
+              "status",
+              "reason",
+              "totalMatches",
+              "truncated",
+              "editionId",
+              "publishedAt",
+              "verifiedAt",
+              "pendingUpdate.code",
+            ],
+          },
+          {
+            title: "Possible matches",
+            rows: "lists[].possibleMatches",
+            columns: [
+              "^.source",
+              "name",
+              "score",
+              "sourceEntryId",
+              "evidence.conflicts",
+              "entityType",
+              "listedOn",
+              "sourceUrl",
+            ],
+          },
+        ],
+      },
     },
 
     list_tasks: {

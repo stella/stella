@@ -5,6 +5,8 @@
 // a TTY), honoring `--output`/`--json`/`--table`. `nextCursor` hints and `--all`
 // truncation notices go to stderr so a piped JSON stdout stays clean.
 
+import type { CompositeView } from "./route-types.js";
+
 export type OutputFormat = "json" | "table" | "jsonl";
 
 /** Reserved output flags read off a parsed command's flags. */
@@ -40,7 +42,7 @@ export const selectFormat = ({
 export const jsonlLine = (value: unknown): string =>
   `${JSON.stringify(value)}\n`;
 
-/** The four mutually exclusive render shapes (spec S4). */
+/** The mutually exclusive render shapes (spec S4). */
 export type RenderPlan =
   | {
       kind: "page";
@@ -51,6 +53,8 @@ export type RenderPlan =
       columns: readonly string[] | undefined;
     }
   | { kind: "single"; payload: unknown }
+  /** One record holding tables; see `ToolAnnotation.composite`. */
+  | { kind: "composite"; payload: unknown; view: CompositeView }
   | { kind: "windowed-text"; text: string; nextCursor: string | null }
   | { kind: "raw-text"; text: string };
 
@@ -104,6 +108,7 @@ export const buildRenderPlan = ({
   textPath,
   singleReadActive,
   columns,
+  composite,
 }: {
   payload: unknown;
   itemsKey: string | undefined;
@@ -111,6 +116,7 @@ export const buildRenderPlan = ({
   textPath: string | undefined;
   singleReadActive: boolean;
   columns: readonly string[] | undefined;
+  composite?: CompositeView | undefined;
 }): RenderPlan => {
   if (textPath !== undefined) {
     return {
@@ -118,6 +124,13 @@ export const buildRenderPlan = ({
       text: asString(valueAtPath(payload, textPath)) ?? "",
       nextCursor: asString(fieldOf(payload, "nextCursor")),
     };
+  }
+  // Another outcome of the same tool (one without the tables) is one record.
+  if (
+    composite !== undefined &&
+    arrayAt(payload, rowsRootKey(composite.sections[0].rows)) !== null
+  ) {
+    return { kind: "composite", payload, view: composite };
   }
   if (!singleReadActive && itemsKey !== undefined) {
     const items = arrayAt(payload, itemsKey);
@@ -134,6 +147,49 @@ export const buildRenderPlan = ({
   }
   return { kind: "single", payload };
 };
+
+/** The top-level key a composite section's rows path starts from. */
+const rowsRootKey = (rows: string): string =>
+  (rows.split(".").at(0) ?? rows).replace(/\[\]$/u, "");
+
+type GatheredRow = { row: unknown; parent: unknown };
+
+/**
+ * The records at a composite section's `rows` path, each with the record it
+ * was read from. A `[]` segment spreads an array, so `lists[].possibleMatches`
+ * yields every list's matches, each beside its list.
+ */
+const gatherRows = (payload: unknown, rows: string): GatheredRow[] => {
+  const segments = rows.split(".");
+  const last = segments.pop() ?? rows;
+  let holders: readonly unknown[] = [payload];
+  for (const segment of segments) {
+    holders = segment.endsWith("[]")
+      ? holders.flatMap((holder) => {
+          // A holder without the array (a list that failed) adds no rows.
+          const spread = arrayAt(holder, segment.slice(0, -2));
+          return spread === null ? [] : spread;
+        })
+      : holders.map((holder) => fieldOf(holder, segment));
+  }
+  return holders.flatMap((holder) => {
+    const found = arrayAt(holder, last);
+    return found === null ? [] : found.map((row) => ({ row, parent: holder }));
+  });
+};
+
+/** A composite column read from the record a row was gathered from. */
+const PARENT_PREFIX = "^.";
+
+const columnHeader = (column: string): string =>
+  column.startsWith(PARENT_PREFIX)
+    ? column.slice(PARENT_PREFIX.length)
+    : column;
+
+const columnValue = ({ row, parent }: GatheredRow, column: string): unknown =>
+  column.startsWith(PARENT_PREFIX)
+    ? valueAtPath(parent, column.slice(PARENT_PREFIX.length))
+    : valueAtPath(row, column);
 
 const isScalar = (value: unknown): value is string | number | boolean =>
   typeof value === "string" ||
@@ -354,6 +410,42 @@ const renderKeyValue = (
     .join("\n");
 };
 
+/**
+ * Summary lines, then one titled table per section. A section with no rows
+ * says so, so an empty table is never mistaken for a missing one.
+ */
+const renderComposite = (
+  payload: unknown,
+  view: CompositeView,
+  width: number | undefined,
+): string => {
+  const summary: Record<string, unknown> = {};
+  for (const path of view.summary) {
+    const value = valueAtPath(payload, path);
+    if (value !== undefined && value !== null) {
+      summary[path] = value;
+    }
+  }
+  const blocks = [renderKeyValue(summary, width)];
+  for (const section of view.sections) {
+    const headers = section.columns.map((column) => columnHeader(column));
+    const rows = gatherRows(payload, section.rows).map((gathered) =>
+      Object.fromEntries(
+        section.columns.map((column) => [
+          columnHeader(column),
+          columnValue(gathered, column),
+        ]),
+      ),
+    );
+    blocks.push(
+      rows.length === 0
+        ? `${section.title}: none`
+        : `${section.title}\n${renderTable({ items: rows, columns: headers, width })}`,
+    );
+  }
+  return blocks.join("\n\n");
+};
+
 export type Writers = {
   stdout: (text: string) => void;
   stderr: (text: string) => void;
@@ -393,6 +485,17 @@ export const renderResult = ({
     }
     if (!allActive && plan.nextCursor !== null) {
       writers.stderr(`more: --cursor ${plan.nextCursor}\n`);
+    }
+    return;
+  }
+
+  if (plan.kind === "composite") {
+    if (format === "json") {
+      writers.stdout(`${JSON.stringify(plan.payload, null, 2)}\n`);
+    } else if (format === "jsonl") {
+      writers.stdout(jsonlLine(plan.payload));
+    } else {
+      writers.stdout(`${renderComposite(plan.payload, plan.view, width)}\n`);
     }
     return;
   }

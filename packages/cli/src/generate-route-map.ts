@@ -631,6 +631,7 @@ const leafSpecsForTool = ({
   const windowedText = textPath !== undefined;
   const followable = annotation?.perEntryCursor !== true;
   const confirmPassthrough = annotation?.confirmPassthrough;
+  const composite = annotation?.composite;
   const localFileBase64Prop = resolveLocalFileProp({ annotation, properties });
   const mode = resolvePaginationMode(properties, annotation);
   const paginated = mode !== "none";
@@ -696,6 +697,7 @@ const leafSpecsForTool = ({
         windowedText,
         ...(textPath === undefined ? {} : { textPath }),
         ...(itemsKey === undefined ? {} : { itemsKey }),
+        ...(composite === undefined ? {} : { composite }),
         destructive: sub?.destructive ?? destructiveHint,
         ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
         ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
@@ -727,6 +729,7 @@ const leafSpecsForTool = ({
       windowedText,
       ...(textPath === undefined ? {} : { textPath }),
       ...(itemsKey === undefined ? {} : { itemsKey }),
+      ...(composite === undefined ? {} : { composite }),
       destructive: confirmPassthrough === true ? false : destructiveHint,
       ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
       ...(localFileBase64Prop === undefined ? {} : { localFileBase64Prop }),
