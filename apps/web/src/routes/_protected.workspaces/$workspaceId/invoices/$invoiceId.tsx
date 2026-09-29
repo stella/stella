@@ -54,7 +54,6 @@ import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
   schemaFormOptions,
-  requiredTrimmedStringSchema,
   toFormErrors,
   trimmedStringSchema,
 } from "@/lib/schema";
@@ -328,7 +327,9 @@ const InvoiceDetail = ({
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold">{invoice.invoiceNumber}</h2>
+            <h2 className="text-lg font-semibold">
+              {invoice.invoiceNumber ?? t("billing.invoices.statuses.draft")}
+            </h2>
             <InvoiceStatusBadge status={invoiceStatus} />
           </div>
           {invoice.reference && (
@@ -732,10 +733,7 @@ const ConfirmAction = ({
 };
 
 const editInvoiceSchema = v.strictObject({
-  invoiceNumber: v.pipe(
-    requiredTrimmedStringSchema("Required"),
-    v.maxLength(64),
-  ),
+  invoiceNumber: v.pipe(trimmedStringSchema(), v.maxLength(64)),
   invoiceDate: v.pipe(v.string(), v.isoDate()),
   dueDate: v.union([v.literal(""), v.pipe(v.string(), v.isoDate())]),
   reference: trimmedStringSchema(),
@@ -785,7 +783,7 @@ const EditInvoiceForm = ({
             invoiceId: toSafeId<"invoice">(invoiceId),
           })
           .patch({
-            invoiceNumber: value.invoiceNumber,
+            invoiceNumber: value.invoiceNumber || null,
             invoiceDate: value.invoiceDate,
             dueDate: value.dueDate || null,
             reference: value.reference || null,

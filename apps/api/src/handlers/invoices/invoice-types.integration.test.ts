@@ -20,8 +20,10 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createInvoice from "@/api/handlers/invoices/create";
 import deleteInvoice from "@/api/handlers/invoices/delete";
 import addEntries from "@/api/handlers/invoices/entries/add";
+import getInvoice from "@/api/handlers/invoices/get";
 import createLine from "@/api/handlers/invoices/lines/create";
 import updateLine from "@/api/handlers/invoices/lines/update";
+import listInvoices from "@/api/handlers/invoices/list";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -67,6 +69,7 @@ const contextFor = <TContext>(
     body: unknown;
     params: Record<string, unknown>;
     auditEvents?: AuditEvent[];
+    query?: Record<string, unknown>;
   },
 ): TContext => {
   const recordAuditEvent = async (
@@ -80,6 +83,7 @@ const contextFor = <TContext>(
     getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
     getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
     body: options.body,
+    query: options.query ?? {},
     params: options.params,
     createAuditRecorder: () => recordAuditEvent,
     memberRole: { role: "owner" },
@@ -197,6 +201,57 @@ const seedEntry = async () => {
 };
 
 describe("invoice document types", () => {
+  test("unnumbered drafts keep null through detail, list, and metadata edits", async () => {
+    const invoiceId = createdId(
+      await createInvoice.handler(
+        contextFor(createInvoice.handler, {
+          params: { workspaceId: ids.wsA1 },
+          body: {
+            invoiceDate: "2026-09-29",
+            currency: "USD",
+            timeEntryIds: [],
+          },
+        }),
+      ),
+    );
+    const params = { workspaceId: ids.wsA1, invoiceId };
+    expect(
+      await getInvoice.handler(
+        contextFor(getInvoice.handler, { params, body: {} }),
+      ),
+    ).toMatchObject({ id: invoiceId, invoiceNumber: null });
+    const listed = await listInvoices.handler(
+      contextFor(listInvoices.handler, {
+        params: { workspaceId: ids.wsA1 },
+        body: {},
+        query: { limit: 100 },
+      }),
+    );
+    if (!("items" in listed)) {
+      return panic("Expected invoice list");
+    }
+    expect(listed.items).toContainEqual(
+      expect.objectContaining({ id: invoiceId, invoiceNumber: null }),
+    );
+    expect(
+      await updateInvoice.handler(
+        contextFor(updateInvoice.handler, {
+          params,
+          body: { invoiceNumber: null, notes: "Draft notes" },
+        }),
+      ),
+    ).toEqual({ id: invoiceId });
+    expect(
+      await getInvoice.handler(
+        contextFor(getInvoice.handler, { params, body: {} }),
+      ),
+    ).toMatchObject({
+      id: invoiceId,
+      invoiceNumber: null,
+      notes: "Draft notes",
+    });
+  });
+
   test("credit notes reject wrong-workspace, draft, void and credit-note originals", async () => {
     const valid = await seedOriginal();
     const originals = await Promise.all([

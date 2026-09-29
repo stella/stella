@@ -4,8 +4,11 @@ SET statement_timeout = '10s';--> statement-breakpoint
 ALTER TABLE "invoices"
   ADD COLUMN "document_type" text DEFAULT 'invoice' NOT NULL,
   ADD COLUMN "original_invoice_id" uuid,
-  ADD COLUMN "finalized_at" timestamptz,
-  ALTER COLUMN "invoice_number" DROP NOT NULL;--> statement-breakpoint
+  ADD COLUMN "finalized_at" timestamptz;--> statement-breakpoint
+
+-- Pre-public; migration writes no NULLs; only new-code drafts omit numbers, and web/CLI/MCP ship in the same release.
+-- squawk-ignore ban-drop-not-null
+ALTER TABLE "invoices" ALTER COLUMN "invoice_number" DROP NOT NULL;--> statement-breakpoint
 
 -- Build the self-reference key and lookup index without holding the DDL
 -- transaction's locks through the scans.
