@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -456,6 +458,8 @@ describe("processDecision — canonical storage mode", () => {
     const decisionId = createSafeId<"caseLawDecision">();
     existingDecision = {
       id: decisionId,
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: "ECLI:CZ:TEST:2026:1",
       metadata: { recoveredDetail: true },
       sourceHash: "recovered-detail-hash",
@@ -528,6 +532,8 @@ describe("processDecision — canonical storage mode", () => {
     // A transfer that failed must therefore leave those pointers alone.
     existingDecision = {
       id: createSafeId<"caseLawDecision">(),
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       metadata: {},
       sourceHash: "older-hash",
       contentHash: null,
@@ -560,6 +566,8 @@ describe("processDecision — canonical storage mode", () => {
   test("retries when an expired upload intent was reclaimed", async () => {
     existingDecision = {
       id: createSafeId<"caseLawDecision">(),
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       metadata: {},
       sourceHash: "older-hash",
       sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
@@ -638,6 +646,8 @@ describe("processDecision — canonical storage mode", () => {
     const recorded = recordedCorpusWrite(decisionId);
     existingDecision = {
       id: decisionId,
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       metadata: {},
       // The publisher's raw hash moved (a metadata change) …
       sourceHash: "older-hash",
@@ -702,6 +712,8 @@ describe("processDecision — canonical storage mode", () => {
     const recorded = recordedCorpusWrite(decisionId);
     existingDecision = {
       id: decisionId,
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       metadata: {},
       sourceHash: "older-hash",
       sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
@@ -743,6 +755,8 @@ describe("processDecision — canonical storage mode", () => {
     const decisionId = createSafeId<"caseLawDecision">();
     existingDecision = {
       id: decisionId,
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       metadata: {},
       // The publisher did not move; only the mirror is stuck pending, so
       // the source-hash skip must not swallow the settlement.
@@ -867,6 +881,8 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
     fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
     existingDecision = {
       id: createSafeId<"caseLawDecision">(),
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       metadata: {},
       sourceHash: "older-hash",
       sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
@@ -934,6 +950,8 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
     const recorded = recordedCorpusWrite(decisionId);
     existingDecision = {
       id: decisionId,
+      caseNumber: decision.caseNumber,
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       metadata: {},
       sourceHash: decision.rawHash,
       sourceObservedAt: new Date("2026-07-31T12:00:00.000Z"),
@@ -979,7 +997,12 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 describe("sanitizeResult — decision-date floor", () => {
   test("bounds a stated date by the decision's own jurisdiction", () => {
     const dated = (country: IngestionResult["country"], decisionDate: string) =>
-      sanitizeResult({ ...decision, country, decisionDate }).decisionDate;
+      sanitizeResult({
+        ...decision,
+        country,
+        decisionDate,
+        sourceDocumentId: "document-1",
+      }).decisionDate;
     expect(dated("USA", "1791-08-03")).toBe("1791-08-03");
     expect(dated("USA", "1599-12-31")).toBeUndefined();
     expect(dated("SVK", "1791-08-03")).toBeUndefined();

@@ -342,9 +342,9 @@
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 888,
+    "count": 902,
     "files": {
-      "apps/api/src/handlers/case-law/decisions/latest.ts": 2,
+      "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-findok.ts": 12,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 7,
@@ -365,12 +365,11 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline/source-observation.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/source-totals.ts": 2,
-      "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 6,
-      "apps/api/src/handlers/chat/chat-message-persistence.ts": 2,
+      "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 7,
+      "apps/api/src/handlers/chat/chat-message-persistence.ts": 1,
       "apps/api/src/handlers/chat/chat-sandbox-plan.ts": 2,
       "apps/api/src/handlers/chat/compaction.ts": 2,
-      "apps/api/src/handlers/chat/fork/create.ts": 1,
-      "apps/api/src/handlers/chat/send-message.ts": 2,
+      "apps/api/src/handlers/chat/send-message.ts": 5,
       "apps/api/src/handlers/chat/stream-chat.ts": 3,
       "apps/api/src/handlers/chat/subagent-runner.ts": 2,
       "apps/api/src/handlers/chat/third-party-boundary.ts": 4,
@@ -424,13 +423,13 @@
       "apps/api/src/lib/account-deletion-steps.ts": 4,
       "apps/api/src/lib/agent-auth-idjag.ts": 1,
       "apps/api/src/lib/agent-skills/access.ts": 1,
-      "apps/api/src/lib/agent-skills/skill-tools.ts": 2,
+      "apps/api/src/lib/agent-skills/skill-tools.ts": 17,
       "apps/api/src/lib/ai-config-loader-core.ts": 1,
       "apps/api/src/lib/ai-provider-probe.ts": 3,
-      "apps/api/src/lib/auth.ts": 10,
+      "apps/api/src/lib/auth.ts": 9,
       "apps/api/src/lib/bilingual/formatting.ts": 1,
       "apps/api/src/lib/buffer-intent-reconciliation.ts": 9,
-      "apps/api/src/lib/business-registries/dispatch.ts": 5,
+      "apps/api/src/lib/business-registries/dispatch.ts": 3,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 2,
       "apps/api/src/lib/compression.ts": 1,
       "apps/api/src/lib/confirmation-otp.ts": 2,
@@ -445,25 +444,27 @@
       "apps/api/src/lib/docx-archive.ts": 4,
       "apps/api/src/lib/email/ses.ts": 1,
       "apps/api/src/lib/email/smtp.ts": 1,
-      "apps/api/src/lib/entities/create-from-buffer.ts": 4,
+      "apps/api/src/lib/entities/create-from-buffer.ts": 2,
       "apps/api/src/lib/entities/list-cursor.ts": 5,
-      "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts": 2,
+      "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts": 1,
       "apps/api/src/lib/files/document-properties.ts": 3,
       "apps/api/src/lib/files/gotenberg.ts": 1,
       "apps/api/src/lib/files/office-evidence-xlsx.ts": 3,
       "apps/api/src/lib/files/outlook-msg.ts": 14,
       "apps/api/src/lib/flows/flow-executor.ts": 4,
-      "apps/api/src/lib/folio-collab-rooms.ts": 3,
+      "apps/api/src/lib/folio-collab-rooms.ts": 2,
       "apps/api/src/lib/health/probe-document-converter.ts": 1,
       "apps/api/src/lib/hosted-usage-provider/client.ts": 6,
       "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": 3,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-client.ts": 23,
+      "apps/api/src/lib/legal-search/corpus-index-client.ts": 22,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 3,
+      "apps/api/src/lib/legal-search/decision-language-identity.ts": 2,
+      "apps/api/src/lib/legal-search/decision-primary-reference.ts": 1,
       "apps/api/src/lib/legal-search/ingestion-normalization.ts": 4,
-      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 4,
+      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 2,
       "apps/api/src/lib/mcp-upstream/crypto.ts": 2,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 2,
@@ -471,8 +472,8 @@
       "apps/api/src/lib/ocr-searchable-pdf-worker.ts": 1,
       "apps/api/src/lib/organization-storage-teardown.ts": 4,
       "apps/api/src/lib/rate-limit/redis-context.ts": 3,
-      "apps/api/src/lib/s3-presign.ts": 5,
-      "apps/api/src/lib/s3.ts": 13,
+      "apps/api/src/lib/s3-presign.ts": 8,
+      "apps/api/src/lib/s3.ts": 12,
       "apps/api/src/lib/scheduler/bullmq.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 1,
       "apps/api/src/lib/scouts/document-deadlines.ts": 1,
@@ -482,7 +483,7 @@
       "apps/api/src/lib/sse-broadcast.ts": 1,
       "apps/api/src/lib/style-set-editor.ts": 1,
       "apps/api/src/lib/subprocess.ts": 1,
-      "apps/api/src/lib/tanstack-ai-models.ts": 7,
+      "apps/api/src/lib/tanstack-ai-models.ts": 9,
       "apps/api/src/lib/tasks/update-task.ts": 2,
       "apps/api/src/lib/two-factor.ts": 1,
       "apps/api/src/lib/web-search/jina.ts": 2,
@@ -600,7 +601,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/timesheets.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/workflows.tsx": 1,
       "apps/web/src/routes/agent-claim.tsx": 2,
-      "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 9,
+      "apps/web/src/routes/auth/-components/dev-quick-start-button.tsx": 10,
       "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx": 6,
       "apps/web/src/routes/auth/index.tsx": 2,
       "apps/web/src/routes/auth/organization.tsx": 5,
@@ -629,7 +630,7 @@
       "packages/business-registries/src/edgar/client.ts": 4,
       "packages/business-registries/src/gcis/client.ts": 8,
       "packages/business-registries/src/krs/client.ts": 4,
-      "packages/business-registries/src/orsr/client.ts": 4,
+      "packages/business-registries/src/orsr/client.ts": 3,
       "packages/business-registries/src/prh/client.ts": 3,
       "packages/business-registries/src/recherche-entreprises/client.ts": 4,
       "packages/business-registries/src/shared/http.ts": 3,
@@ -760,7 +761,7 @@
       "apps/api/src/mcp/apps/document-upload/app.ts": 3,
       "apps/api/src/mcp/capability-tools.ts": 2,
       "apps/api/src/mcp/feedback-sanitize.ts": 1,
-      "apps/api/src/mcp/gateway/dispatch-call.ts": 2,
+      "apps/api/src/mcp/gateway/dispatch-call.ts": 1,
       "apps/api/src/mcp/gateway/external-tools.ts": 2,
       "apps/api/src/mcp/gateway/rate-limit.ts": 1,
       "apps/api/src/mcp/server-core.ts": 8,
@@ -874,6 +875,7 @@
       "packages/scripts/src/i18n-lint.ts": 3,
       "packages/scripts/src/workspace-app-boundaries.ts": 4,
       "packages/scripts/src/workspace-hygiene.ts": 4,
+      "packages/skills/src/loader.ts": 1,
       "packages/skills/src/streaming.ts": 1,
       "packages/template-conditions/src/compute.ts": 1,
       "packages/ui/src/components/destructive-confirm-dialog.tsx": 1,
@@ -982,64 +984,6 @@
       "apps/api/src/lib/skills/skill-package.ts": 1
     }
   },
-  "no-network-await-in-loop-suppressions": {
-    "count": 13,
-    "files": {
-      "apps/api/scripts/seed-firm-knowledge.ts": 1,
-      "apps/api/src/handlers/external-preview/preview.ts": 1,
-      "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
-      "apps/web/src/components/workspaces/row-actions.tsx": 1,
-      "apps/web/src/lib/workspaces/queries/entities.ts": 3,
-      "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
-      "packages/scripts/src/dev-runner.ts": 1
-    }
-  },
-  "require-bounded-request-schema-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "no-unbounded-response-body-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "no-raw-use-effect-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "no-awaited-builder-union-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "no-swallowed-rejection-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "require-toast-error-capture-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "no-detached-void-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "require-detached-label-shape-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "require-exhaustive-panic-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "no-vacuous-throw-assertion-suppressions": {
-    "count": 0,
-    "files": {}
-  },
-  "no-internal-module-mock-suppressions": {
-    "count": 0,
-    "files": {}
-  },
   "no-db-await-in-loop-suppressions": {
     "count": 117,
     "files": {
@@ -1115,8 +1059,66 @@
       "apps/api/src/scripts/repair-publisher-absent-text.ts": 2
     }
   },
+  "no-network-await-in-loop-suppressions": {
+    "count": 13,
+    "files": {
+      "apps/api/scripts/seed-firm-knowledge.ts": 1,
+      "apps/api/src/handlers/external-preview/preview.ts": 1,
+      "apps/web/src/components/workspaces/copy-to-matter-dialog.tsx": 1,
+      "apps/web/src/components/workspaces/row-actions.tsx": 1,
+      "apps/web/src/lib/workspaces/queries/entities.ts": 3,
+      "apps/web/src/lib/workspaces/queries/legal-lists.ts": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
+      "packages/scripts/src/dev-runner.ts": 1
+    }
+  },
+  "require-bounded-request-schema-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-unbounded-response-body-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-raw-use-effect-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-awaited-builder-union-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-swallowed-rejection-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "require-toast-error-capture-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-detached-void-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "require-detached-label-shape-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "require-exhaustive-panic-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-vacuous-throw-assertion-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-internal-module-mock-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "lint-suppression-directives": {
-    "count": 292,
+    "count": 293,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1184,8 +1186,6 @@
       "apps/api/src/lib/file-scan/scanner.ts": 1,
       "apps/api/src/lib/files/document-properties.ts": 1,
       "apps/api/src/lib/files/email-to-html.ts": 1,
-      "apps/api/src/lib/files/pdf-signing/finalize-attempts.ts": 1,
-      "apps/api/src/lib/files/pdf-signing/sessions.ts": 1,
       "apps/api/src/lib/flows/automated-run-cap.ts": 1,
       "apps/api/src/lib/hosted-usage-provider/client.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 2,
@@ -1203,9 +1203,11 @@
       "apps/api/src/lib/tanstack-ai-models.ts": 8,
       "apps/api/src/lib/usage/usage-ledger.ts": 4,
       "apps/api/src/mcp/compat-ids.ts": 1,
+      "apps/api/src/mcp/gateway/skills.ts": 1,
       "apps/api/src/mcp/server-core.ts": 1,
       "apps/api/src/mcp/template-persistence.ts": 1,
       "apps/api/src/mcp/tool-utils.ts": 1,
+      "apps/api/src/scripts/adapter-health.ts": 1,
       "apps/api/src/scripts/citation-probe.ts": 1,
       "apps/api/src/scripts/mcp-canary.ts": 3,
       "apps/api/src/scripts/post-deploy-smoke.ts": 1,
@@ -1228,11 +1230,9 @@
       "apps/web/src/components/chat/chat-thread-messages.tsx": 4,
       "apps/web/src/components/chat/tool-approval-card.tsx": 1,
       "apps/web/src/components/chat/web-search-sources.tsx": 1,
-      "apps/web/src/components/docx/docx-browser-editor.tsx": 1,
+      "apps/web/src/components/docx/docx-browser-editor.tsx": 5,
       "apps/web/src/components/docx/docx-edit-mode.logic.ts": 2,
       "apps/web/src/components/docx/use-docx-block-scroll.ts": 1,
-      "apps/web/src/components/docx/use-docx-preview-file.ts": 1,
-      "apps/web/src/components/docx/use-retained-style-picker-label.ts": 1,
       "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
       "apps/web/src/components/inspector/inspector-broadcast.ts": 1,
       "apps/web/src/components/inspector/inspector-find.tsx": 8,
@@ -1314,7 +1314,6 @@
       "packages/ui/src/components/select.tsx": 1,
       "packages/ui/src/lib/slot.tsx": 1,
       "packages/workspace-ui/src/conditions/builder.tsx": 2,
-      "scripts/sql-perf-detector.ts": 1,
       "scripts/sync-railway-template-source.ts": 1
     }
   },
@@ -1377,7 +1376,7 @@
     "files": {}
   },
   "direct-failure-sinks": {
-    "count": 537,
+    "count": 539,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/bilingual-translations/prepare.ts": 2,
@@ -1552,7 +1551,7 @@
       "apps/api/src/lib/uploads/entity-create.ts": 6,
       "apps/api/src/lib/uploads/file-comparison/sweep.ts": 1,
       "apps/api/src/lib/usage/unit-model.ts": 2,
-      "apps/api/src/lib/workflow-queue.ts": 29,
+      "apps/api/src/lib/workflow-queue.ts": 30,
       "apps/api/src/lib/workflow/ai-generate-batch.ts": 1,
       "apps/api/src/lib/workflow/decisions/decide.ts": 1,
       "apps/api/src/lib/workflow/decisions/decision-usage.ts": 1,
@@ -1560,7 +1559,7 @@
       "apps/api/src/lib/workflow/straggler-catchup.ts": 3,
       "apps/api/src/mcp/capability-tools.ts": 3,
       "apps/api/src/mcp/file-comparison-run.ts": 3,
-      "apps/api/src/mcp/gateway/external-tools.ts": 3,
+      "apps/api/src/mcp/gateway/external-tools.ts": 4,
       "apps/api/src/mcp/gateway/rate-limit.ts": 1,
       "apps/api/src/mcp/gateway/skills.ts": 1,
       "apps/api/src/mcp/knowledge-tools.ts": 1,
@@ -1651,7 +1650,7 @@
     }
   },
   "slice-owned-web-components": {
-    "count": 35,
+    "count": 36,
     "files": {
       "apps/web/src/components/ai-suggestions/scroll-editor-to-pos.ts": 1,
       "apps/web/src/components/auth/two-factor-panel.tsx": 1,
@@ -1680,6 +1679,7 @@
       "apps/web/src/components/selfhost-update-banner.tsx": 1,
       "apps/web/src/components/shortcut-echo-hud.tsx": 1,
       "apps/web/src/components/sidebar-sizing.ts": 1,
+      "apps/web/src/components/table-skeleton-rows.tsx": 1,
       "apps/web/src/components/usage/usage-fallback-notice.tsx": 1,
       "apps/web/src/components/usage/use-usage-limit.ts": 1,
       "apps/web/src/components/workspaces/attached-template-upload-dialog.tsx": 1,
@@ -1728,8 +1728,8 @@
       "apps/api/src/lib/azure-foundry.ts": 1,
       "apps/api/src/lib/bbox": 1,
       "apps/api/src/lib/bilingual": 1,
-      "apps/api/src/lib/billing": 1,
       "apps/api/src/lib/billing-constants.ts": 1,
+      "apps/api/src/lib/billing-rates.ts": 1,
       "apps/api/src/lib/billing-time.ts": 1,
       "apps/api/src/lib/branded-types.ts": 1,
       "apps/api/src/lib/browser-origin-guard.ts": 1,

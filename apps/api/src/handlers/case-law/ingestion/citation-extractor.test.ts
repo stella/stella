@@ -18,6 +18,7 @@ import {
 import { plUokikDecisionIdentifiers } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import {
   bareCitationKey,
+  decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   decisionIdentifiersFromStoredMetadata,
   citationKeyOf,
@@ -141,7 +142,10 @@ describe("extractCitations", () => {
     expect(
       isSelfCitation(
         "C‑128/22",
-        decisionIdentifiersFromMetadata({ caseNumber: "C-128/22" }),
+        decisionIdentifiersFromMetadata({
+          caseNumber: "C-128/22",
+          jurisdiction: "EU",
+        }),
       ),
     ).toBe(true);
   });
@@ -530,6 +534,7 @@ describe("extractCitations", () => {
       isSelfCitation(
         "č. j. KSCB 26INS/8270/2018",
         decisionIdentifiersFromMetadata({
+          jurisdiction: "CZE",
           caseNumber: "KSCB 26 INS 8270/2018",
         }),
       ),
@@ -555,6 +560,7 @@ describe("extractCitations", () => {
       isSelfCitation(
         "č. j. MSPH 99 INS 19057/2012",
         decisionIdentifiersFromMetadata({
+          jurisdiction: "CZE",
           caseNumber: "Msph 99 INS 19057/2012",
         }),
       ),
@@ -569,7 +575,10 @@ describe("extractCitations", () => {
     expect(
       isSelfCitation(
         "č. j.: 137 Ex 1850/23",
-        decisionIdentifiersFromMetadata({ caseNumber: "137 Ex 1850/23" }),
+        decisionIdentifiersFromMetadata({
+          caseNumber: "137 Ex 1850/23",
+          jurisdiction: "CZE",
+        }),
       ),
     ).toBe(true);
   });
@@ -1094,7 +1103,10 @@ describe("extractCitations", () => {
     expect(
       isSelfCitation(
         "č. k. 4 Obo 48/02",
-        decisionIdentifiersFromMetadata({ caseNumber: "4 Obo 48/02" }),
+        decisionIdentifiersFromMetadata({
+          caseNumber: "4 Obo 48/02",
+          jurisdiction: "SVK",
+        }),
       ),
     ).toBe(true);
   });
@@ -2346,10 +2358,69 @@ describe("extractCitations", () => {
 });
 
 describe("stored decision identifier projection", () => {
+  test("recovers a reporter primary as a reporter citation from either stored shape", () => {
+    const reporter = {
+      type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+      value: "347 U.S. 483",
+    };
+    const docket = { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: "1" };
+    const stored = {
+      caseNumber: reporter.value,
+      caseNumberType: reporter.type,
+      ecli: null,
+      jurisdiction: "USA",
+    };
+    // The identifiers written with the row, and the publisher aliases a row
+    // older than them carries.
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...stored,
+        metadata: storeDecisionIdentifiersInMetadata({}, [docket]),
+      }),
+    ).toEqual([reporter, docket]);
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...stored,
+        metadata: { additionalCaseNumbers: [docket.value] },
+      }),
+    ).toEqual([reporter, docket]);
+    // The fault the type closes: the same row read as a docket.
+    expect(
+      decisionIdentifiersFromStoredMetadata({
+        ...stored,
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        metadata: {},
+      }),
+    ).toEqual([
+      { type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER, value: reporter.value },
+    ]);
+  });
+
+  test("keys a decision by its docket only where the docket is its primary", () => {
+    expect(
+      decisionCitationKeyOf({
+        caseNumber: "21 Cdo 1234/2020",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      }),
+    ).toBe(citationKeyOf("21 Cdo 1234/2020"));
+    for (const caseNumberType of [
+      DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+      DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+    ]) {
+      expect(
+        decisionCitationKeyOf({ caseNumber: "347 U.S. 483", caseNumberType }),
+      ).toBeNull();
+    }
+    // The reporter citation would otherwise canonicalize to a docket key.
+    expect(citationKeyOf("347 U.S. 483")).not.toBeNull();
+  });
+
   test("recovers publisher case-number aliases from stored metadata", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
+        jurisdiction: "POL",
         caseNumber: "I ACa 1/24",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: "ECLI:PL:TEST:1",
         metadata: {
           additionalCaseNumbers: ["I ACz 2/24", "I ACa 1/24"],
@@ -2374,7 +2445,9 @@ describe("stored decision identifier projection", () => {
   test("recovers legacy reporter citations from publisher metadata", () => {
     expect(
       decisionIdentifiersFromStoredMetadata({
+        jurisdiction: "CZE",
         caseNumber: "1 As 2/2024",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: null,
         metadata: { citation: "12 Test Reporter 34" },
       }),
@@ -2413,8 +2486,9 @@ describe("stored decision identifier projection", () => {
     ]);
     const stored = decisionIdentifiersFromStoredMetadata({
       caseNumber: "No. 1",
-      country: "USA",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: null,
+      jurisdiction: "USA",
       metadata: storeDecisionIdentifiersInMetadata({}, spellings),
     });
     expect(stored).toEqual(identifiers);
@@ -2422,7 +2496,9 @@ describe("stored decision identifier projection", () => {
 
   test("reserves identifier capacity for a legacy reporter citation", () => {
     const identifiers = decisionIdentifiersFromStoredMetadata({
+      jurisdiction: "CZE",
       caseNumber: "1 As 2/2024",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: null,
       metadata: {
         additionalCaseNumbers: Array.from(
@@ -2452,7 +2528,9 @@ describe("stored decision identifier projection", () => {
     );
     expect(
       decisionIdentifiersFromStoredMetadata({
+        jurisdiction: "CZE",
         caseNumber: "1 As 2/2024",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: null,
         metadata,
       }),
@@ -2478,7 +2556,9 @@ describe("stored decision identifier projection", () => {
 
     expect(
       decisionIdentifiersFromStoredMetadata({
+        jurisdiction: "CZE",
         caseNumber: "1 Azs 4/2026",
+        caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
         ecli: null,
         metadata,
       }),
@@ -2497,6 +2577,7 @@ describe("stored decision identifier projection", () => {
   test("omits optional identifiers with no searchable normalized value", () => {
     expect(
       decisionIdentifiersFromMetadata({
+        jurisdiction: "CZE",
         caseNumber: "A-123",
         ecli: "!!!",
         identifiers: [
@@ -2570,6 +2651,7 @@ describe("court hint", () => {
 
 describe("isSelfCitation", () => {
   const decision = decisionIdentifiersFromMetadata({
+    jurisdiction: "CZE",
     caseNumber: "21 Cdo 1234/2020",
     ecli: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1",
   });
@@ -2604,23 +2686,31 @@ describe("isSelfCitation", () => {
 
   test("case-insensitive match", () => {
     const d = decisionIdentifiersFromMetadata({
+      jurisdiction: "CZE",
       caseNumber: "21 cdo 1234/2020",
     });
     expect(isSelfCitation("sp. zn. 21 Cdo 1234/2020", d)).toBe(true);
   });
 
   test("detects sygn. akt self-reference (Polish)", () => {
-    const d = decisionIdentifiersFromMetadata({ caseNumber: "II CSK 123/20" });
+    const d = decisionIdentifiersFromMetadata({
+      caseNumber: "II CSK 123/20",
+      jurisdiction: "POL",
+    });
     expect(isSelfCitation("sygn. akt II CSK 123/20", d)).toBe(true);
   });
 
   test("detects sygn. self-reference without akt", () => {
-    const d = decisionIdentifiersFromMetadata({ caseNumber: "II CSK 123/20" });
+    const d = decisionIdentifiersFromMetadata({
+      caseNumber: "II CSK 123/20",
+      jurisdiction: "POL",
+    });
     expect(isSelfCitation("sygn. II CSK 123/20", d)).toBe(true);
   });
 
   test("returns false when decision has no ECLI", () => {
     const d = decisionIdentifiersFromMetadata({
+      jurisdiction: "CZE",
       caseNumber: "21 Cdo 1234/2020",
     });
     expect(isSelfCitation("ECLI:CZ:NS:2019:30.CDO.5678.2019.1", d)).toBe(false);
@@ -2794,7 +2884,10 @@ describe("Hungarian citations", () => {
    * derive them.
    */
   const storedKeys = (caseNumber: string) => {
-    const [identifier] = decisionIdentifiersFromMetadata({ caseNumber });
+    const [identifier] = decisionIdentifiersFromMetadata({
+      caseNumber,
+      jurisdiction: "HUN",
+    });
     return {
       type: identifier.type,
       identifier: normalizeDecisionIdentifier(identifier),
@@ -2898,6 +2991,7 @@ describe("Hungarian citations", () => {
 
   test("the printed and listed dockets are one identity of the decision", () => {
     const identifiers = decisionIdentifiersFromMetadata({
+      jurisdiction: "HUN",
       caseNumber: "Gfv.30197/2024/4",
       identifiers: [
         { type: "case-number", value: "Gfv.30197/2024/4" },
@@ -3209,6 +3303,8 @@ describe("Constitutional Court rulings by their collection numbers", () => {
   // published under, then its reporter entry.
   const ruling = {
     caseNumber: "Pl. ÚS 18/01",
+    caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+    jurisdiction: "CZE",
     ecli: "ECLI:CZ:US:2002:Pl.US.18.01",
     metadata: { parallelQuotation: "234/2002 Sb.\nN 53/26 SbNU 73" },
   };
@@ -3303,7 +3399,9 @@ describe("Constitutional Court rulings by their collection numbers", () => {
       isSelfCitation(
         citation?.citationText ?? "",
         decisionIdentifiersFromStoredMetadata({
+          jurisdiction: "CZE",
           caseNumber: "Pl. ÚS 1/12",
+          caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
           ecli: null,
           metadata: {
             parallelCitationLaws: "437/2012 Sb.",

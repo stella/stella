@@ -157,6 +157,7 @@ import {
   RELEVANCE_ORDER,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
+import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import {
   type ExpandedCorpusQuery,
   resolveExpandedCorpusQuery,
@@ -446,6 +447,7 @@ export const caseLawSearchPlan = ({
     SELECT
       m.decision_id,
       d.case_number,
+      d.case_number_type,
       d.slug,
       d.ecli,
       (
@@ -751,13 +753,18 @@ const searchPostgresDecisions = async (
       ecli: toNullableString(row["ecli"]),
     });
 
+    const caseNumberType = primaryReferenceTypeFromStored(
+      row["case_number_type"],
+    );
     return {
       decisionId: String(row["decision_id"]),
       caseNumber: String(row["case_number"]),
+      caseNumberType,
       slug: toNullableString(row["slug"]),
       ecli: toNullableString(row["ecli"]),
       identifiers: decisionIdentifierProjection(row["identifiers"], {
         caseNumber: String(row["case_number"]),
+        caseNumberType,
         ecli: toNullableString(row["ecli"]),
       }),
       court: String(row["court"]),
@@ -1519,14 +1526,17 @@ const decisionHitsPage = ({
       court: row.court,
       ecli: row.ecli,
     });
+    const { caseNumberType } = row;
     return [
       {
         decisionId: row.id,
         caseNumber: row.caseNumber,
+        caseNumberType,
         slug: row.slug,
         ecli: row.ecli,
         identifiers: decisionIdentifierProjection(row.identifiers, {
           caseNumber: row.caseNumber,
+          caseNumberType,
           ecli: row.ecli,
         }),
         court: row.court,
