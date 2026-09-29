@@ -35,16 +35,14 @@ const buildDetachEvents = (params: {
   invoiceId: SafeId<"invoice">;
   detachedTimeEntries: { id: SafeId<"timeEntry"> }[];
   detachedExpenses: { id: SafeId<"expense"> }[];
-  oldTotalAmount: number;
-  totalAmount: number;
 }): AuditEvent[] => {
+  // The new totals record their own invoice event.
   const events: AuditEvent[] = [
     {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
       resourceId: params.invoiceId,
       changes: {
-        totalAmount: { old: params.oldTotalAmount, new: params.totalAmount },
         detachedTimeEntries: {
           old: params.detachedTimeEntries.map((row) => row.id),
           new: null,
@@ -159,11 +157,15 @@ const removeEntries = createSafeHandler(
         // mutate `time_entries`/`expenses`, so this handler must follow the
         // same order or a concurrent transaction can deadlock (see
         // `lockInvoiceInStatus`'s doc comment).
-        const invoiceCheck = await lockDraftInvoiceForLines(tx, {
-          invoiceId: params.invoiceId,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-        });
+        const invoiceCheck = await lockDraftInvoiceForLines(
+          tx,
+          {
+            invoiceId: params.invoiceId,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+          },
+          recordAuditEvent,
+        );
         if (!invoiceCheck) {
           return { ok: false as const };
         }
@@ -233,12 +235,12 @@ const removeEntries = createSafeHandler(
             );
         }
 
-        const totals = await recalculateInvoiceTotals(
+        await recalculateInvoiceTotals(
           tx,
           { invoiceId: params.invoiceId, workspaceId },
           now,
+          recordAuditEvent,
         );
-        const totalAmount = totals.grossAmountMinor;
 
         await recordAuditEvent(
           tx,
@@ -246,8 +248,6 @@ const removeEntries = createSafeHandler(
             invoiceId: params.invoiceId,
             detachedTimeEntries,
             detachedExpenses,
-            oldTotalAmount: invoiceCheck.totalAmount,
-            totalAmount,
           }),
         );
 

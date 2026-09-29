@@ -95,11 +95,15 @@ const updateInvoiceLine = createSafeHandler(
       abortableTx(
         safeDb,
         async (tx): Promise<Result<UpdatedLine, HandlerError>> => {
-          const invoice = await lockDraftInvoiceForLines(tx, {
-            invoiceId: params.invoiceId,
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-          });
+          const invoice = await lockDraftInvoiceForLines(
+            tx,
+            {
+              invoiceId: params.invoiceId,
+              organizationId: session.activeOrganizationId,
+              workspaceId,
+            },
+            recordAuditEvent,
+          );
           if (!invoice) {
             return refuse(409, "Invoice not found or not in draft status");
           }
@@ -187,10 +191,12 @@ const updateInvoiceLine = createSafeHandler(
                 eq(invoiceLines.workspaceId, workspaceId),
               ),
             );
+          // The new totals record their own invoice event.
           const totals = await recalculateInvoiceTotals(
             tx,
             { invoiceId: params.invoiceId, workspaceId },
             now,
+            recordAuditEvent,
           );
 
           // Field names only: a line description can quote privileged work.
@@ -200,10 +206,6 @@ const updateInvoiceLine = createSafeHandler(
             resourceId: params.invoiceId,
             changes: {
               lineNetAmount: { old: line.netAmount, new: pricedLine.netAmount },
-              totalAmount: {
-                old: invoice.totalAmount,
-                new: totals.grossAmountMinor,
-              },
             },
             metadata: { lineId: line.id, changedFields },
           });

@@ -45,11 +45,15 @@ const deleteInvoiceLine = createSafeHandler(
       abortableTx(
         safeDb,
         async (tx): Promise<Result<DeletedLine, HandlerError>> => {
-          const invoice = await lockDraftInvoiceForLines(tx, {
-            invoiceId: params.invoiceId,
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-          });
+          const invoice = await lockDraftInvoiceForLines(
+            tx,
+            {
+              invoiceId: params.invoiceId,
+              organizationId: session.activeOrganizationId,
+              workspaceId,
+            },
+            recordAuditEvent,
+          );
           if (!invoice) {
             return Result.err(
               new HandlerError({
@@ -150,10 +154,12 @@ const deleteInvoiceLine = createSafeHandler(
             );
           }
 
+          // The new totals record their own invoice event.
           const totals = await recalculateInvoiceTotals(
             tx,
             { invoiceId: params.invoiceId, workspaceId },
             now,
+            recordAuditEvent,
           );
 
           await recordAuditEvent(tx, [
@@ -169,10 +175,6 @@ const deleteInvoiceLine = createSafeHandler(
                     netAmount: line.netAmount,
                   },
                   new: null,
-                },
-                totalAmount: {
-                  old: invoice.totalAmount,
-                  new: totals.grossAmountMinor,
                 },
               },
             },

@@ -108,11 +108,15 @@ const createInvoiceLine = createSafeHandler(
     const txResult = await abortableTx(
       safeDb,
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
-        const invoice = await lockDraftInvoiceForLines(tx, {
-          invoiceId: params.invoiceId,
-          organizationId: session.activeOrganizationId,
-          workspaceId,
-        });
+        const invoice = await lockDraftInvoiceForLines(
+          tx,
+          {
+            invoiceId: params.invoiceId,
+            organizationId: session.activeOrganizationId,
+            workspaceId,
+          },
+          recordAuditEvent,
+        );
         if (!invoice) {
           return Result.err(
             new HandlerError({
@@ -242,39 +246,24 @@ const createInvoiceLine = createSafeHandler(
         }
 
         const scope = { invoiceId: params.invoiceId, workspaceId };
+        // The line and the new totals record their own invoice events.
         const [line] = await insertInvoiceLines(
           tx,
           { ...scope, organizationId: session.activeOrganizationId },
           [draft],
+          { recordAuditEvent },
         );
         if (!line) {
           return panic("Invoice line insert returned no row");
         }
-        const totals = await recalculateInvoiceTotals(tx, scope, now);
+        const totals = await recalculateInvoiceTotals(
+          tx,
+          scope,
+          now,
+          recordAuditEvent,
+        );
 
-        await recordAuditEvent(tx, [
-          {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-            resourceId: params.invoiceId,
-            changes: {
-              lineAdded: {
-                old: null,
-                new: {
-                  id: line.id,
-                  source: line.source,
-                  netAmount: draft.netAmount,
-                  vatRateBps: draft.vatRateBps,
-                },
-              },
-              totalAmount: {
-                old: invoice.totalAmount,
-                new: totals.grossAmountMinor,
-              },
-            },
-          },
-          ...events,
-        ]);
+        await recordAuditEvent(tx, events);
 
         return Result.ok({ id: line.id, totals });
       },

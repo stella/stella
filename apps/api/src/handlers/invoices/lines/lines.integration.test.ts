@@ -29,7 +29,12 @@ import transitionInvoice from "@/api/handlers/invoices/transition";
 import batchUpdateTimeEntries from "@/api/handlers/time-entries/batch/update";
 import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import type { AuditEvent } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditEvent,
+  type FieldDiffs,
+} from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
@@ -366,7 +371,7 @@ describe("invoice lines", () => {
     const refused = {
       code: 409,
       response: { message: "Invoice not found or not in draft status" },
-    };
+    } as const;
 
     expect(
       await runCreate(
@@ -573,6 +578,117 @@ describe("invoice lines", () => {
       .from(invoices)
       .where(eq(invoices.id, legacy.invoiceId));
     expect(invoice?.totalAmount).toBe(cents(legacy.totalAmount + 1100));
+  });
+
+  test("line changes audit the lines and totals they write", async () => {
+    const legacy = await seedLegacyDraft();
+    const invoiceEvent = (
+      changes: FieldDiffs,
+      metadata?: Record<string, unknown>,
+    ) => ({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+      resourceId: legacy.invoiceId,
+      changes,
+      ...(metadata ? { metadata } : {}),
+    });
+    const backfill = { materialisedFromAttachedEntries: true };
+
+    const createEvents: AuditEvent[] = [];
+    const lineId = readId(
+      await createInvoiceLine.handler(
+        contextFor({
+          body: manual({ quantity: "1", unitPriceMinor: 1000 }, STANDARD_RATE),
+          params: { workspaceId: ids.wsA1, invoiceId: legacy.invoiceId },
+          auditEvents: createEvents,
+        }),
+      ),
+      "invoiceLine",
+    );
+    expect(createEvents).toEqual([
+      // The first edit backfills the attached entries' lines and stores the
+      // net and VAT a legacy draft lacked; its gross total was already right.
+      invoiceEvent(
+        {
+          linesAdded: {
+            old: null,
+            new: legacy.timeEntries.map((entry) => ({
+              id: expect.any(String),
+              source: "time_entry",
+              netAmount: entry.netAmount,
+              vatRateBps: 0,
+            })),
+          },
+        },
+        backfill,
+      ),
+      invoiceEvent(
+        {
+          linesAdded: {
+            old: null,
+            new: [
+              {
+                id: expect.any(String),
+                source: "expense",
+                netAmount: 11_000,
+                vatRateBps: 0,
+              },
+            ],
+          },
+        },
+        backfill,
+      ),
+      invoiceEvent({
+        netAmount: { old: null, new: legacy.totalAmount },
+        vatAmount: { old: null, new: 0 },
+      }),
+      invoiceEvent({
+        linesAdded: {
+          old: null,
+          new: [
+            {
+              id: lineId,
+              source: "manual",
+              netAmount: 1000,
+              vatRateBps: STANDARD_RATE,
+            },
+          ],
+        },
+      }),
+      invoiceEvent({
+        netAmount: { old: legacy.totalAmount, new: legacy.totalAmount + 1000 },
+        vatAmount: { old: 0, new: 210 },
+        totalAmount: {
+          old: legacy.totalAmount,
+          new: legacy.totalAmount + 1210,
+        },
+      }),
+    ]);
+
+    // Nothing is left to backfill: the delete records its totals and itself.
+    const deleteEvents: AuditEvent[] = [];
+    await deleteInvoiceLine.handler(
+      contextFor({
+        params: { workspaceId: ids.wsA1, invoiceId: legacy.invoiceId, lineId },
+        auditEvents: deleteEvents,
+      }),
+    );
+    expect(deleteEvents).toEqual([
+      invoiceEvent({
+        netAmount: { old: legacy.totalAmount + 1000, new: legacy.totalAmount },
+        vatAmount: { old: 210, new: 0 },
+        totalAmount: {
+          old: legacy.totalAmount + 1210,
+          new: legacy.totalAmount,
+        },
+      }),
+      invoiceEvent({
+        lineRemoved: {
+          old: { id: lineId, source: "manual", netAmount: 1000 },
+          new: null,
+        },
+      }),
+    ]);
   });
 
   test("a line patch that omits the VAT treatment keeps it", async () => {

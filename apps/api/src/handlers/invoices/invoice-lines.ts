@@ -26,6 +26,12 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  type AuditRecorder,
+  type FieldDiffs,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -110,7 +116,7 @@ export const hoursQuantity = (billedMinutes: number): string => {
   const fraction = (scaled % QUANTITY_FACTOR)
     .toString()
     .padStart(QUANTITY_SCALE, "0")
-    .replace(/0+$/u, "");
+    .replace(/(?<!0)0+$/u, "");
   return fraction.length > 0 ? `${whole}.${fraction}` : `${whole}`;
 };
 
@@ -268,16 +274,23 @@ type InvoiceScope = {
 };
 
 /**
- * Appends priced lines after the invoice's last position. The caller holds
- * the invoice row lock (`lockInvoiceInStatus`), which serializes positions.
- * Drafts come from the builders above, whose amounts are already validated,
- * so pricing them cannot fail.
+ * Appends priced lines after the invoice's last position and records them on
+ * the invoice's audit trail (ids, sources and amounts, never descriptions,
+ * which can quote privileged work). The caller holds the invoice row lock
+ * (`lockInvoiceInStatus`), which serializes positions. Drafts come from the
+ * builders above, whose amounts are already validated, so pricing them cannot
+ * fail.
  */
 export const insertInvoiceLines = async (
   tx: Transaction,
   scope: InvoiceScope,
   drafts: readonly InvoiceLineDraft[],
+  audit: {
+    recordAuditEvent: AuditRecorder;
+    metadata?: Record<string, unknown>;
+  },
 ): Promise<{ id: SafeId<"invoiceLine">; source: InvoiceLineSource }[]> => {
+  const { recordAuditEvent, metadata } = audit;
   if (drafts.length === 0) {
     return [];
   }
@@ -297,8 +310,7 @@ export const insertInvoiceLines = async (
       ),
     );
   const start = (last?.position ?? -1) + 1;
-  // audit: skip - callers record the invoice event covering these lines.
-  return await tx
+  const inserted = await tx
     .insert(invoiceLines)
     .values(
       priced.value.map((line, index) => ({
@@ -320,7 +332,20 @@ export const insertInvoiceLines = async (
         expenseId: line.expenseId,
       })),
     )
-    .returning({ id: invoiceLines.id, source: invoiceLines.source });
+    .returning({
+      id: invoiceLines.id,
+      source: invoiceLines.source,
+      netAmount: invoiceLines.netAmount,
+      vatRateBps: invoiceLines.vatRateBps,
+    });
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+    resourceId: scope.invoiceId,
+    changes: { linesAdded: { old: null, new: inserted } },
+    ...(metadata ? { metadata } : {}),
+  });
+  return inserted.map(({ id, source }) => ({ id, source }));
 };
 
 /**
@@ -371,11 +396,12 @@ const MATERIALISE_BATCH_SIZE = 500;
  * a second one) is skipped, so a second call writes nothing; the same filter
  * pages through large invoices, since each written round drops out of it.
  * Runs in the caller's transaction under the invoice row lock; returns how
- * many lines it wrote.
+ * many lines it wrote. Its lines are audited as backfilled.
  */
 const materialiseAttachedEntryLines = async (
   tx: Transaction,
   scope: InvoiceScope,
+  recordAuditEvent: AuditRecorder,
 ): Promise<number> => {
   const unlinedTimeEntries = () =>
     tx
@@ -436,8 +462,7 @@ const materialiseAttachedEntryLines = async (
       .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
       .limit(MATERIALISE_BATCH_SIZE);
 
-  // audit: skip - the entries were attached (and audited) before; their
-  // lines restate the amount the invoice already bills.
+  const backfill = { materialisedFromAttachedEntries: true };
   let written = 0;
   for (;;) {
     const batch = await unlinedTimeEntries();
@@ -446,6 +471,7 @@ const materialiseAttachedEntryLines = async (
       tx,
       scope,
       batch.map((entry) => timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT)),
+      { recordAuditEvent, metadata: backfill },
     );
     if (batch.length < MATERIALISE_BATCH_SIZE) {
       break;
@@ -460,6 +486,7 @@ const materialiseAttachedEntryLines = async (
       batch.map((expense) =>
         expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT),
       ),
+      { recordAuditEvent, metadata: backfill },
     );
     if (batch.length < MATERIALISE_BATCH_SIZE) {
       break;
@@ -485,14 +512,18 @@ const materialiseAttachedEntryLines = async (
 export const lockDraftInvoiceForLines = async (
   tx: Transaction,
   scope: InvoiceScope,
+  recordAuditEvent: AuditRecorder,
 ) => {
   const invoice = await lockInvoiceInStatus(tx, {
     invoiceId: scope.invoiceId,
     workspaceId: scope.workspaceId,
     status: INVOICE_STATUS.DRAFT,
   });
-  if (invoice && (await materialiseAttachedEntryLines(tx, scope)) > 0) {
-    await recalculateInvoiceTotals(tx, scope, new Date());
+  if (
+    invoice &&
+    (await materialiseAttachedEntryLines(tx, scope, recordAuditEvent)) > 0
+  ) {
+    await recalculateInvoiceTotals(tx, scope, new Date(), recordAuditEvent);
   }
   return invoice;
 };
@@ -576,14 +607,16 @@ export const readInvoiceTotals = (
 /**
  * Recomputes the invoice's stored totals from all of its lines (a voided
  * invoice keeps its released lines, and its document keeps their totals).
- * Call inside the transaction that changed the lines, after locking the
- * invoice. Stored lines were priced when written, so totalling them cannot
- * fail.
+ * It records the stored amounts that changed on the invoice's audit trail, so
+ * callers record only what they changed themselves. Call inside the
+ * transaction that changed the lines, after locking the invoice. Stored lines
+ * were priced when written, so totalling them cannot fail.
  */
 export const recalculateInvoiceTotals = async (
   tx: Transaction,
   scope: Omit<InvoiceScope, "organizationId">,
   now: Date,
+  recordAuditEvent: AuditRecorder,
 ): Promise<InvoiceTotals> => {
   const lines = await tx
     .select({
@@ -605,21 +638,42 @@ export const recalculateInvoiceTotals = async (
       `Stored invoice lines failed totalling: ${totals.error.message}`,
     );
   }
-  // audit: skip - callers record the invoice event with the new total.
+  const invoiceScope = and(
+    eq(invoices.id, scope.invoiceId),
+    eq(invoices.workspaceId, scope.workspaceId),
+  );
+  const [stored] = await tx
+    .select({
+      netAmount: invoices.netAmount,
+      vatAmount: invoices.vatAmount,
+      totalAmount: invoices.totalAmount,
+    })
+    .from(invoices)
+    .where(invoiceScope);
+  const next = {
+    netAmount: totals.value.netAmountMinor,
+    vatAmount: totals.value.vatAmountMinor,
+    totalAmount: totals.value.grossAmountMinor,
+  };
   await tx
     .update(invoices)
-    .set({
-      netAmount: totals.value.netAmountMinor,
-      vatAmount: totals.value.vatAmountMinor,
-      totalAmount: totals.value.grossAmountMinor,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(invoices.id, scope.invoiceId),
-        eq(invoices.workspaceId, scope.workspaceId),
-      ),
-    );
+    .set({ ...next, updatedAt: now })
+    .where(invoiceScope);
+  const changes: FieldDiffs = {};
+  for (const field of ["netAmount", "vatAmount", "totalAmount"] as const) {
+    const old = stored?.[field] ?? null;
+    if (old !== next[field]) {
+      changes[field] = { old, new: next[field] };
+    }
+  }
+  if (Object.keys(changes).length > 0) {
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+      resourceId: scope.invoiceId,
+      changes,
+    });
+  }
   return totals.value;
 };
 

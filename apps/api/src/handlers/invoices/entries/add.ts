@@ -47,16 +47,14 @@ const buildAttachEvents = (params: {
   invoiceId: SafeId<"invoice">;
   attachedTimeEntries: { id: SafeId<"timeEntry"> }[];
   attachedExpenses: { id: SafeId<"expense"> }[];
-  oldTotalAmount: number;
-  totalAmount: number;
 }): AuditEvent[] => {
+  // The new lines and totals record their own invoice events.
   const events: AuditEvent[] = [
     {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
       resourceId: params.invoiceId,
       changes: {
-        totalAmount: { old: params.oldTotalAmount, new: params.totalAmount },
         attachedTimeEntries: {
           old: null,
           new: params.attachedTimeEntries.map((row) => row.id),
@@ -289,11 +287,15 @@ const addEntries = createSafeHandler(
       // mutate `time_entries`/`expenses`, so this handler must follow the
       // same order or a concurrent transaction can deadlock (see
       // `lockInvoiceInStatus`'s doc comment).
-      const invoiceCheck = await lockDraftInvoiceForLines(tx, {
-        invoiceId: params.invoiceId,
-        organizationId: session.activeOrganizationId,
-        workspaceId,
-      });
+      const invoiceCheck = await lockDraftInvoiceForLines(
+        tx,
+        {
+          invoiceId: params.invoiceId,
+          organizationId: session.activeOrganizationId,
+          workspaceId,
+        },
+        recordAuditEvent,
+      );
       if (!invoiceCheck) {
         return { ok: false as const, refusal: null };
       }
@@ -398,8 +400,14 @@ const addEntries = createSafeHandler(
             expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT),
           ),
         ],
+        { recordAuditEvent },
       );
-      const totals = await recalculateInvoiceTotals(tx, scope, now);
+      const totals = await recalculateInvoiceTotals(
+        tx,
+        scope,
+        now,
+        recordAuditEvent,
+      );
       const totalAmount = totals.grossAmountMinor;
 
       await recordAuditEvent(
@@ -408,8 +416,6 @@ const addEntries = createSafeHandler(
           invoiceId: params.invoiceId,
           attachedTimeEntries,
           attachedExpenses,
-          oldTotalAmount: invoiceCheck.totalAmount,
-          totalAmount,
         }),
       );
 
