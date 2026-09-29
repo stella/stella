@@ -20,6 +20,8 @@
 //   sql.raw(`version_valid_to IS NULL`)
 //   lt(legislationDocuments.versionValidFrom, date)    // Drizzle comparison
 //   version.versionValidFrom <= date                   // client-side compare
+//   const { versionValidTo: to } = row; to > date      // destructured alias
+//   const from = older.versionValidFrom; lt(from, d)   // const alias
 //
 // Allowed: selecting, ordering and paging by the columns
 // (`.select({ versionValidFrom })`, `versionSortKey(...)`, keyset cursors), a
@@ -28,14 +30,18 @@
 //
 // Detection boundary: syntax only. A comparison is recognised by the operator
 // written directly beside the column in the same SQL text, or by the Drizzle
-// comparison helper it is passed to. A column wrapped in a function before
-// being compared (`coalesce(version_valid_from, ...) > x`), or reached
-// through a computed key, is out of scope; the applicability matrix tests are
-// the net behind this floor.
+// comparison helper it is passed to, and a column is followed through a
+// static computed key, a never-reassigned const and a destructured binding. A
+// column wrapped in a function before being compared
+// (`coalesce(version_valid_from, ...) > x`), or reached through a dynamic key,
+// is out of scope; the applicability matrix tests are the net behind this
+// floor.
 //
 // `legislation-window-hint-display-only` keeps the publisher's successor-start
 // hint (`window_hint_next_start` / `windowHintNextStart`) out of every file
-// but its display owners. The hint is labelled non-authoritative: it may be
+// but its owners the config exempts: the schema, the ingestion writer that
+// persists and hashes it, and the display projections that label a version
+// with it. The hint is labelled non-authoritative: it may be
 // shown next to an inconsistent window, and must never feed an applicability
 // read, the citator, provision linking, or the search projection. Every
 // spelling is flagged, so an alias (`{ windowHintNextStart: next }`), a
@@ -49,8 +55,15 @@ import {
   getCalleeName,
   getPropertyName,
   isAstNode,
+  isIdentifier,
+  isIdentifierReference,
+  isSingleAssignment,
+  isStringLiteral,
+  memberPropertyName,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
+import type { ScopeContext } from "./utils.ts";
 
 const SQL_COMMENT = /--[^\n]*|\/\*[\S\s]*?\*\//gu;
 
@@ -122,22 +135,74 @@ const expressionsOf = (template: unknown): unknown[] =>
     ? template.expressions
     : [];
 
-// `x.versionValidFrom`, `x?.validTo`, `(x.validFrom as SQL)`: the property a
-// member access reads, when it is one of the given names.
-const memberPropertyIn = (
+// The key a destructured binding reads: `{ versionValidFrom }`,
+// `{ versionValidFrom: from }` or `{ validTo = null }`, in a declaration or a
+// parameter. Null for any other binding.
+const destructuredKeyOf = (binding: unknown): string | null => {
+  if (!isAstNode(binding)) {
+    return null;
+  }
+  const parent = isAstNode(binding.parent) ? binding.parent : null;
+  const property =
+    parent?.type === "AssignmentPattern" && isAstNode(parent.parent)
+      ? parent.parent
+      : parent;
+  if (
+    property?.type !== "Property" ||
+    !isAstNode(property.parent) ||
+    property.parent.type !== "ObjectPattern" ||
+    (property.computed === true && !isStringLiteral(property.key))
+  ) {
+    return null;
+  }
+  return getPropertyName(property.key);
+};
+
+// Whether an expression reads one of the given window properties, through
+// the spellings a reader can use: `x.versionValidFrom`, `x?.validTo`,
+// `x["validFrom"]`, `(x.validFrom as SQL)`, a const bound to one
+// (`const from = t.versionValidFrom`), and a destructured binding
+// (`const { versionValidFrom: from } = t`, `({ versionValidTo }) => ...`).
+const readsWindowProperty = (
+  context: ScopeContext,
   node: unknown,
   names: ReadonlySet<string>,
+  seen = new Set<unknown>(),
 ): boolean => {
   const expression = unwrapExpression(node);
+  if (expression === null || seen.has(expression)) {
+    return false;
+  }
+  seen.add(expression);
+  if (expression.type === "MemberExpression") {
+    const name = memberPropertyName(expression);
+    return name !== null && names.has(name);
+  }
+  if (!isIdentifierReference(expression)) {
+    return false;
+  }
+  const variable = resolveVariable(context, expression);
+  const definition = variable?.defs.at(0);
   if (
-    expression === null ||
-    expression.type !== "MemberExpression" ||
-    expression.computed === true
+    variable === null ||
+    definition === undefined ||
+    variable.defs.length !== 1 ||
+    !isSingleAssignment(variable)
   ) {
     return false;
   }
-  const name = getPropertyName(expression.property);
-  return name !== null && names.has(name);
+  const key = destructuredKeyOf(definition.name);
+  if (key !== null) {
+    return names.has(key);
+  }
+  const declarator: unknown = definition.node;
+  return (
+    definition.type === "Variable" &&
+    isAstNode(declarator) &&
+    declarator.type === "VariableDeclarator" &&
+    isIdentifier(declarator.id) &&
+    readsWindowProperty(context, declarator.init, names, seen)
+  );
 };
 
 const isSqlTemplateTag = (tag: unknown): boolean => {
@@ -147,7 +212,10 @@ const isSqlTemplateTag = (tag: unknown): boolean => {
 
 // Whether an SQL template compares a window column by hand, either in its
 // own text or around one of its interpolations.
-const sqlTemplateComparesWindow = (template: unknown): boolean => {
+const sqlTemplateComparesWindow = (
+  context: ScopeContext,
+  template: unknown,
+): boolean => {
   const quasis = quasisOf(template);
   if (
     quasis.some((quasi) =>
@@ -158,7 +226,7 @@ const sqlTemplateComparesWindow = (template: unknown): boolean => {
   }
   return expressionsOf(template).some(
     (expression, index) =>
-      memberPropertyIn(expression, WINDOW_PROPERTIES) &&
+      readsWindowProperty(context, expression, WINDOW_PROPERTIES) &&
       (TRAILING_COMPARISON.test(stripSqlComments(rawTextOf(quasis[index]))) ||
         LEADING_COMPARISON.test(
           stripSqlComments(rawTextOf(quasis[index + 1])),
@@ -198,7 +266,7 @@ export default eslintCompatPlugin({
             if (!isSqlTemplateTag(node.tag)) {
               return;
             }
-            if (sqlTemplateComparesWindow(node.quasi)) {
+            if (sqlTemplateComparesWindow(context, node.quasi)) {
               context.report({ node, messageId: "rawWindowComparison" });
             }
           },
@@ -221,7 +289,9 @@ export default eslintCompatPlugin({
             const bareName = callee.split(".").at(-1) ?? callee;
             if (
               DRIZZLE_COMPARISONS.has(bareName) &&
-              args.some((arg) => memberPropertyIn(arg, WINDOW_PROPERTIES))
+              args.some((arg) =>
+                readsWindowProperty(context, arg, WINDOW_PROPERTIES),
+              )
             ) {
               context.report({ node, messageId: "rawWindowComparison" });
             }
@@ -234,8 +304,8 @@ export default eslintCompatPlugin({
               return;
             }
             if (
-              memberPropertyIn(node.left, COLUMN_PROPERTIES) ||
-              memberPropertyIn(node.right, COLUMN_PROPERTIES)
+              readsWindowProperty(context, node.left, COLUMN_PROPERTIES) ||
+              readsWindowProperty(context, node.right, COLUMN_PROPERTIES)
             ) {
               context.report({ node, messageId: "rawWindowComparison" });
             }
@@ -248,7 +318,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           hintOutsideDisplay:
-            "The successor-start hint of an inconsistent legislation window is display-only and non-authoritative. Read it only in its display owners (the expression label projection and the web label); applicability reads, the citator, provision linking and the search projection must never see it.",
+            "The successor-start hint of an inconsistent legislation window is display-only and non-authoritative. Name it only in its owners (the schema, the ingestion writer that persists and hashes it, and the display projections); applicability reads, the citator, provision linking and the search projection must never see it.",
         },
         schema: [],
       },

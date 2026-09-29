@@ -331,6 +331,10 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
     "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
+  fixtureRuleOverride("legislation-window.fixture.ts", [
+    "legislation-window/legislation-window-through-helper",
+    "legislation-window/legislation-window-hint-display-only",
+  ]),
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
   ]),
@@ -1248,6 +1252,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
+    "./.oxlint-plugins/legislation-window.ts",
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
@@ -1489,6 +1494,54 @@ export default defineConfig({
           "error",
           { allowedColumnExpressions: ["apikey.metadata"] },
         ],
+      },
+    },
+    {
+      // A legislation version's dates answer "which text applied then" only
+      // through the eligibility rule in legislation-validity-window.ts, which
+      // joins window disposition and expression kind into every comparison.
+      // The publisher's successor-start hint is display-only.
+      files: [
+        "apps/api/src/**/*.ts",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "legislation-window/legislation-window-through-helper": "error",
+        "legislation-window/legislation-window-hint-display-only": "error",
+      },
+    },
+    {
+      // The comparison's owners: the helper and its web twin, which check
+      // eligibility first; the schema's partial unique indexes; the writer's
+      // identity lookup and junction report, which place the version being
+      // stored; and tests, which build and assert windows by hand.
+      files: [
+        "apps/api/src/lib/legal-search/legislation-validity-window.ts",
+        "apps/web/src/features/case-law/statute-version.ts",
+        "apps/api/src/db/schema/legislation.ts",
+        "apps/api/src/handlers/legislation/ingestion.ts",
+        "apps/api/src/**/*.test.ts",
+        "apps/web/src/**/*.test.{ts,tsx}",
+      ],
+      rules: {
+        "legislation-window/legislation-window-through-helper": "off",
+      },
+    },
+    {
+      // The hint's owners: the schema, the writer that persists and hashes
+      // it, and the display projections that label a version with it. No
+      // applicability read, citator, provision linking or search projection
+      // is among them.
+      files: [
+        "apps/api/src/db/schema/legislation.ts",
+        "apps/api/src/handlers/legislation/ingestion.ts",
+        "apps/api/src/lib/legal-search/legislation-ingestion-types.ts",
+        "apps/api/src/lib/legal-search/legislation-expression-label.ts",
+        "packages/api-contract/src/legislation-expression.ts",
+      ],
+      rules: {
+        "legislation-window/legislation-window-hint-display-only": "off",
       },
     },
     {
