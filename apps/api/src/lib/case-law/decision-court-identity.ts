@@ -16,8 +16,8 @@ import {
 } from "@stll/api-contract/us-courts";
 
 import {
-  COURT_DIRECTORY_JURISDICTIONS,
   type CourtDirectoryJurisdiction,
+  isCourtDirectoryJurisdiction,
 } from "@/api/lib/case-law/decision-court-id-sql";
 
 /** The directory that admits a jurisdiction's court ids for writing. */
@@ -46,11 +46,6 @@ export const legacyTrustedUsaCourts = (): readonly {
       ? { courtId, name: resolution.court.canonicalName }
       : panic(`Trusted legacy court is not writable: ${courtId}`);
   });
-
-const isCourtDirectoryJurisdiction = (
-  country: string,
-): country is CourtDirectoryJurisdiction =>
-  COURT_DIRECTORY_JURISDICTIONS.some((code) => code === country);
 
 type DecisionCourtIdentityRejection =
   | "missing"

@@ -34,7 +34,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
-import { courtWeightFromMap } from "@/api/lib/case-law/court-weights";
+import { decisionCourtWeight } from "@/api/lib/case-law/court-weights";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 
 /**
@@ -49,7 +49,10 @@ export const SIGNIFICANCE_PROMPT_VERSION = 1;
 type CitingDecisionFact = {
   id: SafeId<"caseLawDecision">;
   treatment: CitationTreatment;
-  /** Court tier from the seeded court-weight table; lower is higher. */
+  /**
+   * Court tier: a directory court's by its id, any other court's from the
+   * seeded court-weight table; lower is higher.
+   */
   tier: number;
   /** Whether it was decided after the subject, so it can be a later reading. */
   later: boolean;
@@ -114,6 +117,7 @@ export const readCitationGraphFacts = async ({
       polarity: caseLawCitations.polarity,
       court: caseLawDecisions.court,
       country: caseLawDecisions.country,
+      courtId: caseLawDecisions.courtId,
       decisionDate: caseLawDecisions.decisionDate,
     })
     .from(caseLawCitations)
@@ -150,7 +154,7 @@ export const readCitationGraphFacts = async ({
   const facts: CitingDecisionFact[] = rows.map((row) => ({
     id: row.citingId,
     treatment: treatmentOf(row.polarity),
-    tier: courtWeightFromMap(weights, row.court, row.country).tier,
+    tier: decisionCourtWeight(weights, row).tier,
     later:
       subjectDate !== null &&
       row.decisionDate !== null &&

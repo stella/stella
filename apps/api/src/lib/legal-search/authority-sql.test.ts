@@ -2,14 +2,17 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { caseLawCourtDirectoryRanks } from "@/api/db/schema";
 import {
   courtWeight,
   courtWeightSql,
 } from "@/api/handlers/case-law/citation-score";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
+import { usCourtDirectoryRankRows } from "@/api/lib/case-law/court-ranks";
 import {
   courtTierSqlFromMap,
   courtWeightFromMap,
+  decisionCourtWeight,
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
@@ -44,6 +47,9 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+    await db
+      .insert(caseLawCourtDirectoryRanks)
+      .values(usCourtDirectoryRankRows());
   },
   { timeout: 30_000 },
 );
@@ -132,43 +138,99 @@ test("the SQL court-tier scale equals courtTierValue(), rank for rank", async ()
  * exercises the cross-country fallback both sides walk in map order.
  */
 const BLEND_FIXTURES = [
-  { authority: 0, country: "CZE", court: "Ústavní soud", lexical: 0.5 },
-  { authority: 2, country: "CZE", court: "Nejvyšší soud", lexical: 0.42 },
+  {
+    authority: 0,
+    country: "CZE",
+    court: "Ústavní soud",
+    courtId: null,
+    lexical: 0.5,
+  },
+  {
+    authority: 2,
+    country: "CZE",
+    court: "Nejvyšší soud",
+    courtId: null,
+    lexical: 0.42,
+  },
   {
     authority: 1,
     country: "CZE",
     court: "Okresní soud v Kolíně",
+    courtId: null,
     lexical: 0.9,
   },
   {
     authority: 0.3,
     country: "SVK",
     court: "Najvyšší súd Slovenskej republiky",
+    courtId: null,
     lexical: 0.7,
   },
-  { authority: 0, country: "CZE", court: "Sąd Najwyższy", lexical: 0.6 },
-  { authority: 4, country: "XYZ", court: "A court nobody ranks", lexical: 0.1 },
+  {
+    authority: 0,
+    country: "CZE",
+    court: "Sąd Najwyższy",
+    courtId: null,
+    lexical: 0.6,
+  },
+  {
+    authority: 4,
+    country: "XYZ",
+    court: "A court nobody ranks",
+    courtId: null,
+    lexical: 0.1,
+  },
+  // A United States court at each directory tier, ranked by its id.
+  {
+    authority: 1,
+    country: "USA",
+    court: "Supreme Court of the United States",
+    courtId: "scotus",
+    lexical: 0.3,
+  },
+  {
+    authority: 1,
+    country: "USA",
+    court: "Court of Appeals for the First Circuit",
+    courtId: "ca1",
+    lexical: 0.3,
+  },
+  {
+    authority: 1,
+    country: "USA",
+    court: "District Court, D. Massachusetts",
+    courtId: "mad",
+    lexical: 0.3,
+  },
+  {
+    authority: 1,
+    country: "USA",
+    court: "Massachusetts Land Court",
+    courtId: "masslandct",
+    lexical: 0.3,
+  },
 ] as const;
 
 test("the Postgres blend equals the TypeScript blend for the same decision", async () => {
   const map = courtWeightMapFromSeed();
-  const courtTier = sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      map,
-    }),
-  );
+  const courtTier = courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map,
+  });
 
-  for (const { authority, country, court, lexical } of BLEND_FIXTURES) {
+  const usaTiers: number[] = [];
+  for (const fixture of BLEND_FIXTURES) {
+    const { authority, country, court, courtId, lexical } = fixture;
+    const { tier } = decisionCourtWeight(map, { court, country, courtId });
+    if (country === "USA") {
+      usaTiers.push(tier);
+    }
     const [inTypeScript] = blendStableCitationAuthority({
       candidates: [{ id: court, score: lexical }],
       authorityById: new Map([[court, authority]]),
-      signals: [
-        courtTierSignal(
-          new Map([[court, courtWeightFromMap(map, court, country).tier]]),
-        ),
-      ],
+      signals: [courtTierSignal(new Map([[court, tier]]))],
     });
 
     const scored = sql<number>`(${blendedRankSql({
@@ -178,13 +240,17 @@ test("the Postgres blend equals the TypeScript blend for the same decision", asy
     })})::float8`;
     const [row] = await db
       .select({ v: scored })
-      .from(sql`(VALUES (${court}, ${country})) AS d(court, country)`);
+      .from(
+        sql`(VALUES (${court}, ${country}, ${courtId}::text)) AS d(court, country, court_id)`,
+      );
 
     expect(Number(row?.v), court).toBeCloseTo(
       inTypeScript?.score ?? Number.NaN,
       12,
     );
   }
+  // The USA fixtures span the directory's tiers, apex first.
+  expect(usaTiers).toEqual([3, 2, 1, 1]);
 });
 
 test("Postgres resolves an overlapping court to the tier the lookup does", async () => {
@@ -217,19 +283,20 @@ test("Postgres resolves an overlapping court to the tier the lookup does", async
       ],
     ],
   ]);
-  const courtTier = sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      map: overlapping,
-    }),
-  );
+  const courtTier = courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map: overlapping,
+  });
 
   // A country the registry does not rank, so both runtimes take the
   // cross-jurisdiction fallback rather than the scoped branch.
   const [row] = await db
     .select({ v: sql<number>`(${courtTier})::float8` })
-    .from(sql`(VALUES ('Shared Court', 'XZZ')) AS d(court, country)`);
+    .from(
+      sql`(VALUES ('Shared Court', 'XZZ', NULL::text)) AS d(court, country, court_id)`,
+    );
 
   expect(Number(row?.v)).toBe(
     courtWeightFromMap(overlapping, "Shared Court", "XZZ").tier,
@@ -245,14 +312,18 @@ test("an unseeded registry renders ranking SQL Postgres accepts", async () => {
   // *and executed*, because the fault is a syntax error the renderer alone
   // cannot show.
   const empty: CourtWeightMap = new Map();
-  const courtTier = sql.raw(
-    courtTierSqlFromMap({
-      countryColumn: "d.country",
-      courtColumn: "d.court",
-      map: empty,
-    }),
-  );
-  const citingWeight = sql.raw(courtWeightSql("d.court", []));
+  const courtTier = courtTierSqlFromMap({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    map: empty,
+  });
+  const citingWeight = courtWeightSql({
+    countryColumn: "d.country",
+    courtColumn: "d.court",
+    courtIdColumn: "d.court_id",
+    entries: [],
+  });
 
   const [row] = await db
     .select({
@@ -265,7 +336,9 @@ test("an unseeded registry renders ranking SQL Postgres accepts", async () => {
         lexicalRank: sql`0.5::float8`,
       })})::float8`,
     })
-    .from(sql`(VALUES ('Ústavní soud', 'CZE')) AS d(court, country)`);
+    .from(
+      sql`(VALUES ('Ústavní soud', 'CZE', NULL::text)) AS d(court, country, court_id)`,
+    );
 
   // The same default the TypeScript lookup falls back to for a court no row
   // ranks, which is every court while the registry is empty.

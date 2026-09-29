@@ -84,6 +84,7 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
+  isChatTurnNotOwned,
   isChatTurnRunIdTaken,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -2450,10 +2451,13 @@ export const createSendMessage = (
 
         // A completed, non-anonymized turn marks compaction due and titles a
         // new thread; neither affects whether the turn itself settled.
-        const runCompletedTurnFollowUps = async ({
-          messagesAfterAssistantPersist,
-          resolvedResponseMessage,
-        }: CompletedTurnFollowUps) => {
+        const runCompletedTurnFollowUps = async (
+          run: ChatTurnRun,
+          {
+            messagesAfterAssistantPersist,
+            resolvedResponseMessage,
+          }: CompletedTurnFollowUps,
+        ) => {
           if (
             messagesAfterAssistantPersist !== null &&
             body.sendMode !== CHAT_SEND_MODE.anonymized
@@ -2474,18 +2478,20 @@ export const createSendMessage = (
             body.sendMode !== CHAT_SEND_MODE.anonymized
           ) {
             detached(
-              generateThreadTitle({
-                initialTitle: initialThreadTitle,
-                messages: [parsedMessage.message, resolvedResponseMessage],
-                organizationId: session.activeOrganizationId,
-                orgAIConfig,
-                promptCachingEnabled,
-                recordAuditEvent,
-                safeDb,
-                threadId: body.threadId,
-                threadWorkspaceId: workspaceId,
-                userId: user.id,
-              }),
+              run.followUp(
+                generateThreadTitle({
+                  initialTitle: initialThreadTitle,
+                  messages: [parsedMessage.message, resolvedResponseMessage],
+                  organizationId: session.activeOrganizationId,
+                  orgAIConfig,
+                  promptCachingEnabled,
+                  recordAuditEvent,
+                  safeDb,
+                  threadId: body.threadId,
+                  threadWorkspaceId: workspaceId,
+                  userId: user.id,
+                }),
+              ),
               "send-message.generate-thread-title",
             );
           }
@@ -2592,6 +2598,15 @@ export const createSendMessage = (
                     workspaceId,
                     indexThread: dependencies.indexThread,
                   });
+                  if (
+                    Result.isError(persistResult) &&
+                    isChatTurnNotOwned(persistResult.error)
+                  ) {
+                    // Another execution or the reaper settled the turn
+                    // first: its outcome stands, and this run has nothing
+                    // left to store.
+                    return Result.ok(null);
+                  }
                   if (Result.isError(persistResult)) {
                     captureError(persistResult.error, {
                       threadId: body.threadId,
@@ -2666,7 +2681,8 @@ export const createSendMessage = (
                     if (settled.value !== null) {
                       const followUps = settled.value;
                       const followedUp = await Result.tryPromise(
-                        async () => await runCompletedTurnFollowUps(followUps),
+                        async () =>
+                          await runCompletedTurnFollowUps(run, followUps),
                       );
                       if (Result.isError(followedUp)) {
                         observeFailure(followedUp.error, {

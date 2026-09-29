@@ -1294,9 +1294,9 @@ const openConversation = async () => {
   return { model, real };
 };
 
-const closeConversation = ({ real }: { real: Real }) => {
+const closeConversation = async ({ real }: { real: Real }) => {
   real.client.dispose();
-  real.harness.close();
+  await real.harness.close();
 };
 
 const runConversations = async (
@@ -1308,7 +1308,7 @@ const runConversations = async (
       try {
         await fc.asyncModelRun(() => conversation, sequence);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     }),
     propertyConfig({ numRuns: 25, seed: propertySeed() }),
@@ -1325,7 +1325,7 @@ const inConversation = async (
   try {
     await steps(conversation.model, conversation.real);
   } finally {
-    closeConversation(conversation);
+    await closeConversation(conversation);
   }
 };
 
@@ -1520,7 +1520,7 @@ describe("a conversation's live view", () => {
           real,
         );
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1549,7 +1549,7 @@ describe("a conversation's live view", () => {
           [[{ ...STEP, calls: ["approval"], text: true }]],
         ).run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1574,7 +1574,7 @@ describe("a conversation's live view", () => {
         expect(real.ledger.pending).toHaveLength(1);
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1601,7 +1601,7 @@ describe("a conversation's live view", () => {
         expect(real.ledger.effects).toHaveLength(1);
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1645,7 +1645,7 @@ describe("a conversation's live view", () => {
         expect(real.ledger.latest).toBe("failed");
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1666,7 +1666,7 @@ describe("a conversation's live view", () => {
         ).run(model, real);
         expect(real.ledger.pending).toHaveLength(1);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1759,7 +1759,7 @@ describe("a conversation's live view", () => {
           }),
         ).toBe(false);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1781,7 +1781,7 @@ describe("a conversation's live view", () => {
         await new ResolveCards(["approve"], [TEXT_ANSWER]).run(model, real);
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1839,7 +1839,7 @@ describe("a conversation's live view", () => {
         ).toHaveLength(1);
         expect(prefixBreaksOf(prompts)).toEqual([]);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1876,7 +1876,7 @@ describe("a conversation's live view", () => {
           getOutputTokenLimit(HARNESS_CHAT_MODEL_ID),
         ]);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1905,7 +1905,7 @@ describe("a conversation's live view", () => {
         ]);
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1932,7 +1932,7 @@ describe("a conversation's live view", () => {
         ).run(model, real);
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -1969,7 +1969,7 @@ describe("a conversation's live view", () => {
         await harness.expectSoundWebClient({ client: real.client, threadId });
         expect(harness.executions).toEqual(["NDA"]);
       } finally {
-        closeConversation({ real });
+        await closeConversation({ real });
       }
     },
     propertyTestTimeout(30_000),
@@ -1996,7 +1996,7 @@ describe("a conversation's live view", () => {
 
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -2042,7 +2042,7 @@ describe("a conversation's live view", () => {
 
         expect(harness.executions).toEqual(["NDA"]);
       } finally {
-        closeConversation({ real });
+        await closeConversation({ real });
       }
     },
     propertyTestTimeout(30_000),
@@ -2092,7 +2092,7 @@ describe("a conversation's live view", () => {
         ]);
         expect(harness.executions).toEqual(["NDA"]);
       } finally {
-        closeConversation({ real });
+        await closeConversation({ real });
       }
     },
     propertyTestTimeout(30_000),
@@ -2147,7 +2147,7 @@ describe("a conversation's live view", () => {
           violations: [],
         });
       } finally {
-        closeConversation({ real });
+        await closeConversation({ real });
       }
     },
     propertyTestTimeout(30_000),
@@ -2183,7 +2183,7 @@ describe("a conversation's live view", () => {
         await new ResendLatest([TEXT_ANSWER]).run(model, real);
         await new ReloadPage().run(model, real);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
@@ -2211,7 +2211,7 @@ describe("a conversation's live view", () => {
         await new SendUserMessage([TEXT_ANSWER], "Continue").run(model, real);
         expect(real.harness.executions).toHaveLength(1);
       } finally {
-        closeConversation(conversation);
+        await closeConversation(conversation);
       }
     },
     propertyTestTimeout(30_000),
