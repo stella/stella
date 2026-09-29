@@ -85,7 +85,6 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
   catalogue: WAIVER_REASON.preExistingGap,
-  chat: WAIVER_REASON.preExistingGap,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,

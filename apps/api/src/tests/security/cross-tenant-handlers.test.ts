@@ -4,10 +4,14 @@ import {
   beforeAll,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { eq } from "drizzle-orm";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
@@ -19,6 +23,9 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawResearchAnswers,
   caseLawResearchColumns,
+  chatMessages,
+  chatThreads,
+  chatTurns,
   documentTranslationRuns,
   entities,
   entityViews,
@@ -38,6 +45,25 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import forkChatThread from "@/api/handlers/chat/fork/create";
+import readChatThreadTitle from "@/api/handlers/chat/get-thread-title";
+import { encodeMessagePageCursor } from "@/api/handlers/chat/message-page";
+import listChatMessages from "@/api/handlers/chat/messages/list";
+import listOlderChatMessages from "@/api/handlers/chat/older-messages/list";
+import readFileChatThread from "@/api/handlers/chat/read-file-thread";
+import { createSendMessage } from "@/api/handlers/chat/send-message";
+import {
+  rollbackUnpersistedChatSideEffects,
+  uploadMessageFilesWithRollback,
+} from "@/api/handlers/chat/send-message-side-effects";
+import listUnavailableChatSkills from "@/api/handlers/chat/skill-availability/list";
+import deleteChatThread from "@/api/handlers/chat/threads/delete";
+import listChatThreads from "@/api/handlers/chat/threads/list";
+import renameChatThread from "@/api/handlers/chat/threads/rename";
+import updateChatThread from "@/api/handlers/chat/threads/update";
+import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import cancelChatTurn from "@/api/handlers/chat/turns/cancel";
+import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
@@ -66,10 +92,12 @@ import readTimeEntryById from "@/api/handlers/time-entries/get";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -238,6 +266,153 @@ const compareDocumentDependencies = {
 const compareDocumentVersions = createDocumentCompareHandler(
   compareDocumentDependencies,
 );
+
+// Chat threads are private to one person in one organization. The chat rows
+// below belong to user A1 working in organization B, so workspace A (user
+// A1, organization A) differs from their owner by the organization alone: a
+// handler that filtered on the user and left the firm to chance would pass a
+// case built on user B1's rows. The turn, delete and send cases get threads
+// of their own, so no positive case removes what another case reads.
+const chatThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222260",
+);
+const chatUserMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222261",
+);
+const chatAssistantMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222262",
+);
+const chatTurnThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222263",
+);
+const chatTurnUserMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222264",
+);
+const chatTurnB = toSafeId<"chatTurn">("22222222-2222-4222-8222-222222222265");
+const chatDeleteThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222266",
+);
+const chatSendThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222267",
+);
+const chatForkFromA = toSafeId<"chatThread">(
+  "11111111-1111-4111-8111-111111111268",
+);
+const chatForkFromB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222268",
+);
+const chatThreadTitleB = "Chat thread B";
+const chatRenameFromA = "Renamed from organization A";
+
+const chatSendOrgAIConfig = {
+  providers: [{ provider: "openai", apiKey: "test-api-key" }],
+  overrideModels: {
+    chat: { provider: "openai", modelId: "gpt-5.4-mini" },
+    fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+    pdf: { provider: "openai", modelId: "gpt-5.4" },
+    reasoning: { provider: "openai", modelId: "gpt-5.4" },
+  },
+  decision: null,
+} satisfies OrgAIConfig;
+
+// The model call is the only seam replaced: thread resolution, scope checks
+// and persistence all run as they do in production, so a send that reaches
+// the stream has passed every tenant boundary on the way.
+const streamChatStub = mock(
+  async () =>
+    new Response("stream started", {
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+);
+
+const sendChatMessage = createSendMessage({
+  createRefRegistry: createChatRefRegistry,
+  indexThread: async () => undefined,
+  loadExternalMcpTools: async () => {
+    const close = async () => undefined;
+    return {
+      close,
+      connectors: [],
+      source: externalMcpToolsModule.createStellaMcpToolSource({
+        closeClients: close,
+        sourceTools: {},
+      }),
+      tools: {},
+    };
+  },
+  loadWebSearchProviders: async () => ({
+    urlFetcher: null,
+    webSearchProvider: null,
+  }),
+  rollbackSideEffects: rollbackUnpersistedChatSideEffects,
+  streamResponse: asTestRaw(streamChatStub),
+  uploadMessageFiles: uploadMessageFilesWithRollback,
+});
+
+type SendChatMessageBody = Parameters<
+  typeof sendChatMessage.handler
+>[0]["body"];
+
+const chatSendRequest = (threadId: SafeId<"chatThread">, messageId: string) => {
+  const message = {
+    id: messageId,
+    parts: [{ content: "Summarise the matter.", type: "text" }],
+    role: "user",
+  };
+  const forwardedProps = {
+    contextMatterIds: [],
+    message,
+    runId: `run-${messageId}`,
+    sendMode: CHAT_SEND_MODE.rawOverride,
+    threadId,
+  };
+  return {
+    body: asTestRaw<SendChatMessageBody>({
+      context: [],
+      data: forwardedProps,
+      forwardedProps,
+      messages: [message],
+      runId: forwardedProps.runId,
+      state: {},
+      threadId,
+      tools: [],
+    }),
+    orgAIConfig: chatSendOrgAIConfig,
+    pinServerValidatedWorkspaceId: () => false,
+  };
+};
+
+/** The owner's view of a chat thread, read past RLS after a handler ran. */
+const readChatThreadRow = async (threadId: SafeId<"chatThread">) =>
+  (
+    await testDb
+      .select({
+        chatModel: chatThreads.chatModel,
+        title: chatThreads.title,
+        webSearchEnabled: chatThreads.webSearchEnabled,
+      })
+      .from(chatThreads)
+      .where(eq(chatThreads.id, threadId))
+  ).at(0) ?? null;
+
+const countChatMessages = async (threadId: SafeId<"chatThread">) =>
+  (
+    await testDb
+      .select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, threadId))
+  ).length;
+
+const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
+  (
+    await testDb
+      .select({
+        cancelRequestedAt: chatTurns.cancelRequestedAt,
+        status: chatTurns.status,
+      })
+      .from(chatTurns)
+      .where(eq(chatTurns.id, turnId))
+  ).at(0) ?? null;
 
 const savedSearchCriteria = (
   workspaceId: SafeId<"workspace">,
@@ -835,7 +1010,346 @@ const isolationCases: IsolationCase[] = [
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
   },
+  {
+    name: "chat thread list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatThreads, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatThreads, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) =>
+      expect(globalChatThreadIds(result)).not.toContain(chatThreadB),
+    expectPositive: (result) =>
+      expect(globalChatThreadIds(result)).toContain(chatThreadB),
+  },
+  {
+    name: "chat messages list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatMessages, workspaceA, {
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatMessages, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(chatMessageIds(result)).toEqual([
+        chatUserMessageB,
+        chatAssistantMessageB,
+      ]),
+  },
+  {
+    // A missing thread may be served as an empty draft; another firm's
+    // thread must come back as exactly that, never as its contents.
+    name: "chat messages list (draft fallback)",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatMessages, workspaceA, {
+        params: { threadId: chatThreadB },
+        query: { allowMissingThread: true },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatMessages, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB },
+        query: { allowMissingThread: true },
+      }),
+    expectDenied: (result) =>
+      expect(result).toMatchObject({ messages: [], threadExists: false }),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({ threadExists: true }),
+  },
+  {
+    // The caller owns this thread, but it sits in a matter their session no
+    // longer reaches: the matter boundary alone keeps it closed.
+    name: "chat messages list (matter without access)",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listChatMessages, workspaceA, {
+        params: { threadId: testIds.chatThreadWorkspaceA2 },
+        query: {},
+      }),
+    runBPositive: async ({ ids: testIds }) =>
+      await runHandler(
+        listChatMessages,
+        createWorkspaceContext({
+          activeWorkspaceIds: [testIds.wsA1, testIds.wsA2],
+          organizationId: testIds.orgA,
+          userId: testIds.userA1,
+          workspaceId: testIds.wsA2,
+        }),
+        {
+          params: { threadId: testIds.chatThreadWorkspaceA2 },
+          query: { workspaceId: testIds.wsA2 },
+        },
+      ),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expect(chatMessageIds(result)).toEqual([testIds.chatMessageWorkspaceA2]),
+  },
+  {
+    name: "older chat messages list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listOlderChatMessages, workspaceA, {
+        params: { threadId: chatThreadB },
+        query: { before: encodeMessagePageCursor(chatAssistantMessageB) },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listOlderChatMessages, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB },
+        query: { before: encodeMessagePageCursor(chatAssistantMessageB) },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(chatMessageIds(result)).toEqual([chatUserMessageB]),
+  },
+  {
+    name: "chat thread title read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readChatThreadTitle, workspaceA, {
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readChatThreadTitle, sameUserWorkspaceB, {
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toEqual({ title: expect.any(String) }),
+  },
+  {
+    name: "chat thread rename",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(renameChatThread, workspaceA, {
+        body: { title: chatRenameFromA },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(renameChatThread, sameUserWorkspaceB, {
+        body: { title: chatThreadTitleB },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "thread")).toMatchObject({
+        title: chatThreadTitleB,
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ title: chatThreadTitleB }),
+  },
+  {
+    // An upsert: a thread id the caller cannot see must neither be updated
+    // nor answered by a fresh placeholder row under the caller's firm.
+    name: "chat thread web search toggle",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThread, workspaceA, {
+        body: { webSearchEnabled: true },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThread, sameUserWorkspaceB, {
+        body: { webSearchEnabled: false },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "thread")).toMatchObject({
+        webSearchEnabled: false,
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ webSearchEnabled: false }),
+  },
+  {
+    name: "chat thread model selection",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(updateChatThreadModel, workspaceA, {
+        body: { model: null },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(updateChatThreadModel, sameUserWorkspaceB, {
+        body: { model: null },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "thread")).not.toBeNull();
+    },
+    expectPositive: (result) =>
+      expect(result).toEqual({ model: null, reasoningEffort: null }),
+  },
+  {
+    name: "chat thread fork",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(forkChatThread, workspaceA, {
+        body: {
+          newThreadId: chatForkFromA,
+          upToMessageId: chatAssistantMessageB,
+        },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+      fork: await readChatThreadRow(chatForkFromA),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(forkChatThread, sameUserWorkspaceB, {
+        body: {
+          newThreadId: chatForkFromB,
+          upToMessageId: chatAssistantMessageB,
+        },
+        params: { threadId: chatThreadB },
+        query: {},
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "fork")).toBeNull();
+    },
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "threadId", chatForkFromB),
+  },
+  {
+    // Deleting another firm's thread answers like a missing one; what matters
+    // is that the row outlives the request.
+    name: "chat thread delete",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(deleteChatThread, workspaceA, {
+        params: { threadId: chatDeleteThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatDeleteThreadB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) => ({
+      response: await runHandler(deleteChatThread, sameUserWorkspaceB, {
+        params: { threadId: chatDeleteThreadB },
+        query: {},
+      }),
+      thread: await readChatThreadRow(chatDeleteThreadB),
+    }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBeNull();
+      expect(recordField(result, "thread")).not.toBeNull();
+    },
+    expectPositive: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBeNull();
+      expect(recordField(result, "thread")).toBeNull();
+    },
+  },
+  {
+    name: "chat turn cancel",
+    runAAgainstB: async ({ workspaceA }) => ({
+      response: await runHandler(cancelChatTurn, workspaceA, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+      }),
+      turn: await readChatTurnRow(chatTurnB),
+    }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(cancelChatTurn, sameUserWorkspaceB, {
+        params: { threadId: chatTurnThreadB, turnId: chatTurnB },
+      }),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "turn")).toEqual({
+        cancelRequestedAt: null,
+        status: "accepted",
+      });
+    },
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        turn: { id: chatTurnB, status: "cancelled" },
+      }),
+  },
+  {
+    name: "chat message send",
+    runAAgainstB: async ({ workspaceA }) => {
+      streamChatStub.mockClear();
+      return {
+        response: await runHandler(
+          sendChatMessage,
+          workspaceA,
+          chatSendRequest(chatSendThreadB, Bun.randomUUIDv7()),
+        ),
+        streamed: streamChatStub.mock.calls.length,
+        messages: await countChatMessages(chatSendThreadB),
+      };
+    },
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(
+        sendChatMessage,
+        sameUserWorkspaceB,
+        chatSendRequest(chatSendThreadB, Bun.randomUUIDv7()),
+      ),
+    expectDenied: (result) => {
+      expect(getStatusCode(recordField(result, "response"))).toBe(404);
+      expect(recordField(result, "streamed")).toBe(0);
+      expect(recordField(result, "messages")).toBe(0);
+    },
+    expectPositive: (result) => expect(result).toBeInstanceOf(Response),
+  },
+  {
+    // The composer names the open file by id; another firm's document is
+    // not found rather than evaluated.
+    name: "chat skill availability for an open file",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listUnavailableChatSkills, workspaceA, {
+        query: chatSkillFileQuery(testIds),
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(listUnavailableChatSkills, workspaceB, {
+        query: chatSkillFileQuery(testIds),
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expect(result).toMatchObject({
+        unavailable: expect.any(Array),
+        unavailableHere: expect.any(Array),
+      }),
+  },
+  {
+    // File chats are keyed by the file the user opened. Organization B,
+    // holding organization A's entity and field ids, finds no thread.
+    name: "file chat thread read",
+    runAAgainstB: async ({ ids: testIds, sameUserWorkspaceB }) =>
+      await runHandler(readFileChatThread, sameUserWorkspaceB, {
+        query: { entityId: testIds.entityA1, fieldId: testIds.fieldA1 },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(readFileChatThread, workspaceA, {
+        query: { entityId: testIds.entityA1, fieldId: testIds.fieldA1 },
+      }),
+    expectDenied: (result) =>
+      expect(result).toMatchObject({ messages: [], threadId: null }),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(
+        result,
+        "threadId",
+        testIds.chatThreadWorkspaceA1,
+      ),
+  },
 ];
+
+const chatSkillFileQuery = (testIds: TestIds) => ({
+  anonymized: false,
+  browserExtension: false,
+  document: CHAT_SKILL_DOCUMENT.file,
+  documentId: testIds.entityB1,
+  fileFieldId: testIds.fileFieldB1,
+  webSearch: false,
+});
 
 beforeAll(async () => {
   testDb = await getTestDb();
@@ -1042,6 +1556,65 @@ beforeAll(async () => {
     entityType: "entity",
     entityId: ids.entityB1,
     idempotencyKey: "cross-tenant:notification-b",
+  });
+  const chatThreadOfB = (id: SafeId<"chatThread">) => ({
+    id,
+    organizationId: ids.orgB,
+    title: chatThreadTitleB,
+    userId: ids.userA1,
+    workspaceId: null,
+  });
+  await testDb
+    .insert(chatThreads)
+    .values([
+      chatThreadOfB(chatThreadB),
+      chatThreadOfB(chatTurnThreadB),
+      chatThreadOfB(chatDeleteThreadB),
+      chatThreadOfB(chatSendThreadB),
+    ]);
+  const chatText = (text: string) => ({
+    version: 1 as const,
+    data: [{ type: "text" as const, text }],
+  });
+  const chatAskedAt = new Date("2026-09-01T09:00:00.000Z");
+  await testDb.insert(chatMessages).values([
+    {
+      id: chatUserMessageB,
+      threadId: chatThreadB,
+      userId: ids.userA1,
+      workspaceId: null,
+      role: "user",
+      content: chatText("Summarise the matter."),
+      createdAt: chatAskedAt,
+    },
+    {
+      id: chatAssistantMessageB,
+      threadId: chatThreadB,
+      userId: ids.userA1,
+      workspaceId: null,
+      role: "assistant",
+      content: chatText("Here is the summary."),
+      createdAt: new Date(chatAskedAt.getTime() + 1000),
+    },
+    {
+      id: chatTurnUserMessageB,
+      threadId: chatTurnThreadB,
+      userId: ids.userA1,
+      workspaceId: null,
+      role: "user",
+      content: chatText("Draft the reply."),
+      createdAt: chatAskedAt,
+    },
+  ]);
+  await testDb.insert(chatTurns).values({
+    id: chatTurnB,
+    // An accepted turn holds a lease until an owner claims it.
+    leaseExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    organizationId: ids.orgB,
+    threadId: chatTurnThreadB,
+    userId: ids.userA1,
+    userMessageId: chatTurnUserMessageB,
+    workspaceId: null,
   });
 });
 
@@ -1262,6 +1835,31 @@ function expectVersionsContainId(result: unknown, expectedId: string): void {
       (version) => isRecord(version) && version["id"] === expectedId,
     ),
   ).toBe(true);
+}
+
+function recordField(result: unknown, field: string): unknown {
+  if (!isRecord(result)) {
+    throw new Error("Expected an object result");
+  }
+  return result[field];
+}
+
+function globalChatThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const threads = recordField(result, "global");
+  if (!Array.isArray(threads)) {
+    throw new TypeError("Expected a chat thread list response");
+  }
+  return threads.map((thread) => recordField(thread, "id"));
+}
+
+function chatMessageIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const messages = recordField(result, "messages");
+  if (!Array.isArray(messages)) {
+    throw new TypeError("Expected a chat message page");
+  }
+  return messages.map((message) => recordField(message, "id"));
 }
 
 const getStatusCode = (result: unknown): number | null => {
