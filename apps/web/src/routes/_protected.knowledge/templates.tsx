@@ -1,31 +1,22 @@
 import { useCallback, useState } from "react";
 
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
+import {
+  memberKnowledgeActions,
+  memberKnowledgeSource,
+} from "@/features/knowledge/member/member-templates";
+import { TemplateListMessage } from "@/features/knowledge/views/templates/template-list-view";
 import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import {
-  knowledgeKeys,
-  templateCategoriesOptions,
-  templateDetailOptions,
-  templatesOptions,
-} from "@/lib/knowledge/queries";
-import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
@@ -43,50 +34,8 @@ export const Route = createFileRoute("/_protected/knowledge/templates")({
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-const TEMPLATE_SIDEBAR_KEYS = ["a", "b", "c", "d", "e"];
-const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
-
-// Mirrors the TemplateList layout (w-48 category sidebar + bordered list
-// pane with count/new-template toolbar and divided rows) so the page
-// keeps its shape while templates load; only the values fade in.
-function TemplatesPageSkeleton() {
-  return (
-    <div className="flex min-h-0 flex-1">
-      <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
-        <nav className="flex-1 space-y-1 p-2">
-          <Skeleton className="h-7 w-full rounded-md" />
-          <div className="my-1 border-t" />
-          {TEMPLATE_SIDEBAR_KEYS.map((key) => (
-            <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
-          ))}
-        </nav>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col border-s">
-        <div className="flex items-center justify-between border-b px-4 py-2">
-          <Skeleton className="h-4 w-8" />
-          <Skeleton className="h-8 w-32 rounded-md" />
-        </div>
-
-        <ul className="flex-1 divide-y overflow-y-auto">
-          {TEMPLATE_ROW_KEYS.map((key) => (
-            <li className="flex items-center gap-4 px-4 py-3" key={key}>
-              <Skeleton className="size-9 shrink-0 rounded-lg" />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Skeleton className="h-4 w-48" />
-                <Skeleton className="h-3 w-32" />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
 function RouteComponent() {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -99,40 +48,17 @@ function RouteComponent() {
     null,
   );
 
-  const {
-    data: templatesData,
-    isLoading: templatesLoading,
-    isError: templatesError,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteQuery(
-    templatesOptions(activeOrganizationId, selectedCategoryId),
+  const templatesSource = memberKnowledgeSource.useTemplates(
+    activeOrganizationId,
+    selectedCategoryId,
   );
-  const { data: categoriesData } = useQuery(
-    templateCategoriesOptions(activeOrganizationId),
-  );
-
-  const templates = templatesData
-    ? templatesData.pages.flatMap((page) => page.items)
-    : [];
-  const categories =
-    categoriesData && "categories" in categoriesData
-      ? categoriesData.categories
-      : [];
+  const templateActions =
+    memberKnowledgeActions.useTemplateActions(activeOrganizationId);
+  const { invalidateTemplates, invalidateCategories } = templateActions;
 
   const handleCategorySelect = (id: string | null) => {
     setSelectedCategoryId(id);
   };
-
-  const invalidateTemplates = useCallback(() => {
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-      }),
-      "knowledge-templates.invalidate-templates",
-    );
-  }, [queryClient, activeOrganizationId]);
 
   // Studio state belongs to this route entry. Replacing it avoids leaving a
   // duplicate list entry behind when the Studio closes.
@@ -150,15 +76,6 @@ function RouteComponent() {
     );
   }, [navigate]);
 
-  const invalidateCategories = () => {
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.templateCategories.all(activeOrganizationId),
-      }),
-      "knowledge-templates.invalidate-categories",
-    );
-  };
-
   // Uploading a template drops you straight into the Studio: create it (the
   // server discovers fields from the DOCX), then open the editor. Field/clause
   // config now happens in the Studio, so there's no separate configure step.
@@ -166,10 +83,10 @@ function RouteComponent() {
   const openUploadedTemplate = useCallback(
     async (file: File) => {
       setUploading(true);
-      const response = await api.templates.put({
+      const response = await templateActions.upload(
         file,
-        name: file.name.replace(DOCX_EXTENSION_RE, ""),
-      });
+        file.name.replace(DOCX_EXTENSION_RE, ""),
+      );
       if (response.error) {
         setUploading(false);
         stellaToast.add({
@@ -188,18 +105,15 @@ function RouteComponent() {
       await openStudio(response.data.id);
       setUploading(false);
     },
-    [t, invalidateTemplates, openStudio],
+    [t, templateActions, invalidateTemplates, openStudio],
   );
 
   const openBlankTemplate = useCallback(
     async (name: string, style: StyleSelection) => {
       const response =
         style.type === "stella"
-          ? await api.templates.blank.put({ name })
-          : await api.templates["style-set"].put({
-              name,
-              styleSetId: toSafeId<"styleSet">(style.styleSetId),
-            });
+          ? await templateActions.createBlank(name)
+          : await templateActions.createFromStyleSet(name, style.styleSetId);
       if (response.error) {
         stellaToast.add({
           type: "error",
@@ -215,7 +129,7 @@ function RouteComponent() {
       await openStudio(response.data.id);
       return true;
     },
-    [t, invalidateTemplates, openStudio],
+    [t, templateActions, invalidateTemplates, openStudio],
   );
 
   if (openTemplateId !== undefined) {
@@ -273,34 +187,15 @@ function RouteComponent() {
     );
   }
 
-  if (templatesLoading) {
-    return <TemplatesPageSkeleton />;
-  }
-
-  if (templatesError) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("templates.loadFailed")}
-        </p>
-      </div>
-    );
-  }
-
-  if (uploading) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      </div>
-    );
+  // Loading and failed loads belong to the list view; an upload in flight
+  // holds the page only once the list itself is ready.
+  if (uploading && templatesSource.status === "ready") {
+    return <TemplateListMessage>{t("common.loading")}</TemplateListMessage>;
   }
 
   return (
     <>
       <TemplateList
-        categories={categories}
-        hasNextPage={hasNextPage}
-        isFetchingNextPage={isFetchingNextPage}
         onCategoriesChanged={invalidateCategories}
         onCategorySelect={handleCategorySelect}
         onCreateBlank={() => setStylePickerOpen(true)}
@@ -312,13 +207,15 @@ function RouteComponent() {
           );
         }}
         onLoadMore={() => {
-          detached(fetchNextPage(), "knowledge-templates.fetch-next-page");
+          detached(
+            templatesSource.fetchNextPage(),
+            "knowledge-templates.fetch-next-page",
+          );
         }}
         onSelect={(template) => {
           detached(openStudio(template.id), "knowledge-templates.open-studio");
         }}
-        selectedCategoryId={selectedCategoryId}
-        templates={templates}
+        source={templatesSource}
       />
       <StyleSetPickerDialog
         initialName={t("templates.untitledTemplate")}
@@ -358,7 +255,7 @@ const TemplateDetail = ({
     isLoading,
     isError,
     error,
-  } = useQuery(templateDetailOptions(activeOrganizationId, templateId));
+  } = memberKnowledgeSource.useTemplateDetail(activeOrganizationId, templateId);
 
   const detail =
     detailData &&
