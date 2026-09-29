@@ -48,6 +48,11 @@ import {
   MAX_SYNC_PAGES,
 } from "@/api/lib/legal-search/ingestion-constants";
 import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
+import {
+  EFFECTIVE_CONSOLIDATION,
+  typedLegislationClassification,
+} from "@/api/lib/legal-search/legislation-expression-classification";
+import type { LegislationExpressionClassification } from "@/api/lib/legal-search/legislation-expression-classification";
 import type {
   LegislationDocumentInput,
   LegislationSourceAdapter,
@@ -259,11 +264,17 @@ const settleLegislationCorpusProjection = async ({
  * something this parser does not yet read, and without the observation
  * fingerprint that change hashes identically and the row can never be
  * refreshed once a later parser learns to read it.
+ *
+ * The version's classification is appended only when it is one a writer could
+ * not state before classifications existed, so every hash stored before then
+ * keeps its bytes and an unchanged re-ingest of such a row stays a skip.
  */
-const legislationSourceHash = (
+export const legislationSourceHash = (
   input: LegislationDocumentInput,
   window: StoredWindow,
+  classification: LegislationExpressionClassification,
 ): string => {
+  const typed = typedLegislationClassification(classification);
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(
     JSON.stringify([
@@ -287,6 +298,15 @@ const legislationSourceHash = (
       input.metadata ?? {},
       input.rawHash,
       input.sourceRawContentType ?? null,
+      ...(typed === null
+        ? []
+        : [
+            [
+              typed.expressionKind,
+              typed.windowDisposition,
+              typed.windowDispositionBasis,
+            ],
+          ]),
     ]),
   );
   return hasher.digest("hex");
@@ -446,31 +466,41 @@ const storeSourceRaw = async ({
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
 };
 
-type StoredClassification = Required<
-  Pick<
-    typeof legislationDocuments.$inferInsert,
-    "expressionKind" | "windowDisposition" | "windowDispositionBasis"
-  >
->;
-
 /**
  * What the input says the version is. The contract can only express a
  * version with a placeable window, so every write states it effective; its
  * kind follows the input's version shape. A row that says otherwise is a
  * changed row, not an unchanged one.
+ *
+ * Except a withdrawal a replay cannot lift: a payload stored earlier proves
+ * what the publisher served then, not that it lists the version now, so a
+ * reparse of it keeps a withdrawn version exactly as stored: its kind, its
+ * disposition and its basis. Only a live observation restores one.
  */
 const storedClassification = (
   input: LegislationDocumentInput,
-): StoredClassification => ({
-  expressionKind:
-    input.version.type === "unversioned" ? "unversioned" : "consolidation",
-  windowDisposition: "effective",
-  windowDispositionBasis: null,
-});
+  existing: StoredVersion | undefined,
+): LegislationExpressionClassification => {
+  if (
+    input.origin === "stored-raw-replay" &&
+    existing?.windowDisposition === "withdrawn"
+  ) {
+    return {
+      expressionKind: existing.expressionKind,
+      windowDisposition: existing.windowDisposition,
+      windowDispositionBasis: existing.windowDispositionBasis,
+    };
+  }
+  return {
+    ...EFFECTIVE_CONSOLIDATION,
+    expressionKind:
+      input.version.type === "unversioned" ? "unversioned" : "consolidation",
+  };
+};
 
 const hasStoredClassification = (
   row: StoredVersion,
-  classification: StoredClassification,
+  classification: LegislationExpressionClassification,
 ): boolean =>
   row.expressionKind === classification.expressionKind &&
   row.windowDisposition === classification.windowDisposition &&
@@ -525,10 +555,7 @@ type StoredVersion = {
   astS3Key: string | null;
   sourceRawS3Key: string | null;
   sourceRawContentType: string | null;
-  expressionKind: string;
-  windowDisposition: string;
-  windowDispositionBasis: string | null;
-};
+} & LegislationExpressionClassification;
 
 type StoredVersionLookup = {
   input: LegislationDocumentInput;
@@ -759,11 +786,11 @@ export const processLegislationDocument = async (
   const sections = input.sections ?? null;
   const ast = input.ast ?? null;
   const window = storedWindow(input.version);
-  const sourceHash = legislationSourceHash(input, window);
   const expectedContentHash = corpusContentHash({ text, sections, ast });
-  const classification = storedClassification(input);
 
   let existing = await findStoredVersion({ input, window, scopedDb });
+  const classification = storedClassification(input, existing);
+  const sourceHash = legislationSourceHash(input, window, classification);
   const existingCorpusPlan =
     existing === undefined
       ? null
