@@ -109,39 +109,154 @@ test("keeps repeated relation scans distinct by structural position", () => {
   );
 });
 
+const coveringScan = (extra: Record<string, unknown> = {}) => ({
+  "Node Type": "Index Only Scan",
+  "Relation Name": "case_law_decisions",
+  "Index Name": "case_law_decisions_sitemap_shard_idx",
+  ...extra,
+});
+
 test("recognizes a LIMIT directly above a covering scan", () => {
   const scans = scanOccurrences({
     "Node Type": "Limit",
-    Plans: [
-      {
-        "Node Type": "Index Only Scan",
-        "Relation Name": "case_law_decisions",
-        "Index Name": "case_law_decisions_sitemap_shard_idx",
-      },
-    ],
+    "Plan Rows": 50,
+    Plans: [coveringScan()],
   });
   expect(scans[0]?.limitAbove).toBe(true);
+  expect(scans[0]?.limitRows).toBe(50);
   expect(heapFetchRiskViolations(scans, "page")).toEqual([]);
 });
 
-test("recognizes a LIMIT above a join on the scan's path", () => {
+test("a LIMIT does not bound scans beneath a blocking node", () => {
+  for (const blocking of [
+    "Aggregate",
+    "Sort",
+    "Incremental Sort",
+    "Hash",
+    "Materialize",
+    "WindowAgg",
+    "Unique",
+    "SetOp",
+    "ProjectSet",
+  ]) {
+    const scans = scanOccurrences({
+      "Node Type": "Limit",
+      "Plan Rows": 5,
+      Plans: [{ "Node Type": blocking, Plans: [coveringScan()] }],
+    });
+    expect([blocking, scans[0]?.limitAbove]).toEqual([blocking, false]);
+    expect(heapFetchRiskViolations(scans, "aggregate")).toEqual([
+      "root/0/0: heap-fetch risk on case_law_decisions: declare one mitigation",
+    ]);
+  }
+});
+
+test("a LIMIT reaches a covering scan through streaming nodes only", () => {
   const scans = scanOccurrences({
     "Node Type": "Limit",
+    "Plan Rows": 5,
     Plans: [
       {
-        "Node Type": "Nested Loop",
+        "Node Type": "Append",
         Plans: [
+          { "Node Type": "Result", Plans: [coveringScan()] },
+          { "Node Type": "Subquery Scan", Plans: [coveringScan()] },
           {
-            "Node Type": "Index Only Scan",
-            "Relation Name": "case_law_decisions",
-            "Index Name": "case_law_decisions_sitemap_shard_idx",
+            "Node Type": "Subquery Scan",
+            Filter: "(rank = 1)",
+            Plans: [coveringScan()],
+          },
+          coveringScan({ Filter: "(language = 'cs')" }),
+          {
+            "Node Type": "Aggregate",
+            Plans: [
+              {
+                "Node Type": "Limit",
+                "Plan Rows": 3,
+                Plans: [coveringScan()],
+              },
+            ],
           },
         ],
       },
     ],
   });
-  expect(scans[0]?.limitAbove).toBe(true);
-  expect(heapFetchRiskViolations(scans, "aggregate")).toEqual([]);
+  expect(
+    scans.map(({ limitAbove, limitRows }) => [limitAbove, limitRows]),
+  ).toEqual([
+    [true, 5],
+    [true, 5],
+    [false, null],
+    [false, null],
+    [true, 3],
+  ]);
+});
+
+test("a LIMIT bounds only the preserved outer side of a join", () => {
+  const join = (joinType: string, extra: Record<string, unknown> = {}) =>
+    scanOccurrences({
+      "Node Type": "Limit",
+      "Plan Rows": 5,
+      Plans: [
+        {
+          "Node Type": "Nested Loop",
+          "Join Type": joinType,
+          ...extra,
+          Plans: [
+            coveringScan({ "Parent Relationship": "Outer" }),
+            coveringScan({ "Parent Relationship": "Inner" }),
+            coveringScan({
+              "Parent Relationship": "SubPlan",
+              "Subplan Name": "SubPlan 1",
+            }),
+          ],
+        },
+      ],
+    }).map(({ limitAbove }) => limitAbove);
+  expect(join("Left")).toEqual([true, false, false]);
+  expect(join("Inner")).toEqual([false, false, false]);
+  expect(join("Semi")).toEqual([false, false, false]);
+  expect(join("Left", { Filter: "(b.id IS NULL)" })).toEqual([
+    false,
+    false,
+    false,
+  ]);
+});
+
+test("a batched mitigation needs the observed LIMIT within its page size", () => {
+  const limited = (rows: number) =>
+    scanOccurrences({
+      "Node Type": "Limit",
+      "Plan Rows": rows,
+      Plans: [coveringScan()],
+    });
+  const mitigation = { type: "batched", pageSize: 100 } as const;
+  expect(heapFetchRiskViolations(limited(100), "page", mitigation)).toEqual([]);
+  expect(
+    heapFetchRiskViolations(
+      scanOccurrences(coveringScan()),
+      "page",
+      mitigation,
+    ),
+  ).toEqual([
+    "root: batched mitigation but no observed LIMIT bounds case_law_decisions",
+  ]);
+  expect(heapFetchRiskViolations(limited(101), "page", mitigation)).toEqual([
+    "root/0: LIMIT of 101 rows exceeds the batched page size 100 on case_law_decisions",
+  ]);
+  expect(
+    heapFetchRiskViolations(
+      scanOccurrences({
+        "Node Type": "Limit",
+        "Plan Rows": 10,
+        Plans: [{ "Node Type": "Aggregate", Plans: [coveringScan()] }],
+      }),
+      "page",
+      mitigation,
+    ),
+  ).toEqual([
+    "root/0/0: batched mitigation but no observed LIMIT bounds case_law_decisions",
+  ]);
 });
 
 test("flags an unbounded covering scan but leaves an Index Scan alone", () => {

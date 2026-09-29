@@ -15,7 +15,10 @@ export type ScanOccurrence = {
   indexCond: string | null;
   filter: string | null;
   rows: number | null;
+  /** A Limit stops this scan early; see `childLimitBound` for what counts. */
   limitAbove: boolean;
+  /** The tightest bounding Limit's estimated rows, when it has one. */
+  limitRows: number | null;
   subplans: readonly {
     position: string;
     name: string | null;
@@ -151,15 +154,75 @@ export const explainRoot = (explained: unknown): PlanNode => {
   return document["Plan"];
 };
 
+/** `null`: nothing stops the node early. `rows: null`: a Limit without an estimate. */
+type LimitBound = { rows: number | null } | null;
+
+const tighterBound = (bound: LimitBound, node: PlanNode): LimitBound => {
+  const planRows = node["Plan Rows"];
+  const rows = typeof planRows === "number" ? planRows : null;
+  if (bound === null || bound.rows === null) {
+    return { rows };
+  }
+  return { rows: rows === null ? bound.rows : Math.min(bound.rows, rows) };
+};
+
+/**
+ * Only nodes that emit at least one row per input row, and pull input lazily,
+ * pass an enclosing Limit to a child. Everything else counts as blocking:
+ * aggregates, sorts, hashes, materialization, windowing, set operations,
+ * Unique, ProjectSet (an empty set drops its input row), merge joins, and
+ * the inner side of any join, which reruns per outer row. SubPlans and
+ * InitPlans run separately, so an outer Limit bounds how often they run,
+ * never what they read. A Filter discards rows it has already read, so a
+ * node with one bounds nothing below it; EXPLAIN only estimates how many.
+ */
+const childLimitBound = (
+  node: PlanNode,
+  child: PlanNode,
+  bound: LimitBound,
+): LimitBound => {
+  const relationship = field(child, "Parent Relationship");
+  if (relationship === "SubPlan" || relationship === "InitPlan") {
+    return null;
+  }
+  const nodeType = field(node, "Node Type");
+  if (nodeType === "Limit") {
+    return tighterBound(bound, node);
+  }
+  if (bound === null || field(node, "Filter") !== null) {
+    return null;
+  }
+  switch (nodeType) {
+    case "Result":
+    case "Subquery Scan":
+    case "Append":
+    case "Merge Append":
+    case "Gather":
+    case "Gather Merge":
+      return bound;
+    case "Nested Loop":
+    case "Hash Join":
+      // A left join keeps every outer row, so the outer side streams to the Limit.
+      return field(node, "Join Type") === "Left" && relationship === "Outer"
+        ? bound
+        : null;
+    default:
+      return null;
+  }
+};
+
 /** Each physical relation scan keeps its structural path, including UNION arms. */
 export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
   const scans: ScanOccurrence[] = [];
-  const visit = (node: PlanNode, position: string, limitAbove: boolean) => {
+  const visit = (node: PlanNode, position: string, bound: LimitBound) => {
     const relation = field(node, "Relation Name");
     const nodeType = field(node, "Node Type");
+    const filter = field(node, "Filter");
     if (relation !== null && nodeType?.includes("Scan")) {
       const { index, indexCond } = indexDetails(node);
       const rows = node["Plan Rows"];
+      // A filtered scan reads past the rows the Limit counts.
+      const scanBound = filter === null ? bound : null;
       scans.push({
         position,
         alias: field(node, "Alias"),
@@ -167,18 +230,18 @@ export const scanOccurrences = (root: PlanNode): ScanOccurrence[] => {
         nodeType,
         index,
         indexCond,
-        filter: field(node, "Filter"),
+        filter,
         rows: typeof rows === "number" ? rows : null,
-        limitAbove,
+        limitAbove: scanBound !== null,
+        limitRows: scanBound?.rows ?? null,
         subplans: subplansOf(node, position),
       });
     }
-    const childHasLimitAbove = limitAbove || nodeType === "Limit";
     for (const [index, child] of childPlans(node).entries()) {
-      visit(child, `${position}/${index}`, childHasLimitAbove);
+      visit(child, `${position}/${index}`, childLimitBound(node, child, bound));
     }
   };
-  visit(root, "root", false);
+  visit(root, "root", null);
   return scans;
 };
 
@@ -188,13 +251,13 @@ export const heapFetchRiskViolations = (
   scanClass: "point" | "page" | "aggregate",
   mitigation?: HeapFetchMitigation,
 ): string[] => {
-  const riskyScans = scans.filter(
-    ({ relation, nodeType, limitAbove }) =>
+  const coveringScans = scans.filter(
+    ({ relation, nodeType }) =>
       guardedTables.has(relation) &&
       nodeType === "Index Only Scan" &&
-      !limitAbove &&
       scanClass !== "point",
   );
+  const riskyScans = coveringScans.filter(({ limitAbove }) => !limitAbove);
   if (mitigation === undefined) {
     return riskyScans.map(
       ({ position, relation }) =>
@@ -202,11 +265,25 @@ export const heapFetchRiskViolations = (
     );
   }
   switch (mitigation.type) {
-    case "batched":
-      return Number.isSafeInteger(mitigation.pageSize) &&
-        mitigation.pageSize > 0
-        ? []
-        : ["batched heap-fetch mitigation needs a positive page size"];
+    case "batched": {
+      const { pageSize } = mitigation;
+      if (!Number.isSafeInteger(pageSize) || pageSize <= 0) {
+        return ["batched heap-fetch mitigation needs a positive page size"];
+      }
+      // The declared page size only counts when the observed plan enforces it.
+      return coveringScans.flatMap(({ position, relation, limitRows }) => {
+        if (limitRows === null) {
+          return [
+            `${position}: batched mitigation but no observed LIMIT bounds ${relation}`,
+          ];
+        }
+        return limitRows > pageSize
+          ? [
+              `${position}: LIMIT of ${String(limitRows)} rows exceeds the batched page size ${String(pageSize)} on ${relation}`,
+            ]
+          : [];
+      });
+    }
     case "snapshot":
       if (!scans.some(({ relation }) => relation === mitigation.relation)) {
         return [
