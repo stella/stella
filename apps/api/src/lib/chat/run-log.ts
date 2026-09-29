@@ -15,22 +15,28 @@ import {
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction, rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatRunLogEntries, chatRunLogs, chatTurns } from "@/api/db/schema";
-import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 const MAX_CHUNK_BYTES = 1024 * 1024;
 const MAX_RUN_BYTES = 32 * MAX_CHUNK_BYTES;
 const READ_PAGE_SIZE = 256;
 const TAIL_POLL_MS = 250;
 const FIRST_ENTRY_WAIT_MS = 30_000;
-const CLOSED_LOG_RETENTION_MS = 15 * 60 * 1000;
+const CLOSED_LOG_RETENTION = "15 minutes";
 const RETENTION_HEADER_BATCH_SIZE = 32;
 export const RETENTION_ENTRY_BATCH_SIZE = 64;
 
-type SchedulerRunLogDb = Pick<typeof rootDb, "transaction">;
+type SchedulerRunLogDb = Pick<SchedulerDb, "transaction">;
+
+/** The fence a producer holds: its turn and the execution that claimed it. */
+type ChatRunLogExecution = {
+  executionId: string;
+  id: SafeId<"chatTurn">;
+};
 
 export class ChatRunLogError extends TaggedError("ChatRunLogError")<{
   message: string;
@@ -38,7 +44,7 @@ export class ChatRunLogError extends TaggedError("ChatRunLogError")<{
 
 type ChatRunLogOptions = {
   db: ScopedDb;
-  execution: ChatTurnExecution;
+  execution: ChatRunLogExecution;
   organizationId: SafeId<"organization">;
   resumeOffset?: string | null;
   runId: string;
@@ -466,8 +472,7 @@ export const sweepClosedChatRunLogs = async (db: SchedulerRunLogDb) =>
           isNotNull(chatRunLogs.closedAt),
           lt(
             chatRunLogs.closedAt,
-            // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff is computed by PostgreSQL at its timestamp precision
-            sql`now() - ${CLOSED_LOG_RETENTION_MS} * interval '1 millisecond'`,
+            sql`now() - ${CLOSED_LOG_RETENTION}::interval`,
           ),
         ),
       )
