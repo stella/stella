@@ -95,6 +95,10 @@ export const validateBaselineFile = (file: string): Baseline => {
 const routeSource = (specifier: string): string =>
   path.posix.normalize(`apps/web/src/${specifier.replace(/^\.\//u, "")}`);
 
+// The lookbehind keeps a long run of slashes linear to strip.
+const withoutTrailingSlash = (route: string) =>
+  route.replace(/(?<!\/)\/+$/u, "") || "/";
+
 const normalizeSource = (source: string): string => {
   const repoPath = source.replaceAll("\\", "/").replace(/^\.?\//u, "");
   return repoPath.replace(/\.(tsx?|jsx?)$/u, "");
@@ -147,14 +151,14 @@ const touchedRoutesInTree = (
       // Parent route variables correspond to the generated import alias plus "Import".
       const source = imports.get(ancestorAlias);
       if (source && changed.has(normalizeSource(source))) {
-        const route = node.route.replace(/\/+$/u, "") || "/";
+        const route = withoutTrailingSlash(node.route);
         touched.add(route);
         touched.add(`${route} target`);
         break;
       }
       if (ancestor.parent === "rootRouteImport") {
         if (changed.has("apps/web/src/routes/__root")) {
-          const route = node.route.replace(/\/+$/u, "") || "/";
+          const route = withoutTrailingSlash(node.route);
           touched.add(route);
           touched.add(`${route} target`);
         }
