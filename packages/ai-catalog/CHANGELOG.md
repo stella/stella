@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.3.1
+
+### Patch Changes
+
+- [#4099](https://github.com/stella/stella/pull/4099) [`3273fa0`](https://github.com/stella/stella/commit/3273fa02b350b9597aeca5c1b32bdb3b702fb16a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Offer Claude Sonnet 5.5 and refresh Mistral cached-input rates.
+
 ## 0.3.0
 
 ### Minor Changes
