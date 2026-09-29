@@ -45,9 +45,6 @@ import {
 import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { publicToolsContributePath } from "@/lib/knowledge/public-tools-path";
-import { pageTitle } from "@/lib/page-title";
-import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 
@@ -83,15 +80,6 @@ const INITIAL_FORM: ContributeFormState = {
 };
 
 type CommitStatus = "idle" | "loading" | "error";
-
-/** The contribute page's head, at the tools' current address. */
-export const createToolContributeHead = () =>
-  createPublicToolsHead({
-    description: "",
-    path: publicToolsContributePath(),
-    title: pageTitle("publicTools.contribute.title"),
-    type: "article",
-  });
 
 /** How to add a tool to the published catalogue. */
 export const ContributePage = () => {
