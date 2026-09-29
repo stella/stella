@@ -435,7 +435,7 @@ type ChatSendLifecycleOptions = {
  * Owns every resource that must be settled when a send stops before its run
  * starts. Starting the run hands the claimed turn over for good.
  */
-class ChatSendLifecycle {
+export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
   /** Ends this process's record of the claim; a no-op once ended. */
@@ -578,44 +578,47 @@ class ChatSendLifecycle {
   }
 
   async cleanup(): Promise<void> {
-    this.releaseClaim();
-    if (this.claimedTurn.status === "preflight") {
-      const failureResult = await persistFailedChatTurn({
-        code: "internal",
-        execution: this.claimedTurn.execution,
-        owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
-        recordAuditEvent: this.options.recordAuditEvent,
-        retryable: true,
-        safeDb: this.options.safeDb,
-        threadId: this.options.threadId,
-        userId: this.options.userId,
-        workspaceId: this.options.workspaceId,
-      });
-      if (Result.isError(failureResult)) {
-        captureError(failureResult.error, {
-          source: "send-message-claimed-turn-preflight-cleanup",
+    try {
+      if (this.claimedTurn.status === "preflight") {
+        const failureResult = await persistFailedChatTurn({
+          code: "internal",
+          execution: this.claimedTurn.execution,
+          owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+          recordAuditEvent: this.options.recordAuditEvent,
+          retryable: true,
+          safeDb: this.options.safeDb,
           threadId: this.options.threadId,
+          userId: this.options.userId,
+          workspaceId: this.options.workspaceId,
         });
+        if (Result.isError(failureResult)) {
+          captureError(failureResult.error, {
+            source: "send-message-claimed-turn-preflight-cleanup",
+            threadId: this.options.threadId,
+          });
+        }
       }
-    }
-    if (this.pendingSideEffects !== undefined) {
-      const rollbackResult = await this.options.rollbackSideEffects({
-        recordAuditEvent: this.options.recordAuditEvent,
-        safeDb: this.options.safeDb,
-        threadId: this.options.threadId,
-        threadState: this.pendingSideEffects.threadState,
-        uploadedFiles: this.pendingSideEffects.uploadedFiles,
-        userId: this.options.userId,
-      });
-      if (Result.isError(rollbackResult)) {
-        captureError(rollbackResult.error, {
-          source: "send-message-unpersisted-side-effect-rollback",
+      if (this.pendingSideEffects !== undefined) {
+        const rollbackResult = await this.options.rollbackSideEffects({
+          recordAuditEvent: this.options.recordAuditEvent,
+          safeDb: this.options.safeDb,
           threadId: this.options.threadId,
+          threadState: this.pendingSideEffects.threadState,
+          uploadedFiles: this.pendingSideEffects.uploadedFiles,
+          userId: this.options.userId,
         });
+        if (Result.isError(rollbackResult)) {
+          captureError(rollbackResult.error, {
+            source: "send-message-unpersisted-side-effect-rollback",
+            threadId: this.options.threadId,
+          });
+        }
       }
-    }
-    if (!this.connectorsHandedOff) {
-      await this.options.externalMcpToolsLoader.closeIfLoaded();
+      if (!this.connectorsHandedOff) {
+        await this.options.externalMcpToolsLoader.closeIfLoaded();
+      }
+    } finally {
+      this.releaseClaim();
     }
   }
 }

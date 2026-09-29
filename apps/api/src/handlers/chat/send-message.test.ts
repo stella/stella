@@ -9,7 +9,9 @@ import { CHAT_TURN_INTENT } from "@stll/api-contract";
 import type { SafeDb } from "@/api/db/safe-db";
 import { chatThreadNames, chatThreads, chatTurns } from "@/api/db/schema";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
+import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import {
+  ChatSendLifecycle,
   createSendMessage,
   shouldLoadExternalMcpToolsForStreaming,
 } from "@/api/handlers/chat/send-message";
@@ -21,6 +23,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -362,6 +365,70 @@ describe("agent connector isolation", () => {
 });
 
 describe("send message disconnect handling", () => {
+  test("tracks a preflight claim until settlement and rollback finish", async () => {
+    for (const settlementFails of [false, true]) {
+      const settlementStarted = Promise.withResolvers<undefined>();
+      const finishSettlement =
+        Promise.withResolvers<Result<boolean, DatabaseError>>();
+      const rollbackStarted = Promise.withResolvers<undefined>();
+      const finishRollback = Promise.withResolvers<undefined>();
+      let calls = 0;
+      const safeDb = asTestRaw<SafeDb>(async () => {
+        calls += 1;
+        if (calls === 1) {
+          settlementStarted.resolve(undefined);
+          return await finishSettlement.promise;
+        }
+        return Result.ok("owned");
+      });
+      const lifecycle = new ChatSendLifecycle({
+        externalMcpToolsLoader:
+          externalMcpToolsModule.createLazyExternalMcpToolsLoader(async () => {
+            throw new Error("Connector discovery was not expected");
+          }),
+        recordAuditEvent: async () => undefined,
+        rollbackSideEffects: async () => {
+          rollbackStarted.resolve(undefined);
+          await finishRollback.promise;
+          return Result.ok(undefined);
+        },
+        safeDb,
+        threadId,
+        userId,
+        workspaceId: activeWorkspaceId,
+      });
+      lifecycle.claimTurn(
+        { executionId: Bun.randomUUIDv7(), id: turnId },
+        undefined,
+      );
+      lifecycle.adoptThread(
+        asTestRaw<Parameters<ChatSendLifecycle["adoptThread"]>[0]>({}),
+      );
+      const cleanup = lifecycle.cleanup();
+      await settlementStarted.promise;
+      const relinquishing = processChatTurnOwnership.relinquish();
+      const finishedEarly = await Promise.race([
+        relinquishing.then(() => true),
+        Bun.sleep(20).then(() => false),
+      ]);
+      expect(finishedEarly).toBe(false);
+      finishSettlement.resolve(
+        settlementFails
+          ? Result.err(new DatabaseError({ message: "settlement failed" }))
+          : Result.ok(true),
+      );
+      await rollbackStarted.promise;
+      const finishedDuringRollback = await Promise.race([
+        relinquishing.then(() => true),
+        Bun.sleep(20).then(() => false),
+      ]);
+      expect(finishedDuringRollback).toBe(false);
+      finishRollback.resolve(undefined);
+      await cleanup;
+      expect(await relinquishing).toBe("stored");
+    }
+  });
+
   test("treats every thread mutation as rollback ownership adoption", () => {
     const adoptionUpdate = chatThreads.rollbackToken.onUpdateFn?.();
     if (!(adoptionUpdate instanceof SQL)) {
