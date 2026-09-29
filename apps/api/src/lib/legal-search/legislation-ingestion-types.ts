@@ -77,7 +77,7 @@ export type LegislationExpressionIdentity = {
 };
 
 /** How an observation reached the writer. */
-export type LegislationObservationOrigin = "live" | "stored-raw-replay";
+type LegislationObservationOrigin = "live" | "stored-raw-replay";
 
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {

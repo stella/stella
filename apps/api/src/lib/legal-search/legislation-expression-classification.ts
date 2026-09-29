@@ -36,7 +36,7 @@ const UNTYPED_KINDS: readonly LegislationExpressionKind[] = [
  * before classifications could be written: an effective window, no basis, and
  * a kind its window already implies.
  */
-export const isUntypedLegislationClassification = ({
+const isUntypedLegislationClassification = ({
   expressionKind,
   windowDisposition,
   windowDispositionBasis,
