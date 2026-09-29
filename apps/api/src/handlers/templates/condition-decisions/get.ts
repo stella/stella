@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import {
+  memberAssignmentRequiredError,
+  storedAIConfigUnreadableError,
+} from "@/api/lib/ai-config-response";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tJsonObject, tSafeId } from "@/api/lib/custom-schema";
@@ -47,8 +50,13 @@ const decideTemplateConditions = createSafeRootHandler(
     orgAIConfigStatus,
     request,
   }) {
+    // The decision model never falls through to the instance provider here,
+    // so only the statuses that refuse every key source apply.
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
       return Result.err(storedAIConfigUnreadableError(undefined));
+    }
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.memberAssignmentRequired) {
+      return Result.err(memberAssignmentRequiredError());
     }
 
     const decided = yield* Result.await(

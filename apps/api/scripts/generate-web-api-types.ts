@@ -18,6 +18,10 @@
 //   from a hash of its smallest path, with no union or intersection positions
 //   in it (see lib/web-api-alias-names.ts), so adding a route renames only a
 //   type it reaches along a smaller path than before.
+// - Union members print in a canonical order rather than the compiler's
+//   type-id order, which follows whichever literal the checker happened to
+//   create first (see lib/web-api-union-order.ts). Intersection members and
+//   object properties keep declaration order, which the compiler preserves.
 // - Anything the printer cannot express structurally falls back to
 //   `typeToString` and is reported; the identity check then decides.
 // - A route's `response` prints as the client reads it: JSON carries a `Date`
@@ -41,6 +45,7 @@ import {
   type AliasGraphEdge,
   nameAliases,
 } from "./lib/web-api-alias-names";
+import { orderUnionMembers } from "./lib/web-api-union-order";
 
 const API_DIR = path.resolve(import.meta.dir, "..");
 const REPO_ROOT = path.resolve(API_DIR, "../..");
@@ -736,11 +741,7 @@ export const printContract = ({
           return print(propertyType);
         }
         const kept = withoutMissing(propertyType);
-        return kept.length === 0
-          ? "never"
-          : kept
-              .map((member) => at("|", () => unionMember(member)))
-              .join(" | ");
+        return kept.length === 0 ? "never" : unionBody(kept);
       });
       members.push(
         `${isReadonlyProperty(property) ? "readonly " : ""}${key}${optional ? "?" : ""}: ${printed}`,
@@ -755,6 +756,16 @@ export const printContract = ({
       ? `(${printed})`
       : printed;
   };
+
+  // Printed in the compiler's order, so nodes are numbered as before, and
+  // joined in a canonical one (see lib/web-api-union-order.ts).
+  const unionBody = (members: readonly ts.Type[]): string =>
+    orderUnionMembers(
+      members.map((member) => ({
+        type: member,
+        printed: at("|", () => unionMember(member)),
+      })),
+    ).join(" | ");
 
   const tuple = (reference: ts.TypeReference, target: ts.TupleType): string => {
     const elements = checker
@@ -881,9 +892,7 @@ export const printContract = ({
     }
     if (type.isUnion()) {
       const { types } = type;
-      return memo(type, () =>
-        types.map((member) => at("|", () => unionMember(member))).join(" | "),
-      );
+      return memo(type, () => unionBody(types));
     }
     if (type.isIntersection()) {
       const { types } = type;

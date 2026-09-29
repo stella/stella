@@ -14,6 +14,7 @@ import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
@@ -640,6 +641,7 @@ describe("TanStack text model resolution", () => {
       ok: null,
       unreadable: 503,
       own_key_required: 403,
+      member_assignment_required: 403,
     } as const satisfies Record<OrgAIConfigStatus, number | null>;
 
     for (const configStatus of Object.values(ORG_AI_CONFIG_STATUS)) {
@@ -657,6 +659,20 @@ describe("TanStack text model resolution", () => {
       if (refused.isErr()) {
         expect(refused.error.status).toBe(status);
       }
+    }
+  });
+
+  test("refuses a member without a seat assignment on the organization's own key", () => {
+    const refused = requireTanStackAIAvailableForRole({
+      configStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      orgConfig: orgConfigForProvider("openrouter"),
+      role: "chat",
+    });
+
+    expect(refused.isErr()).toBe(true);
+    if (refused.isErr()) {
+      expect(refused.error.status).toBe(403);
+      expect(refused.error.code).toBe(AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE);
     }
   });
 

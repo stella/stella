@@ -109,7 +109,7 @@ export const buildTemplateFillAiWiring = ({
     Result<OrgAIConfig | null, HandlerError<403>>
   > => {
     configPromise ??= scopedDb(
-      async (tx) => await loadOrgAIConfig(tx, organizationId),
+      async (tx) => await loadOrgAIConfig(tx, { organizationId, userId }),
     );
     return await configPromise;
   };

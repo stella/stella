@@ -213,9 +213,12 @@ const compactThread = async ({
   const configResult = Result.flatten(
     await Result.tryPromise({
       try: async () =>
-        (await loadOrgAIConfig(db, thread.organizationId)).mapError(
-          configError,
-        ),
+        (
+          await loadOrgAIConfig(db, {
+            organizationId: thread.organizationId,
+            userId: thread.userId,
+          })
+        ).mapError(configError),
       catch: configError,
     }),
   );

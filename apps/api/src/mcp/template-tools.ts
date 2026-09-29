@@ -1210,10 +1210,13 @@ type OrgAIConfigRead = Awaited<ReturnType<typeof loadOrgAIConfig>>;
 const deferOrgAIConfig = (context: McpRequestContext) => {
   let pending: Promise<OrgAIConfigRead> | undefined;
   return async (): Promise<OrgAIConfigRead> => {
-    const organizationId = context.organizationId;
+    const reader = {
+      organizationId: context.organizationId,
+      userId: context.userId,
+    };
     pending ??=
-      context.testDependencies?.loadOrgAIConfig?.(organizationId) ??
-      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, organizationId));
+      context.testDependencies?.loadOrgAIConfig?.(reader) ??
+      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, reader));
     return await pending;
   };
 };
