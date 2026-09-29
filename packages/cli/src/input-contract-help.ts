@@ -1138,17 +1138,20 @@ export const buildInputContractHelp = ({
 
 const nonNullVariants = (schema: JsonSchema): readonly JsonSchema[] => {
   const group = alternativeGroupsAcrossAllOf(schema).at(0);
+  // No union means no variants, so the field gets no hint.
+  if (group === undefined) {
+    return [];
+  }
   const base = {
     ...collapseAllOfForExample(schema),
     anyOf: undefined,
     oneOf: undefined,
   };
-  const variants =
-    group?.variants
-      .filter((variant) => !schemaTypes(variant).includes("null"))
-      .map((variant) =>
-        combineSchemasForExample(base, collapseAllOfForExample(variant)),
-      ) ?? [];
+  const variants = group.variants
+    .filter((variant) => !schemaTypes(variant).includes("null"))
+    .map((variant) =>
+      combineSchemasForExample(base, collapseAllOfForExample(variant)),
+    );
   const only = variants.length === 1 ? variants.at(0) : undefined;
   if (only !== undefined && alternativeGroupsAcrossAllOf(only).length > 0) {
     return nonNullVariants(only);
