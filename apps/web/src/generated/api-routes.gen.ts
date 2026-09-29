@@ -8478,7 +8478,7 @@ export type WebRoutes = {
                   quantity: string;
                   unitPrice: stll_money_CentsAmount;
                   vatRateBps: number;
-                  vatTreatment: ("domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge");
+                  vatTreatment: T06b28a6882;
                   netAmount: stll_money_CentsAmount;
                   vatAmount: stll_money_CentsAmount;
                   grossAmount: stll_money_CentsAmount;
@@ -8498,7 +8498,7 @@ export type WebRoutes = {
                 invoiceDate: string;
                 totalAmount: stll_money_CentsAmount;
                 taxableSupplyDate: Tbe0400fa4c;
-                sellerProfileId: (Tf6d6ffa107 | null);
+                sellerProfileId: T2fc645f541;
                 buyerName: Tbe0400fa4c;
                 buyerRegistrationId: Tbe0400fa4c;
                 buyerVatId: Tbe0400fa4c;
@@ -8623,7 +8623,7 @@ export type WebRoutes = {
               invoiceNumber?: string;
               invoiceDate?: string;
               taxableSupplyDate?: string | null;
-              sellerProfileId?: Tf6d6ffa107 | null;
+              sellerProfileId?: Tfd3441c0df | null;
               buyerName?: string | null;
               buyerRegistrationId?: string | null;
               buyerVatId?: string | null;
@@ -8864,7 +8864,7 @@ export type WebRoutes = {
                   expenseId: T22259c97a4;
                 };
                 vatRateBps: number;
-                vatTreatment: never;
+                vatTreatment: T06b28a6882;
               };
               params: {
                 workspaceId: T8d02a37b3f;
@@ -8914,7 +8914,7 @@ export type WebRoutes = {
                   unit?: string | null;
                   quantity?: string;
                   vatRateBps?: number;
-                  vatTreatment?: never;
+                  vatTreatment?: "domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge";
                   unitPriceMinor?: number;
                 };
                 params: {
@@ -17522,8 +17522,8 @@ export type WebRoutes = {
               updatedAt: string;
               documentType: Tbb2566af3f;
               pattern: string;
-              isDefault: Tfddd645dc8;
               sellerProfileId: T2fc645f541;
+              isDefault: Tfddd645dc8;
               padding: number;
             };
             400: T9a51b7d2bc;
@@ -33952,6 +33952,8 @@ type T066db31a61 = {
 type T06a9543aed = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListClaim";
 };
+
+type T06b28a6882 = "domestic_vat" | "exempt" | "not_vat_payer" | "reverse_charge";
 
 type T06c45cc300 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillProposal";
