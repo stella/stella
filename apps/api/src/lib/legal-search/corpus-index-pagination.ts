@@ -1,8 +1,11 @@
+import { panic } from "better-result";
+
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
   CorpusIndexError,
   CorpusIndexHit,
+  CorpusIndexScoredSearchResponse,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
@@ -68,12 +71,39 @@ type CorpusIndexRanking<TContext> = {
   context: TContext;
 };
 
+/**
+ * Where the scan reads its rounds from. Both return the engine's `_score`
+ * order for the same query string, and the ranking reads only the rank.
+ *
+ * - `native`: the engine's own search endpoint. A hit is the whole stored
+ *   document, passage text included.
+ * - `scored`: the ES-compatible endpoint, projected to the fields the scan
+ *   reads (`fields`, plus the passage fields below), with each hit's BM25
+ *   beside it. Relevance order only: a score says nothing about a date order.
+ */
+export type CorpusIndexScanTransport =
+  | { type: "native" }
+  | { type: "scored"; fields: readonly string[] };
+
+export const NATIVE_SCAN_TRANSPORT = {
+  type: "native",
+} as const satisfies CorpusIndexScanTransport;
+
+/** Fields the scan itself reads off a hit, whatever the caller's id is. */
+const CORPUS_INDEX_SCAN_PASSAGE_FIELDS = [
+  "document_id",
+  "chunk_id",
+  "anchor_id",
+] as const;
+
 type CorpusIndexSearchPageInput<TContext> = {
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
   limit: number;
   parsedCursor: SearchCursor | null;
+  /** Defaults to `native`. */
+  scanTransport?: CorpusIndexScanTransport | undefined;
   /**
    * Order the engine returns candidates in, and with it the meaning of the
    * position score below. Required rather than defaulted: the cursor carries
@@ -132,6 +162,31 @@ type CorpusIndexSearchPageResult<TContext> = {
   nextCursor: SearchCursor | null;
   /** What the scan spent reaching this page, and why it stopped. */
   scan: CorpusIndexScanReport;
+  /** The scores the scan read, under the `scored` transport; null otherwise. */
+  lexicalScores: CorpusIndexScanScores | null;
+};
+
+/**
+ * BM25 as the engine reported it for what one scan read. Never folded into a
+ * page's ranking, which reads the rank; it is what a second ranking over the
+ * same candidates can be computed from without another read.
+ */
+type CorpusIndexScanScores = {
+  /**
+   * BM25 of the query's first hit. Null when the window began past it (a
+   * continuation) or nothing matched.
+   */
+  topScore: number | null;
+  /** Best passage's BM25 per document, in the order the scan reached them. */
+  bestScoreById: ReadonlyMap<string, number>;
+  /** Clause addressing each document's best passage (see `passageClause`). */
+  passageClauseById: ReadonlyMap<string, string>;
+  /** Rank of the first hit the scan did not read. */
+  nextOffset: number;
+  /** The query's hit count as the engine last reported it. */
+  totalHits: number;
+  /** BM25 of the last hit read; no unread hit scores above it. */
+  lastScore: number | null;
 };
 
 /**
@@ -332,7 +387,157 @@ export const isAfterSearchCursor = (
  * is the primary key and the blend re-orders a bounded window of it.
  */
 export const corpusIndexLexicalScore = (globalIndex: number): number =>
-  Math.exp(-globalIndex / LIMITS.corpusIndexSearchCandidateLimit);
+  Math.exp(-globalIndex / LIMITS.corpusIndexLexicalRankDecay);
+
+type ScanRound = {
+  numHits: number;
+  hits: readonly CorpusIndexHit[];
+  /** BM25 per hit, index-aligned with `hits`; null on the native transport. */
+  scores: readonly number[] | null;
+};
+
+type ReadScanRoundOptions = {
+  cluster: QuickwitCluster;
+  indexId: string;
+  query: string;
+  order: CorpusSearchOrder;
+  transport: CorpusIndexScanTransport;
+  startOffset: number;
+  maxHits: number;
+};
+
+/**
+ * One scan round through the chosen transport. Both name the order
+ * explicitly: without it the engine returns hits in document-id order and the
+ * rank-based position score would be meaningless.
+ */
+const readScanRound = async ({
+  cluster,
+  indexId,
+  query,
+  order,
+  transport,
+  startOffset,
+  maxHits,
+}: ReadScanRoundOptions): Promise<ScanRound> => {
+  switch (transport.type) {
+    case "native": {
+      const result = await getCorpusIndexClient(cluster).search({
+        indexId,
+        query,
+        maxHits,
+        startOffset,
+        sortBy: corpusEngineSortBy(order),
+      });
+      if (result.isErr()) {
+        throw corpusIndexSearchFailure(result.error);
+      }
+      return {
+        numHits: result.value.numHits,
+        hits: result.value.hits,
+        scores: null,
+      };
+    }
+    case "scored": {
+      if (order.type !== "relevance") {
+        panic("A scored scan reads relevance order only");
+      }
+      const result = await readScoredScanRound({
+        cluster,
+        indexId,
+        query,
+        fields: transport.fields,
+        from: startOffset,
+        size: maxHits,
+      });
+      return {
+        numHits: result.numHits,
+        hits: result.hits.map((hit) => hit.fields),
+        scores: result.hits.map((hit) => hit.score),
+      };
+    }
+    default:
+      transport satisfies never;
+      return panic(`Unhandled scan transport: ${String(transport)}`);
+  }
+};
+
+/**
+ * What the scored transport reports, collected in the order the scan reads
+ * it. A native round carries no scores and records nothing.
+ */
+const scanScoreRecorder = () => {
+  const bestScoreById = new Map<string, number>();
+  let topScore: number | null = null;
+  let lastScore: number | null = null;
+  return {
+    recordRound: (round: ScanRound, startOffset: number): void => {
+      if (round.scores === null) {
+        return;
+      }
+      if (startOffset === 0) {
+        topScore = round.scores.at(0) ?? null;
+      }
+      lastScore = round.scores.at(-1) ?? lastScore;
+    },
+    /** The hit at `index` is the first, so best, passage of document `id`. */
+    recordBestPassage: (round: ScanRound, index: number, id: string): void => {
+      const bm25 = round.scores?.[index];
+      if (bm25 !== undefined) {
+        bestScoreById.set(id, bm25);
+      }
+    },
+    report: (
+      scan: Pick<
+        CorpusIndexScanScores,
+        "passageClauseById" | "nextOffset" | "totalHits"
+      >,
+    ): CorpusIndexScanScores => ({
+      ...scan,
+      topScore,
+      bestScoreById,
+      lastScore,
+    }),
+  };
+};
+
+type ReadScoredScanRoundOptions = {
+  cluster: QuickwitCluster;
+  indexId: string;
+  query: string;
+  /** Fields the caller reads its id from; the passage fields are added. */
+  fields: readonly string[];
+  from: number;
+  size: number;
+};
+
+/**
+ * One `_score`-ordered round of ids and scores, projected to the caller's id
+ * fields plus the passage fields the scan reads.
+ */
+const readScoredScanRound = async ({
+  cluster,
+  indexId,
+  query,
+  fields,
+  from,
+  size,
+}: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
+  const result = await getCorpusIndexClient(cluster).scoredSearch({
+    indexId,
+    query,
+    from,
+    size,
+    fields: [...new Set([...fields, ...CORPUS_INDEX_SCAN_PASSAGE_FIELDS])],
+    // The caller's id is what the scan reads a hit by; the passage fields are
+    // absent on a document-granular index and stay optional.
+    requiredFields: fields,
+  });
+  if (result.isErr()) {
+    throw corpusIndexSearchFailure(result.error);
+  }
+  return result.value;
+};
 
 const windowAfterCursor = (
   ranked: readonly RankedHit[],
@@ -349,6 +554,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
   limit,
   order,
   parsedCursor,
+  scanTransport = NATIVE_SCAN_TRANSPORT,
   snippetFields,
   extractId,
   extractSnippet,
@@ -358,6 +564,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
   CorpusIndexSearchPageResult<TContext>
 > => {
   const candidates: ScoredCandidate[] = [];
+  const scores = scanScoreRecorder();
   /** Best passage per document, as the clause a snippet round addresses it by. */
   const passageClauseById = new Map<string, string>();
   const anchorIdById = new Map<string, string>();
@@ -416,36 +623,32 @@ export const readCorpusIndexSearchPage = async <TContext>({
     }
     rounds += 1;
 
-    // Name the order explicitly: without it the engine returns hits in
-    // document-id order and the rank-based position score below would be
-    // meaningless.
-    //
     // The round reads four things off a hit (its document, its passage clause,
-    // its anchor, its rank) and receives the whole stored document, passage
-    // text included. That is the engine's contract, not an oversight: its
-    // search endpoint has no per-hit field projection, so the only lever over
-    // a round's width is how many hits it asks for. Hence the scan/highlight
-    // split below, which at least keeps the highlighting off these hits.
+    // its anchor, its rank). The native endpoint sends the whole stored
+    // document, passage text included, and has no per-hit field projection;
+    // the scored transport sends only those fields. Either way the snippet is
+    // cut in the separate highlight round below, which keeps highlighting off
+    // these hits.
     const roundStartedAt = performance.now();
-    const result = await getCorpusIndexClient(cluster).search({
+    const round = await readScanRound({
+      cluster,
       indexId,
       query,
-      maxHits,
+      order,
+      transport: scanTransport,
       startOffset,
-      sortBy: corpusEngineSortBy(order),
+      maxHits,
     });
     indexMs += performance.now() - roundStartedAt;
-    if (result.isErr()) {
-      throw corpusIndexSearchFailure(result.error);
-    }
 
-    const hits = result.value.hits;
+    const hits = round.hits;
     if (hits.length === 0) {
-      totalHits = result.value.numHits;
+      totalHits = round.numHits;
       break;
     }
 
-    totalHits = Math.max(result.value.numHits, startOffset + hits.length);
+    totalHits = Math.max(round.numHits, startOffset + hits.length);
+    scores.recordRound(round, startOffset);
     for (const [index, hit] of hits.entries()) {
       const id = extractId(hit);
       if (id === null) {
@@ -476,6 +679,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
         id,
         score: corpusIndexLexicalScore(startOffset + index),
       });
+      scores.recordBestPassage(round, index, id);
 
       const clause = passageClause(hit);
       if (clause !== null) {
@@ -582,5 +786,13 @@ export const readCorpusIndexSearchPage = async <TContext>({
       roundCapHit,
       highlightRounds: snippets.rounds,
     },
+    lexicalScores:
+      scanTransport.type === "scored"
+        ? scores.report({
+            passageClauseById,
+            nextOffset: startOffset,
+            totalHits,
+          })
+        : null,
   };
 };

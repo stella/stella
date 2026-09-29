@@ -55,7 +55,10 @@ const LOCAL_ONLY_GATES = new Set<string>([
 // Live-API smoke suites not wired into a workflow. Remove an entry once its
 // workflow job exists; the test below rejects entries that no longer declare a
 // gate, so this policy list cannot silently retain stale paths.
-const UNWIRED_TEST_FILES = new Set<string>();
+const UNWIRED_TEST_FILES = new Set<string>([
+  // Needs the pinned search engine running locally; no workflow provides it.
+  "apps/api/src/lib/legal-search/corpus-index-scored-scan.contract.test.ts",
+]);
 
 const TEST_FILE_GLOB = "{apps,packages}/**/*.test.{ts,tsx}";
 const PACKAGE_JSON_GLOB = "{apps,packages}/*/package.json";

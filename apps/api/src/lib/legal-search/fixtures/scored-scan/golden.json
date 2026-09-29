@@ -1,0 +1,3539 @@
+{
+  "small:1": {
+    "pageRanked": [
+      {
+        "id": "small-doc-0008",
+        "score": 1.309935669071146,
+        "lexicalScore": 0.9769367838983476,
+        "citationAuthority": 1.99
+      },
+      {
+        "id": "small-doc-0007",
+        "score": 1.2413110173581776,
+        "lexicalScore": 0.9323938199059483,
+        "citationAuthority": 0.57
+      },
+      {
+        "id": "small-doc-0010",
+        "score": 1.2296513090087415,
+        "lexicalScore": 0.973685749353145,
+        "citationAuthority": 1.71
+      },
+      {
+        "id": "small-doc-0013",
+        "score": 1.2,
+        "lexicalScore": 1,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0011",
+        "score": 1.1449089865395918,
+        "lexicalScore": 0.9449089865395918,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0006",
+        "score": 1.1270111129011524,
+        "lexicalScore": 0.9639974142710154,
+        "citationAuthority": 1.19
+      },
+      {
+        "id": "small-doc-0000",
+        "score": 1.1266888395883679,
+        "lexicalScore": 0.9933555062550344,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0001",
+        "score": 1.1233831670825014,
+        "lexicalScore": 0.9900498337491681,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0004",
+        "score": 1.120088495140529,
+        "lexicalScore": 0.9867551618071957,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0005",
+        "score": 1.1135320066400887,
+        "lexicalScore": 0.9801986733067553,
+        "citationAuthority": 0
+      }
+    ],
+    "nextCursor": {
+      "score": 1.1135320066400887,
+      "id": "small-doc-0005",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "fcdc4426505a3996698445b50fc81aff8fd329a2dc65ce3958ccd0d49d45a4f1",
+    "anchorIdById": "896083a057d1b6fb3e0978537479b978973ed63c0e0a887be466f27fe7bddc88",
+    "snippetById": "4abbe436634d4879d7d590387caefb66524ceb59e3398e5269daf023566bb4bb",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 23,
+      "earlyStopped": false,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+  },
+  "small:2": {
+    "pageRanked": [
+      {
+        "id": "small-doc-0009",
+        "score": 1.1037788668818416,
+        "lexicalScore": 0.9704455335485082,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0002",
+        "score": 1.0750978669175821,
+        "lexicalScore": 0.9417645335842487,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0012",
+        "score": 1.0651371092251027,
+        "lexicalScore": 0.9480639384933955,
+        "citationAuthority": 0.64
+      },
+      {
+        "id": "small-doc-0014",
+        "score": 1.06333888272119,
+        "lexicalScore": 0.9966722160545233,
+        "citationAuthority": 0
+      },
+      {
+        "id": "small-doc-0003",
+        "score": 1.0052972113556344,
+        "lexicalScore": 0.9386305446889677,
+        "citationAuthority": 0
+      }
+    ],
+    "nextCursor": null,
+    "passageCountById": "8824130456118165787c44c429a7cca81e8408609e1740fe5c59162df2f643f5",
+    "anchorIdById": "82b57a82e15f267e67af0c1e937ce0deba9ddf158dfd01c206078c3a0795a1a3",
+    "snippetById": "006289395fd012641e3023c0f94bb370b7dd764bcbc041386b54c551f1547a43",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 23,
+      "earlyStopped": false,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 20, "clauses": 5 }]
+  },
+  "wide:1": {
+    "pageRanked": [
+      {
+        "id": "wide-doc-0632",
+        "score": 1.3078197846616575,
+        "lexicalScore": 0.9449089865395918,
+        "citationAuthority": 3.26
+      },
+      {
+        "id": "wide-doc-0415",
+        "score": 1.3005097619349337,
+        "lexicalScore": 0.9323938199059483,
+        "citationAuthority": 3.6
+      },
+      {
+        "id": "wide-doc-0657",
+        "score": 1.2618868747873266,
+        "lexicalScore": 0.8635817900415641,
+        "citationAuthority": 1.95
+      },
+      {
+        "id": "wide-doc-0622",
+        "score": 1.2617285347666876,
+        "lexicalScore": 0.9480639384933955,
+        "citationAuthority": 0.61
+      },
+      {
+        "id": "wide-doc-0394",
+        "score": 1.252270234937205,
+        "lexicalScore": 0.9933555062550344,
+        "citationAuthority": 0.72
+      },
+      {
+        "id": "wide-doc-0021",
+        "score": 1.2343491991232185,
+        "lexicalScore": 0.9386305446889677,
+        "citationAuthority": 1.18
+      },
+      {
+        "id": "wide-doc-0266",
+        "score": 1.230914744334864,
+        "lexicalScore": 0.9355069850316178,
+        "citationAuthority": 3.21
+      },
+      {
+        "id": "wide-doc-0370",
+        "score": 1.2296627725723406,
+        "lexicalScore": 0.9231163463866358,
+        "citationAuthority": 3.99
+      },
+      {
+        "id": "wide-doc-0013",
+        "score": 1.2141959935109004,
+        "lexicalScore": 0.8693582353988059,
+        "citationAuthority": 2.39
+      },
+      {
+        "id": "wide-doc-0148",
+        "score": 1.2071354844790139,
+        "lexicalScore": 0.9200444146293233,
+        "citationAuthority": 2.77
+      }
+    ],
+    "nextCursor": {
+      "score": 1.2071354844790139,
+      "id": "wide-doc-0148",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "615269409b6e48b16d825dc760ae8837397658994c045f6ce2459a47f94920b4",
+    "anchorIdById": "b5c7ad6c74b2701a76f67aa070899ede73551984caf6fe82c587f35bd6f05b5f",
+    "snippetById": "aa50d6b7b6edd3b49227c20b410ce64ab44717cc7b64cc9f25ab54108721c0b8",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 300,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+  },
+  "wide:2": {
+    "pageRanked": [
+      {
+        "id": "wide-doc-0548",
+        "score": 1.2023698303858574,
+        "lexicalScore": 0.816006194022221,
+        "citationAuthority": 1.64
+      },
+      {
+        "id": "wide-doc-0066",
+        "score": 1.2020139431966352,
+        "lexicalScore": 0.9639974142710154,
+        "citationAuthority": 3.84
+      },
+      {
+        "id": "wide-doc-0057",
+        "score": 1.198379756349488,
+        "lexicalScore": 0.794533602503334,
+        "citationAuthority": 2.12
+      },
+      {
+        "id": "wide-doc-0209",
+        "score": 1.1975709954540168,
+        "lexicalScore": 0.9018263146029529,
+        "citationAuthority": 3.23
+      },
+      {
+        "id": "wide-doc-0094",
+        "score": 1.1940660389305275,
+        "lexicalScore": 0.9169827055971943,
+        "citationAuthority": 0.92
+      },
+      {
+        "id": "wide-doc-0528",
+        "score": 1.1915942792804037,
+        "lexicalScore": 0.8214644091505335,
+        "citationAuthority": 1.31
+      },
+      {
+        "id": "wide-doc-0471",
+        "score": 1.190049833749168,
+        "lexicalScore": 0.9900498337491681,
+        "citationAuthority": 0
+      },
+      {
+        "id": "wide-doc-0248",
+        "score": 1.1842588269074252,
+        "lexicalScore": 0.9607894391523232,
+        "citationAuthority": 2.92
+      },
+      {
+        "id": "wide-doc-0101",
+        "score": 1.1810272994231081,
+        "lexicalScore": 0.8810272994231082,
+        "citationAuthority": 1.25
+      },
+      {
+        "id": "wide-doc-0167",
+        "score": 1.178940267874208,
+        "lexicalScore": 0.951229424500714,
+        "citationAuthority": 3.15
+      }
+    ],
+    "nextCursor": {
+      "score": 1.178940267874208,
+      "id": "wide-doc-0167",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "85e086af2bfa3d5d000c70a3fd0b7e824baabb668eafec8635ed3f7d8723cffc",
+    "anchorIdById": "1a3f25fc960443712016625389e966e7ef0e7e71297ae19dccee3a6db72925be",
+    "snippetById": "1fdcfb8291a872a5e439f95d26e86b0b160c22c476fb29d8746d575bc9ad35bf",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 300,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+  },
+  "deep-page:1": {
+    "pageRanked": [
+      {
+        "id": "deep-page-doc-0388",
+        "score": 1.3474527114859036,
+        "lexicalScore": 0.9801986733067553,
+        "citationAuthority": 3.54
+      },
+      {
+        "id": "deep-page-doc-0359",
+        "score": 1.3368694286891438,
+        "lexicalScore": 0.9417645335842487,
+        "citationAuthority": 1.86
+      },
+      {
+        "id": "deep-page-doc-0349",
+        "score": 1.3018352521088532,
+        "lexicalScore": 0.9639974142710154,
+        "citationAuthority": 0.85
+      },
+      {
+        "id": "deep-page-doc-0422",
+        "score": 1.2826900986580174,
+        "lexicalScore": 0.951229424500714,
+        "citationAuthority": 0.78
+      },
+      {
+        "id": "deep-page-doc-0449",
+        "score": 1.2739036095041916,
+        "lexicalScore": 0.9355069850316178,
+        "citationAuthority": 2.16
+      },
+      {
+        "id": "deep-page-doc-0062",
+        "score": 1.2615686267959998,
+        "lexicalScore": 0.8324906126116027,
+        "citationAuthority": 3.23
+      },
+      {
+        "id": "deep-page-doc-0267",
+        "score": 1.2551692413751447,
+        "lexicalScore": 0.8436648165963837,
+        "citationAuthority": 2.39
+      },
+      {
+        "id": "deep-page-doc-0327",
+        "score": 1.254439750753395,
+        "lexicalScore": 0.8242071926138603,
+        "citationAuthority": 3.3
+      },
+      {
+        "id": "deep-page-doc-0385",
+        "score": 1.2485564304461942,
+        "lexicalScore": 1,
+        "citationAuthority": 1.54
+      },
+      {
+        "id": "deep-page-doc-0136",
+        "score": 1.2401753684627002,
+        "lexicalScore": 0.9292910147212036,
+        "citationAuthority": 1.45
+      },
+      {
+        "id": "deep-page-doc-0401",
+        "score": 1.2059852490908223,
+        "lexicalScore": 0.7788007830714049,
+        "citationAuthority": 3.12
+      },
+      {
+        "id": "deep-page-doc-0286",
+        "score": 1.1887961713069528,
+        "lexicalScore": 0.8297202637161938,
+        "citationAuthority": 3.04
+      },
+      {
+        "id": "deep-page-doc-0059",
+        "score": 1.175866896129938,
+        "lexicalScore": 0.8869204367171575,
+        "citationAuthority": 2.86
+      },
+      {
+        "id": "deep-page-doc-0050",
+        "score": 1.166897300370188,
+        "lexicalScore": 0.781401117164081,
+        "citationAuthority": 1.62
+      },
+      {
+        "id": "deep-page-doc-0432",
+        "score": 1.1652524251779999,
+        "lexicalScore": 0.816006194022221,
+        "citationAuthority": 0.99
+      },
+      {
+        "id": "deep-page-doc-0163",
+        "score": 1.1572680468383063,
+        "lexicalScore": 0.9769367838983476,
+        "citationAuthority": 0.61
+      },
+      {
+        "id": "deep-page-doc-0095",
+        "score": 1.1465040847026262,
+        "lexicalScore": 0.9048374180359595,
+        "citationAuthority": 1.4
+      },
+      {
+        "id": "deep-page-doc-0199",
+        "score": 1.1434856927151948,
+        "lexicalScore": 0.7684856927151948,
+        "citationAuthority": 1.4
+      },
+      {
+        "id": "deep-page-doc-0083",
+        "score": 1.1368867816624628,
+        "lexicalScore": 0.8722609313223268,
+        "citationAuthority": 1.94
+      },
+      {
+        "id": "deep-page-doc-0022",
+        "score": 1.1323938199059482,
+        "lexicalScore": 0.9323938199059483,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0055",
+        "score": 1.126798543400605,
+        "lexicalScore": 0.7998481887906758,
+        "citationAuthority": 1.82
+      },
+      {
+        "id": "deep-page-doc-0338",
+        "score": 1.1261985350017385,
+        "lexicalScore": 0.9261985350017385,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0346",
+        "score": 1.1231163463866358,
+        "lexicalScore": 0.9231163463866358,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0272",
+        "score": 1.120088495140529,
+        "lexicalScore": 0.9867551618071957,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0268",
+        "score": 1.1179626977788866,
+        "lexicalScore": 0.8988252314716089,
+        "citationAuthority": 2.71
+      },
+      {
+        "id": "deep-page-doc-0341",
+        "score": 1.1169827055971944,
+        "lexicalScore": 0.9169827055971943,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0283",
+        "score": 1.116804787154951,
+        "lexicalScore": 0.9834714538216175,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0360",
+        "score": 1.1141670959219132,
+        "lexicalScore": 0.8607079764250578,
+        "citationAuthority": 1.65
+      },
+      {
+        "id": "deep-page-doc-0408",
+        "score": 1.108860119204294,
+        "lexicalScore": 0.6884357160212701,
+        "citationAuthority": 2.77
+      },
+      {
+        "id": "deep-page-doc-0363",
+        "score": 1.1037788668818416,
+        "lexicalScore": 0.9704455335485082,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0169",
+        "score": 1.1022439069171173,
+        "lexicalScore": 0.6770568744981647,
+        "citationAuthority": 3.01
+      },
+      {
+        "id": "deep-page-doc-0320",
+        "score": 1.0897826385818297,
+        "lexicalScore": 0.8693582353988059,
+        "citationAuthority": 2.77
+      },
+      {
+        "id": "deep-page-doc-0102",
+        "score": 1.0894575123429169,
+        "lexicalScore": 0.6703200460356393,
+        "citationAuthority": 2.71
+      },
+      {
+        "id": "deep-page-doc-0003",
+        "score": 1.0892543289513357,
+        "lexicalScore": 0.7892543289513356,
+        "citationAuthority": 1.25
+      },
+      {
+        "id": "deep-page-doc-0213",
+        "score": 1.089046764469576,
+        "lexicalScore": 0.8928529928432785,
+        "citationAuthority": 1.89
+      },
+      {
+        "id": "deep-page-doc-0170",
+        "score": 1.0664651990201777,
+        "lexicalScore": 0.8664651990201777,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0108",
+        "score": 1.06333888272119,
+        "lexicalScore": 0.9966722160545233,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0180",
+        "score": 1.061532495083622,
+        "lexicalScore": 0.794533602503334,
+        "citationAuthority": 2.01
+      },
+      {
+        "id": "deep-page-doc-0182",
+        "score": 1.0600221729217012,
+        "lexicalScore": 0.9933555062550344,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0092",
+        "score": 1.0567165004158348,
+        "lexicalScore": 0.9900498337491681,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0029",
+        "score": 1.0533777479626567,
+        "lexicalScore": 0.9200444146293233,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0087",
+        "score": 1.041191908560698,
+        "lexicalScore": 0.9078585752273646,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0147",
+        "score": 1.0411632362987724,
+        "lexicalScore": 0.8051983240180706,
+        "citationAuthority": 0.52
+      },
+      {
+        "id": "deep-page-doc-0178",
+        "score": 1.0403524160198117,
+        "lexicalScore": 0.973685749353145,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0006",
+        "score": 1.0351596479362863,
+        "lexicalScore": 0.9018263146029529,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0440",
+        "score": 1.0338827671486726,
+        "lexicalScore": 0.9672161004820059,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0057",
+        "score": 1.0307405946865333,
+        "lexicalScore": 0.835270211411272,
+        "citationAuthority": 1.87
+      },
+      {
+        "id": "deep-page-doc-0052",
+        "score": 1.0260355712372369,
+        "lexicalScore": 0.6636502501363194,
+        "citationAuthority": 1.18
+      },
+      {
+        "id": "deep-page-doc-0215",
+        "score": 1.0210721464003134,
+        "lexicalScore": 0.9544054797336466,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0393",
+        "score": 1.0187307530779819,
+        "lexicalScore": 0.8187307530779818,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0412",
+        "score": 1.0143606327564416,
+        "lexicalScore": 0.8810272994231082,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0085",
+        "score": 1.0126497802948768,
+        "lexicalScore": 0.7762091023287752,
+        "citationAuthority": 3.72
+      },
+      {
+        "id": "deep-page-doc-0069",
+        "score": 1.0114287642538946,
+        "lexicalScore": 0.8780954309205613,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0455",
+        "score": 1.0105054359004892,
+        "lexicalScore": 0.6614417654885042,
+        "citationAuthority": 2.56
+      },
+      {
+        "id": "deep-page-doc-0159",
+        "score": 1.0003711277604874,
+        "lexicalScore": 0.6355062628956224,
+        "citationAuthority": 1.22
+      },
+      {
+        "id": "deep-page-doc-0204",
+        "score": 0.9920866297507687,
+        "lexicalScore": 0.7023430400071788,
+        "citationAuthority": 2.9
+      },
+      {
+        "id": "deep-page-doc-0426",
+        "score": 0.9890045614361558,
+        "lexicalScore": 0.6333914353567085,
+        "citationAuthority": 2.86
+      },
+      {
+        "id": "deep-page-doc-0234",
+        "score": 0.9883223409927928,
+        "lexicalScore": 0.8549890076594595,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0414",
+        "score": 0.9858696199080218,
+        "lexicalScore": 0.7237325699660938,
+        "citationAuthority": 1.87
+      },
+      {
+        "id": "deep-page-doc-0042",
+        "score": 0.9840101334994316,
+        "lexicalScore": 0.7840101334994315,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0044",
+        "score": 0.9805978519378948,
+        "lexicalScore": 0.9139311852712282,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0114",
+        "score": 0.9741906156976841,
+        "lexicalScore": 0.8408572823643508,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0185",
+        "score": 0.9736260461397126,
+        "lexicalScore": 0.7736260461397126,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0468",
+        "score": 0.9713924243329948,
+        "lexicalScore": 0.8380590909996615,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0355",
+        "score": 0.9710515858035662,
+        "lexicalScore": 0.7710515858035663,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0457",
+        "score": 0.9616571048464835,
+        "lexicalScore": 0.5965055896949684,
+        "citationAuthority": 3.4
+      },
+      {
+        "id": "deep-page-doc-0207",
+        "score": 0.960839132311293,
+        "lexicalScore": 0.760839132311293,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0082",
+        "score": 0.9607894391523232,
+        "lexicalScore": 0.9607894391523232,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0390",
+        "score": 0.958970035863236,
+        "lexicalScore": 0.7408182206817179,
+        "citationAuthority": 1.02
+      },
+      {
+        "id": "deep-page-doc-0229",
+        "score": 0.958307224061697,
+        "lexicalScore": 0.7583072240616969,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0477",
+        "score": 0.9575921394817286,
+        "lexicalScore": 0.9575921394817286,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0386",
+        "score": 0.9572104151819824,
+        "lexicalScore": 0.679317496356421,
+        "citationAuthority": 0.93
+      },
+      {
+        "id": "deep-page-doc-0318",
+        "score": 0.9532686564546569,
+        "lexicalScore": 0.7532686564546568,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0398",
+        "score": 0.9509100229541907,
+        "lexicalScore": 0.7358958586482417,
+        "citationAuthority": 2.53
+      },
+      {
+        "id": "deep-page-doc-0232",
+        "score": 0.9506356237936017,
+        "lexicalScore": 0.883968957126935,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0407",
+        "score": 0.9491172999930372,
+        "lexicalScore": 0.5827482523739896,
+        "citationAuthority": 3.48
+      },
+      {
+        "id": "deep-page-doc-0172",
+        "score": 0.9480639384933955,
+        "lexicalScore": 0.9480639384933955,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0089",
+        "score": 0.9449089865395918,
+        "lexicalScore": 0.9449089865395918,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0111",
+        "score": 0.9418399857096141,
+        "lexicalScore": 0.8751733190429475,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0367",
+        "score": 0.9386305446889677,
+        "lexicalScore": 0.9386305446889677,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0498",
+        "score": 0.9358521312958118,
+        "lexicalScore": 0.8025187979624785,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0499",
+        "score": 0.9245103929060334,
+        "lexicalScore": 0.8578437262393668,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0368",
+        "score": 0.9207324954904024,
+        "lexicalScore": 0.6146718894297963,
+        "citationAuthority": 3.95
+      },
+      {
+        "id": "deep-page-doc-0431",
+        "score": 0.9199611943998868,
+        "lexicalScore": 0.7866278610665535,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0459",
+        "score": 0.918810455632878,
+        "lexicalScore": 0.8521437889662113,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0123",
+        "score": 0.9159747052127186,
+        "lexicalScore": 0.849308038546052,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0037",
+        "score": 0.9141468491820304,
+        "lexicalScore": 0.7141468491820304,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0245",
+        "score": 0.9131483915572808,
+        "lexicalScore": 0.8464817248906141,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0214",
+        "score": 0.9117703227626097,
+        "lexicalScore": 0.7117703227626097,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0161",
+        "score": 0.8946522872920383,
+        "lexicalScore": 0.5712090638488149,
+        "citationAuthority": 1.73
+      },
+      {
+        "id": "deep-page-doc-0054",
+        "score": 0.8936258006100289,
+        "lexicalScore": 0.8269591339433623,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0218",
+        "score": 0.8898817709880238,
+        "lexicalScore": 0.8898817709880238,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0462",
+        "score": 0.8881310758172002,
+        "lexicalScore": 0.8214644091505335,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0018",
+        "score": 0.8861447506980018,
+        "lexicalScore": 0.6861447506980017,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0305",
+        "score": 0.8845672421667702,
+        "lexicalScore": 0.5788761852562011,
+        "citationAuthority": 3.92
+      },
+      {
+        "id": "deep-page-doc-0222",
+        "score": 0.8810176238341456,
+        "lexicalScore": 0.6658661086826304,
+        "citationAuthority": 0.98
+      },
+      {
+        "id": "deep-page-doc-0198",
+        "score": 0.880317130117156,
+        "lexicalScore": 0.6483443410015097,
+        "citationAuthority": 3.41
+      },
+      {
+        "id": "deep-page-doc-0415",
+        "score": 0.8784133225253786,
+        "lexicalScore": 0.513417119032592,
+        "citationAuthority": 3.39
+      },
+      {
+        "id": "deep-page-doc-0260",
+        "score": 0.8772509126368537,
+        "lexicalScore": 0.8105842459701871,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0364",
+        "score": 0.8748037755010352,
+        "lexicalScore": 0.6748037755010351,
+        "citationAuthority": 0
+      }
+    ],
+    "nextCursor": {
+      "score": 0.8748037755010352,
+      "id": "deep-page-doc-0364",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "c3268cae39d27204c29097ce2b49dc06ed433f46568920f05d435d4e84b0ca62",
+    "anchorIdById": "59d216b93b711d28bec7c35d79a8216a84f3e6365fc9d23b7a5d5f37bb9e7f7a",
+    "snippetById": "ddd7d7ac040dac550bf25d20bd311f84db5b424475e1c1e492b75a3f27c1395f",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 300,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+  },
+  "deep-page:2": {
+    "pageRanked": [
+      {
+        "id": "deep-page-doc-0053",
+        "score": 0.87168627103375,
+        "lexicalScore": 0.7383529377004167,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0451",
+        "score": 0.8680725413891678,
+        "lexicalScore": 0.5151313649185796,
+        "citationAuthority": 1.04
+      },
+      {
+        "id": "deep-page-doc-0396",
+        "score": 0.865587184778739,
+        "lexicalScore": 0.5674136687970038,
+        "citationAuthority": 3.38
+      },
+      {
+        "id": "deep-page-doc-0287",
+        "score": 0.8635817900415641,
+        "lexicalScore": 0.8635817900415641,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0331",
+        "score": 0.8602172944057189,
+        "lexicalScore": 0.569308203496628,
+        "citationAuthority": 2.96
+      },
+      {
+        "id": "deep-page-doc-0471",
+        "score": 0.8594823704070242,
+        "lexicalScore": 0.7261490370736909,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0452",
+        "score": 0.8548603099566496,
+        "lexicalScore": 0.6548603099566497,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0494",
+        "score": 0.8546574776722753,
+        "lexicalScore": 0.721324144338942,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0038",
+        "score": 0.8461867911123844,
+        "lexicalScore": 0.6461867911123843,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0144",
+        "score": 0.8418932070207585,
+        "lexicalScore": 0.6418932070207586,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0223",
+        "score": 0.8417211450643429,
+        "lexicalScore": 0.5361542747316884,
+        "citationAuthority": 3.91
+      },
+      {
+        "id": "deep-page-doc-0074",
+        "score": 0.8411651291137348,
+        "lexicalScore": 0.6376281516217733,
+        "citationAuthority": 2.11
+      },
+      {
+        "id": "deep-page-doc-0039",
+        "score": 0.836503308174941,
+        "lexicalScore": 0.6045122567208023,
+        "citationAuthority": 0.49
+      },
+      {
+        "id": "deep-page-doc-0330",
+        "score": 0.8300461610035198,
+        "lexicalScore": 0.7633794943368531,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0397",
+        "score": 0.8283523005632611,
+        "lexicalScore": 0.3893279103193587,
+        "citationAuthority": 3.92
+      },
+      {
+        "id": "deep-page-doc-0484",
+        "score": 0.8263739534197748,
+        "lexicalScore": 0.6930406200864415,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0238",
+        "score": 0.8196237993552749,
+        "lexicalScore": 0.5655254386995371,
+        "citationAuthority": 0.22
+      },
+      {
+        "id": "deep-page-doc-0027",
+        "score": 0.8149302342452319,
+        "lexicalScore": 0.7482635675785653,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0312",
+        "score": 0.8149189995271812,
+        "lexicalScore": 0.6815856661938479,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0244",
+        "score": 0.812877757345585,
+        "lexicalScore": 0.45993658087499684,
+        "citationAuthority": 1.04
+      },
+      {
+        "id": "deep-page-doc-0126",
+        "score": 0.8099584016508704,
+        "lexicalScore": 0.7432917349842038,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0290",
+        "score": 0.8057243766308726,
+        "lexicalScore": 0.5100057221966218,
+        "citationAuthority": 1.18
+      },
+      {
+        "id": "deep-page-doc-0146",
+        "score": 0.801422699081444,
+        "lexicalScore": 0.6680893657481107,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0334",
+        "score": 0.7945205479701944,
+        "lexicalScore": 0.5945205479701944,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0122",
+        "score": 0.7924181137203483,
+        "lexicalScore": 0.4345982085070782,
+        "citationAuthority": 1.11
+      },
+      {
+        "id": "deep-page-doc-0391",
+        "score": 0.7918895663367816,
+        "lexicalScore": 0.7918895663367816,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0008",
+        "score": 0.7886049696783552,
+        "lexicalScore": 0.5886049696783552,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0107",
+        "score": 0.7872643180372272,
+        "lexicalScore": 0.4147829116815814,
+        "citationAuthority": 3.93
+      },
+      {
+        "id": "deep-page-doc-0217",
+        "score": 0.7830723189209866,
+        "lexicalScore": 0.7310062032185073,
+        "citationAuthority": 0.21
+      },
+      {
+        "id": "deep-page-doc-0275",
+        "score": 0.7808089920954848,
+        "lexicalScore": 0.5808089920954849,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0188",
+        "score": 0.7796620292185107,
+        "lexicalScore": 0.4065696597405991,
+        "citationAuthority": 3.98
+      },
+      {
+        "id": "deep-page-doc-0372",
+        "score": 0.7787679030135892,
+        "lexicalScore": 0.4755261834928,
+        "citationAuthority": 3.73
+      },
+      {
+        "id": "deep-page-doc-0463",
+        "score": 0.7731162709742545,
+        "lexicalScore": 0.5731162709742544,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0149",
+        "score": 0.7688838872984343,
+        "lexicalScore": 0.4835180336398977,
+        "citationAuthority": 2.69
+      },
+      {
+        "id": "deep-page-doc-0105",
+        "score": 0.7666724607810923,
+        "lexicalScore": 0.7000057941144257,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0148",
+        "score": 0.7665216281837332,
+        "lexicalScore": 0.6440364210831414,
+        "citationAuthority": 0.69
+      },
+      {
+        "id": "deep-page-doc-0365",
+        "score": 0.7537738870466408,
+        "lexicalScore": 0.697676326071031,
+        "citationAuthority": 0.23
+      },
+      {
+        "id": "deep-page-doc-0450",
+        "score": 0.75128107423209,
+        "lexicalScore": 0.452334497858877,
+        "citationAuthority": 3.43
+      },
+      {
+        "id": "deep-page-doc-0164",
+        "score": 0.7467278677312255,
+        "lexicalScore": 0.36300693749866725,
+        "citationAuthority": 1.58
+      },
+      {
+        "id": "deep-page-doc-0138",
+        "score": 0.7447613222624968,
+        "lexicalScore": 0.5066169923655895,
+        "citationAuthority": 3.85
+      },
+      {
+        "id": "deep-page-doc-0119",
+        "score": 0.7391842024078331,
+        "lexicalScore": 0.5433508690744998,
+        "citationAuthority": 1.88
+      },
+      {
+        "id": "deep-page-doc-0001",
+        "score": 0.7334469562242892,
+        "lexicalScore": 0.7334469562242892,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0015",
+        "score": 0.7318305925990981,
+        "lexicalScore": 0.5984972592657648,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0427",
+        "score": 0.7317748804530506,
+        "lexicalScore": 0.49493277518989276,
+        "citationAuthority": 3.75
+      },
+      {
+        "id": "deep-page-doc-0165",
+        "score": 0.728573572511393,
+        "lexicalScore": 0.728573572511393,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0233",
+        "score": 0.722045776761016,
+        "lexicalScore": 0.522045776761016,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0065",
+        "score": 0.7199795528433651,
+        "lexicalScore": 0.5866462195100318,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0010",
+        "score": 0.7193477429973127,
+        "lexicalScore": 0.6526810763306461,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0134",
+        "score": 0.7191352373078788,
+        "lexicalScore": 0.45082922637891704,
+        "citationAuthority": 2.05
+      },
+      {
+        "id": "deep-page-doc-0301",
+        "score": 0.7174385881084704,
+        "lexicalScore": 0.3208868639705394,
+        "citationAuthority": 1.9
+      },
+      {
+        "id": "deep-page-doc-0040",
+        "score": 0.71680443920119,
+        "lexicalScore": 0.4999069322759822,
+        "citationAuthority": 2.61
+      },
+      {
+        "id": "deep-page-doc-0311",
+        "score": 0.7118946556833399,
+        "lexicalScore": 0.2874614063130629,
+        "citationAuthority": 2.97
+      },
+      {
+        "id": "deep-page-doc-0410",
+        "score": 0.7094017049096536,
+        "lexicalScore": 0.7094017049096536,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0380",
+        "score": 0.704944743895759,
+        "lexicalScore": 0.39851904108451414,
+        "citationAuthority": 3.98
+      },
+      {
+        "id": "deep-page-doc-0495",
+        "score": 0.7046880897187134,
+        "lexicalScore": 0.7046880897187134,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0093",
+        "score": 0.6996975161420268,
+        "lexicalScore": 0.32627979462303947,
+        "citationAuthority": 1.37
+      },
+      {
+        "id": "deep-page-doc-0466",
+        "score": 0.6932857458465257,
+        "lexicalScore": 0.4932857458465257,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0031",
+        "score": 0.6932316998987353,
+        "lexicalScore": 0.559898366565402,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0303",
+        "score": 0.6916441974609651,
+        "lexicalScore": 0.4916441974609651,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0395",
+        "score": 0.6916006633081715,
+        "lexicalScore": 0.3052370269445351,
+        "citationAuthority": 1.64
+      },
+      {
+        "id": "deep-page-doc-0041",
+        "score": 0.6895114587042751,
+        "lexicalScore": 0.5561781253709418,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0120",
+        "score": 0.6883774706661872,
+        "lexicalScore": 0.4883774706661871,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0016",
+        "score": 0.6861506799359987,
+        "lexicalScore": 0.37281734660266524,
+        "citationAuthority": 1.5
+      },
+      {
+        "id": "deep-page-doc-0381",
+        "score": 0.681057977439627,
+        "lexicalScore": 0.2583775650684929,
+        "citationAuthority": 2.88
+      },
+      {
+        "id": "deep-page-doc-0384",
+        "score": 0.6792930608510828,
+        "lexicalScore": 0.6126263941844161,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0024",
+        "score": 0.6776091269172952,
+        "lexicalScore": 0.5015760690660556,
+        "citationAuthority": 1.42
+      },
+      {
+        "id": "deep-page-doc-0036",
+        "score": 0.6731973263793001,
+        "lexicalScore": 0.6065306597126334,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0329",
+        "score": 0.6730739109569459,
+        "lexicalScore": 0.5397405776236126,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0289",
+        "score": 0.6724232146268042,
+        "lexicalScore": 0.43315195956607544,
+        "citationAuthority": 3.94
+      },
+      {
+        "id": "deep-page-doc-0409",
+        "score": 0.6657204974674136,
+        "lexicalScore": 0.3617989288399626,
+        "citationAuthority": 0.53
+      },
+      {
+        "id": "deep-page-doc-0028",
+        "score": 0.6592406302004438,
+        "lexicalScore": 0.6592406302004438,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0118",
+        "score": 0.6588710421130799,
+        "lexicalScore": 0.5255377087797466,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0219",
+        "score": 0.6582969733825104,
+        "lexicalScore": 0.29424770471430406,
+        "citationAuthority": 3.33
+      },
+      {
+        "id": "deep-page-doc-0077",
+        "score": 0.6572369265746195,
+        "lexicalScore": 0.5905702599079529,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0034",
+        "score": 0.6545640159715592,
+        "lexicalScore": 0.4259925874001307,
+        "citationAuthority": 3.2
+      },
+      {
+        "id": "deep-page-doc-0187",
+        "score": 0.6490605616414431,
+        "lexicalScore": 0.3816187011763268,
+        "citationAuthority": 0.29
+      },
+      {
+        "id": "deep-page-doc-0033",
+        "score": 0.6436164770471533,
+        "lexicalScore": 0.5769498103804866,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0183",
+        "score": 0.6433776746921487,
+        "lexicalScore": 0.4433776746921486,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0292",
+        "score": 0.6399560921269555,
+        "lexicalScore": 0.4389659931170545,
+        "citationAuthority": 2.03
+      },
+      {
+        "id": "deep-page-doc-0464",
+        "score": 0.638067854278273,
+        "lexicalScore": 0.3317633606498357,
+        "citationAuthority": 3.97
+      },
+      {
+        "id": "deep-page-doc-0485",
+        "score": 0.6375052091325493,
+        "lexicalScore": 0.4375052091325493,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0325",
+        "score": 0.6250022682827008,
+        "lexicalScore": 0.6250022682827008,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0084",
+        "score": 0.6233414451271011,
+        "lexicalScore": 0.49000811179376774,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0411",
+        "score": 0.6170328380525312,
+        "lexicalScore": 0.345302880246624,
+        "citationAuthority": 2.16
+      },
+      {
+        "id": "deep-page-doc-0168",
+        "score": 0.6105877059052739,
+        "lexicalScore": 0.6105877059052739,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0405",
+        "score": 0.6093315540681772,
+        "lexicalScore": 0.18451952399298926,
+        "citationAuthority": 2.99
+      },
+      {
+        "id": "deep-page-doc-0020",
+        "score": 0.6090752999807387,
+        "lexicalScore": 0.2532613464923666,
+        "citationAuthority": 2.87
+      },
+      {
+        "id": "deep-page-doc-0402",
+        "score": 0.6072770684270522,
+        "lexicalScore": 0.47394373509371884,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0243",
+        "score": 0.6049310804718897,
+        "lexicalScore": 0.5049310804718897,
+        "citationAuthority": 0.5
+      },
+      {
+        "id": "deep-page-doc-0340",
+        "score": 0.6046111042613411,
+        "lexicalScore": 0.5379444375946745,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0270",
+        "score": 0.6041279522437564,
+        "lexicalScore": 0.470794618910423,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0021",
+        "score": 0.602500570538043,
+        "lexicalScore": 0.602500570538043,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0228",
+        "score": 0.6010367358106042,
+        "lexicalScore": 0.5343700691439376,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0345",
+        "score": 0.5932407208685982,
+        "lexicalScore": 0.39324072086859824,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0308",
+        "score": 0.5886934687637847,
+        "lexicalScore": 0.4553601354304514,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0441",
+        "score": 0.588032311149872,
+        "lexicalScore": 0.38803231114987197,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0030",
+        "score": 0.5835180011583658,
+        "lexicalScore": 0.5168513344916992,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0079",
+        "score": 0.5833457757083638,
+        "lexicalScore": 0.18268352405273466,
+        "citationAuthority": 2.02
+      },
+      {
+        "id": "deep-page-doc-0017",
+        "score": 0.5803487565892586,
+        "lexicalScore": 0.38034875658925854,
+        "citationAuthority": 0
+      },
+      {
+        "id": "deep-page-doc-0131",
+        "score": 0.5800227876667081,
+        "lexicalScore": 0.3219582715376759,
+        "citationAuthority": 0.24
+      }
+    ],
+    "nextCursor": {
+      "score": 0.5800227876667081,
+      "id": "deep-page-doc-0131",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "536d007e2ca06466348e43a79d518adf5ee947add06dc452799c86b7e89e7d42",
+    "anchorIdById": "4c634ccdd2340304e07f70e18ed5066e798e60ebe55409f172925413f4e04f82",
+    "snippetById": "2985db1c4c82b2fbea2b6f6ca5ec02bb93a2899b8cea489e41e9b638818de744",
+    "scan": {
+      "rounds": 3,
+      "passagesScanned": 900,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [
+      { "from": 0, "size": 300 },
+      { "from": 300, "size": 300 },
+      { "from": 600, "size": 300 }
+    ],
+    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+  },
+  "flooded:1": {
+    "pageRanked": [
+      {
+        "id": "flooded-doc-0040",
+        "score": 1.3379893931976308,
+        "lexicalScore": 0.9704455335485082,
+        "citationAuthority": 3.56
+      },
+      {
+        "id": "flooded-doc-0007",
+        "score": 1.2786348444095434,
+        "lexicalScore": 0.9417645335842487,
+        "citationAuthority": 2.11
+      },
+      {
+        "id": "flooded-doc-0057",
+        "score": 1.263159009814383,
+        "lexicalScore": 0.9575921394817286,
+        "citationAuthority": 3.91
+      },
+      {
+        "id": "flooded-doc-0008",
+        "score": 1.23303262753892,
+        "lexicalScore": 0.883968957126935,
+        "citationAuthority": 2.56
+      },
+      {
+        "id": "flooded-doc-0002",
+        "score": 1.2169752606138802,
+        "lexicalScore": 0.7998481887906758,
+        "citationAuthority": 2.62
+      },
+      {
+        "id": "flooded-doc-0055",
+        "score": 1.1930705422802588,
+        "lexicalScore": 0.9292910147212036,
+        "citationAuthority": 0.27
+      },
+      {
+        "id": "flooded-doc-0001",
+        "score": 1.1672161004820059,
+        "lexicalScore": 0.9672161004820059,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0027",
+        "score": 1.1639974142710154,
+        "lexicalScore": 0.9639974142710154,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0000",
+        "score": 1.1616082567503798,
+        "lexicalScore": 0.8269591339433623,
+        "citationAuthority": 2.04
+      },
+      {
+        "id": "flooded-doc-0052",
+        "score": 1.1480639384933955,
+        "lexicalScore": 0.9480639384933955,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0005",
+        "score": 1.1261985350017385,
+        "lexicalScore": 0.9261985350017385,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0016",
+        "score": 1.1139311852712281,
+        "lexicalScore": 0.9139311852712282,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0034",
+        "score": 1.1135320066400887,
+        "lexicalScore": 0.9801986733067553,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0025",
+        "score": 1.1109711237588922,
+        "lexicalScore": 0.697676326071031,
+        "citationAuthority": 2.46
+      },
+      {
+        "id": "flooded-doc-0037",
+        "score": 1.1070190826864783,
+        "lexicalScore": 0.973685749353145,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0024",
+        "score": 1.071963878022301,
+        "lexicalScore": 0.9386305446889677,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0053",
+        "score": 1.0693582353988058,
+        "lexicalScore": 0.8693582353988059,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0022",
+        "score": 1.0666666666666667,
+        "lexicalScore": 1,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0010",
+        "score": 1.0664651990201777,
+        "lexicalScore": 0.8664651990201777,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0049",
+        "score": 1.0600221729217012,
+        "lexicalScore": 0.9933555062550344,
+        "citationAuthority": 0
+      }
+    ],
+    "nextCursor": {
+      "score": 1.0600221729217012,
+      "id": "flooded-doc-0049",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "6f58a0b04f6378c42136bf1cd3fd91359c471be43694e9b8f66f46b7c25263c6",
+    "anchorIdById": "85804e5be9f7814cf4a0373f678689209bca4d4762ad83d12aeba9e32ff6931d",
+    "snippetById": "8943fda5642cebeb91c833fb76f777f747e494420cf796e8781a8524fea3eccf",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 300,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 80, "clauses": 20 }]
+  },
+  "flooded:2": {
+    "pageRanked": [
+      {
+        "id": "flooded-doc-0029",
+        "score": 1.0564496797199692,
+        "lexicalScore": 0.9231163463866358,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0013",
+        "score": 1.0534218284738623,
+        "lexicalScore": 0.9867551618071957,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0030",
+        "score": 1.0441777473637477,
+        "lexicalScore": 0.7532686564546568,
+        "citationAuthority": 2.96
+      },
+      {
+        "id": "flooded-doc-0044",
+        "score": 1.0351596479362863,
+        "lexicalScore": 0.9018263146029529,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0033",
+        "score": 1.0297202637161937,
+        "lexicalScore": 0.8297202637161938,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0028",
+        "score": 1.0290146414998786,
+        "lexicalScore": 0.6592406302004438,
+        "citationAuthority": 3.72
+      },
+      {
+        "id": "flooded-doc-0039",
+        "score": 1.02745610581899,
+        "lexicalScore": 0.9607894391523232,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0012",
+        "score": 1.0261863261766118,
+        "lexicalScore": 0.8928529928432785,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0051",
+        "score": 1.0178960911673807,
+        "lexicalScore": 0.951229424500714,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0050",
+        "score": 1.0051983240180706,
+        "lexicalScore": 0.8051983240180706,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0011",
+        "score": 0.9966722160545233,
+        "lexicalScore": 0.9966722160545233,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0038",
+        "score": 0.9958169454660301,
+        "lexicalScore": 0.7762091023287752,
+        "citationAuthority": 1.04
+      },
+      {
+        "id": "flooded-doc-0017",
+        "score": 0.991922132271905,
+        "lexicalScore": 0.7046880897187134,
+        "citationAuthority": 0.41
+      },
+      {
+        "id": "flooded-doc-0035",
+        "score": 0.9900498337491681,
+        "lexicalScore": 0.9900498337491681,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0003",
+        "score": 0.9173434668327648,
+        "lexicalScore": 0.7840101334994315,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0047",
+        "score": 0.9043849191368996,
+        "lexicalScore": 0.7710515858035663,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0056",
+        "score": 0.8810449168932141,
+        "lexicalScore": 0.5617678084594792,
+        "citationAuthority": 0.66
+      },
+      {
+        "id": "flooded-doc-0058",
+        "score": 0.869229191981575,
+        "lexicalScore": 0.7358958586482417,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0023",
+        "score": 0.816006194022221,
+        "lexicalScore": 0.816006194022221,
+        "citationAuthority": 0
+      },
+      {
+        "id": "flooded-doc-0054",
+        "score": 0.8091434404579144,
+        "lexicalScore": 0.4433776746921486,
+        "citationAuthority": 3.44
+      }
+    ],
+    "nextCursor": {
+      "score": 0.8091434404579144,
+      "id": "flooded-doc-0054",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "cc9c9376bb5a3e62075f9d0f7a89f2406cd04210a72bbf02a379b9fe704ce182",
+    "anchorIdById": "e1cd0546c9dd2532ee63d83da4fcf36b1b874636824fdaf7bdac3405a5ded97f",
+    "snippetById": "96813b184a4f94e2d8ad7815fd0b690fbe471dd0cd26b32d62a22f2624e75b82",
+    "scan": {
+      "rounds": 2,
+      "passagesScanned": 600,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [
+      { "from": 0, "size": 300 },
+      { "from": 300, "size": 300 }
+    ],
+    "highlightRequests": [{ "maxHits": 80, "clauses": 20 }]
+  },
+  "round-cap:1": {
+    "pageRanked": [
+      {
+        "id": "round-cap-doc-0375",
+        "score": 1.4023903727405365,
+        "lexicalScore": 0.9834714538216175,
+        "citationAuthority": 2.7
+      },
+      {
+        "id": "round-cap-doc-0171",
+        "score": 1.3806954060235728,
+        "lexicalScore": 0.9544054797336466,
+        "citationAuthority": 3.07
+      },
+      {
+        "id": "round-cap-doc-0351",
+        "score": 1.3115421067729347,
+        "lexicalScore": 0.9139311852712282,
+        "citationAuthority": 1.93
+      },
+      {
+        "id": "round-cap-doc-0355",
+        "score": 1.2924890076594595,
+        "lexicalScore": 0.8549890076594595,
+        "citationAuthority": 3.8
+      },
+      {
+        "id": "round-cap-doc-0200",
+        "score": 1.2896901644258005,
+        "lexicalScore": 0.8635817900415641,
+        "citationAuthority": 3.06
+      },
+      {
+        "id": "round-cap-doc-0075",
+        "score": 1.2810758662892114,
+        "lexicalScore": 0.9801986733067553,
+        "citationAuthority": 3.56
+      },
+      {
+        "id": "round-cap-doc-0151",
+        "score": 1.2629582892746916,
+        "lexicalScore": 0.9769367838983476,
+        "citationAuthority": 2.72
+      },
+      {
+        "id": "round-cap-doc-0214",
+        "score": 1.2430609176015284,
+        "lexicalScore": 0.8607079764250578,
+        "citationAuthority": 1.55
+      },
+      {
+        "id": "round-cap-doc-0126",
+        "score": 1.2337085570000086,
+        "lexicalScore": 0.8780954309205613,
+        "citationAuthority": 2.86
+      },
+      {
+        "id": "round-cap-doc-0005",
+        "score": 1.2181177241761472,
+        "lexicalScore": 0.9386305446889677,
+        "citationAuthority": 0.95
+      },
+      {
+        "id": "round-cap-doc-0108",
+        "score": 1.2139914862958614,
+        "lexicalScore": 0.849308038546052,
+        "citationAuthority": 3.37
+      },
+      {
+        "id": "round-cap-doc-0221",
+        "score": 1.16636406930629,
+        "lexicalScore": 0.9575921394817286,
+        "citationAuthority": 0.9
+      },
+      {
+        "id": "round-cap-doc-0113",
+        "score": 1.1637020605115465,
+        "lexicalScore": 0.9607894391523232,
+        "citationAuthority": 2.09
+      },
+      {
+        "id": "round-cap-doc-0038",
+        "score": 1.1624049712607636,
+        "lexicalScore": 0.9108898197456121,
+        "citationAuthority": 0.65
+      },
+      {
+        "id": "round-cap-doc-0153",
+        "score": 1.1622098798712415,
+        "lexicalScore": 0.8664651990201777,
+        "citationAuthority": 3.23
+      },
+      {
+        "id": "round-cap-doc-0090",
+        "score": 1.1601218388365468,
+        "lexicalScore": 0.9261985350017385,
+        "citationAuthority": 1.26
+      },
+      {
+        "id": "round-cap-doc-0133",
+        "score": 1.1542748874376991,
+        "lexicalScore": 0.7918895663367816,
+        "citationAuthority": 1.18
+      },
+      {
+        "id": "round-cap-doc-0110",
+        "score": 1.1521819333139272,
+        "lexicalScore": 0.9200444146293233,
+        "citationAuthority": 1.23
+      },
+      {
+        "id": "round-cap-doc-0278",
+        "score": 1.1480639384933955,
+        "lexicalScore": 0.9480639384933955,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0132",
+        "score": 1.1449089865395918,
+        "lexicalScore": 0.9449089865395918,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0091",
+        "score": 1.1327851638675148,
+        "lexicalScore": 0.8214644091505335,
+        "citationAuthority": 0.59
+      },
+      {
+        "id": "round-cap-doc-0395",
+        "score": 1.1324368552141881,
+        "lexicalScore": 0.7334469562242892,
+        "citationAuthority": 1.97
+      },
+      {
+        "id": "round-cap-doc-0164",
+        "score": 1.1231163463866358,
+        "lexicalScore": 0.9231163463866358,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0279",
+        "score": 1.1169827055971944,
+        "lexicalScore": 0.9169827055971943,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0262",
+        "score": 1.116283873246594,
+        "lexicalScore": 0.7633794943368531,
+        "citationAuthority": 2.73
+      },
+      {
+        "id": "round-cap-doc-0095",
+        "score": 1.11052424343598,
+        "lexicalScore": 0.7165313105737893,
+        "citationAuthority": 1.83
+      },
+      {
+        "id": "round-cap-doc-0341",
+        "score": 1.101826314602953,
+        "lexicalScore": 0.9018263146029529,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0187",
+        "score": 1.1001055249609701,
+        "lexicalScore": 0.8025187979624785,
+        "citationAuthority": 1.21
+      },
+      {
+        "id": "round-cap-doc-0157",
+        "score": 1.0928529928432784,
+        "lexicalScore": 0.8928529928432785,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0050",
+        "score": 1.0921308383643622,
+        "lexicalScore": 0.7237325699660938,
+        "citationAuthority": 3.62
+      },
+      {
+        "id": "round-cap-doc-0136",
+        "score": 1.091864990684737,
+        "lexicalScore": 0.8051983240180706,
+        "citationAuthority": 2.75
+      },
+      {
+        "id": "round-cap-doc-0231",
+        "score": 1.0845627578340473,
+        "lexicalScore": 0.951229424500714,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0282",
+        "score": 1.0796554128731328,
+        "lexicalScore": 0.8297202637161938,
+        "citationAuthority": 1.57
+      },
+      {
+        "id": "round-cap-doc-0004",
+        "score": 1.0787210553233793,
+        "lexicalScore": 0.9417645335842487,
+        "citationAuthority": 0.84
+      },
+      {
+        "id": "round-cap-doc-0141",
+        "score": 1.0739934985715007,
+        "lexicalScore": 0.7583072240616969,
+        "citationAuthority": 1.55
+      },
+      {
+        "id": "round-cap-doc-0382",
+        "score": 1.0722609313223268,
+        "lexicalScore": 0.8722609313223268,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0270",
+        "score": 1.068840318364951,
+        "lexicalScore": 0.9355069850316178,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0289",
+        "score": 1.0567165004158348,
+        "lexicalScore": 0.9900498337491681,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0326",
+        "score": 1.0541458494371128,
+        "lexicalScore": 0.7532686564546568,
+        "citationAuthority": 3.56
+      },
+      {
+        "id": "round-cap-doc-0088",
+        "score": 1.0513101592798908,
+        "lexicalScore": 0.794533602503334,
+        "citationAuthority": 1.73
+      },
+      {
+        "id": "round-cap-doc-0022",
+        "score": 1.0466991566718074,
+        "lexicalScore": 0.6930406200864415,
+        "citationAuthority": 1.05
+      },
+      {
+        "id": "round-cap-doc-0057",
+        "score": 1.043522699773414,
+        "lexicalScore": 0.8958341352965282,
+        "citationAuthority": 0.37
+      },
+      {
+        "id": "round-cap-doc-0299",
+        "score": 1.0425752974243259,
+        "lexicalScore": 0.8105842459701871,
+        "citationAuthority": 0.49
+      },
+      {
+        "id": "round-cap-doc-0176",
+        "score": 1.0408572823643507,
+        "lexicalScore": 0.8408572823643508,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0368",
+        "score": 1.0382518964798486,
+        "lexicalScore": 0.7736260461397126,
+        "citationAuthority": 1.94
+      },
+      {
+        "id": "round-cap-doc-0276",
+        "score": 1.037112200215175,
+        "lexicalScore": 0.9704455335485082,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0027",
+        "score": 1.0338827671486726,
+        "lexicalScore": 0.9672161004820059,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0190",
+        "score": 1.023215104321357,
+        "lexicalScore": 0.8898817709880238,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0345",
+        "score": 1.0210430228154244,
+        "lexicalScore": 0.6725581743305757,
+        "citationAuthority": 0.98
+      },
+      {
+        "id": "round-cap-doc-0363",
+        "score": 1.0173022904602684,
+        "lexicalScore": 0.883968957126935,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0241",
+        "score": 1.0132907017103443,
+        "lexicalScore": 0.8132907017103442,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0035",
+        "score": 1.0127748661180103,
+        "lexicalScore": 0.7189237334319262,
+        "citationAuthority": 3.12
+      },
+      {
+        "id": "round-cap-doc-0196",
+        "score": 1,
+        "lexicalScore": 1,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0083",
+        "score": 0.9998481887906758,
+        "lexicalScore": 0.7998481887906758,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0001",
+        "score": 0.9971864668291994,
+        "lexicalScore": 0.7971864668291995,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0150",
+        "score": 0.9966722160545233,
+        "lexicalScore": 0.9966722160545233,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0013",
+        "score": 0.9959576813878702,
+        "lexicalScore": 0.9292910147212036,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0063",
+        "score": 0.9950065593409517,
+        "lexicalScore": 0.781401117164081,
+        "citationAuthority": 0.96
+      },
+      {
+        "id": "round-cap-doc-0220",
+        "score": 0.9933555062550344,
+        "lexicalScore": 0.9933555062550344,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0290",
+        "score": 0.9911770595727001,
+        "lexicalScore": 0.8578437262393668,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0330",
+        "score": 0.9867551618071957,
+        "lexicalScore": 0.9867551618071957,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0387",
+        "score": 0.9854771222995447,
+        "lexicalScore": 0.8521437889662113,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0188",
+        "score": 0.973685749353145,
+        "lexicalScore": 0.973685749353145,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0023",
+        "score": 0.9710515858035662,
+        "lexicalScore": 0.7710515858035663,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0055",
+        "score": 0.9677310637319896,
+        "lexicalScore": 0.7840101334994315,
+        "citationAuthority": 1.58
+      },
+      {
+        "id": "round-cap-doc-0210",
+        "score": 0.9575405259471936,
+        "lexicalScore": 0.8242071926138603,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0321",
+        "score": 0.9540100112450602,
+        "lexicalScore": 0.8380590909996615,
+        "citationAuthority": 0.63
+      },
+      {
+        "id": "round-cap-doc-0186",
+        "score": 0.9418399857096141,
+        "lexicalScore": 0.8751733190429475,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0117",
+        "score": 0.9412201300633245,
+        "lexicalScore": 0.8078867967299912,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0315",
+        "score": 0.9323938199059483,
+        "lexicalScore": 0.9323938199059483,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0337",
+        "score": 0.9261490370736909,
+        "lexicalScore": 0.7261490370736909,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0182",
+        "score": 0.9131483915572808,
+        "lexicalScore": 0.8464817248906141,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0266",
+        "score": 0.9117703227626097,
+        "lexicalScore": 0.7117703227626097,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0329",
+        "score": 0.9078585752273646,
+        "lexicalScore": 0.9078585752273646,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0209",
+        "score": 0.9059354216173953,
+        "lexicalScore": 0.6065306597126334,
+        "citationAuthority": 1.24
+      },
+      {
+        "id": "round-cap-doc-0331",
+        "score": 0.9048374180359595,
+        "lexicalScore": 0.9048374180359595,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0019",
+        "score": 0.9046629738557903,
+        "lexicalScore": 0.5561781253709418,
+        "citationAuthority": 0.98
+      },
+      {
+        "id": "round-cap-doc-0040",
+        "score": 0.9011750692472023,
+        "lexicalScore": 0.4661101341822672,
+        "citationAuthority": 3.62
+      },
+      {
+        "id": "round-cap-doc-0273",
+        "score": 0.8991572792782694,
+        "lexicalScore": 0.8324906126116027,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0371",
+        "score": 0.8988252314716089,
+        "lexicalScore": 0.8988252314716089,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0360",
+        "score": 0.8953546099939926,
+        "lexicalScore": 0.6953546099939927,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0122",
+        "score": 0.891001427690916,
+        "lexicalScore": 0.522045776761016,
+        "citationAuthority": 3.66
+      },
+      {
+        "id": "round-cap-doc-0391",
+        "score": 0.8905702599079528,
+        "lexicalScore": 0.5905702599079529,
+        "citationAuthority": 0.5
+      },
+      {
+        "id": "round-cap-doc-0292",
+        "score": 0.8891170747890588,
+        "lexicalScore": 0.7557837414557255,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0143",
+        "score": 0.8853974197446485,
+        "lexicalScore": 0.8187307530779818,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0024",
+        "score": 0.8842530422083279,
+        "lexicalScore": 0.44932896411722156,
+        "citationAuthority": 3.61
+      },
+      {
+        "id": "round-cap-doc-0222",
+        "score": 0.8842078550671366,
+        "lexicalScore": 0.5965055896949684,
+        "citationAuthority": 1.06
+      },
+      {
+        "id": "round-cap-doc-0340",
+        "score": 0.8770568744981646,
+        "lexicalScore": 0.6770568744981647,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0396",
+        "score": 0.8693582353988059,
+        "lexicalScore": 0.8693582353988059,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0145",
+        "score": 0.8650619189799524,
+        "lexicalScore": 0.4916441974609651,
+        "citationAuthority": 1.37
+      },
+      {
+        "id": "round-cap-doc-0106",
+        "score": 0.8552784789280486,
+        "lexicalScore": 0.6526810763306461,
+        "citationAuthority": 2.08
+      },
+      {
+        "id": "round-cap-doc-0280",
+        "score": 0.8505090947233165,
+        "lexicalScore": 0.6505090947233165,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0268",
+        "score": 0.849329726074388,
+        "lexicalScore": 0.6146718894297963,
+        "citationAuthority": 0.51
+      },
+      {
+        "id": "round-cap-doc-0041",
+        "score": 0.8483443410015097,
+        "lexicalScore": 0.6483443410015097,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0318",
+        "score": 0.8453274715347333,
+        "lexicalScore": 0.6250022682827008,
+        "citationAuthority": 1.05
+      },
+      {
+        "id": "round-cap-doc-0131",
+        "score": 0.8436648165963837,
+        "lexicalScore": 0.8436648165963837,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0267",
+        "score": 0.8275057989779596,
+        "lexicalScore": 0.760839132311293,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0115",
+        "score": 0.8270927968774391,
+        "lexicalScore": 0.5415427147756329,
+        "citationAuthority": 1.03
+      },
+      {
+        "id": "round-cap-doc-0312",
+        "score": 0.8269591339433623,
+        "lexicalScore": 0.8269591339433623,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0239",
+        "score": 0.8167242143691609,
+        "lexicalScore": 0.6167242143691608,
+        "citationAuthority": 0
+      }
+    ],
+    "nextCursor": {
+      "score": 0.8167242143691609,
+      "id": "round-cap-doc-0239",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "acb07d524abe066c173c5b0bce5dcff9a098654cb3d301aa587b9f96de9affe0",
+    "anchorIdById": "c345c7d76400952a77b23c7d09a28b50f74630d3758c9eb8a03db9e7fb67bd66",
+    "snippetById": "68eeecd53833fa4b3c4137370f8792ecead56fca791d1ef2b7428e37bbcf2aca",
+    "scan": {
+      "rounds": 2,
+      "passagesScanned": 600,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [
+      { "from": 0, "size": 300 },
+      { "from": 300, "size": 300 }
+    ],
+    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+  },
+  "round-cap:2": {
+    "pageRanked": [
+      {
+        "id": "round-cap-doc-0144",
+        "score": 0.816006194022221,
+        "lexicalScore": 0.816006194022221,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0194",
+        "score": 0.8070338446316184,
+        "lexicalScore": 0.5984972592657648,
+        "citationAuthority": 2.28
+      },
+      {
+        "id": "round-cap-doc-0323",
+        "score": 0.8050196043670833,
+        "lexicalScore": 0.7383529377004167,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0383",
+        "score": 0.8025625253149083,
+        "lexicalScore": 0.7358958586482417,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0213",
+        "score": 0.8010239963622028,
+        "lexicalScore": 0.5168513344916992,
+        "citationAuthority": 0.39
+      },
+      {
+        "id": "round-cap-doc-0154",
+        "score": 0.7988847160924661,
+        "lexicalScore": 0.39062783535852114,
+        "citationAuthority": 2.27
+      },
+      {
+        "id": "round-cap-doc-0147",
+        "score": 0.7925739635337771,
+        "lexicalScore": 0.6592406302004438,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0372",
+        "score": 0.7925421120354033,
+        "lexicalScore": 0.5925421120354032,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0302",
+        "score": 0.7892543289513356,
+        "lexicalScore": 0.7892543289513356,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0294",
+        "score": 0.788193643289983,
+        "lexicalScore": 0.6548603099566497,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0303",
+        "score": 0.7866278610665535,
+        "lexicalScore": 0.7866278610665535,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0384",
+        "score": 0.7842248219775142,
+        "lexicalScore": 0.631283645506926,
+        "citationAuthority": 1.04
+      },
+      {
+        "id": "round-cap-doc-0354",
+        "score": 0.7808089920954848,
+        "lexicalScore": 0.5808089920954849,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0205",
+        "score": 0.7762091023287752,
+        "lexicalScore": 0.7762091023287752,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0305",
+        "score": 0.773707635971828,
+        "lexicalScore": 0.7070409693051614,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0232",
+        "score": 0.7736224874742865,
+        "lexicalScore": 0.4231620823177488,
+        "citationAuthority": 2.62
+      },
+      {
+        "id": "round-cap-doc-0030",
+        "score": 0.7730904584450577,
+        "lexicalScore": 0.6397571251117244,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0020",
+        "score": 0.7690097066738455,
+        "lexicalScore": 0.7023430400071788,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0165",
+        "score": 0.7688395962289557,
+        "lexicalScore": 0.6355062628956224,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0137",
+        "score": 0.7680498907226182,
+        "lexicalScore": 0.679317496356421,
+        "citationAuthority": 0.42
+      },
+      {
+        "id": "round-cap-doc-0002",
+        "score": 0.7639770762075931,
+        "lexicalScore": 0.5290529981164869,
+        "citationAuthority": 3.61
+      },
+      {
+        "id": "round-cap-doc-0069",
+        "score": 0.7627762950107905,
+        "lexicalScore": 0.5272924240430485,
+        "citationAuthority": 3.65
+      },
+      {
+        "id": "round-cap-doc-0306",
+        "score": 0.7580351457700472,
+        "lexicalScore": 0.5580351457700471,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0135",
+        "score": 0.7538179083131014,
+        "lexicalScore": 0.39984965434484737,
+        "citationAuthority": 2.78
+      },
+      {
+        "id": "round-cap-doc-0346",
+        "score": 0.7507619411130763,
+        "lexicalScore": 0.7507619411130763,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0256",
+        "score": 0.7492970108960721,
+        "lexicalScore": 0.4883774706661871,
+        "citationAuthority": 0.74
+      },
+      {
+        "id": "round-cap-doc-0369",
+        "score": 0.7482635675785653,
+        "lexicalScore": 0.7482635675785653,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0006",
+        "score": 0.7459597275177494,
+        "lexicalScore": 0.6126263941844161,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0140",
+        "score": 0.7457735080913922,
+        "lexicalScore": 0.7457735080913922,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0298",
+        "score": 0.7432917349842038,
+        "lexicalScore": 0.7432917349842038,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0336",
+        "score": 0.7378455900541356,
+        "lexicalScore": 0.6045122567208023,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0079",
+        "score": 0.7310062032185073,
+        "lexicalScore": 0.7310062032185073,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0223",
+        "score": 0.728573572511393,
+        "lexicalScore": 0.728573572511393,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0120",
+        "score": 0.7281084321551708,
+        "lexicalScore": 0.6614417654885042,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0056",
+        "score": 0.7251227903128259,
+        "lexicalScore": 0.3715766910220457,
+        "citationAuthority": 2.76
+      },
+      {
+        "id": "round-cap-doc-0332",
+        "score": 0.7156817387358718,
+        "lexicalScore": 0.4787069488199054,
+        "citationAuthority": 3.76
+      },
+      {
+        "id": "round-cap-doc-0316",
+        "score": 0.7151313649185795,
+        "lexicalScore": 0.5151313649185796,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0238",
+        "score": 0.7141468491820304,
+        "lexicalScore": 0.7141468491820304,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0235",
+        "score": 0.702738866299242,
+        "lexicalScore": 0.35227846114270417,
+        "citationAuthority": 2.62
+      },
+      {
+        "id": "round-cap-doc-0386",
+        "score": 0.7007470021303371,
+        "lexicalScore": 0.5674136687970038,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0179",
+        "score": 0.7000581020233752,
+        "lexicalScore": 0.6333914353567085,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0203",
+        "score": 0.6821449694273597,
+        "lexicalScore": 0.5488116360940264,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0000",
+        "score": 0.6784983939441687,
+        "lexicalScore": 0.5451650606108354,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0134",
+        "score": 0.6755261834928,
+        "lexicalScore": 0.4755261834928,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0349",
+        "score": 0.6659251343402305,
+        "lexicalScore": 0.5325918010068972,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0065",
+        "score": 0.6643483675228046,
+        "lexicalScore": 0.4106557527523455,
+        "citationAuthority": 0.67
+      },
+      {
+        "id": "round-cap-doc-0107",
+        "score": 0.6630130683112281,
+        "lexicalScore": 0.46301306831122807,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0003",
+        "score": 0.661187214636861,
+        "lexicalScore": 0.5945205479701944,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0283",
+        "score": 0.6376281516217733,
+        "lexicalScore": 0.6376281516217733,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0328",
+        "score": 0.6360492863215357,
+        "lexicalScore": 0.4360492863215356,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0046",
+        "score": 0.6332402656093156,
+        "lexicalScore": 0.4999069322759822,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0085",
+        "score": 0.6313481751612885,
+        "lexicalScore": 0.5066169923655895,
+        "citationAuthority": 0.24
+      },
+      {
+        "id": "round-cap-doc-0204",
+        "score": 0.6284344751261458,
+        "lexicalScore": 0.5617678084594792,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0160",
+        "score": 0.6245749761068884,
+        "lexicalScore": 0.42457497610688844,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0313",
+        "score": 0.620350384508682,
+        "lexicalScore": 0.4203503845086819,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0192",
+        "score": 0.6046111042613411,
+        "lexicalScore": 0.5379444375946745,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0317",
+        "score": 0.6041279522437564,
+        "lexicalScore": 0.470794618910423,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0286",
+        "score": 0.6011995450121546,
+        "lexicalScore": 0.314532878345488,
+        "citationAuthority": 2.75
+      },
+      {
+        "id": "round-cap-doc-0319",
+        "score": 0.5964723356873185,
+        "lexicalScore": 0.17147233568731846,
+        "citationAuthority": 3
+      },
+      {
+        "id": "round-cap-doc-0197",
+        "score": 0.5964008999630868,
+        "lexicalScore": 0.3570069605691474,
+        "citationAuthority": 3.95
+      },
+      {
+        "id": "round-cap-doc-0009",
+        "score": 0.5886934687637847,
+        "lexicalScore": 0.4553601354304514,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0281",
+        "score": 0.5854912382589152,
+        "lexicalScore": 0.2115416584269825,
+        "citationAuthority": 1.38
+      },
+      {
+        "id": "round-cap-doc-0244",
+        "score": 0.5827482523739896,
+        "lexicalScore": 0.5827482523739896,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0128",
+        "score": 0.5805705854241131,
+        "lexicalScore": 0.31036694126548503,
+        "citationAuthority": 2.11
+      },
+      {
+        "id": "round-cap-doc-0051",
+        "score": 0.5803487565892586,
+        "lexicalScore": 0.38034875658925854,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0071",
+        "score": 0.5791720103049729,
+        "lexicalScore": 0.2922925776808594,
+        "citationAuthority": 2.76
+      },
+      {
+        "id": "round-cap-doc-0359",
+        "score": 0.5731162709742544,
+        "lexicalScore": 0.5731162709742544,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0233",
+        "score": 0.5725987683280532,
+        "lexicalScore": 0.38289288597511206,
+        "citationAuthority": 1.72
+      },
+      {
+        "id": "round-cap-doc-0161",
+        "score": 0.5712090638488149,
+        "lexicalScore": 0.5712090638488149,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0036",
+        "score": 0.5678794411714423,
+        "lexicalScore": 0.36787944117144233,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0274",
+        "score": 0.5664477522732476,
+        "lexicalScore": 0.33509763785677166,
+        "citationAuthority": 3.37
+      },
+      {
+        "id": "round-cap-doc-0073",
+        "score": 0.5655254386995371,
+        "lexicalScore": 0.5655254386995371,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0015",
+        "score": 0.5613207547960848,
+        "lexicalScore": 0.48190899009020244,
+        "citationAuthority": 0.36
+      },
+      {
+        "id": "round-cap-doc-0296",
+        "score": 0.5605864113489685,
+        "lexicalScore": 0.12830650164242224,
+        "citationAuthority": 3.43
+      },
+      {
+        "id": "round-cap-doc-0378",
+        "score": 0.5538646689401248,
+        "lexicalScore": 0.2377188356067914,
+        "citationAuthority": 1.56
+      },
+      {
+        "id": "round-cap-doc-0017",
+        "score": 0.5522848825809723,
+        "lexicalScore": 0.418951549247639,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0380",
+        "score": 0.5514177954800878,
+        "lexicalScore": 0.1972401349699735,
+        "citationAuthority": 2.79
+      },
+      {
+        "id": "round-cap-doc-0175",
+        "score": 0.545302880246624,
+        "lexicalScore": 0.345302880246624,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0195",
+        "score": 0.5441537868654124,
+        "lexicalScore": 0.34415378686541237,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0109",
+        "score": 0.5433508690744998,
+        "lexicalScore": 0.5433508690744998,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0338",
+        "score": 0.5403707194433887,
+        "lexicalScore": 0.3395955256449391,
+        "citationAuthority": 0.29
+      },
+      {
+        "id": "round-cap-doc-0333",
+        "score": 0.5362164937067333,
+        "lexicalScore": 0.33621649370673334,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0263",
+        "score": 0.5266032475416635,
+        "lexicalScore": 0.45993658087499684,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0061",
+        "score": 0.5265740542019316,
+        "lexicalScore": 0.39324072086859824,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0116",
+        "score": 0.5255377087797466,
+        "lexicalScore": 0.5255377087797466,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0084",
+        "score": 0.5207221880116826,
+        "lexicalScore": 0.15881742610692068,
+        "citationAuthority": 3.2
+      },
+      {
+        "id": "round-cap-doc-0168",
+        "score": 0.5192624060891888,
+        "lexicalScore": 0.2261251511872281,
+        "citationAuthority": 3.08
+      },
+      {
+        "id": "round-cap-doc-0174",
+        "score": 0.5187873662189254,
+        "lexicalScore": 0.3854540328855921,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0353",
+        "score": 0.5178615517029088,
+        "lexicalScore": 0.09193562577698285,
+        "citationAuthority": 3.05
+      },
+      {
+        "id": "round-cap-doc-0010",
+        "score": 0.5174958930455837,
+        "lexicalScore": 0.45082922637891704,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0048",
+        "score": 0.5171033571193469,
+        "lexicalScore": 0.08687079897981204,
+        "citationAuthority": 3.3
+      },
+      {
+        "id": "round-cap-doc-0014",
+        "score": 0.515583070621366,
+        "lexicalScore": 0.315583070621366,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0066",
+        "score": 0.5151040587148612,
+        "lexicalScore": 0.23223627472975883,
+        "citationAuthority": 2.58
+      },
+      {
+        "id": "round-cap-doc-0053",
+        "score": 0.5124163714367321,
+        "lexicalScore": 0.37908303810339883,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0208",
+        "score": 0.5100443413588153,
+        "lexicalScore": 0.4433776746921486,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0068",
+        "score": 0.5083085333421946,
+        "lexicalScore": 0.5083085333421946,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0163",
+        "score": 0.5056326597837212,
+        "lexicalScore": 0.4389659931170545,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0393",
+        "score": 0.5012648751737449,
+        "lexicalScore": 0.4345982085070782,
+        "citationAuthority": 0
+      },
+      {
+        "id": "round-cap-doc-0240",
+        "score": 0.49973723169940193,
+        "lexicalScore": 0.40521668375419645,
+        "citationAuthority": 0.46
+      },
+      {
+        "id": "round-cap-doc-0269",
+        "score": 0.4895126735946426,
+        "lexicalScore": 0.12083451267510242,
+        "citationAuthority": 3.64
+      }
+    ],
+    "nextCursor": {
+      "score": 0.4895126735946426,
+      "id": "round-cap-doc-0269",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "7e4bd243b6a5cbaf5cafb0b18ff491f02de44fabfd396c651342a48fd6c7818c",
+    "anchorIdById": "a9f4b4274bae42fc1eb6c23554ff90542d1da4cc6a2059fbbedb7b53f7bfd9b0",
+    "snippetById": "5c08bf88db48ac813c60081663ff9f9bbd7fc75823dcf6f1cd8dd64421a7605c",
+    "scan": {
+      "rounds": 3,
+      "passagesScanned": 900,
+      "earlyStopped": false,
+      "roundCapHit": true,
+      "highlightRounds": 1
+    },
+    "scanRequests": [
+      { "from": 0, "size": 300 },
+      { "from": 300, "size": 300 },
+      { "from": 600, "size": 300 }
+    ],
+    "highlightRequests": [{ "maxHits": 400, "clauses": 100 }]
+  },
+  "monopolised:1": {
+    "pageRanked": [
+      {
+        "id": "monopolised-flood",
+        "score": 1,
+        "lexicalScore": 1,
+        "citationAuthority": 0
+      }
+    ],
+    "nextCursor": {
+      "score": 0.549787068367864,
+      "id": "monopolised-flood",
+      "sort": "relevance",
+      "windowStart": 900
+    },
+    "passageCountById": "aaa8b014cbc1af96b61e5dd85b7aa3e3859b65caa0761b34dcf9e79b9ac8b5aa",
+    "anchorIdById": "e7f26cc6745ba1da4214fad7c8e3cda06707720e2825c3899278e0e6e412a663",
+    "snippetById": "3261e7e00e1bd9c37dba1564c27a3df8af273b2b1185a38c2538d5cfbe947b08",
+    "scan": {
+      "rounds": 3,
+      "passagesScanned": 900,
+      "earlyStopped": false,
+      "roundCapHit": true,
+      "highlightRounds": 1
+    },
+    "scanRequests": [
+      { "from": 0, "size": 300 },
+      { "from": 300, "size": 300 },
+      { "from": 600, "size": 300 }
+    ],
+    "highlightRequests": [{ "maxHits": 4, "clauses": 1 }]
+  },
+  "monopolised:2": {
+    "pageRanked": [
+      {
+        "id": "monopolised-doc-0057",
+        "score": 0.46811857904817883,
+        "lexicalScore": 0.028724639654239433,
+        "citationAuthority": 3.95
+      },
+      {
+        "id": "monopolised-doc-0016",
+        "score": 0.46124976013192,
+        "lexicalScore": 0.032171745947522895,
+        "citationAuthority": 3.23
+      },
+      {
+        "id": "monopolised-doc-0050",
+        "score": 0.4484427720176715,
+        "lexicalScore": 0.03271243493901982,
+        "citationAuthority": 2.56
+      },
+      {
+        "id": "monopolised-doc-0032",
+        "score": 0.39906930183188555,
+        "lexicalScore": 0.02862905025955845,
+        "citationAuthority": 3.77
+      },
+      {
+        "id": "monopolised-doc-0055",
+        "score": 0.3950769400570566,
+        "lexicalScore": 0.027968772286637182,
+        "citationAuthority": 3.53
+      },
+      {
+        "id": "monopolised-doc-0033",
+        "score": 0.3839632108380788,
+        "lexicalScore": 0.03282165832666321,
+        "citationAuthority": 2.65
+      },
+      {
+        "id": "monopolised-doc-0029",
+        "score": 0.3650917861576544,
+        "lexicalScore": 0.03485123632947581,
+        "citationAuthority": 1.91
+      },
+      {
+        "id": "monopolised-doc-0070",
+        "score": 0.36046567225090653,
+        "lexicalScore": 0.034275196060430335,
+        "citationAuthority": 1.8
+      },
+      {
+        "id": "monopolised-doc-0077",
+        "score": 0.35748312133347804,
+        "lexicalScore": 0.02989691443692632,
+        "citationAuthority": 0.74
+      },
+      {
+        "id": "monopolised-doc-0000",
+        "score": 0.35499719666908447,
+        "lexicalScore": 0.031957980982809955,
+        "citationAuthority": 1.72
+      }
+    ],
+    "nextCursor": {
+      "score": 0.35499719666908447,
+      "id": "monopolised-doc-0000",
+      "sort": "relevance",
+      "windowStart": 900
+    },
+    "passageCountById": "a96f3a2424af7d4e128f7231cde63a8dabfb309245b1f5cb4b98c8de9c450bfb",
+    "anchorIdById": "7428a17f75f7f027b5f93bd5f0aa58656a7862e3457d134591feac1f85f42e6f",
+    "snippetById": "a2d4a5dc278e1b3f153a0debd77f7c3e45d23138898b988fae7a9618d3a8672d",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 210,
+      "earlyStopped": false,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 900, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 40, "clauses": 10 }]
+  },
+  "granular:1": {
+    "pageRanked": [
+      {
+        "id": "granular-doc-0460",
+        "score": 1.3874668020261174,
+        "lexicalScore": 0.9639974142710154,
+        "citationAuthority": 2.92
+      },
+      {
+        "id": "granular-doc-0003",
+        "score": 1.3750872925210187,
+        "lexicalScore": 0.951229424500714,
+        "citationAuthority": 2.94
+      },
+      {
+        "id": "granular-doc-0424",
+        "score": 1.3579738484033055,
+        "lexicalScore": 0.9480639384933955,
+        "citationAuthority": 2.33
+      },
+      {
+        "id": "granular-doc-0151",
+        "score": 1.2628330361748503,
+        "lexicalScore": 0.973685749353145,
+        "citationAuthority": 2.87
+      },
+      {
+        "id": "granular-doc-0330",
+        "score": 1.2601320836524526,
+        "lexicalScore": 0.9449089865395918,
+        "citationAuthority": 1.54
+      },
+      {
+        "id": "granular-doc-0315",
+        "score": 1.2417739716802025,
+        "lexicalScore": 0.9900498337491681,
+        "citationAuthority": 1.61
+      },
+      {
+        "id": "granular-doc-0384",
+        "score": 1.2240935291032184,
+        "lexicalScore": 0.8187307530779818,
+        "citationAuthority": 2.17
+      },
+      {
+        "id": "granular-doc-0342",
+        "score": 1.2172217844286277,
+        "lexicalScore": 0.8051983240180706,
+        "citationAuthority": 2.41
+      },
+      {
+        "id": "granular-doc-0309",
+        "score": 1.2045230705636412,
+        "lexicalScore": 0.8693582353988059,
+        "citationAuthority": 0.82
+      },
+      {
+        "id": "granular-doc-0024",
+        "score": 1.1933555062550345,
+        "lexicalScore": 0.9933555062550344,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0261",
+        "score": 1.1903623973466257,
+        "lexicalScore": 0.8269591339433623,
+        "citationAuthority": 3.29
+      },
+      {
+        "id": "granular-doc-0387",
+        "score": 1.1859139016779632,
+        "lexicalScore": 0.8578437262393668,
+        "citationAuthority": 1.85
+      },
+      {
+        "id": "granular-doc-0398",
+        "score": 1.1850564506640096,
+        "lexicalScore": 0.9139311852712282,
+        "citationAuthority": 2.14
+      },
+      {
+        "id": "granular-doc-0184",
+        "score": 1.1838640742106454,
+        "lexicalScore": 0.7788007830714049,
+        "citationAuthority": 2.16
+      },
+      {
+        "id": "granular-doc-0361",
+        "score": 1.1802725518528627,
+        "lexicalScore": 0.9575921394817286,
+        "citationAuthority": 2.88
+      },
+      {
+        "id": "granular-doc-0258",
+        "score": 1.177455736517132,
+        "lexicalScore": 0.8722609313223268,
+        "citationAuthority": 0.54
+      },
+      {
+        "id": "granular-doc-0049",
+        "score": 1.1704455335485082,
+        "lexicalScore": 0.9704455335485082,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0225",
+        "score": 1.168684954115143,
+        "lexicalScore": 0.9292910147212036,
+        "citationAuthority": 3.95
+      },
+      {
+        "id": "granular-doc-0321",
+        "score": 1.165302408858185,
+        "lexicalScore": 0.7971864668291995,
+        "citationAuthority": 3.6
+      },
+      {
+        "id": "granular-doc-0199",
+        "score": 1.1550200947171014,
+        "lexicalScore": 0.7892543289513356,
+        "citationAuthority": 3.44
+      },
+      {
+        "id": "granular-doc-0284",
+        "score": 1.1544054797336467,
+        "lexicalScore": 0.9544054797336466,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0264",
+        "score": 1.152528111092518,
+        "lexicalScore": 0.9231163463866358,
+        "citationAuthority": 3.25
+      },
+      {
+        "id": "granular-doc-0239",
+        "score": 1.1464349086991008,
+        "lexicalScore": 0.7070409693051614,
+        "citationAuthority": 3.95
+      },
+      {
+        "id": "granular-doc-0170",
+        "score": 1.142792004454249,
+        "lexicalScore": 0.781401117164081,
+        "citationAuthority": 3.17
+      },
+      {
+        "id": "granular-doc-0480",
+        "score": 1.1417645335842488,
+        "lexicalScore": 0.9417645335842487,
+        "citationAuthority": 0
+      }
+    ],
+    "nextCursor": {
+      "score": 1.1417645335842488,
+      "id": "granular-doc-0480",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "27fe2fbe40ca41c1fff72100948055d1e804d80913f0daa1c1c836ffcbea4c46",
+    "anchorIdById": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "snippetById": "6b6d8ee5d31bda4ec51c0ec66f938f59f15ea05a2c73f85fb31af1fa93513325",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 300,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 100, "clauses": 25 }]
+  },
+  "granular:2": {
+    "pageRanked": [
+      {
+        "id": "granular-doc-0301",
+        "score": 1.1386305446889677,
+        "lexicalScore": 0.9386305446889677,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0122",
+        "score": 1.1336323234152539,
+        "lexicalScore": 0.8408572823643508,
+        "citationAuthority": 3.06
+      },
+      {
+        "id": "granular-doc-0097",
+        "score": 1.1261985350017385,
+        "lexicalScore": 0.9261985350017385,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0305",
+        "score": 1.1244541218194537,
+        "lexicalScore": 0.7261490370736909,
+        "citationAuthority": 1.95
+      },
+      {
+        "id": "granular-doc-0161",
+        "score": 1.1191045044099455,
+        "lexicalScore": 0.8464817248906141,
+        "citationAuthority": 2.19
+      },
+      {
+        "id": "granular-doc-0248",
+        "score": 1.116804787154951,
+        "lexicalScore": 0.9834714538216175,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0345",
+        "score": 1.1136227484402226,
+        "lexicalScore": 0.6884357160212701,
+        "citationAuthority": 3.01
+      },
+      {
+        "id": "granular-doc-0332",
+        "score": 1.1135320066400887,
+        "lexicalScore": 0.9801986733067553,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0256",
+        "score": 1.110889819745612,
+        "lexicalScore": 0.9108898197456121,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0142",
+        "score": 1.1107200798287113,
+        "lexicalScore": 0.7000057941144257,
+        "citationAuthority": 2.36
+      },
+      {
+        "id": "granular-doc-0326",
+        "score": 1.1058046798015249,
+        "lexicalScore": 0.7334469562242892,
+        "citationAuthority": 3.92
+      },
+      {
+        "id": "granular-doc-0299",
+        "score": 1.0999353436815569,
+        "lexicalScore": 0.883968957126935,
+        "citationAuthority": 2.57
+      },
+      {
+        "id": "granular-doc-0063",
+        "score": 1.099830024255147,
+        "lexicalScore": 0.7117703227626097,
+        "citationAuthority": 1.68
+      },
+      {
+        "id": "granular-doc-0283",
+        "score": 1.098825231471609,
+        "lexicalScore": 0.8988252314716089,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0231",
+        "score": 1.0928529928432784,
+        "lexicalScore": 0.8928529928432785,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0282",
+        "score": 1.083153713925921,
+        "lexicalScore": 0.7532686564546568,
+        "citationAuthority": 1.9
+      },
+      {
+        "id": "granular-doc-0168",
+        "score": 1.0810272994231083,
+        "lexicalScore": 0.8810272994231082,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0010",
+        "score": 1.0780954309205613,
+        "lexicalScore": 0.8780954309205613,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0189",
+        "score": 1.0751733190429476,
+        "lexicalScore": 0.8751733190429475,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0218",
+        "score": 1.06581196131991,
+        "lexicalScore": 0.7094017049096536,
+        "citationAuthority": 2.9
+      },
+      {
+        "id": "granular-doc-0082",
+        "score": 1.0657271532392816,
+        "lexicalScore": 0.9323938199059483,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0221",
+        "score": 1.0653606902113277,
+        "lexicalScore": 0.6270890852730561,
+        "citationAuthority": 3.86
+      },
+      {
+        "id": "granular-doc-0434",
+        "score": 1.0634212472491291,
+        "lexicalScore": 0.6397571251117244,
+        "citationAuthority": 2.93
+      },
+      {
+        "id": "granular-doc-0237",
+        "score": 1.06333888272119,
+        "lexicalScore": 0.9966722160545233,
+        "citationAuthority": 0
+      },
+      {
+        "id": "granular-doc-0013",
+        "score": 1.056465207575981,
+        "lexicalScore": 0.6505090947233165,
+        "citationAuthority": 2.19
+      }
+    ],
+    "nextCursor": {
+      "score": 1.056465207575981,
+      "id": "granular-doc-0013",
+      "sort": "relevance",
+      "windowStart": 0
+    },
+    "passageCountById": "7f03f9e6f06f171b04d53b4d6fffa88c1e1986ee913256f05bf19b24d6119fb4",
+    "anchorIdById": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "snippetById": "020729e706627144feb716d1b988b9a468bbbf5a1128f0c8dd7f1be10077d356",
+    "scan": {
+      "rounds": 1,
+      "passagesScanned": 300,
+      "earlyStopped": true,
+      "roundCapHit": false,
+      "highlightRounds": 1
+    },
+    "scanRequests": [{ "from": 0, "size": 300 }],
+    "highlightRequests": [{ "maxHits": 100, "clauses": 25 }]
+  }
+}

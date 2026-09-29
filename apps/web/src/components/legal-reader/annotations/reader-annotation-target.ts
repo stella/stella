@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
+import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
 import {
@@ -29,6 +30,7 @@ export type ReaderAnnotationTarget =
   | {
       type: "decision";
       caseNumber: string;
+      caseNumberType: DecisionPrimaryReferenceType;
       country: string;
       court: string;
       decisionDate: string | null;
@@ -136,6 +138,7 @@ export const readerTargetCitation = ({
     case "decision": {
       return formatDecisionCitation({
         caseNumber: target.caseNumber,
+        caseNumberType: target.caseNumberType,
         country: target.country,
         court: target.court,
         decisionDate: target.decisionDate,

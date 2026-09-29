@@ -11,11 +11,5 @@
   "privatePackages": {
     "version": false
   },
-  "ignore": [
-    "@stll/api",
-    "@stll/boe",
-    "@stll/infosoud",
-    "@stll/locales",
-    "@stll/text-normalize"
-  ]
+  "ignore": ["@stll/api", "@stll/boe", "@stll/infosoud", "@stll/locales"]
 }

@@ -5,21 +5,27 @@ import {
 import type {
   DecisionIdentifier,
   DecisionIdentifiers,
+  DecisionPrimaryReferenceType,
 } from "@stll/legal-ast/decision-identifier";
+
+import { primaryDecisionIdentifier } from "@/api/lib/legal-search/decision-primary-reference";
 
 type LegacyDecisionIdentifierFields = {
   caseNumber: string;
+  /** The row's `case_number_type`, so the fallback never guesses a docket. */
+  caseNumberType: DecisionPrimaryReferenceType;
   ecli: string | null;
 };
 
 export const legacyDecisionIdentifiers = ({
   caseNumber,
+  caseNumberType,
   ecli,
 }: LegacyDecisionIdentifierFields): DecisionIdentifiers => {
-  const caseNumberIdentifier = {
-    type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-    value: caseNumber,
-  } as const;
+  const caseNumberIdentifier = primaryDecisionIdentifier({
+    caseNumber,
+    caseNumberType,
+  });
   return ecli === null
     ? [caseNumberIdentifier]
     : [

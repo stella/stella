@@ -19,6 +19,7 @@ import {
 import { loadChangesetPolicy } from "./changeset-guard";
 
 const SHARED_NPM_PACKAGES = [
+  "agent-input",
   "auth-model",
   "ai-catalog",
   "anonymize-chat",
@@ -34,6 +35,8 @@ const SHARED_NPM_PACKAGES = [
   "stable-stringify",
   "start-runtime",
   "template-conditions",
+  "text-normalize",
+  "time",
   "workspace-model",
   "workspace-ui",
 ] as const;

@@ -78,13 +78,13 @@ const prepareTemplate = createSafeRootHandler(
       traceId: Bun.randomUUIDv7(),
     });
 
-    const buffer = yield* Result.await(scanTemplateUpload(file));
+    const scanned = yield* Result.await(scanTemplateUpload(file));
 
     const prepared = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await prepareTemplateFromDocument({
-            buffer,
+            file: scanned,
             // suggestTemplateFieldsOrEmpty degrades a call failure (BYOK
             // misconfiguration, provider outage, timeout) to the documented
             // empty-suggestions fallback — instead of failing the whole
@@ -112,7 +112,7 @@ const prepareTemplate = createSafeRootHandler(
     // parses binary responses as text and corrupts the zip (the same failure
     // the save round-trip hit). The client decodes this back to bytes.
     return Result.ok({
-      docxBase64: prepared.buffer.toString("base64"),
+      docxBase64: Buffer.from(prepared.file.bytes).toString("base64"),
       fieldCount: prepared.fields.length,
       unappliedCount: prepared.unapplied.length,
     });

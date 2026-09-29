@@ -1,16 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { fillTemplate } from "./patch-template";
 
 type TestParagraph = string | { text: string; numId: number };
 
 type BuildDocxOptions = { numberingXml?: string };
 
-const buildDocxBuffer = async (
+const buildDocx = async (
   paragraphs: TestParagraph[],
   options?: BuildDocxOptions,
-): Promise<Buffer> => {
+): Promise<ScannedFile> => {
   const para = (p: TestParagraph) => {
     const { text, numId } =
       typeof p === "string" ? { text: p, numId: undefined } : p;
@@ -30,13 +33,13 @@ const buildDocxBuffer = async (
   if (options?.numberingXml !== undefined) {
     zip.file("word/numbering.xml", options.numberingXml);
   }
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 // Concatenated visible text: value substitution splits a paragraph into
 // multiple <w:t> runs, so assert on the stripped text, not the raw XML.
-const docTextOf = async (buffer: Buffer): Promise<string> => {
-  const zip = await JSZip.loadAsync(buffer);
+const docTextOf = async (file: ScannedFile): Promise<string> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   let text = (await zip.file("word/document.xml")?.async("string")) ?? "";
   // Strip tags until stable so a tag span revealed by an earlier removal can't
   // survive — the single-pass form trips CodeQL's incomplete-sanitization check.
@@ -58,12 +61,12 @@ const lease = [
 
 describe("fillTemplate — cross-reference numbering", () => {
   test("numbers included clauses and resolves references to them", async () => {
-    const docx = await buildDocxBuffer(lease);
-    const { buffer } = await fillTemplate(docx, {
+    const docx = await buildDocx(lease);
+    const { file } = await fillTemplate(docx, {
       rent: "5000",
       has_guarantee: true,
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("Clause 1. Rent is 5000.");
     expect(text).toContain("Clause 2. Guarantee provided.");
@@ -72,12 +75,12 @@ describe("fillTemplate — cross-reference numbering", () => {
   });
 
   test("a clause excluded by a condition is not numbered; its ref stays unresolved", async () => {
-    const docx = await buildDocxBuffer(lease);
-    const { buffer } = await fillTemplate(docx, {
+    const docx = await buildDocx(lease);
+    const { file } = await fillTemplate(docx, {
       rent: "5000",
       has_guarantee: false,
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("Clause 1. Rent is 5000.");
     expect(text).not.toContain("Guarantee provided.");
@@ -89,17 +92,17 @@ describe("fillTemplate — cross-reference numbering", () => {
 
 describe("fillTemplate — @num/@ref through {% for %} expansion", () => {
   test("each iteration is numbered sequentially; refs resolve per iteration", async () => {
-    const docx = await buildDocxBuffer([
+    const docx = await buildDocx([
       "Clause {{ num('intro') }}. Introduction.",
       "{% for party in parties %}",
       "Clause {{ num('party') }}. {{ party.name }} is a party (see Clause {{ ref('party') }}, cf. Clause {{ ref('intro') }}).",
       "{% endfor %}",
       "Closing per Clause {{ ref('intro') }}.",
     ]);
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       parties: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("Clause 1. Introduction.");
     expect(text).toContain(
@@ -115,16 +118,16 @@ describe("fillTemplate — @num/@ref through {% for %} expansion", () => {
   });
 
   test("a ref from outside the loop to a loop-local key stays unresolved", async () => {
-    const docx = await buildDocxBuffer([
+    const docx = await buildDocx([
       "{% for item in items %}",
       "Clause {{ num('item') }}. {{ item.name }}.",
       "{% endfor %}",
       "See Clause {{ ref('item') }}.",
     ]);
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       items: [{ name: "A" }, { name: "B" }],
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("Clause 1. A.");
     expect(text).toContain("Clause 2. B.");
@@ -133,21 +136,21 @@ describe("fillTemplate — @num/@ref through {% for %} expansion", () => {
   });
 
   test("iterations excluded by a nested {% if %} do not consume numbers", async () => {
-    const docx = await buildDocxBuffer([
+    const docx = await buildDocx([
       "{% for item in items %}",
       "{% if item.include %}",
       "Clause {{ num('item') }}. {{ item.name }}.",
       "{% endif %}",
       "{% endfor %}",
     ]);
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       items: [
         { name: "A", include: true },
         { name: "B", include: false },
         { name: "C", include: true },
       ],
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("Clause 1. A.");
     expect(text).toContain("Clause 2. C.");
@@ -155,17 +158,17 @@ describe("fillTemplate — @num/@ref through {% for %} expansion", () => {
   });
 
   test("nested loops number every inner occurrence sequentially", async () => {
-    const docx = await buildDocxBuffer([
+    const docx = await buildDocx([
       "{% for group in groups %}",
       "{% for subitem in subitems %}",
       "Item {{ num('sub') }}.",
       "{% endfor %}",
       "{% endfor %}",
     ]);
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       groups: [{ subitems: ["a", "b"] }, { subitems: ["c"] }],
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("Item 1.");
     expect(text).toContain("Item 2.");
@@ -176,15 +179,15 @@ describe("fillTemplate — @num/@ref through {% for %} expansion", () => {
 
 describe("fillTemplate — {{ loop.index }}/{{ loop.length }} through {% for %} expansion", () => {
   test("block loop resolves index/count and composes with item fields", async () => {
-    const docx = await buildDocxBuffer([
+    const docx = await buildDocx([
       "{% for party in parties %}",
       "{{ loop.index }}/{{ loop.length }}: {{ party.name }}.",
       "{% endfor %}",
     ]);
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       parties: [{ name: "Alpha" }, { name: "Beta" }, { name: "Gamma" }],
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("1/3: Alpha.");
     expect(text).toContain("2/3: Beta.");
@@ -192,7 +195,7 @@ describe("fillTemplate — {{ loop.index }}/{{ loop.length }} through {% for %} 
   });
 
   test("nested loops bind @index/@count to the innermost loop", async () => {
-    const docx = await buildDocxBuffer([
+    const docx = await buildDocx([
       "{% for group in groups %}",
       "G{{ loop.index }}/{{ loop.length }}.",
       "{% for item in group.items %}",
@@ -200,10 +203,10 @@ describe("fillTemplate — {{ loop.index }}/{{ loop.length }} through {% for %} 
       "{% endfor %}",
       "{% endfor %}",
     ]);
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       groups: [{ items: ["a", "b"] }, { items: ["c"] }],
     });
-    const text = await docTextOf(buffer);
+    const text = await docTextOf(file);
 
     expect(text).toContain("G1/2.");
     expect(text).toContain("G2/2.");
@@ -222,8 +225,8 @@ const NUMBERING_XML =
   `<w:num w:numId="2"><w:abstractNumId w:val="99"/></w:num>` +
   `</w:numbering>`;
 
-const numIdsOf = async (buffer: Buffer): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(buffer);
+const numIdsOf = async (file: ScannedFile): Promise<string[]> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   return [...xml.matchAll(/<w:numId w:val="(?<numId>\d+)"\s*\/?>/gu)].flatMap(
     (m) => (m[1] ? [m[1]] : []),
@@ -232,7 +235,7 @@ const numIdsOf = async (buffer: Buffer): Promise<string[]> => {
 
 describe("fillTemplate — w:numPr through {% for %} expansion", () => {
   test("cloned list paragraphs keep the template numId (one continuous Word sequence) and numbering.xml is untouched", async () => {
-    const docx = await buildDocxBuffer(
+    const docx = await buildDocx(
       [
         "{% for item in items %}",
         { text: "{{ item.name }}", numId: 1 },
@@ -240,23 +243,23 @@ describe("fillTemplate — w:numPr through {% for %} expansion", () => {
       ],
       { numberingXml: NUMBERING_XML },
     );
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       items: [{ name: "A" }, { name: "B" }, { name: "C" }],
     });
 
     // All iterations reference the same numbering instance: Word
     // counters live on the (shared) definition, so the rendered list
     // continues 1..3 instead of restarting per iteration.
-    expect(await numIdsOf(buffer)).toEqual(["1", "1", "1"]);
+    expect(await numIdsOf(file)).toEqual(["1", "1", "1"]);
 
-    const zip = await JSZip.loadAsync(buffer);
+    const zip = await JSZip.loadAsync(file.bytes);
     expect(await zip.file("word/numbering.xml")?.async("string")).toBe(
       NUMBERING_XML,
     );
   });
 
   test("a cloned numPr whose numId does not resolve is pruned", async () => {
-    const docx = await buildDocxBuffer(
+    const docx = await buildDocx(
       [
         "{% for item in items %}",
         { text: "{{ item.name }}", numId: 2 },
@@ -265,26 +268,26 @@ describe("fillTemplate — w:numPr through {% for %} expansion", () => {
       ],
       { numberingXml: NUMBERING_XML },
     );
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       items: [{ name: "A" }, { name: "B" }],
     });
 
-    expect(await numIdsOf(buffer)).toEqual([]);
-    const text = await docTextOf(buffer);
+    expect(await numIdsOf(file)).toEqual([]);
+    const text = await docTextOf(file);
     expect(text).toContain("A");
     expect(text).toContain("B");
   });
 
   test("without word/numbering.xml every numPr is pruned from the expanded document", async () => {
-    const docx = await buildDocxBuffer([
+    const docx = await buildDocx([
       "{% for item in items %}",
       { text: "{{ item.name }}", numId: 1 },
       "{% endfor %}",
     ]);
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       items: [{ name: "A" }],
     });
 
-    expect(await numIdsOf(buffer)).toEqual([]);
+    expect(await numIdsOf(file)).toEqual([]);
   });
 });

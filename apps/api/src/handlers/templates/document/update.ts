@@ -59,7 +59,7 @@ const saveTemplateDocument = createSafeRootHandler(
       );
     }
 
-    const buffer = yield* Result.await(scanTemplateUpload(file));
+    const scanned = yield* Result.await(scanTemplateUpload(file));
 
     const existing = yield* Result.await(
       safeDb((tx) =>
@@ -87,7 +87,7 @@ const saveTemplateDocument = createSafeRootHandler(
           templateId,
           mode: { type: "new-version", userId: user.id },
           recordAuditEvent,
-          prepare: () => Result.ok({ bytes: new Uint8Array(buffer) }),
+          prepare: () => Result.ok({ file: scanned }),
         }),
       ),
     );

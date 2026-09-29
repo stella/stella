@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -83,14 +84,17 @@ export const CaseDecisionInspectorView = ({
   } = useQuery(decisionOptions(decisionId));
   const decisionDate = decision?.decisionDate ?? null;
   const ast = parseDocumentAst(decision?.documentAst);
+  // No text is shown before the decision loads, so the default is moot then.
+  const caseNumberType =
+    decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
   const provisionAnchors = useDecisionProvisionAnchors({
-    blocks: visibleDecisionBlocks(ast),
+    blocks: visibleDecisionBlocks(ast, caseNumberType),
     country: decision?.country ?? null,
     decisionId,
     decisionDate,
   });
   const statuteCitationAnchors = useDecisionStatuteCitationAnchors(
-    visibleDecisionBlocks(ast),
+    visibleDecisionBlocks(ast, caseNumberType),
     decisionDate,
   );
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -226,6 +230,7 @@ export const CaseDecisionInspectorView = ({
                 <DecisionCitations
                   decision={{
                     caseNumber: decision.caseNumber,
+                    caseNumberType: decision.caseNumberType,
                     country: decision.country,
                     court: decision.court,
                     decisionDate: decision.decisionDate,

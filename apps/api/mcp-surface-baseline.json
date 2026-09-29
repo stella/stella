@@ -5,13 +5,13 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28620,
+        "description": 28603,
         "inputSchema": 82351,
-        "outputSchema": 54201,
+        "outputSchema": 54298,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 180879,
+      "payloadUtf8Bytes": 180959,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -55,16 +55,16 @@
       "chars": {
         "name": 472,
         "title": 496,
-        "description": 12893,
+        "description": 12876,
         "inputSchema": 26219,
-        "outputSchema": 31102,
+        "outputSchema": 31199,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 76437,
+      "payloadUtf8Bytes": 76517,
       "largestDescription": {
-        "tool": "read_case_law_citations",
-        "chars": 802
+        "tool": "search_case_law",
+        "chars": 803
       },
       "largestInputSchema": {
         "tool": "search_case_law",
@@ -80,16 +80,16 @@
       "chars": {
         "name": 161,
         "title": 176,
-        "description": 6055,
+        "description": 6038,
         "inputSchema": 12263,
-        "outputSchema": 8622,
+        "outputSchema": 8719,
         "annotations": 956,
         "instructions": 1188
       },
-      "payloadUtf8Bytes": 29094,
+      "payloadUtf8Bytes": 29174,
       "largestDescription": {
-        "tool": "read_case_law_citations",
-        "chars": 802
+        "tool": "search_case_law",
+        "chars": 803
       },
       "largestInputSchema": {
         "tool": "search_case_law",

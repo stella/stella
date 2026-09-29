@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { fetchDevOtp } from "@/lib/dev-otp";
-import { redirectToSchema } from "@/lib/redirect";
+import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
 
 const searchSchema = v.strictObject({
@@ -35,7 +35,7 @@ function OTP() {
   const devOtp = Route.useLoaderData({ select: (d) => d.devOtp });
 
   const handleVerified = async () => {
-    await navigate({ href: redirectTo, replace: true });
+    await navigate(afterSignInNavigation(redirectTo));
   };
 
   return (
