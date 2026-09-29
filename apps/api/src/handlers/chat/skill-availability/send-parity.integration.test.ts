@@ -8,7 +8,10 @@ import {
   CHAT_SKILL_DOCUMENT,
   type ChatEditApplyMode,
 } from "@stll/api-contract";
-import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
+import {
+  listSkillMetadata,
+  SKILL_REQUIRED_TOOLS_METADATA_KEY,
+} from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatThreads } from "@/api/db/schema";
@@ -64,6 +67,9 @@ const SKILLS = {
 type SkillKey = keyof typeof SKILLS;
 const SKILL_KEYS = Object.keys(SKILLS).map((key) => asTestRaw<SkillKey>(key));
 const slugOf = (key: SkillKey) => `parity-${key}-${RUN}`;
+// The shipped skills, decided under their slug: the id the skill list gives
+// a built-in, and the name a send references it by.
+const BUILT_IN_SLUGS = listSkillMetadata().map(({ name }) => name);
 
 const loadWebSearchProviders = async () =>
   await Promise.resolve({
@@ -199,8 +205,8 @@ const callerContext = () => ({
   user: { id: ids.userA1 },
 });
 
-/** The skills the menu offers in `chat`. */
-const menuOffers = async (chat: Chat): Promise<ReadonlySet<SkillKey>> => {
+/** The skills the menu offers in `chat`: seeded keys and built-in slugs. */
+const menuOffers = async (chat: Chat): Promise<ReadonlySet<string>> => {
   const result = await listUnavailableChatSkills.handler(
     createTestHandlerContext<
       Parameters<typeof listUnavailableChatSkills.handler>[0]
@@ -233,16 +239,17 @@ const menuOffers = async (chat: Chat): Promise<ReadonlySet<SkillKey>> => {
       ({ skillId }) => skillId,
     ),
   );
-  return new Set(
-    SKILL_KEYS.filter((_, index) => {
+  return new Set([
+    ...SKILL_KEYS.filter((_, index) => {
       const skillId = seededSkillIds.at(index);
       return skillId !== undefined && !withheld.has(skillId);
     }),
-  );
+    ...BUILT_IN_SLUGS.filter((slug) => !withheld.has(slug)),
+  ]);
 };
 
 /** The skills a send from `chat` runs rather than names unavailable. */
-const sendAccepts = async (chat: Chat): Promise<ReadonlySet<SkillKey>> => {
+const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(threadId);
   const workspaceId = chat.matter ? ids.wsA1 : null;
@@ -258,9 +265,14 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<SkillKey>> => {
     id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
     parts: [
       {
-        content: `Use ${SKILL_KEYS.map(
-          (key) => `[Parity ${key}](#stella-skill-ref=${slugOf(key)})`,
-        ).join(" and ")}.`,
+        content: `Use ${[
+          ...SKILL_KEYS.map(
+            (key) => `[Parity ${key}](#stella-skill-ref=${slugOf(key)})`,
+          ),
+          ...BUILT_IN_SLUGS.map(
+            (slug) => `[${slug}](#stella-skill-ref=${slug})`,
+          ),
+        ].join(" and ")}.`,
         type: "text",
       },
     ],
@@ -324,9 +336,10 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<SkillKey>> => {
     systemUntrusted
       .split("\n")
       .find((line) => line.includes("UNAVAILABLE SKILLS")) ?? "";
-  return new Set(
-    SKILL_KEYS.filter((key) => !unavailableLine.includes(slugOf(key))),
-  );
+  return new Set([
+    ...SKILL_KEYS.filter((key) => !unavailableLine.includes(slugOf(key))),
+    ...BUILT_IN_SLUGS.filter((slug) => !unavailableLine.includes(slug)),
+  ]);
 };
 
 const CHATS: readonly (Chat & { name: string })[] = [
@@ -391,7 +404,7 @@ describe("the composer menu and the send path decide skill availability alike", 
       expect(
         violationsOf(
           CHAT_ORACLE.skillsMenuMatchesSend,
-          SKILL_KEYS.flatMap((skill) =>
+          [...SKILL_KEYS, ...BUILT_IN_SLUGS].flatMap((skill) =>
             offered.has(skill) === accepted.has(skill)
               ? []
               : [
