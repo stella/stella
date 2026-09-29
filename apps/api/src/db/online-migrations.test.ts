@@ -15,6 +15,7 @@ const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
 const REINDEX_FRAGMENT = "REINDEX INDEX CONCURRENTLY";
 const REPORT_EXPORT_INDEX = "report_exports_workspace_requester_created_idx";
 const CREDENTIAL_INDEX = "account_credential_singleton_uidx";
+const CHAT_RUN_INDEX = "chat_turns_org_run_id_uidx";
 const SOURCE_DOCUMENT_INDEX = "case_law_decisions_source_document_idx";
 const SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_null_idx";
 const LEGACY_SOURCE_CASE_INDEX = "case_law_decisions_source_case_lang_idx";
@@ -117,6 +118,33 @@ describe("online migrations", () => {
         `${REINDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
       ),
     ).toBeGreaterThan(-1);
+  });
+
+  test("repairs an invalid chat run index after an interrupted build", async () => {
+    expect(
+      ONLINE_MIGRATION_INDEXES.some(({ name }) => name === CHAT_RUN_INDEX),
+    ).toBe(true);
+    const artifactName = `${CHAT_RUN_INDEX}_ccnew`;
+    const harness = createHarness({
+      artifacts: {
+        [CHAT_RUN_INDEX]: [{ isValid: false, name: artifactName }],
+      },
+      indexStates: { [CHAT_RUN_INDEX]: [false, true] },
+    });
+
+    await runOnlineMigrations(harness.pool);
+
+    const drop = indexOfStatement(
+      harness.statements,
+      `${DROP_INDEX_FRAGMENT} public."${artifactName}"`,
+    );
+    const repair = indexOfStatement(
+      harness.statements,
+      `${REINDEX_FRAGMENT} public."${CHAT_RUN_INDEX}"`,
+    );
+    expect(drop).toBeGreaterThan(-1);
+    expect(repair).toBeGreaterThan(drop);
+    expect(harness.released()).toBe(true);
   });
 
   test("rejects a valid same-named index with the wrong definition", async () => {

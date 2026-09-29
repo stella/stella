@@ -61,6 +61,13 @@ const rejectionOf = async (operation: Promise<unknown>): Promise<unknown> =>
   );
 
 test("binds each run id to one turn per organization, accepts owner-lost, and replays", async () => {
+  expect(
+    migrationStatements.some((statement) =>
+      statement.includes(
+        'REINDEX INDEX CONCURRENTLY "chat_turns_org_run_id_uidx"',
+      ),
+    ),
+  ).toBe(false);
   const database = new PGlite();
   await database.exec(PRE_MIGRATION);
 

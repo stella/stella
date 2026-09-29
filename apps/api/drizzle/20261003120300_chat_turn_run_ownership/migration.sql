@@ -32,14 +32,12 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- The migration runner validates this index after the ledger update and
--- concurrently repairs an interrupted INVALID build. IF NOT EXISTS preserves
--- an already-valid uniqueness boundary across retries.
+-- The online phase validates this index after the ledger update and repairs
+-- an interrupted INVALID build. IF NOT EXISTS preserves an already-valid
+-- uniqueness boundary across retries without rebuilding it.
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "chat_turns_org_run_id_uidx"
   ON "chat_turns" ("organization_id", "run_id")
   WHERE "run_id" IS NOT NULL;
---> statement-breakpoint
-REINDEX INDEX CONCURRENTLY "chat_turns_org_run_id_uidx";
 --> statement-breakpoint
 
 SET statement_timeout = '5s';
