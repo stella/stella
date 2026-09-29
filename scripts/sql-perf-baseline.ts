@@ -6,11 +6,18 @@ import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
+  analyzeMigrationSqlPerf,
   analyzeSqlPerf,
   isBaselinedSqlPerfKind,
   reportSqlPerfOrColumns,
 } from "./sql-perf-detector";
-import { isSqlPerfSource, SQL_PERF_LINT_FILES } from "./sql-perf-scope.ts";
+import {
+  isSqlPerfMigration,
+  isSqlPerfSource,
+  SQL_PERF_EXEMPT_MIGRATIONS,
+  SQL_PERF_LINT_FILES,
+  SQL_PERF_MIGRATION_FILES,
+} from "./sql-perf-scope.ts";
 
 export const SQL_PERF_BASELINE_PATH = BASELINE_PATHS.sqlPerf;
 const SOURCE_GLOBS = SQL_PERF_LINT_FILES;
@@ -57,6 +64,38 @@ export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
       left.localeCompare(right),
     ),
   );
+};
+
+/**
+ * Findings in the migrations the check reads. None is baselined: each is
+ * rewritten or carries a `-- sql-perf-allow` reason. An exemption naming a
+ * migration that no longer exists is a finding too.
+ */
+export const scanSqlPerfMigrations = (root: string): string[] => {
+  const findings: string[] = [];
+  for (const directory of Object.keys(SQL_PERF_EXEMPT_MIGRATIONS)) {
+    if (!existsSync(path.join(root, "apps/api/drizzle", directory))) {
+      findings.push(
+        `${directory}: exempt from the SQL performance check but not a migration`,
+      );
+    }
+  }
+  for (const file of new Bun.Glob(SQL_PERF_MIGRATION_FILES).scanSync(root)) {
+    if (!isSqlPerfMigration(file)) {
+      continue;
+    }
+    const source = readFileSync(path.join(root, file), "utf-8");
+    const { hits, commentErrors } = analyzeMigrationSqlPerf(source);
+    for (const { line, column } of hits) {
+      findings.push(
+        `${file}:${line}:${column}: optional keyset bound (<param> IS NULL OR <column> > <param>)`,
+      );
+    }
+    for (const { line, message } of commentErrors) {
+      findings.push(`${file}:${line}: ${message}`);
+    }
+  }
+  return findings.toSorted();
 };
 
 export const scanSqlPerfOrColumns = (root: string): string[] => {
@@ -276,6 +315,13 @@ const main = (): number => {
     return panic("SQL performance baseline was not initialized");
   }
   const issues = compareSqlPerfCounts(current, baseline);
+  const migrationFindings = scanSqlPerfMigrations(root);
+  if (migrationFindings.length > 0) {
+    console.error(
+      `SQL performance findings in migrations:\n${migrationFindings.join("\n")}`,
+    );
+    return 1;
+  }
 
   if (mode === "write") {
     const lowered = lowerSqlPerfBaseline(current, baseline);

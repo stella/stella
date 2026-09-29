@@ -5,14 +5,31 @@ import type { SQLWrapper } from "drizzle-orm";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 
 import type { Transaction } from "@/api/db/root";
-import { decisionTextPresenceQuery } from "@/api/handlers/case-law/decisions/get";
+import {
+  decisionCitationPageQuery,
+  decisionCitationSummaryQuery,
+} from "@/api/handlers/case-law/decisions/citation-graph";
+import {
+  decisionRecordQuery,
+  decisionTextPresenceQuery,
+} from "@/api/handlers/case-law/decisions/get";
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
-import { decisionIdsByIdentityQuery } from "@/api/handlers/case-law/decisions/search";
+import {
+  candidateDecisionRowsQuery,
+  caseLawSearchRowFilters,
+  decisionIdsByIdentityQuery,
+  pageDecisionRowsQuery,
+} from "@/api/handlers/case-law/decisions/search";
 import {
   getShardConditions,
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
-import { statuteSitemapShardQuery } from "@/api/handlers/legislation/sitemap";
+import { buildLegislationFacetsQuery } from "@/api/handlers/legislation/facets";
+import { buildListStatutesQuery } from "@/api/handlers/legislation/list";
+import {
+  statuteSitemapIndexQuery,
+  statuteSitemapShardQuery,
+} from "@/api/handlers/legislation/sitemap";
 import {
   decisionPageSql,
   ID_PAGE_SIZE,
@@ -21,11 +38,17 @@ import {
   SITEMAP_REFRESH_PAGE_SIZE,
   sitemapRefreshPageSql,
 } from "@/api/lib/case-law/sitemap-shard-refresh";
+import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
 import planContracts from "@/api/tests/query-plans/contracts.json" with { type: "json" };
-import type { AccessPath } from "@/api/tests/query-plans/plan-walker";
+import type {
+  AccessPath,
+  HeapFetchException,
+  HeapFetchMitigation,
+} from "@/api/tests/query-plans/plan-walker";
 import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";
 
 type QueryPlanEntry = {
@@ -35,9 +58,11 @@ type QueryPlanEntry = {
   build: (tx: Transaction) => SQLWrapper;
   seed: "case-law" | "legislation";
   planMode?: "covering-index";
+  heapFetchMitigation?: HeapFetchMitigation;
+  heapFetchExceptions?: readonly HeapFetchException[];
   contract: {
     scans: readonly AccessPath[];
-    allowSeqScan?: boolean;
+    allowSeqScan?: string;
   };
 };
 
@@ -52,6 +77,7 @@ if (!Array.isArray(shardConditions)) {
 }
 const sampleCountry =
   publicCaseLawCountry("CZE") ?? panic("The query-plan country must be public");
+const citationPageSize = 10;
 
 /** A raw `$1` statement with its one parameter bound, as a Drizzle query. */
 const withFirstParameter = (text: string, value: string): SQLWrapper => {
@@ -83,7 +109,7 @@ export const QUERY_PLAN_REGISTRY = [
   },
   {
     id: "case-law.sitemap-refresh",
-    class: "aggregate",
+    class: "page",
     role: "root",
     // A resumed page, so the plan covers the row comparison on the index keys.
     build: () =>
@@ -100,6 +126,10 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     planMode: "covering-index",
+    heapFetchMitigation: {
+      type: "batched",
+      pageSize: SITEMAP_REFRESH_PAGE_SIZE,
+    },
     contract: planContracts["case-law.sitemap-refresh"],
   },
   {
@@ -136,6 +166,18 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["legislation.sitemap-shard-read"],
   },
   {
+    id: "legislation.sitemap-index-read",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) => statuteSitemapIndexQuery(tx),
+    seed: "legislation",
+    heapFetchMitigation: {
+      type: "snapshot",
+      relation: "statute_sitemap_shards",
+    },
+    contract: planContracts["legislation.sitemap-index-read"],
+  },
+  {
     id: "case-law.decisions-list",
     class: "page",
     role: "public-law-reader",
@@ -159,6 +201,173 @@ export const QUERY_PLAN_REGISTRY = [
     contract:
       planContracts[PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence],
   },
+  {
+    id: PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionRecordQuery(tx, QUERY_PLAN_SAMPLE.caseLaw.decisionId),
+    seed: "case-law",
+    contract: planContracts[PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead],
+  },
+  {
+    id: "case-law.search-candidate-rows",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      candidateDecisionRowsQuery(tx, {
+        filters: caseLawSearchRowFilters(
+          { country: sampleCountry },
+          QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ),
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
+      }),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "batched",
+      pageSize: QUERY_PLAN_SAMPLE.caseLaw.candidateIds.length,
+    },
+    contract: planContracts["case-law.search-candidate-rows"],
+  },
+  {
+    id: PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration,
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      rehydrateCorpusIndexProviderCandidatesQuery(tx, {
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
+      }),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "batched",
+      pageSize: LIMITS.corpusIndexSearchCandidateLimit,
+    },
+    contract:
+      planContracts[PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration],
+  },
+  {
+    id: "case-law.search-page-rows",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      pageDecisionRowsQuery(tx, {
+        filters: caseLawSearchRowFilters(
+          { country: sampleCountry },
+          QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ),
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        ids: QUERY_PLAN_SAMPLE.caseLaw.candidateIds,
+      }),
+    seed: "case-law",
+    heapFetchMitigation: {
+      type: "batched",
+      pageSize: QUERY_PLAN_SAMPLE.caseLaw.candidateIds.length,
+    },
+    contract: planContracts["case-law.search-page-rows"],
+  },
+  {
+    id: "case-law.citation-page-incoming",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        cursorId: undefined,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        direction: "incoming",
+        limit: citationPageSize,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-incoming"],
+  },
+  {
+    id: "case-law.citation-page-outgoing",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        cursorId: undefined,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        direction: "outgoing",
+        limit: citationPageSize,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-outgoing"],
+  },
+  {
+    id: "case-law.citation-summary",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationSummaryQuery({
+        currentYear: 2026,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        tx,
+      }),
+    seed: "case-law",
+    heapFetchExceptions: [
+      {
+        scan: {
+          position: "root/0/0/0/0/1/1",
+          relation: "case_law_decisions",
+          nodeType: "Index Only Scan",
+          index: "case_law_decisions_search_candidate_idx",
+        },
+        reason:
+          "Per-citing-row index-only lookup under an aggregate; the only Limit is above the aggregates.",
+        rework: "perf(case-law): bound the citation summary query",
+        expiresOn: "2026-10-13",
+      },
+    ],
+    contract: planContracts["case-law.citation-summary"],
+  },
+  {
+    id: "legislation.list",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      buildListStatutesQuery(tx, {
+        country: "CZE",
+        query: {},
+        limit: 20,
+        cursor: null,
+        asOf: sql`CURRENT_DATE`,
+      }),
+    seed: "legislation",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      // Two correlated covering SubPlans, about one row each, per listed row.
+      rows: 2 * 21,
+      reason:
+        "Each version SubPlan run reads about one row, and the SubPlans run at most once per row under the outer Limit(21).",
+    },
+    contract: planContracts["legislation.list"],
+  },
+  {
+    id: "legislation.facets",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) => buildLegislationFacetsQuery(tx, "CZE"),
+    seed: "legislation",
+    contract: planContracts["legislation.facets"],
+  },
+  {
+    id: "corpus-index.projection-erasure-claim",
+    class: "page",
+    role: "root",
+    build: (tx) =>
+      corpusProjectionErasureClaimQuery(tx, {
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+        limit: 64,
+        scopedEntityIds: null,
+      }),
+    seed: "case-law",
+    contract: planContracts["corpus-index.projection-erasure-claim"],
+  },
 ] as const satisfies readonly QueryPlanEntry[];
 
 type SharedQueryDisposition =
@@ -176,8 +385,8 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
     reason: "Facets come from the corpus-index provider, not PostgreSQL.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration]: {
-    type: "excluded",
-    reason: "Candidate-id batch size changes the statement shape.",
+    type: "registered",
+    id: PUBLIC_LAW_SHARED_QUERY.caseLawCorpusIndexRehydration,
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCorpusStatus]: {
     type: "excluded",
@@ -200,8 +409,8 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
     reason: "Coverage mixes source metadata and decision counts.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead]: {
-    type: "excluded",
-    reason: "Subject-gated detail read contains multiple statements.",
+    type: "registered",
+    id: PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawDecisionTextPresence]: {
     type: "registered",

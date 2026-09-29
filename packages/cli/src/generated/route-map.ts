@@ -5920,7 +5920,7 @@ export const generatedRouteMap: RouteNode = {
                 enum: ["buyer", "seller", "neutral"],
                 repeatable: false,
                 description:
-                  "Side the review takes. Use an advertised value; case and surrounding whitespace are normalized.",
+                  "Side the review takes. Set only for a buyer, seller, or neutral side; a recipient, controller, or customer has none, so omit it. Use an advertised value; case and surrounding whitespace are normalized.",
                 required: false,
               },
               {
@@ -5978,7 +5978,7 @@ export const generatedRouteMap: RouteNode = {
                       enum: ["buyer", "seller", "neutral"],
                       type: "string",
                       description:
-                        "Side the review takes. Use an advertised value; case and surrounding whitespace are normalized.",
+                        "Side the review takes. Set only for a buyer, seller, or neutral side; a recipient, controller, or customer has none, so omit it. Use an advertised value; case and surrounding whitespace are normalized.",
                       "x-stella-agent-input": {
                         kind: "enum",
                       },
@@ -42714,7 +42714,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "skills", "list"],
                 capabilityId: "skills.list",
                 description:
-                  "List the agent skills visible to you, the organization's team skills plus your own private ones, enabled first and then by scope and name, with cursor pagination. Instruction bodies come back only for skills that carry a slash command; read one skill in full with skills.get. Also reports whether you may manage team skills.",
+                  "List the agent skills visible to you, the organization's team skills plus your own private ones, enabled first and then by scope and name, with cursor pagination, alongside the skills shipped with stella (`builtIn`). Instruction bodies come back only for skills that carry a slash command; read one skill in full with skills.get. Also reports whether you may manage team skills.",
                 access: "read",
                 flags: [],
                 inputOnly: [],

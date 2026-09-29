@@ -493,6 +493,36 @@ describe("openSkillResourceTab", () => {
     });
   });
 
+  test("refreshes content when an installed skill replaces a built-in resource", () => {
+    const resource = {
+      content: "Built-in content",
+      label: "Guidance",
+      mimeType: "text/markdown",
+      origin: "built-in" as const,
+      resourcePath: "knowledge/guidance.md",
+      skillId: null,
+      skillName: "review",
+    };
+
+    useInspectorTabsStore.getState().openSkillResourceTab(resource);
+    useInspectorTabsStore.getState().openSkillResourceTab({
+      ...resource,
+      content: "Installed content",
+      origin: "upload",
+      skillId: "agentSkill_1",
+    });
+
+    const tab = useInspectorTabsStore
+      .getState()
+      .tabs.find((item) => item.id === buildSkillResourceTabId(resource));
+    expect(tab).toMatchObject({
+      type: "skill-resource",
+      content: "Installed content",
+      origin: "upload",
+      skillId: "agentSkill_1",
+    });
+  });
+
   test("refreshes content when explicitly requested for the same source", () => {
     const resource = {
       content: "Original content",
@@ -1616,11 +1646,45 @@ describe("Inspector tab broadcast", () => {
     activeSkill: { skillId: "agentSkill_1", skillName: "review" },
   };
 
+  const builtInSkillResourceTab = {
+    ...skillResourceTab,
+    id: "skill-resource:summarize/SKILL.md",
+    skillName: "summarize",
+    skillId: null,
+    origin: "built-in",
+  };
+  const builtInChatTab = {
+    ...chatTab,
+    id: toChatThreadId("thread-built-in-skill"),
+    activeSkill: { skillName: "summarize" },
+  };
+
   test.each([
     { ...skillResourceTab, skillId: null },
     { ...skillResourceTab, origin: "built-in" },
-    { ...chatTab, activeSkill: { skillName: "review" } },
-  ])("rejects skill context without a persisted skill id or origin", (tab) => {
+    { ...skillResourceTab, origin: "unknown" },
+  ])(
+    "rejects a skill resource whose skill id does not fit its origin",
+    (tab) => {
+      installFakeBroadcastChannel();
+      const scope = { organizationId: "org-1", userId: "user-1" };
+      const peer = new FakeBroadcastChannel(
+        getInspectorTabsBroadcastChannelName(scope),
+      );
+      cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+
+      peer.emit({
+        type: "inspector-tabs:sync",
+        senderId: "peer-tab",
+        updatedAt: 1,
+        tabs: [tab],
+      });
+
+      expect(useInspectorTabsStore.getState().tabs).toEqual([]);
+    },
+  );
+
+  test("accepts skill context from a skill row or a built-in skill", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };
     const peer = new FakeBroadcastChannel(
@@ -1632,30 +1696,19 @@ describe("Inspector tab broadcast", () => {
       type: "inspector-tabs:sync",
       senderId: "peer-tab",
       updatedAt: 1,
-      tabs: [tab],
-    });
-
-    expect(useInspectorTabsStore.getState().tabs).toEqual([]);
-  });
-
-  test("accepts skill context carrying a persisted skill id and origin", () => {
-    installFakeBroadcastChannel();
-    const scope = { organizationId: "org-1", userId: "user-1" };
-    const peer = new FakeBroadcastChannel(
-      getInspectorTabsBroadcastChannelName(scope),
-    );
-    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
-
-    peer.emit({
-      type: "inspector-tabs:sync",
-      senderId: "peer-tab",
-      updatedAt: 1,
-      tabs: [skillResourceTab, chatTab],
+      tabs: [
+        skillResourceTab,
+        chatTab,
+        builtInSkillResourceTab,
+        builtInChatTab,
+      ],
     });
 
     expect(useInspectorTabsStore.getState().tabs).toMatchObject([
       skillResourceTab,
       chatTab,
+      builtInSkillResourceTab,
+      builtInChatTab,
     ]);
   });
 

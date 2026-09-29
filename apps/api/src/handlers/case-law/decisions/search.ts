@@ -339,13 +339,12 @@ export const caseLawSearchPlan = ({
 
   const scoreExpr = blendedRankSql({
     authority: sql`cb.authority`,
-    courtTier: sql.raw(
-      courtTierSqlFromMap({
-        countryColumn: "d.country",
-        courtColumn: "d.court",
-        map: courtWeights,
-      }),
-    ),
+    courtTier: courtTierSqlFromMap({
+      countryColumn: "d.country",
+      courtColumn: "d.court",
+      courtIdColumn: "d.court_id",
+      map: courtWeights,
+    }),
     lexicalRank: ftsSearch.rank,
   });
   const sortKeyExpr = decisionSortKeySql(sort, scoreExpr);
@@ -377,16 +376,18 @@ export const caseLawSearchPlan = ({
   // The citing court can belong to any jurisdiction — citation graphs cross
   // borders — so this side of the statement reads the flattened registry
   // rather than the decision's own country.
-  const courtWeightExpr = courtWeightSql(
-    "citing_d.court",
-    flattenCourtWeightEntries(courtWeights),
-  );
+  const courtWeightExpr = courtWeightSql({
+    countryColumn: "citing_d.country",
+    courtColumn: "citing_d.court",
+    courtIdColumn: "citing_d.court_id",
+    entries: flattenCourtWeightEntries(courtWeights),
+  });
 
-  const citationAuthorityLateral = sql.raw(`
+  const citationAuthorityLateral = sql`
     LATERAL (
       SELECT ln(1 + coalesce(
         sum(
-          (${polarityWeightSql("c.polarity")})
+          (${sql.raw(polarityWeightSql("c.polarity"))})
           * (${courtWeightExpr})
           * (1.0 / (1 + COALESCE(extract(epoch FROM (now() - citing_d.decision_date)) / (365.25 * 86400), 1.0)))
         ),
@@ -398,11 +399,11 @@ export const caseLawSearchPlan = ({
         ON citing_d.id = c.citing_decision_id
       JOIN case_law_sources citing_src
         ON citing_src.id = citing_d.source_id
-       AND ${redistributableCaseLawSourceSqlFor("citing_src")}
+       AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
       WHERE c.cited_decision_id = d.id
-        AND ${publishedCaseLawDecisionSqlFor("citing_d")}
+        AND ${sql.raw(publishedCaseLawDecisionSqlFor("citing_d"))}
     ) cb
-  `);
+  `;
 
   // Every matched language version, scored once. The page and the total both
   // read this set, so the representative rule below sees exactly what the
@@ -462,6 +463,7 @@ export const caseLawSearchPlan = ({
         WHERE identifier.decision_id = d.id
       ) AS identifiers,
       d.court,
+      d.court_id,
       d.country,
       d.language,
       d.language_group_key,
@@ -750,6 +752,7 @@ const searchPostgresDecisions = async (
     const presentation = courtPresentation(courtWeights, {
       country: String(row["country"]),
       court: String(row["court"]),
+      courtId: toNullableString(row["court_id"]),
       ecli: toNullableString(row["ecli"]),
     });
 
@@ -1072,7 +1075,7 @@ type DecisionRowsQueryOptions = {
  * language versions of one judgment, and the request's filters are applied in
  * SQL rather than read back.
  */
-const candidateDecisionRowsQuery = (
+export const candidateDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
   { filters, ids }: DecisionRowsQueryOptions,
 ) =>
@@ -1101,7 +1104,7 @@ type CandidateDecisionRow = Awaited<
  * publisher summary and the identifier aggregate are the expensive parts, and
  * a page of ten is the only place they are wanted.
  */
-const pageDecisionRowsQuery = (
+export const pageDecisionRowsQuery = (
   tx: CaseLawPublicReadTransaction,
   { filters, ids }: DecisionRowsQueryOptions,
 ) =>
@@ -1146,8 +1149,19 @@ type HydratedDecisionRows = Map<string, CandidateDecisionRow | null>;
  * emits publisher text re-proves the row is still servable rather than
  * inheriting the candidate read's answer.
  */
-const caseLawSearchRowFilters = (
-  body: SearchDecisionsBody,
+type CaseLawSearchRowFilterBody = Pick<
+  SearchDecisionsBody,
+  | "country"
+  | "court"
+  | "dateFrom"
+  | "dateTo"
+  | "decisionType"
+  | "sourceId"
+  | "language"
+>;
+
+export const caseLawSearchRowFilters = (
+  body: CaseLawSearchRowFilterBody,
   generation: string,
 ): SQL[] => {
   const filters: SQL[] = [
@@ -1524,6 +1538,7 @@ const decisionHitsPage = ({
     const presentation = courtPresentation(courtWeights, {
       country: row.country,
       court: row.court,
+      courtId: row.courtId,
       ecli: row.ecli,
     });
     const { caseNumberType } = row;

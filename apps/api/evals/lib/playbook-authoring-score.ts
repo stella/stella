@@ -4,7 +4,12 @@
  * model, no store; the eval script gathers the evidence and this judges it.
  */
 
-import type { Position } from "@/api/lib/workflow/playbook-positions";
+import type {
+  PlaybookScope,
+  Position,
+} from "@/api/lib/workflow/playbook-positions";
+
+type PlaybookPerspective = NonNullable<PlaybookScope["perspective"]>;
 
 export type SaveCallRecord = {
   /** The raw input, before any parse: a refused call is kept whole. */
@@ -27,6 +32,12 @@ export type PlaybookExpectation = {
   plantedRefusals: readonly string[];
   /** Positions one call may carry: the ones the brief asked to add or change. */
   maxPositionsPerCall: number;
+  /**
+   * The `scope.perspective` values the brief's side maps to; `undefined` is
+   * the omission the tool asks for when the side maps to none. A seeded
+   * playbook keeps its stored value.
+   */
+  perspectives: readonly (PlaybookPerspective | undefined)[];
   /** Scenario-specific defects in the final positions; empty when clean. */
   check: (positions: readonly Position[]) => string[];
 };
@@ -63,6 +74,7 @@ const positionsCarried = (input: unknown): number => {
 export const scorePlaybookRun = ({
   calls,
   expectation,
+  finalPerspective,
   finalPositions,
   seededPositions,
   turnError,
@@ -71,6 +83,8 @@ export const scorePlaybookRun = ({
   expectation: PlaybookExpectation;
   /** `null` when the run left no playbook to judge. */
   finalPositions: readonly Position[] | null;
+  /** The stored `scope.perspective`; `undefined` when unset or no playbook. */
+  finalPerspective: PlaybookPerspective | undefined;
   seededPositions: readonly Position[];
   turnError: string | null;
 }): PlaybookRunScore => {
@@ -107,6 +121,11 @@ export const scorePlaybookRun = ({
   }
   if (finalPositions !== null) {
     defects.push(...expectation.check(finalPositions));
+    if (!expectation.perspectives.includes(finalPerspective)) {
+      defects.push(
+        `saved scope.perspective ${String(finalPerspective)}; the side maps to ${expectation.perspectives.map(String).join(" or ")}`,
+      );
+    }
   }
 
   const altered = expectation.untouchedSourceIds.filter((sourceId) => {

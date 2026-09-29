@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import {
   CHAT_EDIT_APPLY_MODE,
@@ -7,7 +7,10 @@ import {
   CHAT_SKILL_DOCUMENT,
   type ChatSkillContextNeed,
 } from "@stll/api-contract";
-import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
+import {
+  listSkillMetadata,
+  SKILL_REQUIRED_TOOLS_METADATA_KEY,
+} from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
@@ -76,14 +79,15 @@ const skillIds = new Map<SkillKey, SafeId<"agentSkill">>();
 
 // A deployment with a web-search provider, so the web-search switch is the
 // only thing that decides whether chat has `web_search`.
+const loadWebSearchProviders = async () => ({
+  urlFetcher: null,
+  webSearchProvider: {
+    name: "tavily" as const,
+    search: async () => await Promise.resolve({ results: [] }),
+  },
+});
 const listUnavailableChatSkills = createListUnavailableChatSkills({
-  loadWebSearchProviders: async () => ({
-    urlFetcher: null,
-    webSearchProvider: {
-      name: "tavily",
-      search: async () => await Promise.resolve({ results: [] }),
-    },
-  }),
+  loadWebSearchProviders,
 });
 
 beforeAll(async () => {
@@ -363,5 +367,89 @@ describe("the composer's chat is authorized before it is evaluated", () => {
     expect(
       await call({ query: { ...WIDEST, document: CHAT_SKILL_DOCUMENT.file } }),
     ).toMatchObject({ code: 400 });
+  });
+});
+
+describe("built-in skills are decided beside installed ones", () => {
+  // The shipped skills, each declaring a tool no chat has, so the decision
+  // on them is visible; their names stay the shipped ones.
+  const listUnmetBuiltIns = createListUnavailableChatSkills({
+    listBuiltInSkills: () =>
+      listSkillMetadata().map(({ description, name, version }) => ({
+        description,
+        metadata: { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: SKILL.nowhere.tools },
+        name,
+        version,
+      })),
+    loadWebSearchProviders,
+  });
+  const builtInNames = listSkillMetadata().map(({ name }) => name);
+
+  const unavailableIds = async () => {
+    const result = await listUnmetBuiltIns.handler(
+      createTestHandlerContext<Parameters<typeof listUnmetBuiltIns.handler>[0]>(
+        {
+          getAccessibleWorkspaces: async () => WITH_MATTER(),
+          getWorkspaceAccess: async () => null,
+          memberRole: { role: "owner" as const },
+          query: {},
+          safeDb,
+          scopedDb,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+        },
+      ),
+    );
+    if ("code" in result) {
+      throw new TypeError(`expected the availability list, got ${result.code}`);
+    }
+    return new Set(result.unavailable.map(({ skillId }) => skillId));
+  };
+
+  const withRowFor = async (
+    slug: string,
+    enabled: boolean,
+    check: (rowId: SafeId<"agentSkill">) => Promise<void>,
+  ) => {
+    const id = toSafeId<"agentSkill">(Bun.randomUUIDv7());
+    await testDb.insert(agentSkills).values({
+      id,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      scope: "private",
+      origin: "authored",
+      slug,
+      name: `Installed ${slug}`,
+      description: "Installed under a built-in slug.",
+      metadata: {},
+      contentHash: "0".repeat(64),
+      body: "Installed body.",
+      enabled,
+    });
+    try {
+      await check(id);
+    } finally {
+      await testDb.delete(agentSkills).where(eq(agentSkills.id, id));
+    }
+  };
+
+  test("a built-in whose tools chat lacks is withheld under its slug", async () => {
+    expect(builtInNames.length).toBeGreaterThan(0);
+    const unavailable = await unavailableIds();
+    for (const name of builtInNames) {
+      expect(unavailable.has(name)).toBe(true);
+    }
+  });
+
+  test("an enabled installed row with the slug is decided instead of the built-in", async () => {
+    const name = builtInNames.at(0) ?? "";
+    await withRowFor(name, true, async (rowId) => {
+      const unavailable = await unavailableIds();
+      expect(unavailable.has(name)).toBe(false);
+      expect(unavailable.has(rowId)).toBe(false);
+    });
+    await withRowFor(name, false, async () => {
+      expect((await unavailableIds()).has(name)).toBe(true);
+    });
   });
 });

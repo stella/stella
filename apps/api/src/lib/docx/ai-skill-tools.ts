@@ -35,17 +35,22 @@ export type SkillToolsContext = {
 
 /**
  * Returns the `load-skill` + `read-skill-resource` tool set when `prompt`
- * references at least one skill, otherwise `undefined` so the caller keeps its
- * existing no-tools behaviour. The catalog is the one chat serves: the
- * caller's enabled team and private skills, private first on a slug
- * collision. `ctx` is omitted at boundaries that cannot wire the skill
- * identity; in that case skill refs stay inert (no tools).
+ * references at least one skill in the catalog, otherwise `undefined` so the
+ * caller keeps its existing no-tools behaviour. The catalog is the one chat
+ * serves: the caller's enabled team and private skills and the built-ins,
+ * private first on a slug collision. `ctx` is omitted at boundaries that
+ * cannot wire the skill identity; in that case skill refs stay inert (no
+ * tools).
  */
 export const maybeSkillTools = async (
   prompt: string,
   ctx: SkillToolsContext | undefined,
 ): Promise<Result<ChatToolMap | undefined, SafeDbError>> => {
-  if (ctx === undefined || extractSkillRefSlugs(prompt).length === 0) {
+  if (ctx === undefined) {
+    return Result.ok(undefined);
+  }
+  const referencedSlugs = new Set(extractSkillRefSlugs(prompt));
+  if (referencedSlugs.size === 0) {
     return Result.ok(undefined);
   }
   const listed = await listAvailableChatSkillMetadata(ctx);
@@ -58,7 +63,7 @@ export const maybeSkillTools = async (
     offeredToolNames: () => new Set(),
     skills: listed.value,
   });
-  if (skills.length === 0) {
+  if (!skills.some(({ name }) => referencedSlugs.has(name))) {
     return Result.ok(undefined);
   }
   return Result.ok(
