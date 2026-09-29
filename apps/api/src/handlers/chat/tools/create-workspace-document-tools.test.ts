@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { docxToMarkdown } from "@stll/folio-core/server";
@@ -18,6 +19,8 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -238,4 +241,48 @@ describe("createCreateWorkspaceDocumentTools", () => {
       /missing a file property/iu,
     );
   });
+  test.each([
+    { reason: "capacity_exceeded", kind: "limit" },
+    { reason: "key_conflict", kind: "limit" },
+    { reason: "reservation_busy", kind: "limit" },
+    { reason: "storage_unavailable", kind: "server-defect" },
+  ] as const)(
+    "surfaces $reason as a recoverable $kind tool failure",
+    async ({ reason, kind }) => {
+      const { scopedDb } = createScopedDbMock({});
+      const failure = new OrganizationFileUsageError({
+        reason,
+        message: "File storage unavailable.",
+      });
+      const tools = createCreateWorkspaceDocumentTools({
+        scopedDb,
+        organizationId,
+        userId,
+        workspaceId,
+        recordAuditEvent: async () => undefined,
+        refRegistry: createChatRefRegistry(),
+        createEntityFromBuffer: async () => Result.err(failure),
+      });
+      const execute = tools[CREATE_MATTER_DOCUMENT_TOOL_NAME].execute;
+      expect(execute).toBeDefined();
+      if (!execute) {
+        return;
+      }
+      const rejection = await Promise.resolve(
+        execute(
+          { title: "Loan Agreement", markdown },
+          asTestRaw<Parameters<typeof execute>[1]>({}),
+        ),
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(rejection).toBeInstanceOf(ChatToolError);
+      expect(rejection).toMatchObject({
+        kind,
+        message: failure.message,
+        cause: failure,
+      });
+    },
+  );
 });

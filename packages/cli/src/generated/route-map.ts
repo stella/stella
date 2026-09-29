@@ -3486,7 +3486,7 @@ export const generatedRouteMap: RouteNode = {
                 cursor: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 512,
+                  maxLength: 1844,
                   description:
                     "Opaque cursor from a previous search_legislation call",
                 },
@@ -24926,7 +24926,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "entries-add"],
                 capabilityId: "invoices.entries.add",
                 description:
-                  "Attach approved, billable, not-yet-invoiced time entries and expenses to a draft invoice, marking them billed and recomputing the invoice total. Every entry must match the invoice currency, because an invoice is single-currency and nothing is converted. Only draft invoices accept entries, and a concurrent change to the same entries fails with a retryable conflict rather than attaching part of the set.",
+                  "Attach approved, billable, not-yet-invoiced time entries and expenses to a draft invoice as invoice lines without VAT, marking them billed and recomputing the invoice totals. Every entry must match the invoice currency, because an invoice is single-currency and nothing is converted. Only draft invoices accept entries, and a concurrent change to the same entries fails with a retryable conflict rather than attaching part of the set.",
                 access: "write",
                 flags: [
                   {
@@ -25033,7 +25033,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "entries-remove"],
                 capabilityId: "invoices.entries.remove",
                 description:
-                  "Detach time entries and expenses from a draft invoice, returning them to approved, unbilled status and recomputing the invoice total. Reversible: the same entries can be attached again with invoices.entries.add, and nothing is deleted. Only draft invoices may be changed, and ids that are not on this invoice are skipped without an error.",
+                  "Detach time entries and expenses from a draft invoice, removing their invoice lines, returning them to approved, unbilled status, and recomputing the invoice totals. Reversible: the same entries can be attached again with invoices.entries.add, and the entries themselves are kept. Only draft invoices may be changed, and ids that are not on this invoice are skipped without an error.",
                 access: "write",
                 flags: [
                   {
@@ -25140,7 +25140,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
                 description:
-                  "Read one invoice with its full line detail: every attached time entry with its work item, every attached expense with its work item, plus status, dates, currency, and total. Use invoices.list for a paginated summary without line items.",
+                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
                 access: "read",
                 flags: [
                   {
@@ -25182,6 +25182,467 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                         invoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "lines-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "invoices", "lines-create"],
+                capabilityId: "invoices.lines.create",
+                description:
+                  "Add one line to a draft invoice and recompute its totals. The source is a manual line (description, decimal quantity, optional unit, unit price in minor units), an approved unbilled time entry, or an approved unbilled expense; an entry line takes its amount from the entry and marks the entry billed. Every line carries a VAT rate in basis points and a VAT treatment. Only draft invoices accept lines.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--invoice-id",
+                    prop: "invoiceId",
+                    required: true,
+                    part: "params",
+                    partPath: "invoiceId",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 10000,
+                    repeatable: false,
+                    description: "VAT rate in basis points: 2100 is 21 %",
+                    flag: "--vat-rate-bps",
+                    prop: "vatRateBps",
+                    required: true,
+                    part: "body",
+                    partPath: "vatRateBps",
+                  },
+                ],
+                inputOnly: ["body.source", "body.vatTreatment"],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["source", "vatRateBps", "vatTreatment"],
+                      properties: {
+                        source: {
+                          anyOf: [
+                            {
+                              type: "object",
+                              required: [
+                                "type",
+                                "description",
+                                "quantity",
+                                "unitPriceMinor",
+                              ],
+                              properties: {
+                                type: {
+                                  const: "manual",
+                                  type: "string",
+                                },
+                                description: {
+                                  minLength: 1,
+                                  maxLength: 10000,
+                                  type: "string",
+                                },
+                                quantity: {
+                                  pattern:
+                                    "^(0|[1-9][0-9]{0,13})(\\.[0-9]{1,4})?$",
+                                  description:
+                                    'Non-negative decimal quantity with a dot and at most four decimals, e.g. "1.5"',
+                                  type: "string",
+                                },
+                                unit: {
+                                  nullable: true,
+                                  anyOf: [
+                                    {
+                                      minLength: 1,
+                                      maxLength: 32,
+                                      type: "string",
+                                    },
+                                    {
+                                      type: "null",
+                                    },
+                                  ],
+                                },
+                                unitPriceMinor: {
+                                  minimum: 0,
+                                  maximum: 9007199254740991,
+                                  type: "integer",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["type", "timeEntryId"],
+                              properties: {
+                                type: {
+                                  const: "time_entry",
+                                  type: "string",
+                                },
+                                timeEntryId: {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                                description: {
+                                  minLength: 1,
+                                  maxLength: 10000,
+                                  type: "string",
+                                },
+                              },
+                            },
+                            {
+                              type: "object",
+                              required: ["type", "expenseId"],
+                              properties: {
+                                type: {
+                                  const: "expense",
+                                  type: "string",
+                                },
+                                expenseId: {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                                description: {
+                                  minLength: 1,
+                                  maxLength: 10000,
+                                  type: "string",
+                                },
+                              },
+                            },
+                          ],
+                        },
+                        vatRateBps: {
+                          minimum: 0,
+                          maximum: 10000,
+                          description: "VAT rate in basis points: 2100 is 21 %",
+                          type: "integer",
+                        },
+                        vatTreatment: {
+                          anyOf: [
+                            {
+                              const: "domestic_vat",
+                              type: "string",
+                            },
+                            {
+                              const: "not_vat_payer",
+                              type: "string",
+                            },
+                            {
+                              const: "reverse_charge",
+                              type: "string",
+                            },
+                            {
+                              const: "exempt",
+                              type: "string",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "invoiceId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        invoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "lines-delete": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "invoices", "lines-delete"],
+                capabilityId: "invoices.lines.delete",
+                description:
+                  "Remove one line from a draft invoice and recompute its totals. A time entry or expense line returns its entry to approved, unbilled status, so it can be billed again. Only draft invoices can be edited.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--invoice-id",
+                    prop: "invoiceId",
+                    required: true,
+                    part: "params",
+                    partPath: "invoiceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--line-id",
+                    prop: "lineId",
+                    required: true,
+                    part: "params",
+                    partPath: "lineId",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: true,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    params: {
+                      type: "object",
+                      required: ["matterId", "invoiceId", "lineId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        invoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        lineId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "lines-update": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "invoices", "lines-update"],
+                capabilityId: "invoices.lines.update",
+                description:
+                  "Change one line of a draft invoice and recompute its totals. Any line takes a new description, VAT rate, or VAT treatment; quantity, unit, and unit price change only on a manual line, because a time entry or expense line takes its amount from the entry. Omitted fields stay unchanged. Only draft invoices can be edited.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--matter-id",
+                    prop: "matterId",
+                    required: true,
+                    part: "params",
+                    partPath: "matterId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--invoice-id",
+                    prop: "invoiceId",
+                    required: true,
+                    part: "params",
+                    partPath: "invoiceId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--line-id",
+                    prop: "lineId",
+                    required: true,
+                    part: "params",
+                    partPath: "lineId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--description",
+                    prop: "description",
+                    required: false,
+                    part: "body",
+                    partPath: "description",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    description:
+                      'Non-negative decimal quantity with a dot and at most four decimals, e.g. "1.5"',
+                    flag: "--quantity",
+                    prop: "quantity",
+                    required: false,
+                    part: "body",
+                    partPath: "quantity",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--unit",
+                    prop: "unit",
+                    required: false,
+                    part: "body",
+                    partPath: "unit",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 9007199254740991,
+                    repeatable: false,
+                    flag: "--unit-price-minor",
+                    prop: "unitPriceMinor",
+                    required: false,
+                    part: "body",
+                    partPath: "unitPriceMinor",
+                  },
+                  {
+                    kind: "int",
+                    min: 0,
+                    max: 10000,
+                    repeatable: false,
+                    description: "VAT rate in basis points: 2100 is 21 %",
+                    flag: "--vat-rate-bps",
+                    prop: "vatRateBps",
+                    required: false,
+                    part: "body",
+                    partPath: "vatRateBps",
+                  },
+                ],
+                inputOnly: ["body.vatTreatment"],
+                paginated: false,
+                destructive: false,
+                scope: "billing_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        description: {
+                          minLength: 1,
+                          maxLength: 10000,
+                          type: "string",
+                        },
+                        quantity: {
+                          pattern: "^(0|[1-9][0-9]{0,13})(\\.[0-9]{1,4})?$",
+                          description:
+                            'Non-negative decimal quantity with a dot and at most four decimals, e.g. "1.5"',
+                          type: "string",
+                        },
+                        unit: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 32,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        unitPriceMinor: {
+                          minimum: 0,
+                          maximum: 9007199254740991,
+                          type: "integer",
+                        },
+                        vatRateBps: {
+                          minimum: 0,
+                          maximum: 10000,
+                          description: "VAT rate in basis points: 2100 is 21 %",
+                          type: "integer",
+                        },
+                        vatTreatment: {
+                          anyOf: [
+                            {
+                              const: "domestic_vat",
+                              type: "string",
+                            },
+                            {
+                              const: "not_vat_payer",
+                              type: "string",
+                            },
+                            {
+                              const: "reverse_charge",
+                              type: "string",
+                            },
+                            {
+                              const: "exempt",
+                              type: "string",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["matterId", "invoiceId", "lineId"],
+                      properties: {
+                        matterId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        invoiceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        lineId: {
                           minLength: 36,
                           maxLength: 36,
                           pattern:
@@ -25352,7 +25813,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "update"],
                 capabilityId: "invoices.update",
                 description:
-                  "Change a draft invoice's number, invoice date, due date, reference, notes, or currency. Only draft invoices can be edited, and the currency cannot change while any time entry or expense is still attached to the invoice.",
+                  "Change a draft invoice's number, issue date (invoiceDate), taxable supply date, due date, reference, notes, currency, issuing seller profile, or buyer details as they should read on the document. Omitted fields stay unchanged; null clears an optional field. Only draft invoices can be edited, and the currency cannot change while the invoice has lines or attached entries.",
                 access: "write",
                 flags: [
                   {
@@ -25427,6 +25888,96 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "notes",
                   },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--taxable-supply-date",
+                    prop: "taxableSupplyDate",
+                    required: false,
+                    part: "body",
+                    partPath: "taxableSupplyDate",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--seller-profile-id",
+                    prop: "sellerProfileId",
+                    required: false,
+                    part: "body",
+                    partPath: "sellerProfileId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-name",
+                    prop: "buyerName",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerName",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-registration-id",
+                    prop: "buyerRegistrationId",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerRegistrationId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-vat-id",
+                    prop: "buyerVatId",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerVatId",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-address-line1",
+                    prop: "buyerAddressLine1",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerAddressLine1",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-address-line2",
+                    prop: "buyerAddressLine2",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerAddressLine2",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-city",
+                    prop: "buyerCity",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerCity",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-postal-code",
+                    prop: "buyerPostalCode",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerPostalCode",
+                  },
+                  {
+                    kind: "nullable-string",
+                    repeatable: false,
+                    flag: "--buyer-country",
+                    prop: "buyerCountry",
+                    required: false,
+                    part: "body",
+                    partPath: "buyerCountry",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -25483,6 +26034,130 @@ export const generatedRouteMap: RouteNode = {
                           anyOf: [
                             {
                               maxLength: 10000,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        taxableSupplyDate: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              format: "date",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        sellerProfileId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerName: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 1,
+                              maxLength: 512,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerRegistrationId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 64,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerVatId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 64,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerAddressLine1: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 512,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerAddressLine2: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 512,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerCity: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 256,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerPostalCode: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 32,
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        buyerCountry: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              maxLength: 128,
                               type: "string",
                             },
                             {
@@ -26653,7 +27328,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         cursor: {
-                          maxLength: 512,
+                          maxLength: 1844,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",

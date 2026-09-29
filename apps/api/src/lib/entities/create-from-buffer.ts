@@ -42,6 +42,7 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -140,6 +141,7 @@ export type CreateEntityFromBufferResult = Result<
   | EntityLimitError
   | InvalidParentError
   | MissingFilePropertyError
+  | OrganizationFileUsageError
 >;
 
 /**
@@ -282,6 +284,29 @@ export const createEntityFromBuffer = async ({
       return true;
     };
 
+    const settleUncertainWrite = async () => {
+      // A transport failure is ambiguous: S3 may publish after this immediate
+      // delete completes. Keep the intent recoverable so later sweeps remove
+      // any late publication; the heartbeat stops in finally below.
+      const cleanupSucceeded = await cleanupObject();
+      if (publication.type === "service") {
+        const settled = await settleObjectCleanupIntentsAfterWriter({
+          safeDb,
+          intentIds: [publication.id],
+          objectState: objectWriterSettlementAfterCleanup({
+            cleanupSucceeded,
+            writeState,
+          }),
+        });
+        if (settled.isErr()) {
+          observeFailure(settled.error, {
+            sink: cleanupSettlementFailure,
+            ctx: { entityId },
+          });
+        }
+      }
+    };
+
     try {
       if (!env.FEATURE_FILE_USAGE_LIMITS) {
         await withTimeout(
@@ -308,30 +333,12 @@ export const createEntityFromBuffer = async ({
             ),
         });
         if (Result.isError(fileWrite)) {
-          throw fileWrite.error;
+          await settleUncertainWrite();
+          return Result.err(fileWrite.error);
         }
       }
     } catch (error) {
-      // A transport failure is ambiguous: S3 may publish after this immediate
-      // delete completes. Keep the intent recoverable so later sweeps remove
-      // any late publication; the heartbeat stops in finally below.
-      const cleanupSucceeded = await cleanupObject();
-      if (publication.type === "service") {
-        const settled = await settleObjectCleanupIntentsAfterWriter({
-          safeDb,
-          intentIds: [publication.id],
-          objectState: objectWriterSettlementAfterCleanup({
-            cleanupSucceeded,
-            writeState,
-          }),
-        });
-        if (settled.isErr()) {
-          observeFailure(settled.error, {
-            sink: cleanupSettlementFailure,
-            ctx: { entityId },
-          });
-        }
-      }
+      await settleUncertainWrite();
       throw error;
     }
 

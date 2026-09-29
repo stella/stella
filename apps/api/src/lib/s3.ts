@@ -679,6 +679,7 @@ export const createS3ObjectIfAbsent = async (
 
 class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
   message: string;
+  cause?: unknown;
   status?: number;
   code?: string;
 }> {}
@@ -762,39 +763,52 @@ export const getS3ObjectWithSignal = async (
 export const hashS3ObjectSha256WithSignal = async (
   key: string,
   signal: AbortSignal,
-): Promise<string> =>
-  await documentsCredentials.run(async () => {
-    const response = await getAbortableS3().send(
-      new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
-      { abortSignal: signal },
-    );
-    if (!response.Body) {
-      throw new S3ObjectReadError({
-        message: "S3 returned an object without a response body",
-      });
-    }
-    const reader = response.Body.transformToWebStream().getReader();
-    const hasher = new Bun.CryptoHasher("sha256");
-    try {
-      while (true) {
-        const chunk = await reader.read();
-        if (chunk.done) {
-          return hasher.digest("hex");
-        }
-        signal.throwIfAborted();
-        const value: unknown = chunk.value;
-        if (!(value instanceof Uint8Array)) {
-          throw new S3ObjectReadError({
-            message: "S3 returned an invalid response chunk",
-          });
-        }
-        hasher.update(value);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-  });
-
+) =>
+  Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await documentsCredentials.run(async () => {
+          const response = await getAbortableS3().send(
+            new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+            { abortSignal: signal },
+          );
+          if (!response.Body) {
+            return Result.err(
+              new S3ObjectReadError({
+                message: "S3 returned an object without a response body",
+              }),
+            );
+          }
+          const reader = response.Body.transformToWebStream().getReader();
+          const hasher = new Bun.CryptoHasher("sha256");
+          try {
+            while (true) {
+              const chunk = await reader.read();
+              if (chunk.done) {
+                return Result.ok(hasher.digest("hex"));
+              }
+              signal.throwIfAborted();
+              const value: unknown = chunk.value;
+              if (!(value instanceof Uint8Array)) {
+                return Result.err(
+                  new S3ObjectReadError({
+                    message: "S3 returned an invalid response chunk",
+                  }),
+                );
+              }
+              hasher.update(value);
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        }),
+      catch: (cause) =>
+        new S3ObjectReadError({
+          message: "S3 object could not be hashed",
+          cause,
+        }),
+    }),
+  );
 /**
  * Whether the store confirmed the object is not there, as opposed to
  * failing to answer.

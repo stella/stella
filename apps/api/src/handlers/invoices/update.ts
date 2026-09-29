@@ -1,11 +1,13 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
   expenses,
   INVOICE_STATUS,
+  invoiceLines,
   invoices,
+  sellerProfiles,
   timeEntries,
 } from "@/api/db/schema";
 import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
@@ -27,7 +29,28 @@ const updateInvoiceBodySchema = t.Object({
   reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
   currency: t.Optional(tCurrencyCode),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+  taxableSupplyDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  sellerProfileId: t.Optional(t.Nullable(tSafeId("sellerProfile"))),
+  buyerName: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 512 }))),
+  buyerRegistrationId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  buyerVatId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
+  buyerAddressLine1: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
+  buyerAddressLine2: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
+  buyerCity: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
+  buyerPostalCode: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
+  buyerCountry: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
 });
+
+const BUYER_FIELDS = [
+  "buyerName",
+  "buyerRegistrationId",
+  "buyerVatId",
+  "buyerAddressLine1",
+  "buyerAddressLine2",
+  "buyerCity",
+  "buyerPostalCode",
+  "buyerCountry",
+] as const;
 
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
@@ -38,6 +61,8 @@ type InvoiceUpdateSource = {
   invoiceNumber: string;
   notes: string | null;
   reference: string | null;
+  sellerProfileId: string | null;
+  taxableSupplyDate: string | null;
 };
 
 type InvoiceUpdateChanges = Partial<InvoiceUpdateSource>;
@@ -45,7 +70,8 @@ type InvoiceUpdateChanges = Partial<InvoiceUpdateSource>;
 type InvoiceUpdateResult =
   | { status: "updated"; id: string }
   | { status: "not-updated" }
-  | { status: "currency-has-entries" };
+  | { status: "currency-has-entries" }
+  | { status: "seller-profile-not-found" };
 
 const buildInvoiceUpdateAuditChanges = (
   existing: InvoiceUpdateSource,
@@ -85,22 +111,43 @@ const buildInvoiceUpdateAuditChanges = (
       new: changedFields.currency,
     };
   }
+  if (changedFields.taxableSupplyDate !== undefined) {
+    changes["taxableSupplyDate"] = {
+      old: existing.taxableSupplyDate,
+      new: changedFields.taxableSupplyDate,
+    };
+  }
+  if (changedFields.sellerProfileId !== undefined) {
+    changes["sellerProfileId"] = {
+      old: existing.sellerProfileId,
+      new: changedFields.sellerProfileId,
+    };
+  }
   return changes;
 };
 
 const updateInvoice = createSafeHandler(
   {
     description:
-      "Change a draft invoice's number, invoice date, due date, reference, " +
-      "notes, or currency. Only draft invoices can be edited, and the " +
-      "currency cannot change while any time entry or expense is still " +
-      "attached to the invoice.",
+      "Change a draft invoice's number, issue date (invoiceDate), taxable " +
+      "supply date, due date, reference, notes, currency, issuing seller " +
+      "profile, or buyer details as they should read on the document. " +
+      "Omitted fields stay unchanged; null clears an optional field. Only " +
+      "draft invoices can be edited, and the currency cannot change while " +
+      "the invoice has lines or attached entries.",
     permissions: { invoice: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: invoiceParamsSchema,
     body: updateInvoiceBodySchema,
   },
-  async function* ({ safeDb, workspaceId, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    workspaceId,
+    params,
+    body,
+    recordAuditEvent,
+  }) {
     const changedFields = pickDefined(body, [
       "invoiceNumber",
       "invoiceDate",
@@ -108,9 +155,13 @@ const updateInvoice = createSafeHandler(
       "reference",
       "notes",
       "currency",
+      "taxableSupplyDate",
+      "sellerProfileId",
     ]);
+    const changedBuyerFields = pickDefined(body, BUYER_FIELDS);
     const set = {
       ...changedFields,
+      ...changedBuyerFields,
       updatedAt: new Date(),
     };
 
@@ -125,10 +176,46 @@ const updateInvoice = createSafeHandler(
           return { status: "not-updated" } satisfies InvoiceUpdateResult;
         }
 
+        const { sellerProfileId } = changedFields;
+        if (sellerProfileId !== undefined && sellerProfileId !== null) {
+          const [profile] = await tx
+            .select({ id: sellerProfiles.id })
+            .from(sellerProfiles)
+            .where(
+              and(
+                eq(sellerProfiles.id, sellerProfileId),
+                eq(sellerProfiles.organizationId, session.activeOrganizationId),
+                isNull(sellerProfiles.archivedAt),
+              ),
+            )
+            .limit(1);
+          if (!profile) {
+            return {
+              status: "seller-profile-not-found",
+            } satisfies InvoiceUpdateResult;
+          }
+        }
+
         if (
           changedFields.currency !== undefined &&
           changedFields.currency !== existing.currency
         ) {
+          const line = await tx
+            .select({ id: invoiceLines.id })
+            .from(invoiceLines)
+            .where(
+              and(
+                eq(invoiceLines.invoiceId, params.invoiceId),
+                eq(invoiceLines.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          if (line.at(0)) {
+            return {
+              status: "currency-has-entries",
+            } satisfies InvoiceUpdateResult;
+          }
+
           const attachedTimeEntry = await tx
             .select({ id: timeEntries.id })
             .from(timeEntries)
@@ -181,6 +268,8 @@ const updateInvoice = createSafeHandler(
             resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
             resourceId: row.id,
             changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
+            // Buyer details are personal data: record which changed, not values.
+            metadata: { changedBuyerFields: Object.keys(changedBuyerFields) },
           });
         }
         if (!row) {
@@ -190,6 +279,14 @@ const updateInvoice = createSafeHandler(
       }),
     );
 
+    if (result.status === "seller-profile-not-found") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Seller profile not found or archived",
+        }),
+      );
+    }
     if (result.status === "currency-has-entries") {
       return Result.err(
         new HandlerError({

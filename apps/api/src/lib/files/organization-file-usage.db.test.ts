@@ -13,6 +13,7 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId } from "@/api/lib/branded-types";
+import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import {
   deleteOrganizationFilesWithSignal,
   deleteOrganizationFileWithSignal,
@@ -22,6 +23,7 @@ import {
   commitOrganizationFilesBytes,
   copyOrganizationFile,
   reconcileOrganizationFileObject,
+  reconcileOrganizationFileObjects,
   releaseOrganizationFileBytes,
   releaseOrganizationFilesBytes,
   removeOrganizationFileBytes,
@@ -287,6 +289,80 @@ describe("organization file usage", () => {
     ).toBe(true);
     expect((await counter())?.committedBytes).toBe(9n);
     await removeOrganizationFileBytes(object.objectKey, db());
+  });
+
+  test("page reconciliation is a fixed point and skips active writes without losing sibling deltas", async () => {
+    const first = input("fixture/page-reconcile-first", 6);
+    const second = input("fixture/page-reconcile-second", 5);
+    const busy = input("fixture/page-reconcile-busy", 4);
+    const added = input("fixture/page-reconcile-added", 7);
+    const foreign = {
+      ...input("fixture/page-reconcile-foreign", 4),
+      organizationId: ids.orgB,
+    };
+    const conflictSibling = input("fixture/page-reconcile-conflict-sibling", 1);
+    expect(
+      await reconcileOrganizationFileObjects([first, second, foreign], db()),
+    ).toMatchObject({ status: "ok", value: 3 });
+    const reservations = await reserveOrganizationFilesBytes(
+      [busy, { ...first, sizeBytes: 8 }],
+      db(),
+    );
+    expect(Result.isOk(reservations)).toBe(true);
+    if (Result.isError(reservations)) {
+      return;
+    }
+    try {
+      const page = [
+        { ...busy, sizeBytes: 1 },
+        { ...first, sizeBytes: 2 },
+        { ...second, sizeBytes: 3 },
+        added,
+        foreign,
+      ];
+      expect(await reconcileOrganizationFileObjects(page, db())).toMatchObject({
+        status: "ok",
+        value: 3,
+      });
+      expect((await counter())?.committedBytes).toBe(16n);
+      expect((await counter())?.reservedBytes).toBe(6n);
+      expect(await reconcileOrganizationFileObjects(page, db())).toMatchObject({
+        status: "ok",
+        value: 3,
+      });
+      expect((await counter())?.committedBytes).toBe(16n);
+      expect((await counter())?.reservedBytes).toBe(6n);
+      const conflicted = await reconcileOrganizationFileObjects(
+        [conflictSibling, { ...foreign, organizationId: ids.orgA }],
+        db(),
+      );
+      expect(conflicted).toMatchObject({
+        status: "error",
+        error: { reason: "key_conflict" },
+      });
+      expect(
+        await testDb
+          .select()
+          .from(organizationFileObjects)
+          .where(
+            eq(organizationFileObjects.objectKey, conflictSibling.objectKey),
+          ),
+      ).toHaveLength(0);
+      expect((await counter())?.committedBytes).toBe(16n);
+      expect((await counter())?.reservedBytes).toBe(6n);
+    } finally {
+      await releaseOrganizationFilesBytes(reservations.value, db());
+      await removeOrganizationFilesBytes(
+        [
+          first.objectKey,
+          second.objectKey,
+          added.objectKey,
+          foreign.objectKey,
+          conflictSibling.objectKey,
+        ],
+        db(),
+      );
+    }
   });
 
   test("zero-byte objects are recorded without consuming capacity", async () => {
@@ -651,8 +727,12 @@ describe("organization file usage", () => {
     }
     expect((await counter())?.reservedBytes).toBe(2n);
     expect(
-      Result.isError(await commitOrganizationFilesBytes(original.value, db())),
-    ).toBe(true);
+      await commitOrganizationFilesBytes(original.value, db()),
+    ).toMatchObject({
+      value: {
+        busyObjectKeys: ["fixture/batch-settle-a", "fixture/batch-settle-b"],
+      },
+    });
     expect(
       Result.isOk(await releaseOrganizationFilesBytes(original.value, db())),
     ).toBe(true);
@@ -685,7 +765,14 @@ describe("organization file usage", () => {
       ],
       db(),
     );
-    expect(Result.isError(written)).toBe(true);
+    expect(Result.isOk(written)).toBe(true);
+    if (Result.isOk(written)) {
+      expect(written.value).toHaveLength(2);
+      expect(written.value.at(0)).toMatchObject({ value: "stored" });
+      expect(written.value.at(1)).toMatchObject({
+        error: { reason: "storage_unavailable" },
+      });
+    }
     expect((await counter())?.committedBytes).toBe(4n);
     expect((await counter())?.reservedBytes).toBe(6n);
     await removeOrganizationFilesBytes(
@@ -696,6 +783,178 @@ describe("organization file usage", () => {
     expect((await counter())?.reservedBytes).toBe(6n);
     await releaseConfirmedAbsentReservation("fixture/batch-uncertain");
     expect((await counter())?.reservedBytes).toBe(0n);
+  });
+
+  test("copy rounds settle earlier successes and open no later round after uncertainty", async () => {
+    const copiedKeys: string[] = [];
+    const attempted: number[] = [];
+    let earlierCommitted = 0n;
+    const inputs = Array.from({ length: 260 }, (_, index) => ({
+      organizationId: ids.orgB,
+      objectKey: `fixture/copy-round-${index}`,
+      sizeBytes: 1,
+      copy: async () => {
+        attempted.push(index);
+        if (index === 150) {
+          earlierCommitted =
+            (
+              await testDb
+                .select()
+                .from(organizationFileUsage)
+                .where(eq(organizationFileUsage.organizationId, ids.orgB))
+            ).at(0)?.committedBytes ?? 0n;
+          return Result.err(new Error("uncertain copy timeout"));
+        }
+        copiedKeys.push(`fixture/copy-round-${index}`);
+        return Result.ok(index);
+      },
+    }));
+    const copied = await copyOrganizationFiles({
+      inputs,
+      concurrency: 16,
+      db: db(),
+    });
+    expect(Result.isOk(copied)).toBe(true);
+    expect(earlierCommitted).toBe(128n);
+    expect(attempted).toHaveLength(256);
+    expect(copiedKeys).toHaveLength(255);
+    if (Result.isOk(copied)) {
+      expect(copied.value).toHaveLength(260);
+      expect(copied.value.filter(Result.isOk)).toHaveLength(255);
+    }
+    const usage = (
+      await testDb
+        .select()
+        .from(organizationFileUsage)
+        .where(eq(organizationFileUsage.organizationId, ids.orgB))
+    ).at(0);
+    expect(usage?.committedBytes).toBe(255n);
+    expect(usage?.reservedBytes).toBe(1n);
+    const pending = (
+      await testDb
+        .select()
+        .from(organizationFileObjects)
+        .where(eq(organizationFileObjects.objectKey, "fixture/copy-round-150"))
+    ).at(0);
+    expect(pending?.writeId).toBeTruthy();
+    await removeOrganizationFilesBytes(copiedKeys, db());
+    if (pending?.writeId) {
+      await releaseOrganizationFileBytes(
+        {
+          status: "reserved",
+          organizationId: ids.orgB,
+          objectKey: pending.objectKey,
+          writeId: pending.writeId,
+        },
+        db(),
+      );
+    }
+  });
+
+  test("batch commits settle matching siblings when one reservation is reclaimed", async () => {
+    const reserved = await reserveOrganizationFilesBytes(
+      [input("fixture/reclaimed-a", 7), input("fixture/reclaimed-b", 5)],
+      db(),
+    );
+    expect(Result.isOk(reserved)).toBe(true);
+    if (Result.isError(reserved)) {
+      return;
+    }
+    const reclaimedId = Bun.randomUUIDv7();
+    await testDb
+      .update(organizationFileObjects)
+      .set({ writeId: reclaimedId })
+      .where(eq(organizationFileObjects.objectKey, "fixture/reclaimed-a"));
+    const committed = await commitOrganizationFilesBytes(reserved.value, db());
+    expect(committed).toMatchObject({
+      value: { busyObjectKeys: ["fixture/reclaimed-a"] },
+    });
+    expect((await counter())?.committedBytes).toBe(5n);
+    expect((await counter())?.reservedBytes).toBe(7n);
+    await removeOrganizationFileBytes("fixture/reclaimed-b", db());
+    await releaseOrganizationFileBytes(
+      {
+        status: "reserved",
+        organizationId: ids.orgA,
+        objectKey: "fixture/reclaimed-a",
+        writeId: reclaimedId,
+      },
+      db(),
+    );
+  });
+
+  test("batch reservation recovers confirmed stale writes and retries once", async () => {
+    const fake = startFakeS3();
+    const inputs = [
+      input("fixture/batch-recover-a", 4),
+      input("fixture/batch-recover-b", 5),
+    ];
+    try {
+      const reserved = await reserveOrganizationFilesBytes(inputs, db());
+      expect(Result.isOk(reserved)).toBe(true);
+      fake.put(
+        envBase.S3_BUCKET,
+        "fixture/batch-recover-a",
+        "four",
+        undefined,
+        new Date(),
+      );
+      fake.put(
+        envBase.S3_BUCKET,
+        "fixture/batch-recover-b",
+        "fives",
+        undefined,
+        new Date(),
+      );
+      await testDb
+        .update(organizationFileObjects)
+        .set({ reservationStartedAt: new Date(Date.now() - 6 * 60_000) })
+        .where(eq(organizationFileObjects.organizationId, ids.orgA));
+      const recovered = await reserveOrganizationFilesBytes(inputs, db());
+      expect(recovered).toMatchObject({
+        value: [
+          { status: "already_committed" },
+          { status: "already_committed" },
+        ],
+      });
+      expect((await counter())?.committedBytes).toBe(9n);
+      expect((await counter())?.reservedBytes).toBe(0n);
+      await removeOrganizationFilesBytes(
+        inputs.map((item) => item.objectKey),
+        db(),
+      );
+    } finally {
+      fake.stop();
+    }
+  });
+
+  test("busy and cross-organization batch aborts retain typed errors without reserving siblings", async () => {
+    const held = await reserveOrganizationFileBytes(
+      input("fixture/abort-held", 5),
+      db(),
+    );
+    expect(Result.isOk(held)).toBe(true);
+    if (Result.isError(held)) {
+      return;
+    }
+    const busy = await reserveOrganizationFilesBytes(
+      [input("fixture/abort-fresh", 3), input("fixture/abort-held", 5)],
+      db(),
+    );
+    expect(busy).toMatchObject({ error: { reason: "reservation_busy" } });
+    expect((await counter())?.reservedBytes).toBe(5n);
+    const sibling = await testDb
+      .select()
+      .from(organizationFileObjects)
+      .where(eq(organizationFileObjects.objectKey, "fixture/abort-fresh"));
+    expect(sibling).toHaveLength(0);
+    const conflict = await reserveOrganizationFilesBytes(
+      [{ ...input("fixture/abort-held", 5), organizationId: ids.orgB }],
+      db(),
+    );
+    expect(conflict).toMatchObject({ error: { reason: "key_conflict" } });
+    expect((await counter())?.reservedBytes).toBe(5n);
+    await releaseOrganizationFileBytes(held.value, db());
   });
 
   test("flag off does not call the database", async () => {

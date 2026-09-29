@@ -9,6 +9,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
@@ -20,7 +21,13 @@ export const PUBLIC_JURISDICTIONS_DESCRIPTION =
 export const searchLegislationBodySchema = t.Object({
   query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
+  // A continuation past a capped scan window carries the acts it already
+  // showed, so the cursor may be longer than a bare keyset.
+  cursor: t.Optional(
+    tPaginationCursor({
+      maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+    }),
+  ),
   jurisdiction: t.Optional(
     t.String({ maxLength: 3, description: PUBLIC_JURISDICTIONS_DESCRIPTION }),
   ),

@@ -380,19 +380,20 @@ const copyWorkspaceFiles = async ({
   }
   const inputs = Result.all(prepared);
   if (Result.isError(inputs)) {
-    throw inputs.error;
+    return Result.err(inputs.error);
   }
   const copied = await copyOrganizationFiles({
     inputs: inputs.value,
     concurrency: FILE_COPY_CONCURRENCY,
   });
   if (Result.isError(copied)) {
-    throw copied.error;
+    return Result.err(copied.error);
   }
   const completed = Result.all(copied.value);
   if (Result.isError(completed)) {
-    throw completed.error;
+    return Result.err(completed.error);
   }
+  return Result.ok(undefined);
 };
 
 const cleanupCopiedS3Keys = async ({
@@ -554,15 +555,18 @@ export const createDuplicateWorkspace = (
       const copiedS3Keys: string[] = [];
 
       if (includeContent) {
-        const copyResult = await Result.tryPromise(async () => {
-          await copyWorkspaceFiles({
-            copiedS3Keys,
-            copies: fileCopies,
-            organizationId,
-            sourceWorkspaceId,
-            targetWorkspaceId,
-          });
-        });
+        const copyResult = Result.flatten(
+          await Result.tryPromise(
+            async () =>
+              await copyWorkspaceFiles({
+                copiedS3Keys,
+                copies: fileCopies,
+                organizationId,
+                sourceWorkspaceId,
+                targetWorkspaceId,
+              }),
+          ),
+        );
 
         if (Result.isError(copyResult)) {
           await cleanupCopiedS3Keys({

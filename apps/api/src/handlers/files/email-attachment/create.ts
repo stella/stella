@@ -12,6 +12,10 @@ import {
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+} from "@/api/lib/files/organization-file-usage";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
@@ -193,8 +197,12 @@ const toSaveHandlerError = (
     | { _tag: "DocumentTooLargeError" }
     | { _tag: "EntityLimitError" }
     | { _tag: "InvalidParentError" }
-    | { _tag: "MissingFilePropertyError" },
+    | { _tag: "MissingFilePropertyError" }
+    | OrganizationFileUsageError,
 ): HandlerError => {
+  if (error instanceof OrganizationFileUsageError) {
+    return organizationFileUsageHandlerError(error);
+  }
   switch (error._tag) {
     case "DocumentTooLargeError":
       return new HandlerError({

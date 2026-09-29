@@ -96,13 +96,15 @@ const deleteThread = createSafeRootHandler(
       );
       const deleted = await deleteS3Keys(s3Keys);
       if (Result.isError(deleted)) {
-        throw new HandlerError({
-          status: 500,
-          message: "Failed to delete thread user files from storage",
-          cause: deleted.error,
-        });
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to delete thread user files from storage",
+            cause: deleted.error,
+          }),
+        );
       }
-      return await safeDb((tx) =>
+      const removed = await safeDb((tx) =>
         // audit: skip — file-row cleanup belongs to the CHAT_THREAD delete audit below
         tx.delete(userFiles).where(
           and(
@@ -114,6 +116,14 @@ const deleteThread = createSafeRootHandler(
             ),
           ),
         ),
+      );
+      return removed.mapError(
+        (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to delete thread user file records",
+            cause,
+          }),
       );
     };
 

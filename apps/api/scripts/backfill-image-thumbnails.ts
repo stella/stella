@@ -18,7 +18,7 @@
  *   bun apps/api/scripts/backfill-image-thumbnails.ts chat     # chat files only
  */
 
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, inArray, isNull, sql } from "drizzle-orm";
 
 import { userFiles } from "@/api/db/schema";
@@ -50,6 +50,10 @@ import {
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 import { buildChatThumbnailQuery } from "./backfill-image-thumbnails.helpers";
+
+class ThumbnailBackfillWriteError extends TaggedError(
+  "ThumbnailBackfillWriteError",
+)<{ message: string; cause: unknown }> {}
 
 const BATCH_SIZE = 200;
 
@@ -235,20 +239,45 @@ const backfillChatFilePage = async (
         })),
       );
     }
-    return await Result.tryPromise({
-      try: async () => {
-        for (const thumbnail of prepared) {
-          await write(thumbnail);
-        }
-      },
-      catch: (cause) => cause,
-    });
+    const results = [];
+    for (const thumbnail of prepared) {
+      results.push(
+        await Result.tryPromise({
+          try: async () => await write(thumbnail),
+          catch: (cause) =>
+            new ThumbnailBackfillWriteError({
+              message: "Thumbnail backfill write failed",
+              cause,
+            }),
+        }),
+      );
+    }
+    return Result.ok(results);
   })();
   if (written.status === "error") {
     await deleteThumbnailsBestEffort(
       prepared.map((thumbnail) => thumbnail.thumbnailKey),
     );
     throw written.error;
+  }
+  const successful: PreparedThumbnail[] = [];
+  const failedKeys: string[] = [];
+  let failure: Error | undefined;
+  for (const [index, outcome] of written.value.entries()) {
+    const thumbnail = prepared.at(index);
+    if (!thumbnail) {
+      return panic("Thumbnail outcome must match its input");
+    }
+    if (outcome.status === "error") {
+      failedKeys.push(thumbnail.thumbnailKey);
+      failure ??= outcome.error;
+    } else {
+      successful.push(thumbnail);
+    }
+  }
+  await deleteThumbnailsBestEffort(failedKeys);
+  if (successful.length === 0) {
+    throw failure ?? panic("Thumbnail batch has no outcomes");
   }
   const updated = await Result.tryPromise({
     try: async () =>
@@ -259,7 +288,7 @@ const backfillChatFilePage = async (
             .set({
               thumbnailFileId: sqlCaseFragment({
                 operand: sql`${userFiles.id}`,
-                branches: prepared.map(
+                branches: successful.map(
                   (thumbnail) =>
                     sql`WHEN ${thumbnail.rowId}::uuid THEN ${thumbnail.thumbnailFileId}::text`,
                 ),
@@ -267,7 +296,7 @@ const backfillChatFilePage = async (
               }),
               placeholder: sqlCaseFragment({
                 operand: sql`${userFiles.id}`,
-                branches: prepared.map(
+                branches: successful.map(
                   (thumbnail) =>
                     sql`WHEN ${thumbnail.rowId}::uuid THEN ${thumbnail.placeholder}::text`,
                 ),
@@ -278,7 +307,7 @@ const backfillChatFilePage = async (
               and(
                 inArray(
                   userFiles.id,
-                  prepared.map((thumbnail) => thumbnail.rowId),
+                  successful.map((thumbnail) => thumbnail.rowId),
                 ),
                 isNull(userFiles.thumbnailFileId),
               ),
@@ -289,16 +318,19 @@ const backfillChatFilePage = async (
   });
   if (Result.isError(updated)) {
     await deleteThumbnailsBestEffort(
-      prepared.map((thumbnail) => thumbnail.thumbnailKey),
+      successful.map((thumbnail) => thumbnail.thumbnailKey),
     );
     throw updated.error;
   }
   const updatedIds = new Set(updated.value.map((row) => row.id));
   await deleteThumbnailsBestEffort(
-    prepared
+    successful
       .filter((thumbnail) => !updatedIds.has(thumbnail.rowId))
       .map((thumbnail) => thumbnail.thumbnailKey),
   );
+  if (failure) {
+    throw failure;
+  }
   return updated.value.length;
 };
 

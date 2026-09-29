@@ -1,10 +1,15 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { captureError } from "@/api/lib/analytics/capture";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+} from "@/api/lib/files/organization-file-usage";
 import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
@@ -69,13 +74,30 @@ const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
       );
     }
 
-    const stored = await storeFolioCollabSnapshot({
+    const storedResult = await storeFolioCollabSnapshot({
       authority: { type: "collab-service" },
       expectedGeneration,
       expectedSnapshotRevision,
       snapshotBytes,
       value,
     });
+
+    if (Result.isError(storedResult)) {
+      if (storedResult.error instanceof OrganizationFileUsageError) {
+        return Result.err(
+          organizationFileUsageHandlerError(storedResult.error),
+        );
+      }
+      captureError(storedResult.error, { roomId });
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: storedResult.error.message,
+          cause: storedResult.error,
+        }),
+      );
+    }
+    const stored = storedResult.value;
 
     if (stored.status === "room-missing") {
       return Result.err(

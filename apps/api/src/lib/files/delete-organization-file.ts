@@ -10,6 +10,7 @@ type DeleteOrganizationFileOptions = {
 };
 
 const DELETE_CONCURRENCY = 50;
+const DELETE_CHUNK_TIMEOUT_MS = 30_000;
 
 /** Settle confirmed deletes together; failed or timed-out keys remain accounted. */
 export const deleteOrganizationFilesWithSignal = async (
@@ -18,31 +19,39 @@ export const deleteOrganizationFilesWithSignal = async (
   { fileUsageDb }: DeleteOrganizationFileOptions = {},
 ): Promise<Result<void, OrganizationFileUsageError>> => {
   const uniqueKeys = [...new Set(keys)];
-  const deletedKeys: string[] = [];
   const failures: unknown[] = [];
+  const { removeOrganizationFilesBytes } =
+    await import("@/api/lib/files/organization-file-usage");
   for (
     let offset = 0;
     offset < uniqueKeys.length;
     offset += DELETE_CONCURRENCY
   ) {
     const chunk = uniqueKeys.slice(offset, offset + DELETE_CONCURRENCY);
+    const deletedKeys: string[] = [];
+    const chunkSignal = AbortSignal.any([
+      signal,
+      AbortSignal.timeout(DELETE_CHUNK_TIMEOUT_MS),
+    ]);
     const results = await Promise.allSettled(
       chunk.map(async (key) => {
-        await deleteS3ObjectWithSignal(key, signal);
+        await deleteS3ObjectWithSignal(key, chunkSignal);
         deletedKeys.push(key);
       }),
     );
+    // db-await-in-loop: bounded batch rounds; each round settles before the next, one statement per round
+    const removed = await removeOrganizationFilesBytes(
+      deletedKeys,
+      fileUsageDb,
+    );
+    if (Result.isError(removed)) {
+      return Result.err(removed.error);
+    }
     for (const result of results) {
       if (result.status === "rejected") {
         failures.push(result.reason);
       }
     }
-  }
-  const { removeOrganizationFilesBytes } =
-    await import("@/api/lib/files/organization-file-usage");
-  const removed = await removeOrganizationFilesBytes(deletedKeys, fileUsageDb);
-  if (Result.isError(removed)) {
-    return Result.err(removed.error);
   }
   if (failures.length > 0) {
     return Result.err(

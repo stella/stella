@@ -21,7 +21,8 @@ import {
 } from "@/api/lib/db/maintenance-db";
 import { createUserFileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
-import { reconcileOrganizationFileObject } from "@/api/lib/files/organization-file-usage";
+import type { FileUsageInput } from "@/api/lib/files/organization-file-usage";
+import { reconcileOrganizationFileObjects } from "@/api/lib/files/organization-file-usage";
 import {
   ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT,
   reconcileAbandonedOrganizationFileReservations,
@@ -60,29 +61,32 @@ const readObjectSize = async (objectKey: string): Promise<number | null> => {
   throw head.error;
 };
 
-const importObject = async (
-  organizationId: SafeId<"organization">,
-  objectKey: string,
+const importObjectPage = async (
+  objects: readonly Pick<FileUsageInput, "organizationId" | "objectKey">[],
 ) => {
-  if (isTemporaryOrganizationObjectKey(organizationId, objectKey)) {
-    return false;
-  }
-  const sizeBytes = await readObjectSize(objectKey);
-  if (sizeBytes === null) {
-    return false;
-  }
-  const recorded = await reconcileOrganizationFileObject({
-    organizationId,
-    objectKey,
-    sizeBytes,
-  });
-  if (Result.isError(recorded)) {
-    if (recorded.error.reason === "reservation_busy") {
-      return false;
+  const inputs: FileUsageInput[] = [];
+  const organizationsByKey = new Map<string, SafeId<"organization">>();
+  for (const { organizationId, objectKey } of objects) {
+    const previousOrganization = organizationsByKey.get(objectKey);
+    if (previousOrganization !== undefined) {
+      if (previousOrganization !== organizationId) {
+        panic("Object key belongs to multiple organizations during backfill");
+      }
+      continue;
     }
-    throw recorded.error;
+    if (isTemporaryOrganizationObjectKey(organizationId, objectKey)) {
+      continue;
+    }
+    organizationsByKey.set(objectKey, organizationId);
+    const sizeBytes = await readObjectSize(objectKey);
+    if (sizeBytes !== null) {
+      inputs.push({ organizationId, objectKey, sizeBytes });
+    }
   }
-  return true;
+  const recorded = await reconcileOrganizationFileObjects(inputs, ledgerDb);
+  return recorded.unwrap(
+    "Organization file reconciliation must succeed during backfill",
+  );
 };
 
 const readOrganizationPage = async (cursor: SafeId<"organization"> | null) =>
@@ -96,8 +100,8 @@ const readOrganizationPage = async (cursor: SafeId<"organization"> | null) =>
         .limit(PAGE_SIZE),
   );
 
-const readUserFilePage = async (cursor: SafeId<"userFile"> | null) =>
-  await db.transaction(
+const importUserFilePage = async (cursor: SafeId<"userFile"> | null) => {
+  const files = await db.transaction(
     async (tx) =>
       await tx
         .select({
@@ -113,14 +117,30 @@ const readUserFilePage = async (cursor: SafeId<"userFile"> | null) =>
         .orderBy(asc(userFiles.id))
         .limit(PAGE_SIZE),
   );
+  const objects: Pick<FileUsageInput, "organizationId" | "objectKey">[] = [];
+  for (const file of files) {
+    const organizationId = brandPersistedOrganizationId(file.organizationId);
+    objects.push({ organizationId, objectKey: file.s3Key });
+    if (file.thumbnailFileId) {
+      objects.push({
+        organizationId,
+        objectKey: createUserFileKey({
+          fileId: file.thumbnailFileId,
+          mimeType: THUMBNAIL_MIME_TYPE,
+          userId: brandPersistedUserId(file.userId),
+        }),
+      });
+    }
+  }
+  return { files, imported: await importObjectPage(objects) };
+};
 
 let orgCursor: SafeId<"organization"> | null = null;
 let imported = 0;
-let removed = 0;
 let settledReservations = 0;
 let mismatchedReservations = 0;
 while (true) {
-  // db-await-in-loop: the previous page's last organization ID is the next cursor
+  // db-await-in-loop: the previous organization page's last ID supplies the next page cursor
   const organizations = await readOrganizationPage(orgCursor);
   if (organizations.length === 0) {
     break;
@@ -135,13 +155,10 @@ while (true) {
         maxKeys: PAGE_SIZE,
         signal: AbortSignal.timeout(30_000),
       });
-      for (const { key } of page.objects) {
-        // Temporary upload and comparison objects expire by bucket lifecycle;
-        // only durable storage consumes the organization byte counter.
-        if (await importObject(organizationId, key)) {
-          imported += 1;
-        }
-      }
+      // db-await-in-loop: each bounded S3 object page is imported in one accounting statement before advancing its key cursor
+      imported += await importObjectPage(
+        page.objects.map(({ key }) => ({ organizationId, objectKey: key })),
+      );
       keyCursor = page.objects.at(-1)?.key ?? null;
       if (!page.truncated) {
         break;
@@ -150,33 +167,6 @@ while (true) {
         panic("Object listing ended without a cursor");
       }
     }
-
-    // db-await-in-loop: each organization is repaired after its organization-prefixed object walk
-    removed += await reconcileAbsentOrganizationFileObjects({
-      db: ledgerDb,
-      organizationId,
-      objectExists: async (key) => (await readObjectSize(key)) !== null,
-      staleBefore: new Date(
-        Temporal.Now.instant().epochMilliseconds - RESERVATION_STALE_AFTER_MS,
-      ),
-    });
-    let settledBatch;
-    do {
-      // db-await-in-loop: each bounded batch must settle before the next batch is claimed
-      const batch = await reconcileAbandonedOrganizationFileReservations({
-        db: ledgerDb,
-        organizationId,
-      });
-      settledBatch = batch.unwrap(
-        "Reservation reconciliation must succeed during backfill",
-      );
-      settledReservations +=
-        settledBatch.committed + settledBatch.deleted + settledBatch.released;
-      mismatchedReservations += settledBatch.mismatched;
-    } while (
-      settledBatch.scanned ===
-      ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT
-    );
   }
   const lastOrganization = organizations.at(-1);
   orgCursor =
@@ -189,29 +179,12 @@ while (true) {
 // organization to rescan other organizations' files on every page.
 let fileCursor: SafeId<"userFile"> | null = null;
 while (true) {
-  // db-await-in-loop: the previous global file page supplies the next id cursor
-  const files = await readUserFilePage(fileCursor);
+  // db-await-in-loop: each global file page is read and imported once before its last id supplies the next cursor
+  const page = await importUserFilePage(fileCursor);
+  imported += page.imported;
+  const { files } = page;
   if (files.length === 0) {
     break;
-  }
-  for (const file of files) {
-    const organizationId = brandPersistedOrganizationId(file.organizationId);
-    if (await importObject(organizationId, file.s3Key)) {
-      imported += 1;
-    }
-    if (
-      file.thumbnailFileId &&
-      (await importObject(
-        organizationId,
-        createUserFileKey({
-          fileId: file.thumbnailFileId,
-          mimeType: THUMBNAIL_MIME_TYPE,
-          userId: brandPersistedUserId(file.userId),
-        }),
-      ))
-    ) {
-      imported += 1;
-    }
   }
   const lastFile = files.at(-1);
   fileCursor =
@@ -220,6 +193,29 @@ while (true) {
     break;
   }
 }
+
+const removed = await reconcileAbsentOrganizationFileObjects({
+  db: ledgerDb,
+  objectExists: async (key) => (await readObjectSize(key)) !== null,
+  staleBefore: new Date(
+    Temporal.Now.instant().epochMilliseconds - RESERVATION_STALE_AFTER_MS,
+  ),
+});
+let settledBatch;
+do {
+  // db-await-in-loop: each global pending-reservation page settles before the next page is claimed
+  const batch = await reconcileAbandonedOrganizationFileReservations({
+    db: ledgerDb,
+  });
+  settledBatch = batch.unwrap(
+    "Reservation reconciliation must succeed during backfill",
+  );
+  settledReservations +=
+    settledBatch.committed + settledBatch.deleted + settledBatch.released;
+  mismatchedReservations += settledBatch.mismatched;
+} while (
+  settledBatch.scanned === ORGANIZATION_FILE_RESERVATION_RECONCILE_BATCH_LIMIT
+);
 
 const unexpectedUnsettled = await reportOrganizationFileUsageBackfill({
   counts: {

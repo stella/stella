@@ -32,6 +32,7 @@ import {
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -120,7 +121,7 @@ export type CreateEntityVersionFromBufferResult = Result<
     fileName: string;
     versionNumber: number;
   },
-  EntityVersionTargetError
+  EntityVersionTargetError | OrganizationFileUsageError
 >;
 
 const ENTITY_VERSION_TARGET_MESSAGES = {
@@ -271,7 +272,8 @@ export const createEntityVersionFromBuffer = async ({
             ),
         });
         if (Result.isError(fileWrite)) {
-          throw fileWrite.error;
+          await cleanupObject();
+          return Result.err(fileWrite.error);
         }
       }
     } catch (error) {

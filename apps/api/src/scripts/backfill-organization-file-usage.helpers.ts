@@ -1,16 +1,5 @@
-import { panic, Result } from "better-result";
-import {
-  and,
-  asc,
-  count,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, count, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 
 import {
   organizationFileObjects,
@@ -18,7 +7,8 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { releaseOrganizationFilesBytes } from "@/api/lib/files/organization-file-usage";
+import type { OrganizationFileLedgerCursor } from "@/api/lib/files/organization-file-usage-queries";
+import { organizationFileLedgerPageQuery } from "@/api/lib/files/organization-file-usage-queries";
 
 const PAGE_SIZE = 200;
 
@@ -37,150 +27,152 @@ export const isTemporaryOrganizationObjectKey = (
 
 type ReconcileAbsentOptions = {
   db: Pick<MaintenanceDb, "transaction">;
-  organizationId: SafeId<"organization">;
   objectExists: (key: string) => Promise<boolean>;
   staleBefore: Date;
 };
 
-/** Check committed ledger rows in keyset pages; each confirmed absence is removed atomically. */
+/** Walk the global tenant/key index and settle each page with one grouped mutation. */
 export const reconcileAbsentOrganizationFileObjects = async ({
   db,
-  organizationId,
   objectExists,
   staleBefore,
 }: ReconcileAbsentOptions): Promise<number> => {
-  let cursor: string | null = null;
+  let cursor: OrganizationFileLedgerCursor | null = null;
   let removed = 0;
-  const reconcilePage = async (afterKey: string | null) => {
+  const reconcilePage = async (after: OrganizationFileLedgerCursor | null) => {
     const rows = await db.transaction(
       async (tx) =>
-        await tx
-          .select({
-            objectKey: organizationFileObjects.objectKey,
-            status: organizationFileObjects.status,
-            pendingSizeBytes: organizationFileObjects.pendingSizeBytes,
-            writeId: organizationFileObjects.writeId,
-            reservationStartedAt: organizationFileObjects.reservationStartedAt,
-          })
-          .from(organizationFileObjects)
-          .where(
-            and(
-              eq(organizationFileObjects.organizationId, organizationId),
-              afterKey === null
-                ? undefined
-                : gt(organizationFileObjects.objectKey, afterKey),
-            ),
-          )
-          .orderBy(asc(organizationFileObjects.objectKey))
-          .limit(PAGE_SIZE),
+        await organizationFileLedgerPageQuery({
+          db: tx,
+          cursor: after,
+          limit: PAGE_SIZE,
+        }),
     );
-    const toRelease = [];
-    const absentKeys: string[] = [];
+    const absent: {
+      organizationId: SafeId<"organization">;
+      objectKey: string;
+      writeId: string | null;
+      action: "release" | "remove";
+    }[] = [];
     for (const row of rows) {
-      const { objectKey } = row;
       if (row.status === "reserved" || row.pendingSizeBytes !== null) {
         if (
           row.writeId === null ||
           row.reservationStartedAt === null ||
           row.reservationStartedAt >= staleBefore ||
-          (await objectExists(objectKey))
+          (await objectExists(row.objectKey))
         ) {
           continue;
         }
-        toRelease.push({
-          status: "reserved" as const,
-          organizationId,
-          objectKey,
+        absent.push({
+          organizationId: row.organizationId,
+          objectKey: row.objectKey,
           writeId: row.writeId,
+          action: "release",
         });
         continue;
       }
       if (
-        !isTemporaryOrganizationObjectKey(organizationId, objectKey) &&
-        (await objectExists(objectKey))
+        !isTemporaryOrganizationObjectKey(row.organizationId, row.objectKey) &&
+        (await objectExists(row.objectKey))
       ) {
         continue;
       }
-      absentKeys.push(objectKey);
+      absent.push({
+        organizationId: row.organizationId,
+        objectKey: row.objectKey,
+        writeId: null,
+        action: "remove",
+      });
     }
-    const released = await releaseOrganizationFilesBytes(toRelease, db);
-    if (Result.isError(released)) {
-      throw released.error;
+    if (absent.length === 0) {
+      return { rows, deleted: 0 };
     }
-    const deleted =
-      absentKeys.length === 0
-        ? 0
-        : await db.transaction(async (tx) => {
-            const counter = await tx
-              .select({ organizationId: organizationFileUsage.organizationId })
-              .from(organizationFileUsage)
-              .where(eq(organizationFileUsage.organizationId, organizationId))
-              .for("update")
-              .then((current) => current.at(0));
-            if (!counter) {
-              return panic(
-                "Organization file counter disappeared during backfill",
-              );
-            }
-            const current = await tx
-              .select({
-                objectKey: organizationFileObjects.objectKey,
-              })
-              .from(organizationFileObjects)
-              .where(
-                and(
-                  eq(organizationFileObjects.organizationId, organizationId),
-                  inArray(organizationFileObjects.objectKey, absentKeys),
-                  eq(organizationFileObjects.status, "committed"),
-                  isNull(organizationFileObjects.pendingSizeBytes),
-                  isNull(organizationFileObjects.writeId),
-                ),
-              );
-            const confirmedKeys: string[] = [];
-            for (const row of current) {
-              // Writers take the same counter lock before writing S3. Rechecking
-              // absence under that lock closes the gap after the first HEAD.
-              if (
-                !isTemporaryOrganizationObjectKey(
-                  organizationId,
-                  row.objectKey,
-                ) &&
-                (await objectExists(row.objectKey))
-              ) {
-                continue;
-              }
-              confirmedKeys.push(row.objectKey);
-            }
-            if (confirmedKeys.length === 0) {
-              return 0;
-            }
-            await tx.execute(sql`
-              WITH removed AS (
-                DELETE FROM ${organizationFileObjects}
-                WHERE ${organizationFileObjects.organizationId} = ${organizationId}
-                  AND ${inArray(organizationFileObjects.objectKey, confirmedKeys)}
-                RETURNING size_bytes
-              )
-              UPDATE ${organizationFileUsage}
-              SET committed_bytes = committed_bytes - COALESCE((SELECT SUM(size_bytes) FROM removed), 0),
-                  updated_at = ${new Date()}::timestamptz
-              WHERE ${organizationFileUsage.organizationId} = ${organizationId}
-            `);
-            return confirmedKeys.length;
-          });
+    const deleted = await db.transaction(async (tx) => {
+      const organizationIds = [
+        ...new Set(absent.map((row) => row.organizationId)),
+      ].toSorted();
+      const counters = await tx
+        .select({ organizationId: organizationFileUsage.organizationId })
+        .from(organizationFileUsage)
+        .where(inArray(organizationFileUsage.organizationId, organizationIds))
+        .orderBy(asc(organizationFileUsage.organizationId))
+        .limit(organizationIds.length)
+        .for("update");
+      if (counters.length !== organizationIds.length) {
+        return panic("Organization file counter disappeared during backfill");
+      }
+      const current = await tx
+        .select()
+        .from(organizationFileObjects)
+        .where(
+          inArray(
+            organizationFileObjects.objectKey,
+            absent.map((row) => row.objectKey),
+          ),
+        )
+        .limit(absent.length);
+      const byKey = new Map(current.map((row) => [row.objectKey, row]));
+      const confirmed: typeof absent = [];
+      for (const candidate of absent) {
+        const row = byKey.get(candidate.objectKey);
+        if (
+          !row ||
+          row.organizationId !== candidate.organizationId ||
+          row.writeId !== candidate.writeId
+        ) {
+          continue;
+        }
+        if (candidate.action === "release") {
+          if (row.status === "reserved" || row.pendingSizeBytes !== null) {
+            confirmed.push(candidate);
+          }
+          continue;
+        }
+        if (row.status !== "committed" || row.pendingSizeBytes !== null) {
+          continue;
+        }
+        // A second HEAD under the counter lock preserves a newer committed write.
+        if (
+          !isTemporaryOrganizationObjectKey(
+            row.organizationId,
+            row.objectKey,
+          ) &&
+          (await objectExists(row.objectKey))
+        ) {
+          continue;
+        }
+        confirmed.push(candidate);
+      }
+      if (confirmed.length === 0) {
+        return 0;
+      }
+      await tx.execute(sql`
+        with input as (select * from jsonb_to_recordset(${JSON.stringify(confirmed)}::text::jsonb) as x("organizationId" text, "objectKey" text, "writeId" text, action text)),
+        matched as (select o.*, i.action from organization_file_objects o join input i on o.organization_id = i."organizationId" and o.object_key = i."objectKey" and o.write_id is not distinct from i."writeId"),
+        removed as (delete from organization_file_objects o using matched m where o.object_key = m.object_key and (m.action = 'remove' or m.status = 'reserved') returning o.object_key),
+        updated as (update organization_file_objects o set pending_size_bytes = null, write_id = null, expected_sha256_hex = null, reservation_started_at = null, updated_at = now() from matched m where o.object_key = m.object_key and m.action = 'release' and m.status = 'committed' returning o.object_key),
+        changed as (select object_key from removed union all select object_key from updated),
+        deltas as (select m.organization_id,
+          sum(case when m.action = 'remove' then m.size_bytes else 0 end) as committed,
+          sum(case when m.action = 'release' then case when m.status = 'reserved' then m.size_bytes else greatest(m.pending_size_bytes - m.size_bytes, 0) end else 0 end) as reserved
+          from matched m join changed c on c.object_key = m.object_key group by m.organization_id)
+        update organization_file_usage u set committed_bytes = u.committed_bytes - d.committed, reserved_bytes = u.reserved_bytes - d.reserved, updated_at = now()
+        from deltas d where u.organization_id = d.organization_id
+      `);
+      return confirmed.filter((row) => row.action === "remove").length;
+    });
     return { rows, deleted };
   };
   for (;;) {
-    // db-await-in-loop: sequential cursor page walk
+    // db-await-in-loop: the global tenant/key page supplies the next tuple cursor and settles before advancing
     const { rows, deleted } = await reconcilePage(cursor);
     removed += deleted;
-    if (rows.length === 0) {
+    const last = rows.at(-1);
+    if (!last) {
       break;
     }
-    cursor = rows.at(-1)?.objectKey ?? null;
-    if (cursor === null) {
-      return panic("Ledger page ended without a cursor");
-    }
+    cursor = { organizationId: last.organizationId, objectKey: last.objectKey };
     if (rows.length < PAGE_SIZE) {
       break;
     }
@@ -214,9 +206,12 @@ export const reportOrganizationFileUsageBackfill = async ({
         .select({ rows: count() })
         .from(organizationFileObjects)
         .where(
-          or(
-            eq(organizationFileObjects.status, "reserved"),
-            isNotNull(organizationFileObjects.pendingSizeBytes),
+          and(
+            isNotNull(organizationFileObjects.writeId),
+            or(
+              eq(organizationFileObjects.status, "reserved"),
+              isNotNull(organizationFileObjects.pendingSizeBytes),
+            ),
           ),
         )
         .then((rows) => rows.at(0)?.rows ?? 0),

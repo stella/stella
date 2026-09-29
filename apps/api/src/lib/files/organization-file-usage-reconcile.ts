@@ -24,6 +24,7 @@ import {
   OrganizationFileUsageError,
   releaseOrganizationFilesBytes,
 } from "@/api/lib/files/organization-file-usage";
+import { organizationFileReservationCandidatesQuery } from "@/api/lib/files/organization-file-usage-queries";
 import type { HeadObjectResult } from "@/api/lib/s3-presign";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
@@ -157,21 +158,21 @@ const matchesReferencedReservation = async ({
     );
   }
   const { hashS3ObjectSha256WithSignal } = await import("@/api/lib/s3");
-  const read = await Result.tryPromise({
-    try: async () =>
-      await hashS3ObjectSha256WithSignal(
-        objectKey,
-        signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(HASH_READ_TIMEOUT_MS)])
-          : AbortSignal.timeout(HASH_READ_TIMEOUT_MS),
-      ),
-    catch: (cause) =>
+  const read = (
+    await hashS3ObjectSha256WithSignal(
+      objectKey,
+      signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(HASH_READ_TIMEOUT_MS)])
+        : AbortSignal.timeout(HASH_READ_TIMEOUT_MS),
+    )
+  ).mapError(
+    (cause) =>
       new OrganizationFileUsageError({
         message: "Referenced file could not be verified",
         reason: "storage_unavailable",
         cause,
       }),
-  });
+  );
   return Result.isError(read)
     ? Result.err(read.error)
     : Result.ok(read.value === expectedSha256Hex);
@@ -200,35 +201,13 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
     const retryBefore = new Date(now.getTime() - RETRY_DELAY_MS);
     const candidates = await db.transaction(
       async (tx) =>
-        await tx
-          .select({
-            objectKey: organizationFileObjects.objectKey,
-            organizationId: organizationFileObjects.organizationId,
-            writeId: organizationFileObjects.writeId,
-          })
-          .from(organizationFileObjects)
-          .where(
-            and(
-              unsettledObject,
-              isNotNull(organizationFileObjects.writeId),
-              lte(
-                organizationFileObjects.reservationStartedAt,
-                sql`${staleBefore}::timestamptz`,
-              ),
-              lte(
-                organizationFileObjects.updatedAt,
-                sql`${retryBefore}::timestamptz`,
-              ),
-              organizationId === undefined
-                ? undefined
-                : eq(organizationFileObjects.organizationId, organizationId),
-            ),
-          )
-          .orderBy(
-            asc(organizationFileObjects.updatedAt),
-            asc(organizationFileObjects.objectKey),
-          )
-          .limit(limit),
+        await organizationFileReservationCandidatesQuery({
+          db: tx,
+          organizationId,
+          staleBefore,
+          retryBefore,
+          limit,
+        }),
     );
     const { headObject } = await import("@/api/lib/s3-presign");
     const { deleteS3ObjectWithSignal, isMissingS3ObjectError } =
@@ -362,7 +341,8 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
       toRelease.push(reservation);
       deleted += 1;
     }
-    yield* await commitOrganizationFilesBytes(toCommit, db);
+    const settled = yield* await commitOrganizationFilesBytes(toCommit, db);
+    committed -= settled.busyObjectKeys.length;
     yield* await releaseOrganizationFilesBytes(toRelease, db);
     return Result.ok({
       scanned: candidates.length,

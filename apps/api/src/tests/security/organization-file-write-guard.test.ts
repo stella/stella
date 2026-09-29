@@ -201,12 +201,12 @@ const collectCallbackFlow = (ast: ts.SourceFile) => {
     return scope;
   };
   const resolve = (identifier: ts.Identifier) => {
-    let scope: ts.Node | undefined = identifier.parent;
-    while (scope) {
+    let scope = identifier.parent;
+    for (;;) {
       const currentScope = scope;
       const found = bindings.find(
         (binding) =>
-          binding.name &&
+          binding.name !== undefined &&
           ts.isIdentifier(binding.name) &&
           binding.name.text === identifier.text &&
           scopeOf(binding) === currentScope,
@@ -214,9 +214,11 @@ const collectCallbackFlow = (ast: ts.SourceFile) => {
       if (found) {
         return found;
       }
+      if (ts.isSourceFile(scope)) {
+        return undefined;
+      }
       scope = scope.parent;
     }
-    return undefined;
   };
   return { calls, resolve };
 };

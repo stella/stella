@@ -46,9 +46,6 @@ CREATE TABLE "organization_file_objects" (
 CREATE INDEX "organization_file_objects_org_key_idx"
   ON "organization_file_objects" ("organization_id", "object_key");--> statement-breakpoint
 
-CREATE INDEX "organization_file_objects_org_status_key_idx"
-  ON "organization_file_objects" ("organization_id", "status", "object_key");--> statement-breakpoint
-
 CREATE INDEX "organization_file_objects_pending_reconcile_idx"
   ON "organization_file_objects" ("updated_at", "object_key")
   WHERE "write_id" IS NOT NULL;--> statement-breakpoint

@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { expect, test } from "bun:test";
 import { SQL } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/bun-sql";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -9,6 +10,11 @@ import {
   organizationFileObjects,
   organizationFileUsage,
 } from "@/api/db/schema";
+import {
+  organizationFileLedgerPageQuery,
+  organizationFileReservationCandidatesQuery,
+} from "@/api/lib/files/organization-file-usage-queries";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
@@ -118,14 +124,18 @@ test("the file usage migration creates the indexes declared by the live schema",
   }
 });
 
-const planFor = async (database: PGlite, query: string) => {
+const planFor = async (
+  database: PGlite,
+  query: { sql: string; params: unknown[] },
+) => {
   const plan = await database.query<{ "QUERY PLAN": string }>(
-    `explain (costs off) ${query}`,
+    `explain (costs off) ${query.sql}`,
+    query.params,
   );
   return plan.rows.map((row) => row["QUERY PLAN"]).join("\n");
 };
 
-test("tenant pages use keyset indexes and stale claims support ordered scans", async () => {
+test("global tuple pages use keyset indexes and stale claims support ordered scans", async () => {
   const database = await migratedDatabase();
   try {
     await database.exec(`
@@ -143,29 +153,45 @@ test("tenant pages use keyset indexes and stale claims support ordered scans", a
       from generate_series(1, 20) tenant cross join generate_series(1, 5000) file;
       analyze organization_file_objects;
     `);
+    const queryDb = drizzle.mock();
+    const organizationId = brandPersistedOrganizationId("tenant-1");
     const firstPage = await planFor(
       database,
-      `select object_key from organization_file_objects where organization_id = 'tenant-1' order by object_key limit 200`,
+      organizationFileLedgerPageQuery({
+        db: queryDb,
+        cursor: null,
+        limit: 200,
+      }).toSQL(),
     );
     const cursorPage = await planFor(
       database,
-      `select object_key from organization_file_objects where organization_id = 'tenant-1' and object_key > 'tenant-1/file-02500' order by object_key limit 200`,
+      organizationFileLedgerPageQuery({
+        db: queryDb,
+        cursor: { organizationId, objectKey: "tenant-1/file-02500" },
+        limit: 200,
+      }).toSQL(),
     );
     for (const plan of [firstPage, cursorPage]) {
       expect(plan).toContain("organization_file_objects_org_key_idx");
       expect(plan).not.toMatch(/\bSort\b/u);
       expect(plan).not.toContain("Seq Scan");
     }
-    const staleQuery = `select object_key from organization_file_objects
-      where write_id is not null and (status = 'reserved' or (status = 'committed' and pending_size_bytes is not null))
-      and reservation_started_at <= '2021-01-01'::timestamptz and updated_at <= '2021-01-01'::timestamptz`;
+    const options = {
+      db: queryDb,
+      staleBefore: new Date("2021-01-01T00:00:00.000Z"),
+      retryBefore: new Date("2021-01-01T00:00:00.000Z"),
+      limit: 50,
+    };
     const globalClaim = await planFor(
       database,
-      `${staleQuery} order by updated_at, object_key limit 50`,
+      organizationFileReservationCandidatesQuery(options).toSQL(),
     );
     const tenantClaim = await planFor(
       database,
-      `${staleQuery} and organization_id = 'tenant-1' order by updated_at, object_key limit 50`,
+      organizationFileReservationCandidatesQuery({
+        ...options,
+        organizationId,
+      }).toSQL(),
     );
     expect(globalClaim).toContain(
       "organization_file_objects_pending_reconcile_idx",
@@ -173,19 +199,7 @@ test("tenant pages use keyset indexes and stale claims support ordered scans", a
     expect(tenantClaim).toContain(
       "organization_file_objects_org_pending_reconcile_idx",
     );
-    // This small fixture can favor a bitmap scan and sort for one tenant.
-    // Separately prove that both indexes can supply the requested order.
-    await database.exec(
-      "set enable_bitmapscan = off; set enable_seqscan = off",
-    );
-    const orderedTenantClaim = await planFor(
-      database,
-      `${staleQuery} and organization_id = 'tenant-1' order by updated_at, object_key limit 50`,
-    );
-    expect(orderedTenantClaim).toContain(
-      "organization_file_objects_org_pending_reconcile_idx",
-    );
-    for (const plan of [globalClaim, orderedTenantClaim]) {
+    for (const plan of [globalClaim, tenantClaim]) {
       expect(plan).not.toMatch(/\bSort\b/u);
       expect(plan).not.toContain("Seq Scan");
     }

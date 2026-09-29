@@ -9,6 +9,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fileSecurityRejection } from "@/api/lib/file-scan/rejection";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { getScanWarnings } from "@/api/lib/file-scan/warnings";
+import {
+  OrganizationFileUsageError,
+  organizationFileUsageHandlerError,
+} from "@/api/lib/files/organization-file-usage";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
@@ -130,6 +134,9 @@ export default createSafeHandler(
       }),
     );
     if (Result.isError(created)) {
+      if (created.error instanceof OrganizationFileUsageError) {
+        return Result.err(organizationFileUsageHandlerError(created.error));
+      }
       let status: 400 | 404 | 409 | 413;
       switch (created.error.code) {
         case "current-version-not-found":
@@ -161,8 +168,8 @@ export default createSafeHandler(
           break;
         }
         default: {
-          created.error.code satisfies never;
-          return panic(`Unhandled code: ${String(created.error.code)}`);
+          created.error satisfies never;
+          return panic("Unhandled entity version failure", created.error);
         }
       }
       return Result.err(

@@ -95,7 +95,6 @@ describe("organization file usage backfill", () => {
     const checked: string[] = [];
     const options = {
       db: ledgerDb(),
-      organizationId: ids.orgA,
       objectExists: async (key: string) => {
         checked.push(key);
         return key === presentKey;
@@ -133,7 +132,6 @@ describe("organization file usage backfill", () => {
     let checks = 0;
     const removed = await reconcileAbsentOrganizationFileObjects({
       db: ledgerDb(),
-      organizationId: ids.orgA,
       objectExists: async (key) => {
         if (key !== objectKey) {
           return true;
@@ -218,8 +216,8 @@ describe("organization file usage backfill", () => {
     ]);
     const options = {
       db: ledgerDb(),
-      organizationId: ids.orgB,
-      objectExists: async (key: string) => key === presentPending,
+      objectExists: async (key: string) =>
+        key === presentPending || !key.startsWith(prefix),
       staleBefore: new Date("2026-01-01T00:00:00Z"),
     };
     expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(0);
@@ -246,6 +244,67 @@ describe("organization file usage backfill", () => {
       .where(eq(organizationFileUsage.organizationId, ids.orgB))
       .then((matches) => matches.at(0));
     expect(usage).toMatchObject({ committedBytes: 2n, reservedBytes: 7n });
+  });
+
+  test("global tuple pages cross organization boundaries and settle every tenant counter", async () => {
+    const objects = [ids.orgA, ids.orgB]
+      .toSorted()
+      .flatMap((organizationId, tenantIndex) =>
+        Array.from({ length: tenantIndex === 0 ? 205 : 105 }, (_, index) => ({
+          organizationId,
+          objectKey: `${tenantIndex === 0 ? "z" : "a"}/global-boundary/${String(index).padStart(3, "0")}`,
+          sizeBytes: 1n,
+          status: "committed" as const,
+        })),
+      );
+    await testDb.insert(organizationFileObjects).values(objects);
+    await testDb
+      .update(organizationFileUsage)
+      .set({
+        committedBytes:
+          11n +
+          BigInt(
+            objects.filter((row) => row.organizationId === ids.orgA).length,
+          ),
+      })
+      .where(eq(organizationFileUsage.organizationId, ids.orgA));
+    await testDb
+      .update(organizationFileUsage)
+      .set({
+        committedBytes:
+          2n +
+          BigInt(
+            objects.filter((row) => row.organizationId === ids.orgB).length,
+          ),
+      })
+      .where(eq(organizationFileUsage.organizationId, ids.orgB));
+    const checked = new Set<string>();
+    const options = {
+      db: ledgerDb(),
+      objectExists: async (key: string) => {
+        if (!key.includes("/global-boundary/")) {
+          return true;
+        }
+        checked.add(key);
+        return false;
+      },
+      staleBefore: new Date("2026-01-01T00:00:00Z"),
+    };
+    expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(310);
+    expect(checked.size).toBe(310);
+    expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(0);
+    const counters = await testDb
+      .select()
+      .from(organizationFileUsage)
+      .where(
+        inArray(organizationFileUsage.organizationId, [ids.orgA, ids.orgB]),
+      );
+    expect(
+      counters.find((row) => row.organizationId === ids.orgA)?.committedBytes,
+    ).toBe(11n);
+    expect(
+      counters.find((row) => row.organizationId === ids.orgB)?.committedBytes,
+    ).toBe(2n);
   });
 
   test("prints the summary while mismatched reservations stay pending", async () => {
@@ -313,8 +372,9 @@ describe("organization file usage backfill", () => {
       .where(eq(organizationFileUsage.organizationId, ids.orgB));
     const options = {
       db: ledgerDb(),
-      organizationId: ids.orgB,
-      objectExists: async (key: string) => Number(key.split("/").at(-1)) >= 200,
+      objectExists: async (key: string) =>
+        !key.startsWith(`${ids.orgB}/page-boundary/`) ||
+        Number(key.split("/").at(-1)) >= 200,
       staleBefore: new Date("2026-01-01T00:00:00Z"),
     };
     expect(await reconcileAbsentOrganizationFileObjects(options)).toBe(200);

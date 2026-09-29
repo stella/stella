@@ -71,8 +71,6 @@ export const resolveUploadMime = ({
   );
 };
 
-const S3_DELETE_TIMEOUT_MS = 30 * 1000;
-
 type DeleteS3ObjectsProps = {
   fileRows: { fileId: string; mimeType: string }[];
   organizationId: SafeId<"organization">;
@@ -105,11 +103,9 @@ export const deleteS3Objects = async ({
 
 export const deleteS3Keys = async (
   keys: string[],
+  signal = new AbortController().signal,
 ): Promise<Result<void, S3Error>> => {
-  const deleted = await deleteOrganizationFilesWithSignal(
-    keys,
-    AbortSignal.timeout(S3_DELETE_TIMEOUT_MS),
-  );
+  const deleted = await deleteOrganizationFilesWithSignal(keys, signal);
   if (Result.isError(deleted)) {
     return Result.err(
       new S3Error({

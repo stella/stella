@@ -1,6 +1,9 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -406,15 +409,19 @@ describe("folio collaboration room snapshot generation", () => {
     scopedFailureAfterCalls = 1;
     scopedLockRows = [[{ status: "active" }]];
 
-    expect(
-      storeFolioCollabSnapshot({
-        authority: { type: "participant", userId: firstUserId },
-        expectedGeneration: 3,
-        expectedSnapshotRevision: 0,
-        snapshotBytes: new TextEncoder().encode("snapshot"),
-        value: authorized.value,
-      }),
-    ).rejects.toThrow("snapshot transaction failed");
+    const result = await storeFolioCollabSnapshot({
+      authority: { type: "participant", userId: firstUserId },
+      expectedGeneration: 3,
+      expectedSnapshotRevision: 0,
+      snapshotBytes: new TextEncoder().encode("snapshot"),
+      value: authorized.value,
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.cause).toMatchObject({
+        message: "snapshot transaction failed",
+      });
+    }
 
     const written = fake.requests.filter(({ method }) => method === "PUT");
     const writtenKey = written.at(0)?.key;
@@ -431,6 +438,43 @@ describe("folio collaboration room snapshot generation", () => {
     ).toEqual(written.map(({ key }) => key));
     // The room pointer never published, so the store must hold nothing.
     expect([...fake.objects.keys()]).toEqual([]);
+  });
+
+  test("returns a file-write failure after keeping its cleanup intent recoverable", async () => {
+    scopedLockRows = [[{ status: "active" }]];
+    const authorized = await authorize(validRow());
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") {
+      return;
+    }
+    const priorFlag = env.FEATURE_FILE_USAGE_LIMITS;
+    const priorWorkerFlag =
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS;
+    env.FEATURE_FILE_USAGE_LIMITS = true;
+    envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = false;
+    fake.failNext({ method: "PUT", code: "AccessDenied", status: 403 });
+    try {
+      const result = await storeFolioCollabSnapshot({
+        authority: { type: "participant", userId: firstUserId },
+        expectedGeneration: 3,
+        expectedSnapshotRevision: 0,
+        snapshotBytes: new TextEncoder().encode("snapshot"),
+        value: authorized.value,
+      });
+      expect(result).toMatchObject({
+        status: "error",
+        error: { reason: "storage_unavailable" },
+      });
+      expect(
+        fake.requests.filter(({ method }) => method === "DELETE"),
+      ).toHaveLength(1);
+      expect(scopedInsertedRows).toHaveLength(1);
+      expect(scopedDeleteCalls).toBe(0);
+      expect([...fake.objects.keys()]).toEqual([]);
+    } finally {
+      env.FEATURE_FILE_USAGE_LIMITS = priorFlag;
+      envDocumentProcessingWorker.FEATURE_FILE_USAGE_LIMITS = priorWorkerFlag;
+    }
   });
 
   test("accepts a generation-fenced store from the collaboration service", () => {
@@ -496,9 +540,12 @@ describe("folio collaboration room stored files", () => {
     });
 
     expect(result).toMatchObject({
-      snapshotRevision: 1,
-      sizeBytes: snapshotBytes.byteLength,
-      status: "stored",
+      status: "ok",
+      value: {
+        snapshotRevision: 1,
+        sizeBytes: snapshotBytes.byteLength,
+        status: "stored",
+      },
     });
     expect(intentLockRead).toBe(true);
     expect(scopedLockRows).toEqual([]);
