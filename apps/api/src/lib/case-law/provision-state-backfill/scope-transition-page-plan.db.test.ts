@@ -294,7 +294,8 @@ test(
 
     // Three pages, then an empty page that completes the job.
     expect(results).toEqual([true, true, true, false]);
-    expect(cursors).toEqual([
+    const storedCursors: unknown = cursors;
+    expect(storedCursors).toEqual([
       ordered[PAGE_ROWS - 1],
       ordered[2 * PAGE_ROWS - 1],
       ordered.at(-1),
