@@ -56,6 +56,15 @@ const FILL_DISCOVER_SEGMENT = "fill-discover";
 
 const PLAYBOOK_DETAIL_KEY_SEGMENT = "detail";
 
+// An organization's Knowledge rows sit under one audience + org prefix, so no
+// other source of Knowledge data can share a cache entry with them.
+const memberKnowledgeKey = (organizationId: string, section: string) => [
+  "knowledge",
+  "member",
+  organizationId,
+  section,
+];
+
 export const knowledgeKeys = {
   skills: {
     root: agentSkillsQueryRoot(),
@@ -118,7 +127,8 @@ export const knowledgeKeys = {
     ],
   },
   templates: {
-    all: (organizationId: string) => ["templates", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "templates"),
     list: (organizationId: string, { categoryId, limit }: TemplatesPageKey) => [
       ...knowledgeKeys.templates.all(organizationId),
       "list",
@@ -186,10 +196,12 @@ export const knowledgeKeys = {
     ],
   },
   templateCategories: {
-    all: (organizationId: string) => ["template-categories", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "template-categories"),
   },
   templateRecipes: {
-    all: (organizationId: string) => ["template-recipes", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "template-recipes"),
   },
   clauses: {
     all: (organizationId: string) => ["clauses", organizationId],
@@ -220,7 +232,8 @@ export const knowledgeKeys = {
     ],
   },
   playbooks: {
-    all: (organizationId: string) => ["playbooks", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "playbooks"),
     list: (organizationId: string, { limit }: PlaybooksPageKey) => [
       ...knowledgeKeys.playbooks.all(organizationId),
       "list",
@@ -246,7 +259,8 @@ export const knowledgeKeys = {
     ],
   },
   playbookStarters: {
-    all: (organizationId: string) => ["playbook-starters", organizationId],
+    all: (organizationId: string) =>
+      memberKnowledgeKey(organizationId, "playbook-starters"),
   },
   flows: {
     all: (organizationId: string) => ["flows", organizationId],

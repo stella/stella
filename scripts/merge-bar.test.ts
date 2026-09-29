@@ -210,8 +210,8 @@ const passingSnapshot = (
   requiredCheckRuns: ["ci-result"],
   reviewThreads: [{ id: "PRRT_kwDOabcdef", isResolved: true }],
   migrations: {
-    baseDirectories: ["20260801120000_earlier", "20260812090000_latest"],
     addedDirectories: ["apps/api/drizzle/20260816200000_new_column"],
+    removedDirectories: [],
   },
   headShaBeforeMerge: HEAD_SHA,
   ...overrides,
@@ -589,41 +589,65 @@ describe("merge bar", () => {
     ).toBe("merge");
   });
 
-  // The branch's own CI could not see a migration that landed on the base
-  // branch after that run finished.
-  test("a migration below the base branch's maximum aborts", () => {
-    expect(
-      failedGate(
-        passingSnapshot({
-          migrations: {
-            baseDirectories: ["20260816200000_landed_meanwhile"],
-            addedDirectories: ["apps/api/drizzle/20260816140000_branch"],
-          },
-        }),
-      ),
-    ).toEqual({ decision: "abort", reasons: ["MIGRATION_ORDER_VIOLATION"] });
-  });
-
-  test("a migration equal to the base branch's maximum aborts", () => {
-    expect(
-      failedGate(
-        passingSnapshot({
-          migrations: {
-            baseDirectories: ["20260816200000_landed_meanwhile"],
-            addedDirectories: ["apps/api/drizzle/20260816200000_branch"],
-          },
-        }),
-      ),
-    ).toEqual({ decision: "abort", reasons: ["MIGRATION_ORDER_VIOLATION"] });
-  });
-
-  test("a pull request that adds no migrations passes the ordering gate", () => {
+  test("a migration below the base branch's maximum may merge", () => {
     expect(
       evaluateMergeBar(
         passingSnapshot({
           migrations: {
-            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: ["apps/api/drizzle/20260816140000_branch"],
+            removedDirectories: [],
+          },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("a migration sharing a timestamp with another migration may merge", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            addedDirectories: ["apps/api/drizzle/20260816200000_branch"],
+            removedDirectories: [],
+          },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("removing a base migration aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          migrations: {
             addedDirectories: [],
+            removedDirectories: ["apps/api/drizzle/20260801120000_original"],
+          },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["MIGRATION_IDENTITY_VIOLATION"] });
+  });
+
+  test("renaming a base migration aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          migrations: {
+            addedDirectories: ["apps/api/drizzle/20260801130000_renamed"],
+            removedDirectories: ["apps/api/drizzle/20260801120000_original"],
+          },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["MIGRATION_IDENTITY_VIOLATION"] });
+  });
+
+  test("a pull request that changes no migrations passes the identity gate", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            addedDirectories: [],
+            removedDirectories: [],
           },
         }),
       ).decision,
@@ -657,7 +681,7 @@ describe("merge bar", () => {
     expect(gates.toSorted()).toEqual([
       "head-stability",
       "mergeable",
-      "migration-order",
+      "migration-identity",
       "pull-request-state",
       "required-check",
       "review-threads",

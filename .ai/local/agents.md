@@ -98,7 +98,8 @@ and on a declared input no test reads any more.
 
 Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
 mergeability, the required checks on the exact head SHA, unresolved review
-threads, and migration ordering against the live base in one invocation, then
+threads, and migration identity (no merged migration renamed or deleted) in
+one invocation, then
 arms "merge when ready" pinned to that head; a release pull request
 (`chore: release v…`) is instead enqueued at the front of the queue, and
 `--jump` does the same for any pull request. Main has a merge queue: GitHub

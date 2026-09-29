@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -10,6 +12,8 @@ import {
   createFixtureTemplatePackCatalogue,
   FIXTURE_TEMPLATE_PACKS as FIXTURE_PACKS,
 } from "./fixtures/catalogue";
+import { GENERATED_TEMPLATE_PACKS } from "./packs.gen";
+import { PUBLIC_PACK_IDS } from "./public-packs";
 import type { GeneratedTemplatePack } from "./schema";
 
 const MISSING_CONTENT_ROOT = path.join(
@@ -28,6 +32,15 @@ if (!fixtureTemplate) {
 }
 
 describe("template pack catalogue", () => {
+  test("only license-checked packs permit public display", () => {
+    expect(
+      GENERATED_TEMPLATE_PACKS.filter((pack) => pack.publicDisplay).map(
+        (pack) => pack.id,
+      ),
+    ).toEqual([...PUBLIC_PACK_IDS]);
+    expect(FIXTURE_PACKS.every((pack) => !pack.publicDisplay)).toBe(true);
+  });
+
   test("an uninitialised content root is an empty catalogue, not an error", async () => {
     // The manifest is committed data, so it is populated even where the
     // content submodule is not checked out.
@@ -44,6 +57,23 @@ describe("template pack catalogue", () => {
       slug: fixtureTemplate.slug,
     });
     expect(Result.isError(docx)).toBe(true);
+  });
+
+  test("an empty packs directory does not advertise manifest entries", () => {
+    const contentRoot = mkdtempSync(
+      path.join(tmpdir(), "template-pack-empty-"),
+    );
+    try {
+      mkdirSync(path.join(contentRoot, "packs"));
+      const catalogue = createTemplatePackCatalogue({
+        packs: FIXTURE_PACKS,
+        contentRoot,
+      });
+      expect(catalogue.list()).toEqual([]);
+      expect(catalogue.get(fixturePack.id)).toBeNull();
+    } finally {
+      rmSync(contentRoot, { recursive: true, force: true });
+    }
   });
 
   test("reads DOCX bytes whose hash matches the manifest", async () => {

@@ -1,6 +1,6 @@
 ---
 name: conventions-db
-description: 'Apply when writing or modifying database schema, queries, migrations, transactions, or tenant-scoped persistence.'
+description: "Apply when writing or modifying database schema, queries, migrations, transactions, or tenant-scoped persistence."
 ---
 
 # Database Conventions
@@ -53,6 +53,10 @@ transactions, or tenant-scoped persistence.
   enforced by `migration-concurrent-index.test.ts`, or put repairable work in
   `online-migrations.ts`. Keep long backfills outside schema migrations and
   checkpoint them durably.
+- A migration directory's name is its identity: the migrator applies every
+  directory whose name the database has not recorded, in name order. The
+  timestamp prefix does not need to sort after the base branch, but never
+  rename or delete a merged migration; add a new one instead.
 - Validate migration history two ways: apply every committed migration to a
   fresh database, then confirm
   `bun --filter @stll/api db:push -- --explain` reports no schema drift. Do not
@@ -83,7 +87,7 @@ transactions, or tenant-scoped persistence.
 - Keep transactions short; perform S3, network, conversion, and other external
   I/O outside them.
 - Close every read-decide-write race. Lock the decisive row with `SELECT ...
-  FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
+FOR UPDATE`, or encode the expected state/version in the mutation `WHERE`
   clause and check the affected-row count.
 - Make retries converge. Stable identities, unique constraints, conditional
   transitions, and idempotency keys are stronger than read-before-insert

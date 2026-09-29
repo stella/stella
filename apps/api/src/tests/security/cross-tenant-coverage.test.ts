@@ -126,6 +126,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Unauthenticated reads of bundled deployment content (public template
+  // packs, starter playbooks); no database access or tenant-scoped input.
+  "public-knowledge": WAIVER_REASON.noTenantReadSurface,
   // Like mcp-connectors: the only reads are per-user+org connection state
   // (org+user RLS) and external Microsoft Graph data. Neither is a
   // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
