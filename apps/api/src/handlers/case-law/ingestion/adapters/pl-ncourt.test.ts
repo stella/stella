@@ -816,6 +816,43 @@ describe("the document", () => {
     expect(whitespace.html).not.toContain("<p>");
   });
 
+  test("unknown wrappers keep paragraphs and table cells separate", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xFoo><xText>ab</xText><xText>cd</xText><xRows><xRow><xClmn><xText>Left cell</xText></xClmn><xClmn><xText>Right cell</xText></xClmn></xRow></xRows></xFoo></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe(
+      "<p>ab</p>\n<p>cd</p>\n<table><tr><td><p>Left cell</p></td>\n<td><p>Right cell</p></td></tr></table>",
+    );
+    expect(content.sourceParagraphs).toEqual([
+      "ab",
+      "cd",
+      "Left cell",
+      "Right cell",
+    ]);
+    expect(content.unmappedMarkup).toEqual(["xFoo"]);
+  });
+
+  test("unknown wrappers with only inline marks stay in one paragraph", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xFoo>Before <xBx>bold</xBx> after</xFoo></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe("<p>Before <strong>bold</strong> after</p>");
+    expect(content.unmappedMarkup).toEqual(["xFoo"]);
+  });
+
+  test("the source view includes text inside layout elements", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xCOLGROUPx><xCOLx><xText>Source paragraph</xText><![CDATA[Source note]]></xCOLx></xCOLGROUPx></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.sourceParagraphs).toEqual([
+      "Source paragraph",
+      "Source note",
+    ]);
+  });
+
   test("CDATA inside a paragraph stays beside its inline text", () => {
     const content =
       readPlNcourtContent(
@@ -823,7 +860,7 @@ describe("the document", () => {
       ) ?? panic("the document did not read");
     expect(content.html).toBe("<p>Before &lt;quoted&gt; after</p>");
     expect(content.sourceParagraphs).toEqual(["Before <quoted> after"]);
-    expect(content.unmappedMarkup).toEqual(["#cdata"]);
+    expect(content.unmappedMarkup).toEqual([]);
   });
 
   test("later list bullets appear once between their neighbouring items", () => {

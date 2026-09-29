@@ -111,9 +111,6 @@ const renderInline = (node: AnyNode, state: RenderState): string => {
     return escapeHtml(node.data);
   }
   if (isCDATA(node)) {
-    if (textOf(node).trim().length > 0) {
-      state.unmapped.add("#cdata");
-    }
     return node.children.map((child) => renderInline(child, state)).join("");
   }
   if (!isTag(node)) {
@@ -292,6 +289,22 @@ const renderUnit = (element: Element, state: RenderState): string => {
   return `${opening}${rest.map((child) => renderBlock(child, state)).join("\n")}`;
 };
 
+const STRUCTURAL_TAGS = new Set([
+  "xText",
+  "xTitle",
+  "xUnit",
+  "xBlock",
+  "xRows",
+  "xEnum",
+]);
+
+const hasStructuralDescendant = (element: Element): boolean =>
+  element.children.some(
+    (child) =>
+      isTag(child) &&
+      (STRUCTURAL_TAGS.has(child.name) || hasStructuralDescendant(child)),
+  );
+
 const renderBlock = (element: AnyNode, state: RenderState): string => {
   if (!isTag(element)) {
     if (
@@ -321,6 +334,9 @@ const renderBlock = (element: AnyNode, state: RenderState): string => {
         return "";
       }
       state.unmapped.add(element.name);
+      if (hasStructuralDescendant(element)) {
+        return renderBlocks(element, state);
+      }
       return `<p>${renderInlines(element, state)}</p>`;
     }
   }
@@ -375,9 +391,6 @@ const sourceParagraphsOf = (root: Element): string[] => {
   const paragraphs: string[] = [];
   const walk = (node: AnyNode): void => {
     if (isTag(node)) {
-      if (LAYOUT_TAGS.has(node.name)) {
-        return;
-      }
       if (TEXT_ELEMENTS.has(node.name)) {
         // Only the root's own name labels the document rather than its text.
         const text =
