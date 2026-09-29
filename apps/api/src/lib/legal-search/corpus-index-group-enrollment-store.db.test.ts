@@ -517,7 +517,17 @@ test("a withdrawn attestation makes the group unready until attested again", asy
           jurisdiction,
         }),
     );
-  const globalIndexes = async () => (await read(undefined)).route.indexId;
+  const target = async (jurisdiction: string | undefined) => {
+    const served = await read(jurisdiction);
+    return Result.isOk(served)
+      ? served.value
+      : panic(`Refused: ${served.error.message}`);
+  };
+  const refusedRead = async (jurisdiction: string) => {
+    const served = await read(jurisdiction);
+    return Result.isError(served) ? served.error : null;
+  };
+  const globalIndexes = async () => (await target(undefined)).route.indexId;
 
   // Nothing to withdraw before a binding or an attestation.
   expect(await withdraw(USA)).toBe(false);
@@ -529,13 +539,16 @@ test("a withdrawn attestation makes the group unready until attested again", asy
     async (tx) => await attestCorpusIndexGroupEnrollmentTx(tx, ATTEST_USA),
   );
   expect(await readiness()).toEqual({ type: "attested" });
-  expect((await read("USA")).route.indexId).toBe("case_law_v7_usa");
+  expect((await target("USA")).route.indexId).toBe("case_law_v7_usa");
   expect(await globalIndexes()).toContain("case_law_v7_usa");
   expect(await withdraw(USA)).toBe(true);
   expect(await readiness()).toEqual({ type: "unready", reason: "pending" });
   // Out of service: scoped reads refuse, generation-wide reads leave it out,
   // and it is among the indexes no append may start on.
-  expect(await rejectionOf(read("USA"))).toMatchObject({ status: 503 });
+  expect(await refusedRead("USA")).toMatchObject({
+    indexId: "case_law_v7_usa",
+    reason: "pending",
+  });
   expect(await globalIndexes()).not.toContain("case_law_v7_usa");
   expect(
     await inTx(async (tx) => await unattestedCorpusIndexIdsTx(tx, MANIFEST)),
@@ -622,7 +635,7 @@ test("a withdrawn attestation makes the group unready until attested again", asy
       .from(corpusIndexGroupWithdrawals),
   ).toEqual([{ indexGroup: "usa" }]);
   expect(await globalIndexes()).toContain("case_law_v7_hun");
-  expect((await read("HUN")).route.indexId).toBe("case_law_v7_hun");
+  expect((await target("HUN")).route.indexId).toBe("case_law_v7_hun");
 
   const cze = { manifest: MANIFEST, indexGroup: "cs_sk" } as const;
   expect(await rejectionOf(withdraw(cze))).toMatchObject({
