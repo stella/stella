@@ -22,7 +22,7 @@ const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
 );
 const CHAT_TURN_RUN_OWNERSHIP_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261003120300_chat_turn_run_ownership",
+  "20261003120600_chat_turn_run_ownership",
   "migration.sql",
 );
 const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
