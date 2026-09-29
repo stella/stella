@@ -20,6 +20,7 @@ type Workflow = {
     {
       if?: string;
       permissions?: unknown;
+      concurrency?: unknown;
       steps: readonly {
         uses?: string;
         run?: string;
@@ -52,6 +53,15 @@ const readWorkflow = (file: string): Workflow => {
 
 const permissionLevels = (permissions: unknown): readonly unknown[] =>
   isRecord(permissions) ? Object.values(permissions) : [];
+
+const config = parseReviewGateConfig(
+  Bun.YAML.parse(
+    readFileSync(
+      path.join(import.meta.dirname, "..", ".github", "review-gate.yml"),
+      "utf-8",
+    ),
+  ),
+);
 
 const publisher = readWorkflow("review-gate.yml");
 const relay = readWorkflow("review-gate-signal.yml");
@@ -110,14 +120,7 @@ describe("the publisher", () => {
   // (a merge-queue write, like enqueuing) needs contents and pull-requests
   // write, and shadow mode, which never dequeues, holds neither.
   test("holds exactly the permissions its configured mode needs", () => {
-    const { mode } = parseReviewGateConfig(
-      Bun.YAML.parse(
-        readFileSync(
-          path.join(import.meta.dirname, "..", ".github", "review-gate.yml"),
-          "utf-8",
-        ),
-      ),
-    );
+    const { mode } = config;
     const access = mode === "enforce" ? "write" : "read";
     expect(publisher.permissions).toEqual({});
     for (const job of Object.values(publisher.jobs)) {
@@ -135,19 +138,96 @@ describe("the publisher", () => {
       types: ["requested"],
     });
   });
+});
+
+// Concurrency and the event filter decide which evaluations can drop one
+// another. A run whose job is skipped must never enter a group, and a merge
+// group's evaluation must never be replaced by anything: until the next
+// sweep, nothing else evaluates that commit.
+describe("the publisher's concurrency", () => {
+  const [job, ...others] = Object.values(publisher.jobs);
+  const concurrency = isRecord(job?.concurrency) ? job.concurrency : {};
+  const group = concurrency["group"];
+  // In order: the first alternative that holds wins, and `&&` binds tighter
+  // than `||`, so each alternative is one condition and its key.
+  const alternatives =
+    typeof group === "string"
+      ? group
+          .replaceAll(/\s+/gu, " ")
+          .split("||")
+          .map((part) => part.trim())
+      : [];
+  const OWN_GROUP = "format('run-{0}', github.run_id)";
+
+  test("is set on the one job, never on the workflow", () => {
+    expect(others).toEqual([]);
+    expect(publisher.concurrency).toBeUndefined();
+    expect(typeof group).toBe("string");
+  });
 
   // Its pull_request_target run is listed among the pull request's checks,
   // so another event for the same head cancelling it reads as failed CI.
   test("never lets another run cancel a pull request event's run", () => {
-    const { concurrency } = publisher;
-    const group = isRecord(concurrency) ? concurrency["group"] : undefined;
-    // The first alternative wins; any later one could be shared.
-    const [first] =
-      typeof group === "string"
-        ? group.replaceAll(/\s+/gu, " ").split("||")
-        : [];
-    expect(first?.trim()).toEndWith(
-      "github.event_name == 'pull_request_target' && format('run-{0}', github.run_id)",
+    expect(alternatives[0]).toEndWith(
+      `github.event_name == 'pull_request_target' && ${OWN_GROUP}`,
+    );
+  });
+
+  // GitHub replaces even a pending run when another joins its group, whatever
+  // cancel-in-progress says, so only a group of its own keeps it.
+  test("never lets another run replace or cancel a merge group's evaluation", () => {
+    expect(alternatives[1]).toBe(
+      `github.event.workflow_run.event == 'merge_group' && ${OWN_GROUP}`,
+    );
+    // Ahead of every key another event could share with the group commit.
+    expect(alternatives[2]).toBe("github.event.workflow_run.head_sha");
+  });
+
+  test("never cancels the sweep, the fallback for every group", () => {
+    expect(alternatives.at(-1)).toBe("'sweep' }}");
+    expect(concurrency["cancel-in-progress"]).toMatch(
+      /^\$\{\{ github\.event_name != 'schedule' \}\}$/u,
+    );
+  });
+
+  // The job `if:` is decided before concurrency applies, so statuses and
+  // check runs no reviewer sends are skipped without ever joining a group.
+  const condition = job?.if?.replaceAll(/\s+/gu, " ") ?? "";
+  const filterNames = (pattern: RegExp): readonly string[] => {
+    const names: unknown = JSON.parse(
+      pattern.exec(condition)?.groups?.["names"] ?? "null",
+    );
+    return Array.isArray(names) &&
+      names.every((name) => typeof name === "string")
+      ? names.toSorted()
+      : expect.unreachable(`no reviewer filter matching ${pattern.source}`);
+  };
+
+  test("lets through only statuses a configured reviewer sends", () => {
+    expect(
+      filterNames(
+        /\(github\.event_name != 'status' \|\| \(github\.event\.state != 'pending' && contains\(fromJSON\('(?<names>\[[^']*\])'\), github\.event\.context\)\)\)/u,
+      ),
+    ).toEqual(
+      config.reviewers
+        .flatMap(({ done }) =>
+          done.commitStatus === null ? [] : [done.commitStatus.context],
+        )
+        .toSorted(),
+    );
+  });
+
+  test("lets through only check runs a configured reviewer sends", () => {
+    expect(
+      filterNames(
+        /\(github\.event_name != 'check_run' \|\| \(github\.event\.check_run\.app\.slug != 'github-actions' && contains\(fromJSON\('(?<names>\[[^']*\])'\), github\.event\.check_run\.name\)\)\)/u,
+      ),
+    ).toEqual(
+      config.reviewers
+        .flatMap(({ done }) =>
+          done.checkRun === null ? [] : [done.checkRun.name],
+        )
+        .toSorted(),
     );
   });
 });
