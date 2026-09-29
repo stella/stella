@@ -59,12 +59,14 @@ type Sweep = {
   next: number;
 };
 
-const widthOf = (sweep: Sweep, inline: Inline): number => {
+const widthOf = (sweep: Sweep, inline: Inline): number | null => {
   const cached = sweep.widths.get(inline);
   if (cached !== undefined) {
     return cached;
   }
-  chargeWork(sweep.budget, 1);
+  if (!chargeWork(sweep.budget, 1)) {
+    return null;
+  }
   let width = 0;
   if (inline.type === "text") {
     width = inline.text.length;
@@ -72,7 +74,11 @@ const widthOf = (sweep: Sweep, inline: Inline): number => {
     width = 1;
   } else if (hasInlineChildren(inline)) {
     for (const child of inline.children) {
-      width += widthOf(sweep, child);
+      const childWidth = widthOf(sweep, child);
+      if (childWidth === null) {
+        return null;
+      }
+      width += childWidth;
     }
   }
   sweep.widths.set(inline, width);
@@ -94,12 +100,18 @@ const dissolveWrappers = (
   sweep: Sweep,
   inlines: readonly Inline[],
   offset: number,
-): Inline[] => {
+): Inline[] | null => {
   const out: Inline[] = [];
   let at = offset;
   for (const inline of inlines) {
-    chargeWork(sweep.budget, 1);
-    const end = at + widthOf(sweep, inline);
+    if (!chargeWork(sweep.budget, 1)) {
+      return null;
+    }
+    const width = widthOf(sweep, inline);
+    if (width === null) {
+      return null;
+    }
+    const end = at + width;
     if (!hasInlineChildren(inline)) {
       out.push(inline);
       at = end;
@@ -122,6 +134,9 @@ const dissolveWrappers = (
       }
     }
     const children = dissolveWrappers(sweep, inline.children, at);
+    if (children === null) {
+      return null;
+    }
     if (inline.type === "citation" && crossed) {
       out.push(...children);
     } else if (inline.type === "citation") {
@@ -145,7 +160,7 @@ const splitAt = (
   inline: Inline,
   offset: number,
   cut: Cut,
-): [Inline, Inline] => {
+): [Inline, Inline] | null => {
   const { point, zeroSide } = cut;
   if (inline.type === "text") {
     return [
@@ -160,8 +175,14 @@ const splitAt = (
   const right: Inline[] = [];
   let at = offset;
   for (const child of inline.children) {
-    chargeWork(sweep.budget, 1);
-    const end = at + widthOf(sweep, child);
+    if (!chargeWork(sweep.budget, 1)) {
+      return null;
+    }
+    const width = widthOf(sweep, child);
+    if (width === null) {
+      return null;
+    }
+    const end = at + width;
     if (end === at) {
       (at < point || (at === point && zeroSide === "left") ? left : right).push(
         child,
@@ -171,7 +192,11 @@ const splitAt = (
     } else if (at >= point) {
       right.push(child);
     } else {
-      const [head, tail] = splitAt(sweep, child, at, cut);
+      const split = splitAt(sweep, child, at, cut);
+      if (split === null) {
+        return null;
+      }
+      const [head, tail] = split;
       left.push(head);
       right.push(tail);
     }
@@ -202,6 +227,26 @@ const wrapperOf = (
   };
 };
 
+type ContainedSpans = {
+  spans: readonly Span[];
+  from: number;
+  to: number;
+  end: number;
+};
+
+const lastContainedSpan = ({
+  spans,
+  from,
+  to,
+  end,
+}: ContainedSpans): number => {
+  let last = from;
+  while (last < to && (spans[last]?.end ?? end + 1) <= end) {
+    last += 1;
+  }
+  return last;
+};
+
 /**
  * Second sweep over one level: spans `[from, to)` lie inside this level. A
  * span inside one container is wrapped within it; one crossing nodes of
@@ -212,7 +257,7 @@ const wrapLevel = (
   inlines: readonly Inline[],
   offset: number,
   [from, to]: readonly [number, number],
-): Inline[] => {
+): Inline[] | null => {
   if (from === to) {
     return [...inlines];
   }
@@ -230,50 +275,68 @@ const wrapLevel = (
   let at = offset;
   let current = from;
   for (let node = take(); node !== undefined; node = take()) {
-    chargeWork(sweep.budget, 1);
+    if (!chargeWork(sweep.budget, 1)) {
+      return null;
+    }
     const span = current < to ? sweep.spans[current] : undefined;
-    const end = at + widthOf(sweep, node);
+    const width = widthOf(sweep, node);
+    if (width === null) {
+      return null;
+    }
+    const end = at + width;
     if (span === undefined || end === at || span.start >= end) {
       out.push(node);
       at = end;
       continue;
     }
     if (hasInlineChildren(node) && span.end <= end) {
-      let last = current;
-      while (last < to && (sweep.spans[last]?.end ?? end + 1) <= end) {
-        last += 1;
-      }
+      const last = lastContainedSpan({
+        spans: sweep.spans,
+        from: current,
+        to,
+        end,
+      });
       const crossing = last < to ? sweep.spans[last] : undefined;
       if (crossing !== undefined && crossing.start < end) {
-        const [head, tail] = splitAt(sweep, node, at, {
+        const split = splitAt(sweep, node, at, {
           point: crossing.start,
           zeroSide: "left",
         });
-        out.push(
-          hasInlineChildren(head)
-            ? {
-                ...head,
-                children: wrapLevel(sweep, head.children, at, [current, last]),
-              }
-            : head,
-        );
+        if (split === null) {
+          return null;
+        }
+        const [head, tail] = split;
+        if (hasInlineChildren(head)) {
+          const children = wrapLevel(sweep, head.children, at, [current, last]);
+          if (children === null) {
+            return null;
+          }
+          out.push({ ...head, children });
+        } else {
+          out.push(head);
+        }
         carried = tail;
         at = crossing.start;
       } else {
-        out.push({
-          ...node,
-          children: wrapLevel(sweep, node.children, at, [current, last]),
-        });
+        const children = wrapLevel(sweep, node.children, at, [current, last]);
+        if (children === null) {
+          return null;
+        }
+        out.push({ ...node, children });
         at = end;
       }
       current = last;
       continue;
     }
     if (span.start > at) {
-      const [head, tail] = splitAt(sweep, node, at, {
+      const split = splitAt(sweep, node, at, {
         point: span.start,
         zeroSide: "left",
       });
+      if (split === null) {
+        return null;
+      }
+      const [head, tail] = split;
       out.push(head);
       carried = tail;
       at = span.start;
@@ -284,13 +347,23 @@ const wrapLevel = (
       if (piece === undefined) {
         return panic("A span runs past the run that holds it");
       }
-      chargeWork(sweep.budget, 1);
-      const pieceEnd = at + widthOf(sweep, piece);
+      if (!chargeWork(sweep.budget, 1)) {
+        return null;
+      }
+      const pieceWidth = widthOf(sweep, piece);
+      if (pieceWidth === null) {
+        return null;
+      }
+      const pieceEnd = at + pieceWidth;
       if (pieceEnd > span.end) {
-        const [head, tail] = splitAt(sweep, piece, at, {
+        const split = splitAt(sweep, piece, at, {
           point: span.end,
           zeroSide: "right",
         });
+        if (split === null) {
+          return null;
+        }
+        const [head, tail] = split;
         inside.push(head);
         carried = tail;
         at = span.end;
@@ -313,7 +386,7 @@ const annotateRun = (
   budget: CitationWorkBudget,
   inlines: readonly Inline[],
   occurrences: readonly UsCitationOccurrence[],
-): Inline[] => {
+): Inline[] | null => {
   const sweep: Sweep = {
     spans: occurrences.map((occurrence) => ({
       start: occurrence.start,
@@ -327,6 +400,9 @@ const annotateRun = (
     next: 0,
   };
   const dissolved = dissolveWrappers(sweep, inlines, 0);
+  if (dissolved === null) {
+    return null;
+  }
   return wrapLevel(sweep, dissolved, 0, [0, sweep.spans.length]);
 };
 
@@ -348,32 +424,42 @@ const annotateBlock = (
   budget: CitationWorkBudget,
   block: Block,
   byRun: ReadonlyMap<string, UsCitationOccurrence[]>,
-): Block => {
+): Block | null => {
   switch (block.type) {
     case "heading":
-    case "paragraph":
+    case "paragraph": {
+      const inlines = annotateRun(
+        budget,
+        block.inlines,
+        occurrencesIn(byRun, runKey(block.id, undefined)),
+      );
+      if (inlines === null) {
+        return null;
+      }
       return {
         ...block,
-        inlines: annotateRun(
-          budget,
-          block.inlines,
-          occurrencesIn(byRun, runKey(block.id, undefined)),
-        ),
+        inlines,
       };
-    case "table":
-      return {
-        ...block,
-        rows: block.rows.map((cells, row) =>
-          cells.map((cell, column) => ({
-            ...cell,
-            inlines: annotateRun(
-              budget,
-              cell.inlines,
-              occurrencesIn(byRun, runKey(block.id, { row, column })),
-            ),
-          })),
-        ),
-      };
+    }
+    case "table": {
+      const rows: typeof block.rows = [];
+      for (const [row, cells] of block.rows.entries()) {
+        const annotatedCells: (typeof block.rows)[number] = [];
+        for (const [column, cell] of cells.entries()) {
+          const inlines = annotateRun(
+            budget,
+            cell.inlines,
+            occurrencesIn(byRun, runKey(block.id, { row, column })),
+          );
+          if (inlines === null) {
+            return null;
+          }
+          annotatedCells.push({ ...cell, inlines });
+        }
+        rows.push(annotatedCells);
+      }
+      return { ...block, rows };
+    }
     case "image":
       return block;
     default: {
@@ -401,10 +487,11 @@ export const annotateUsCitations = (
   }
   const blocks: Block[] = [];
   for (const block of ast.blocks) {
-    blocks.push(annotateBlock(budget, block, byRun));
-    if (budget.spent > budget.limit) {
+    const annotated = annotateBlock(budget, block, byRun);
+    if (annotated === null) {
       return Result.err(workBudgetExhausted(budget));
     }
+    blocks.push(annotated);
   }
   return Result.ok({ ...ast, blocks });
 };

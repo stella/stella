@@ -275,6 +275,23 @@ describe("pins (properties)", () => {
 });
 
 describe("annotation work", () => {
+  test("stops inside a block as soon as its work budget is exhausted", () => {
+    const children: Inline[] = Array.from({ length: 1000 }, () => ({
+      type: "text",
+      text: "x",
+    }));
+    const nested: Inline[] = [{ type: "italic", children }];
+    for (const inlines of [children, nested]) {
+      const ast = documentOf([paragraph("p", inlines)]);
+      for (const limit of [0, 1, 8]) {
+        const budget = { limit, spent: 0 };
+        const result = annotateUsCitations(ast, [], budget);
+        expect(Result.isError(result)).toBe(true);
+        expect(budget.spent).toBe(limit + 1);
+      }
+    }
+  });
+
   /** The work one annotation of `times` repetitions of `unit` spends. */
   const workOf = (unit: Inline[], times: number): number => {
     const ast = documentOf([
