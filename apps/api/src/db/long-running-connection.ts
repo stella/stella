@@ -4,6 +4,8 @@ import type { ReservedSQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
+import { errorClassName } from "@/api/lib/errors/error-tag";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 const CONNECTION_TIMEOUT_SECONDS = 10;
@@ -57,6 +59,25 @@ export const withDedicatedReservedSession = async <
   work,
 }: ReservedWorkOptions<T, TSession>): Promise<T> => {
   const reserved = await reserve();
+  const guarded = new Proxy(reserved, {
+    apply(target, _thisArg, args) {
+      signal.throwIfAborted();
+      if (typeof target !== "function") {
+        return panic("Expected a callable dedicated PostgreSQL session");
+      }
+      return Reflect.apply(target, target, args);
+    },
+    get(target, property) {
+      if (property === "unsafe") {
+        return (...args: Parameters<TSession["unsafe"]>) => {
+          signal.throwIfAborted();
+          return target.unsafe(...args);
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
   let cancelling: Promise<unknown> | undefined;
   let onAbort: (() => void) | undefined;
   const body = (async () => {
@@ -74,21 +95,31 @@ export const withDedicatedReservedSession = async <
       }
       cancelling = Promise.allSettled([
         Promise.resolve().then(() => cancelBackend(pid)),
-      ]);
+      ]).then(([result]) => {
+        if (result?.status === "rejected") {
+          logger.error("db.long_running.cancel_failed", {
+            "error.type":
+              result.reason instanceof Error
+                ? errorClassName(result.reason)
+                : "Unknown",
+          });
+        }
+        return undefined;
+      });
     };
     signal.addEventListener("abort", onAbort, { once: true });
     if (signal.aborted) {
       onAbort();
       signal.throwIfAborted();
     }
-    return await work(reserved, async ({ statementTimeout, lockTimeout }) => {
+    return await work(guarded, async ({ statementTimeout, lockTimeout }) => {
       const statementBudget = positiveMilliseconds(
         statementTimeout,
         "statementTimeout",
       );
       const lockBudget = positiveMilliseconds(lockTimeout, "lockTimeout");
-      await reserved.unsafe(`SET LOCAL lock_timeout = '${lockBudget}ms'`);
-      await reserved.unsafe(
+      await guarded.unsafe(`SET LOCAL lock_timeout = '${lockBudget}ms'`);
+      await guarded.unsafe(
         `SET LOCAL statement_timeout = '${statementBudget}ms'`,
       );
     });

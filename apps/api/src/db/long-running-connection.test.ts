@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+
 import {
   withDedicatedReservedSession,
   withLongRunningConnection,
@@ -69,4 +71,71 @@ test("abort waits for backend cancellation before closing the session", async ()
     "cancel settled",
     "close",
   ]);
+});
+
+test("abort between statements refuses the next statement", async () => {
+  const controller = new AbortController();
+  const statements: string[] = [];
+  const run = withDedicatedReservedSession({
+    reserve: async () => ({
+      unsafe: async (statement: string) => {
+        statements.push(statement);
+        return statement.includes("pg_backend_pid") ? [{ pid: 42 }] : [];
+      },
+      release: () => {},
+      close: async () => {},
+    }),
+    cancelBackend: async () => {},
+    signal: controller.signal,
+    work: async (session) => {
+      await session.unsafe("SELECT 1");
+      controller.abort(new Error("session aborted between statements"));
+      await session.unsafe("SELECT pg_sleep(60)");
+    },
+  });
+
+  await expect(run).rejects.toThrow("session aborted between statements");
+  expect(statements).toEqual(["SELECT pg_backend_pid() AS pid", "SELECT 1"]);
+});
+
+test("failed backend cancellation is reported before the session closes", async () => {
+  const controller = new AbortController();
+  const logs = installRecordingLogger();
+  const events: string[] = [];
+  const failure = new TypeError("cancellation connection failed");
+  try {
+    const run = withDedicatedReservedSession({
+      reserve: async () => ({
+        unsafe: async () => [{ pid: 42 }],
+        release: () => events.push("release"),
+        close: async () => {
+          expect(
+            logs.records.some(
+              (record) => record.message === "db.long_running.cancel_failed",
+            ),
+          ).toBe(true);
+          events.push("close");
+        },
+      }),
+      cancelBackend: async () => {
+        events.push("cancel");
+        throw failure;
+      },
+      signal: controller.signal,
+      work: async () => {
+        controller.abort();
+      },
+    });
+
+    await run;
+    expect(events).toEqual(["cancel", "close"]);
+    expect(logs.at("ERROR")).toContainEqual(
+      expect.objectContaining({
+        message: "db.long_running.cancel_failed",
+        attributes: expect.objectContaining({ "error.type": "TypeError" }),
+      }),
+    );
+  } finally {
+    logs.restore();
+  }
 });
