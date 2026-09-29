@@ -20,12 +20,14 @@ import {
 import {
   createSchemaPglite,
   installPgliteChatRunLogRls,
+  installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
@@ -659,6 +661,8 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteChatTurnRunIdLookup(db);
+  await installPgliteOrganizationMemberCapacity(db);
   await installPgliteChatRunLogRls(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {

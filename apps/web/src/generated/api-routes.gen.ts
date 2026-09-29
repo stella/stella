@@ -823,8 +823,8 @@ export type WebRoutes = {
           updatedFrom?: string;
           updatedTo?: string;
           query: string;
-          types: Array<T9527c354f7>;
-          kinds: Array<T884a45faa8>;
+          types: Array<T6500cff7d8>;
+          kinds: Array<T334757ea46>;
           workspaceIds: Array<T9e07a7d6cd>;
           editedByUserIds: Array<string>;
           mimeTypes: Array<string>;
@@ -897,16 +897,16 @@ export type WebRoutes = {
         post: {
           body: {
             limit?: number;
-            kinds?: Array<T884a45faa8>;
+            kinds?: Array<T334757ea46>;
             updatedFrom?: string;
             updatedTo?: string;
             query: string;
-            types: Array<T9527c354f7>;
+            types: Array<T6500cff7d8>;
             search: string;
             workspaceIds: Array<T9e07a7d6cd>;
             editedByUserIds: Array<string>;
             mimeTypes: Array<string>;
-            facet: ("mimeType" | "workspace" | "editor");
+            facet: ("editor" | "mimeType" | "workspace");
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -966,7 +966,7 @@ export type WebRoutes = {
         post: {
           body: {
             query: string;
-            type: T9527c354f7;
+            type: T6500cff7d8;
             resultId: string;
           };
           params: T5e3ac29766;
@@ -977,7 +977,7 @@ export type WebRoutes = {
               messages: Array<{
                 content: string;
                 id: string;
-                role: ("user" | "system" | "assistant");
+                role: ("assistant" | "system" | "user");
               }>;
               type: "chat-messages";
             } | {
@@ -1028,11 +1028,11 @@ export type WebRoutes = {
             400: T731ffd6028;
             401: T731ffd6028;
             402: T731ffd6028;
-            403: ("Forbidden" | T72e75e00cb | T86f61f0431);
+            403: (Tcbfb640fc8 | T86f61f0431 | "Forbidden");
             404: T731ffd6028;
             409: T731ffd6028;
             413: T731ffd6028;
-            422: (T72e75e00cb | T86f61f0431 | {
+            422: (Tcbfb640fc8 | T86f61f0431 | {
               type: "validation";
               on: string;
               summary?: string;
@@ -1081,7 +1081,7 @@ export type WebRoutes = {
             updatedTo?: string;
             originalQuery?: string;
             query: string;
-            types: Array<T9527c354f7>;
+            types: Array<T6500cff7d8>;
             workspaceIds: Array<T9e07a7d6cd>;
             editedByUserIds: Array<string>;
             mimeTypes: Array<string>;
@@ -1127,7 +1127,7 @@ export type WebRoutes = {
             };
             401: T68cafa3445;
             402: T68cafa3445;
-            403: ("Forbidden" | Tc32428bafa | Tfa94fa9804);
+            403: (T4969bac86c | Tfa94fa9804 | "Forbidden");
             404: {
               code?: string;
               message: string;
@@ -1153,7 +1153,7 @@ export type WebRoutes = {
             };
             409: T68cafa3445;
             413: T68cafa3445;
-            422: (Tc32428bafa | Tfa94fa9804 | {
+            422: (T4969bac86c | Tfa94fa9804 | {
               type: "validation";
               on: string;
               summary?: string;
@@ -1202,7 +1202,7 @@ export type WebRoutes = {
               updatedTo?: string;
               originalQuery?: string;
               query: string;
-              types: Array<T9527c354f7>;
+              types: Array<T6500cff7d8>;
               title: string;
               citations: Array<{
                 number: number;
@@ -1652,12 +1652,12 @@ export type WebRoutes = {
               suggestions: Array<{
                 literalText: string;
                 fieldPath: string;
-                inputType?: undefined | "number" | "boolean" | "date" | "text" | "select";
-                label?: undefined | string;
-                exampleValue?: undefined | string;
-                aiPrompt?: undefined | string;
+                inputType?: "boolean" | "date" | "number" | "select" | "text" | undefined;
+                label?: string | undefined;
+                exampleValue?: string | undefined;
+                aiPrompt?: string | undefined;
               } & {
-                hint?: undefined | string;
+                hint?: string | undefined;
               }>;
             };
             400: T9a51b7d2bc;
@@ -2375,31 +2375,31 @@ export type WebRoutes = {
               whenToUse: Tbe0400fa4c;
               whenNotToUse: Tbe0400fa4c;
               sizeBytes: number;
-              manifest: (null | {
+              manifest: {
                 version: number;
                 fields: Array<{
                   path: string;
-                  label?: undefined | string;
-                  hint?: undefined | string;
-                  inputType?: undefined | "number" | "boolean" | "date" | "text" | "select";
-                  options?: undefined | Array<string>;
-                  validation?: undefined | T8da97ce6b5;
-                  required?: undefined | false | true;
-                  aiPrompt?: undefined | string;
-                  aiAdapt?: undefined | false | true;
-                  aiSeesDocument?: undefined | false | true;
-                  optionsFrom?: undefined | string;
-                  lookup?: undefined | T3217a347d4;
-                  source?: undefined | T551b81e20a | T1faca0bf38 | T76d112985a | T8f7cd2c7c4 | T6f17a2dbb3;
-                  formula?: undefined | string;
-                  condition?: undefined | string;
-                  conditionAst?: undefined | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
-                  dateFormat?: undefined | {
+                  label?: string | undefined;
+                  hint?: string | undefined;
+                  inputType?: "boolean" | "date" | "number" | "select" | "text" | undefined;
+                  options?: Array<string> | undefined;
+                  validation?: Tdb5805e6ca | undefined;
+                  required?: false | true | undefined;
+                  aiPrompt?: string | undefined;
+                  aiAdapt?: false | true | undefined;
+                  aiSeesDocument?: false | true | undefined;
+                  optionsFrom?: string | undefined;
+                  lookup?: T3217a347d4 | undefined;
+                  source?: T11ae381356 | T9de06ef8f6 | T14cb63054f | T376e5c32ed | T6f17a2dbb3 | undefined;
+                  formula?: string | undefined;
+                  condition?: string | undefined;
+                  conditionAst?: stll_conditions_CompareNode | stll_conditions_GroupNode | stll_conditions_PredicateNode | undefined;
+                  dateFormat?: {
                     locale: string;
-                    style: ("long" | "medium" | "short" | "iso");
-                  };
+                    style: ("iso" | "long" | "medium" | "short");
+                  } | undefined;
                 }>;
-              });
+              } | null;
               languages: Array<string>;
               useCount: number;
               lastUsedAt: Tdf2b0d1150;
@@ -2477,9 +2477,9 @@ export type WebRoutes = {
           body: {
             name?: string;
             tags?: Array<string>;
-            whenToUse?: null | string;
-            whenNotToUse?: null | string;
-            categoryId?: null | Tb532bdabe3;
+            whenToUse?: string | null;
+            whenNotToUse?: string | null;
+            categoryId?: Tb532bdabe3 | null;
             languages?: Array<string>;
           };
           params: {
@@ -2617,10 +2617,10 @@ export type WebRoutes = {
                   version: number;
                   fieldCount: number;
                   createdAt: string;
-                  author: (null | {
+                  author: {
                     name: string;
                     image: Tbe0400fa4c;
-                  });
+                  } | null;
                 }>;
                 nextCursor: Tbe0400fa4c;
                 limit: number;
@@ -2867,19 +2867,19 @@ export type WebRoutes = {
                   slotName: Tbe0400fa4c;
                   sortOrder: number;
                   insertedAt: string;
-                  clause: (null | {
+                  clause: {
                     title: string;
                     id: T0da73a8dae;
                     currentVersion: number;
-                  });
-                  clauseVersion: (null | {
+                  } | null;
+                  clauseVersion: {
                     id: Tbdcaa23547;
                     version: number;
-                  });
-                  clauseVariant: (null | {
+                  } | null;
+                  clauseVariant: {
                     id: T8065b8ad03;
                     label: string;
-                  });
+                  } | null;
                   isOutdated: Tfddd645dc8;
                   variantDeleted: Tfddd645dc8;
                 }>;
@@ -3428,7 +3428,7 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T5e3ac29766;
           query: {
-            detail?: "standard" | "full";
+            detail?: "full" | "standard";
             registry: T347d72c6fa;
             q: string;
           };
@@ -3437,11 +3437,11 @@ export type WebRoutes = {
             200: {
               type: "lookup";
               registry: T347d72c6fa;
-              hit: (null | T6668c52442);
+              hit: (T2e9c7d4856 | null);
             } | {
               type: "search";
               registry: T347d72c6fa;
-              hits: Array<T6668c52442>;
+              hits: Array<T2e9c7d4856>;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -3484,31 +3484,31 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: ((T5dace84134 & {
+              200: ((Td4c150f9a7 & {
                 status: "clear";
                 checkedAt: string;
                 sourceDataAsOf: Tbe0400fa4c;
                 record: null;
-              }) | (T5dace84134 & {
+              }) | (Td4c150f9a7 & {
                 status: "found";
                 checkedAt: string;
                 sourceDataAsOf: Tbe0400fa4c;
-                findings: [T27f58c309e, ...T27f58c309e[]];
+                findings: [T4e21d0f768, ...T4e21d0f768[]];
                 totalMatches: number;
                 record: null;
-              }) | (T5dace84134 & T8c8906ff99) | (T5dace84134 & Te052fe8cc7) | (T5dace84134 & T9ba0459a89) | (T73980560a1 & {
+              }) | (Td4c150f9a7 & Tbffa2a23cb) | (Td4c150f9a7 & T096dadd2e6) | (Td4c150f9a7 & Tebd3ce2c77) | (T1b3c18c274 & {
                 status: "clear";
                 checkedAt: string;
                 sourceDataAsOf: Tbe0400fa4c;
                 record: Tb165f0f166;
-              }) | (T73980560a1 & {
+              }) | (T1b3c18c274 & {
                 status: "found";
                 checkedAt: string;
                 sourceDataAsOf: Tbe0400fa4c;
-                findings: [T02d1680473, ...T02d1680473[]];
+                findings: [T69c6723040, ...T69c6723040[]];
                 totalMatches: number;
                 record: Tb165f0f166;
-              }) | (T73980560a1 & T8c8906ff99) | (T73980560a1 & Te052fe8cc7) | (T73980560a1 & T9ba0459a89));
+              }) | (T1b3c18c274 & Tbffa2a23cb) | (T1b3c18c274 & T096dadd2e6) | (T1b3c18c274 & Tebd3ce2c77));
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -3540,7 +3540,7 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T5e3ac29766;
           query: {
-            format?: "json" | "csv";
+            format?: "csv" | "json";
           };
           headers: Record<never, never>;
           response: {
@@ -3585,10 +3585,10 @@ export type WebRoutes = {
                   name: string;
                   samples: Array<string>;
                   sourceIndex: number;
-                  targetField: ("tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "address_line_1" | "address_line_2" | "postal_code" | "primary_email" | "primary_phone" | "custom_field" | "ignore");
+                  targetField: ("address_line_1" | "address_line_2" | "city" | "country" | "custom_field" | "display_name" | "first_name" | "ignore" | "last_name" | "middle_name" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type");
                 }>;
                 readonly defaultType: T1dacb02040;
-                readonly delimiter: ("comma" | "semicolon" | "tab" | "labeled");
+                readonly delimiter: ("comma" | "labeled" | "semicolon" | "tab");
                 readonly generateDisplayName: Tfddd645dc8;
                 readonly rowCount: number;
                 readonly taxIdScheme: Te403754937;
@@ -4037,7 +4037,7 @@ export type WebRoutes = {
                 profissao: Tbe0400fa4c;
                 email: Tbe0400fa4c;
                 endereco: Tbe0400fa4c;
-                contactType: (null | "organization" | "person");
+                contactType: ("organization" | "person" | null);
               }>;
             } & {
               truncated: Tfddd645dc8;
@@ -4119,16 +4119,16 @@ export type WebRoutes = {
               paymentTermDays: T588d0ee653;
               originatingAttorneyId: Tbe0400fa4c;
               responsibleAttorneyId: Tbe0400fa4c;
-              originatingAttorney: (null | {
+              originatingAttorney: {
                 name: string;
                 id: string;
                 image: Tbe0400fa4c;
-              });
-              responsibleAttorney: (null | {
+              } | null;
+              responsibleAttorney: {
                 name: string;
                 id: string;
                 image: Tbe0400fa4c;
-              });
+              } | null;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -4158,9 +4158,9 @@ export type WebRoutes = {
       ":contactId": {
         post: {
           body: {
-            tags?: null | Array<string>;
+            tags?: Array<string> | null;
             type?: "organization" | "person";
-            metadata?: null | {
+            metadata?: {
               dataBoxes?: Array<{
                 label?: string;
                 id: string;
@@ -4171,32 +4171,32 @@ export type WebRoutes = {
                 id: string;
                 label: string;
               }>;
-            };
+            } | null;
             displayName?: string;
-            firstName?: null | string;
-            lastName?: null | string;
-            organizationName?: null | string;
-            emails?: null | Array<{
+            firstName?: string | null;
+            lastName?: string | null;
+            organizationName?: string | null;
+            emails?: Array<{
               label?: string;
               type: Ta7217a98e1;
               address: string;
               isPrimary: Tfddd645dc8;
-            }>;
-            phones?: null | Array<{
+            }> | null;
+            phones?: Array<{
               label?: string;
               number: string;
               type: T1d719fd945;
               isPrimary: Tfddd645dc8;
-            }>;
-            registrationNumber?: null | string;
-            taxId?: null | string;
-            currency?: null | string;
-            notes?: null | string;
-            color?: null | string;
-            prefix?: null | string;
-            middleName?: null | string;
-            suffix?: null | string;
-            addresses?: null | Array<{
+            }> | null;
+            registrationNumber?: string | null;
+            taxId?: string | null;
+            currency?: string | null;
+            notes?: string | null;
+            color?: string | null;
+            prefix?: string | null;
+            middleName?: string | null;
+            suffix?: string | null;
+            addresses?: Array<{
               country?: string;
               label?: string;
               state?: string;
@@ -4206,26 +4206,26 @@ export type WebRoutes = {
               type: T10a0947927;
               isPrimary: Tfddd645dc8;
               line1: string;
-            }>;
-            bankAccounts?: null | Array<{
+            }> | null;
+            bankAccounts?: Array<{
               iban?: string;
               bic?: string;
               currency?: string;
               accountNumber?: string;
               bankName?: string;
-            }>;
-            billingAddress?: null | {
+            }> | null;
+            billingAddress?: {
               country?: string;
               state?: string;
               line1?: string;
               line2?: string;
               postalCode?: string;
               city?: string;
-            };
-            defaultHourlyRate?: null | number;
-            paymentTermDays?: null | number;
-            originatingAttorneyId?: null | string;
-            responsibleAttorneyId?: null | string;
+            } | null;
+            defaultHourlyRate?: number | null;
+            paymentTermDays?: number | null;
+            originatingAttorneyId?: string | null;
+            responsibleAttorneyId?: string | null;
           };
           params: T4d118d2832;
           query: Record<never, never>;
@@ -4518,13 +4518,13 @@ export type WebRoutes = {
           patch: {
             body: {
               set?: false | true;
-              groupByPropertyId?: T173eec1550 | "_status" | "_kind";
-              groupValue?: null | string;
+              groupByPropertyId?: T173eec1550 | "_kind" | "_status";
+              groupValue?: string | null;
               optionValues?: Array<string>;
               onlyAddedAt?: string;
               propertyId: T173eec1550;
               filters: Array<stll_conditions_ConditionNode>;
-              flag: ("verified" | "locked");
+              flag: ("locked" | "verified");
             };
             params: {
               workspaceId: string;
@@ -4568,7 +4568,7 @@ export type WebRoutes = {
         presign: {
           post: {
             body: {
-              parentId?: null | Tf742ada503;
+              parentId?: Tf742ada503 | null;
               name: string;
               mimeType: string;
               propertyId: T173eec1550;
@@ -4633,8 +4633,8 @@ export type WebRoutes = {
           preflight: {
             post: {
               body: {
-                propertyId?: null | T173eec1550;
-                parentId?: null | Tf742ada503;
+                propertyId?: T173eec1550 | null;
+                parentId?: Tf742ada503 | null;
                 entityCount: number;
               };
               params: {
@@ -4678,10 +4678,10 @@ export type WebRoutes = {
           tree: {
             post: {
               body: {
-                propertyId?: null | T173eec1550;
-                parentId?: null | Tf742ada503;
+                propertyId?: T173eec1550 | null;
+                parentId?: Tf742ada503 | null;
                 files: Array<{
-                  parentKey?: null | string;
+                  parentKey?: string | null;
                   name: string;
                   mimeType: string;
                   key: string;
@@ -4689,7 +4689,7 @@ export type WebRoutes = {
                   sha256Hex: string;
                 }>;
                 directories: Array<{
-                  parentKey?: null | string;
+                  parentKey?: string | null;
                   name: string;
                   key: string;
                 }>;
@@ -4851,8 +4851,8 @@ export type WebRoutes = {
             compare: {
               post: {
                 body: {
-                  mode?: "strict" | "best-effort";
-                  granularity?: "word" | "character";
+                  mode?: "best-effort" | "strict";
+                  granularity?: "character" | "word";
                   output: {
                     type: "preview";
                   } | {
@@ -4932,7 +4932,7 @@ export type WebRoutes = {
                       baseVersionId: Tb86085a330;
                       targetVersionId: Tb86085a330;
                       error: {
-                        code: ("parse_failed" | "timeout" | "delivery_failed" | "apply_failed" | "document_too_large" | "final_paragraph_mark" | "invalid_options" | "operation_limit" | "persistence_failed" | "read_failed" | "round_trip_failed" | "serialization_failed" | "tracked_change_resolution_failed" | "version_not_found");
+                        code: ("apply_failed" | "delivery_failed" | "document_too_large" | "final_paragraph_mark" | "invalid_options" | "operation_limit" | "parse_failed" | "persistence_failed" | "read_failed" | "round_trip_failed" | "serialization_failed" | "timeout" | "tracked_change_resolution_failed" | "version_not_found");
                         message: string;
                         hint: string;
                       };
@@ -4975,8 +4975,8 @@ export type WebRoutes = {
               color: string;
             }>;
             prompt?: string;
-            currency?: null | string;
-            fallback?: null | string;
+            currency?: string | null;
+            fallback?: string | null;
             dependencies?: Array<{
               condition: T60e51917c9;
               dependsOnPropertyId: T173eec1550;
@@ -5027,8 +5027,8 @@ export type WebRoutes = {
                   color: string;
                 }>;
                 prompt?: string;
-                currency?: null | string;
-                fallback?: null | string;
+                currency?: string | null;
+                fallback?: string | null;
                 dependencies?: Array<{
                   condition: T60e51917c9;
                   dependsOnPropertyId: T173eec1550;
@@ -5096,7 +5096,7 @@ export type WebRoutes = {
             response: {
               200: {
                 status: "ready";
-                content: (T8cf50df639 | T271d61ed3c | T9f60b23b0d | T16bcee9e60 | T450a9782d1 | Tcd21978e37 | Tcc7dd2aee2);
+                content: (T8cf50df639 | T0aff3edf22 | T9f60b23b0d | T285ff51ba0 | T0887c7c099 | Tcd21978e37 | Tbce82e5c70);
               } | {
                 status: "unsupported";
               } | {
@@ -5420,8 +5420,8 @@ export type WebRoutes = {
       "guide-progress": {
         patch: {
           body: {
-            status: ("skipped" | "completed" | "not-started");
-            tourId: ("documents" | "chat" | "playbooks" | "chat-power" | "workflows" | "tabular-review");
+            status: ("completed" | "not-started" | "skipped");
+            tourId: ("chat" | "chat-power" | "documents" | "playbooks" | "tabular-review" | "workflows");
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -5669,44 +5669,44 @@ export type WebRoutes = {
         put: {
           body: {
             status?: string;
-            location?: null | string;
+            location?: string | null;
             priority?: string;
             listItemType?: string;
-            dueDate?: null | string;
+            dueDate?: string | null;
             parentId?: Tf742ada503;
-            startAt?: null | string;
-            endAt?: null | string;
+            startAt?: string | null;
+            endAt?: string | null;
             agendaKind?: string;
             listId?: T5ed75bc2cc;
-            occurredAt?: null | string;
-            remindAt?: null | string;
+            occurredAt?: string | null;
+            remindAt?: string | null;
             allDay?: false | true;
-            timeZone?: null | string;
-            onlineMeetingUrl?: null | string;
-            availability?: null | string;
-            sensitivity?: null | string;
-            organizer?: null | {
+            timeZone?: string | null;
+            onlineMeetingUrl?: string | null;
+            availability?: string | null;
+            sensitivity?: string | null;
+            organizer?: {
               name: Tbe0400fa4c;
               email: Tbe0400fa4c;
-            };
-            attendees?: null | Array<{
-              type?: null | string;
+            } | null;
+            attendees?: Array<{
+              type?: string | null;
               optional?: false | true;
-              responseStatus?: null | string;
+              responseStatus?: string | null;
               name: Tbe0400fa4c;
               email: Tbe0400fa4c;
-            }>;
-            recurrence?: null | {
+            }> | null;
+            recurrence?: {
               pattern: Tbe0400fa4c;
               range: Tbe0400fa4c;
-            };
+            } | null;
             ownerUserId?: T56ed95d57c;
-            workingTargetDate?: null | string;
-            hardDeadlineDate?: null | string;
-            sourceDescription?: null | string;
+            workingTargetDate?: string | null;
+            hardDeadlineDate?: string | null;
+            sourceDescription?: string | null;
             listSectionId?: T0a54ae7a2b;
             listPosition?: string;
-            listDescription?: null | string;
+            listDescription?: string | null;
             assigneeIds?: Array<T56ed95d57c>;
             name: string;
           };
@@ -5747,36 +5747,36 @@ export type WebRoutes = {
           body: {
             name?: string;
             status?: string;
-            location?: null | string;
+            location?: string | null;
             priority?: string;
             listItemType?: string;
-            dueDate?: null | string;
-            startAt?: null | string;
-            endAt?: null | string;
+            dueDate?: string | null;
+            startAt?: string | null;
+            endAt?: string | null;
             agendaKind?: string;
-            sortOrder?: null | string;
-            occurredAt?: null | string;
-            remindAt?: null | string;
+            sortOrder?: string | null;
+            occurredAt?: string | null;
+            remindAt?: string | null;
             allDay?: false | true;
-            timeZone?: null | string;
-            onlineMeetingUrl?: null | string;
-            availability?: null | string;
-            sensitivity?: null | string;
-            organizer?: null | {
+            timeZone?: string | null;
+            onlineMeetingUrl?: string | null;
+            availability?: string | null;
+            sensitivity?: string | null;
+            organizer?: {
               name: Tbe0400fa4c;
               email: Tbe0400fa4c;
-            };
-            attendees?: null | Array<{
-              type?: null | string;
+            } | null;
+            attendees?: Array<{
+              type?: string | null;
               optional?: false | true;
-              responseStatus?: null | string;
+              responseStatus?: string | null;
               name: Tbe0400fa4c;
               email: Tbe0400fa4c;
-            }>;
-            recurrence?: null | {
+            }> | null;
+            recurrence?: {
               pattern: Tbe0400fa4c;
               range: Tbe0400fa4c;
-            };
+            } | null;
             workflowReason?: string;
             taskId: Tf742ada503;
           };
@@ -5893,20 +5893,20 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                flowReview: (null | {
+                flowReview: {
                   runId: T2e29c5e55f;
-                });
+                } | null;
                 name: string;
                 status: Tbe0400fa4c;
                 location: Tbe0400fa4c;
-                kind: T884a45faa8;
-                metadata: (null | {
+                kind: T334757ea46;
+                metadata: {
                   url: string;
                   snippet?: string;
                   citation?: string;
                   jurisdiction?: string;
                   sourceType?: string;
-                });
+                } | null;
                 id: Tf742ada503;
                 workspaceId: T9e07a7d6cd;
                 createdAt: string;
@@ -5940,9 +5940,9 @@ export type WebRoutes = {
                 externalId: Tbe0400fa4c;
                 externalChangeKey: Tbe0400fa4c;
                 externalICalUid: Tbe0400fa4c;
-                externalData: (null | {
+                externalData: {
                   [key: string]: unknown;
-                });
+                } | null;
                 readOnly: Tfddd645dc8;
                 children: Array<{
                   name: string;
@@ -5980,12 +5980,12 @@ export type WebRoutes = {
                     entityId: Tf742ada503;
                     role: T4e819907f9;
                     userId: string;
-                    user: (null | {
+                    user: {
                       name: string;
                       id: string;
                       image: Tbe0400fa4c;
                       deletedAt: Tdf2b0d1150;
-                    });
+                    } | null;
                   }>;
                 }>;
                 assignees: Array<{
@@ -5995,18 +5995,18 @@ export type WebRoutes = {
                   entityId: Tf742ada503;
                   role: T4e819907f9;
                   userId: string;
-                  user: (null | {
+                  user: {
                     name: string;
                     id: string;
                     image: Tbe0400fa4c;
                     deletedAt: Tdf2b0d1150;
-                  });
+                  } | null;
                 }>;
-                currentVersion: (null | {
+                currentVersion: {
                   description: Tbe0400fa4c;
                   id: Tb86085a330;
                   workspaceId: T9e07a7d6cd;
-                  source: (null | {
+                  source: {
                     kind: "upload";
                   } | {
                     kind: "desktop-edit";
@@ -6016,8 +6016,8 @@ export type WebRoutes = {
                     kind: "comparison";
                     baseVersionId: string;
                     targetVersionId: string;
-                    mode: ("strict" | "best-effort");
-                    granularity: ("word" | "character");
+                    mode: ("best-effort" | "strict");
+                    granularity: ("character" | "word");
                     baseTrackedChanges: T922e475469;
                     targetTrackedChanges: T922e475469;
                   } | {
@@ -6025,7 +6025,7 @@ export type WebRoutes = {
                     baseVersionId: string;
                     certificateSha256Hex: string;
                     signingTime: string;
-                    level: ("B-B" | "B-T" | "B-LT");
+                    level: ("B-B" | "B-LT" | "B-T");
                     timestampAuthorityUrl: Tbe0400fa4c;
                     warnings: Array<{
                       code: string;
@@ -6037,7 +6037,7 @@ export type WebRoutes = {
                     itemId: string;
                     eTag: string;
                     webUrl: string;
-                  });
+                  } | null;
                   createdAt: string;
                   createdBy: Tbe0400fa4c;
                   entityId: Tf742ada503;
@@ -6049,16 +6049,16 @@ export type WebRoutes = {
                   diffWordsRemoved: T588d0ee653;
                   verificationCode: Tbe0400fa4c;
                   collaborationContributorUserIds: T51e1843fb9;
-                  detectedLanguage: (null | "AR" | "BG" | "DE" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "LT" | "LV" | "NL" | "PL" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "ZH" | "CS" | "DA" | "EN-GB" | "EL" | "JA" | "KO" | "NB" | "PT-PT" | "UK");
+                  detectedLanguage: ("AR" | "BG" | "CS" | "DA" | "DE" | "EL" | "EN-GB" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "JA" | "KO" | "LT" | "LV" | "NB" | "NL" | "PL" | "PT-PT" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "UK" | "ZH" | null);
                   deletedBy: Tbe0400fa4c;
-                });
-                createdByUser: (null | {
+                } | null;
+                createdByUser: {
                   name: string;
                   id: string;
                   image: Tbe0400fa4c;
                   deletedAt: Tdf2b0d1150;
-                });
-                workObligation: (null | {
+                } | null;
+                workObligation: {
                   status: T2fb0b2d20e;
                   type: T6fe53f6bc0;
                   workspaceId: T9e07a7d6cd;
@@ -6074,14 +6074,14 @@ export type WebRoutes = {
                   workingTargetDate: Tbe0400fa4c;
                   hardDeadlineDate: Tbe0400fa4c;
                   sourceDescription: Tbe0400fa4c;
-                  owner: (null | {
+                  owner: {
                     name: string;
                     id: string;
                     image: Tbe0400fa4c;
                     deletedAt: Tdf2b0d1150;
-                  });
+                  } | null;
                   events: Array<{
-                    type: ("created" | "cancelled" | "completed" | "owner_assigned" | "acknowledged" | "delegated" | "working_target_changed" | "hard_deadline_changed" | "type_changed" | "provenance_changed" | "reopened");
+                    type: ("acknowledged" | "cancelled" | "completed" | "created" | "delegated" | "hard_deadline_changed" | "owner_assigned" | "provenance_changed" | "reopened" | "type_changed" | "working_target_changed");
                     reason: Tbe0400fa4c;
                     id: (string & valibot_Brand<"SafeId"> & {
                       readonly __safeIdType?: "workObligationEvent";
@@ -6099,7 +6099,7 @@ export type WebRoutes = {
                       type: "acknowledged";
                     } | {
                       type: "date_changed";
-                      field: ("working_target_date" | "hard_deadline_date");
+                      field: ("hard_deadline_date" | "working_target_date");
                       previousDate: Tbe0400fa4c;
                       nextDate: Tbe0400fa4c;
                     } | {
@@ -6120,20 +6120,20 @@ export type WebRoutes = {
                     occurredAt: string;
                     actorUserId: Tbe0400fa4c;
                     obligationEntityId: Tf742ada503;
-                    actor: (null | {
+                    actor: {
                       name: string;
                       id: string;
                       image: Tbe0400fa4c;
                       deletedAt: Tdf2b0d1150;
-                    });
+                    } | null;
                   }>;
-                  acknowledgedBy: (null | {
+                  acknowledgedBy: {
                     name: string;
                     id: string;
                     image: Tbe0400fa4c;
                     deletedAt: Tdf2b0d1150;
-                  });
-                });
+                  } | null;
+                } | null;
                 linksAsSource: Array<{
                   id: T6ecf471e35;
                   workspaceId: T9e07a7d6cd;
@@ -6141,11 +6141,11 @@ export type WebRoutes = {
                   linkType: string;
                   sourceEntityId: Tf742ada503;
                   targetEntityId: Tf742ada503;
-                  targetEntity: (null | {
+                  targetEntity: {
                     name: string;
-                    kind: T884a45faa8;
+                    kind: T334757ea46;
                     id: Tf742ada503;
-                  });
+                  } | null;
                 }>;
                 linksAsTarget: Array<{
                   id: T6ecf471e35;
@@ -6154,11 +6154,11 @@ export type WebRoutes = {
                   linkType: string;
                   sourceEntityId: Tf742ada503;
                   targetEntityId: Tf742ada503;
-                  sourceEntity: (null | {
+                  sourceEntity: {
                     name: string;
-                    kind: T884a45faa8;
+                    kind: T334757ea46;
                     id: Tf742ada503;
-                  });
+                  } | null;
                 }>;
               };
               400: T9a51b7d2bc;
@@ -6406,24 +6406,24 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: Array<{
-                  sourceEntity: (null | {
+                  sourceEntity: {
                     resource: {
                       readonly type: "entity";
                       readonly id: Tf742ada503;
                     };
                     name: string;
-                    kind: T884a45faa8;
+                    kind: T334757ea46;
                     id: Tf742ada503;
-                  });
-                  targetEntity: (null | {
+                  } | null;
+                  targetEntity: {
                     resource: {
                       readonly type: "entity";
                       readonly id: Tf742ada503;
                     };
                     name: string;
-                    kind: T884a45faa8;
+                    kind: T334757ea46;
                     id: Tf742ada503;
-                  });
+                  } | null;
                   id: T6ecf471e35;
                   workspaceId: T9e07a7d6cd;
                   createdAt: string;
@@ -6524,7 +6524,7 @@ export type WebRoutes = {
               text: string;
             }>;
             isDirective?: false | true;
-            directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+            directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if";
             directiveExpression?: string;
             listKind?: "bullet" | "ordered";
             listLevel?: number;
@@ -6572,7 +6572,7 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T5e3ac29766;
           query: {
-            format?: "json" | "csv";
+            format?: "csv" | "json";
             ids?: string;
           };
           headers: Record<never, never>;
@@ -6672,8 +6672,8 @@ export type WebRoutes = {
       "ai-rewrite": {
         post: {
           body: {
-            title?: null | string;
-            usageNotes?: null | string;
+            title?: string | null;
+            usageNotes?: string | null;
             body: Array<Tf7a762d6ad>;
             instruction: string;
           };
@@ -6759,10 +6759,10 @@ export type WebRoutes = {
           response: {
             200: {
               body: Array<Ta03fcc4def>;
-              metadata: (null | {
+              metadata: {
                 version: 1;
                 custom: T529735e682;
-              });
+              } | null;
               description: Tbe0400fa4c;
               title: string;
               id: T0da73a8dae;
@@ -6823,18 +6823,18 @@ export type WebRoutes = {
                 text: string;
               }>;
               isDirective?: false | true;
-              directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+              directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if";
               directiveExpression?: string;
               listKind?: "bullet" | "ordered";
               listLevel?: number;
               text: string;
             }>;
-            metadata?: null | T7a3ee17d2d;
-            description?: null | string;
+            metadata?: T7a3ee17d2d | null;
+            description?: string | null;
             title?: string;
-            language?: null | string;
-            categoryId?: null | T1d1d28b371;
-            usageNotes?: null | string;
+            language?: string | null;
+            categoryId?: T1d1d28b371 | null;
+            usageNotes?: string | null;
             snapshotVersion?: false | true;
           };
           params: {
@@ -7148,7 +7148,7 @@ export type WebRoutes = {
                   text: string;
                 }>;
                 isDirective?: false | true;
-                directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+                directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if";
                 directiveExpression?: string;
                 listKind?: "bullet" | "ordered";
                 listLevel?: number;
@@ -7208,7 +7208,7 @@ export type WebRoutes = {
                     text: string;
                   }>;
                   isDirective?: false | true;
-                  directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+                  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if";
                   directiveExpression?: string;
                   listKind?: "bullet" | "ordered";
                   listLevel?: number;
@@ -7301,21 +7301,21 @@ export type WebRoutes = {
       post: {
         body: {
           context: Array<Te8eee0ded7>;
-          data: T97b6e5d995;
+          data: T344a394669;
           state: Record<never, never>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
-          forwardedProps: T97b6e5d995;
+          forwardedProps: T344a394669;
           tools: Array<Te8d0e5a977>;
         } | {
           context: Array<Te8eee0ded7>;
-          data: T2dc5e98509;
+          data: Ta6eced4642;
           state: Record<never, never>;
           runId: string;
           threadId: Taf779979ed;
           messages: Array<T9281829eb5>;
-          forwardedProps: T2dc5e98509;
+          forwardedProps: Ta6eced4642;
           tools: Array<Te8d0e5a977>;
           parentRunId: string;
           resume: Array<Tacbaeed0d6>;
@@ -7428,7 +7428,7 @@ export type WebRoutes = {
                   reasoningEffort: Tcd00264565;
                   context: T313f510b34;
                 } & {
-                  threadId: (null | Taf779979ed);
+                  threadId: (Taf779979ed | null);
                 };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
@@ -7607,7 +7607,7 @@ export type WebRoutes = {
                 defaultReasoningEffort: Tcd00264565;
                 displayName: string;
                 iconProvider: T4b83723412;
-                reasoningEfforts: (null | ReadonlyArray<("none" | "max" | "medium" | "high" | "low" | "minimal" | "xhigh")>);
+                reasoningEfforts: (ReadonlyArray<("high" | "low" | "max" | "medium" | "minimal" | "none" | "xhigh")> | null);
                 value: string;
               }>;
               defaultValue: Tbe0400fa4c;
@@ -7643,7 +7643,7 @@ export type WebRoutes = {
           params: T5e3ac29766;
           query: {
             anonymized?: false | true;
-            document?: "template" | "file" | "draft";
+            document?: "draft" | "file" | "template";
             workspaceId?: T9e07a7d6cd;
             documentId?: Tf742ada503;
             fileFieldId?: T6993bee61f;
@@ -7695,7 +7695,7 @@ export type WebRoutes = {
           body: {
             prompt: string;
             sendMode: T00bc2c60de;
-            strategy: ("structure" | "verify" | "decompose" | "specify-output");
+            strategy: ("decompose" | "specify-output" | "structure" | "verify");
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -7816,7 +7816,7 @@ export type WebRoutes = {
           model: {
             patch: {
               body: {
-                reasoningEffort?: null | "none" | "max" | "medium" | "high" | "low" | "minimal" | "xhigh";
+                reasoningEffort?: "high" | "low" | "max" | "medium" | "minimal" | "none" | "xhigh" | null;
                 model: Tbe0400fa4c;
               };
               params: {
@@ -8207,14 +8207,14 @@ export type WebRoutes = {
                     200: {
                       turn: {
                         id: T348bff1a92;
-                        status: ("failed" | "accepted" | "running" | "completed" | "awaiting-user");
+                        status: ("accepted" | "awaiting-user" | "completed" | "failed" | "running");
                       } | {
                         id: T348bff1a92;
                         reason: T5e702ac6d9;
                         status: "cancelled";
                       } | {
                         id: T348bff1a92;
-                        reason: Tbcc05c4756;
+                        reason: T91be5f6aad;
                         status: "interrupted";
                       };
                     };
@@ -8301,7 +8301,7 @@ export type WebRoutes = {
               body: {
                 format: "docx";
                 messageId: T66e92cdab1;
-                citationStyle: ("none" | "inline" | "footnotes");
+                citationStyle: ("footnotes" | "inline" | "none");
               };
               params: {
                 threadId: Taf779979ed;
@@ -8431,10 +8431,10 @@ export type WebRoutes = {
                   rateAtEntry: stll_money_CentsAmount;
                   invoiceNarrative: Tbe0400fa4c;
                   workItemId: Tf058fe611e;
-                  workItem: (null | {
+                  workItem: {
                     name: string;
                     id: Tf742ada503;
-                  });
+                  } | null;
                 }>;
                 expenses: Array<{
                   description: string;
@@ -8447,10 +8447,10 @@ export type WebRoutes = {
                   amount: stll_money_CentsAmount;
                   category: Tcb19db2b80;
                   markup: number;
-                  matter: (null | {
+                  matter: {
                     name: string;
                     id: Tf742ada503;
-                  });
+                  } | null;
                 }>;
               };
               400: T9a51b7d2bc;
@@ -8482,9 +8482,9 @@ export type WebRoutes = {
       ":workspaceId": {
         put: {
           body: {
-            reference?: null | string;
-            dueDate?: null | string;
-            notes?: null | string;
+            reference?: string | null;
+            dueDate?: string | null;
+            notes?: string | null;
             currency: string;
             invoiceNumber: string;
             invoiceDate: string;
@@ -8529,10 +8529,10 @@ export type WebRoutes = {
         ":invoiceId": {
           patch: {
             body: {
-              reference?: null | string;
-              dueDate?: null | string;
+              reference?: string | null;
+              dueDate?: string | null;
               currency?: string;
-              notes?: null | string;
+              notes?: string | null;
               invoiceNumber?: string;
               invoiceDate?: string;
             };
@@ -8577,7 +8577,7 @@ export type WebRoutes = {
           transition: {
             post: {
               body: {
-                action: ("void" | "finalize" | "revert_to_draft" | "send" | "mark_paid");
+                action: ("finalize" | "mark_paid" | "revert_to_draft" | "send" | "void");
               };
               params: {
                 workspaceId: T8d02a37b3f;
@@ -8752,13 +8752,13 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T3ba9545800;
           query: {
-            status?: "draft" | "approved" | "billed" | "written_off";
+            status?: "approved" | "billed" | "draft" | "written_off";
             cursor?: string;
             limit?: number;
             userId?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
-            category?: "other" | "expert_witness" | "filing_fee" | "travel" | "printing" | "courier";
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             dateFrom?: string;
             dateTo?: string;
           };
@@ -8814,7 +8814,7 @@ export type WebRoutes = {
         put: {
           body: {
             billable?: false | true;
-            invoiceDescription?: null | string;
+            invoiceDescription?: string | null;
             markup?: number;
             description: string;
             currency: string;
@@ -8859,15 +8859,15 @@ export type WebRoutes = {
       ":workspaceId": {
         patch: {
           body: {
-            status?: "draft" | "approved";
+            status?: "approved" | "draft";
             description?: string;
             currency?: string;
             matterId?: Tf742ada503;
             billable?: false | true;
-            invoiceDescription?: null | string;
+            invoiceDescription?: string | null;
             dateIncurred?: string;
             amount?: number;
-            category?: "other" | "expert_witness" | "filing_fee" | "travel" | "printing" | "courier";
+            category?: "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
             markup?: number;
             id: T22259c97a4;
           };
@@ -9231,7 +9231,7 @@ export type WebRoutes = {
                   country: string;
                   eli: string;
                   asOf: string;
-                  statute: (null | {
+                  statute: {
                     id: Tfc8a750351;
                     eli: string;
                     slug: Tbe0400fa4c;
@@ -9240,7 +9240,7 @@ export type WebRoutes = {
                     language: string;
                     versionValidFrom: Tbe0400fa4c;
                     versionValidTo: Tbe0400fa4c;
-                  });
+                  } | null;
                 }>;
               });
               400: T9a51b7d2bc;
@@ -9508,7 +9508,7 @@ export type WebRoutes = {
                   };
                   headers: unknown;
                   response: {
-                    200: (T279717e2be | T3b03b89012);
+                    200: (T279717e2be | Tb19925bd53);
                     400: T9a51b7d2bc;
                     401: T9a51b7d2bc;
                     402: T9a51b7d2bc;
@@ -9995,13 +9995,13 @@ export type WebRoutes = {
                 lawId: string;
               };
               query: {
-                relationType?: "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
+                relationType?: "all" | "derogatedBy" | "derogates" | "modifiedBy" | "modifies";
               };
               headers: Record<never, never>;
               response: {
                 200: {
                   lawId: string;
-                  relationType: ("all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy");
+                  relationType: ("all" | "derogatedBy" | "derogates" | "modifiedBy" | "modifies");
                   analysis: unknown;
                 };
                 400: T9a51b7d2bc;
@@ -10151,7 +10151,7 @@ export type WebRoutes = {
             query: Record<never, never>;
             headers: Record<never, never>;
             response: {
-              200: T346b54ceed;
+              200: T2203ecc422;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
@@ -10251,7 +10251,7 @@ export type WebRoutes = {
               connectors: Array<{
                 id: Ta10437f406;
                 slug: string;
-                organizationId: (null | Tb1d68817ba);
+                organizationId: (Tb1d68817ba | null);
                 displayName: string;
                 description: string;
                 url: string;
@@ -10696,9 +10696,9 @@ export type WebRoutes = {
                 id: (string & valibot_Brand<"SafeId"> & {
                   readonly __safeIdType?: "usageEntitlement";
                 });
-                status: ("active" | "cancelled" | "trialing" | "past_due" | "paused");
+                status: ("active" | "cancelled" | "past_due" | "paused" | "trialing");
                 seats: number;
-                source: ("manual" | "hosted");
+                source: ("hosted" | "manual");
                 currentPeriodStart: string;
                 currentPeriodEnd: string;
                 cancelAtPeriodEnd: Tfddd645dc8;
@@ -10751,10 +10751,10 @@ export type WebRoutes = {
                   allowanceMicroUnits: number;
                   usedMicroUnits: number;
                 };
-                fallbackWeekly: (null | {
+                fallbackWeekly: {
                   allowanceMicroUnits: number;
                   usedMicroUnits: number;
-                });
+                } | null;
               };
             };
             400: T9a51b7d2bc;
@@ -10791,7 +10791,7 @@ export type WebRoutes = {
           response: {
             200: {
               policies: Array<{
-                kind: ("subscription" | "addon");
+                kind: ("addon" | "subscription");
                 description: Tbe0400fa4c;
                 id: T4c80e82e5d;
                 key: string;
@@ -10799,17 +10799,17 @@ export type WebRoutes = {
                 sortOrder: number;
                 monthlyUsageUnits: number;
               } & {
-                price: (null | {
+                price: {
                   amountCents: number;
                   currency: string;
-                  billingInterval: ("year" | "month" | "one_time");
+                  billingInterval: ("month" | "one_time" | "year");
                   basis: ("flat" | "per_seat");
-                });
+                } | null;
                 hostedCheckout: {
                   status: "available";
                 } | {
                   status: "unavailable";
-                  reason: ("provider_unavailable" | "policy_unavailable");
+                  reason: ("policy_unavailable" | "provider_unavailable");
                 };
               }>;
             };
@@ -11037,12 +11037,12 @@ export type WebRoutes = {
         body: Record<never, never>;
         params: T5e3ac29766;
         query: {
-          origin?: "source" | "model" | "manual";
+          origin?: "manual" | "model" | "source";
           cursor?: string;
           limit?: number;
           matterId?: T9e07a7d6cd;
-          severity?: "warning" | "info" | "notice" | "critical";
-          view?: "open" | "snoozed" | "resolved";
+          severity?: "critical" | "info" | "notice" | "warning";
+          view?: "open" | "resolved" | "snoozed";
           assignedToMe?: false | true;
         };
         headers: Record<never, never>;
@@ -11116,9 +11116,9 @@ export type WebRoutes = {
       requests: {
         post: {
           body: {
-            matterId?: null | T9e07a7d6cd;
-            severity?: "warning" | "info" | "notice" | "critical";
-            assigneeUserId?: null | T56ed95d57c;
+            matterId?: T9e07a7d6cd | null;
+            severity?: "critical" | "info" | "notice" | "warning";
+            assigneeUserId?: T56ed95d57c | null;
             description: string;
             title: string;
           };
@@ -11226,7 +11226,7 @@ export type WebRoutes = {
         dismissals: {
           post: {
             body: {
-              reason?: null | string;
+              reason?: string | null;
             };
             params: T8f465d529b;
             query: Record<never, never>;
@@ -11263,7 +11263,7 @@ export type WebRoutes = {
         assignments: {
           post: {
             body: {
-              assigneeUserId: (null | T56ed95d57c);
+              assigneeUserId: (T56ed95d57c | null);
             };
             params: T8f465d529b;
             query: Record<never, never>;
@@ -11304,7 +11304,7 @@ export type WebRoutes = {
                 type: "workspace";
                 workspaceId: T9e07a7d6cd;
               };
-              suggestionKind: ("create-deadline" | "create-task" | "promote-to-workspace" | "assign" | "open-chat");
+              suggestionKind: ("assign" | "create-deadline" | "create-task" | "open-chat" | "promote-to-workspace");
             };
             params: T8f465d529b;
             query: Record<never, never>;
@@ -11449,7 +11449,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              connection: (null | {
+              connection: {
                 id: (string & valibot_Brand<"SafeId"> & {
                   readonly __safeIdType?: "sharepointConnection";
                 });
@@ -11459,7 +11459,7 @@ export type WebRoutes = {
                 expiresAt: Tdf2b0d1150;
                 lastUsedAt: Tdf2b0d1150;
                 createdAt: string;
-              });
+              } | null;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -11528,7 +11528,7 @@ export type WebRoutes = {
                 items: Array<{
                   id: string;
                   name: string;
-                  kind: ("folder" | "file");
+                  kind: ("file" | "folder");
                   mimeType: Tbe0400fa4c;
                   webUrl: Tbe0400fa4c;
                   eTag: Tbe0400fa4c;
@@ -11609,7 +11609,7 @@ export type WebRoutes = {
         put: {
           body: {
             templateProperties?: Array<{
-              role?: null | "document-type-classifier";
+              role?: "document-type-classifier" | null;
               dependencies?: Array<{
                 condition: T60e51917c9;
                 dependsOnSourceId: string;
@@ -11741,9 +11741,9 @@ export type WebRoutes = {
             post: {
               body: {
                 name?: string;
-                layout?: Td09dd3a151 | T1a92e2c41a | Td3ee8d4ce6 | T17e2f7d16d | Tfe912fcba8 | Tda5c7074d2 | T8740abfdcf;
+                layout?: Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811;
                 templateProperties?: Array<{
-                  role?: null | "document-type-classifier";
+                  role?: "document-type-classifier" | null;
                   dependencies?: Array<{
                     condition: T60e51917c9;
                     dependsOnSourceId: string;
@@ -11991,7 +11991,7 @@ export type WebRoutes = {
                 name: string;
                 formatType?: "company-specification" | "registry-reference";
               }>;
-              defaultRegistryId: (null | "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies");
+              defaultRegistryId: ("ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies" | null);
             } & {
               account: {
                 email: string;
@@ -12002,7 +12002,7 @@ export type WebRoutes = {
                 userId: string;
                 organizationId: string;
               };
-            } | Tb9b95eff02 | (Tb9b95eff02 & {
+            } | T71245bf5cf | (T71245bf5cf & {
               results: Array<{
                 id: string;
                 name: string;
@@ -12159,14 +12159,14 @@ export type WebRoutes = {
             requestId?: string;
             clientVersion?: string;
             errorReference?: string;
-            client: ("other" | "desktop" | "mcp" | "cli" | "web");
+            client: ("cli" | "desktop" | "mcp" | "other" | "web");
           };
           expected?: string;
           steps?: string;
           evidence?: string;
-          kind: ("bug" | "idea" | "missing_capability" | "docs");
+          kind: ("bug" | "docs" | "idea" | "missing_capability");
           title: string;
-          area: ("templates" | "matters" | "contacts" | "other" | "documents" | "tasks" | "chat" | "case_law" | "legislation" | "billing" | "mcp_cli" | "web_app" | "desktop");
+          area: ("billing" | "case_law" | "chat" | "contacts" | "desktop" | "documents" | "legislation" | "matters" | "mcp_cli" | "other" | "tasks" | "templates" | "web_app");
           whatHappened: string;
         };
         params: T5e3ac29766;
@@ -12179,7 +12179,7 @@ export type WebRoutes = {
             deduplicated: Tfddd645dc8;
             deliveries: Array<{
               channel: ("email" | "github");
-              status: ("failed" | "delivered");
+              status: ("delivered" | "failed");
               url?: string;
             }>;
             stored: true;
@@ -12236,11 +12236,11 @@ export type WebRoutes = {
           200: {
             items: Array<{
               id: T9bcd2c6ed7;
-              kind: ("mention" | "report_export_succeeded" | "report_export_failed" | "flow_run_completed" | "flow_run_failed" | "flow_run_awaiting_approval" | "announcement");
+              kind: ("announcement" | "flow_run_awaiting_approval" | "flow_run_completed" | "flow_run_failed" | "mention" | "report_export_failed" | "report_export_succeeded");
               metadata: {
-                [key: string]: (string | number);
+                [key: string]: (number | string);
               };
-              entityType: (null | "entity" | "flow_run" | "report_export");
+              entityType: ("entity" | "flow_run" | "report_export" | null);
               entityId: Tbe0400fa4c;
               workspaceId: T63854f81c6;
               readAt: Tbe0400fa4c;
@@ -12436,7 +12436,7 @@ export type WebRoutes = {
       post: {
         body: {
           scope?: {
-            perspective?: "neutral" | "buyer" | "seller";
+            perspective?: "buyer" | "neutral" | "seller";
             documentTypeKey?: string;
             trigger?: "manual" | "onClassified";
           };
@@ -12731,7 +12731,7 @@ export type WebRoutes = {
               id: T4e595a8315;
               name: string;
               description: Tbe0400fa4c;
-              scope: (null | T0779b152b5);
+              scope: (T0779b152b5 | null);
               positions: Tc892bdfad5;
               status: Ta4ea9eaecf;
               approvedAt: Tbe0400fa4c;
@@ -12767,7 +12767,7 @@ export type WebRoutes = {
         put: {
           body: {
             scope?: {
-              perspective?: "neutral" | "buyer" | "seller";
+              perspective?: "buyer" | "neutral" | "seller";
               documentTypeKey?: string;
               trigger?: "manual" | "onClassified";
             };
@@ -13197,8 +13197,8 @@ export type WebRoutes = {
                 schedule: {
                   frequency: T6bbfe677bd;
                   hourUtc: number;
-                  dayOfWeek?: undefined | number;
-                  dayOfMonth?: undefined | number;
+                  dayOfWeek?: number | undefined;
+                  dayOfMonth?: number | undefined;
                 };
               } | {
                 type: "file-upload";
@@ -13498,7 +13498,7 @@ export type WebRoutes = {
                 fieldId: T6993bee61f;
               };
               query: {
-                purpose: ("download" | "display" | "native-display");
+                purpose: ("display" | "download" | "native-display");
               };
               headers: Record<never, never>;
               response: {
@@ -13569,7 +13569,7 @@ export type WebRoutes = {
                   attachments: Array<stll_api_contract_EmailAttachmentDescriptor>;
                   bodyFolds: Array<{
                     id: string;
-                    kind: ("signature" | "quoted-history");
+                    kind: ("quoted-history" | "signature");
                   }>;
                   bodyHtml: string;
                   citationBlocks: Array<stll_api_contract_EmailCitationBlock>;
@@ -13736,7 +13736,7 @@ export type WebRoutes = {
                 fieldId: T6993bee61f;
               };
               query: {
-                metadata: ("strip" | "keep");
+                metadata: ("keep" | "strip");
               };
               headers: Record<never, never>;
               response: {
@@ -13748,7 +13748,7 @@ export type WebRoutes = {
                 404: T4498be3bc0;
                 409: T9a51b7d2bc;
                 413: T9a51b7d2bc;
-                422: ("Unprocessable Content" | {
+                422: {
                   code?: string;
                   message: string;
                   hint?: string;
@@ -13774,7 +13774,7 @@ export type WebRoutes = {
                   found?: unknown;
                   property?: string;
                   expected?: string;
-                });
+                } | "Unprocessable Content";
                 428: T9a51b7d2bc;
                 429: T9a51b7d2bc;
                 500: T9a51b7d2bc;
@@ -13796,7 +13796,7 @@ export type WebRoutes = {
                 fieldId: T6993bee61f;
               };
               query: {
-                format: ("text" | "searchable-pdf");
+                format: ("searchable-pdf" | "text");
               };
               headers: Record<never, never>;
               response: {
@@ -13831,10 +13831,10 @@ export type WebRoutes = {
     "folio-collab-rooms": {
       authorize: {
         post: {
-          body: (null | {
+          body: {
             token?: unknown;
             roomName?: unknown;
-          });
+          } | null;
           params: T5e3ac29766;
           query: unknown;
           headers: unknown;
@@ -13949,9 +13949,9 @@ export type WebRoutes = {
       snapshot: {
         load: {
           post: {
-            body: (null | {
+            body: {
               roomId?: unknown;
-            });
+            } | null;
             params: T5e3ac29766;
             query: unknown;
             headers: unknown;
@@ -13994,12 +13994,12 @@ export type WebRoutes = {
       snapshot: {
         store: {
           post: {
-            body: (null | {
+            body: {
               roomId?: unknown;
               expectedGeneration?: unknown;
               expectedSnapshotRevision?: unknown;
               snapshotBase64?: unknown;
-            });
+            } | null;
             params: T5e3ac29766;
             query: unknown;
             headers: unknown;
@@ -14049,11 +14049,11 @@ export type WebRoutes = {
               apiBaseUrl: string;
               entityId: Tf742ada503;
               handoffId: T16de477cfb;
-              linkedAccount: (null | {
+              linkedAccount: {
                 email: string;
                 name: Tbe0400fa4c;
                 verifiedAt: string;
-              });
+              } | null;
               propertyId: T173eec1550;
               remoteSession: T07b521aaca;
               workspaceId: T9e07a7d6cd;
@@ -14239,7 +14239,7 @@ export type WebRoutes = {
                 rotatedSessionToken: string;
               };
               400: {
-                readonly message: ("Checkpoint content type must be application/vnd.openxmlformats-officedocument.wordprocessingml.document." | "Checkpoint content type must be application/vnd.openxmlformats-officedocument.spreadsheetml.sheet." | "Checkpoint content type must be application/vnd.openxmlformats-officedocument.presentationml.presentation.");
+                readonly message: ("Checkpoint content type must be application/vnd.openxmlformats-officedocument.presentationml.presentation." | "Checkpoint content type must be application/vnd.openxmlformats-officedocument.spreadsheetml.sheet." | "Checkpoint content type must be application/vnd.openxmlformats-officedocument.wordprocessingml.document.");
               };
               401: {
                 readonly code: "desktop_edit_session_token_expired";
@@ -14363,7 +14363,7 @@ export type WebRoutes = {
             headers: unknown;
             response: {
               200: {
-                status: ("transferred" | "denied");
+                status: ("denied" | "transferred");
               };
               401: {
                 readonly code: "desktop_edit_session_token_expired";
@@ -14399,9 +14399,9 @@ export type WebRoutes = {
     "pdf-signing-handoffs": {
       redeem: {
         post: {
-          body: (null | {
+          body: {
             handoffToken?: unknown;
-          });
+          } | null;
           params: T5e3ac29766;
           query: unknown;
           headers: unknown;
@@ -14447,9 +14447,9 @@ export type WebRoutes = {
           ":entityId": {
             put: {
               body: {
-                originThreadId?: null | Taf779979ed;
+                originThreadId?: Taf779979ed | null;
                 suggestions: Array<{
-                  comment?: null | string;
+                  comment?: string | null;
                   ref: string;
                   severity: Ta8989496e3;
                   area: string;
@@ -14507,7 +14507,7 @@ export type WebRoutes = {
                 entityId: Tf742ada503;
               };
               query: {
-                status?: "pending" | "accepted" | "rejected";
+                status?: "accepted" | "pending" | "rejected";
                 cursor?: string;
                 limit?: number;
               };
@@ -14520,10 +14520,10 @@ export type WebRoutes = {
                     comment: Tbe0400fa4c;
                     severity: Ta8989496e3;
                     area: string;
-                    status: ("pending" | "accepted" | "rejected");
-                    appliedMode: (null | "direct" | "suggested" | "tracked-changes");
+                    status: ("accepted" | "pending" | "rejected");
+                    appliedMode: ("direct" | "suggested" | "tracked-changes" | null);
                     createdAt: string;
-                    origin: ("review" | "chat");
+                    origin: ("chat" | "review");
                   }>;
                   nextCursor: Tbe0400fa4c;
                   limit: number;
@@ -15345,8 +15345,8 @@ export type WebRoutes = {
         post: {
           body: {
             name?: string;
-            description?: null | string;
-            parentId?: null | Tb532bdabe3;
+            description?: string | null;
+            parentId?: Tb532bdabe3 | null;
             sortOrder?: number;
           };
           params: {
@@ -15494,7 +15494,7 @@ export type WebRoutes = {
               lastReviewedAt: Tbe0400fa4c;
               disclaimer: Tbe0400fa4c;
             } & {
-              templates: Array<Ta95577b206>;
+              templates: Array<T0822683656>;
               templateCount: number;
               matchesJurisdiction: Tfddd645dc8;
               matchesLanguage: Tfddd645dc8;
@@ -15595,9 +15595,9 @@ export type WebRoutes = {
               matchesJurisdiction: Tfddd645dc8;
               matchesLanguage: Tfddd645dc8;
             } & {
-              templates: Array<(Ta95577b206 & {
+              templates: Array<(T0822683656 & {
                 readme: string;
-                installedTemplateId: (null | Td4824cf25d);
+                installedTemplateId: (Td4824cf25d | null);
               })>;
               canInstall: Tfddd645dc8;
               hidden: Tfddd645dc8;
@@ -15641,7 +15641,7 @@ export type WebRoutes = {
               200: (T7fc66a79c4 | {
                 items: Array<{
                   slug: string;
-                  status: ("installed" | "already-installed");
+                  status: ("already-installed" | "installed");
                   templateId: Td4824cf25d;
                 }>;
               });
@@ -15680,7 +15680,7 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              unavailableNativeToolBackendSlugs: Array<("ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies" | "infosoud" | "boe" | "web-search")>;
+              unavailableNativeToolBackendSlugs: Array<("ares" | "boe" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "infosoud" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies" | "web-search")>;
             };
             400: T9a51b7d2bc;
             401: T3f3b30a014;
@@ -15710,23 +15710,23 @@ export type WebRoutes = {
               tags: Array<T85c0da56d3>;
               kind: "skill";
               description: string;
-              $schema?: undefined | string;
+              $schema?: string | undefined;
               source: "in-tree";
               jurisdictions: Array<string>;
               displayName: string;
               slug: string;
-              iconUrl?: undefined | string;
+              iconUrl?: string | undefined;
               author: string;
               resources: Array<string>;
               icon: Tbe0400fa4c;
               entryPath: string;
-              authorUrl?: undefined | string;
+              authorUrl?: string | undefined;
               setup: Ta8d1af4749;
-              homepage?: undefined | string;
+              homepage?: string | undefined;
             } & {
               license: Tbe0400fa4c;
               cost: T65bedee18b;
-              serverVersion?: null | string;
+              serverVersion?: string | null;
               isRecommendedForOrg: Tfddd645dc8;
               installState: T3a2aa457e2;
               isLocked: Tfddd645dc8;
@@ -15738,24 +15738,24 @@ export type WebRoutes = {
               tags: Array<T85c0da56d3>;
               kind: "skill";
               description: string;
-              $schema?: undefined | string;
+              $schema?: string | undefined;
               source: "github";
               jurisdictions: Array<string>;
               displayName: string;
               slug: string;
-              iconUrl?: undefined | string;
+              iconUrl?: string | undefined;
               author: string;
               icon: Tbe0400fa4c;
-              authorUrl?: undefined | string;
+              authorUrl?: string | undefined;
               setup: Ta8d1af4749;
-              homepage?: undefined | string;
-              directory?: undefined | string;
+              homepage?: string | undefined;
+              directory?: string | undefined;
               repo: string;
               rev: string;
             } & {
               license: Tbe0400fa4c;
               cost: T65bedee18b;
-              serverVersion?: null | string;
+              serverVersion?: string | null;
               isRecommendedForOrg: Tfddd645dc8;
               installState: T3a2aa457e2;
               isLocked: Tfddd645dc8;
@@ -15768,25 +15768,25 @@ export type WebRoutes = {
               kind: "mcp";
               url: string;
               description: string;
-              $schema?: undefined | string;
+              $schema?: string | undefined;
               jurisdictions: Array<string>;
               displayName: string;
               slug: string;
-              authType: ("none" | "bearer" | "oauth");
+              authType: ("bearer" | "none" | "oauth");
               oauthRequestedScopes: Array<string>;
               allowedTools: Array<string>;
-              documentationUrl?: undefined | string;
-              tokenHelpUrl?: undefined | string;
-              iconUrl?: undefined | string;
+              documentationUrl?: string | undefined;
+              tokenHelpUrl?: string | undefined;
+              iconUrl?: string | undefined;
               author: string;
               icon: Tbe0400fa4c;
-              authorUrl?: undefined | string;
+              authorUrl?: string | undefined;
               setup: Ta8d1af4749;
-              homepage?: undefined | string;
+              homepage?: string | undefined;
             } & {
               license: Tbe0400fa4c;
               cost: T65bedee18b;
-              serverVersion?: null | string;
+              serverVersion?: string | null;
               isRecommendedForOrg: Tfddd645dc8;
               installState: T3a2aa457e2;
               isLocked: Tfddd645dc8;
@@ -15797,25 +15797,25 @@ export type WebRoutes = {
             } | {
               tags: Array<T85c0da56d3>;
               kind: "native-tool";
-              url?: undefined | string;
+              url?: string | undefined;
               description: string;
-              $schema?: undefined | string;
+              $schema?: string | undefined;
               jurisdictions: Array<string>;
               displayName: string;
               slug: string;
-              documentationUrl?: undefined | string;
-              iconUrl?: undefined | string;
+              documentationUrl?: string | undefined;
+              iconUrl?: string | undefined;
               author: string;
               icon: Tbe0400fa4c;
               pinned: Tfddd645dc8;
-              authorUrl?: undefined | string;
+              authorUrl?: string | undefined;
               setup: Ta8d1af4749;
-              homepage?: undefined | string;
+              homepage?: string | undefined;
               backendSlug: string;
             } & {
               license: Tbe0400fa4c;
               cost: T65bedee18b;
-              serverVersion?: null | string;
+              serverVersion?: string | null;
               isRecommendedForOrg: Tfddd645dc8;
               installState: T3a2aa457e2;
               isLocked: Tfddd645dc8;
@@ -16031,7 +16031,7 @@ export type WebRoutes = {
           body: Record<never, never>;
           params: T8ab40ae369;
           query: {
-            type?: "task" | "activity";
+            type?: "activity" | "task";
             cursor?: string;
             active?: false | true;
             limit?: number;
@@ -16466,8 +16466,8 @@ export type WebRoutes = {
           entries: {
             put: {
               body: {
-                userId?: null | string;
-                effectiveTo?: null | string;
+                userId?: string | null;
+                effectiveTo?: string | null;
                 hourlyRate: number;
                 effectiveFrom: string;
               };
@@ -16515,7 +16515,7 @@ export type WebRoutes = {
               body: {
                 hourlyRate?: number;
                 effectiveFrom?: string;
-                effectiveTo?: null | string;
+                effectiveTo?: string | null;
                 id: T5535a308b3;
               };
               params: {
@@ -16758,19 +16758,19 @@ export type WebRoutes = {
       ":sellerProfileId": {
         patch: {
           body: {
-            country?: null | string;
-            iban?: null | string;
-            bic?: null | string;
-            postalCode?: null | string;
-            city?: null | string;
-            registrationId?: null | string;
-            accountNumber?: null | string;
+            country?: string | null;
+            iban?: string | null;
+            bic?: string | null;
+            postalCode?: string | null;
+            city?: string | null;
+            registrationId?: string | null;
+            accountNumber?: string | null;
             legalName?: string;
-            vatId?: null | string;
-            addressLine1?: null | string;
-            addressLine2?: null | string;
+            vatId?: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
             defaultCurrency?: string;
-            footerNotes?: null | string;
+            footerNotes?: string | null;
           };
           params: T16ddc96cbc;
           query: Record<never, never>;
@@ -16889,7 +16889,7 @@ export type WebRoutes = {
         response: {
           200: {
             contentType: Tbe0400fa4c;
-            format: ("text" | "pdf" | "markdown");
+            format: ("markdown" | "pdf" | "text");
             title: Tbe0400fa4c;
             text: string;
             url: string;
@@ -17361,7 +17361,7 @@ export type WebRoutes = {
           memoryExtractionEnabled?: false | true;
           timeMinimumUnitMinutes?: number;
           timeEditWindowDays?: number;
-          timeLockedThroughMonth?: null | string;
+          timeLockedThroughMonth?: string | null;
           timeNarrativeRequired?: false | true;
         };
         params: T5e3ac29766;
@@ -17370,7 +17370,7 @@ export type WebRoutes = {
         response: {
           200: {
             timeNarrativeRequired?: false | true;
-            timeLockedThroughMonth?: null | string;
+            timeLockedThroughMonth?: string | null;
             timeEditWindowDays?: number;
             timeMinimumUnitMinutes?: number;
             memoryExtractionEnabled?: false | true;
@@ -17570,16 +17570,16 @@ export type WebRoutes = {
               providers: Array<{
                 provider: Tcc23752159;
                 apiKeyMasked: string;
-                endpoint?: undefined | string;
-                apiVersion?: undefined | string;
+                endpoint?: string | undefined;
+                apiVersion?: string | undefined;
                 region: T23680c2d7b;
               }>;
               overrideModels: T25e979f956;
-              decision: (null | {
+              decision: {
                 provider: "typesafe";
                 apiKeyMasked: string;
                 modelId: string;
-              });
+              } | null;
             }));
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -17609,11 +17609,11 @@ export type WebRoutes = {
       "ai-config": {
         post: {
           body: {
-            decision?: null | {
+            decision?: {
               apiKey?: string;
               modelId: string;
               provider: "typesafe";
-            };
+            } | null;
             overrideModels: {
               chat: T8aea504e13;
               pdf: T8aea504e13;
@@ -17639,11 +17639,11 @@ export type WebRoutes = {
                 region: T23680c2d7b;
               }>;
               overrideModels: T25e979f956;
-              decision: (null | {
+              decision: {
                 provider: "typesafe";
                 apiKeyMasked: string;
                 modelId: string;
-              });
+              } | null;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -18115,7 +18115,7 @@ export type WebRoutes = {
               permissions: {
                 [key: string]: Array<string>;
               };
-              audience: (null | "default" | "anonymized" | "documents" | "law");
+              audience: ("anonymized" | "default" | "documents" | "law" | null);
               enabled: Tfddd645dc8;
               expiresAt: Tdf2b0d1150;
               createdAt: string;
@@ -18168,7 +18168,7 @@ export type WebRoutes = {
             start: Tbe0400fa4c;
             key: string;
             scopes: Array<T696e471b85>;
-            audience: (undefined | "default" | "anonymized" | "documents" | "law");
+            audience: ("anonymized" | "default" | "documents" | "law" | undefined);
             expiresAt: Tdf2b0d1150;
           };
           400: T9a51b7d2bc;
@@ -18365,8 +18365,8 @@ export type WebRoutes = {
         post: {
           body: {
             name?: string;
-            description?: null | string;
-            parentId?: null | T1d1d28b371;
+            description?: string | null;
+            parentId?: T1d1d28b371 | null;
             sortOrder?: number;
           };
           params: {
@@ -18465,10 +18465,10 @@ export type WebRoutes = {
                 mine: Tfddd645dc8;
                 id: Td9d59542cb;
                 groupId: Tbe0400fa4c;
-                kind: ("highlight" | "comment");
+                kind: ("comment" | "highlight");
                 visibility: Te3f7475d27;
-                color: (null | "yellow" | "green" | "sky" | "violet" | "red");
-                style: (null | "highlight" | "underline" | "squiggly" | "strikethrough");
+                color: ("green" | "red" | "sky" | "violet" | "yellow" | null);
+                style: ("highlight" | "squiggly" | "strikethrough" | "underline" | null);
                 blockAnchorId: string;
                 startOffset: number;
                 endOffset: number;
@@ -18696,10 +18696,10 @@ export type WebRoutes = {
               type: "custom";
             };
             query: string;
-            types: Array<T9527c354f7>;
+            types: Array<T6500cff7d8>;
             sort: "relevance";
             version: 1;
-            kinds: Array<T884a45faa8>;
+            kinds: Array<T334757ea46>;
             workspaceIds: Array<T9e07a7d6cd>;
             editedByUserIds: Array<string>;
             mimeTypes: Array<string>;
@@ -18748,10 +18748,10 @@ export type WebRoutes = {
                 type: "custom";
               };
               query: string;
-              types: Array<T9527c354f7>;
+              types: Array<T6500cff7d8>;
               sort: "relevance";
               version: 1;
-              kinds: Array<T884a45faa8>;
+              kinds: Array<T334757ea46>;
               workspaceIds: Array<T9e07a7d6cd>;
               editedByUserIds: Array<string>;
               mimeTypes: Array<string>;
@@ -18861,7 +18861,7 @@ export type WebRoutes = {
     } & {
       post: {
         body: {
-          narrativeLanguage?: null | string;
+          narrativeLanguage?: string | null;
           name: string;
           narrative: string;
         };
@@ -18899,7 +18899,7 @@ export type WebRoutes = {
           body: {
             name?: string;
             narrative?: string;
-            narrativeLanguage?: null | string;
+            narrativeLanguage?: string | null;
           };
           params: T0604484dde;
           query: Record<never, never>;
@@ -19061,13 +19061,13 @@ export type WebRoutes = {
                   asOf: Tbe0400fa4c;
                 };
               };
-              countries: ReadonlyArray<((T4586fbd3dc & {
+              countries: ReadonlyArray<((T08ed227429 & {
                 availability: "searchable";
                 searchable: number;
                 decisionYearFrom: T588d0ee653;
                 decisionYearTo: T588d0ee653;
-                courts: (null | ReadonlyArray<T27f4c16dc2>);
-              }) | (T4586fbd3dc & {
+                courts: (ReadonlyArray<T27f4c16dc2> | null);
+              }) | (T08ed227429 & {
                 availability: "in-preparation";
               }))>;
             } | {
@@ -19555,7 +19555,7 @@ export type WebRoutes = {
                     citationText: string;
                     sectionIndex: T588d0ee653;
                     treatment: Tf8140c6ae1;
-                    decision: (null | T70fd969971);
+                    decision: (T408e0f164e | null);
                   }>;
                   nextCursor: Tbe0400fa4c;
                   limit: number;
@@ -19676,7 +19676,7 @@ export type WebRoutes = {
                       citationText: string;
                       sectionIndex: T588d0ee653;
                       treatment: Tf8140c6ae1;
-                      decision: T70fd969971;
+                      decision: T408e0f164e;
                     }>;
                   });
                   400: Tb2f04eed16;
@@ -19729,14 +19729,14 @@ export type WebRoutes = {
                     point: Tbe0400fa4c;
                     confidence: number;
                     section: number;
-                    selection: (null | "text" | "date-window" | "misprint-correction");
+                    selection: ("date-window" | "misprint-correction" | "text" | null);
                     letter: Tbe0400fa4c;
                     workIdentifier: string;
                     workNumber: number;
                     workYear: number;
                     workCollection: string;
                     workEli: Tbe0400fa4c;
-                    unit: ("section" | "article");
+                    unit: ("article" | "section");
                     sectionSuffix: Tbe0400fa4c;
                     subsection: Tbe0400fa4c;
                     sentence: Tbe0400fa4c;
@@ -19744,8 +19744,8 @@ export type WebRoutes = {
                     sentenceText: string;
                     spanStart: number;
                     spanEnd: number;
-                    workSource: (null | "number" | "title" | "definition" | "alias" | "carry-over");
-                    spanRole: (null | "printed" | "range-interior");
+                    workSource: ("alias" | "carry-over" | "definition" | "number" | "title" | null);
+                    spanRole: ("printed" | "range-interior" | null);
                     printPieceId: Tbe0400fa4c;
                     printStart: T588d0ee653;
                     printEnd: T588d0ee653;
@@ -19755,14 +19755,14 @@ export type WebRoutes = {
                     nameEnd: T588d0ee653;
                     nameText: Tbe0400fa4c;
                     printedWorkIdentifier: Tbe0400fa4c;
-                    targetDocumentId: (null | Tfc8a750351);
-                    targetStatus: (null | "available" | "anchor_missing" | "no_version_for_date" | "work_not_held" | "unverified_target" | "incomplete_versions");
+                    targetDocumentId: (Tfc8a750351 | null);
+                    targetStatus: ("anchor_missing" | "available" | "incomplete_versions" | "no_version_for_date" | "unverified_target" | "work_not_held" | null);
                   } & {
                     previewKey: Tbe0400fa4c;
                   }>;
                   nextCursor: Tbe0400fa4c;
                   limit: number;
-                  previews: Array<(T3b03b89012 & {
+                  previews: Array<(Tb19925bd53 & {
                     key: string;
                   })>;
                   status: {
@@ -19904,7 +19904,7 @@ export type WebRoutes = {
             query: {
               cursor?: string;
               limit?: number;
-              sort?: "newest" | "authority";
+              sort?: "authority" | "newest";
               eli?: string;
               anchor?: string;
               work?: string;
@@ -20075,7 +20075,7 @@ export type WebRoutes = {
               limit?: number;
               court?: string;
               language?: string;
-              sort?: "relevance" | "newest";
+              sort?: "newest" | "relevance";
               strict?: false | true;
               decisionType?: string;
               sourceId?: Tec26b7abb5;
@@ -20095,7 +20095,7 @@ export type WebRoutes = {
             response: {
               200: {
                 nextCursor: Tbe0400fa4c;
-                facets: (null | {
+                facets: {
                   source: Array<T033348b898>;
                   court: Array<{
                     tierLabel: Tc79049686d;
@@ -20104,7 +20104,7 @@ export type WebRoutes = {
                   language: Array<T033348b898>;
                   decisionType: Array<T033348b898>;
                   year: Array<T033348b898>;
-                });
+                } | null;
                 warnings: Array<{
                   code: ("function_words_optional" | "no_hits" | "no_hits_filtered");
                   message: string;
@@ -20351,7 +20351,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
-                  status: ("error" | "done" | "generating");
+                  status: ("done" | "error" | "generating");
                   analysis?: (T15e45ddbb1 & {
                     version: 2;
                   }) | (T15e45ddbb1 & {
@@ -20472,7 +20472,7 @@ export type WebRoutes = {
                     term: string;
                     alternatives: Array<string>;
                   }>;
-                  outcome: ("none" | "degraded" | "expanded");
+                  outcome: ("degraded" | "expanded" | "none");
                 };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
@@ -20688,7 +20688,7 @@ export type WebRoutes = {
                   color: string;
                 }>;
                 question?: string;
-                answerType?: "date" | "text" | "single-select" | "multi-select" | "int";
+                answerType?: "date" | "int" | "multi-select" | "single-select" | "text";
               };
               params: Tc5e15b2397;
               query: Record<never, never>;
@@ -20776,17 +20776,17 @@ export type WebRoutes = {
                   items: Array<{
                     columnId: Teb50de97c7;
                     decisionId: T406326c84f;
-                    state: ("pending" | "failed" | "answered" | "not_stated" | "not_allowed");
-                    answer: (null | T5b398cdd9d | T77cbe76bde | Tbd6f65e1eb | T45c8485af6 | T8cf50df639 | T271d61ed3c | T9f60b23b0d | T16bcee9e60 | T450a9782d1 | Tcd21978e37 | Tcc7dd2aee2 | T41ee5fbcc8);
-                    run: (null | {
+                    state: ("answered" | "failed" | "not_allowed" | "not_stated" | "pending");
+                    answer: (T5b398cdd9d | T77cbe76bde | Tbd6f65e1eb | T01e71ad247 | T8cf50df639 | T0aff3edf22 | T9f60b23b0d | T285ff51ba0 | T0887c7c099 | Tcd21978e37 | Tbce82e5c70 | T41ee5fbcc8 | null);
+                    run: {
                       version: 1;
                       model: string;
                       completedAt: string;
                       retrieved: Tfddd645dc8;
                       rationale: string;
                       justification: Taedcc9e56f;
-                    });
-                    failureReason: (null | "decision_unavailable" | "no_text" | "model_error" | "missing_answer" | "wrong_type" | "run_error");
+                    } | null;
+                    failureReason: ("decision_unavailable" | "missing_answer" | "model_error" | "no_text" | "run_error" | "wrong_type" | null);
                     updatedAt: string;
                     stale: Tfddd645dc8;
                   }>;
@@ -20924,7 +20924,7 @@ export type WebRoutes = {
         ":workspaceId": {
           post: {
             body: {
-              note?: null | string;
+              note?: string | null;
               decisionId: T406326c84f;
             };
             params: Te89bc15241;
@@ -20956,7 +20956,7 @@ export type WebRoutes = {
               401: T9a51b7d2bc;
               402: T9a51b7d2bc;
               403: Tddfcdef857;
-              404: ("Not Found" | {
+              404: {
                 code?: string;
                 message: string;
                 hint?: string;
@@ -20976,7 +20976,7 @@ export type WebRoutes = {
                 requiredFields?: Array<T81694d3f69>;
               } | {
                 readonly message: "Decision not found";
-              });
+              } | "Not Found";
               409: T9a51b7d2bc;
               413: T9a51b7d2bc;
               422: (T9a51b7d2bc | {
@@ -21004,7 +21004,7 @@ export type WebRoutes = {
             post: {
               body: {
                 items: Array<{
-                  note?: null | string;
+                  note?: string | null;
                   decisionId: T406326c84f;
                 }>;
               };
@@ -21068,7 +21068,7 @@ export type WebRoutes = {
                 401: T9a51b7d2bc;
                 402: T9a51b7d2bc;
                 403: Tddfcdef857;
-                404: ("Not Found" | {
+                404: {
                   code?: string;
                   message: string;
                   hint?: string;
@@ -21088,7 +21088,7 @@ export type WebRoutes = {
                   requiredFields?: Array<T81694d3f69>;
                 } | {
                   readonly message: "Matter link not found";
-                });
+                } | "Not Found";
                 409: T9a51b7d2bc;
                 413: T9a51b7d2bc;
                 422: (T9a51b7d2bc | {
@@ -21133,30 +21133,30 @@ export type WebRoutes = {
                     totalDecisionsAsOf: Tbe0400fa4c;
                     reportedTotal: T588d0ee653;
                     reportedTotalAsOf: Tbe0400fa4c;
-                    reportedTotalOrigin: (null | "adapter-poll" | "listing-census" | "operator");
+                    reportedTotalOrigin: ("adapter-poll" | "listing-census" | "operator" | null);
                     insertedLastHour: number;
                     inserted24h: number;
                     failures24h: number;
-                    lastEvent: (null | {
+                    lastEvent: {
                       status: string;
                       inserted: number;
                       skipped: number;
                       durationMs: number;
                       finishedAt: string;
                       failed: Tfddd645dc8;
-                    });
+                    } | null;
                     topErrors: Array<{
                       errorType: string;
                       count: number;
                     }>;
-                    reconciliation: (null | {
+                    reconciliation: {
                       slices: number;
                       shortSlices: number;
                       failedSlices: number;
                       parked: number;
                       terminal: number;
                       lastCheckedAt: Tbe0400fa4c;
-                    });
+                    } | null;
                   }>;
                   totalDecisions: T588d0ee653;
                   estimatedTotalEvents: number;
@@ -21388,7 +21388,7 @@ export type WebRoutes = {
         post: {
           body: {
             scope: T7906e8b72f;
-            blueprintId: ("blank" | "answer-from-sources" | "check-against-rules" | "intake-to-draft");
+            blueprintId: ("answer-from-sources" | "blank" | "check-against-rules" | "intake-to-draft");
           };
           params: T5e3ac29766;
           query: Record<never, never>;
@@ -21668,9 +21668,9 @@ export type WebRoutes = {
             name?: string;
             body?: string;
             description?: string;
-            version?: null | string;
+            version?: string | null;
             enabled?: false | true;
-            command?: null | string;
+            command?: string | null;
           };
           params: {
             skillId: T8ff9f6d126;
@@ -21757,7 +21757,7 @@ export type WebRoutes = {
         resources: {
           post: {
             body: {
-              kind?: "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
+              kind?: "asset" | "knowledge" | "prompt" | "reference" | "script" | "template";
               path: string;
               content: string;
             };
@@ -22424,7 +22424,7 @@ export type WebRoutes = {
                 items: Array<{
                   readonly id: Tf42adc792b;
                   readonly revisionId: T6e37e01eb4;
-                  readonly proposalId: (null | T06c45cc300);
+                  readonly proposalId: (T06c45cc300 | null);
                   readonly rangeStart: number;
                   readonly rangeEnd: number;
                   readonly anchorText: string;
@@ -22895,7 +22895,7 @@ export type WebRoutes = {
         patch: {
           body: {
             name?: string;
-            layout?: Td09dd3a151 | T1a92e2c41a | Td3ee8d4ce6 | T17e2f7d16d | Tfe912fcba8 | Tda5c7074d2 | T8740abfdcf;
+            layout?: Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811;
           };
           params: T34252d475f;
           query: Record<never, never>;
@@ -23015,11 +23015,11 @@ export type WebRoutes = {
             }>;
             fieldMode?: "full" | "visible";
             fieldIds?: Array<T173eec1550>;
-            excludedKinds?: Array<T884a45faa8>;
+            excludedKinds?: Array<T334757ea46>;
             previewableForAi?: false | true;
             includeAssignees?: false | true;
             asOf?: string;
-            inboxView?: "open" | "snoozed" | "resolved";
+            inboxView?: "open" | "resolved" | "snoozed";
             group?: {
               optionValues?: Array<string>;
               groupByPropertyId: T0378ec4ac6;
@@ -23040,7 +23040,7 @@ export type WebRoutes = {
               items: Array<{
                 kind: "entity";
                 entity: T09dc0536e6;
-                workRisk: ("none" | "at_risk");
+                workRisk: ("at_risk" | "none");
                 signal?: never;
                 projection?: never;
               } | {
@@ -23135,7 +23135,7 @@ export type WebRoutes = {
       ":workspaceId": {
         put: {
           body: {
-            description?: null | string;
+            description?: string | null;
             name: string;
           };
           params: T62128c5ec5;
@@ -23175,7 +23175,7 @@ export type WebRoutes = {
           body: {
             name?: string;
             status?: string;
-            description?: null | string;
+            description?: string | null;
             id: T5ed75bc2cc;
           };
           params: T62128c5ec5;
@@ -23349,15 +23349,15 @@ export type WebRoutes = {
           post: {
             body: {
               candidates: Array<{
-                status?: null | string;
-                description?: null | string;
-                priority?: null | string;
-                dueDate?: null | string;
+                status?: string | null;
+                description?: string | null;
+                priority?: string | null;
+                dueDate?: string | null;
                 suggestedAssigneeUserIds?: Array<T56ed95d57c>;
                 name: string;
                 itemType: string;
                 sources: Array<{
-                  quote?: null | string;
+                  quote?: string | null;
                   entityId: Tf742ada503;
                   entityVersionId: Tb86085a330;
                   locator: {
@@ -23505,7 +23505,7 @@ export type WebRoutes = {
         "item-sources": {
           post: {
             body: {
-              quote?: null | string;
+              quote?: string | null;
               listId: T5ed75bc2cc;
               sourceEntityId: Tf742ada503;
               sourceEntityVersionId: Tb86085a330;
@@ -23602,7 +23602,7 @@ export type WebRoutes = {
         "item-reviews": {
           post: {
             body: {
-              note?: null | string;
+              note?: string | null;
               decision: string;
               listId: T5ed75bc2cc;
               itemEntityId: Tf742ada503;
@@ -23690,9 +23690,9 @@ export type WebRoutes = {
         items: {
           patch: {
             body: {
-              description?: null | string;
+              description?: string | null;
               position?: string;
-              sectionId?: null | T0a54ae7a2b;
+              sectionId?: T0a54ae7a2b | null;
               listId: T5ed75bc2cc;
               itemEntityId: Tf742ada503;
             };
@@ -23739,10 +23739,10 @@ export type WebRoutes = {
               listId: T5ed75bc2cc;
               confidence: T2233e69cfb;
               itemEntityId: Tf742ada503;
-              occurredOn: (null | {
+              occurredOn: {
                 date: string;
-                precision: ("year" | "month" | "day");
-              });
+                precision: ("day" | "month" | "year");
+              } | null;
               evidenceKind: Tbe0400fa4c;
               interpretationNote: Tbe0400fa4c;
               scoring: Tad12f531bb;
@@ -23807,12 +23807,12 @@ export type WebRoutes = {
                 kind: "reopen";
               } | {
                 kind: "record-conflict";
-                resolution: (null | {
+                resolution: {
                   kind: "governed";
                   factEntityId: Tf742ada503;
                 } | {
                   kind: "escalated";
-                });
+                } | null;
               };
               claimId: T06a9543aed;
             };
@@ -24062,7 +24062,7 @@ export type WebRoutes = {
                       occurredOnPrecision: T4a9a2dd4a4;
                       evidenceKind: Tbe0400fa4c;
                       medium: Tbe0400fa4c;
-                      confidence: (null | "medium" | "high" | "low");
+                      confidence: ("high" | "low" | "medium" | null);
                       interpretationNote: Tbe0400fa4c;
                       sources: ReadonlyArray<{
                         sourceEntityId: Tf742ada503;
@@ -24125,9 +24125,9 @@ export type WebRoutes = {
                     };
                     refs: Array<{
                       factEntityId: Tf742ada503;
-                      rel: ("record" | "supports" | "conflicts");
+                      rel: ("conflicts" | "record" | "supports");
                     }>;
-                    review: (null | Tc528191da5);
+                    review: (Tc528191da5 | null);
                   }>;
                 };
                 400: T9a51b7d2bc;
@@ -24182,12 +24182,12 @@ export type WebRoutes = {
                         position: number;
                         name: string;
                         description: Tbe0400fa4c;
-                        itemType: ("issue" | "task" | "fact" | "requirement" | "event");
-                        itemStatus: (null | "open" | "in_progress" | "in_review" | "done" | "cancelled");
-                        priority: (null | "none" | "medium" | "urgent" | "high" | "low");
+                        itemType: ("event" | "fact" | "issue" | "requirement" | "task");
+                        itemStatus: ("cancelled" | "done" | "in_progress" | "in_review" | "open" | null);
+                        priority: ("high" | "low" | "medium" | "none" | "urgent" | null);
                         dueDate: Tbe0400fa4c;
                         suggestedAssigneeUserIds: Array<T56ed95d57c>;
-                        status: ("pending" | "accepted" | "rejected" | "accepting");
+                        status: ("accepted" | "accepting" | "pending" | "rejected");
                         acceptedEntityId: Tf058fe611e;
                       } & {
                         sources: Array<{
@@ -24372,13 +24372,13 @@ export type WebRoutes = {
                     status: Tbe0400fa4c;
                     priority: Tbe0400fa4c;
                     dueDate: Tbe0400fa4c;
-                    sectionId: (null | T0a54ae7a2b);
+                    sectionId: (T0a54ae7a2b | null);
                     position: string;
                     description: Tbe0400fa4c;
-                    reviewStatus: ("verified" | "in_review" | "rejected" | "unreviewed" | "changes_requested");
+                    reviewStatus: ("changes_requested" | "in_review" | "rejected" | "unreviewed" | "verified");
                     createdAt: string;
                     updatedAt: string;
-                    factDetails: (null | {
+                    factDetails: {
                       confidence: T2233e69cfb;
                       occurredOn: Tbe0400fa4c;
                       occurredOnPrecision: T4a9a2dd4a4;
@@ -24386,12 +24386,12 @@ export type WebRoutes = {
                       medium: Tbe0400fa4c;
                       interpretationNote: Tbe0400fa4c;
                       scoring: Tad12f531bb;
-                    });
-                    firstSource: (null | {
+                    } | null;
+                    firstSource: {
                       documentId: Tf742ada503;
                       documentName: string;
                       locator: Tb14bbccf94;
-                    });
+                    } | null;
                   } & {
                     customFields: Array<{
                       entityId: Tf742ada503;
@@ -24513,7 +24513,7 @@ export type WebRoutes = {
                         sourceEntityVersionId: Tb86085a330;
                         locator: Tb14bbccf94;
                         quote: Tbe0400fa4c;
-                        verificationStatus: ("verified" | "unverified" | "rejected");
+                        verificationStatus: ("rejected" | "unverified" | "verified");
                         verifiedBy: Tbe0400fa4c;
                         verifiedAt: Tdf2b0d1150;
                         createdAt: string;
@@ -24555,14 +24555,14 @@ export type WebRoutes = {
         ":entityId": {
           patch: {
             body: {
-              type?: "task" | "deadline";
+              type?: "deadline" | "task";
               reason?: string;
-              sourceType?: "email" | "document" | "court" | "manual" | "calendar" | "import" | "api";
-              sourceEntityId?: null | Tf742ada503;
-              ownerUserId?: null | T56ed95d57c;
-              workingTargetDate?: null | string;
-              hardDeadlineDate?: null | string;
-              sourceDescription?: null | string;
+              sourceType?: "api" | "calendar" | "court" | "document" | "email" | "import" | "manual";
+              sourceEntityId?: Tf742ada503 | null;
+              ownerUserId?: T56ed95d57c | null;
+              workingTargetDate?: string | null;
+              hardDeadlineDate?: string | null;
+              sourceDescription?: string | null;
             };
             params: {
               workspaceId: T8d02a37b3f;
@@ -24648,7 +24648,7 @@ export type WebRoutes = {
             post: {
               body: {
                 reason?: string;
-                action: ("complete" | "cancel" | "reopen");
+                action: ("cancel" | "complete" | "reopen");
               };
               params: {
                 workspaceId: T8d02a37b3f;
@@ -24695,7 +24695,7 @@ export type WebRoutes = {
           cursor?: string;
           limit?: number;
           asOf?: string;
-          queue?: "completed" | "at_risk" | "to_acknowledge" | "upcoming";
+          queue?: "at_risk" | "completed" | "to_acknowledge" | "upcoming";
         };
         headers: Record<never, never>;
         response: {
@@ -24714,7 +24714,7 @@ export type WebRoutes = {
               name: string;
               taskStatus: Tbe0400fa4c;
               priority: Tbe0400fa4c;
-              attention: ("none" | "acknowledgement_required" | "hard_deadline_due" | "working_target_due");
+              attention: ("acknowledgement_required" | "hard_deadline_due" | "none" | "working_target_due");
             }>;
             nextCursor: Tbe0400fa4c;
             limit: number;
@@ -24747,11 +24747,11 @@ export type WebRoutes = {
       ":sessionId": {
         certificate: {
           post: {
-            body: (null | {
+            body: {
               sessionToken?: unknown;
               certificate?: unknown;
               certificateChain?: unknown;
-            });
+            } | null;
             params: T066db31a61;
             query: unknown;
             headers: unknown;
@@ -24759,7 +24759,7 @@ export type WebRoutes = {
               200: {
                 digestAlgorithm: "SHA-256";
                 digestHex: string;
-                signatureAlgorithm: ("RSASSA-PKCS1-v1_5" | "ECDSA");
+                signatureAlgorithm: ("ECDSA" | "RSASSA-PKCS1-v1_5");
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -24790,10 +24790,10 @@ export type WebRoutes = {
       ":sessionId": {
         signature: {
           post: {
-            body: (null | {
+            body: {
               signature?: unknown;
               sessionToken?: unknown;
-            });
+            } | null;
             params: T066db31a61;
             query: unknown;
             headers: unknown;
@@ -24831,10 +24831,10 @@ export type WebRoutes = {
       ":sessionId": {
         cancel: {
           post: {
-            body: (null | {
+            body: {
               reason?: unknown;
               sessionToken?: unknown;
-            });
+            } | null;
             params: T066db31a61;
             query: unknown;
             headers: unknown;
@@ -24933,12 +24933,12 @@ export type WebRoutes = {
     dev: {
       "seed-firm-knowledge": {
         post: {
-          body: (null | {
+          body: {
             matters?: number;
             organizationId?: string;
-            incompleteMatterMode?: "skip" | "replace";
+            incompleteMatterMode?: "replace" | "skip";
             selectionSeed?: string;
-          });
+          } | null;
           params: T5e3ac29766;
           query: Record<never, never>;
           headers: Record<never, never>;
@@ -25022,7 +25022,7 @@ export type WebRoutes = {
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
-            200: (Response | T37fe4edf98 | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
+            200: (Response | T261548128c | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
             401: never;
             500: never;
           };
@@ -25038,7 +25038,7 @@ export type WebRoutes = {
           query: Record<never, never>;
           headers: Record<never, never>;
           response: {
-            200: (Response | T37fe4edf98 | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
+            200: (Response | T261548128c | T8833b520cb | T2fe5059b53 | Tdfa2695a01 | T563240ea85);
             401: never;
             500: never;
           };
@@ -25061,7 +25061,7 @@ export type WebRoutes = {
               }>;
               fieldMode?: "full" | "visible";
               fieldIds?: Array<T173eec1550>;
-              excludedKinds?: Array<T884a45faa8>;
+              excludedKinds?: Array<T334757ea46>;
               previewableForAi?: false | true;
             };
             params: {
@@ -25253,7 +25253,7 @@ export type WebRoutes = {
         bilingual: {
           post: {
             body: {
-              borders?: "none" | "grid";
+              borders?: "grid" | "none";
               entityId: Tf742ada503;
               fieldId: T6993bee61f;
               targetLang: string;
@@ -25490,11 +25490,11 @@ export type WebRoutes = {
               force?: false | true;
               entityId: Tf742ada503;
               propertyId: T173eec1550;
-              linkedAccount: (null | {
+              linkedAccount: {
                 name: Tbe0400fa4c;
                 email: string;
                 verifiedAt: string;
-              });
+              } | null;
             };
             params: {
               workspaceId: string;
@@ -25701,7 +25701,7 @@ export type WebRoutes = {
         "blank-document": {
           put: {
             body: {
-              parentId?: null | Tf742ada503;
+              parentId?: Tf742ada503 | null;
               name: string;
             };
             params: {
@@ -25742,7 +25742,7 @@ export type WebRoutes = {
         "blank-document-from-style-set": {
           put: {
             body: {
-              parentId?: null | Tf742ada503;
+              parentId?: Tf742ada503 | null;
               name: string;
               styleSetId: T6868c5f803;
             };
@@ -25950,7 +25950,7 @@ export type WebRoutes = {
               }>;
               fieldMode?: "full" | "visible";
               fieldIds?: Array<T173eec1550>;
-              excludedKinds?: Array<T884a45faa8>;
+              excludedKinds?: Array<T334757ea46>;
               previewableForAi?: false | true;
               includeAssignees?: false | true;
             };
@@ -26053,7 +26053,7 @@ export type WebRoutes = {
               }>;
               fieldMode?: "full" | "visible";
               fieldIds?: Array<T173eec1550>;
-              excludedKinds?: Array<T884a45faa8>;
+              excludedKinds?: Array<T334757ea46>;
               optionValues?: Array<string>;
               groupByPropertyId: T0378ec4ac6;
               groupValue: Tbe0400fa4c;
@@ -26379,12 +26379,12 @@ export type WebRoutes = {
               200: {
                 entityId: Tf742ada503;
                 entityIds: Array<Tf742ada503>;
-                field: (null | {
+                field: {
                   sourceEntityId: Tf742ada503;
                   sourceFieldId: T6993bee61f;
                   entityId: Tf742ada503;
                   fieldId: T6993bee61f;
-                });
+                } | null;
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -26422,7 +26422,7 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                match: (null | stll_api_contract_DocumentReferenceMatch);
+                match: (stll_api_contract_DocumentReferenceMatch | null);
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -26678,8 +26678,8 @@ export type WebRoutes = {
         };
         put: {
           body: {
-            kind?: "message" | "document" | "folder" | "task" | "link";
-            parentId?: null | Tf742ada503;
+            kind?: "document" | "folder" | "link" | "message" | "task";
+            parentId?: Tf742ada503 | null;
             name: string;
           };
           params: T7e76966445;
@@ -26731,7 +26731,7 @@ export type WebRoutes = {
                   200: {
                     entityId: Tf742ada503;
                     entityName: string;
-                    kind: T884a45faa8;
+                    kind: T334757ea46;
                     currentVersionId: T9021211256;
                     versions: Array<{
                       id: Tb86085a330;
@@ -26741,20 +26741,20 @@ export type WebRoutes = {
                       description: Tbe0400fa4c;
                       diffWordsAdded: T588d0ee653;
                       diffWordsRemoved: T588d0ee653;
-                      sourceKind: (null | "upload" | "desktop-edit" | "collaboration" | "comparison" | "signature" | "sharepoint");
+                      sourceKind: ("collaboration" | "comparison" | "desktop-edit" | "sharepoint" | "signature" | "upload" | null);
                       createdAt: string;
-                      author: (null | {
+                      author: {
                         id: string;
                         name: string;
                         image: Tbe0400fa4c;
-                      });
-                      file: (null | {
+                      } | null;
+                      file: {
                         fieldId: string;
                         propertyId: string;
                         fileName: string;
                         mimeType: string;
                         sizeBytes: number;
-                      });
+                      } | null;
                     }>;
                     olderCursor: Tbe0400fa4c;
                   };
@@ -27089,7 +27089,7 @@ export type WebRoutes = {
                     response: {
                       200: {
                         entityVersionId: Tb86085a330;
-                        file: (null | {
+                        file: {
                           fieldId: T6993bee61f;
                           propertyId: T173eec1550;
                           fileName: string;
@@ -27097,7 +27097,7 @@ export type WebRoutes = {
                           sizeBytes: number;
                           encrypted: Tfddd645dc8;
                           pdfFileId: Tbe0400fa4c;
-                        });
+                        } | null;
                       };
                       400: T9a51b7d2bc;
                       401: T9a51b7d2bc;
@@ -27136,7 +27136,7 @@ export type WebRoutes = {
               response: {
                 200: {
                   entityId: Tf742ada503;
-                  kind: T884a45faa8;
+                  kind: T334757ea46;
                   name: string;
                   currentVersionId: Tb86085a330;
                   currentVersionCreatedAt: string;
@@ -27226,11 +27226,11 @@ export type WebRoutes = {
               leadUserId: Tbe0400fa4c;
               lastActivityAt: string;
               createdAt: string;
-              client: (null | {
+              client: {
                 id: Tbf83a7d346;
                 displayName: string;
                 responsibleAttorneyName: Tbe0400fa4c;
-              });
+              } | null;
               entityCount: number;
               openTaskCount: number;
               nextDeadline: Tbe0400fa4c;
@@ -27398,7 +27398,7 @@ export type WebRoutes = {
                 recentEntities: Array<{
                   entityId: Tf742ada503;
                   name: string;
-                  kind: T884a45faa8;
+                  kind: T334757ea46;
                   status: Tbe0400fa4c;
                   priority: Tbe0400fa4c;
                   listItemType: Tcdfc93c4d1;
@@ -27451,8 +27451,8 @@ export type WebRoutes = {
               query: {
                 cursor?: string;
                 limit?: number;
-                action?: "all" | "update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove";
-                category?: "correspondence" | "all" | "court" | "matter" | "documents" | "tasks" | "team" | "automation";
+                action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
+                category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
                 from?: string;
                 actorId?: string;
                 toExclusive?: string;
@@ -27461,15 +27461,15 @@ export type WebRoutes = {
               response: {
                 200: {
                   items: Array<{
-                    action: ("update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove");
+                    action: ("add" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update");
                     activityAt: string;
                     approval: {
-                      status: ("pending" | "approved" | "not_required" | "rejected");
+                      status: ("approved" | "not_required" | "pending" | "rejected");
                       user: T4ada5516f7;
                     };
-                    category: ("correspondence" | "court" | "matter" | "documents" | "tasks" | "team" | "automation");
+                    category: ("automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team");
                     id: T3ae9eb741e;
-                    performer: (T58ea91aa38 | {
+                    performer: (Td236e2b0da | {
                       name: Tbe0400fa4c;
                       type: ("agent" | "service");
                     });
@@ -27482,7 +27482,7 @@ export type WebRoutes = {
                       entityId: Tbe0400fa4c;
                       fieldId: Tbe0400fa4c;
                       id: string;
-                      kind: ("message" | "correspondence" | "document" | "court" | "matter" | "folder" | "task" | "link" | "playbook" | "team" | "documentReviewRun" | "automation" | "translationRun");
+                      kind: ("automation" | "correspondence" | "court" | "document" | "documentReviewRun" | "folder" | "link" | "matter" | "message" | "playbook" | "task" | "team" | "translationRun");
                       mimeType: Tbe0400fa4c;
                       name: Tbe0400fa4c;
                       pdfFileId: Tbe0400fa4c;
@@ -27490,7 +27490,7 @@ export type WebRoutes = {
                     };
                     trigger: {
                       source: Tbe0400fa4c;
-                      type: ("direct" | "webhook" | "user_dispatch" | "agent_delegation" | "schedule" | "credential" | "system");
+                      type: ("agent_delegation" | "credential" | "direct" | "schedule" | "system" | "user_dispatch" | "webhook");
                       user: T4ada5516f7;
                     };
                   }>;
@@ -27580,12 +27580,12 @@ export type WebRoutes = {
                   workspaceId: T8d02a37b3f;
                 };
                 query: {
-                  action?: "all" | "update" | "delete" | "create" | "cancel" | "review" | "execute" | "add" | "remove";
-                  category?: "correspondence" | "all" | "court" | "matter" | "documents" | "tasks" | "team" | "automation";
+                  action?: "add" | "all" | "cancel" | "create" | "delete" | "execute" | "remove" | "review" | "update";
+                  category?: "all" | "automation" | "correspondence" | "court" | "documents" | "matter" | "tasks" | "team";
                   from?: string;
                   actorId?: string;
                   toExclusive?: string;
-                  format: ("json" | "csv");
+                  format: ("csv" | "json");
                 };
                 headers: Record<never, never>;
                 response: {
@@ -27632,12 +27632,12 @@ export type WebRoutes = {
                 isPrimary: Tfddd645dc8;
                 notes: Tbe0400fa4c;
                 organizationId: Tb1d68817ba;
-                contact: (null | {
+                contact: {
                   type: T1dacb02040;
                   id: Tbf83a7d346;
                   displayName: string;
                   color: Tbe0400fa4c;
-                });
+                } | null;
               }>;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -27666,7 +27666,7 @@ export type WebRoutes = {
           put: {
             body: {
               isPrimary?: false | true;
-              notes?: null | string;
+              notes?: string | null;
               contactId: Tbf83a7d346;
               role: Tdedb951219;
             };
@@ -27757,12 +27757,12 @@ export type WebRoutes = {
                 id: Td6c4fb13a4;
                 createdAt: string;
                 userId: string;
-                user: (null | {
+                user: {
                   name: string;
                   email: string;
                   id: string;
                   image: Tbe0400fa4c;
-                });
+                } | null;
               }>;
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -28067,7 +28067,7 @@ export type WebRoutes = {
                   id: T6ef7cb3785;
                   fieldId: T6993bee61f;
                   content: Taedcc9e56f;
-                  boundingBoxes: (null | Tbc6f0a29ca);
+                  boundingBoxes: (Tbc6f0a29ca | null);
                   fileFieldIds: Array<T6993bee61f>;
                 }>;
                 400: T9a51b7d2bc;
@@ -28110,7 +28110,7 @@ export type WebRoutes = {
               200: {
                 items: Array<{
                   activityAt: string;
-                  entityKind: T884a45faa8;
+                  entityKind: T334757ea46;
                   fileName: Tbe0400fa4c;
                   id: string;
                   mimeType: Tbe0400fa4c;
@@ -28194,12 +28194,12 @@ export type WebRoutes = {
               clientId: Tb411b93636;
               leadUserId: Tbe0400fa4c;
               stampedVersionCount: number;
-              client: (null | {
+              client: {
                 type: T1dacb02040;
                 id: Tbf83a7d346;
                 displayName: string;
                 color: Tbe0400fa4c;
-              });
+              } | null;
             };
             400: T9a51b7d2bc;
             401: T9a51b7d2bc;
@@ -28235,7 +28235,7 @@ export type WebRoutes = {
             response: {
               200: {
                 running: Tfddd645dc8;
-                run: (null | {
+                run: {
                   completed: number;
                   errorCode: Tbe0400fa4c;
                   executionVersion: number;
@@ -28243,11 +28243,11 @@ export type WebRoutes = {
                   id: (string & valibot_Brand<"SafeId"> & {
                     readonly __safeIdType?: "extractionRun";
                   });
-                  scope: ("workspace" | "properties" | "entities" | "cells");
+                  scope: ("cells" | "entities" | "properties" | "workspace");
                   startedAt: Tdf2b0d1150;
-                  status: ("failed" | "running" | "skipped" | "completed" | "planning" | "finalizing");
+                  status: ("completed" | "failed" | "finalizing" | "planning" | "running" | "skipped");
                   total: number;
-                });
+                } | null;
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -28279,7 +28279,7 @@ export type WebRoutes = {
                 entityIds?: Array<Tf742ada503>;
                 entityIdsOrder?: Array<Tf742ada503>;
                 propertyIds?: Array<T173eec1550>;
-                serviceTier?: "standard" | "flex";
+                serviceTier?: "flex" | "standard";
               };
               params: {
                 workspaceId: T8d02a37b3f;
@@ -28288,7 +28288,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
-                  status: ("skipped" | "started" | "already-running");
+                  status: ("already-running" | "skipped" | "started");
                 };
                 400: T9a51b7d2bc;
                 401: T9a51b7d2bc;
@@ -28367,7 +28367,7 @@ export type WebRoutes = {
             headers: Record<never, never>;
             response: {
               200: {
-                status: ("failed" | "skipped" | "started" | "already-running");
+                status: ("already-running" | "failed" | "skipped" | "started");
               };
               400: T9a51b7d2bc;
               401: T9a51b7d2bc;
@@ -28831,7 +28831,7 @@ export type WebRoutes = {
             run: {
               post: {
                 body: {
-                  projection: ("none" | "columns");
+                  projection: ("columns" | "none");
                 };
                 params: {
                   workspaceId: T8d02a37b3f;
@@ -29243,7 +29243,7 @@ export type WebRoutes = {
               headers: Record<never, never>;
               response: {
                 200: {
-                  latest: (null | T270af050c9);
+                  latest: (T270af050c9 | null);
                   items: Array<{
                     id: Te37ec2cbbd;
                     status: T7263651183;
@@ -29532,8 +29532,8 @@ export type WebRoutes = {
                   200: {
                     run: {
                       id: Tde3313d76e;
-                      status: ("failed" | "cancelled" | "completed" | "queued" | "preparing" | "translating" | "assembling" | "validating");
-                      errorCode: (null | "internal" | "unsupported_format" | "document_unresolved" | "document_changed" | "unsupported_review_markup" | "provider_unavailable" | "translation_failed" | "format_validation_failed");
+                      status: ("assembling" | "cancelled" | "completed" | "failed" | "preparing" | "queued" | "translating" | "validating");
+                      errorCode: ("document_changed" | "document_unresolved" | "format_validation_failed" | "internal" | "provider_unavailable" | "translation_failed" | "unsupported_format" | "unsupported_review_markup" | null);
                       output: T8adc422ed8;
                       engine: ("ai" | "deepl");
                       total: number;
@@ -29595,12 +29595,12 @@ export type WebRoutes = {
                     ordinal: number;
                     kind: T4ae6d071f3;
                     inTable: Tfddd645dc8;
-                    tableLayout: (null | "inline" | "stacked");
+                    tableLayout: ("inline" | "stacked" | null);
                     sourceParaId: Tbe0400fa4c;
                     sourceText: string;
                   } & {
                     disposition: T7ed363629c;
-                    dispositionOrigin: ("default" | "rule" | "user" | "model");
+                    dispositionOrigin: ("default" | "model" | "rule" | "user");
                   }>;
                   glossary: Array<{
                     source: string;
@@ -29705,7 +29705,7 @@ export type WebRoutes = {
                     run: {
                       id: Ta114ed3d14;
                       status: T7263651183;
-                      errorCode: (null | "internal" | "ai_unavailable" | "enqueue_failed" | "document_unresolved" | "document_changed" | "translation_failed" | "not_bilingual" | "apply_failed");
+                      errorCode: ("ai_unavailable" | "apply_failed" | "document_changed" | "document_unresolved" | "enqueue_failed" | "internal" | "not_bilingual" | "translation_failed" | null);
                       entityId: Tf742ada503;
                       fileFieldId: T6993bee61f;
                       entityVersionId: Tb86085a330;
@@ -29723,7 +29723,7 @@ export type WebRoutes = {
                       ordinal: number;
                       kind: T4ae6d071f3;
                       disposition: T7ed363629c;
-                      status: ("pending" | "failed" | "translated");
+                      status: ("failed" | "pending" | "translated");
                       warnings: Array<string>;
                       sourceText: string;
                       targetText: Tbe0400fa4c;
@@ -30108,9 +30108,9 @@ export type WebRoutes = {
                     createdAt: string;
                     stepRuns: Array<{
                       index: number;
-                      kind: ("ai" | "review-gate" | "create-document");
-                      status: ("pending" | "failed" | "running" | "skipped" | "awaiting_review" | "completed");
-                      output: (null | {
+                      kind: ("ai" | "create-document" | "review-gate");
+                      status: ("awaiting_review" | "completed" | "failed" | "pending" | "running" | "skipped");
+                      output: {
                         kind: "ai";
                         markdown: string;
                       } | {
@@ -30121,7 +30121,7 @@ export type WebRoutes = {
                       } | {
                         kind: "create-document";
                         entityId: string;
-                      });
+                      } | null;
                       error: Tbe0400fa4c;
                       reviewTaskEntityId: Tf058fe611e;
                       startedAt: Tbe0400fa4c;
@@ -30159,7 +30159,7 @@ export type WebRoutes = {
               review: {
                 post: {
                   body: {
-                    note?: null | string;
+                    note?: string | null;
                     decision: Tebe6fae3ef;
                   };
                   params: T94cbbaa5a7;
@@ -30241,10 +30241,10 @@ export type WebRoutes = {
           body: {
             name?: string;
             reference?: string;
-            billingReference?: null | string;
-            color?: null | string;
+            billingReference?: string | null;
+            color?: string | null;
             clientId?: Tbf83a7d346;
-            leadUserId?: null | string;
+            leadUserId?: string | null;
             promote?: {
               memberUserIds?: Array<string>;
               clientId: Tbf83a7d346;
@@ -30307,8 +30307,8 @@ export type CorrespondenceRoutes = {
                     });
                     sender: string;
                     receivedAt: string;
-                    reason: ("unknown_recipient" | "revoked_address" | "unauthorized_sender" | "authentication_failed" | "message_too_large" | "attachment_rejected" | "malformed_message");
-                    setupHint: (null | "configure_sender_spf_dkim_dmarc");
+                    reason: ("attachment_rejected" | "authentication_failed" | "malformed_message" | "message_too_large" | "revoked_address" | "unauthorized_sender" | "unknown_recipient");
+                    setupHint: ("configure_sender_spf_dkim_dmarc" | null);
                   }>;
                   nextCursor: Tbe0400fa4c;
                   limit: number;
@@ -30629,7 +30629,7 @@ export type CorrespondenceRoutes = {
                     filename: string;
                     mediaType: string;
                     byteSize: number;
-                    scanVerdict: ("unknown" | "clean" | "infected");
+                    scanVerdict: ("clean" | "infected" | "unknown");
                   }>;
                 };
                 400: T9a51b7d2bc;
@@ -30660,8 +30660,8 @@ export type CorrespondenceRoutes = {
           ":correspondenceId": {
             patch: {
               body: {
-                handlingState?: "new" | "handled";
-                assigneeId?: null | T56ed95d57c;
+                handlingState?: "handled" | "new";
+                assigneeId?: T56ed95d57c | null;
               };
               params: {
                 workspaceId: T8d02a37b3f;
@@ -30781,7 +30781,7 @@ export type MemoriesRoutes = {
         params: T5e3ac29766;
         query: {
           status?: "active" | "archived" | "stale" | "suggested";
-          scope?: "organization" | "workspace" | "user";
+          scope?: "organization" | "user" | "workspace";
           cursor?: string;
           workspaceId?: T9e07a7d6cd;
           limit?: number;
@@ -30791,13 +30791,13 @@ export type MemoriesRoutes = {
           200: {
             items: Array<{
               id: string;
-              scope: ("organization" | "workspace" | "user");
+              scope: ("organization" | "user" | "workspace");
               kind: Td204418ab7;
               content: string;
               language: Tbe0400fa4c;
               status: ("active" | "archived" | "stale" | "suggested");
               pinned: Tfddd645dc8;
-              source: ("tool" | "user" | "extracted");
+              source: ("extracted" | "tool" | "user");
               workspaceId: Tbe0400fa4c;
               sourceDataWorkspaceIds: Array<string>;
               createdAt: string;
@@ -30974,8 +30974,8 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   __toolSide: "client";
   name: `mcp__${string}`;
   description: string;
-  inputSchema?: Tf26698434e | Tc6a27e1b37 | tanstack_ai_JSONSchema;
-  outputSchema?: Tf26698434e | Tc6a27e1b37 | tanstack_ai_JSONSchema;
+  inputSchema?: tanstack_ai_JSONSchema | T2238d312e7 | T8d67e84046;
+  outputSchema?: tanstack_ai_JSONSchema | T2238d312e7 | T8d67e84046;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
@@ -30994,7 +30994,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31005,16 +31005,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Te71342795f;
+      readonly types?: Te71342795f | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Td2e9147457 | Promise<(T22d9b74f40 | Td2e9147457)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td2e9147457 | Promise<(Tfc86db9c4b | Td2e9147457)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Te71342795f;
+      readonly types?: Te71342795f | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31035,16 +31035,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T888f21ca4b;
+      readonly types?: T888f21ca4b | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T49beff9484 | Promise<(T22d9b74f40 | T49beff9484)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T49beff9484 | Promise<(Tfc86db9c4b | T49beff9484)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T888f21ca4b;
+      readonly types?: T888f21ca4b | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31066,7 +31066,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31078,7 +31078,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31090,7 +31090,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31102,7 +31102,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31114,7 +31114,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31126,7 +31126,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31138,7 +31138,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31150,7 +31150,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31162,7 +31162,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31174,7 +31174,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31186,7 +31186,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31198,7 +31198,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31210,7 +31210,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31222,7 +31222,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31234,7 +31234,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31246,7 +31246,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31258,7 +31258,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31270,7 +31270,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31282,7 +31282,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31294,7 +31294,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31306,7 +31306,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31318,7 +31318,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31330,7 +31330,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31341,16 +31341,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T5990be2a25;
+      readonly types?: T5990be2a25 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tfce51d6930 | Promise<(T22d9b74f40 | Tfce51d6930)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tfce51d6930 | Promise<(Tfc86db9c4b | Tfce51d6930)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T5990be2a25;
+      readonly types?: T5990be2a25 | undefined;
     };
   };
   outputSchema?: {
@@ -31358,16 +31358,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T107ce1b5ba;
+      readonly types?: T21b8909cf9 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Te11f81d4cd | Promise<(T22d9b74f40 | Te11f81d4cd)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T3ef81b8401 | Promise<(Tfc86db9c4b | T3ef81b8401)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T107ce1b5ba;
+      readonly types?: T21b8909cf9 | undefined;
     };
   };
   needsApproval?: false;
@@ -31375,7 +31375,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: Tdb5a1ce47f, context?: Tc88149628d): (T21d4acdd13 | T7e9fce8170 | T6b4b00e15b | T05cba4d570 | Promise<Td7d37c35b1>);
+    (args: Tdb5a1ce47f, context?: Tc88149628d): (T21d4acdd13 | T81a87f67e2 | T6b4b00e15b | Te458e3a8a0 | Promise<T3ee3f8c0bd>);
   };
   readonly [__symbol0]?: T0cd9826f45;
 } | {
@@ -31387,16 +31387,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Td77afb227b;
+      readonly types?: Tb7a1edbe71 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T1a5dc3145e | Promise<(T22d9b74f40 | T1a5dc3145e)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T5524006796 | Promise<(Tfc86db9c4b | T5524006796)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Td77afb227b;
+      readonly types?: Tb7a1edbe71 | undefined;
     };
   };
   outputSchema?: {
@@ -31404,16 +31404,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T682c6e749f;
+      readonly types?: T682c6e749f | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T2e64e7c399 | Promise<(T22d9b74f40 | T2e64e7c399)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T2e64e7c399 | Promise<(Tfc86db9c4b | T2e64e7c399)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T682c6e749f;
+      readonly types?: T682c6e749f | undefined;
     };
   };
   needsApproval?: false;
@@ -31421,7 +31421,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: Tba4a651ce0, context?: Tc88149628d): (T42132256a7 | Promise<T42132256a7>);
+    (args: T005df2fae9, context?: Tc88149628d): (T42132256a7 | Promise<T42132256a7>);
   };
   readonly [__symbol0]?: T0cd9826f45;
 } | {
@@ -31434,7 +31434,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31446,7 +31446,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31458,7 +31458,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31469,16 +31469,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T76433bdd98;
+      readonly types?: T76433bdd98 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T3af8ea50d0 | Promise<(T22d9b74f40 | T3af8ea50d0)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T3af8ea50d0 | Promise<(Tfc86db9c4b | T3af8ea50d0)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T76433bdd98;
+      readonly types?: T76433bdd98 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31499,16 +31499,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T19f6de971c;
+      readonly types?: T19f6de971c | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tab803e393c | Promise<(T22d9b74f40 | Tab803e393c)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tab803e393c | Promise<(Tfc86db9c4b | Tab803e393c)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T19f6de971c;
+      readonly types?: T19f6de971c | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31529,16 +31529,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T59bc5192f7;
+      readonly types?: T6b347503a9 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tbcf5250947 | Promise<(T22d9b74f40 | Tbcf5250947)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T217025cb58 | Promise<(Tfc86db9c4b | T217025cb58)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T59bc5192f7;
+      readonly types?: T6b347503a9 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31547,7 +31547,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: Tf72e5821b0, context?: Tc88149628d): unknown;
+    (args: Tee258ffbbe, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -31559,16 +31559,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T119167339e;
+      readonly types?: T119167339e | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Td536646f91 | Promise<(T22d9b74f40 | Td536646f91)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td536646f91 | Promise<(Tfc86db9c4b | Td536646f91)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T119167339e;
+      readonly types?: T119167339e | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31589,16 +31589,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T29a74257e3;
+      readonly types?: T4fa3ad8093 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T12cb09eaca | Promise<(T22d9b74f40 | T12cb09eaca)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T641b83000f | Promise<(Tfc86db9c4b | T641b83000f)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T29a74257e3;
+      readonly types?: T4fa3ad8093 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31607,7 +31607,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T3b2c7123e2, context?: Tc88149628d): unknown;
+    (args: T2f5bcad84c, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -31619,16 +31619,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T099eec7919;
+      readonly types?: T1f6852a9bf | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T059308d7fb | Promise<(T22d9b74f40 | T059308d7fb)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T4f71e3a3a0 | Promise<(Tfc86db9c4b | T4f71e3a3a0)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T099eec7919;
+      readonly types?: T1f6852a9bf | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31637,7 +31637,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T1c0bc9000a, context?: Tc88149628d): unknown;
+    (args: T1cd5f6c01f, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -31649,16 +31649,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T7165758c88;
+      readonly types?: T7165758c88 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tb44e1703bb | Promise<(T22d9b74f40 | Tb44e1703bb)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb44e1703bb | Promise<(Tfc86db9c4b | Tb44e1703bb)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T7165758c88;
+      readonly types?: T7165758c88 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31679,16 +31679,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T804828b375;
+      readonly types?: T804828b375 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T8ea407634a | Promise<(T22d9b74f40 | T8ea407634a)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T8ea407634a | Promise<(Tfc86db9c4b | T8ea407634a)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T804828b375;
+      readonly types?: T804828b375 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31709,16 +31709,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tc35f5ed366;
+      readonly types?: T5de736febe | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tc1ed87d509 | Promise<(T22d9b74f40 | Tc1ed87d509)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te1486aaecd | Promise<(Tfc86db9c4b | Te1486aaecd)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tc35f5ed366;
+      readonly types?: T5de736febe | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31727,7 +31727,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T89ed64b036, context?: Tc88149628d): unknown;
+    (args: T8136384b1e, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -31739,16 +31739,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T16c6699378;
+      readonly types?: T16c6699378 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T26ffdbcefc | Promise<(T22d9b74f40 | T26ffdbcefc)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T26ffdbcefc | Promise<(Tfc86db9c4b | T26ffdbcefc)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T16c6699378;
+      readonly types?: T16c6699378 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31769,16 +31769,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tc620425c7c;
+      readonly types?: Tda018e6666 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T50288d650a | Promise<(T22d9b74f40 | T50288d650a)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9899c62a18 | Promise<(Tfc86db9c4b | T9899c62a18)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tc620425c7c;
+      readonly types?: Tda018e6666 | undefined;
     };
   };
   outputSchema?: {
@@ -31786,16 +31786,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T25b363bf5d;
+      readonly types?: T8d5e2ac251 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tdba4b44741 | Promise<(T22d9b74f40 | Tdba4b44741)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T17f9c80581 | Promise<(Tfc86db9c4b | T17f9c80581)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T25b363bf5d;
+      readonly types?: T8d5e2ac251 | undefined;
     };
   };
   needsApproval?: true;
@@ -31803,7 +31803,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T353d98c95e, context?: Tc88149628d): (T501e21fe4d | Tc4816eabc2 | Promise<T49bccf09e2>);
+    (args: Tb33a71380a, context?: Tc88149628d): (Td617134437 | Tc38488b75b | Promise<Taa699009ad>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -31815,16 +31815,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T367a10cc51;
+      readonly types?: T367a10cc51 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Td0c9b180ad | Promise<(T22d9b74f40 | Td0c9b180ad)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Td0c9b180ad | Promise<(Tfc86db9c4b | Td0c9b180ad)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T367a10cc51;
+      readonly types?: T367a10cc51 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31845,16 +31845,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T0e6d815eb1;
+      readonly types?: T4c7ffc5c98 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tf8f2b2e8a8 | Promise<(T22d9b74f40 | Tf8f2b2e8a8)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T6a8b8e209a | Promise<(Tfc86db9c4b | T6a8b8e209a)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T0e6d815eb1;
+      readonly types?: T4c7ffc5c98 | undefined;
     };
   };
   outputSchema?: {
@@ -31862,16 +31862,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Ta94982c099;
+      readonly types?: Ta94982c099 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T9a8daf49a9 | Promise<(T22d9b74f40 | T9a8daf49a9)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T9a8daf49a9 | Promise<(Tfc86db9c4b | T9a8daf49a9)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Ta94982c099;
+      readonly types?: Ta94982c099 | undefined;
     };
   };
   needsApproval?: true;
@@ -31879,7 +31879,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T4195ea1b74, context?: Tc88149628d): (T3a8e541c8b | Promise<T3a8e541c8b>);
+    (args: T09610a4d6a, context?: Tc88149628d): (T3a8e541c8b | Promise<T3a8e541c8b>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -31891,16 +31891,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T699c14b14c;
+      readonly types?: T699c14b14c | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tdc2a8db8cb | Promise<(T22d9b74f40 | Tdc2a8db8cb)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tdc2a8db8cb | Promise<(Tfc86db9c4b | Tdc2a8db8cb)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T699c14b14c;
+      readonly types?: T699c14b14c | undefined;
     };
   };
   outputSchema?: undefined;
@@ -31922,7 +31922,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31934,7 +31934,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31946,7 +31946,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31958,7 +31958,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31970,7 +31970,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31982,7 +31982,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -31994,7 +31994,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -32006,7 +32006,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -32018,7 +32018,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -32030,7 +32030,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -32042,7 +32042,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -32053,16 +32053,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T2e2021adee;
+      readonly types?: T2e2021adee | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T51f6ece09d | Promise<(T22d9b74f40 | T51f6ece09d)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T51f6ece09d | Promise<(Tfc86db9c4b | T51f6ece09d)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T2e2021adee;
+      readonly types?: T2e2021adee | undefined;
     };
   };
   outputSchema?: {
@@ -32070,16 +32070,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tde7fb406e1;
+      readonly types?: Tde7fb406e1 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T3012ed5aad | Promise<(T22d9b74f40 | T3012ed5aad)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T3012ed5aad | Promise<(Tfc86db9c4b | T3012ed5aad)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tde7fb406e1;
+      readonly types?: Tde7fb406e1 | undefined;
     };
   };
   needsApproval?: true;
@@ -32099,16 +32099,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T1bd0be04de;
+      readonly types?: T43c61826c6 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T1e45e62b6b | Promise<(T22d9b74f40 | T1e45e62b6b)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta1f9b4de71 | Promise<(Tfc86db9c4b | Ta1f9b4de71)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T1bd0be04de;
+      readonly types?: T43c61826c6 | undefined;
     };
   };
   outputSchema?: {
@@ -32116,16 +32116,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T4f903e0db7;
+      readonly types?: T921fd22a21 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Ta43f3a994b | Promise<(T22d9b74f40 | Ta43f3a994b)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Ta43e2dcaa2 | Promise<(Tfc86db9c4b | Ta43e2dcaa2)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T4f903e0db7;
+      readonly types?: T921fd22a21 | undefined;
     };
   };
   needsApproval?: true;
@@ -32133,7 +32133,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T48c9e573fc, context?: Tc88149628d): (Tb21d985837 | Promise<Tb21d985837>);
+    (args: Tbbfb0e2dc0, context?: Tc88149628d): (Tddb0458281 | Promise<Tddb0458281>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -32145,16 +32145,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T93760ea794;
+      readonly types?: Tf273198011 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T984d9f8701 | Promise<(T22d9b74f40 | T984d9f8701)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T984d9f8701 | Promise<(Tfc86db9c4b | T984d9f8701)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T93760ea794;
+      readonly types?: Tf273198011 | undefined;
     };
   };
   outputSchema?: {
@@ -32162,16 +32162,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tdc71db7bee;
+      readonly types?: T5728aceaa2 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T75bb875923 | Promise<(T22d9b74f40 | T75bb875923)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tf2f09f50cf | Promise<(Tfc86db9c4b | Tf2f09f50cf)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tdc71db7bee;
+      readonly types?: T5728aceaa2 | undefined;
     };
   };
   needsApproval?: true;
@@ -32179,7 +32179,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T52fcbe1ef6, context?: Tc88149628d): (Ta8b3a4e1d1 | Promise<Ta8b3a4e1d1>);
+    (args: T1ea5eea592, context?: Tc88149628d): (T8161ebccd4 | Promise<T8161ebccd4>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -32191,16 +32191,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Td72ffb3ca2;
+      readonly types?: T692b04920e | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T39bd2e99da | Promise<(T22d9b74f40 | T39bd2e99da)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T39bd2e99da | Promise<(Tfc86db9c4b | T39bd2e99da)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Td72ffb3ca2;
+      readonly types?: T692b04920e | undefined;
     };
   };
   outputSchema?: {
@@ -32208,16 +32208,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T71cf339d21;
+      readonly types?: T71cf339d21 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T2a09c7df07 | Promise<(T22d9b74f40 | T2a09c7df07)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T2a09c7df07 | Promise<(Tfc86db9c4b | T2a09c7df07)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T71cf339d21;
+      readonly types?: T71cf339d21 | undefined;
     };
   };
   needsApproval?: true;
@@ -32225,7 +32225,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: Tce5e19ec0e, context?: Tc88149628d): (T51cc6664d5 | Promise<T51cc6664d5>);
+    (args: Tfe8087360e, context?: Tc88149628d): (T51cc6664d5 | Promise<T51cc6664d5>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -32237,16 +32237,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T76a95623f1;
+      readonly types?: Tc601a26749 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T239c95b432 | Promise<(T22d9b74f40 | T239c95b432)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T239c95b432 | Promise<(Tfc86db9c4b | T239c95b432)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T76a95623f1;
+      readonly types?: Tc601a26749 | undefined;
     };
   };
   outputSchema?: {
@@ -32254,16 +32254,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Td7a8af8a91;
+      readonly types?: Td7a8af8a91 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Te846513736 | Promise<(T22d9b74f40 | Te846513736)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te846513736 | Promise<(Tfc86db9c4b | Te846513736)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Td7a8af8a91;
+      readonly types?: Td7a8af8a91 | undefined;
     };
   };
   needsApproval?: true;
@@ -32271,32 +32271,32 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: Te0b1fd5531, context?: Tc88149628d): (Tdefb828a83 | Promise<Tdefb828a83>);
+    (args: Ta1379e699e, context?: Tc88149628d): (Tdefb828a83 | Promise<Tdefb828a83>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
   name: "search-past-chats";
   description: string;
-  inputSchema?: T30793b9dc0;
-  outputSchema?: T9680aa9f01;
+  inputSchema?: Tc7057093bd;
+  outputSchema?: Taec8e40e3e;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: Te7be292eda;
+  execute?: Tcaa4ce6922;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
   name: "search-all-past-chats";
   description: string;
-  inputSchema?: T30793b9dc0;
-  outputSchema?: T9680aa9f01;
+  inputSchema?: Tc7057093bd;
+  outputSchema?: Taec8e40e3e;
   needsApproval?: true;
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: Te7be292eda;
+  execute?: Tcaa4ce6922;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -32307,16 +32307,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T4deb005d6d;
+      readonly types?: T4deb005d6d | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tcfcb60a90e | Promise<(T22d9b74f40 | Tcfcb60a90e)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tcfcb60a90e | Promise<(Tfc86db9c4b | Tcfcb60a90e)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T4deb005d6d;
+      readonly types?: T4deb005d6d | undefined;
     };
   };
   outputSchema?: undefined;
@@ -32337,16 +32337,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T5bb4fea9f8;
+      readonly types?: T25fd06afe1 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T054aedcf37 | Promise<(T22d9b74f40 | T054aedcf37)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb13124e7c6 | Promise<(Tfc86db9c4b | Tb13124e7c6)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T5bb4fea9f8;
+      readonly types?: T25fd06afe1 | undefined;
     };
   };
   outputSchema?: undefined;
@@ -32355,7 +32355,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: Tab11ee99f7, context?: Tc88149628d): unknown;
+    (args: T81f0fdb1b7, context?: Tc88149628d): unknown;
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -32367,16 +32367,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Ta5b3abbaeb;
+      readonly types?: Ta5b3abbaeb | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T1a34fdd78a | Promise<(T22d9b74f40 | T1a34fdd78a)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T1a34fdd78a | Promise<(Tfc86db9c4b | T1a34fdd78a)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Ta5b3abbaeb;
+      readonly types?: Ta5b3abbaeb | undefined;
     };
   };
   outputSchema?: {
@@ -32384,16 +32384,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tbedd195a15;
+      readonly types?: Tbedd195a15 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T4e0b438dd4 | Promise<(T22d9b74f40 | T4e0b438dd4)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T4e0b438dd4 | Promise<(Tfc86db9c4b | T4e0b438dd4)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | Tbedd195a15;
+      readonly types?: Tbedd195a15 | undefined;
     };
   };
   needsApproval?: true;
@@ -32413,16 +32413,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T13442801e2;
+      readonly types?: T6bd5a18bc8 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T4e07585f60 | Promise<(T22d9b74f40 | T4e07585f60)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T1e5e71d2be | Promise<(Tfc86db9c4b | T1e5e71d2be)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T13442801e2;
+      readonly types?: T6bd5a18bc8 | undefined;
     };
   };
   outputSchema?: {
@@ -32430,16 +32430,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T6da17dcfb9;
+      readonly types?: T6da17dcfb9 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T0e694e7f35 | Promise<(T22d9b74f40 | T0e694e7f35)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T0e694e7f35 | Promise<(Tfc86db9c4b | T0e694e7f35)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T6da17dcfb9;
+      readonly types?: T6da17dcfb9 | undefined;
     };
   };
   needsApproval?: true;
@@ -32447,7 +32447,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T7c5bb3a7e5, context?: Tc88149628d): (T0e2086ec76 | Promise<T0e2086ec76>);
+    (args: T4a592a8301, context?: Tc88149628d): (T0e2086ec76 | Promise<T0e2086ec76>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -32459,16 +32459,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T8fd3506feb;
+      readonly types?: T1fd3bcf307 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T323404941e | Promise<(T22d9b74f40 | T323404941e)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Te87ebce9be | Promise<(Tfc86db9c4b | Te87ebce9be)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T8fd3506feb;
+      readonly types?: T1fd3bcf307 | undefined;
     };
   };
   outputSchema?: {
@@ -32476,16 +32476,16 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
       readonly jsonSchema: Tc49e8b2305;
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T44f2e6d941;
+      readonly types?: T44f2e6d941 | undefined;
     };
   } & {
     readonly "~standard": {
       readonly validate: {
-        (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T74166dcf18 | Promise<(T22d9b74f40 | T74166dcf18)>);
+        (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T74166dcf18 | Promise<(Tfc86db9c4b | T74166dcf18)>);
       };
       readonly version: 1;
       readonly vendor: string;
-      readonly types?: undefined | T44f2e6d941;
+      readonly types?: T44f2e6d941 | undefined;
     };
   };
   needsApproval?: true;
@@ -32493,7 +32493,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   lazy?: false | true;
   metadata?: T631856df6b;
   execute?: {
-    (args: T1dec1d0a87, context?: Tc88149628d): (Tee12b2a0c6 | Promise<Tee12b2a0c6>);
+    (args: T74837627f5, context?: Tc88149628d): (Tee12b2a0c6 | Promise<Tee12b2a0c6>);
   };
   readonly [__symbol0]?: T350a170d52;
 } | {
@@ -32506,7 +32506,7 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 } | {
   __toolSide: "client";
@@ -32518,13 +32518,13 @@ export type ChatMessage = (tanstack_ai_client_UIMessage<ReadonlyArray<{
   approvalSchema?: undefined;
   lazy?: false | true;
   metadata?: T631856df6b;
-  execute?: T1209f7b6f8;
+  execute?: T114ef593c6;
   readonly [__symbol0]?: T350a170d52;
 }>, unknown, undefined> & {
-  metadata?: Te863c9aa28;
+  metadata?: T417792d11a;
 });
 
-export type ChatPart = (tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_client_ToolResultPart | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | T86d991e7c0 | Tf9529310eb | T97fca5e74e | T621420426b | T2dbe0476e0 | T5143c04283 | T5cbad7b267 | Tc1f6a75e68 | T08899c0691 | T3115fa37b5 | Tefe86bc66f | Tc6f6bfa330 | T516226b2c3 | T6947d07557 | Tde9fbd919d | T2a6713721b | T050ffb7f51 | T4c6fb063e8 | T347ea842b3 | Tc31abec450 | Te4cef2c4f1 | T64dd0ef184 | T7aace93e83 | Te903957931 | Td60cdaf8e2 | T8442475520 | Tf7f5c58163 | T6454934e85 | T7726303d04 | T698805d2cd | T5681b43fbc | T08bd31660c | T99632b6a0a | T0cbcac4402 | T3582432480 | T451ea4af96 | Te265963f83 | T4cff2c04a4 | T09ed4390f0 | T1c0b32c703 | T908548b020 | T4b0b703d9e | T0dfed83fbb | T28236c25e3 | T213cf195f4 | Tfed59c6977 | Te07b1866e3 | T645c36442e | T8df4d19800 | Ta20d5deb18 | Tc4d06db5b5 | T7a0429686a | Ta7584da43a | T5b1470ddab | T172316168a | T92cce81fcb | Tec808acc7a | T0b64e151e3 | T77dbcc2472 | Tb5de57bdb6 | Te6421fbbcc | T6b16466116 | Td7a976c35b | Te1e7a7564f | T0ef90f0d9a | T3953b344f7 | T812d2b310a | Tef6a8c50b8 | T74bd0da96e | Tbff0077d7c | T9f6ae92b98 | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_client_SubagentPart);
+export type ChatPart = (tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_SubagentPart | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | tanstack_ai_client_ToolResultPart | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | Te0862af907 | Te2f4644948 | T7177f7c683 | Ta85ccee7af | T7e246539c7 | T5fcbd957c4 | T3f7112bc47 | Tdd40b6002f | T63213f6a66 | T37645f97e3 | Tb675330ce6 | Teff0fd014f | T291799859b | Tfd761de317 | Ta9703ec17d | Td43d5a192e | T7f8a36b7e8 | T1906714431 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T87debc7a12 | Tda26afd3a5 | Ta70c642bca | Tebb9fbb4f8 | Ta5b5eca36c | Tbcccb22aed | Tb33e966012 | T580bd0de31 | Td55da643d6 | Td15a61239d | T4b08c72cf3 | Td8667c9636 | T9f7b063dac | Tb23918f1b2 | T3dd22338ec);
 
 export type ChatSourceDocument = Tcde02c03e1;
 
@@ -32631,10 +32631,10 @@ export type ChatUITools = {
   };
   "create-document": {
     input: Tdb5a1ce47f;
-    output: Tc3ce63cbd9;
+    output: Tea0fd307f9;
   };
   "ask-user": {
-    input: Tba4a651ce0;
+    input: T005df2fae9;
     output: Ta9ca9b7bcb;
   };
   "update-current-skill-body": {
@@ -32658,7 +32658,7 @@ export type ChatUITools = {
     output: unknown;
   };
   business_registry_lookup: {
-    input: Tf72e5821b0;
+    input: Tee258ffbbe;
     output: unknown;
   };
   counterparty_check: {
@@ -32666,11 +32666,11 @@ export type ChatUITools = {
     output: unknown;
   };
   boe_search_legislation: {
-    input: T3b2c7123e2;
+    input: T2f5bcad84c;
     output: unknown;
   };
   boe_get_law: {
-    input: T1c0bc9000a;
+    input: T1cd5f6c01f;
     output: unknown;
   };
   boe_get_law_structure: {
@@ -32682,7 +32682,7 @@ export type ChatUITools = {
     output: unknown;
   };
   boe_find_related_laws: {
-    input: T89ed64b036;
+    input: T8136384b1e;
     output: unknown;
   };
   borme_get_summary: {
@@ -32690,15 +32690,15 @@ export type ChatUITools = {
     output: unknown;
   };
   "use-browser": {
-    input: T353d98c95e;
-    output: Tabc58da83b;
+    input: Tb33a71380a;
+    output: T1bc07bd9cb;
   };
   infosoud_lookup_case: {
     input: T466db84340;
     output: unknown;
   };
   "update-entity-fields": {
-    input: T4195ea1b74;
+    input: T09610a4d6a;
     output: T6f9e2e6853;
   };
   create_matter_document: {
@@ -32706,35 +32706,35 @@ export type ChatUITools = {
     output: Tccd7994462;
   };
   web_search: {
-    input: T48c9e573fc;
-    output: Tefa091671d;
+    input: Tbbfb0e2dc0;
+    output: Td5ded8ed3b;
   };
   fetch_url: {
-    input: T52fcbe1ef6;
-    output: T5345561adb;
+    input: T1ea5eea592;
+    output: T116d4a6834;
   };
   "search-chat-history": {
-    input: Tce5e19ec0e;
+    input: Tfe8087360e;
     output: T0800a1cff9;
   };
   "expand-chat-history": {
-    input: Te0b1fd5531;
+    input: Ta1379e699e;
     output: Tf40440a0f9;
   };
   "search-past-chats": {
-    input: Tce5e19ec0e;
-    output: T9ae8ef5978;
+    input: Tfe8087360e;
+    output: T59c690454c;
   };
   "search-all-past-chats": {
-    input: Tce5e19ec0e;
-    output: T9ae8ef5978;
+    input: Tfe8087360e;
+    output: T59c690454c;
   };
   describe_template: {
     input: Ta297fc92a3;
     output: unknown;
   };
   suggest_template_fields: {
-    input: Tab11ee99f7;
+    input: T81f0fdb1b7;
     output: unknown;
   };
   review_folder_consistency: {
@@ -32742,11 +32742,11 @@ export type ChatUITools = {
     output: T88a38d2a60;
   };
   spawn_subagents: {
-    input: T7c5bb3a7e5;
+    input: T4a592a8301;
     output: Tb2b1f765a2;
   };
   remember: {
-    input: T1dec1d0a87;
+    input: T74837627f5;
     output: T9b129e6597;
   };
   execute_typescript: {
@@ -32966,15 +32966,42 @@ export type ViewSort = T4c703c7179;
 
 export type ViewTemplateProperty = T2eac278e7d;
 
-type T00b5a3f4ca = "cancelled" | "disconnected" | "budget-exceeded" | "controller-busy" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-changed" | "tab-closed" | "timed-out" | "unsupported-page";
+type T005df2fae9 = {
+  analysis: string;
+  questions: Array<{
+    question: string;
+    reason: string;
+    options?: Array<string> | undefined;
+    default?: string | undefined;
+  }>;
+};
+
+type T00b5a3f4ca = "budget-exceeded" | "cancelled" | "controller-busy" | "disconnected" | "element-not-found" | "execution-failed" | "invalid-command" | "navigation-failed" | "no-controlled-tab" | "outcome-unknown" | "permission-denied" | "redirected" | "replay-state-unknown" | "sensitive-field" | "stale-controller" | "stale-snapshot" | "tab-changed" | "tab-closed" | "timed-out" | "unsupported-page";
 
 type T00bc2c60de = "anonymized" | "rawOverride";
 
-type T0199bafd46 = null | "document-type-classifier";
+type T0199bafd46 = "document-type-classifier" | null;
 
 type T01bb43c3ea = {
   text: string;
   id: string;
+};
+
+type T01e71ad247 = {
+  scanWarnings?: Array<string>;
+  pdfDerivative?: T77e493d553 | Tf1da61a84f | T2f120574a2 | T2253957f29;
+  thumbnailFileId?: string | null;
+  placeholder?: string;
+  thumbnailDerivative?: T77e493d553 | Tf1da61a84f | T2f120574a2 | T2253957f29;
+  type: "file";
+  mimeType: string;
+  id: string;
+  pdfFileId: Tbe0400fa4c;
+  encrypted: Tfddd645dc8;
+  fileName: string;
+  version: 1;
+  sizeBytes: number;
+  sha256Hex: string;
 };
 
 type T02cfa8674d = string | {
@@ -32982,9 +33009,9 @@ type T02cfa8674d = string | {
   message: string;
 };
 
-type T02d1680473 = {
-  type: ("unreliable-person" | "unreliable-vat-payer");
-  publishedOn: Tbe0400fa4c;
+type T02efc15f2b = {
+  readonly value: T59c690454c;
+  readonly issues?: undefined;
 };
 
 type T033348b898 = {
@@ -32993,9 +33020,9 @@ type T033348b898 = {
   count: number;
 };
 
-type T03697fb142 = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
+type T03697fb142 = "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "EU" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
 
-type T0378ec4ac6 = T173eec1550 | "_status" | "_kind";
+type T0378ec4ac6 = T173eec1550 | "_kind" | "_status";
 
 type T03c381f302 = {
   revision: string;
@@ -33007,35 +33034,19 @@ type T0487b0001f = {
   id: string;
 };
 
-type T050ffb7f51 = {
+type T0548b5740f = {
   type: "tool-call";
   id: string;
-  name: "link_matter_contact";
+  name: "save_document";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
 
-type T054aedcf37 = {
-  readonly value: T8a03a9eca5;
-  readonly issues?: undefined;
-};
-
-type T059308d7fb = {
-  readonly value: Td527bc6af5;
-  readonly issues?: undefined;
-};
-
 type T059c285743 = {
   skillName: string;
   path: string;
-};
-
-type T05cba4d570 = {
-  success: false;
-  message: string;
-  errors?: undefined | Array<Te1f90e1fdd>;
 };
 
 type T0604484dde = {
@@ -33061,7 +33072,7 @@ type T0739338f2c = {
 };
 
 type T0779b152b5 = {
-  perspective?: "neutral" | "buyer" | "seller";
+  perspective?: "buyer" | "neutral" | "seller";
   documentTypeKey?: string;
   trigger?: "manual" | "onClassified";
 };
@@ -33111,36 +33122,69 @@ type T0800a1cff9 = {
   }>;
 };
 
-type T08899c0691 = {
-  type: "tool-call";
-  id: string;
-  name: "delete_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T088b2f68ca = {
-  fileFieldId?: T6993bee61f;
-  docxEditSnapshot?: T94af9a40b9;
-  supportsDocxEdits?: false | true;
-  entityId: Tf742ada503;
-  fileName: string;
+type T0822683656 = {
+  title: string;
+  jurisdictions: ReadonlyArray<T61d3076ac0>;
+  fields: ReadonlyArray<string>;
+  slug: string;
+  license: string;
+  languages: ReadonlyArray<string>;
+  sha256: string;
+  legalArea: Tbe0400fa4c;
 };
 
-type T08bd31660c = {
-  type: "tool-call";
-  id: string;
-  name: "create-current-skill-resource";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type T0887c7c099 = {
+  value: number;
+  type: "int";
+  version: 1;
+  currency: Tbe0400fa4c;
+};
+
+type T08ed227429 = {
+  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
+  health: Te354fca58a;
+  stored: {
+    decisions: number;
+    asOf: Tbe0400fa4c;
+  };
+  addedLastWeek: T588d0ee653;
+  completeness: {
+    measuredSources: number;
+    stored: number;
+    reported: number;
+    storedAsOf: Tbe0400fa4c;
+    staleSources: number;
+    notMeasuredSources: number;
+    notCountedSources: number;
+  };
+  sources: ReadonlyArray<{
+    adapterKey: string;
+    name: string;
+    publicHomeUrl: string;
+    health: Te354fca58a;
+    lastSyncAt: Tbe0400fa4c;
+    completeness: {
+      state: "measured";
+    } & Tc9c6fb618b | {
+      state: "stale";
+    } & Tc9c6fb618b | {
+      state: "not-measured-yet";
+    } | {
+      state: "not-counted-yet";
+    };
+    addedLastWeek: T588d0ee653;
+  }>;
+};
 
 type T094c3ba654 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "timeEntry";
+};
+
+type T09610a4d6a = {
+  matterRef: string;
+  entityRef: string;
+  propertyRef: string;
+  value: T426e4657a4;
 };
 
 type T096c8fbbba = {
@@ -33149,20 +33193,22 @@ type T096c8fbbba = {
   count: number;
 };
 
-type T099eec7919 = {
-  readonly input: T1c0bc9000a;
-  readonly output: Td527bc6af5;
+type T096dadd2e6 = {
+  status: "unavailable";
+  checkedAt: string;
+  reason: ("http-error" | "malformed-response" | "network" | "outage-page" | "soap-fault" | "source-error" | "timeout");
+  detail: Tbe0400fa4c;
 };
 
-type T09c57cc1dd = null | T0da73a8dae;
+type T09c57cc1dd = T0da73a8dae | null;
 
-type T09d040568c = "Internal Server Error" | T9a51b7d2bc;
+type T09d040568c = T9a51b7d2bc | "Internal Server Error";
 
 type T09dc0536e6 = stll_api_contract_AgendaItemWireFields & {
   entityId: string;
   workspaceId: string;
   workspaceName: string;
-  kind: T884a45faa8;
+  kind: T334757ea46;
   name: Tbe0400fa4c;
   parentId: Tbe0400fa4c;
   createdAt: string;
@@ -33178,17 +33224,17 @@ type T09dc0536e6 = stll_api_contract_AgendaItemWireFields & {
   listItemType: Tbe0400fa4c;
   readOnly: Tfddd645dc8;
   sortOrder: Tbe0400fa4c;
-  activeEditBy: (null | {
+  activeEditBy: {
     name: string;
     image: Tbe0400fa4c;
     isMe: Tfddd645dc8;
-  });
+  } | null;
   fields: Array<{
     id: string;
     propertyId: string;
     entityId: string;
     content: Te4799562ab;
-    ocrExportStatus?: "text" | "unavailable" | "text-and-pdf";
+    ocrExportStatus?: "text" | "text-and-pdf" | "unavailable";
   }>;
   cellMetadata: Array<{
     propertyId: string;
@@ -33222,16 +33268,6 @@ type T09dc0536e6 = stll_api_contract_AgendaItemWireFields & {
   }>;
 };
 
-type T09ed4390f0 = {
-  type: "tool-call";
-  id: string;
-  name: "boe_get_law_structure";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
 type T0a1c0a6ee4 = {
   id: Tec5d6ccf29;
   type: ("created" | "existing" | "reactivated");
@@ -33241,21 +33277,30 @@ type T0a54ae7a2b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListSection";
 };
 
-type T0b64e151e3 = {
-  type: "tool-call";
-  id: string;
-  name: "create_matter_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T6c9afce89f;
-} & T4d73965770;
+type T0aff3edf22 = {
+  value: Tbe0400fa4c;
+  type: "single-select";
+  version: 1;
+};
 
 type T0b7cb34284 = {
   apiContractVersion: 4;
   version: string;
   commit: string;
   status: "ok";
+};
+
+type T0bdd08f6e7 = {
+  datePropertyId: string;
+  endDatePropertyId?: string | undefined;
+  additionalDatePropertyIds?: Array<string> | undefined;
+  mode: ("month" | "week" | "year");
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "calendar";
 };
 
 type T0c07d42a21 = {
@@ -33271,20 +33316,15 @@ type T0c07d42a21 = {
   toExclusive?: string;
 };
 
-type T0c82020958 = {
-  validFrom: Tbe0400fa4c;
-  validTo: Tbe0400fa4c;
-};
-
 type T0ca223e5b8 = {
   handle: T8ee3aa7cc6;
   text: string;
 };
 
-type T0cbcac4402 = {
+type T0cb52bc3d9 = {
   type: "tool-call";
   id: string;
-  name: "read-skill-resource";
+  name: "delete_matter";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
@@ -33305,16 +33345,6 @@ type T0da73a8dae = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clause";
 };
 
-type T0dfed83fbb = {
-  type: "tool-call";
-  id: string;
-  name: "use-browser";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T501e21fe4d | Tc4816eabc2;
-} & T4d73965770;
-
 type T0e2086ec76 = {
   results: Array<{
     index: number;
@@ -33332,17 +33362,12 @@ type T0e694e7f35 = {
   readonly issues?: undefined;
 };
 
-type T0e6d815eb1 = {
-  readonly input: T4195ea1b74;
-  readonly output: Ta1bec2af75;
-};
+type T0e7822079a = "date" | "file" | "int" | "money" | "multi-select" | "person" | "single-select" | "text";
 
-type T0e7822079a = "date" | "text" | "person" | "file" | "single-select" | "multi-select" | "int" | "money";
-
-type T0ef90f0d9a = {
+type T0f5b7a8f75 = {
   type: "tool-call";
   id: string;
-  name: "describe_template";
+  name: "delete_clause";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
@@ -33354,31 +33379,44 @@ type T1060343604 = {
   readonly output: any;
 };
 
-type T1065d99f0d = "search" | "fetch";
+type T1065d99f0d = "fetch" | "search";
 
 type T107b6d1fde = {
   documentRef: string;
   name: string;
 };
 
-type T107ce1b5ba = {
-  readonly input: Td7d37c35b1;
-  readonly output: Tc3ce63cbd9;
+type T10a0947927 = "billing" | "home" | "mailing" | "office" | "other" | "service";
+
+type T10a86d9f45 = "authored" | "bundled" | "upload" | "url";
+
+type T114ef593c6 = {
+  (args: unknown, context?: Tc88149628d): unknown;
 };
-
-type T10a0947927 = "other" | "billing" | "office" | "home" | "mailing" | "service";
-
-type T10a86d9f45 = "url" | "authored" | "bundled" | "upload";
 
 type T116acb8596 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListGenerationCandidate";
 };
 
-type T117607dc8d = "manual" | "schedule" | "file-upload";
+type T116d4a6834 = {
+  url: string;
+  title?: string | undefined;
+  publishedAt?: string | undefined;
+  content: string;
+  truncated: Tfddd645dc8;
+  provider: "jina";
+};
+
+type T117607dc8d = "file-upload" | "manual" | "schedule";
 
 type T119167339e = {
   readonly input: Tf1ef3fc0b0;
   readonly output: Tc497209a93;
+};
+
+type T11ae381356 = {
+  kind: "contact";
+  field: Td16108295a;
 };
 
 type T12044d22fd = {
@@ -33410,12 +33448,13 @@ type T12044d22fd = {
   version: 1;
 };
 
-type T1209f7b6f8 = {
-  (args: unknown, context?: Tc88149628d): unknown;
-};
-
 type T12163e1f6a = {
   readonly error: "Not Found";
+};
+
+type T12519395d5 = {
+  lawId: string;
+  relationType?: "all" | "derogatedBy" | "derogates" | "modifiedBy" | "modifies" | undefined;
 };
 
 type T129008ae9b = {
@@ -33426,19 +33465,9 @@ type T129008ae9b = {
   timezone: string;
 };
 
-type T12cb09eaca = {
-  readonly value: T8c80beb4cd;
-  readonly issues?: undefined;
-};
-
 type T130347c9ff = "decision" | "statute";
 
-type T13442801e2 = {
-  readonly input: T7c5bb3a7e5;
-  readonly output: T56c757e5e1;
-};
-
-type T139d25f59c = "task" | "activity";
+type T139d25f59c = "activity" | "task";
 
 type T13b00b267e = Response | {
   status: "idle";
@@ -33467,19 +33496,28 @@ type T13c40e7e09 = {
   domain: string;
 };
 
-type T15dbebb935 = "nda" | "dpa" | "msa" | "saas";
+type T14ae4bed9b = {
+  type: "tool-call";
+  id: string;
+  name: "configure_template_fields";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T14cb63054f = {
+  kind: "matter";
+  field: ("billingReference" | "name" | "reference" | "status");
+};
+
+type T15dbebb935 = "dpa" | "msa" | "nda" | "saas";
 
 type T15e45ddbb1 = {
   generatedAt: string;
   model: string;
   inputFingerprint: string;
   tree: Array<T4a06edd937>;
-};
-
-type T16bcee9e60 = {
-  value: Tbe0400fa4c;
-  type: "date";
-  version: 1;
 };
 
 type T16c6699378 = {
@@ -33495,31 +33533,15 @@ type T16de477cfb = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "desktopEditHandoff";
 };
 
-type T16f65ff3fd = "global" | "at" | "de" | "eu" | "sk" | "cz";
-
-type T172316168a = {
-  type: "tool-call";
-  id: string;
-  name: "reply_comment";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type T16f65ff3fd = "at" | "cz" | "de" | "eu" | "global" | "sk";
 
 type T173eec1550 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "property";
 };
 
-type T17e2f7d16d = {
-  groupByPropertyId?: undefined | string;
-  subgroupByPropertyId?: undefined | string;
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T4c703c7179>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4a5707509f>;
-  version: 1;
-  type: "kanban";
+type T17f9c80581 = {
+  readonly value: T1bc07bd9cb;
+  readonly issues?: undefined;
 };
 
 type T1856d5abc1 = {
@@ -33530,7 +33552,17 @@ type T18f0d4543f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentReviewFinding";
 };
 
-type T19752008a0 = null | "reviewed" | "disputed";
+type T1906714431 = {
+  type: "tool-call";
+  id: string;
+  name: "read_changes";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T19752008a0 = "disputed" | "reviewed" | null;
 
 type T19f6de971c = {
   readonly input: T6225d0be51;
@@ -33542,21 +33574,10 @@ type T1a34fdd78a = {
   readonly issues?: undefined;
 };
 
-type T1a5dc3145e = {
-  readonly value: T5ad5018b7e;
-  readonly issues?: undefined;
-};
-
-type T1a92e2c41a = {
-  groupByPropertyId?: undefined | string;
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T4c703c7179>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4a5707509f>;
-  version: 1;
-  type: "table";
-  columnOrder: Array<string>;
-  columnPinning: Array<string>;
+type T1b3c18c274 = {
+  kind: "cz-vat-reliability";
+  source: Tc73807a034;
+  subject: Te6e750ecc6;
 };
 
 type T1b8351dd22 = {
@@ -33567,27 +33588,32 @@ type T1b8351dd22 = {
   createdAt: string;
 };
 
-type T1bd0be04de = {
-  readonly input: T48c9e573fc;
-  readonly output: T9a80a98f0b;
-};
-
-type T1c0b32c703 = {
-  type: "tool-call";
-  id: string;
-  name: "boe_get_law_block";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T1c0bc9000a = {
-  lawId: string;
-  metadata?: undefined | false | true;
-  analysis?: undefined | false | true;
-  fullText?: undefined | false | true;
-  eli?: undefined | false | true;
+type T1bc07bd9cb = {
+  protocolVersion: 4;
+  snapshot: {
+    contentTrust: "untrusted-web-content";
+    elements: Array<{
+      context?: string | undefined;
+      href?: string | undefined;
+      name: string;
+      ref: string;
+      role: string;
+      value?: string | undefined;
+    }>;
+    revision: string;
+    text: string;
+    textOffset: number;
+    textTotalChars: number;
+    tabId: number;
+    title: string;
+    url: string;
+  };
+  status: "success";
+} | {
+  code: T00b5a3f4ca;
+  message: string;
+  protocolVersion: 4;
+  status: "error";
 };
 
 type T1c0d9c2cf5 = {
@@ -33623,37 +33649,47 @@ type T1cbe63218a = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentType";
 };
 
+type T1cd5f6c01f = {
+  lawId: string;
+  metadata?: false | true | undefined;
+  analysis?: false | true | undefined;
+  fullText?: false | true | undefined;
+  eli?: false | true | undefined;
+};
+
 type T1d1d28b371 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clauseCategory";
 };
 
-type T1d6100d20a = {
-  type: "footnote";
-  label: string;
-  noteId?: undefined | string;
-};
-
-type T1d719fd945 = "other" | "mobile" | "office" | "home" | "fax";
+type T1d719fd945 = "fax" | "home" | "mobile" | "office" | "other";
 
 type T1dacb02040 = "organization" | "person";
 
-type T1dec1d0a87 = {
-  content: string;
-  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
-  scope?: undefined | "workspace" | "user";
-};
-
-type T1e45e62b6b = {
-  readonly value: T9a80a98f0b;
+type T1e5e71d2be = {
+  readonly value: Tf1e33da2e2;
   readonly issues?: undefined;
 };
 
-type T1eaad4c663 = "verified" | "needs-review" | "important" | "follow-up" | "contradiction";
+type T1ea5eea592 = {
+  url: string;
+  maxChars?: number | undefined;
+};
 
-type T1faca0bf38 = {
-  kind: "party";
-  role: Tdedb951219;
-  field: Td16108295a;
+type T1eaad4c663 = "contradiction" | "follow-up" | "important" | "needs-review" | "verified";
+
+type T1edc2e9811 = {
+  listId: (T5ed75bc2cc | null);
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "avt";
+};
+
+type T1f6852a9bf = {
+  readonly input: T1cd5f6c01f;
+  readonly output: Tf5fa97e79b;
 };
 
 type T1fb4a2d60d = {
@@ -33669,40 +33705,45 @@ type T1fc3209762 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "savedTimeNarrative";
 };
 
-type T213cf195f4 = {
-  type: "tool-call";
-  id: string;
-  name: "update-entity-fields";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T3a8e541c8b;
-} & T4d73965770;
+type T1fd3bcf307 = {
+  readonly input: T74837627f5;
+  readonly output: T475c8d6c2c;
+};
 
-type T21931d6d07 = "highlight" | "underline" | "squiggly" | "strikethrough";
+type T217025cb58 = {
+  readonly value: Te47ce45d73;
+  readonly issues?: undefined;
+};
+
+type T21931d6d07 = "highlight" | "squiggly" | "strikethrough" | "underline";
 
 type T21b00a9f66 = {
   path: string;
-  kind: ("string" | "boolean" | "object" | "array");
+  kind: ("array" | "boolean" | "object" | "string");
   count: number;
-  label?: undefined | string;
-  hint?: undefined | string;
-  inputType?: undefined | "number" | "boolean" | "date" | "text" | "select";
-  options?: undefined | Array<string>;
-  validation?: undefined | T8da97ce6b5;
-  required?: undefined | false | true;
-  aiAdapt?: undefined | false | true;
-  aiPrompt?: undefined | string;
-  aiSeesDocument?: undefined | false | true;
-  optionsFrom?: undefined | string;
-  lookup?: undefined | T3217a347d4;
-  source?: undefined | T551b81e20a | T1faca0bf38 | T76d112985a | T8f7cd2c7c4 | T6f17a2dbb3;
-  formula?: undefined | string;
-  condition?: undefined | string;
-  conditionAst?: undefined | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
-  dateFormat?: undefined | stll_template_conditions_FieldDateFormat;
-  itemFields?: undefined | Array<T21b00a9f66>;
-  visibleWhen?: undefined | string;
+  label?: string | undefined;
+  hint?: string | undefined;
+  inputType?: "boolean" | "date" | "number" | "select" | "text" | undefined;
+  options?: Array<string> | undefined;
+  validation?: Tdb5805e6ca | undefined;
+  required?: false | true | undefined;
+  aiAdapt?: false | true | undefined;
+  aiPrompt?: string | undefined;
+  aiSeesDocument?: false | true | undefined;
+  optionsFrom?: string | undefined;
+  lookup?: T3217a347d4 | undefined;
+  source?: T11ae381356 | T9de06ef8f6 | T14cb63054f | T376e5c32ed | T6f17a2dbb3 | undefined;
+  formula?: string | undefined;
+  condition?: string | undefined;
+  conditionAst?: stll_conditions_CompareNode | stll_conditions_GroupNode | stll_conditions_PredicateNode | undefined;
+  dateFormat?: stll_template_conditions_FieldDateFormat | undefined;
+  itemFields?: Array<T21b00a9f66> | undefined;
+  visibleWhen?: string | undefined;
+};
+
+type T21b8909cf9 = {
+  readonly input: T3ee3f8c0bd;
+  readonly output: Tea0fd307f9;
 };
 
 type T21d4acdd13 = {
@@ -33717,27 +33758,115 @@ type T21d4acdd13 = {
   mention: string;
 };
 
+type T21ddbd121a = {
+  text: string;
+  instructions: Tbe0400fa4c;
+};
+
 type T21e7b1b9fc = {
   countryCode: ("AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW");
   isPrimary: Tfddd645dc8;
+};
+
+type T2203ecc422 = {
+  documentAst: {
+    version: 1;
+    source: T9d8da34b19;
+    metadata: Tb41431d9b3;
+    blocks: Array<{
+      id: string;
+      anchorId: string;
+      type: "heading";
+      level: T83854980c8;
+      role?: "decision-title" | "section-heading" | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "paragraph";
+      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
+      note?: T8bbaf16642 | undefined;
+      listDepth?: 1 | 2 | 3 | 4 | undefined;
+      number?: number | undefined;
+      inlines: Array<Ta4c2166933>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "table";
+      role?: "metadata-table" | "related-proceedings" | undefined;
+      rows: Array<Array<{
+        inlines: Array<Ta4c2166933>;
+        plainText: string;
+        colSpan?: number | undefined;
+        rowSpan?: number | undefined;
+        header?: true | undefined;
+      }>>;
+      plainText: string;
+    } | {
+      id: string;
+      anchorId: string;
+      type: "image";
+      src: string;
+      alt?: string | undefined;
+      width?: number | undefined;
+      height?: number | undefined;
+      plainText: string;
+    }>;
+  } | T3f8f92c9e4 | null;
+  fulltext: Tbe0400fa4c;
+  eli: string;
+  slug: Tbe0400fa4c;
+  title: string;
+  country: string;
+  language: string;
+  documentType: Tbe0400fa4c;
+  status: string;
+  effectiveDate: Tbe0400fa4c;
+  versionValidFrom: Tbe0400fa4c;
+  versionValidTo: Tbe0400fa4c;
+  sections: Tb9db08c163;
+  sourceUrl: Tbe0400fa4c;
+  documentUrl: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+  citationCaseCount: T588d0ee653;
+  allowsDerivedAi: Tfddd645dc8;
+  id: Tfc8a750351;
 };
 
 type T22259c97a4 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "expense";
 };
 
-type T2233e69cfb = "medium" | "high" | "low";
+type T2233e69cfb = "high" | "low" | "medium";
 
-type T22d9b74f40 = {
-  readonly issues: ReadonlyArray<{
-    readonly message: string;
-    readonly path?: undefined | ReadonlyArray<(string | number | symbol | {
-      readonly key: (string | number | symbol);
-    })>;
-  }>;
+type T2238d312e7 = {
+  readonly "~standard": {
+    readonly jsonSchema: Tc49e8b2305;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: T1060343604 | undefined;
+  };
 };
 
-type T23680c2d7b = "global" | "ch" | "eu";
+type T22503d92e1 = {
+  type: "tool-call";
+  id: string;
+  name: "resolve_comment";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T2253957f29 = {
+  reason?: "enqueue" | "processing";
+  status: "failed";
+};
+
+type T23680c2d7b = "ch" | "eu" | "global";
 
 type T239c95b432 = {
   readonly value: Taf56293cce;
@@ -33749,7 +33878,7 @@ type T244a503d33 = {
   resource_name: string;
   resource_logo_uri: string;
   authorization_servers: Array<string>;
-  scopes_supported: Array<("stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback" | "stella:search_anonymized" | "stella:read_anonymized" | "stella:templates_anonymized")>;
+  scopes_supported: Array<("stella:admin_read" | "stella:admin_write" | "stella:billing_write" | "stella:chat" | "stella:contacts_write" | "stella:documents_write" | "stella:external_mcps" | "stella:feedback" | "stella:knowledge_write" | "stella:matters_write" | "stella:onboarding" | "stella:read" | "stella:read_anonymized" | "stella:search" | "stella:search_anonymized" | "stella:skills" | "stella:templates" | "stella:templates_anonymized")>;
   bearer_methods_supported: Array<string>;
   stella_contract: {
     protocol: 2;
@@ -33772,12 +33901,7 @@ type T2530f6e50c = {
   workspaceId: T8d02a37b3f;
 };
 
-type T25af101672 = null | "supported" | "tension" | "contradicted" | "nocover" | "notverifiable";
-
-type T25b363bf5d = {
-  readonly input: T49bccf09e2;
-  readonly output: Tabc58da83b;
-};
+type T25af101672 = "contradicted" | "nocover" | "notverifiable" | "supported" | "tension" | null;
 
 type T25e979f956 = {
   chat: T8919d5949d;
@@ -33786,10 +33910,20 @@ type T25e979f956 = {
   reasoning: T8919d5949d;
 };
 
+type T25fd06afe1 = {
+  readonly input: T81f0fdb1b7;
+  readonly output: T21ddbd121a;
+};
+
+type T261548128c = {
+  status: "unconfigured";
+  missing: ("CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND" | "PUBLIC_LAW_DATABASE_URL");
+};
+
 type T26d760a340 = {
   type: "file";
   version: 1;
-} | Tcb216ab4cd | Tabd3c9202c | Tcdd35a1427 | T2b5a9a8bf4 | {
+} | Tcb216ab4cd | Te16cf19189 | Tcdd35a1427 | T2b5a9a8bf4 | {
   type: "money";
   version: 1;
   currency: Tbe0400fa4c;
@@ -33821,9 +33955,9 @@ type T270af050c9 = {
       }>;
       playbook: {
         definitionId: Tcadd7d5047;
-        versionId: (null | (string & valibot_Brand<"SafeId"> & {
+        versionId: ((string & valibot_Brand<"SafeId"> & {
           readonly __safeIdType?: "playbookDefinitionVersion";
-        }));
+        }) | null);
         provenance: T2df478253f;
         definitionSnapshot: {
           name: string;
@@ -33862,7 +33996,7 @@ type T270af050c9 = {
         issue: string;
         severity: T7538035c96;
         standardSource: T06588da39f;
-        verdict: (null | "fallback" | "missing" | "compliant" | "deviation" | "additional" | "not-applicable");
+        verdict: ("additional" | "compliant" | "deviation" | "fallback" | "missing" | "not-applicable" | null);
         delta: {
           kind: "parameter";
           target: Tda8bbd279d;
@@ -33873,7 +34007,7 @@ type T270af050c9 = {
             label: string;
             inTarget: Tfddd645dc8;
             inStandard: Tfddd645dc8;
-            citation: (null | T1c6c700a79);
+            citation: (T1c6c700a79 | null);
           }>;
         } | {
           kind: "presence";
@@ -33883,21 +34017,21 @@ type T270af050c9 = {
         } | {
           kind: "language";
         };
-        extracted: (null | {
+        extracted: {
           value: string;
           text: string;
-        });
+        } | null;
         rationale: Tbe0400fa4c;
         matchedRef?: T6b29dee50d | Tcbd1655cb4;
-        consensus?: "mixed" | "single" | "consistent";
-        impact?: "neutral" | "unknown" | "favourable" | "unfavourable";
+        consensus?: "consistent" | "mixed" | "single";
+        impact?: "favourable" | "neutral" | "unfavourable" | "unknown";
         explanation?: {
           type: "comparison";
           text: string;
         } | {
           type: "insufficient-evidence";
         };
-        recommendation?: null | string;
+        recommendation?: string | null;
         citations: Array<T1c6c700a79>;
         referenceCitations?: Array<{
           fileFieldId: T6993bee61f;
@@ -33906,7 +34040,7 @@ type T270af050c9 = {
             blockId: string;
           }>;
         }>;
-        fix: (null | {
+        fix: {
           kind: "replaceInBlock";
           blockId: string;
           find: string;
@@ -33919,7 +34053,7 @@ type T270af050c9 = {
           kind: "insertAfterBlock";
           blockId: string;
           text: string;
-        });
+        } | null;
       } & {
         referenceDetail?: "withheld";
       };
@@ -33931,14 +34065,8 @@ type T270af050c9 = {
     applicationStatus: Tc0c6b48ad3;
     appliedBy: Tbe0400fa4c;
     appliedAt: Tbe0400fa4c;
-    suggestionId: (null | T2d0a4c53c0);
+    suggestionId: (T2d0a4c53c0 | null);
   }>;
-};
-
-type T271d61ed3c = {
-  value: Tbe0400fa4c;
-  type: "single-select";
-  version: 1;
 };
 
 type T27875dbd24 = {
@@ -33974,37 +34102,15 @@ type T27f4c16dc2 = {
   decisions: number;
 };
 
-type T27f58c309e = {
-  fileNumber: string;
-  court: Tbe0400fa4c;
-  phase: ("unverified" | "ongoing" | "ended");
-  stateCode: Tbe0400fa4c;
-  matchedBy: ("company-id" | "name-and-birth-date");
-  debtor: {
-    name: Tbe0400fa4c;
-    firstName: Tbe0400fa4c;
-    companyId: Tbe0400fa4c;
-    birthDate: Tbe0400fa4c;
-    address: Tbe0400fa4c;
-  };
-  insolvencyDeclaredOn: Tbe0400fa4c;
-  insolvencyEndedOn: Tbe0400fa4c;
-  url: Tbe0400fa4c;
+type T280b23614f = "confidential" | "normal" | "private" | null;
+
+type T2832369547 = "completed" | "failed" | "queued" | "running";
+
+type T285ff51ba0 = {
+  value: Tbe0400fa4c;
+  type: "date";
+  version: 1;
 };
-
-type T280b23614f = null | "private" | "normal" | "confidential";
-
-type T28236c25e3 = {
-  type: "tool-call";
-  id: string;
-  name: "infosoud_lookup_case";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T2832369547 = "failed" | "running" | "completed" | "queued";
 
 type T28ae3065fc = "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp" | "Backspace" | "Enter" | "Escape" | "Space" | "Tab";
 
@@ -34014,9 +34120,23 @@ type T290c6ff7c9 = {
   validTo: Tbe0400fa4c;
 };
 
-type T29a74257e3 = {
-  readonly input: T3b2c7123e2;
-  readonly output: T8c80beb4cd;
+type T291799859b = {
+  type: "tool-call";
+  id: string;
+  name: "read_section";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T2998ce6505 = {
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "filesystem";
 };
 
 type T2a09c7df07 = {
@@ -34043,16 +34163,6 @@ type T2a53b33d09 = {
   readonly id: stll_api_contract_SafeId<"entity">;
 };
 
-type T2a6713721b = {
-  type: "tool-call";
-  id: string;
-  name: "delete_task";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
 type T2b15184b07 = {
   neutral: number;
   negative: number;
@@ -34067,7 +34177,7 @@ type T2b5a9a8bf4 = {
   version: 1;
 };
 
-type T2b6600fed5 = null | "email" | "manual" | "calendar" | "infosoud" | "import" | "api";
+type T2b6600fed5 = "api" | "calendar" | "email" | "import" | "infosoud" | "manual" | null;
 
 type T2bf53fea26 = {
   id: Tcdc6b0a442;
@@ -34101,51 +34211,9 @@ type T2d674d595a = {
   documentTitle: string;
 };
 
-type T2dbe0476e0 = {
-  type: "tool-call";
-  id: string;
-  name: "create_template";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type T2df478253f = "approved" | "draft" | "ephemeral";
 
-type T2dc5e98509 = {
-  workspaceId?: T9e07a7d6cd;
-  contextMatterIds?: Array<T9e07a7d6cd>;
-  truncateAfterMessageId?: T66e92cdab1;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T129008ae9b;
-  activeDraft?: T42a50d3ca2;
-  activeFile?: T088b2f68ca;
-  activeTemplate?: T9bf573e525;
-  activeDecision?: Tfc773e48e5;
-  activeExternal?: Tc42c89297d;
-  activeSkill?: T369422441d;
-  activeStatute?: T576bcbcea8;
-  browserClient?: Tf9e246ce28;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T66e92cdab1;
-    role: "assistant";
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: Taf779979ed;
-  sendMode: T00bc2c60de;
-  parentRunId: string;
-  resume: Array<Tacbaeed0d6>;
-};
-
-type T2df478253f = "draft" | "approved" | "ephemeral";
-
-type T2e1b9ec514 = "Desktop edit session source file is no longer available." | "Desktop edit session not found." | "Desktop editing moved to another device. This local copy is preserved." | `File validation failed: ${string}` | "Workspace is not active" | "Desktop edit session is already closed." | "Desktop edit session file type changed while finalizing." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Base entity version not found.";
+type T2e1b9ec514 = `File validation failed: ${string}` | "Base entity version not found." | "Desktop edit session file type changed while finalizing." | "Desktop edit session is already closed." | "Desktop edit session not found." | "Desktop edit session source file is no longer available." | "Desktop editing moved to another device. This local copy is preserved." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Workspace is not active";
 
 type T2e2021adee = {
   readonly input: Taeaa3ad44e;
@@ -34161,1480 +34229,12 @@ type T2e64e7c399 = {
   readonly issues?: undefined;
 };
 
-type T2e9e8fc862 = {
-  lawId: string;
-  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
-};
-
-type T2eac278e7d = {
-  role?: null | "document-type-classifier";
-  dependencies?: Array<{
-    condition: T60e51917c9;
-    dependsOnSourceId: string;
-  }>;
-  name: string;
-  tool: {
-    type: "ai-model";
-    prompt: string;
-    version: 1;
-  } | {
-    type: "manual-input";
-    version: 1;
-  };
-  version: 1;
-  content: {
-    type: "file";
-    version: 1;
-  } | {
-    type: "text";
-    version: 1;
-  } | {
-    type: Tf795dc12d5;
-    options: Array<{
-      value: string;
-      color: string;
-    }>;
-    version: 1;
-    fallback: Tbe0400fa4c;
-  } | {
-    type: "date";
-    version: 1;
-  } | {
-    type: "int";
-    version: 1;
-  } | {
-    type: "money";
-    version: 1;
-    currency: Tbe0400fa4c;
-  } | {
-    type: "person";
-    version: 1;
-  };
-  sourceId: string;
-  createIfMissing: Tfddd645dc8;
-};
-
-type T2eda26bd51 = {
-  id: T501a665986;
-  decisionId: T406326c84f;
-  workspaceId: T9e07a7d6cd;
-  note: Tbe0400fa4c;
-  linkedBy: string;
-  createdAt: string;
-};
-
-type T2f120574a2 = {
-  status: "ready";
-};
-
-type T2f575449b0 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawJudge";
-};
-
-type T2fb0b2d20e = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
-
-type T2fe5059b53 = {
-  status: "connected";
-};
-
-type T300701e436 = {
-  workspaceId: T8d02a37b3f;
-};
-
-type T3012ed5aad = {
-  readonly value: Tccd7994462;
-  readonly issues?: undefined;
-};
-
-type T30793b9dc0 = {
-  readonly "~standard": {
-    readonly jsonSchema: Tc49e8b2305;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Td72ffb3ca2;
-  };
-} & {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T71f88011ed): (T22d9b74f40 | T39bd2e99da | Promise<(T22d9b74f40 | T39bd2e99da)>);
-    };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Td72ffb3ca2;
-  };
-};
-
-type T310abc7c1b = null | {
-  pattern: Tbe0400fa4c;
-  range: Tbe0400fa4c;
-  raw?: unknown;
-};
-
-type T3115fa37b5 = {
-  type: "tool-call";
-  id: string;
-  name: "set_field_value";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T313f510b34 = null | T2a109871bb;
-
-type T3185916700 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalListVerificationRun";
-};
-
-type T3217a347d4 = {
-  registry: T347d72c6fa;
-  formats: Array<{
-    key: string;
-    template: string;
-  }>;
-};
-
-type T323404941e = {
-  readonly value: Te384930758;
-  readonly issues?: undefined;
-};
-
-type T32a2c3700a = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "agentSkillResource";
-};
-
-type T32fdeee18e = {
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: Tbe0400fa4c;
-  id: string;
-  language: string;
-  slug: Tbe0400fa4c;
-};
-
-type T34252d475f = {
-  viewId: T7e10a0d884;
-};
-
-type T346b54ceed = {
-  documentAst: (null | {
-    version: 1;
-    source: T9d8da34b19;
-    metadata: Tb41431d9b3;
-    blocks: Array<{
-      id: string;
-      anchorId: string;
-      type: "heading";
-      level: T83854980c8;
-      role?: undefined | "decision-title" | "section-heading";
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "paragraph";
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
-      note?: undefined | T1d6100d20a;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
-      number?: undefined | number;
-      inlines: Array<Ta4c2166933>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "table";
-      role?: undefined | "related-proceedings" | "metadata-table";
-      rows: Array<Array<{
-        inlines: Array<Ta4c2166933>;
-        plainText: string;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
-        header?: undefined | true;
-      }>>;
-      plainText: string;
-    } | {
-      id: string;
-      anchorId: string;
-      type: "image";
-      src: string;
-      alt?: undefined | string;
-      width?: undefined | number;
-      height?: undefined | number;
-      plainText: string;
-    }>;
-  } | T3f8f92c9e4);
-  fulltext: Tbe0400fa4c;
-  eli: string;
-  slug: Tbe0400fa4c;
-  title: string;
-  country: string;
-  language: string;
-  documentType: Tbe0400fa4c;
-  status: string;
-  effectiveDate: Tbe0400fa4c;
-  versionValidFrom: Tbe0400fa4c;
-  versionValidTo: Tbe0400fa4c;
-  sections: Tb9db08c163;
-  sourceUrl: Tbe0400fa4c;
-  documentUrl: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-  citationCaseCount: T588d0ee653;
-  allowsDerivedAi: Tfddd645dc8;
-  id: Tfc8a750351;
-};
-
-type T346ea860b1 = {
-  readonly type: "contact";
-  readonly id: stll_api_contract_SafeId<"contact">;
-};
-
-type T347d72c6fa = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
-
-type T347ea842b3 = {
-  type: "tool-call";
-  id: string;
-  name: "delete_clause";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T348bff1a92 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "chatTurn";
-};
-
-type T34da0c446b = {
-  workspaceId: string;
-};
-
-type T350a170d52 = {
-  needsApproval: true;
-  approvalSchema: undefined;
-};
-
-type T353d98c95e = {
-  action: "open";
-  url: string;
-} | {
-  action: "snapshot";
-  textOffset?: undefined | number;
-} | {
-  action: "click";
-  page: T779a78611c;
-  target: T823941dec3;
-} | {
-  action: "fill";
-  page: T779a78611c;
-  target: T823941dec3;
-  value: string;
-} | {
-  action: "select";
-  page: T779a78611c;
-  target: T823941dec3;
-  value: string;
-} | {
-  action: "press-key";
-  key: T28ae3065fc;
-  page: T779a78611c;
-  target: T823941dec3;
-} | {
-  action: "go-back";
-};
-
-type T3582432480 = {
-  type: "tool-call";
-  id: string;
-  name: "business_registry_lookup";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T367a10cc51 = {
-  readonly input: T466db84340;
-  readonly output: T27875dbd24;
-};
-
-type T369422441d = {
-  skillId: T8ff9f6d126;
-  skillName: string;
-};
-
-type T373044b8de = "workspace" | "download";
-
-type T37fe4edf98 = {
-  status: "unconfigured";
-  missing: ("PUBLIC_LAW_DATABASE_URL" | "CORPUS_INDEX_Q09_SEARCH_ENDPOINT" | "DEV_PUBLIC_LAW_CONNECT_COMMAND");
-};
-
-type T37fefd1259 = {
-  entityId: string;
-  fieldId: string;
-  fileId: string;
-  fileName: string;
-  renamed: Tfddd645dc8;
-};
-
-type T3802454091 = "language" | "presence" | "parameter" | "enumeration";
-
-type T38d4bc0e42 = {
-  playbookId: T4e595a8315;
-};
-
-type T38eb7c9eb4 = null | Array<T884a45faa8>;
-
-type T3913e4550c = {
-  lawId: string;
-  blockId: string;
-};
-
-type T392bdfc9ed = {
-  readonly target: ((T5e3ac29766 & string) | "draft-2020-12" | "draft-07" | "openapi-3.0");
-  readonly libraryOptions?: undefined | T631856df6b;
-};
-
-type T3953b344f7 = {
-  type: "tool-call";
-  id: string;
-  name: "suggest_template_fields";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T39bd2e99da = {
-  readonly value: T86d8d3c659;
-  readonly issues?: undefined;
-};
-
-type T3a2aa457e2 = "available" | "unavailable" | "installed";
-
-type T3a5b898b8d = {
-  path: string;
-  label: string;
-};
-
-type T3a8e541c8b = {
-  success: true;
-  entityRef: string;
-  propertyRef: string;
-  newValue: string;
-};
-
-type T3ae9eb741e = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "auditLog";
-};
-
-type T3af8ea50d0 = {
-  readonly value: T64c3504dad;
-  readonly issues?: undefined;
-};
-
-type T3b03b89012 = {
-  documentId: Tfc8a750351;
-  language: string;
-  anchorId: string;
-  citedAnchorId: Tbe0400fa4c;
-  headings: Array<{
-    anchorId: string;
-    level: T83854980c8;
-    text: string;
-  }>;
-  heading: (null | {
-    id: string;
-    anchorId: string;
-    level: T83854980c8;
-    text: string;
-  });
-  blocks: Array<{
-    id: string;
-    anchorId: string;
-    text: string;
-  }>;
-};
-
-type T3b2c7123e2 = {
-  text?: undefined | string;
-  title?: undefined | string;
-  departmentCode?: undefined | string;
-  legalRangeCode?: undefined | string;
-  matterCode?: undefined | string;
-  dateFrom?: undefined | string;
-  dateTo?: undefined | string;
-  offset?: undefined | number;
-  limit?: undefined | number;
-};
-
-type T3b4d67e019 = null | {
-  country?: string;
-  state?: string;
-  line1?: string;
-  line2?: string;
-  postalCode?: string;
-  city?: string;
-};
-
-type T3ba9545800 = {
-  workspaceId: string;
-};
-
-type T3c0c1b0a27 = {
-  title: string;
-  introduction: string;
-  investmentHeading: string;
-  investmentBody: string;
-  equityFinancingHeading: string;
-  equityFinancingBody: string;
-  conversionPriceHeading: string;
-  conversionPriceBody: string;
-  shareClassHeading: string;
-  shareClassBody: string;
-  liquidityEventHeading: string;
-  liquidityEventBody: string;
-  companyRepresentationsHeading: string;
-  companyRepresentationsBody: string;
-  generalHeading: string;
-  generalBody: string;
-};
-
-type T3c3fa57c15 = {
-  country?: string;
-  label?: string;
-  state?: string;
-  line2?: string;
-  postalCode?: string;
-  city?: string;
-  type: T10a0947927;
-  isPrimary: Tfddd645dc8;
-  line1: string;
-};
-
-type T3dc3e2ca32 = {
-  label?: string;
-  text: string;
-  id: string;
-};
-
-type T3e64088e2c = "failed" | "no-backend" | "below-floor";
-
-type T3f3b30a014 = "Unauthorized" | T9a51b7d2bc;
-
-type T3f8f92c9e4 = {
-  [key: string]: never;
-};
-
-type T3fbc5ba165 = readonly [T73b2a1010d, ...T73b2a1010d[]];
-
-type T4042d27c41 = {
-  workspaceId: string;
-};
-
-type T406326c84f = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawDecision";
-};
-
-type T4195ea1b74 = {
-  matterRef: string;
-  entityRef: string;
-  propertyRef: string;
-  value: T426e4657a4;
-};
-
-type T41b8bd81bd = {
-  entities: Array<{
-    entity: T2a53b33d09;
-    toolCallId: string;
-    workspace: T4c3eeb6df3;
-  }>;
-  unresolvedInputs: Array<{
-    kind: ("contact" | "entity" | "matter" | "property");
-    param: string;
-    ref: string;
-    toolCallId: string;
-  }>;
-  workspaceScope: Array<T4c3eeb6df3>;
-};
-
-type T41e0ad416a = {
-  quote: string;
-  blockAnchorId: string;
-  startOffset: number;
-  endOffset: number;
-};
-
-type T41ee5fbcc8 = {
-  snippet?: string;
-  citation?: string;
-  jurisdiction?: string;
-  sourceType?: string;
-  type: "clip";
-  url: string;
-  version: 1;
-};
-
-type T42132256a7 = {
-  answers: Array<{
-    question: string;
-    answer: string;
-  }>;
-};
-
-type T426e4657a4 = null | string | number | Array<string>;
-
-type T42a50d3ca2 = {
-  fileName: string;
-  toolCallId: string;
-  originChatMessageId: T66e92cdab1;
-  originChatThreadId: Taf779979ed;
-  docxEditSnapshot: T94af9a40b9;
-};
-
-type T42b0ce8576 = {
-  ok: false;
-  error: string;
-};
-
-type T43ff0c9596 = {
-  ":workspaceId": T5e3ac29766;
-};
-
-type T4498be3bc0 = "Not Found" | {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tfbf26a7023>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T0d3b649ce9;
-  error?: string;
-  claim?: T753574bc22;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T81694d3f69>;
-};
-
-type T44e2cd4568 = null | false | true;
-
-type T44f2e6d941 = {
-  readonly input: Tee12b2a0c6;
-  readonly output: T9b129e6597;
-};
-
-type T450a9782d1 = {
-  value: number;
-  type: "int";
-  version: 1;
-  currency: Tbe0400fa4c;
-};
-
-type T450f33afce = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "folioCollabRoom";
-};
-
-type T451ea4af96 = {
-  type: "tool-call";
-  id: string;
-  name: "counterparty_check";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T453834ba82 = "active" | "archived" | "deleting";
-
-type T4586fbd3dc = {
-  country: ("AUT" | "CZE" | "EU" | "HUN" | "POL" | "SVK" | "USA");
-  health: Te354fca58a;
-  stored: {
-    decisions: number;
-    asOf: Tbe0400fa4c;
-  };
-  addedLastWeek: T588d0ee653;
-  completeness: {
-    measuredSources: number;
-    stored: number;
-    reported: number;
-    storedAsOf: Tbe0400fa4c;
-    staleSources: number;
-    notMeasuredSources: number;
-    notCountedSources: number;
-  };
-  sources: ReadonlyArray<{
-    adapterKey: string;
-    name: string;
-    publicHomeUrl: string;
-    health: Te354fca58a;
-    lastSyncAt: Tbe0400fa4c;
-    completeness: {
-      state: "measured";
-    } & T533de96505 | {
-      state: "stale";
-    } & T533de96505 | {
-      state: "not-measured-yet";
-    } | {
-      state: "not-counted-yet";
-    };
-    addedLastWeek: T588d0ee653;
-  }>;
-};
-
-type T45c8485af6 = {
-  scanWarnings?: Array<string>;
-  pdfDerivative?: T77e493d553 | Tf1da61a84f | T2f120574a2 | T7a1942a03f;
-  thumbnailFileId?: null | string;
-  placeholder?: string;
-  thumbnailDerivative?: T77e493d553 | Tf1da61a84f | T2f120574a2 | T7a1942a03f;
-  type: "file";
-  mimeType: string;
-  id: string;
-  pdfFileId: Tbe0400fa4c;
-  encrypted: Tfddd645dc8;
-  fileName: string;
-  version: 1;
-  sizeBytes: number;
-  sha256Hex: string;
-};
-
-type T45d1c6c746 = {
-  name: string;
-  organName: Tbe0400fa4c;
-  position: Tbe0400fa4c;
-  identifier: Tbe0400fa4c;
-  address: Tbe0400fa4c;
-  validFrom: Tbe0400fa4c;
-  validTo: Tbe0400fa4c;
-};
-
-type T466bee4580 = {
-  lawId: string;
-  blockId: string;
-};
-
-type T466db84340 = {
-  courtCode: string;
-  spisZn: string;
-};
-
-type T4750c1f7ee = "user" | "proposed" | "detected";
-
-type T47f7828fc7 = null | T6993bee61f;
-
-type T4866a24af7 = null | T6e37e01eb4;
-
-type T48c9e573fc = {
-  query: string;
-  jurisdiction?: undefined | "global" | "at" | "de" | "eu" | "sk" | "cz";
-  freshness?: undefined | "year" | "any" | "month" | "week" | "day";
-  maxResults?: undefined | number;
-};
-
-type T49bccf09e2 = T501e21fe4d | Tc4816eabc2;
-
-type T49beff9484 = {
-  readonly value: T5282b3aa45;
-  readonly issues?: undefined;
-};
-
-type T4a06edd937 = {
-  id: string;
-  label: string;
-  category: string;
-  startAnchorId: string;
-  endAnchorId: string;
-  annotations: Array<{
-    id: string;
-    summary: string;
-    startAnchorId: string;
-    endAnchorId: string;
-    textSnippet: string;
-  }>;
-  children: Array<T4a06edd937>;
-};
-
-type T4a5707509f = {
-  propertyId: string;
-  kind: ("max" | "count" | "min" | "count-unique" | "count-empty" | "count-filled" | "percent-empty" | "percent-filled" | "sum" | "average" | "median" | "range" | "percent-of-total");
-};
-
-type T4a9a2dd4a4 = null | "year" | "month" | "day";
-
-type T4ac8f6dd24 = {
-  check?: T2cd830774a | T53caa211eb;
-  guidance?: string;
-  negotiation?: Tea672cd0a4;
-  purpose?: string;
-  issue: string;
-  mode: "graded";
-  standard: T7dd13bf604;
-  ask: {
-    derived?: {
-      content: T26d760a340;
-      question: string;
-      rulesHash: string;
-    };
-    mode: "auto";
-  } | {
-    mode: "manual";
-    content: T26d760a340;
-    question: string;
-  };
-  enabled: Tfddd645dc8;
-  severity: T7538035c96;
-  sourceId: string;
-};
-
-type T4ada5516f7 = null | T58ea91aa38;
-
-type T4ae6d071f3 = "table" | "paragraph" | "heading" | "listItem";
-
-type T4b0b703d9e = {
-  type: "tool-call";
-  id: string;
-  name: "borme_get_summary";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T4b83723412 = "google" | "openrouter" | "openai" | "anthropic" | "bedrock" | "mistral";
-
-type T4bb0fb38a9 = {
-  street: Tbe0400fa4c;
-  postalCode: Tbe0400fa4c;
-  city: Tbe0400fa4c;
-  country: Tbe0400fa4c;
-  textAddress: Tbe0400fa4c;
-};
-
-type T4c3eeb6df3 = {
-  readonly type: "workspace";
-  readonly id: stll_api_contract_SafeId<"workspace">;
-};
-
-type T4c60d2e7ad = {
-  date: string;
-};
-
-type T4c6fb063e8 = {
-  type: "tool-call";
-  id: string;
-  name: "save_clause";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T4c703c7179 = {
-  propertyId: string;
-  desc: Tfddd645dc8;
-};
-
-type T4c80e82e5d = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "usagePolicy";
-};
-
-type T4cff2c04a4 = {
-  type: "tool-call";
-  id: string;
-  name: "boe_get_law";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T4d118d2832 = {
-  contactId: (string & valibot_Brand<"SafeId"> & T1c99d77bbc);
-};
-
-type T4d5e4f5d1c = {
-  readonly message: string;
-  readonly code?: string;
-};
-
-type T4d73965770 = {
-  approval?: {
-    id: string;
-    needsApproval: Tfddd645dc8;
-    approved?: false | true;
-  };
-};
-
-type T4deb005d6d = {
-  readonly input: Ta297fc92a3;
-  readonly output: T8de31056e4;
-};
-
-type T4deef1ef75 = {
-  workspaceId: T8d02a37b3f;
-};
-
-type T4e07585f60 = {
-  readonly value: T56c757e5e1;
-  readonly issues?: undefined;
-};
-
-type T4e0b438dd4 = {
-  readonly value: T88a38d2a60;
-  readonly issues?: undefined;
-};
-
-type T4e595a8315 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "playbookDefinition";
-};
-
-type T4e80f4822c = {
-  kind: ("added" | "removed" | "unchanged" | "gap");
-  text: string;
-} | {
-  kind: "changed";
-  runs: Array<{
-    kind: ("same" | "del" | "ins");
-    text: string;
-  }>;
-};
-
-type T4e819907f9 = "assignee" | "reviewer";
-
-type T4eb5cc5545 = {
-  context?: undefined | string;
-  href?: undefined | string;
-  name: string;
-  ref: string;
-  role: string;
-};
-
-type T4f14f5a335 = "year" | "month" | "week" | "day";
-
-type T4f903e0db7 = {
-  readonly input: Tb21d985837;
-  readonly output: Tefa091671d;
-};
-
-type T501a665986 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "caseLawMatterLink";
-};
-
-type T501e21fe4d = {
-  protocolVersion: 4;
-  snapshot: {
-    contentTrust: "untrusted-web-content";
-    elements: Array<{
-      context?: undefined | string;
-      href?: undefined | string;
-      name: string;
-      ref: string;
-      role: string;
-      value?: undefined | string;
-    }>;
-    revision: string;
-    text: string;
-    textOffset: number;
-    textTotalChars: number;
-    tabId: number;
-    title: string;
-    url: string;
-  };
-  status: "success";
-};
-
-type T50288d650a = {
-  readonly value: Tc2a8824cf4;
-  readonly issues?: undefined;
-};
-
-type T504bb6d30f = Ta307d8fb8c | Tbc510e9400;
-
-type T5143c04283 = {
-  type: "tool-call";
-  id: string;
-  name: "configure_template_fields";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T516226b2c3 = {
-  type: "tool-call";
-  id: string;
-  name: "save_contact";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T51cc6664d5 = {
-  query: string;
-  results: Array<{
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
-type T51e1843fb9 = null | Array<string>;
-
-type T51f6ece09d = {
-  readonly value: Td84f9e1ca6;
-  readonly issues?: undefined;
-};
-
-type T5282b3aa45 = {
-  templateId: string;
-  values: T98898fcada;
-};
-
-type T529735e682 = {
-  [key: string]: Tcf7096fd53;
-};
-
-type T52fcbe1ef6 = {
-  url: string;
-  maxChars?: undefined | number;
-};
-
-type T5316b44209 = {
-  type: "file";
-  version: 1;
-} | {
-  type: "text";
-  version: 1;
-} | {
-  type: Tf795dc12d5;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: Tbe0400fa4c;
-} | {
-  type: "date";
-  version: 1;
-} | {
-  type: "int";
-  version: 1;
-} | {
-  type: "money";
-  version: 1;
-  currency: Tbe0400fa4c;
-} | {
-  type: "person";
-  version: 1;
-};
-
-type T5334594290 = {
-  workspaceId: string;
-};
-
-type T533de96505 = {
-  stored: number;
-  storedAsOf: string;
-  reported: number;
-  reportedAsOf: string;
-  reportedBy: ("operator" | "publisher" | "listing");
-};
-
-type T5345561adb = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: Tfddd645dc8;
-  provider: "jina";
-};
-
-type T539e1e5c66 = {
-  templateId: string;
-  values: T98898fcada;
-};
-
-type T53be3fbe82 = {
-  code: stll_api_contract_ContactImportIssueCode;
-  field: (null | "tags" | "type" | "country" | "state" | "display_name" | "first_name" | "last_name" | "organization_name" | "notes" | "tax_id" | "city" | "prefix" | "middle_name" | "suffix" | "registration_number" | "address_line_1" | "address_line_2" | "postal_code" | "primary_email" | "primary_phone");
-  rowNumber: number;
-};
-
-type T53caa211eb = {
-  kind: "constraint";
-  condition: stll_conditions_ConditionNode;
-};
-
-type T540f9c7521 = {
-  text: string;
-  index: number;
-  style?: string;
-  bold?: false | true;
-  fontSize?: number;
-  alignment?: "left" | "right" | "center" | "both";
-  tableRow?: {
-    table: number;
-    kind: "cells";
-    cells: ReadonlyArray<{
-      paragraphs: ReadonlyArray<{
-        text: string;
-        style?: string;
-        bold?: false | true;
-        fontSize?: number;
-        alignment?: "left" | "right" | "center" | "both";
-      }>;
-    }>;
-  } | {
-    table: number;
-    kind: ("delimiter" | "syntheticHeader");
-  };
-} & {
-  source?: undefined | "body" | "header" | "footer";
-  isDirective?: undefined | false | true;
-  directiveKind?: undefined | "if" | "elif" | "else" | "endif" | "for" | "endfor";
-  directiveExpression?: undefined | string;
-};
-
-type T551b81e20a = {
-  kind: "contact";
-  field: Td16108295a;
-};
-
-type T5535a308b3 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "rateEntry";
-};
-
-type T561c958713 = {
-  code?: string;
-  message: string;
-};
-
-type T563240ea85 = {
-  status: "failed";
-  message: string;
-};
-
-type T565e9250b1 = {
-  text: string;
-  id: string;
-};
-
-type T5681b43fbc = {
-  type: "tool-call";
-  id: string;
-  name: "update-current-skill-resource";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T56b53aeb22 = {
-  updated: Tfddd645dc8;
-};
-
-type T56c757e5e1 = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
-};
-
-type T56ed95d57c = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "user";
-};
-
-type T576bcbcea8 = {
-  documentId: Tfc8a750351;
-};
-
-type T57ebdcbe25 = {
-  workspaceId: string;
-};
-
-type T5855f1649e = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "pendingUpload";
-};
-
-type T588d0ee653 = null | number;
-
-type T58ea91aa38 = {
-  deletedAt: Tbe0400fa4c;
-  id: string;
-  image: Tbe0400fa4c;
-  name: Tbe0400fa4c;
-  type: "user";
-};
-
-type T5971389af6 = {
-  status: ("accepted" | "new" | "snoozed" | "dismissed");
-  origin: ("source" | "model" | "manual");
-  kind: ("request.submitted" | "hearing.changed" | "deadline.detected" | "contract.reviewed" | "work.unacknowledged" | "work.deadline_at_risk");
-  title: string;
-  id: Td6d5acce5e;
-  workspaceId: T63854f81c6;
-  summary: string;
-  workspaceName: Tbe0400fa4c;
-  subject: {
-    type: "workspace";
-    workspaceId: string;
-  } | {
-    type: "entity";
-    workspaceId: string;
-    entityId: string;
-  } | {
-    type: "court-case";
-    courtCode: string;
-    caseNumber: string;
-  } | {
-    type: "none";
-  };
-  severity: ("warning" | "info" | "notice" | "critical");
-  evidence: {
-    kind: "request.submitted";
-    description: string;
-    attachments: Array<{
-      fileId: string;
-      name: string;
-      mimeType: string;
-      size: number;
-    }>;
-  } | {
-    kind: "hearing.changed";
-    courtName: string;
-    caseNumber: string;
-    previousAt: Tbe0400fa4c;
-    currentAt: string;
-    hearingType: Tbe0400fa4c;
-    sourceUrl: Tbe0400fa4c;
-  } | {
-    kind: "deadline.detected";
-    dueAt: string;
-    label: string;
-    quote: string;
-    entityId: string;
-    entityName: string;
-  } | {
-    kind: "contract.reviewed";
-    entityId: string;
-    entityName: string;
-    verdict: ("reject" | "needs-review" | "safe");
-    findings: Array<{
-      title: string;
-      severity: ("warning" | "info" | "notice" | "critical");
-      quote: string;
-    }>;
-    reviewRunId: Tbe0400fa4c;
-  } | {
-    kind: "work.unacknowledged";
-    obligationEntityId: string;
-    ownerUserId: string;
-    assignedAt: string;
-    daysWaiting: number;
-    workingTargetDate: Tbe0400fa4c;
-    hardDeadlineDate: Tbe0400fa4c;
-  } | {
-    kind: "work.deadline_at_risk";
-    obligationEntityId: string;
-    ownerUserId: string;
-    hardDeadlineDate: string;
-    workingTargetDate: Tbe0400fa4c;
-    daysUntilDeadline: number;
-    obligationStatus: ("active" | "awaiting_acknowledgement");
-  };
-  createdByUserId: Tbe0400fa4c;
-  scoutKey: string;
-  confidence: T588d0ee653;
-  suggestions: Array<{
-    kind: "create-deadline";
-    workspaceId: string;
-    name: string;
-    dueAt: string;
-  } | {
-    kind: "create-task";
-    workspaceId: string;
-    name: string;
-    dueAt: Tbe0400fa4c;
-  } | {
-    kind: "promote-to-workspace";
-  } | {
-    kind: "assign";
-  } | {
-    kind: "open-chat";
-    prompt: string;
-  }>;
-  assigneeUserId: Tbe0400fa4c;
-  dismissReason: Tbe0400fa4c;
-  acceptedResult: (null | {
-    suggestionKind: ("create-deadline" | "create-task");
-    result: {
-      type: "entity";
-      entityId: string;
-      workspaceId: string;
-    };
-  } | {
-    suggestionKind: "promote-to-workspace";
-    result: {
-      type: "workspace";
-      workspaceId: string;
-    };
-  } | {
-    suggestionKind: ("assign" | "open-chat");
-    result: {
-      type: "none";
-    };
-  });
-  assigneeUserName: Tbe0400fa4c;
-  assigneeUserImage: Tbe0400fa4c;
-} & {
-  snoozedUntil: Tbe0400fa4c;
-  resolvedAt: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type T5990be2a25 = {
-  readonly input: Tdb5a1ce47f;
-  readonly output: Ta2adf01c0a;
-};
-
-type T59bc5192f7 = {
-  readonly input: Tf72e5821b0;
-  readonly output: Td80ce08c34;
-};
-
-type T5ad5018b7e = {
-  analysis: string;
-  questions: Array<{
-    question: string;
-    reason: string;
-    options?: undefined | Array<string>;
-    default?: undefined | string;
-  }>;
-};
-
-type T5aeeefecac = {
-  spf: Tccc654a7c7;
-  dkim: Tccc654a7c7;
-  dmarc: Tccc654a7c7;
-  alignedIdentifier: Tbe0400fa4c;
-} & {
-  address: string;
-};
-
-type T5b1470ddab = {
-  type: "tool-call";
-  id: string;
-  name: "add_comment";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T5b398cdd9d = {
-  type: "error";
-  version: 1;
-};
-
-type T5bb4fea9f8 = {
-  readonly input: Tab11ee99f7;
-  readonly output: T8a03a9eca5;
-};
-
-type T5bd2b68d05 = {
-  status: "unavailable";
-  reason: string;
-};
-
-type T5cb2c9d717 = {
-  [key: string]: string;
-};
-
-type T5cbad7b267 = {
-  type: "tool-call";
-  id: string;
-  name: "read_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T5d1f5ab5f2 = null | Tb532bdabe3;
-
-type T5dace84134 = {
-  kind: "cz-insolvency";
-  source: Tc73807a034;
-  subject: Te6e750ecc6;
-};
-
-type T5e3ac29766 = {};
-
-type T5e6378eb9f = null | {
-  street: Tbe0400fa4c;
-  postalCode: Tbe0400fa4c;
-  city: Tbe0400fa4c;
-  country: Tbe0400fa4c;
-  textAddress: Tbe0400fa4c;
-};
-
-type T5e702ac6d9 = "superseded" | "user-stop";
-
-type T5ed75bc2cc = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "legalList";
-};
-
-type T5eefd06bf2 = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "contactExtractionUpload";
-};
-
-type T60db7b1f8f = "new" | "handled";
-
-type T60e51917c9 = null | stll_conditions_CompareNode | stll_conditions_PredicateNode | stll_conditions_GroupNode;
-
-type T6124e792aa = null | Array<T3c3fa57c15>;
-
-type T613c5cabbb = string & valibot_Brand<"SafeId"> & {
-  readonly __safeIdType?: "pdfSigningSession";
-};
-
-type T61747391b1 = "draft" | "approved" | "billed" | "written_off";
-
-type T61a314e9df = "EU" | "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
-
-type T61d3076ac0 = {
-  country: string;
-  subdivision?: undefined | string;
-};
-
-type T6202858453 = "responsible" | "originating" | "lead";
-
-type T62128c5ec5 = {
-  workspaceId: string;
-};
-
-type T621420426b = {
-  type: "tool-call";
-  id: string;
-  name: "fill_template";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T6225d0be51 = {
-  skillName: string;
-  path: string;
-};
-
-type T6269a5e99e = {
-  configured: false;
-  platformFallback: Tfddd645dc8;
-} | {
-  configured: true;
-  apiKeyMasked: string;
-  platformFallback: Tfddd645dc8;
-};
-
-type T62f288d6ab = "matters" | "all-chats";
-
-type T631856df6b = {
-  [key: string]: unknown;
-};
-
-type T635a859ab7 = "left" | "right" | "preserve" | "center" | "both";
-
-type T63854f81c6 = null | T9e07a7d6cd;
-
-type T63924fc269 = {
-  text: string;
-  id: string;
-};
-
-type T6454934e85 = {
-  type: "tool-call";
-  id: string;
-  name: "create-document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T21d4acdd13 | T7e9fce8170 | T6b4b00e15b | T05cba4d570;
-};
-
-type T645c36442e = {
-  type: "tool-call";
-  id: string;
-  name: "read_section";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T64c3504dad = {
-  skillName: string;
-};
-
-type T64dd0ef184 = {
-  type: "tool-call";
-  id: string;
-  name: "create_reader_annotation";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T64f30e502a = "overview" | "table" | "filesystem" | "kanban" | "calendar" | "timeline" | "avt";
-
-type T64f82fc86d = {
-  bold: Tfddd645dc8;
-  alignment: T635a859ab7;
-  fontFamily: string;
-  fontSizePt: number;
-  spaceAfterPt: number;
-  spaceBeforePt: number;
-  numberingFormat: T9c3d54ef16;
-  indentLeftPt: number;
-  hangingPt: number;
-};
-
-type T653f0c375b = {
-  id: string;
-  name: string;
-  narrative: string;
-  narrativeLanguage: Tbe0400fa4c;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type T658a00d740 = {
-  address: string;
-  name: Tbe0400fa4c;
-};
-
-type T65bedee18b = null | "free" | "paid";
-
-type T6668c52442 = {
+type T2e9c7d4856 = {
   registry: T347d72c6fa;
   id: string;
   name: string;
   legalForm: Tbe0400fa4c;
-  address: (null | {
+  address: {
     line1: Tbe0400fa4c;
     line2: Tbe0400fa4c;
     postalCode: Tbe0400fa4c;
@@ -35642,7 +34242,7 @@ type T6668c52442 = {
     region: Tbe0400fa4c;
     country: Tbe0400fa4c;
     textAddress: Tbe0400fa4c;
-  });
+  } | null;
   registryUrl: string;
   details?: {
     registry: "ares";
@@ -35650,7 +34250,7 @@ type T6668c52442 = {
       ico: string;
       name: string;
       legalForm: Tbe0400fa4c;
-      address: (null | {
+      address: {
         street: Tbe0400fa4c;
         houseNumber: Tbe0400fa4c;
         orientationNumber: Tbe0400fa4c;
@@ -35661,17 +34261,17 @@ type T6668c52442 = {
         district: Tbe0400fa4c;
         country: Tbe0400fa4c;
         textAddress: Tbe0400fa4c;
-      });
+      } | null;
       dateEstablished: Tbe0400fa4c;
       dateRegistered: Tbe0400fa4c;
       czNace: Array<string>;
       registryUrl: string;
       status: Tbe0400fa4c;
-      courtFile: (null | {
+      courtFile: {
         court: string;
         section: string;
         insert: string;
-      });
+      } | null;
       shareCapital: Tbe0400fa4c;
       statutoryBodies: Array<{
         organName: string;
@@ -35683,7 +34283,7 @@ type T6668c52442 = {
         }>;
       }>;
       actingClause: Tbe0400fa4c;
-      vrEnrichmentStatus: ("not_found" | "complete" | "unavailable" | "not_requested");
+      vrEnrichmentStatus: ("complete" | "not_found" | "not_requested" | "unavailable");
     };
   } | {
     registry: "brreg";
@@ -35762,18 +34362,18 @@ type T6668c52442 = {
       registeredOfficeAddress: Tcbf6fe4665;
       serviceAddress: Tcbf6fe4665;
       sicCodes: Array<string>;
-      accounts: (null | {
+      accounts: {
         nextDue: Tbe0400fa4c;
         nextMadeUpTo: Tbe0400fa4c;
         lastMadeUpTo: Tbe0400fa4c;
         overdue: Tfddd645dc8;
-      });
-      confirmationStatement: (null | {
+      } | null;
+      confirmationStatement: {
         lastMadeUpTo: Tbe0400fa4c;
         nextDue: Tbe0400fa4c;
         nextMadeUpTo: Tbe0400fa4c;
         overdue: Tfddd645dc8;
-      });
+      } | null;
       hasCharges: T44e2cd4568;
       hasInsolvencyHistory: T44e2cd4568;
       hasBeenLiquidated: T44e2cd4568;
@@ -35794,7 +34394,7 @@ type T6668c52442 = {
       activityClass: Tbe0400fa4c;
       employeeStratum: Tbe0400fa4c;
       unitType: Tbe0400fa4c;
-      address: (null | {
+      address: {
         line1: Tbe0400fa4c;
         line2: Tbe0400fa4c;
         postalCode: Tbe0400fa4c;
@@ -35803,7 +34403,7 @@ type T6668c52442 = {
         state: Tbe0400fa4c;
         country: "MX";
         textAddress: Tbe0400fa4c;
-      });
+      } | null;
       coordinates: {
         latitude: T588d0ee653;
         longitude: T588d0ee653;
@@ -35891,24 +34491,24 @@ type T6668c52442 = {
         nip: Tbe0400fa4c;
         regon: Tbe0400fa4c;
       };
-      shareCapital: (null | {
+      shareCapital: {
         amount: string;
         currency: string;
-      });
-      address: (null | {
+      } | null;
+      address: {
         street: Tbe0400fa4c;
         postalCode: Tbe0400fa4c;
         city: Tbe0400fa4c;
         country: Tbe0400fa4c;
         textAddress: Tbe0400fa4c;
-      });
-      registeredSeat: (null | {
+      } | null;
+      registeredSeat: {
         country: Tbe0400fa4c;
         voivodeship: Tbe0400fa4c;
         county: Tbe0400fa4c;
         commune: Tbe0400fa4c;
         locality: Tbe0400fa4c;
-      });
+      } | null;
       email: Tbe0400fa4c;
       website: Tbe0400fa4c;
       status: {
@@ -35939,11 +34539,11 @@ type T6668c52442 = {
     company: T9676908f8c;
     history: (T5bd2b68d05 | {
       status: "loaded";
-      value: Array<((T0c82020958 & {
-        kind: ("name" | "address" | "legal-form" | "share-capital" | "acting-clause" | "legal-status");
+      value: Array<((T69e6288a5e & {
+        kind: ("acting-clause" | "address" | "legal-form" | "legal-status" | "name" | "share-capital");
         value: string;
-      }) | (T0c82020958 & {
-        kind: ("statutory-body-member" | "stakeholder");
+      }) | (T69e6288a5e & {
+        kind: ("stakeholder" | "statutory-body-member");
         name: string;
         role: Tbe0400fa4c;
       }))>;
@@ -35966,11 +34566,11 @@ type T6668c52442 = {
         ico: Tbe0400fa4c;
         address: Tbe0400fa4c;
         connectedThrough: Tbe0400fa4c;
-        fileReference: (null | {
+        fileReference: {
           court: string;
           section: string;
           insertNumber: string;
-        });
+        } | null;
       }>;
     });
   } | {
@@ -35986,10 +34586,10 @@ type T6668c52442 = {
       legalFormCode: Tbe0400fa4c;
       streetAddress: T5e6378eb9f;
       postalAddress: T5e6378eb9f;
-      mainBusinessLine: (null | {
+      mainBusinessLine: {
         code: string;
         description: Tbe0400fa4c;
-      });
+      } | null;
       status: {
         type: "registered";
       } | {
@@ -36044,9 +34644,9 @@ type T6668c52442 = {
       name: string;
       formerNames: Array<T290c6ff7c9>;
       legalForm: Tcc3a2ff045;
-      address: (null | T4bb0fb38a9);
+      address: (T4b0612714b | null);
       formerAddresses: Array<{
-        value: T4bb0fb38a9;
+        value: T4b0612714b;
         validFrom: Tbe0400fa4c;
         validTo: Tbe0400fa4c;
       }>;
@@ -36059,12 +34659,12 @@ type T6668c52442 = {
         terminatedAt: string;
       };
       legalStatuses: Array<string>;
-      sourceRegister: (null | {
+      sourceRegister: {
         name: string;
         code: Tbe0400fa4c;
         registrationOffice: Tbe0400fa4c;
         registrationNumber: Tbe0400fa4c;
-      });
+      } | null;
       statutoryBodies: Array<T45d1c6c746>;
       stakeholders: Array<T45d1c6c746>;
       authorizations: Array<T290c6ff7c9>;
@@ -36101,17 +34701,1444 @@ type T6668c52442 = {
   };
 };
 
+type T2eac278e7d = {
+  role?: "document-type-classifier" | null;
+  dependencies?: Array<{
+    condition: T60e51917c9;
+    dependsOnSourceId: string;
+  }>;
+  name: string;
+  tool: {
+    type: "ai-model";
+    prompt: string;
+    version: 1;
+  } | {
+    type: "manual-input";
+    version: 1;
+  };
+  version: 1;
+  content: {
+    type: "file";
+    version: 1;
+  } | {
+    type: "text";
+    version: 1;
+  } | {
+    type: Tf795dc12d5;
+    options: Array<{
+      value: string;
+      color: string;
+    }>;
+    version: 1;
+    fallback: Tbe0400fa4c;
+  } | {
+    type: "date";
+    version: 1;
+  } | {
+    type: "int";
+    version: 1;
+  } | {
+    type: "money";
+    version: 1;
+    currency: Tbe0400fa4c;
+  } | {
+    type: "person";
+    version: 1;
+  };
+  sourceId: string;
+  createIfMissing: Tfddd645dc8;
+};
+
+type T2eda26bd51 = {
+  id: T501a665986;
+  decisionId: T406326c84f;
+  workspaceId: T9e07a7d6cd;
+  note: Tbe0400fa4c;
+  linkedBy: string;
+  createdAt: string;
+};
+
+type T2f120574a2 = {
+  status: "ready";
+};
+
+type T2f1eb9f087 = {
+  type: "tool-call";
+  id: string;
+  name: "save_task";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T2f4d996387 = {
+  type: "tool-call";
+  id: string;
+  name: "save_time_entry";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T2f575449b0 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawJudge";
+};
+
+type T2f5bcad84c = {
+  text?: string | undefined;
+  title?: string | undefined;
+  departmentCode?: string | undefined;
+  legalRangeCode?: string | undefined;
+  matterCode?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
+  offset?: number | undefined;
+  limit?: number | undefined;
+};
+
+type T2fb0b2d20e = "active" | "awaiting_acknowledgement" | "cancelled" | "completed" | "unassigned";
+
+type T2fe5059b53 = {
+  status: "connected";
+};
+
+type T2fed70772e = {
+  groupByPropertyId?: string | undefined;
+  subgroupByPropertyId?: string | undefined;
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "kanban";
+};
+
+type T300701e436 = {
+  workspaceId: T8d02a37b3f;
+};
+
+type T3012ed5aad = {
+  readonly value: Tccd7994462;
+  readonly issues?: undefined;
+};
+
+type T310abc7c1b = {
+  pattern: Tbe0400fa4c;
+  range: Tbe0400fa4c;
+  raw?: unknown;
+} | null;
+
+type T313f510b34 = T2a109871bb | null;
+
+type T3185916700 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalListVerificationRun";
+};
+
+type T3217a347d4 = {
+  registry: T347d72c6fa;
+  formats: Array<{
+    key: string;
+    template: string;
+  }>;
+};
+
+type T32a2c3700a = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "agentSkillResource";
+};
+
+type T32fdeee18e = {
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: Tbe0400fa4c;
+  id: string;
+  language: string;
+  slug: Tbe0400fa4c;
+};
+
+type T334757ea46 = "document" | "folder" | "link" | "message" | "task";
+
+type T34252d475f = {
+  viewId: T7e10a0d884;
+};
+
+type T344a394669 = {
+  workspaceId?: T9e07a7d6cd;
+  contextMatterIds?: Array<T9e07a7d6cd>;
+  truncateAfterMessageId?: T66e92cdab1;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T129008ae9b;
+  activeDraft?: Tdaa8eea194;
+  activeFile?: T7af392baeb;
+  activeTemplate?: Teca103477f;
+  activeDecision?: Tfc773e48e5;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: T369422441d;
+  activeStatute?: T576bcbcea8;
+  browserClient?: Tf9e246ce28;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T66e92cdab1;
+    role: Tbc3d04c5ab;
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: Taf779979ed;
+  sendMode: T00bc2c60de;
+};
+
+type T346ea860b1 = {
+  readonly type: "contact";
+  readonly id: stll_api_contract_SafeId<"contact">;
+};
+
+type T347d72c6fa = "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
+
+type T348bff1a92 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "chatTurn";
+};
+
+type T34da0c446b = {
+  workspaceId: string;
+};
+
+type T350a170d52 = {
+  needsApproval: true;
+  approvalSchema: undefined;
+};
+
+type T367a10cc51 = {
+  readonly input: T466db84340;
+  readonly output: T27875dbd24;
+};
+
+type T369422441d = {
+  skillId: T8ff9f6d126;
+  skillName: string;
+};
+
+type T373044b8de = "download" | "workspace";
+
+type T37645f97e3 = {
+  type: "tool-call";
+  id: string;
+  name: "update-entity-fields";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T3a8e541c8b;
+} & T4d73965770;
+
+type T376e5c32ed = {
+  kind: "attorney";
+  ref: T6202858453;
+  field: ("email" | "name");
+};
+
+type T37fefd1259 = {
+  entityId: string;
+  fieldId: string;
+  fileId: string;
+  fileName: string;
+  renamed: Tfddd645dc8;
+};
+
+type T3802454091 = "enumeration" | "language" | "parameter" | "presence";
+
+type T38d4bc0e42 = {
+  playbookId: T4e595a8315;
+};
+
+type T38eb7c9eb4 = Array<T334757ea46> | null;
+
+type T3913e4550c = {
+  lawId: string;
+  blockId: string;
+};
+
+type T392bdfc9ed = {
+  readonly target: ((T5e3ac29766 & string) | "draft-07" | "draft-2020-12" | "openapi-3.0");
+  readonly libraryOptions?: T631856df6b | undefined;
+};
+
+type T3958c3b3af = {
+  type: "tool-call";
+  id: string;
+  name: "update-current-skill-body";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T396413b1f2 = {
+  type: "tool-call";
+  id: string;
+  name: "save_clause";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T39bd2e99da = {
+  readonly value: T86d8d3c659;
+  readonly issues?: undefined;
+};
+
+type T3a2aa457e2 = "available" | "installed" | "unavailable";
+
+type T3a5b898b8d = {
+  path: string;
+  label: string;
+};
+
+type T3a8e541c8b = {
+  success: true;
+  entityRef: string;
+  propertyRef: string;
+  newValue: string;
+};
+
+type T3ae9eb741e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "auditLog";
+};
+
+type T3af8ea50d0 = {
+  readonly value: T64c3504dad;
+  readonly issues?: undefined;
+};
+
+type T3b4d67e019 = {
+  country?: string;
+  state?: string;
+  line1?: string;
+  line2?: string;
+  postalCode?: string;
+  city?: string;
+} | null;
+
+type T3ba9545800 = {
+  workspaceId: string;
+};
+
+type T3c0c1b0a27 = {
+  title: string;
+  introduction: string;
+  investmentHeading: string;
+  investmentBody: string;
+  equityFinancingHeading: string;
+  equityFinancingBody: string;
+  conversionPriceHeading: string;
+  conversionPriceBody: string;
+  shareClassHeading: string;
+  shareClassBody: string;
+  liquidityEventHeading: string;
+  liquidityEventBody: string;
+  companyRepresentationsHeading: string;
+  companyRepresentationsBody: string;
+  generalHeading: string;
+  generalBody: string;
+};
+
+type T3c3fa57c15 = {
+  country?: string;
+  label?: string;
+  state?: string;
+  line2?: string;
+  postalCode?: string;
+  city?: string;
+  type: T10a0947927;
+  isPrimary: Tfddd645dc8;
+  line1: string;
+};
+
+type T3dc3e2ca32 = {
+  label?: string;
+  text: string;
+  id: string;
+};
+
+type T3dd22338ec = {
+  type: "tool-call";
+  id: string;
+  name: "discover_tools";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T3e64088e2c = "below-floor" | "failed" | "no-backend";
+
+type T3ee3f8c0bd = T21d4acdd13 | T81a87f67e2 | T6b4b00e15b | Te458e3a8a0;
+
+type T3ef81b8401 = {
+  readonly value: Tea0fd307f9;
+  readonly issues?: undefined;
+};
+
+type T3f3b30a014 = T9a51b7d2bc | "Unauthorized";
+
+type T3f7112bc47 = {
+  type: "tool-call";
+  id: string;
+  name: "borme_get_summary";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T3f8f92c9e4 = {
+  [key: string]: never;
+};
+
+type T3fbc5ba165 = readonly [T73b2a1010d, ...T73b2a1010d[]];
+
+type T4042d27c41 = {
+  workspaceId: string;
+};
+
+type T406326c84f = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawDecision";
+};
+
+type T408e0f164e = {
+  id: T406326c84f;
+  caseNumber: string;
+  country: string;
+  court: string;
+  decisionDate: Tbe0400fa4c;
+  decisionType: Tbe0400fa4c;
+  ecli: Tbe0400fa4c;
+  language: string;
+  languageAlternates: ReadonlyArray<T32fdeee18e>;
+  slug: Tbe0400fa4c;
+} & {
+  citationAuthority: number;
+};
+
+type T417792d11a = {
+  activeDraftContext?: {
+    type: "generated-document";
+    originChatMessageId: T66e92cdab1;
+    originChatThreadId: Taf779979ed;
+    toolCallId: string;
+    version: 1;
+  } | undefined;
+  anonRestorations?: {
+    pairs: Array<Tc7eaf8104c>;
+  } | undefined;
+  docxEditPreferences?: {
+    docxEditRepresentation?: "direct" | "tracked-changes" | undefined;
+    editApplyMode?: "auto" | "manual" | undefined;
+  } | undefined;
+  mentions?: {
+    mentions: Array<((Ta3fb0e1ff6 & {
+      category: "entity";
+      resource: T2a53b33d09;
+      workspaceId: Tbe0400fa4c;
+    }) | (Ta3fb0e1ff6 & {
+      category: "workspace";
+      resource: T4c3eeb6df3;
+    }))>;
+  } | undefined;
+  refEncoding?: "persisted-resource-ids-v1" | "persisted-resource-refs-v2" | undefined;
+  refContext?: (T41b8bd81bd & {
+    version: 1;
+  }) | (T41b8bd81bd & {
+    version: 2;
+    refs: Array<{
+      kind: "contact";
+      ref: string;
+      contact: T346ea860b1;
+    } | {
+      kind: "entity";
+      ref: string;
+      entity: T2a53b33d09;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "matter";
+      ref: string;
+      workspace: T4c3eeb6df3;
+    } | {
+      kind: "property";
+      ref: string;
+      property: {
+        readonly type: "property";
+        readonly id: stll_api_contract_SafeId<"property">;
+      };
+    } | {
+      kind: "source";
+      ref: string;
+      href: `#stella-source=${string}`;
+    }>;
+  }) | undefined;
+  serverProvenance?: {
+    type: "search-summary";
+    version: 1;
+  } | undefined;
+  sourceDocuments?: Array<Tcde02c03e1> | undefined;
+  turnOutcome?: {
+    type: "awaiting-user";
+    interaction: {
+      type: "approval";
+      toolCallId: string;
+    } | {
+      type: "ask-user";
+      toolCallId: string;
+    } | {
+      type: "client-tool";
+      toolCallId: string;
+    };
+  } | {
+    type: "completed";
+  } | {
+    type: "cancelled";
+    reason: T5e702ac6d9;
+  } | {
+    type: "failed";
+    error: ("empty_completion" | "loop_detected" | "model_unavailable" | "provider_billing" | "provider_credentials_rejected" | "provider_stream_incomplete" | "provider_unavailable" | "quota_exhausted" | "unknown");
+  } | {
+    type: "interrupted";
+    reason: T91be5f6aad;
+  } | undefined;
+  usage?: {
+    totalTokens: number;
+    completionTokens: number;
+    promptTokens: number;
+  } & {
+    completionTokensDetails?: {
+      reasoningTokens?: number;
+    } | undefined;
+  } | undefined;
+};
+
+type T41b8bd81bd = {
+  entities: Array<{
+    entity: T2a53b33d09;
+    toolCallId: string;
+    workspace: T4c3eeb6df3;
+  }>;
+  unresolvedInputs: Array<{
+    kind: ("contact" | "entity" | "matter" | "property");
+    param: string;
+    ref: string;
+    toolCallId: string;
+  }>;
+  workspaceScope: Array<T4c3eeb6df3>;
+};
+
+type T41e0ad416a = {
+  quote: string;
+  blockAnchorId: string;
+  startOffset: number;
+  endOffset: number;
+};
+
+type T41e8180893 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_task";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T41ee5fbcc8 = {
+  snippet?: string;
+  citation?: string;
+  jurisdiction?: string;
+  sourceType?: string;
+  type: "clip";
+  url: string;
+  version: 1;
+};
+
+type T42132256a7 = {
+  answers: Array<{
+    question: string;
+    answer: string;
+  }>;
+};
+
+type T426e4657a4 = Array<string> | number | string | null;
+
+type T42b0ce8576 = {
+  ok: false;
+  error: string;
+};
+
+type T43a95a3581 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_reader_annotation";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T43c61826c6 = {
+  readonly input: Tbbfb0e2dc0;
+  readonly output: T777e4fb6de;
+};
+
+type T43ff0c9596 = {
+  ":workspaceId": T5e3ac29766;
+};
+
+type T4498be3bc0 = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tfbf26a7023>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T0d3b649ce9;
+  error?: string;
+  claim?: T753574bc22;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T81694d3f69>;
+} | "Not Found";
+
+type T44e2cd4568 = false | true | null;
+
+type T44f2e6d941 = {
+  readonly input: Tee12b2a0c6;
+  readonly output: T9b129e6597;
+};
+
+type T450f33afce = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "folioCollabRoom";
+};
+
+type T453834ba82 = "active" | "archived" | "deleting";
+
+type T45d1c6c746 = {
+  name: string;
+  organName: Tbe0400fa4c;
+  position: Tbe0400fa4c;
+  identifier: Tbe0400fa4c;
+  address: Tbe0400fa4c;
+  validFrom: Tbe0400fa4c;
+  validTo: Tbe0400fa4c;
+};
+
+type T466bee4580 = {
+  lawId: string;
+  blockId: string;
+};
+
+type T466db84340 = {
+  courtCode: string;
+  spisZn: string;
+};
+
+type T4750c1f7ee = "detected" | "proposed" | "user";
+
+type T475c8d6c2c = {
+  content: string;
+  kind?: "decision" | "fact" | "instruction" | "preference" | "relationship" | undefined;
+  scope?: "user" | "workspace" | undefined;
+};
+
+type T47f7828fc7 = T6993bee61f | null;
+
+type T482343ffbd = {
+  query: string;
+  scope: T62f288d6ab;
+  hint: Tbe0400fa4c;
+  results: Array<{
+    threadId: string;
+    threadTitle: string;
+    matterRef: Tbe0400fa4c;
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type T4866a24af7 = T6e37e01eb4 | null;
+
+type T4969bac86c = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tfbf26a7023>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T0d3b649ce9;
+  error?: string;
+  claim?: T753574bc22;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T81694d3f69>;
+};
+
+type T49708f9c20 = {
+  groupByPropertyId?: string | undefined;
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "table";
+  columnOrder: Array<string>;
+  columnPinning: Array<string>;
+};
+
+type T49beff9484 = {
+  readonly value: T5282b3aa45;
+  readonly issues?: undefined;
+};
+
+type T4a06edd937 = {
+  id: string;
+  label: string;
+  category: string;
+  startAnchorId: string;
+  endAnchorId: string;
+  annotations: Array<{
+    id: string;
+    summary: string;
+    startAnchorId: string;
+    endAnchorId: string;
+    textSnippet: string;
+  }>;
+  children: Array<T4a06edd937>;
+};
+
+type T4a5707509f = {
+  propertyId: string;
+  kind: ("average" | "count" | "count-empty" | "count-filled" | "count-unique" | "max" | "median" | "min" | "percent-empty" | "percent-filled" | "percent-of-total" | "range" | "sum");
+};
+
+type T4a592a8301 = {
+  subagents: Array<{
+    task: string;
+    context?: string | undefined;
+    expectedOutput?: string | undefined;
+    model?: string | undefined;
+  }>;
+};
+
+type T4a9a2dd4a4 = "day" | "month" | "year" | null;
+
+type T4ac8f6dd24 = {
+  check?: T2cd830774a | T53caa211eb;
+  guidance?: string;
+  negotiation?: Tea672cd0a4;
+  purpose?: string;
+  issue: string;
+  mode: "graded";
+  standard: T7dd13bf604;
+  ask: {
+    derived?: {
+      content: T26d760a340;
+      question: string;
+      rulesHash: string;
+    };
+    mode: "auto";
+  } | {
+    mode: "manual";
+    content: T26d760a340;
+    question: string;
+  };
+  enabled: Tfddd645dc8;
+  severity: T7538035c96;
+  sourceId: string;
+};
+
+type T4ada5516f7 = Td236e2b0da | null;
+
+type T4ae6d071f3 = "heading" | "listItem" | "paragraph" | "table";
+
+type T4b0612714b = {
+  street: Tbe0400fa4c;
+  postalCode: Tbe0400fa4c;
+  city: Tbe0400fa4c;
+  country: Tbe0400fa4c;
+  textAddress: Tbe0400fa4c;
+};
+
+type T4b08c72cf3 = {
+  type: "tool-call";
+  id: string;
+  name: "review_folder_consistency";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: Tad027ba68a;
+} & T4d73965770;
+
+type T4b83723412 = "anthropic" | "bedrock" | "google" | "mistral" | "openai" | "openrouter";
+
+type T4c3eeb6df3 = {
+  readonly type: "workspace";
+  readonly id: stll_api_contract_SafeId<"workspace">;
+};
+
+type T4c60d2e7ad = {
+  date: string;
+};
+
+type T4c703c7179 = {
+  propertyId: string;
+  desc: Tfddd645dc8;
+};
+
+type T4c7ffc5c98 = {
+  readonly input: T09610a4d6a;
+  readonly output: Te099fcc103;
+};
+
+type T4c80e82e5d = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "usagePolicy";
+};
+
+type T4d118d2832 = {
+  contactId: (string & valibot_Brand<"SafeId"> & T1c99d77bbc);
+};
+
+type T4d5e4f5d1c = {
+  readonly message: string;
+  readonly code?: string;
+};
+
+type T4d73965770 = {
+  approval?: {
+    id: string;
+    needsApproval: Tfddd645dc8;
+    approved?: false | true;
+  };
+};
+
+type T4deb005d6d = {
+  readonly input: Ta297fc92a3;
+  readonly output: T8de31056e4;
+};
+
+type T4deef1ef75 = {
+  workspaceId: T8d02a37b3f;
+};
+
+type T4e0b438dd4 = {
+  readonly value: T88a38d2a60;
+  readonly issues?: undefined;
+};
+
+type T4e21d0f768 = {
+  fileNumber: string;
+  court: Tbe0400fa4c;
+  phase: ("ended" | "ongoing" | "unverified");
+  stateCode: Tbe0400fa4c;
+  matchedBy: ("company-id" | "name-and-birth-date");
+  debtor: {
+    name: Tbe0400fa4c;
+    firstName: Tbe0400fa4c;
+    companyId: Tbe0400fa4c;
+    birthDate: Tbe0400fa4c;
+    address: Tbe0400fa4c;
+  };
+  insolvencyDeclaredOn: Tbe0400fa4c;
+  insolvencyEndedOn: Tbe0400fa4c;
+  url: Tbe0400fa4c;
+};
+
+type T4e595a8315 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "playbookDefinition";
+};
+
+type T4e80f4822c = {
+  kind: ("added" | "gap" | "removed" | "unchanged");
+  text: string;
+} | {
+  kind: "changed";
+  runs: Array<{
+    kind: ("del" | "ins" | "same");
+    text: string;
+  }>;
+};
+
+type T4e819907f9 = "assignee" | "reviewer";
+
+type T4eb5cc5545 = {
+  context?: string | undefined;
+  href?: string | undefined;
+  name: string;
+  ref: string;
+  role: string;
+};
+
+type T4f14f5a335 = "day" | "month" | "week" | "year";
+
+type T4f71e3a3a0 = {
+  readonly value: Tf5fa97e79b;
+  readonly issues?: undefined;
+};
+
+type T4fa3ad8093 = {
+  readonly input: T2f5bcad84c;
+  readonly output: Te7215e4424;
+};
+
+type T501a665986 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "caseLawMatterLink";
+};
+
+type T504bb6d30f = Ta307d8fb8c | Tbc510e9400;
+
+type T51cc6664d5 = {
+  query: string;
+  results: Array<{
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type T51e1843fb9 = Array<string> | null;
+
+type T51f6ece09d = {
+  readonly value: Td84f9e1ca6;
+  readonly issues?: undefined;
+};
+
+type T5282b3aa45 = {
+  templateId: string;
+  values: T98898fcada;
+};
+
+type T529735e682 = {
+  [key: string]: Tcf7096fd53;
+};
+
+type T5316b44209 = {
+  type: "file";
+  version: 1;
+} | {
+  type: "text";
+  version: 1;
+} | {
+  type: Tf795dc12d5;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: Tbe0400fa4c;
+} | {
+  type: "date";
+  version: 1;
+} | {
+  type: "int";
+  version: 1;
+} | {
+  type: "money";
+  version: 1;
+  currency: Tbe0400fa4c;
+} | {
+  type: "person";
+  version: 1;
+};
+
+type T5334594290 = {
+  workspaceId: string;
+};
+
+type T539e1e5c66 = {
+  templateId: string;
+  values: T98898fcada;
+};
+
+type T53be3fbe82 = {
+  code: stll_api_contract_ContactImportIssueCode;
+  field: ("address_line_1" | "address_line_2" | "city" | "country" | "display_name" | "first_name" | "last_name" | "middle_name" | "notes" | "organization_name" | "postal_code" | "prefix" | "primary_email" | "primary_phone" | "registration_number" | "state" | "suffix" | "tags" | "tax_id" | "type" | null);
+  rowNumber: number;
+};
+
+type T53caa211eb = {
+  kind: "constraint";
+  condition: stll_conditions_ConditionNode;
+};
+
+type T540f9c7521 = {
+  text: string;
+  index: number;
+  style?: string;
+  bold?: false | true;
+  fontSize?: number;
+  alignment?: "both" | "center" | "left" | "right";
+  tableRow?: {
+    table: number;
+    kind: "cells";
+    cells: ReadonlyArray<{
+      paragraphs: ReadonlyArray<{
+        text: string;
+        style?: string;
+        bold?: false | true;
+        fontSize?: number;
+        alignment?: "both" | "center" | "left" | "right";
+      }>;
+    }>;
+  } | {
+    table: number;
+    kind: ("delimiter" | "syntheticHeader");
+  };
+} & {
+  source?: "body" | "footer" | "header" | undefined;
+  isDirective?: false | true | undefined;
+  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if" | undefined;
+  directiveExpression?: string | undefined;
+};
+
+type T54ad5c389f = {
+  type: "tool-call";
+  id: string;
+  name: "load-skill";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T5524006796 = {
+  readonly value: Teab768a417;
+  readonly issues?: undefined;
+};
+
+type T5535a308b3 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "rateEntry";
+};
+
+type T561c958713 = {
+  code?: string;
+  message: string;
+};
+
+type T563240ea85 = {
+  status: "failed";
+  message: string;
+};
+
+type T565e9250b1 = {
+  text: string;
+  id: string;
+};
+
+type T56b53aeb22 = {
+  updated: Tfddd645dc8;
+};
+
+type T56ed95d57c = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "user";
+};
+
+type T5728aceaa2 = {
+  readonly input: T8161ebccd4;
+  readonly output: T116d4a6834;
+};
+
+type T576bcbcea8 = {
+  documentId: Tfc8a750351;
+};
+
+type T57ebdcbe25 = {
+  workspaceId: string;
+};
+
+type T580bd0de31 = {
+  type: "tool-call";
+  id: string;
+  name: "search-all-past-chats";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T482343ffbd;
+} & T4d73965770;
+
+type T5855f1649e = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "pendingUpload";
+};
+
+type T588d0ee653 = number | null;
+
+type T5922ccec9f = {
+  type: "tool-call";
+  id: string;
+  name: "delete_document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T5971389af6 = {
+  status: ("accepted" | "dismissed" | "new" | "snoozed");
+  origin: ("manual" | "model" | "source");
+  kind: ("contract.reviewed" | "deadline.detected" | "hearing.changed" | "request.submitted" | "work.deadline_at_risk" | "work.unacknowledged");
+  title: string;
+  id: Td6d5acce5e;
+  workspaceId: T63854f81c6;
+  summary: string;
+  workspaceName: Tbe0400fa4c;
+  subject: {
+    type: "workspace";
+    workspaceId: string;
+  } | {
+    type: "entity";
+    workspaceId: string;
+    entityId: string;
+  } | {
+    type: "court-case";
+    courtCode: string;
+    caseNumber: string;
+  } | {
+    type: "none";
+  };
+  severity: ("critical" | "info" | "notice" | "warning");
+  evidence: {
+    kind: "request.submitted";
+    description: string;
+    attachments: Array<{
+      fileId: string;
+      name: string;
+      mimeType: string;
+      size: number;
+    }>;
+  } | {
+    kind: "hearing.changed";
+    courtName: string;
+    caseNumber: string;
+    previousAt: Tbe0400fa4c;
+    currentAt: string;
+    hearingType: Tbe0400fa4c;
+    sourceUrl: Tbe0400fa4c;
+  } | {
+    kind: "deadline.detected";
+    dueAt: string;
+    label: string;
+    quote: string;
+    entityId: string;
+    entityName: string;
+  } | {
+    kind: "contract.reviewed";
+    entityId: string;
+    entityName: string;
+    verdict: ("needs-review" | "reject" | "safe");
+    findings: Array<{
+      title: string;
+      severity: ("critical" | "info" | "notice" | "warning");
+      quote: string;
+    }>;
+    reviewRunId: Tbe0400fa4c;
+  } | {
+    kind: "work.unacknowledged";
+    obligationEntityId: string;
+    ownerUserId: string;
+    assignedAt: string;
+    daysWaiting: number;
+    workingTargetDate: Tbe0400fa4c;
+    hardDeadlineDate: Tbe0400fa4c;
+  } | {
+    kind: "work.deadline_at_risk";
+    obligationEntityId: string;
+    ownerUserId: string;
+    hardDeadlineDate: string;
+    workingTargetDate: Tbe0400fa4c;
+    daysUntilDeadline: number;
+    obligationStatus: ("active" | "awaiting_acknowledgement");
+  };
+  createdByUserId: Tbe0400fa4c;
+  scoutKey: string;
+  confidence: T588d0ee653;
+  suggestions: Array<{
+    kind: "create-deadline";
+    workspaceId: string;
+    name: string;
+    dueAt: string;
+  } | {
+    kind: "create-task";
+    workspaceId: string;
+    name: string;
+    dueAt: Tbe0400fa4c;
+  } | {
+    kind: "promote-to-workspace";
+  } | {
+    kind: "assign";
+  } | {
+    kind: "open-chat";
+    prompt: string;
+  }>;
+  assigneeUserId: Tbe0400fa4c;
+  dismissReason: Tbe0400fa4c;
+  acceptedResult: {
+    suggestionKind: ("create-deadline" | "create-task");
+    result: {
+      type: "entity";
+      entityId: string;
+      workspaceId: string;
+    };
+  } | {
+    suggestionKind: "promote-to-workspace";
+    result: {
+      type: "workspace";
+      workspaceId: string;
+    };
+  } | {
+    suggestionKind: ("assign" | "open-chat");
+    result: {
+      type: "none";
+    };
+  } | null;
+  assigneeUserName: Tbe0400fa4c;
+  assigneeUserImage: Tbe0400fa4c;
+} & {
+  snoozedUntil: Tbe0400fa4c;
+  resolvedAt: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type T5990be2a25 = {
+  readonly input: Tdb5a1ce47f;
+  readonly output: Ta2adf01c0a;
+};
+
+type T59c690454c = {
+  query: string;
+  scope: T62f288d6ab;
+  hint: Tbe0400fa4c;
+  results: Array<{
+    threadId: string;
+    threadTitle: string;
+    matterRef: Tbe0400fa4c;
+    messageId: string;
+    role: string;
+    excerpt: string;
+    createdAt: string;
+  }>;
+};
+
+type T5aeeefecac = {
+  spf: Tccc654a7c7;
+  dkim: Tccc654a7c7;
+  dmarc: Tccc654a7c7;
+  alignedIdentifier: Tbe0400fa4c;
+} & {
+  address: string;
+};
+
+type T5b398cdd9d = {
+  type: "error";
+  version: 1;
+};
+
+type T5bd2b68d05 = {
+  status: "unavailable";
+  reason: string;
+};
+
+type T5cb2c9d717 = {
+  [key: string]: string;
+};
+
+type T5d1f5ab5f2 = Tb532bdabe3 | null;
+
+type T5de736febe = {
+  readonly input: T8136384b1e;
+  readonly output: T12519395d5;
+};
+
+type T5e3ac29766 = {};
+
+type T5e6378eb9f = {
+  street: Tbe0400fa4c;
+  postalCode: Tbe0400fa4c;
+  city: Tbe0400fa4c;
+  country: Tbe0400fa4c;
+  textAddress: Tbe0400fa4c;
+} | null;
+
+type T5e702ac6d9 = "superseded" | "user-stop";
+
+type T5ed75bc2cc = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "legalList";
+};
+
+type T5eefd06bf2 = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "contactExtractionUpload";
+};
+
+type T5fcbd957c4 = {
+  type: "tool-call";
+  id: string;
+  name: "boe_find_related_laws";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T60db7b1f8f = "handled" | "new";
+
+type T60e51917c9 = stll_conditions_CompareNode | stll_conditions_GroupNode | stll_conditions_PredicateNode | null;
+
+type T6124e792aa = Array<T3c3fa57c15> | null;
+
+type T613c5cabbb = string & valibot_Brand<"SafeId"> & {
+  readonly __safeIdType?: "pdfSigningSession";
+};
+
+type T61747391b1 = "approved" | "billed" | "draft" | "written_off";
+
+type T61a314e9df = "AD" | "AE" | "AF" | "AG" | "AI" | "AL" | "AM" | "AO" | "AQ" | "AR" | "AS" | "AT" | "AU" | "AW" | "AX" | "AZ" | "BA" | "BB" | "BD" | "BE" | "BF" | "BG" | "BH" | "BI" | "BJ" | "BL" | "BM" | "BN" | "BO" | "BQ" | "BR" | "BS" | "BT" | "BV" | "BW" | "BY" | "BZ" | "CA" | "CC" | "CD" | "CF" | "CG" | "CH" | "CI" | "CK" | "CL" | "CM" | "CN" | "CO" | "CR" | "CU" | "CV" | "CW" | "CX" | "CY" | "CZ" | "DE" | "DJ" | "DK" | "DM" | "DO" | "DZ" | "EC" | "EE" | "EG" | "EH" | "ER" | "ES" | "ET" | "EU" | "FI" | "FJ" | "FK" | "FM" | "FO" | "FR" | "GA" | "GB" | "GD" | "GE" | "GF" | "GG" | "GH" | "GI" | "GL" | "GM" | "GN" | "GP" | "GQ" | "GR" | "GS" | "GT" | "GU" | "GW" | "GY" | "HK" | "HM" | "HN" | "HR" | "HT" | "HU" | "ID" | "IE" | "IL" | "IM" | "IN" | "IO" | "IQ" | "IR" | "IS" | "IT" | "JE" | "JM" | "JO" | "JP" | "KE" | "KG" | "KH" | "KI" | "KM" | "KN" | "KP" | "KR" | "KW" | "KY" | "KZ" | "LA" | "LB" | "LC" | "LI" | "LK" | "LR" | "LS" | "LT" | "LU" | "LV" | "LY" | "MA" | "MC" | "MD" | "ME" | "MF" | "MG" | "MH" | "MK" | "ML" | "MM" | "MN" | "MO" | "MP" | "MQ" | "MR" | "MS" | "MT" | "MU" | "MV" | "MW" | "MX" | "MY" | "MZ" | "NA" | "NC" | "NE" | "NF" | "NG" | "NI" | "NL" | "NO" | "NP" | "NR" | "NU" | "NZ" | "OM" | "PA" | "PE" | "PF" | "PG" | "PH" | "PK" | "PL" | "PM" | "PN" | "PR" | "PS" | "PT" | "PW" | "PY" | "QA" | "RE" | "RO" | "RS" | "RU" | "RW" | "SA" | "SB" | "SC" | "SD" | "SE" | "SG" | "SH" | "SI" | "SJ" | "SK" | "SL" | "SM" | "SN" | "SO" | "SR" | "SS" | "ST" | "SV" | "SX" | "SY" | "SZ" | "TC" | "TD" | "TF" | "TG" | "TH" | "TJ" | "TK" | "TL" | "TM" | "TN" | "TO" | "TR" | "TT" | "TV" | "TW" | "TZ" | "UA" | "UG" | "UM" | "US" | "UY" | "UZ" | "VA" | "VC" | "VE" | "VG" | "VI" | "VN" | "VU" | "WF" | "WS" | "XK" | "YE" | "YT" | "ZA" | "ZM" | "ZW";
+
+type T61d3076ac0 = {
+  country: string;
+  subdivision?: string | undefined;
+};
+
+type T61d4286dcb = {
+  type: "tool-call";
+  id: string;
+  name: "list_templates";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T61e931b9a3 = {
+  type: "tool-call";
+  id: string;
+  name: "manage_organization";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T6202858453 = "lead" | "originating" | "responsible";
+
+type T62128c5ec5 = {
+  workspaceId: string;
+};
+
+type T6225d0be51 = {
+  skillName: string;
+  path: string;
+};
+
+type T6269a5e99e = {
+  configured: false;
+  platformFallback: Tfddd645dc8;
+} | {
+  configured: true;
+  apiKeyMasked: string;
+  platformFallback: Tfddd645dc8;
+};
+
+type T62f288d6ab = "all-chats" | "matters";
+
+type T631856df6b = {
+  [key: string]: unknown;
+};
+
+type T63213f6a66 = {
+  type: "tool-call";
+  id: string;
+  name: "infosoud_lookup_case";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T635a859ab7 = "both" | "center" | "left" | "preserve" | "right";
+
+type T63854f81c6 = T9e07a7d6cd | null;
+
+type T63924fc269 = {
+  text: string;
+  id: string;
+};
+
+type T641b83000f = {
+  readonly value: Te7215e4424;
+  readonly issues?: undefined;
+};
+
+type T64c3504dad = {
+  skillName: string;
+};
+
+type T64f30e502a = "avt" | "calendar" | "filesystem" | "kanban" | "overview" | "table" | "timeline";
+
+type T64f82fc86d = {
+  bold: Tfddd645dc8;
+  alignment: T635a859ab7;
+  fontFamily: string;
+  fontSizePt: number;
+  spaceAfterPt: number;
+  spaceBeforePt: number;
+  numberingFormat: T9c3d54ef16;
+  indentLeftPt: number;
+  hangingPt: number;
+};
+
+type T6500cff7d8 = "case-law" | "chat" | "contact" | "document" | "folder" | "link" | "matter" | "message" | "task";
+
+type T653f0c375b = {
+  id: string;
+  name: string;
+  narrative: string;
+  narrativeLanguage: Tbe0400fa4c;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type T658a00d740 = {
+  address: string;
+  name: Tbe0400fa4c;
+};
+
+type T65bedee18b = "free" | "paid" | null;
+
 type T6685765ee4 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawCitation";
 };
 
-type T66d278db93 = "failed" | "cancelled" | "review" | "running" | "queued" | "committed";
+type T66d278db93 = "cancelled" | "committed" | "failed" | "queued" | "review" | "running";
 
 type T66e92cdab1 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatMessage";
 };
 
-type T682630bfc7 = null | T8cba41e37d;
+type T682630bfc7 = Tddfc027982 | null;
 
 type T682c6e749f = {
   readonly input: T42132256a7;
@@ -36130,7 +36157,7 @@ type T68b623e94c = {
   file: File;
 };
 
-type T68cafa3445 = Tc32428bafa | Tfa94fa9804;
+type T68cafa3445 = T4969bac86c | Tfa94fa9804;
 
 type T690ddaefc0 = {
   documentRef: string;
@@ -36141,27 +36168,12 @@ type T69193eb0dc = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateLookupFormat";
 };
 
-type T6947d07557 = {
-  type: "tool-call";
-  id: string;
-  name: "delete_contact";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type T692b04920e = {
+  readonly input: Tfe8087360e;
+  readonly output: T86d8d3c659;
+};
 
-type T696e471b85 = "stella:search" | "stella:read" | "stella:templates" | "stella:documents_write" | "stella:matters_write" | "stella:contacts_write" | "stella:chat" | "stella:knowledge_write" | "stella:billing_write" | "stella:admin_read" | "stella:admin_write" | "stella:onboarding" | "stella:skills" | "stella:external_mcps" | "stella:feedback";
-
-type T698805d2cd = {
-  type: "tool-call";
-  id: string;
-  name: "update-current-skill-body";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type T696e471b85 = "stella:admin_read" | "stella:admin_write" | "stella:billing_write" | "stella:chat" | "stella:contacts_write" | "stella:documents_write" | "stella:external_mcps" | "stella:feedback" | "stella:knowledge_write" | "stella:matters_write" | "stella:onboarding" | "stella:read" | "stella:search" | "stella:skills" | "stella:templates";
 
 type T6993bee61f = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "field";
@@ -36172,25 +36184,40 @@ type T699c14b14c = {
   readonly output: Tf8c3169b2f;
 };
 
+type T69c6723040 = {
+  type: ("unreliable-person" | "unreliable-vat-payer");
+  publishedOn: Tbe0400fa4c;
+};
+
+type T69e6288a5e = {
+  validFrom: Tbe0400fa4c;
+  validTo: Tbe0400fa4c;
+};
+
+type T69eae4f8b4 = {
+  readonly input: T482343ffbd;
+  readonly output: T59c690454c;
+};
+
 type T69ec7580d1 = {
   condition: T60e51917c9;
   dependsOnPropertyId: T173eec1550;
 };
 
-type T6b16466116 = {
-  type: "tool-call";
-  id: string;
-  name: "expand-chat-history";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: Tdefb828a83;
-} & T4d73965770;
+type T6a8b8e209a = {
+  readonly value: Te099fcc103;
+  readonly issues?: undefined;
+};
 
 type T6b29dee50d = {
   kind: "fallback";
   label?: string;
   text: string;
+};
+
+type T6b347503a9 = {
+  readonly input: Tee258ffbbe;
+  readonly output: Te47ce45d73;
 };
 
 type T6b4b00e15b = {
@@ -36202,19 +36229,19 @@ type T6b4b00e15b = {
 type T6b718d91dc = {
   createdAt: string;
   id: T66e92cdab1;
-  metadata?: Te863c9aa28;
+  metadata?: T417792d11a;
   role: Tbc3d04c5ab;
-  parts: Array<(tanstack_ai_client_TextPart | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | {
+  parts: Array<(tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | tanstack_ai_client_TextPart | tanstack_ai_client_ThinkingPart | {
     type: "tool-result";
     id?: string;
     name?: string;
     toolCallId: string;
-    content: (string | Array<tanstack_ai_ContentPart>);
-    state: ("error" | "complete" | "streaming");
+    content: (Array<tanstack_ai_ContentPart> | string);
+    state: ("complete" | "error" | "streaming");
     error?: string;
     metadata?: T631856df6b;
     createdAt?: string;
-  } | tanstack_ai_client_ThinkingPart | tanstack_ai_UIResourcePart | T86d991e7c0 | Tf9529310eb | T97fca5e74e | T621420426b | T2dbe0476e0 | T5143c04283 | T5cbad7b267 | Tc1f6a75e68 | T08899c0691 | T3115fa37b5 | Tefe86bc66f | Tc6f6bfa330 | T516226b2c3 | T6947d07557 | Tde9fbd919d | T2a6713721b | T050ffb7f51 | T4c6fb063e8 | T347ea842b3 | Tc31abec450 | Te4cef2c4f1 | T64dd0ef184 | T7aace93e83 | Te903957931 | Td60cdaf8e2 | T8442475520 | Tf7f5c58163 | T6454934e85 | T7726303d04 | T698805d2cd | T5681b43fbc | T08bd31660c | T99632b6a0a | T0cbcac4402 | T3582432480 | T451ea4af96 | Te265963f83 | T4cff2c04a4 | T09ed4390f0 | T1c0b32c703 | T908548b020 | T4b0b703d9e | T0dfed83fbb | T28236c25e3 | T213cf195f4 | Tfed59c6977 | Te07b1866e3 | T645c36442e | T8df4d19800 | Ta20d5deb18 | Tc4d06db5b5 | T7a0429686a | Ta7584da43a | T5b1470ddab | T172316168a | T92cce81fcb | Tec808acc7a | T0b64e151e3 | T77dbcc2472 | Tb5de57bdb6 | Te6421fbbcc | T6b16466116 | Td7a976c35b | Te1e7a7564f | T0ef90f0d9a | T3953b344f7 | T812d2b310a | Tef6a8c50b8 | T74bd0da96e | Tbff0077d7c | T9f6ae92b98 | tanstack_ai_StructuredOutputPart<unknown> | {
+  } | Te2c1a8a498 | Tda8f0f96e8 | T61d4286dcb | T7382bd77d4 | Tba6edcbeb9 | T14ae4bed9b | Td9a96e07c3 | T0548b5740f | T5922ccec9f | T953b8b828f | Tb5c31df0ee | T0cb52bc3d9 | Tbd752f6459 | Tf666d2dda4 | T2f1eb9f087 | T41e8180893 | Td8bd350a0d | T396413b1f2 | T0f5b7a8f75 | Tcfc2bcdf0c | Tbec7099b68 | Te7bcf4f8cd | Tf580acfc9a | T43a95a3581 | T2f4d996387 | T708cb204fe | T61e931b9a3 | Td00a89251b | Tb89b7edf1b | T3958c3b3af | Tddeee5f72e | T832cfa2544 | T54ad5c389f | Tf540c7cacc | Tf7089f7953 | Te0862af907 | Te2f4644948 | T7177f7c683 | Ta85ccee7af | T7e246539c7 | T5fcbd957c4 | T3f7112bc47 | Tdd40b6002f | T63213f6a66 | T37645f97e3 | Tb675330ce6 | Teff0fd014f | T291799859b | Tfd761de317 | Ta9703ec17d | Td43d5a192e | T7f8a36b7e8 | T1906714431 | Tac064ee8a2 | Taee4ff1ecc | T22503d92e1 | T87debc7a12 | Tda26afd3a5 | Ta70c642bca | Tebb9fbb4f8 | Ta5b5eca36c | Tbcccb22aed | Tb33e966012 | T580bd0de31 | Td55da643d6 | Td15a61239d | T4b08c72cf3 | Td8667c9636 | T9f7b063dac | Tb23918f1b2 | T3dd22338ec | {
     type: "subagent";
     subagent: {
       stop?: {
@@ -36223,7 +36250,7 @@ type T6b718d91dc = {
       id: string;
       status: tanstack_ai_SubagentStatus;
       parentRunId?: string;
-      interruptIds?: undefined | Array<string>;
+      interruptIds?: Array<string> | undefined;
       messages: Array<Tcf1688e82d>;
       error?: T561c958713;
       name: string;
@@ -36235,7 +36262,12 @@ type T6b718d91dc = {
   })>;
 };
 
-type T6bbfe677bd = "daily" | "weekly" | "monthly";
+type T6bbfe677bd = "daily" | "monthly" | "weekly";
+
+type T6bd5a18bc8 = {
+  readonly input: T4a592a8301;
+  readonly output: Tf1e33da2e2;
+};
 
 type T6c8f3af024 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "userFile";
@@ -36268,11 +36300,25 @@ type T6e37e01eb4 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillRevision";
 };
 
+type T6e5891caeb = {
+  startDatePropertyId: string;
+  endDatePropertyId: string;
+  zoom: ("day" | "month" | "quarter" | "week");
+  groupByPropertyId?: string | undefined;
+  showTable: Tfddd645dc8;
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "timeline";
+};
+
 type T6e9118d33d = {
   fieldPath: string;
   valuePath: string;
   itemIndex: T588d0ee653;
-  reason: ("truncated" | "empty" | "interrupted" | "generation-failed");
+  reason: ("empty" | "generation-failed" | "interrupted" | "truncated");
   message: string;
 };
 
@@ -36296,21 +36342,21 @@ type T6f9e2e6853 = {
   newValue: string;
 };
 
-type T6fe53f6bc0 = "task" | "deadline";
+type T6fe53f6bc0 = "deadline" | "task";
 
-type T70fd969971 = {
-  id: T406326c84f;
-  caseNumber: string;
-  country: string;
-  court: string;
-  decisionDate: Tbe0400fa4c;
-  decisionType: Tbe0400fa4c;
-  ecli: Tbe0400fa4c;
-  language: string;
-  languageAlternates: ReadonlyArray<T32fdeee18e>;
-  slug: Tbe0400fa4c;
-} & {
-  citationAuthority: number;
+type T708cb204fe = {
+  type: "tool-call";
+  id: string;
+  name: "delete_time_entry";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type T71245bf5cf = {
+  defaultFormatId: Tbe0400fa4c;
+  defaultFormatSource: ("organization" | "user" | null);
 };
 
 type T71643efc98 = "required" | "restricted";
@@ -36320,34 +36366,44 @@ type T7165758c88 = {
   readonly output: Taa8cddb06d;
 };
 
+type T7177f7c683 = {
+  type: "tool-call";
+  id: string;
+  name: "boe_get_law";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
 type T71cf339d21 = {
   readonly input: T51cc6664d5;
   readonly output: T0800a1cff9;
 };
 
-type T71e45ea880 = null | Tbdcaa23547;
+type T71e45ea880 = Tbdcaa23547 | null;
 
-type T71f88011ed = undefined | {
-  readonly libraryOptions?: undefined | T631856df6b;
-};
+type T71f88011ed = {
+  readonly libraryOptions?: T631856df6b | undefined;
+} | undefined;
 
 type T71f8c17907 = {
   type: T1dacb02040;
   displayName: string;
-  prefix?: undefined | string;
-  firstName?: undefined | string;
-  middleName?: undefined | string;
-  lastName?: undefined | string;
-  suffix?: undefined | string;
-  organizationName?: undefined | string;
-  notes?: undefined | string;
-  emails?: undefined | Array<Te7a0943297>;
-  phones?: undefined | Array<T76156445ff>;
-  addresses?: undefined | Array<T3c3fa57c15>;
-  tags?: undefined | Array<string>;
-  registrationNumber?: undefined | string;
-  taxId?: undefined | string;
-  metadata?: undefined | Ta716eb8a48;
+  prefix?: string | undefined;
+  firstName?: string | undefined;
+  middleName?: string | undefined;
+  lastName?: string | undefined;
+  suffix?: string | undefined;
+  organizationName?: string | undefined;
+  notes?: string | undefined;
+  emails?: Array<Te7a0943297> | undefined;
+  phones?: Array<T76156445ff> | undefined;
+  addresses?: Array<T3c3fa57c15> | undefined;
+  tags?: Array<string> | undefined;
+  registrationNumber?: string | undefined;
+  taxId?: string | undefined;
+  metadata?: Ta716eb8a48 | undefined;
 };
 
 type T7213122d77 = {
@@ -36380,34 +36436,14 @@ type T7251581258 = {
   errors: Array<string>;
 };
 
-type T7263651183 = "failed" | "cancelled" | "running" | "completed" | "queued";
-
-type T72e75e00cb = {
-  code?: string;
-  message: string;
-  hint?: string;
-  issues?: Array<Tfbf26a7023>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T0d3b649ce9;
-  error?: string;
-  claim?: T753574bc22;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T81694d3f69>;
-};
+type T7263651183 = "cancelled" | "completed" | "failed" | "queued" | "running";
 
 type T72f7776665 = {
-  client: (null | {
+  client: {
     id: Tbf83a7d346;
     displayName: string;
-  });
-  defaultViewId: (null | T7e10a0d884);
+  } | null;
+  defaultViewId: (T7e10a0d884 | null);
   id: T9e07a7d6cd;
   name: string;
   reference: string;
@@ -36417,17 +36453,21 @@ type T72f7776665 = {
   lastActivityAt: string;
 };
 
-type T731ffd6028 = T72e75e00cb | T86f61f0431;
+type T731ffd6028 = Tcbfb640fc8 | T86f61f0431;
 
 type T73467fd01f = {
   lawId: string;
 };
 
-type T73980560a1 = {
-  kind: "cz-vat-reliability";
-  source: Tc73807a034;
-  subject: Te6e750ecc6;
-};
+type T7382bd77d4 = {
+  type: "tool-call";
+  id: string;
+  name: "fill_template";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type T73b2a1010d = {
   type: "case-number";
@@ -36450,15 +36490,11 @@ type T74166dcf18 = {
   readonly issues?: undefined;
 };
 
-type T74bd0da96e = {
-  type: "tool-call";
-  id: string;
-  name: "remember";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: Tee12b2a0c6;
-} & T4d73965770;
+type T74837627f5 = {
+  content: string;
+  kind?: "decision" | "fact" | "instruction" | "preference" | "relationship" | undefined;
+  scope?: "user" | "workspace" | undefined;
+};
 
 type T74ebaa3415 = {
   [key: string]: any;
@@ -36472,15 +36508,10 @@ type T753574bc22 = {
   interval: number;
 };
 
-type T7538035c96 = "medium" | "high" | "low" | "blocker";
+type T7538035c96 = "blocker" | "high" | "low" | "medium";
 
 type T759c58ee94 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "reportExport";
-};
-
-type T75bb875923 = {
-  readonly value: T5345561adb;
-  readonly issues?: undefined;
 };
 
 type T75c585bdb4 = {
@@ -36517,27 +36548,14 @@ type T7655e43efa = {
   };
 };
 
-type T76a95623f1 = {
-  readonly input: Te0b1fd5531;
-  readonly output: Taf56293cce;
-};
+type T775353dad5 = T631856df6b | null;
 
-type T76d112985a = {
-  kind: "matter";
-  field: ("name" | "status" | "reference" | "billingReference");
+type T777e4fb6de = {
+  query: string;
+  jurisdiction: T16f65ff3fd;
+  freshness: ("any" | "day" | "month" | "week" | "year");
+  maxResults: number;
 };
-
-type T7726303d04 = {
-  type: "tool-call";
-  id: string;
-  name: "ask-user";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T42132256a7;
-};
-
-type T775353dad5 = null | T631856df6b;
 
 type T779a78611c = {
   revision: string;
@@ -36549,17 +36567,7 @@ type T77cbe76bde = {
   version: 1;
 };
 
-type T77d06e55fd = null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "enqueue_failed" | "no_text" | "extraction_failed" | "grading_failed";
-
-type T77dbcc2472 = {
-  type: "tool-call";
-  id: string;
-  name: "web_search";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: Tb21d985837;
-} & T4d73965770;
+type T77d06e55fd = "ai_unavailable" | "enqueue_failed" | "extraction_failed" | "grading_failed" | "internal" | "no_text" | "pin_content_changed" | "pin_unresolved" | "unsupported_format" | null;
 
 type T77e493d553 = {
   status: "not-required";
@@ -36577,51 +36585,25 @@ type T79f23715fc = {
   validFrom: Tbe0400fa4c;
 };
 
-type T7a0429686a = {
-  type: "tool-call";
-  id: string;
-  name: "read_comments";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type T7a0a473ce3 = "workspaces.parties.client" | "templates.binding.sourceParty" | "common.matter" | "templates.binding.sourceAttorney" | "templates.binding.sourceFirm" | "common.displayName" | "contacts.fields.firstName" | "contacts.fields.lastName" | "common.organizationName" | "common.email" | "contacts.columns.phone" | "common.anonymizationLabels.address" | "contacts.fields.billingAddressLine1" | "contacts.fields.billingAddressCity" | "contacts.fields.billingAddressPostalCode" | "common.country" | "contacts.fields.registrationNumber" | "contacts.fields.taxId" | "contacts.fields.bankAccountIban" | "contacts.fields.bankAccountBic" | "contacts.communication.dataBoxPlaceholder" | "common.name" | "common.reference" | "templates.binding.fieldBillingReference" | "common.status" | "workspaces.parties.partyRoles.opposing_party" | "workspaces.parties.partyRoles.opposing_counsel" | "workspaces.parties.partyRoles.co_counsel" | "workspaces.parties.partyRoles.witness" | "workspaces.parties.partyRoles.expert_witness" | "workspaces.parties.partyRoles.third_party" | "workspaces.parties.partyRoles.judge" | "workspaces.parties.partyRoles.mediator" | "workspaces.parties.partyRoles.other" | "contacts.attorneys.responsible" | "contacts.attorneys.originating" | "templates.binding.attorneyLead";
-
-type T7a1942a03f = {
-  reason?: "processing" | "enqueue";
-  status: "failed";
-};
+type T7a0a473ce3 = "common.anonymizationLabels.address" | "common.country" | "common.displayName" | "common.email" | "common.matter" | "common.name" | "common.organizationName" | "common.reference" | "common.status" | "contacts.attorneys.originating" | "contacts.attorneys.responsible" | "contacts.columns.phone" | "contacts.communication.dataBoxPlaceholder" | "contacts.fields.bankAccountBic" | "contacts.fields.bankAccountIban" | "contacts.fields.billingAddressCity" | "contacts.fields.billingAddressLine1" | "contacts.fields.billingAddressPostalCode" | "contacts.fields.firstName" | "contacts.fields.lastName" | "contacts.fields.registrationNumber" | "contacts.fields.taxId" | "templates.binding.attorneyLead" | "templates.binding.fieldBillingReference" | "templates.binding.sourceAttorney" | "templates.binding.sourceFirm" | "templates.binding.sourceParty" | "workspaces.parties.client" | "workspaces.parties.partyRoles.co_counsel" | "workspaces.parties.partyRoles.expert_witness" | "workspaces.parties.partyRoles.judge" | "workspaces.parties.partyRoles.mediator" | "workspaces.parties.partyRoles.opposing_counsel" | "workspaces.parties.partyRoles.opposing_party" | "workspaces.parties.partyRoles.other" | "workspaces.parties.partyRoles.third_party" | "workspaces.parties.partyRoles.witness";
 
 type T7a3ee17d2d = {
   [key: string]: unknown;
 };
 
-type T7aace93e83 = {
-  type: "tool-call";
-  id: string;
-  name: "update_reader_annotation";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type T7aebf701ec = "company-id" | "person" | "tax-id";
 
-type T7aebf701ec = "person" | "company-id" | "tax-id";
+type T7af392baeb = {
+  fileFieldId?: T6993bee61f;
+  docxEditSnapshot?: T94af9a40b9;
+  supportsDocxEdits?: false | true;
+  entityId: Tf742ada503;
+  fileName: string;
+};
 
 type T7afaf18a37 = {
   url: string;
   maxChars: number;
-};
-
-type T7c5bb3a7e5 = {
-  subagents: Array<{
-    task: string;
-    context?: undefined | string;
-    expectedOutput?: undefined | string;
-    model?: undefined | string;
-  }>;
 };
 
 type T7cf33d5fda = {
@@ -36681,23 +36663,21 @@ type T7e10a0d884 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "workspaceView";
 };
 
+type T7e246539c7 = {
+  type: "tool-call";
+  id: string;
+  name: "boe_get_law_block";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
 type T7e76966445 = {
   workspaceId: string;
 };
 
-type T7e9fce8170 = {
-  fixes?: undefined | Array<{
-    code: string;
-    message: string;
-    line?: undefined | number;
-  }>;
-  warnings?: undefined | Array<Te1f90e1fdd>;
-  success: true;
-  destination: "draft";
-  fileName: string;
-};
-
-type T7ed363629c = "keep" | "inline" | "translate";
+type T7ed363629c = "inline" | "keep" | "translate";
 
 type T7efa92f703 = {
   readonly __safeIdType?: "workspace";
@@ -36710,12 +36690,22 @@ type T7f217a9731 = {
 } | {
   index: number;
   status: "skipped";
-  reason: ("invalid_tax_id" | "contacts_limit_reached" | "duplicate_contact_id" | "duplicate_tax_id" | "invalid_row");
+  reason: ("contacts_limit_reached" | "duplicate_contact_id" | "duplicate_tax_id" | "invalid_row" | "invalid_tax_id");
 };
 
 type T7f53fbfebd = {
   workspaceId: T8d02a37b3f;
 };
+
+type T7f8a36b7e8 = {
+  type: "tool-call";
+  id: string;
+  name: "read_comments";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type T7fc66a79c4 = {
   readonly error: "Not Found";
@@ -36730,15 +36720,48 @@ type T8065b8ad03 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clauseVariant";
 };
 
-type T812d2b310a = {
-  type: "tool-call";
-  id: string;
-  name: "review_folder_consistency";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: Tad027ba68a;
-} & T4d73965770;
+type T807b8d5703 = {
+  action: "open";
+  url: string;
+} | {
+  action: "snapshot";
+  textOffset?: number | undefined;
+} | {
+  action: "click";
+  page: T03c381f302;
+  target: T4eb5cc5545;
+} | {
+  action: "fill";
+  page: T03c381f302;
+  target: T4eb5cc5545;
+  value: string;
+} | {
+  action: "select";
+  page: T03c381f302;
+  target: T4eb5cc5545;
+  value: string;
+} | {
+  action: "press-key";
+  key: T28ae3065fc;
+  page: T03c381f302;
+  target: T4eb5cc5545;
+} | {
+  action: "go-back";
+};
+
+type T8136384b1e = {
+  lawId: string;
+  relationType?: "all" | "derogatedBy" | "derogates" | "modifiedBy" | "modifies" | undefined;
+};
+
+type T8161ebccd4 = {
+  url: string;
+  title?: string | undefined;
+  publishedAt?: string | undefined;
+  content: string;
+  truncated: Tfddd645dc8;
+  provider: "jina";
+};
 
 type T81694d3f69 = {
   path: string;
@@ -36747,43 +36770,60 @@ type T81694d3f69 = {
   options: T51e1843fb9;
 };
 
-type T818296fd17 = "none" | "bearer" | "oauth2";
+type T818296fd17 = "bearer" | "none" | "oauth2";
+
+type T81a87f67e2 = {
+  fixes?: Array<{
+    code: string;
+    message: string;
+    line?: number | undefined;
+  }> | undefined;
+  warnings?: Array<Te1f90e1fdd> | undefined;
+  success: true;
+  destination: "draft";
+  fileName: string;
+};
 
 type T81e7f6a3eb = {
   flowId: T9546dfa359;
 };
 
+type T81f0fdb1b7 = {
+  text: string;
+  instructions: Tbe0400fa4c;
+};
+
 type T823941dec3 = {
-  context?: undefined | string;
-  href?: undefined | string;
+  context?: string | undefined;
+  href?: string | undefined;
   name: string;
   ref: string;
   role: string;
 };
 
-type T83854980c8 = 1 | 2 | 3 | 4 | 5 | 6;
-
-type T8402f88e6b = {
-  closeReason: (null | "expired" | "user_cancelled" | "base_version_diverged" | "digest_mismatch" | "unsupported_platform" | "certificate_rejected" | "certificate_revoked" | "certified_document" | "signature_invalid" | "signing_failed" | "stamp_overflow" | "stamp_unrenderable" | "would_break_signatures");
-  expiresAt: string;
-  finalizedVersionId: T9021211256;
-  finalizedVersionNumber: T588d0ee653;
-  status: ("open" | "cancelled" | "finalized" | "expired");
-};
-
-type T8436dc75f2 = {
-  folderRef: string;
-};
-
-type T8442475520 = {
+type T832cfa2544 = {
   type: "tool-call";
   id: string;
-  name: "delete_time_entry";
+  name: "create-current-skill-resource";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
+
+type T83854980c8 = 1 | 2 | 3 | 4 | 5 | 6;
+
+type T8402f88e6b = {
+  closeReason: ("base_version_diverged" | "certificate_rejected" | "certificate_revoked" | "certified_document" | "digest_mismatch" | "expired" | "signature_invalid" | "signing_failed" | "stamp_overflow" | "stamp_unrenderable" | "unsupported_platform" | "user_cancelled" | "would_break_signatures" | null);
+  expiresAt: string;
+  finalizedVersionId: T9021211256;
+  finalizedVersionNumber: T588d0ee653;
+  status: ("cancelled" | "expired" | "finalized" | "open");
+};
+
+type T8436dc75f2 = {
+  folderRef: string;
+};
 
 type T84b2a2edb5 = {
   id: Td4824cf25d;
@@ -36800,59 +36840,49 @@ type T85e6600670 = {
   message: string;
   paragraphIndex: number;
   directive: string;
-  source?: "body" | "header" | "footer";
+  source?: "body" | "footer" | "header";
 };
 
 type T85f803b281 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "anonymizationBlacklistEntry";
 };
 
-type T8643dbf11b = null | {
+type T8643dbf11b = {
   street: Tbe0400fa4c;
   city: Tbe0400fa4c;
   region: Tbe0400fa4c;
   postalCode: Tbe0400fa4c;
   country: Tbe0400fa4c;
   textAddress: Tbe0400fa4c;
-};
+} | null;
 
-type T86a1d73bed = "docx" | "xlsx" | "pptx";
+type T86a1d73bed = "docx" | "pptx" | "xlsx";
 
 type T86d8d3c659 = {
   query: string;
   limit: number;
 };
 
-type T86d991e7c0 = {
-  type: "tool-call";
-  id: string;
-  name: `mcp__${string}`;
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: any;
-} & T4d73965770;
-
 type T86f61f0431 = {
   readonly message: string;
 };
 
-type T870458a513 = "organization" | "matters";
+type T870458a513 = "matters" | "organization";
 
 type T8723d9d642 = {
   code?: string;
   message: string;
 };
 
-type T8740abfdcf = {
-  listId: (null | T5ed75bc2cc);
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T4c703c7179>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4a5707509f>;
-  version: 1;
-  type: "avt";
-};
+type T87debc7a12 = {
+  type: "tool-call";
+  id: string;
+  name: "show_in_document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type T880b804d02 = {
   pageNumber: number;
@@ -36862,7 +36892,7 @@ type T880b804d02 = {
   xMax: number;
 };
 
-type T880f60a469 = "Bad Request" | {
+type T880f60a469 = {
   code?: string;
   message: string;
   hint?: string;
@@ -36880,13 +36910,11 @@ type T880f60a469 = "Bad Request" | {
   claim_token_expires?: string;
   post_claim_scopes?: Array<string>;
   requiredFields?: Array<T81694d3f69>;
-};
+} | "Bad Request";
 
 type T8833b520cb = {
   status: "connecting";
 };
-
-type T884a45faa8 = "message" | "document" | "folder" | "task" | "link";
 
 type T888f21ca4b = {
   readonly input: T539e1e5c66;
@@ -36934,27 +36962,17 @@ type T88a38d2a60 = {
   }>;
 };
 
-type T88ad5a8d38 = null | T1b8351dd22;
+type T88ad5a8d38 = T1b8351dd22 | null;
 
 type T8919d5949d = {
   provider: Tcc23752159;
   modelId: string;
 };
 
-type T89ed64b036 = {
-  lawId: string;
-  relationType?: undefined | "all" | "modifies" | "modifiedBy" | "derogates" | "derogatedBy";
-};
-
 type T89f3fe155f = {
   items: Array<T09dc0536e6>;
   nextCursor: Tbe0400fa4c;
   limit: number;
-};
-
-type T8a03a9eca5 = {
-  text: string;
-  instructions: Tbe0400fa4c;
 };
 
 type T8ab40ae369 = {
@@ -36973,39 +36991,22 @@ type T8ab40cad8c = {
   versionValidFrom: Tbe0400fa4c;
 };
 
-type T8ac3351254 = null | "internal" | "pin_unresolved" | "pin_content_changed" | "unsupported_format" | "ai_unavailable" | "playbook_check_failed" | "reference_check_failed" | "enqueue_failed";
+type T8ac3351254 = "ai_unavailable" | "enqueue_failed" | "internal" | "pin_content_changed" | "pin_unresolved" | "playbook_check_failed" | "reference_check_failed" | "unsupported_format" | null;
 
-type T8adc422ed8 = "translated" | "bilingual";
+type T8adc422ed8 = "bilingual" | "translated";
 
 type T8aea504e13 = {
   modelId: string;
   provider: T4b83723412;
 };
 
-type T8bf396d917 = "yellow" | "green" | "sky" | "violet" | "red";
-
-type T8c80beb4cd = {
-  text?: undefined | string;
-  title?: undefined | string;
-  departmentCode?: undefined | string;
-  legalRangeCode?: undefined | string;
-  matterCode?: undefined | string;
-  dateFrom?: undefined | string;
-  dateTo?: undefined | string;
-  offset?: undefined | number;
-  limit?: undefined | number;
+type T8bbaf16642 = {
+  type: "footnote";
+  label: string;
+  noteId?: string | undefined;
 };
 
-type T8c8906ff99 = {
-  status: "not-registered";
-  checkedAt: string;
-  sourceDataAsOf: Tbe0400fa4c;
-};
-
-type T8cba41e37d = {
-  email: Tbe0400fa4c;
-  name: Tbe0400fa4c;
-};
+type T8bf396d917 = "green" | "red" | "sky" | "violet" | "yellow";
 
 type T8cf50df639 = {
   value: string;
@@ -37020,30 +37021,25 @@ type T8d27901f72 = {
   decisionInstanceProvisioned: Tfddd645dc8;
 };
 
-type T8da97ce6b5 = {
-  required?: undefined | false | true;
-  minLength?: undefined | number;
-  maxLength?: undefined | number;
-  min?: undefined | number;
-  max?: undefined | number;
-  pattern?: undefined | string;
-  minItems?: undefined | number;
-  maxItems?: undefined | number;
+type T8d5e2ac251 = {
+  readonly input: Taa699009ad;
+  readonly output: T1bc07bd9cb;
+};
+
+type T8d67e84046 = {
+  readonly "~standard": {
+    readonly validate: {
+      (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | Tb761d2c017 | Promise<(Tfc86db9c4b | Tb761d2c017)>);
+    };
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: T1060343604 | undefined;
+  };
 };
 
 type T8de31056e4 = {
   templateId: string;
 };
-
-type T8df4d19800 = {
-  type: "tool-call";
-  id: string;
-  name: "list_stories";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
 
 type T8ea407634a = {
   readonly value: T466bee4580;
@@ -37068,67 +37064,43 @@ type T8ee3aa7cc6 = {
 
 type T8f22b22b9e = {
   name: string;
-  organization?: undefined | string;
-  url?: undefined | string;
-  role: ("reviewer" | "drafter" | "converter");
-  date?: undefined | string;
+  organization?: string | undefined;
+  url?: string | undefined;
+  role: ("converter" | "drafter" | "reviewer");
+  date?: string | undefined;
 };
 
 type T8f465d529b = {
   signalId: Td6d5acce5e;
 };
 
-type T8f584f9d60 = null | T8065b8ad03;
-
-type T8f7cd2c7c4 = {
-  kind: "attorney";
-  ref: T6202858453;
-  field: ("name" | "email");
-};
-
-type T8fd3506feb = {
-  readonly input: T1dec1d0a87;
-  readonly output: Te384930758;
-};
+type T8f584f9d60 = T8065b8ad03 | null;
 
 type T8ff9f6d126 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkill";
 };
 
-type T9021211256 = null | Tb86085a330;
-
-type T908548b020 = {
-  type: "tool-call";
-  id: string;
-  name: "boe_find_related_laws";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type T9021211256 = Tb86085a330 | null;
 
 type T90864899a0 = "all" | "columns";
+
+type T91be5f6aad = "client-disconnected" | "timeout";
+
+type T921fd22a21 = {
+  readonly input: Tddb0458281;
+  readonly output: Td5ded8ed3b;
+};
 
 type T922a8f0700 = {
   packId: string;
 };
 
-type T922e475469 = "keep" | "accept" | "reject";
+type T922e475469 = "accept" | "keep" | "reject";
 
 type T9281829eb5 = {
   id: string;
-  role: ("tool" | "user" | "system" | "activity" | "assistant" | "reasoning" | "developer");
+  role: ("activity" | "assistant" | "developer" | "reasoning" | "system" | "tool" | "user");
 };
-
-type T92cce81fcb = {
-  type: "tool-call";
-  id: string;
-  name: "resolve_comment";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
 
 type T92e9230d1b = Response | {
   status: "idle";
@@ -37146,18 +37118,13 @@ type T92e9230d1b = Response | {
   message: string;
 };
 
-type T93760ea794 = {
-  readonly input: T52fcbe1ef6;
-  readonly output: T7afaf18a37;
-};
-
 type T94af9a40b9 = {
   canApplyEdits?: false | true;
   blocks: Array<{
     displayLabel?: string;
     styleId?: string;
     blockTextHash?: string;
-    kind: ("paragraph" | "heading" | "listItem");
+    kind: ("heading" | "listItem" | "paragraph");
     text: string;
     id: string;
   }>;
@@ -37168,7 +37135,15 @@ type T94cbbaa5a7 = {
   runId: T2e29c5e55f;
 };
 
-type T9527c354f7 = "message" | "document" | "contact" | "matter" | "folder" | "task" | "link" | "chat" | "case-law";
+type T953b8b828f = {
+  type: "tool-call";
+  id: string;
+  name: "set_field_value";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type T9546dfa359 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "flowDefinition";
@@ -37182,19 +37157,19 @@ type T9676908f8c = {
   ico: string;
   name: string;
   legalForm: Tbe0400fa4c;
-  address: (null | {
+  address: {
     street: Tbe0400fa4c;
     postalCode: Tbe0400fa4c;
     city: Tbe0400fa4c;
     country: Tbe0400fa4c;
     textAddress: Tbe0400fa4c;
-  });
-  courtFile: (null | {
+  } | null;
+  courtFile: {
     court: string;
     courtName: Tbe0400fa4c;
     section: string;
     insertNumber: string;
-  });
+  } | null;
   establishedAt: Tbe0400fa4c;
   terminatedAt: Tbe0400fa4c;
   shareCapital: Tbe0400fa4c;
@@ -37228,25 +37203,7 @@ type T9676908f8c = {
   registryUrl: string;
 };
 
-type T9680aa9f01 = {
-  readonly "~standard": {
-    readonly jsonSchema: Tc49e8b2305;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Tda60fb80f5;
-  };
-} & {
-  readonly "~standard": {
-    readonly validate: {
-      (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tc3aa9b9341 | Promise<(T22d9b74f40 | Tc3aa9b9341)>);
-    };
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | Tda60fb80f5;
-  };
-};
-
-type T9717780ffe = "supported" | "tension" | "contradicted";
+type T9717780ffe = "contradicted" | "supported" | "tension";
 
 type T973f0d36bf = {
   type: "file";
@@ -37277,55 +37234,20 @@ type T973f0d36bf = {
   version: 1;
 };
 
-type T97b6e5d995 = {
-  workspaceId?: T9e07a7d6cd;
-  contextMatterIds?: Array<T9e07a7d6cd>;
-  truncateAfterMessageId?: T66e92cdab1;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T129008ae9b;
-  activeDraft?: T42a50d3ca2;
-  activeFile?: T088b2f68ca;
-  activeTemplate?: T9bf573e525;
-  activeDecision?: Tfc773e48e5;
-  activeExternal?: Tc42c89297d;
-  activeSkill?: T369422441d;
-  activeStatute?: T576bcbcea8;
-  browserClient?: Tf9e246ce28;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T66e92cdab1;
-    role: Tbc3d04c5ab;
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: Taf779979ed;
-  sendMode: T00bc2c60de;
-};
-
-type T97fca5e74e = {
-  type: "tool-call";
-  id: string;
-  name: "list_templates";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
 type T984d9f8701 = {
   readonly value: T7afaf18a37;
   readonly issues?: undefined;
 };
 
-type T98724a80a4 = "Not Found" | T9a51b7d2bc;
+type T98724a80a4 = T9a51b7d2bc | "Not Found";
 
 type T98898fcada = {
   [key: string]: unknown;
+};
+
+type T9899c62a18 = {
+  readonly value: T807b8d5703;
+  readonly issues?: undefined;
 };
 
 type T989e289c86 = {
@@ -37339,16 +37261,6 @@ type T989e289c86 = {
   indentLeftPt: number;
   hangingPt: number;
 };
-
-type T99632b6a0a = {
-  type: "tool-call";
-  id: string;
-  name: "load-skill";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
 
 type T99663c92cb = {
   clauseVersion?: number;
@@ -37380,14 +37292,7 @@ type T9a51b7d2bc = {
   requiredFields?: Array<T81694d3f69>;
 };
 
-type T9a7fed5187 = "email" | "document" | "court" | "manual" | "flow" | "calendar" | "import" | "api";
-
-type T9a80a98f0b = {
-  query: string;
-  jurisdiction: T16f65ff3fd;
-  freshness: ("year" | "any" | "month" | "week" | "day");
-  maxResults: number;
-};
+type T9a7fed5187 = "api" | "calendar" | "court" | "document" | "email" | "flow" | "import" | "manual";
 
 type T9a80b4d3e9 = {
   workspaceId: string;
@@ -37398,61 +37303,19 @@ type T9a8daf49a9 = {
   readonly issues?: undefined;
 };
 
-type T9ae8ef5978 = {
-  query: string;
-  scope: T62f288d6ab;
-  hint: Tbe0400fa4c;
-  results: Array<{
-    threadId: string;
-    threadTitle: string;
-    matterRef: Tbe0400fa4c;
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
 type T9b129e6597 = {
   status: "saved";
-};
-
-type T9ba0459a89 = {
-  status: "not-covered";
-  reason: ("subject-type-not-supported" | "tax-id-required");
-  supportedSubjectTypes: Array<T7aebf701ec>;
 };
 
 type T9bcd2c6ed7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "notification";
 };
 
-type T9bcd9af8d6 = {
-  query: string;
-  scope: T62f288d6ab;
-  hint: Tbe0400fa4c;
-  results: Array<{
-    threadId: string;
-    threadTitle: string;
-    matterRef: Tbe0400fa4c;
-    messageId: string;
-    role: string;
-    excerpt: string;
-    createdAt: string;
-  }>;
-};
-
 type T9bf0b27838 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListGenerationRun";
 };
 
-type T9bf573e525 = {
-  docxEditSnapshot?: T94af9a40b9;
-  templateId: Td4824cf25d;
-  fileName: string;
-};
-
-type T9c3d54ef16 = "preserve" | "decimal" | "hierarchicalDecimal" | "lowerLetterParenthetical" | "lowerRomanParenthetical" | "upperLetterParenthetical" | "upperRoman";
+type T9c3d54ef16 = "decimal" | "hierarchicalDecimal" | "lowerLetterParenthetical" | "lowerRomanParenthetical" | "preserve" | "upperLetterParenthetical" | "upperRoman";
 
 type T9c598ec048 = {
   accepted: number;
@@ -37468,6 +37331,12 @@ type T9d8da34b19 = {
   printUrl: string;
 };
 
+type T9de06ef8f6 = {
+  kind: "party";
+  role: Tdedb951219;
+  field: Td16108295a;
+};
+
 type T9e07a7d6cd = string & valibot_Brand<"SafeId"> & T7efa92f703;
 
 type T9f60b23b0d = {
@@ -37476,14 +37345,14 @@ type T9f60b23b0d = {
   version: 1;
 };
 
-type T9f6ae92b98 = {
+type T9f7b063dac = {
   type: "tool-call";
   id: string;
-  name: "discover_tools";
+  name: "remember";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
-  output?: unknown;
+  output?: Tee12b2a0c6;
 } & T4d73965770;
 
 type T9fbd583e13 = {
@@ -37501,7 +37370,7 @@ type Ta03fcc4def = {
     italic?: false | true;
   }>;
   isDirective?: false | true;
-  directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if";
   directiveExpression?: string;
   listKind?: "bullet" | "ordered";
   listLevel?: number;
@@ -37511,10 +37380,10 @@ type Ta0a053f749 = {
   code: string;
   message: string;
   severity: Tf31e28edee;
-  line?: undefined | number;
+  line?: number | undefined;
 };
 
-type Ta0c1d202e7 = null | stll_money_CentsAmount;
+type Ta0c1d202e7 = stll_money_CentsAmount | null;
 
 type Ta0e1c4f807 = T12163e1f6a | {
   documentPending: Tfddd645dc8;
@@ -37540,7 +37409,7 @@ type Ta0e1c4f807 = T12163e1f6a | {
   languageGroupKey: Tbe0400fa4c;
   decisionDate: Tbe0400fa4c;
   decisionType: Tbe0400fa4c;
-  documentAst: (null | T3f8f92c9e4 | {
+  documentAst: (T3f8f92c9e4 | {
     metadata: Tb41431d9b3;
     source: T9d8da34b19;
     version: 1;
@@ -37548,52 +37417,52 @@ type Ta0e1c4f807 = T12163e1f6a | {
     blocks: Array<{
       type: "heading";
       id: string;
-      role?: undefined | "decision-title" | "section-heading";
+      role?: "decision-title" | "section-heading" | undefined;
       anchorId: string;
       level: T83854980c8;
       inlines: Array<Ta4c2166933>;
     } & {
-      plainText?: undefined | string;
+      plainText?: string | undefined;
     } | {
-      number?: undefined | number;
+      number?: number | undefined;
       type: "paragraph";
       id: string;
-      role?: undefined | "unknown" | "summary" | "quote" | "counsel" | "signature" | "case-number" | "parties" | "intro" | "history" | "argumentation" | "holding" | "dissent" | "closing" | "front-matter" | "apparatus" | "syllabus" | "headnotes" | "panel";
+      role?: "apparatus" | "argumentation" | "case-number" | "closing" | "counsel" | "dissent" | "front-matter" | "headnotes" | "history" | "holding" | "intro" | "panel" | "parties" | "quote" | "signature" | "summary" | "syllabus" | "unknown" | undefined;
       anchorId: string;
-      note?: undefined | T1d6100d20a;
+      note?: T8bbaf16642 | undefined;
       inlines: Array<Ta4c2166933>;
-      listDepth?: undefined | 1 | 2 | 3 | 4;
+      listDepth?: 1 | 2 | 3 | 4 | undefined;
     } & {
-      plainText?: undefined | string;
+      plainText?: string | undefined;
     } | {
       type: "image";
       src: string;
       id: string;
       anchorId: string;
-      height?: undefined | number;
-      width?: undefined | number;
-      alt?: undefined | string;
+      height?: number | undefined;
+      width?: number | undefined;
+      alt?: string | undefined;
     } & {
-      plainText?: undefined | string;
+      plainText?: string | undefined;
     } | {
       type: "table";
       id: string;
-      role?: undefined | "related-proceedings" | "metadata-table";
+      role?: "metadata-table" | "related-proceedings" | undefined;
       anchorId: string;
       plainText: string;
     } & {
       rows: Array<Array<{
-        header?: undefined | true;
+        header?: true | undefined;
         inlines: Array<Ta4c2166933>;
-        colSpan?: undefined | number;
-        rowSpan?: undefined | number;
+        colSpan?: number | undefined;
+        rowSpan?: number | undefined;
       } & {
-        plainText?: undefined | string;
+        plainText?: string | undefined;
       }>>;
     }>;
-  });
+  } | null);
   projectionDigest: Tbe0400fa4c;
-  documentAstSource: (null | "store" | "row");
+  documentAstSource: ("row" | "store" | null);
   sections: Tb9db08c163;
   sourceUrl: Tbe0400fa4c;
   sourceAttributionUrl: Tbe0400fa4c;
@@ -37615,18 +37484,18 @@ type Ta0e1c4f807 = T12163e1f6a | {
     allowsDerivedAi: Tfddd645dc8;
   };
   judges: Array<{
-    role: ("rapporteur" | "presiding" | "panel-member" | "dissenting" | "advocate-general");
+    role: ("advocate-general" | "dissenting" | "panel-member" | "presiding" | "rapporteur");
     name: string;
-    judgeId: (null | T2f575449b0);
-    portrait: (null | {
+    judgeId: (T2f575449b0 | null);
+    portrait: {
       url: string;
       attribution: string;
-    });
+    } | null;
   }>;
   citationsFrom: (Array<never> | Array<{
     id: T6685765ee4;
     citationText: string;
-    citedDecisionId: (null | T406326c84f);
+    citedDecisionId: (T406326c84f | null);
     sectionIndex: T588d0ee653;
   }>);
   citationsTo: (Array<never> | Array<{
@@ -37648,22 +37517,16 @@ type Ta114ed3d14 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "bilingualTranslationRun";
 };
 
-type Ta1bec2af75 = {
-  matterRef: string;
-  entityRef: string;
-  propertyRef: string;
-  value: T426e4657a4;
+type Ta1379e699e = {
+  messageId: string;
+  before?: number | undefined;
+  after?: number | undefined;
 };
 
-type Ta20d5deb18 = {
-  type: "tool-call";
-  id: string;
-  name: "read_story";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type Ta1f9b4de71 = {
+  readonly value: T777e4fb6de;
+  readonly issues?: undefined;
+};
 
 type Ta297fc92a3 = {
   templateId: string;
@@ -37674,7 +37537,7 @@ type Ta2adf01c0a = {
   source: string;
 };
 
-type Ta2bfcf8544 = Td09dd3a151 | T1a92e2c41a | Td3ee8d4ce6 | T17e2f7d16d | Tfe912fcba8 | Tda5c7074d2 | T8740abfdcf;
+type Ta2bfcf8544 = Tebc5a69b82 | T49708f9c20 | T2998ce6505 | T2fed70772e | T0bdd08f6e7 | T6e5891caeb | T1edc2e9811;
 
 type Ta307d8fb8c = {
   readonly type: "present";
@@ -37690,15 +37553,15 @@ type Ta3fb0e1ff6 = {
   label: string;
 };
 
-type Ta43f3a994b = {
-  readonly value: Tefa091671d;
+type Ta43e2dcaa2 = {
+  readonly value: Td5ded8ed3b;
   readonly issues?: undefined;
 };
 
 type Ta4c2166933 = {
   type: "text";
   text: string;
-  anonymized?: undefined | true;
+  anonymized?: true | undefined;
 } | {
   type: "bold";
   children: Array<Ta4c2166933>;
@@ -37721,26 +37584,78 @@ type Ta4c2166933 = {
 } | {
   type: "citation";
   cite: string;
-  href?: undefined | string;
+  href?: string | undefined;
   children: Array<Ta4c2166933>;
 } | {
   type: "line-break";
 } | {
   type: "page-anchor";
   label: string;
-  href?: undefined | string;
+  href?: string | undefined;
 };
 
-type Ta4ea9eaecf = "draft" | "approved";
+type Ta4ea9eaecf = "approved" | "draft";
 
 type Ta5b3abbaeb = {
   readonly input: Tbb0cc35d34;
   readonly output: T8436dc75f2;
 };
 
-type Ta5e56d2d42 = "AR" | "BG" | "DE" | "ES" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "LT" | "LV" | "NL" | "PL" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "ZH" | "CS" | "DA" | "EN-GB" | "EL" | "JA" | "KO" | "NB" | "PT-PT" | "UK" | "ZH-HANS" | "ZH-HANT" | "EN-US" | "PT-BR" | "ES-419";
+type Ta5b5eca36c = {
+  type: "tool-call";
+  id: string;
+  name: "search-chat-history";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T51cc6664d5;
+} & T4d73965770;
 
-type Ta62bb7ae6f = "pending" | "failed" | "cancelled" | "running" | "awaiting_review" | "completed";
+type Ta5e56d2d42 = "AR" | "BG" | "CS" | "DA" | "DE" | "EL" | "EN-GB" | "EN-US" | "ES" | "ES-419" | "ET" | "FI" | "FR" | "HU" | "ID" | "IT" | "JA" | "KO" | "LT" | "LV" | "NB" | "NL" | "PL" | "PT-BR" | "PT-PT" | "RO" | "RU" | "SK" | "SL" | "SV" | "TR" | "UK" | "ZH" | "ZH-HANS" | "ZH-HANT";
+
+type Ta62bb7ae6f = "awaiting_review" | "cancelled" | "completed" | "failed" | "pending" | "running";
+
+type Ta6eced4642 = {
+  workspaceId?: T9e07a7d6cd;
+  contextMatterIds?: Array<T9e07a7d6cd>;
+  truncateAfterMessageId?: T66e92cdab1;
+  turnIntent?: "regenerate";
+  toolScope?: "suggest-template-fields";
+  runMode?: "agent";
+  userContext?: T129008ae9b;
+  activeDraft?: Tdaa8eea194;
+  activeFile?: T7af392baeb;
+  activeTemplate?: Teca103477f;
+  activeDecision?: Tfc773e48e5;
+  activeExternal?: Tc42c89297d;
+  activeSkill?: T369422441d;
+  activeStatute?: T576bcbcea8;
+  browserClient?: Tf9e246ce28;
+  editApplyMode?: "auto" | "manual";
+  docxEditRepresentation?: "direct" | "tracked-changes";
+  devModelId?: string;
+  message: {
+    metadata?: unknown;
+    id: T66e92cdab1;
+    role: "assistant";
+    parts: Array<unknown>;
+  };
+  runId: string;
+  threadId: Taf779979ed;
+  sendMode: T00bc2c60de;
+  parentRunId: string;
+  resume: Array<Tacbaeed0d6>;
+};
+
+type Ta70c642bca = {
+  type: "tool-call";
+  id: string;
+  name: "web_search";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: Tddb0458281;
+} & T4d73965770;
 
 type Ta70e9835f3 = "cz-insolvency" | "cz-vat-reliability";
 
@@ -37757,52 +37672,42 @@ type Ta716eb8a48 = {
   }>;
 };
 
-type Ta7217a98e1 = "other" | "work" | "personal";
+type Ta7217a98e1 = "other" | "personal" | "work";
 
-type Ta7584da43a = {
+type Ta85ccee7af = {
   type: "tool-call";
   id: string;
-  name: "read_changes";
+  name: "boe_get_law_structure";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
 
-type Ta8989496e3 = "medium" | "high" | "low" | "unspecified";
+type Ta8989496e3 = "high" | "low" | "medium" | "unspecified";
 
-type Ta8b3a4e1d1 = {
-  url: string;
-  title?: undefined | string;
-  publishedAt?: undefined | string;
-  content: string;
-  truncated: Tfddd645dc8;
-  provider: "jina";
-};
-
-type Ta8d1af4749 = "none" | "account" | "api-key";
+type Ta8d1af4749 = "account" | "api-key" | "none";
 
 type Ta90cfc78fd = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "correspondenceAllowedSender";
 };
 
-type Ta92a4cb146 = null | Array<Te7a0943297>;
+type Ta92a4cb146 = Array<Te7a0943297> | null;
 
 type Ta94982c099 = {
   readonly input: T3a8e541c8b;
   readonly output: T6f9e2e6853;
 };
 
-type Ta95577b206 = {
-  title: string;
-  jurisdictions: ReadonlyArray<T61d3076ac0>;
-  fields: ReadonlyArray<string>;
-  slug: string;
-  license: string;
-  languages: ReadonlyArray<string>;
-  sha256: string;
-  legalArea: Tbe0400fa4c;
-};
+type Ta9703ec17d = {
+  type: "tool-call";
+  id: string;
+  name: "read_story";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Ta9ad173755 = {
   savedSearchId: Tcdc6b0a442;
@@ -37815,6 +37720,8 @@ type Ta9ca9b7bcb = {
   }>;
 };
 
+type Taa699009ad = Td617134437 | Tc38488b75b;
+
 type Taa8cddb06d = {
   lawId: string;
 };
@@ -37823,57 +37730,24 @@ type Taa9f64260f = {
   prompt: string;
 };
 
-type Tab11ee99f7 = {
-  text: string;
-  instructions: Tbe0400fa4c;
-};
-
-type Tab56f8d869 = "portrait" | "landscape";
+type Tab56f8d869 = "landscape" | "portrait";
 
 type Tab803e393c = {
   readonly value: T059c285743;
   readonly issues?: undefined;
 };
 
-type Tabc58da83b = {
-  protocolVersion: 4;
-  snapshot: {
-    contentTrust: "untrusted-web-content";
-    elements: Array<{
-      context?: undefined | string;
-      href?: undefined | string;
-      name: string;
-      ref: string;
-      role: string;
-      value?: undefined | string;
-    }>;
-    revision: string;
-    text: string;
-    textOffset: number;
-    textTotalChars: number;
-    tabId: number;
-    title: string;
-    url: string;
-  };
-  status: "success";
-} | {
-  code: T00b5a3f4ca;
-  message: string;
-  protocolVersion: 4;
-  status: "error";
-};
+type Tabfa37ff84 = "in" | "out";
 
-type Tabd3c9202c = {
-  type: Tf795dc12d5;
-  options: Array<{
-    value: string;
-    color: string;
-  }>;
-  version: 1;
-  fallback: Tbe0400fa4c;
-};
-
-type Tabfa37ff84 = "out" | "in";
+type Tac064ee8a2 = {
+  type: "tool-call";
+  id: string;
+  name: "add_comment";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Tacbaeed0d6 = {
   payload?: unknown;
@@ -37923,11 +37797,11 @@ type Tad027ba68a = {
   }>;
 };
 
-type Tad12f531bb = "included" | "held";
+type Tad12f531bb = "held" | "included";
 
-type Tada6067f00 = T346b54ceed | T279717e2be;
+type Tada6067f00 = T2203ecc422 | T279717e2be;
 
-type Tae4c134ba8 = "active" | "cancelled" | "completed" | "unassigned" | "awaiting_acknowledgement";
+type Tae4c134ba8 = "active" | "awaiting_acknowledgement" | "cancelled" | "completed" | "unassigned";
 
 type Tae9bee69f4 = {
   identificador?: string;
@@ -37946,6 +37820,24 @@ type Tae9bee69f4 = {
 type Taeaa3ad44e = {
   title: string;
   markdown: string;
+};
+
+type Taec8e40e3e = {
+  readonly "~standard": {
+    readonly jsonSchema: Tc49e8b2305;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: T69eae4f8b4 | undefined;
+  };
+} & {
+  readonly "~standard": {
+    readonly validate: {
+      (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T02efc15f2b | Promise<(Tfc86db9c4b | T02efc15f2b)>);
+    };
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: T69eae4f8b4 | undefined;
+  };
 };
 
 type Taedcc9e56f = {
@@ -37985,6 +37877,16 @@ type Taedcc9e56f = {
   }>;
 };
 
+type Taee4ff1ecc = {
+  type: "tool-call";
+  id: string;
+  name: "reply_comment";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
 type Taef59073eb = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "mcpUserConnection";
 };
@@ -37999,6 +37901,11 @@ type Taf779979ed = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "chatThread";
 };
 
+type Tb13124e7c6 = {
+  readonly value: T21ddbd121a;
+  readonly issues?: undefined;
+};
+
 type Tb14bbccf94 = {
   type: "document";
 } | {
@@ -38007,11 +37914,11 @@ type Tb14bbccf94 = {
 } | {
   type: "pdf-page";
   pageNumber: number;
-  boundingBoxes?: undefined | Tbc6f0a29ca;
+  boundingBoxes?: Tbc6f0a29ca | undefined;
 };
 
 type Tb165f0f166 = {
-  subjectType: ("vat-payer" | "identified-person" | "vat-group" | "unreliable-person");
+  subjectType: ("identified-person" | "unreliable-person" | "vat-group" | "vat-payer");
   name: Tbe0400fa4c;
   address: Tbe0400fa4c;
   taxOfficeCode: Tbe0400fa4c;
@@ -38019,6 +37926,29 @@ type Tb165f0f166 = {
     account: string;
     publishedOn: string;
     withdrawnOn: Tbe0400fa4c;
+  }>;
+};
+
+type Tb19925bd53 = {
+  documentId: Tfc8a750351;
+  language: string;
+  anchorId: string;
+  citedAnchorId: Tbe0400fa4c;
+  headings: Array<{
+    anchorId: string;
+    level: T83854980c8;
+    text: string;
+  }>;
+  heading: {
+    id: string;
+    anchorId: string;
+    level: T83854980c8;
+    text: string;
+  } | null;
+  blocks: Array<{
+    id: string;
+    anchorId: string;
+    text: string;
   }>;
 };
 
@@ -38031,23 +37961,17 @@ type Tb2028981db = {
   question: string;
 };
 
-type Tb21d985837 = {
-  query: string;
-  jurisdiction: T16f65ff3fd;
-  results: Array<{
-    id: string;
-    url: string;
-    title: string;
-    snippet: string;
-    publishedAt?: undefined | string;
-    source: string;
-    score?: undefined | number;
-  }>;
-  provider: "tavily";
-  answer?: undefined | string;
-};
+type Tb23918f1b2 = {
+  type: "tool-call";
+  id: string;
+  name: "execute_typescript";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
-type Tb28d44fa4d = null | "unknown" | "free" | "tentative" | "busy" | "out_of_office" | "working_elsewhere";
+type Tb28d44fa4d = "busy" | "free" | "out_of_office" | "tentative" | "unknown" | "working_elsewhere" | null;
 
 type Tb2b1f765a2 = {
   results: Array<{
@@ -38083,13 +38007,52 @@ type Tb2f04eed16 = {
   readonly message: string;
 };
 
+type Tb33a71380a = {
+  action: "open";
+  url: string;
+} | {
+  action: "snapshot";
+  textOffset?: number | undefined;
+} | {
+  action: "click";
+  page: T779a78611c;
+  target: T823941dec3;
+} | {
+  action: "fill";
+  page: T779a78611c;
+  target: T823941dec3;
+  value: string;
+} | {
+  action: "select";
+  page: T779a78611c;
+  target: T823941dec3;
+  value: string;
+} | {
+  action: "press-key";
+  key: T28ae3065fc;
+  page: T779a78611c;
+  target: T823941dec3;
+} | {
+  action: "go-back";
+};
+
+type Tb33e966012 = {
+  type: "tool-call";
+  id: string;
+  name: "search-past-chats";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T482343ffbd;
+} & T4d73965770;
+
 type Tb3b9f88be6 = {
   codigo?: string;
   nombre?: string;
   item?: Tae9bee69f4 | Array<Tae9bee69f4>;
 };
 
-type Tb411b93636 = null | Tbf83a7d346;
+type Tb411b93636 = Tbf83a7d346 | null;
 
 type Tb41431d9b3 = {
   caseNumber: Tbe0400fa4c;
@@ -38110,19 +38073,34 @@ type Tb532bdabe3 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateCategory";
 };
 
-type Tb5de57bdb6 = {
+type Tb5c31df0ee = {
   type: "tool-call";
   id: string;
-  name: "fetch_url";
+  name: "save_matter";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
-  output?: Ta8b3a4e1d1;
+  output?: unknown;
+} & T4d73965770;
+
+type Tb675330ce6 = {
+  type: "tool-call";
+  id: string;
+  name: "suggest_changes";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
 } & T4d73965770;
 
 type Tb761d2c017 = {
   readonly value: any;
   readonly issues?: undefined;
+};
+
+type Tb7a1edbe71 = {
+  readonly input: T005df2fae9;
+  readonly output: Teab768a417;
 };
 
 type Tb7bcf69f62 = string & valibot_Brand<"SafeId"> & {
@@ -38155,13 +38133,14 @@ type Tb86085a330 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "entityVersion";
 };
 
-type Tb896476a72 = {
+type Tb89b7edf1b = {
+  type: "tool-call";
   id: string;
-  resourceName: (string & valibot_Brand<"ResourceName">);
-  type: T9527c354f7;
-  title: string;
-  headline: Tbe0400fa4c;
-  updatedAt: string;
+  name: "ask-user";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T42132256a7;
 };
 
 type Tb934c8da8e = {
@@ -38186,31 +38165,26 @@ type Tb934c8da8e = {
   readonly message: "Legislation document not found";
 };
 
-type Tb9b95eff02 = {
-  defaultFormatId: Tbe0400fa4c;
-  defaultFormatSource: (null | "organization" | "user");
-};
-
-type Tb9db08c163 = null | Array<{
+type Tb9db08c163 = Array<{
   index: number;
-  type: ("unknown" | "header" | "footer" | "history" | "argumentation" | "dissent" | "ruling");
+  type: ("argumentation" | "dissent" | "footer" | "header" | "history" | "ruling" | "unknown");
   title: Tbe0400fa4c;
   text: string;
-}>;
+}> | null;
 
 type Tba428f02e1 = {
   readonly [key: string]: never;
 };
 
-type Tba4a651ce0 = {
-  analysis: string;
-  questions: Array<{
-    question: string;
-    reason: string;
-    options?: undefined | Array<string>;
-    default?: undefined | string;
-  }>;
-};
+type Tba6edcbeb9 = {
+  type: "tool-call";
+  id: string;
+  name: "create_template";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Tbb0cc35d34 = {
   folderRef: string;
@@ -38237,8 +38211,8 @@ type Tbbddf8a170 = {
     };
   } | {
     type: "file-upload";
-    workspaceIds: (null | Array<T9e07a7d6cd>);
-    fileExtensions: (null | Array<string>);
+    workspaceIds: (Array<T9e07a7d6cd> | null);
+    fileExtensions: (Array<string> | null);
   };
   steps: Array<{
     name: string;
@@ -38256,6 +38230,13 @@ type Tbbddf8a170 = {
   }>;
 };
 
+type Tbbfb0e2dc0 = {
+  query: string;
+  jurisdiction?: "at" | "cz" | "de" | "eu" | "global" | "sk" | undefined;
+  freshness?: "any" | "day" | "month" | "week" | "year" | undefined;
+  maxResults?: number | undefined;
+};
+
 type Tbbfbf3c65c = {
   bold: Tfddd645dc8;
   alignment: T635a859ab7;
@@ -38270,7 +38251,7 @@ type Tbbfbf3c65c = {
 
 type Tbc037571a0 = "free" | "pro";
 
-type Tbc3d04c5ab = "user" | "system" | "assistant";
+type Tbc3d04c5ab = "assistant" | "system" | "user";
 
 type Tbc510e9400 = {
   readonly type: "absent";
@@ -38288,11 +38269,22 @@ type Tbca2f95139 = {
   dismissed: number;
 };
 
-type Tbcc05c4756 = "timeout" | "client-disconnected" | "owner-lost";
+type Tbcccb22aed = {
+  type: "tool-call";
+  id: string;
+  name: "expand-chat-history";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: Tdefb828a83;
+} & T4d73965770;
 
-type Tbcf5250947 = {
-  readonly value: Td80ce08c34;
-  readonly issues?: undefined;
+type Tbce82e5c70 = {
+  name: string;
+  type: "person";
+  userId: Tbe0400fa4c;
+  version: 1;
+  image: Tbe0400fa4c;
 };
 
 type Tbcff5c05b4 = {
@@ -38305,18 +38297,38 @@ type Tbd6f65e1eb = {
   version: 1;
 };
 
-type Tbda09b9036 = null | T69193eb0dc;
+type Tbd752f6459 = {
+  type: "tool-call";
+  id: string;
+  name: "save_contact";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type Tbda09b9036 = T69193eb0dc | null;
 
 type Tbdcaa23547 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "clauseVersion";
 };
 
-type Tbe0400fa4c = null | string;
+type Tbe0400fa4c = string | null;
 
-type Tbed0668ae0 = null | {
+type Tbec7099b68 = {
+  type: "tool-call";
+  id: string;
+  name: "run_playbook";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type Tbed0668ae0 = {
   amount: number;
   currency: Tbe0400fa4c;
-};
+} | null;
 
 type Tbedd195a15 = {
   readonly input: Tad027ba68a;
@@ -38325,147 +38337,36 @@ type Tbedd195a15 = {
 
 type Tbf83a7d346 = string & valibot_Brand<"SafeId"> & T1c99d77bbc;
 
-type Tbff0077d7c = {
-  type: "tool-call";
-  id: string;
-  name: "execute_typescript";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type Tbffa2a23cb = {
+  status: "not-registered";
+  checkedAt: string;
+  sourceDataAsOf: Tbe0400fa4c;
+};
 
 type Tc0c1f34102 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "correspondence";
 };
 
-type Tc0c6b48ad3 = "pending" | "applied";
+type Tc0c6b48ad3 = "applied" | "pending";
 
-type Tc0f5c8e964 = "draft" | "finalized" | "sent" | "paid" | "void";
+type Tc0f5c8e964 = "draft" | "finalized" | "paid" | "sent" | "void";
 
-type Tc18269d27b = "reference" | "template" | "prompt" | "asset" | "knowledge" | "script";
+type Tc18269d27b = "asset" | "knowledge" | "prompt" | "reference" | "script" | "template";
 
-type Tc1ed87d509 = {
-  readonly value: T2e9e8fc862;
-  readonly issues?: undefined;
-};
-
-type Tc1f6a75e68 = {
-  type: "tool-call";
-  id: string;
-  name: "save_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type Tc23cfaebea = null | {
+type Tc23cfaebea = {
   street: Tbe0400fa4c;
   postalCode: Tbe0400fa4c;
   city: Tbe0400fa4c;
   municipality: Tbe0400fa4c;
   country: Tbe0400fa4c;
   textAddress: Tbe0400fa4c;
-};
+} | null;
 
-type Tc2a8824cf4 = {
-  action: "open";
-  url: string;
-} | {
-  action: "snapshot";
-  textOffset?: undefined | number;
-} | {
-  action: "click";
-  page: T03c381f302;
-  target: T4eb5cc5545;
-} | {
-  action: "fill";
-  page: T03c381f302;
-  target: T4eb5cc5545;
-  value: string;
-} | {
-  action: "select";
-  page: T03c381f302;
-  target: T4eb5cc5545;
-  value: string;
-} | {
-  action: "press-key";
-  key: T28ae3065fc;
-  page: T03c381f302;
-  target: T4eb5cc5545;
-} | {
-  action: "go-back";
-};
-
-type Tc31abec450 = {
-  type: "tool-call";
-  id: string;
-  name: "save_playbook";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type Tc32428bafa = {
-  code?: string;
+type Tc38488b75b = {
+  code: T00b5a3f4ca;
   message: string;
-  hint?: string;
-  issues?: Array<Tfbf26a7023>;
-  reason?: string;
-  required?: number;
-  available?: number;
-  confirmation?: T0d3b649ce9;
-  error?: string;
-  claim?: T753574bc22;
-  registration_id?: string;
-  registration_type?: string;
-  claim_url?: string;
-  claim_token?: string;
-  claim_token_expires?: string;
-  post_claim_scopes?: Array<string>;
-  requiredFields?: Array<T81694d3f69>;
-};
-
-type Tc35f5ed366 = {
-  readonly input: T89ed64b036;
-  readonly output: T2e9e8fc862;
-};
-
-type Tc3aa9b9341 = {
-  readonly value: T9ae8ef5978;
-  readonly issues?: undefined;
-};
-
-type Tc3ce63cbd9 = {
-  success: true;
-  fileName: string;
-  entityId: string;
-  fieldId: string;
-  workspaceId: string;
-  entityRef: string;
-  matterRef: string;
-  href: string;
-  mention: string;
-} | {
-  fixes?: undefined | Array<{
-    code: string;
-    message: string;
-    line?: undefined | number;
-  }>;
-  warnings?: undefined | Array<Ta0a053f749>;
-  success: true;
-  destination: "draft";
-  fileName: string;
-} | {
-  success: true;
-  destination: "download";
-  fileName: string;
-} | {
-  success: false;
-  message: string;
-  errors?: undefined | Array<Ta0a053f749>;
+  protocolVersion: 4;
+  status: "error";
 };
 
 type Tc42c89297d = {
@@ -38476,13 +38377,6 @@ type Tc42c89297d = {
   sourceToolName?: string;
   url: string;
   title: string;
-};
-
-type Tc4816eabc2 = {
-  code: T00b5a3f4ca;
-  message: string;
-  protocolVersion: 4;
-  status: "error";
 };
 
 type Tc497209a93 = {
@@ -38510,31 +38404,21 @@ type Tc49e8b2305 = {
   };
 };
 
-type Tc4d06db5b5 = {
-  type: "tool-call";
-  id: string;
-  name: "find_text";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
 type Tc528191da5 = {
   noteSavedAt: Tbe0400fa4c;
   decidedAt: Tbe0400fa4c;
   status: T19752008a0;
-  statusOrigin: (null | "single" | "bulk");
+  statusOrigin: ("bulk" | "single" | null);
   override: T25af101672;
   note: string;
   decidedBy: Tbe0400fa4c;
   reopened: Tfddd645dc8;
-  recordConflictResolution: (null | {
+  recordConflictResolution: {
     kind: "governed";
     factEntityId: Tf742ada503;
   } | {
     kind: "escalated";
-  });
+  } | null;
 };
 
 type Tc5405dd456 = {
@@ -38542,7 +38426,7 @@ type Tc5405dd456 = {
   createdBy: Tbe0400fa4c;
   position: number;
   question: string;
-  content: (Tcb216ab4cd | Tabd3c9202c | Tcdd35a1427 | T2b5a9a8bf4);
+  content: (Tcb216ab4cd | Te16cf19189 | Tcdd35a1427 | T2b5a9a8bf4);
   createdAt: string;
   updatedAt: string;
 };
@@ -38551,23 +38435,132 @@ type Tc5e15b2397 = {
   columnId: Teb50de97c7;
 };
 
-type Tc620425c7c = {
-  readonly input: T353d98c95e;
-  readonly output: Tc2a8824cf4;
+type Tc601a26749 = {
+  readonly input: Ta1379e699e;
+  readonly output: Taf56293cce;
 };
 
-type Tc6a27e1b37 = {
+type Tc6e1fc1a97 = {
+  code?: string;
+  message: string;
+  hint?: string;
+  issues?: Array<Tfbf26a7023>;
+  reason?: string;
+  required?: number;
+  available?: number;
+  confirmation?: T0d3b649ce9;
+  error?: string;
+  claim?: T753574bc22;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: Array<string>;
+  requiredFields?: Array<T81694d3f69>;
+} | "Bad Gateway";
+
+type Tc7057093bd = {
+  readonly "~standard": {
+    readonly jsonSchema: Tc49e8b2305;
+    readonly version: 1;
+    readonly vendor: string;
+    readonly types?: T692b04920e | undefined;
+  };
+} & {
   readonly "~standard": {
     readonly validate: {
-      (value: unknown, options?: T71f88011ed): (T22d9b74f40 | Tb761d2c017 | Promise<(T22d9b74f40 | Tb761d2c017)>);
+      (value: unknown, options?: T71f88011ed): (Tfc86db9c4b | T39bd2e99da | Promise<(Tfc86db9c4b | T39bd2e99da)>);
     };
     readonly version: 1;
     readonly vendor: string;
-    readonly types?: undefined | T1060343604;
+    readonly types?: T692b04920e | undefined;
   };
 };
 
-type Tc6e1fc1a97 = "Bad Gateway" | {
+type Tc73807a034 = {
+  name: string;
+  authority: string;
+  url: string;
+};
+
+type Tc79049686d = "constitutional" | "other" | "regional" | "supreme";
+
+type Tc7eaf8104c = {
+  placeholder: string;
+  original: string;
+};
+
+type Tc88149628d = tanstack_ai_ToolExecutionContext<unknown> | undefined;
+
+type Tc892bdfad5 = {
+  items: Array<T6d031af10d>;
+  version: 3;
+};
+
+type Tc9c6fb618b = {
+  stored: number;
+  storedAsOf: string;
+  reported: number;
+  reportedAsOf: string;
+  reportedBy: ("listing" | "operator" | "publisher");
+};
+
+type Tc9f332d529 = {
+  numero?: string;
+  seccion?: Td90f8b552b | Array<Td90f8b552b>;
+  sumario_diario?: {
+    identificador?: string;
+    url_pdf?: {
+      szBytes?: string;
+      szKBytes?: string;
+      texto?: string;
+    };
+  };
+};
+
+type Tcaa4ce6922 = {
+  (args: Tfe8087360e, context?: Tc88149628d): (T482343ffbd | Promise<T482343ffbd>);
+};
+
+type Tcadd7d5047 = T4e595a8315 | null;
+
+type Tcb19db2b80 = "courier" | "expert_witness" | "filing_fee" | "other" | "printing" | "travel";
+
+type Tcb216ab4cd = {
+  type: "text";
+  version: 1;
+};
+
+type Tcbcd8d06b3 = {
+  id: string;
+  resourceName: (string & valibot_Brand<"ResourceName">);
+  type: T6500cff7d8;
+  title: string;
+  headline: Tbe0400fa4c;
+  updatedAt: string;
+};
+
+type Tcbd1655cb4 = {
+  kind: "redLine";
+  ruleId: string;
+  text: string;
+};
+
+type Tcbf6fe4665 = {
+  premises: Tbe0400fa4c;
+  addressLine1: Tbe0400fa4c;
+  addressLine2: Tbe0400fa4c;
+  locality: Tbe0400fa4c;
+  region: Tbe0400fa4c;
+  postalCode: Tbe0400fa4c;
+  country: Tbe0400fa4c;
+  poBox: Tbe0400fa4c;
+  careOf: Tbe0400fa4c;
+  textAddress: Tbe0400fa4c;
+} | null;
+
+type Tcbfb640fc8 = {
   code?: string;
   message: string;
   hint?: string;
@@ -38587,95 +38580,16 @@ type Tc6e1fc1a97 = "Bad Gateway" | {
   requiredFields?: Array<T81694d3f69>;
 };
 
-type Tc6f6bfa330 = {
-  type: "tool-call";
-  id: string;
-  name: "delete_matter";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type Tcc1d747a33 = "double" | "onePoint15" | "onePoint5" | "preserve" | "single";
 
-type Tc73807a034 = {
-  name: string;
-  authority: string;
-  url: string;
-};
+type Tcc23752159 = "anthropic" | "azure_foundry" | "bedrock" | "google" | "huggingface" | "mistral" | "openai" | "openai_compatible" | "openrouter";
 
-type Tc79049686d = "constitutional" | "supreme" | "regional" | "other";
-
-type Tc7eaf8104c = {
-  placeholder: string;
-  original: string;
-};
-
-type Tc88149628d = undefined | tanstack_ai_ToolExecutionContext<unknown>;
-
-type Tc892bdfad5 = {
-  items: Array<T6d031af10d>;
-  version: 3;
-};
-
-type Tc9f332d529 = {
-  numero?: string;
-  seccion?: Td90f8b552b | Array<Td90f8b552b>;
-  sumario_diario?: {
-    identificador?: string;
-    url_pdf?: {
-      szBytes?: string;
-      szKBytes?: string;
-      texto?: string;
-    };
-  };
-};
-
-type Tcadd7d5047 = null | T4e595a8315;
-
-type Tcb19db2b80 = "other" | "expert_witness" | "filing_fee" | "travel" | "printing" | "courier";
-
-type Tcb216ab4cd = {
-  type: "text";
-  version: 1;
-};
-
-type Tcbd1655cb4 = {
-  kind: "redLine";
-  ruleId: string;
-  text: string;
-};
-
-type Tcbf6fe4665 = null | {
-  premises: Tbe0400fa4c;
-  addressLine1: Tbe0400fa4c;
-  addressLine2: Tbe0400fa4c;
-  locality: Tbe0400fa4c;
-  region: Tbe0400fa4c;
-  postalCode: Tbe0400fa4c;
-  country: Tbe0400fa4c;
-  poBox: Tbe0400fa4c;
-  careOf: Tbe0400fa4c;
-  textAddress: Tbe0400fa4c;
-};
-
-type Tcc1d747a33 = "double" | "single" | "preserve" | "onePoint15" | "onePoint5";
-
-type Tcc23752159 = "google" | "openrouter" | "openai" | "azure_foundry" | "anthropic" | "bedrock" | "mistral" | "openai_compatible" | "huggingface";
-
-type Tcc3a2ff045 = null | {
+type Tcc3a2ff045 = {
   code: Tbe0400fa4c;
   label: string;
-};
+} | null;
 
-type Tcc5629f46f = "stale" | "fresh";
-
-type Tcc7dd2aee2 = {
-  name: string;
-  type: "person";
-  userId: Tbe0400fa4c;
-  version: 1;
-  image: Tbe0400fa4c;
-};
+type Tcc5629f46f = "fresh" | "stale";
 
 type Tcc859dad06 = {
   body: {
@@ -38709,7 +38623,7 @@ type Tcc859dad06 = {
   };
 };
 
-type Tccc654a7c7 = "none" | "unknown" | "pass" | "fail";
+type Tccc654a7c7 = "fail" | "none" | "pass" | "unknown";
 
 type Tccd7994462 = {
   success: true;
@@ -38720,7 +38634,7 @@ type Tccd7994462 = {
   mention: string;
 };
 
-type Tcd00264565 = null | "none" | "max" | "medium" | "high" | "low" | "minimal" | "xhigh";
+type Tcd00264565 = "high" | "low" | "max" | "medium" | "minimal" | "none" | "xhigh" | null;
 
 type Tcd21978e37 = {
   type: "money";
@@ -38729,13 +38643,13 @@ type Tcd21978e37 = {
   amountCents: number;
 };
 
-type Tcd94cef1c0 = null | Array<{
+type Tcd94cef1c0 = Array<{
   iban?: string;
   bic?: string;
   currency?: string;
   accountNumber?: string;
   bankName?: string;
-}>;
+}> | null;
 
 type Tcdc6b0a442 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "savedSearch";
@@ -38761,33 +38675,28 @@ type Tcde02c03e1 = {
   workspaceId: Tbe0400fa4c;
 };
 
-type Tcdfc93c4d1 = null | "issue" | "task" | "fact" | "requirement" | "event";
-
-type Tce5e19ec0e = {
-  query: string;
-  limit?: undefined | number;
-};
+type Tcdfc93c4d1 = "event" | "fact" | "issue" | "requirement" | "task" | null;
 
 type Tcf1688e82d = {
   id: string;
   role: Tbc3d04c5ab;
-  parts: Array<(tanstack_ai_UIResourcePart | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_TextPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_AudioPart<unknown> | tanstack_ai_VideoPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ToolCallPart<unknown> | {
+  parts: Array<(tanstack_ai_AudioPart<unknown> | tanstack_ai_DocumentPart<unknown> | tanstack_ai_ImagePart<unknown> | tanstack_ai_StructuredOutputPart<unknown> | tanstack_ai_TextPart<unknown> | tanstack_ai_ThinkingPart | tanstack_ai_ToolCallPart<unknown> | tanstack_ai_UIResourcePart | tanstack_ai_VideoPart<unknown> | {
     type: "tool-result";
     id?: string;
     name?: string;
     toolCallId: string;
-    content: (string | Array<tanstack_ai_ContentPart<unknown, unknown, unknown, unknown, unknown>>);
+    content: (Array<tanstack_ai_ContentPart<unknown, unknown, unknown, unknown, unknown>> | string);
     state: tanstack_ai_ToolResultState;
     error?: string;
     metadata?: T631856df6b;
     createdAt?: string;
-  } | tanstack_ai_ThinkingPart | {
+  } | {
     type: "subagent";
     subagent: {
       id: string;
       status: tanstack_ai_SubagentStatus;
       parentRunId?: string;
-      interruptIds?: undefined | Array<string>;
+      interruptIds?: Array<string> | undefined;
       messages: Array<Tcf1688e82d>;
       error?: T561c958713;
       name: string;
@@ -38804,20 +38713,31 @@ type Tcf1688e82d = {
   };
 };
 
-type Tcf7096fd53 = null | string | number | false | true | T529735e682 | Array<Tcf7096fd53>;
+type Tcf7096fd53 = number | string | T529735e682 | Array<Tcf7096fd53> | false | true | null;
+
+type Tcfc2bcdf0c = {
+  type: "tool-call";
+  id: string;
+  name: "save_playbook";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Tcfcb60a90e = {
   readonly value: T8de31056e4;
   readonly issues?: undefined;
 };
 
-type Td09dd3a151 = {
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T4c703c7179>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4a5707509f>;
-  version: 1;
-  type: "overview";
+type Td00a89251b = {
+  type: "tool-call";
+  id: string;
+  name: "create-document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T21d4acdd13 | T81a87f67e2 | T6b4b00e15b | Te458e3a8a0;
 };
 
 type Td0c9b180ad = {
@@ -38825,34 +38745,51 @@ type Td0c9b180ad = {
   readonly issues?: undefined;
 };
 
-type Td16108295a = "email" | "displayName" | "firstName" | "lastName" | "organizationName" | "address" | "phone" | "addressStreet" | "addressCity" | "addressPostalCode" | "addressCountry" | "registrationNumber" | "taxId" | "iban" | "bic" | "dataBox";
+type Td15a61239d = {
+  type: "tool-call";
+  id: string;
+  name: "suggest_template_fields";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
-type Td204418ab7 = "decision" | "instruction" | "fact" | "preference" | "relationship";
+type Td16108295a = "address" | "addressCity" | "addressCountry" | "addressPostalCode" | "addressStreet" | "bic" | "dataBox" | "displayName" | "email" | "firstName" | "iban" | "lastName" | "organizationName" | "phone" | "registrationNumber" | "taxId";
+
+type Td204418ab7 = "decision" | "fact" | "instruction" | "preference" | "relationship";
+
+type Td236e2b0da = {
+  deletedAt: Tbe0400fa4c;
+  id: string;
+  image: Tbe0400fa4c;
+  name: Tbe0400fa4c;
+  type: "user";
+};
 
 type Td2e9147457 = {
   readonly value: Record<never, never>;
   readonly issues?: undefined;
 };
 
-type Td3ee8d4ce6 = {
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T4c703c7179>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4a5707509f>;
-  version: 1;
-  type: "filesystem";
-};
+type Td43d5a192e = {
+  type: "tool-call";
+  id: string;
+  name: "find_text";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Td4824cf25d = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "template";
 };
 
-type Td527bc6af5 = {
-  lawId: string;
-  metadata?: undefined | false | true;
-  analysis?: undefined | false | true;
-  fullText?: undefined | false | true;
-  eli?: undefined | false | true;
+type Td4c150f9a7 = {
+  kind: "cz-insolvency";
+  source: Tc73807a034;
+  subject: Te6e750ecc6;
 };
 
 type Td536646f91 = {
@@ -38860,20 +38797,36 @@ type Td536646f91 = {
   readonly issues?: undefined;
 };
 
-type Td56234f3f1 = {
-  path: string;
-  reason: ("outside-skill-folder" | "unsupported-folder" | "unsupported-extension" | "not-utf8-text");
-};
-
-type Td60cdaf8e2 = {
+type Td55da643d6 = {
   type: "tool-call";
   id: string;
-  name: "save_time_entry";
+  name: "describe_template";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
+
+type Td56234f3f1 = {
+  path: string;
+  reason: ("not-utf8-text" | "outside-skill-folder" | "unsupported-extension" | "unsupported-folder");
+};
+
+type Td5ded8ed3b = {
+  query: string;
+  jurisdiction: T16f65ff3fd;
+  results: Array<{
+    id: string;
+    url: string;
+    title: string;
+    snippet: string;
+    publishedAt?: string | undefined;
+    source: string;
+    score?: number | undefined;
+  }>;
+  provider: "tavily";
+  answer?: string | undefined;
+};
 
 type Td615a955de = {
   type: "headingSection";
@@ -38881,6 +38834,29 @@ type Td615a955de = {
   headingBlockId: string;
   headingTextHash: string;
   headingLevel: number;
+};
+
+type Td617134437 = {
+  protocolVersion: 4;
+  snapshot: {
+    contentTrust: "untrusted-web-content";
+    elements: Array<{
+      context?: string | undefined;
+      href?: string | undefined;
+      name: string;
+      ref: string;
+      role: string;
+      value?: string | undefined;
+    }>;
+    revision: string;
+    text: string;
+    textOffset: number;
+    textTotalChars: number;
+    tabId: number;
+    title: string;
+    url: string;
+  };
+  status: "success";
 };
 
 type Td6c4fb13a4 = string & valibot_Brand<"SafeId"> & {
@@ -38891,45 +38867,35 @@ type Td6d5acce5e = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "signal";
 };
 
-type Td72ffb3ca2 = {
-  readonly input: Tce5e19ec0e;
-  readonly output: T86d8d3c659;
-};
-
-type Td77afb227b = {
-  readonly input: Tba4a651ce0;
-  readonly output: T5ad5018b7e;
-};
-
 type Td7a8af8a91 = {
   readonly input: Tdefb828a83;
   readonly output: Tf40440a0f9;
-};
-
-type Td7a976c35b = {
-  type: "tool-call";
-  id: string;
-  name: "search-past-chats";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T9bcd9af8d6;
-} & T4d73965770;
-
-type Td7d37c35b1 = T21d4acdd13 | T7e9fce8170 | T6b4b00e15b | T05cba4d570;
-
-type Td80ce08c34 = {
-  jurisdiction: T61a314e9df;
-  query: string;
-  registry?: undefined | "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
-  detail?: undefined | "standard" | "full";
-  limit?: undefined | number;
 };
 
 type Td84f9e1ca6 = {
   title: string;
   markdown: string;
 };
+
+type Td8667c9636 = {
+  type: "tool-call";
+  id: string;
+  name: "spawn_subagents";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T0e2086ec76;
+} & T4d73965770;
+
+type Td8bd350a0d = {
+  type: "tool-call";
+  id: string;
+  name: "link_matter_contact";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Td90f8b552b = {
   apartado?: Tb3b9f88be6 | Array<Tb3b9f88be6>;
@@ -38938,34 +38904,58 @@ type Td90f8b552b = {
   nombre?: string;
 };
 
+type Td9a96e07c3 = {
+  type: "tool-call";
+  id: string;
+  name: "read_document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
 type Td9d59542cb = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalReaderAnnotation";
 };
 
-type Tda5c7074d2 = {
-  startDatePropertyId: string;
-  endDatePropertyId: string;
-  zoom: ("month" | "week" | "day" | "quarter");
-  groupByPropertyId?: undefined | string;
-  showTable: Tfddd645dc8;
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T4c703c7179>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4a5707509f>;
-  version: 1;
-  type: "timeline";
+type Tda018e6666 = {
+  readonly input: Tb33a71380a;
+  readonly output: T807b8d5703;
 };
 
-type Tda60fb80f5 = {
-  readonly input: T9bcd9af8d6;
-  readonly output: T9ae8ef5978;
-};
+type Tda26afd3a5 = {
+  type: "tool-call";
+  id: string;
+  name: "create_matter_document";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T6c9afce89f;
+} & T4d73965770;
 
-type Tda8bbd279d = null | {
+type Tda8bbd279d = {
   text: string;
   value: T588d0ee653;
   unit: Tbe0400fa4c;
   citation: T1c6c700a79;
+} | null;
+
+type Tda8f0f96e8 = {
+  type: "tool-call";
+  id: string;
+  name: "set_practice_jurisdictions";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type Tdaa8eea194 = {
+  fileName: string;
+  toolCallId: string;
+  originChatMessageId: T66e92cdab1;
+  originChatThreadId: Taf779979ed;
+  docxEditSnapshot: T94af9a40b9;
 };
 
 type Tdadf537056 = {
@@ -39000,41 +38990,42 @@ type Tdadf537056 = {
   };
 };
 
-type Tdaf2e43033 = "preserve" | "a4" | "letter" | "legal";
+type Tdaf2e43033 = "a4" | "legal" | "letter" | "preserve";
+
+type Tdb5805e6ca = {
+  required?: false | true | undefined;
+  minLength?: number | undefined;
+  maxLength?: number | undefined;
+  min?: number | undefined;
+  max?: number | undefined;
+  pattern?: string | undefined;
+  minItems?: number | undefined;
+  maxItems?: number | undefined;
+};
 
 type Tdb5a1ce47f = {
   name: string;
   source: string;
 };
 
-type Tdba4b44741 = {
-  readonly value: Tabc58da83b;
-  readonly issues?: undefined;
-};
-
-type Tdbef009541 = null | Array<(T8cba41e37d & {
+type Tdbef009541 = Array<(Tddfc027982 & {
   optional?: false | true;
-  responseStatus?: null | string;
-  type?: null | "optional" | "required" | "resource";
-})>;
+  responseStatus?: string | null;
+  type?: "optional" | "required" | "resource" | null;
+})> | null;
 
 type Tdc2a8db8cb = {
   readonly value: Tf8c3169b2f;
   readonly issues?: undefined;
 };
 
-type Tdc6c8f5a77 = "date" | "text" | "single-select" | "multi-select" | "int";
+type Tdc6c8f5a77 = "date" | "int" | "multi-select" | "single-select" | "text";
 
-type Tdc71db7bee = {
-  readonly input: Ta8b3a4e1d1;
-  readonly output: T5345561adb;
-};
-
-type Tdc9ed49116 = null | {
+type Tdc9ed49116 = {
   name: string;
   url: string;
-  retrievedAt?: undefined | string;
-};
+  retrievedAt?: string | undefined;
+} | null;
 
 type Tdce31e5530 = "accepted" | "rejected";
 
@@ -39042,7 +39033,48 @@ type Tdd2500e122 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "anonymizationAllowlistEntry";
 };
 
-type Tddfcdef857 = "Forbidden" | T9a51b7d2bc;
+type Tdd40b6002f = {
+  type: "tool-call";
+  id: string;
+  name: "use-browser";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: Td617134437 | Tc38488b75b;
+} & T4d73965770;
+
+type Tddb0458281 = {
+  query: string;
+  jurisdiction: T16f65ff3fd;
+  results: Array<{
+    id: string;
+    url: string;
+    title: string;
+    snippet: string;
+    publishedAt?: string | undefined;
+    source: string;
+    score?: number | undefined;
+  }>;
+  provider: "tavily";
+  answer?: string | undefined;
+};
+
+type Tddeee5f72e = {
+  type: "tool-call";
+  id: string;
+  name: "update-current-skill-resource";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type Tddfc027982 = {
+  email: Tbe0400fa4c;
+  name: Tbe0400fa4c;
+};
+
+type Tddfcdef857 = T9a51b7d2bc | "Forbidden";
 
 type Tde3313d76e = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentTranslationRun";
@@ -39053,17 +39085,7 @@ type Tde7fb406e1 = {
   readonly output: Tccd7994462;
 };
 
-type Tde9fbd919d = {
-  type: "tool-call";
-  id: string;
-  name: "save_task";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type Tdedb951219 = "other" | "opposing_party" | "opposing_counsel" | "co_counsel" | "witness" | "expert_witness" | "third_party" | "judge" | "mediator";
+type Tdedb951219 = "co_counsel" | "expert_witness" | "judge" | "mediator" | "opposing_counsel" | "opposing_party" | "other" | "third_party" | "witness";
 
 type Tdefb828a83 = {
   targetMessageId: string;
@@ -39080,7 +39102,7 @@ type Tdf07e1b328 = {
   id: string;
 };
 
-type Tdf2b0d1150 = null | string;
+type Tdf2b0d1150 = string | null;
 
 type Tdf4839a002 = {
   workspaceId: string;
@@ -39095,41 +39117,30 @@ type Tdfa6d7299b = {
   workspaceId: string;
 };
 
-type Te052fe8cc7 = {
-  status: "unavailable";
-  checkedAt: string;
-  reason: ("timeout" | "network" | "http-error" | "outage-page" | "soap-fault" | "malformed-response" | "source-error");
-  detail: Tbe0400fa4c;
-};
-
-type Te06446a5fa = null | (Ta716eb8a48 & {
+type Te06446a5fa = (Ta716eb8a48 & {
   version: 1;
   custom?: T529735e682;
-});
+}) | null;
 
-type Te07b1866e3 = {
+type Te0862af907 = {
   type: "tool-call";
   id: string;
-  name: "get_document_outline";
+  name: "counterparty_check";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
 
-type Te0b1fd5531 = {
-  messageId: string;
-  before?: undefined | number;
-  after?: undefined | number;
+type Te099fcc103 = {
+  matterRef: string;
+  entityRef: string;
+  propertyRef: string;
+  value: T426e4657a4;
 };
 
 type Te1131bea29 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "templateClause";
-};
-
-type Te11f81d4cd = {
-  readonly value: Tc3ce63cbd9;
-  readonly issues?: undefined;
 };
 
 type Te12036118a = {
@@ -39231,24 +39242,39 @@ type Te12036118a = {
   }>;
 };
 
-type Te1e7a7564f = {
-  type: "tool-call";
-  id: string;
-  name: "search-all-past-chats";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T9bcd9af8d6;
-} & T4d73965770;
+type Te1486aaecd = {
+  readonly value: T12519395d5;
+  readonly issues?: undefined;
+};
+
+type Te16cf19189 = {
+  type: Tf795dc12d5;
+  options: Array<{
+    value: string;
+    color: string;
+  }>;
+  version: 1;
+  fallback: Tbe0400fa4c;
+};
 
 type Te1f90e1fdd = {
   code: string;
   message: string;
   severity: Tf31e28edee;
-  line?: undefined | number;
+  line?: number | undefined;
 };
 
-type Te265963f83 = {
+type Te2c1a8a498 = {
+  type: "tool-call";
+  id: string;
+  name: `mcp__${string}`;
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: any;
+} & T4d73965770;
+
+type Te2f4644948 = {
   type: "tool-call";
   id: string;
   name: "boe_search_legislation";
@@ -39258,19 +39284,13 @@ type Te265963f83 = {
   output?: unknown;
 } & T4d73965770;
 
-type Te354fca58a = "unknown" | "disabled" | "current" | "delayed" | "stalled";
+type Te354fca58a = "current" | "delayed" | "disabled" | "stalled" | "unknown";
 
 type Te37ec2cbbd = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "documentReviewRun";
 };
 
-type Te384930758 = {
-  content: string;
-  kind?: undefined | "decision" | "instruction" | "fact" | "preference" | "relationship";
-  scope?: undefined | "workspace" | "user";
-};
-
-type Te3a65a5e3c = null | "task" | "event" | "deadline" | "meeting" | "hearing";
+type Te3a65a5e3c = "deadline" | "event" | "hearing" | "meeting" | "task" | null;
 
 type Te3f7475d27 = "private" | "shared";
 
@@ -39278,7 +39298,7 @@ type Te4034c4d39 = {
   workspaceId: string;
 };
 
-type Te403754937 = "none" | "br_cpf_cnpj";
+type Te403754937 = "br_cpf_cnpj" | "none";
 
 type Te40e3b7f99 = {
   version: 1;
@@ -39301,27 +39321,21 @@ type Te4500bd0c4 = {
   hangingPt: number;
 };
 
-type Te4799562ab = T5b398cdd9d | T77cbe76bde | Tbd6f65e1eb | T45c8485af6 | T8cf50df639 | T271d61ed3c | T9f60b23b0d | T16bcee9e60 | T450a9782d1 | Tcd21978e37 | Tcc7dd2aee2 | T41ee5fbcc8;
+type Te458e3a8a0 = {
+  success: false;
+  message: string;
+  errors?: Array<Te1f90e1fdd> | undefined;
+};
 
-type Te4cef2c4f1 = {
-  type: "tool-call";
-  id: string;
-  name: "run_playbook";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type Te4799562ab = T5b398cdd9d | T77cbe76bde | Tbd6f65e1eb | T01e71ad247 | T8cf50df639 | T0aff3edf22 | T9f60b23b0d | T285ff51ba0 | T0887c7c099 | Tcd21978e37 | Tbce82e5c70 | T41ee5fbcc8;
 
-type Te6421fbbcc = {
-  type: "tool-call";
-  id: string;
-  name: "search-chat-history";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T51cc6664d5;
-} & T4d73965770;
+type Te47ce45d73 = {
+  jurisdiction: T61a314e9df;
+  query: string;
+  registry?: "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies" | undefined;
+  detail?: "full" | "standard" | undefined;
+  limit?: number | undefined;
+};
 
 type Te6e750ecc6 = {
   type: "company-id";
@@ -39334,15 +39348,27 @@ type Te6e750ecc6 = {
 } | {
   type: "tax-id";
   value: string;
-  derivedFrom: (null | {
+  derivedFrom: {
     type: "company-id";
     value: string;
-  });
+  } | null;
 };
 
 type Te71342795f = {
   readonly input: Record<never, never>;
   readonly output: Record<never, never>;
+};
+
+type Te7215e4424 = {
+  text?: string | undefined;
+  title?: string | undefined;
+  departmentCode?: string | undefined;
+  legalRangeCode?: string | undefined;
+  matterCode?: string | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
+  offset?: number | undefined;
+  limit?: number | undefined;
 };
 
 type Te7a0943297 = {
@@ -39352,109 +39378,24 @@ type Te7a0943297 = {
   isPrimary: Tfddd645dc8;
 };
 
-type Te7be292eda = {
-  (args: Tce5e19ec0e, context?: Tc88149628d): (T9bcd9af8d6 | Promise<T9bcd9af8d6>);
-};
+type Te7bcf4f8cd = {
+  type: "tool-call";
+  id: string;
+  name: "create_reader_annotation";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Te846513736 = {
   readonly value: Tf40440a0f9;
   readonly issues?: undefined;
 };
 
-type Te863c9aa28 = {
-  activeDraftContext?: undefined | {
-    type: "generated-document";
-    originChatMessageId: T66e92cdab1;
-    originChatThreadId: Taf779979ed;
-    toolCallId: string;
-    version: 1;
-  };
-  anonRestorations?: undefined | {
-    pairs: Array<Tc7eaf8104c>;
-  };
-  docxEditPreferences?: undefined | {
-    docxEditRepresentation?: undefined | "direct" | "tracked-changes";
-    editApplyMode?: undefined | "auto" | "manual";
-  };
-  mentions?: undefined | {
-    mentions: Array<((Ta3fb0e1ff6 & {
-      category: "entity";
-      resource: T2a53b33d09;
-      workspaceId: Tbe0400fa4c;
-    }) | (Ta3fb0e1ff6 & {
-      category: "workspace";
-      resource: T4c3eeb6df3;
-    }))>;
-  };
-  refEncoding?: undefined | "persisted-resource-ids-v1" | "persisted-resource-refs-v2";
-  refContext?: undefined | (T41b8bd81bd & {
-    version: 1;
-  }) | (T41b8bd81bd & {
-    version: 2;
-    refs: Array<{
-      kind: "contact";
-      ref: string;
-      contact: T346ea860b1;
-    } | {
-      kind: "entity";
-      ref: string;
-      entity: T2a53b33d09;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "matter";
-      ref: string;
-      workspace: T4c3eeb6df3;
-    } | {
-      kind: "property";
-      ref: string;
-      property: {
-        readonly type: "property";
-        readonly id: stll_api_contract_SafeId<"property">;
-      };
-    } | {
-      kind: "source";
-      ref: string;
-      href: `#stella-source=${string}`;
-    }>;
-  });
-  serverProvenance?: undefined | {
-    type: "search-summary";
-    version: 1;
-  };
-  sourceDocuments?: undefined | Array<Tcde02c03e1>;
-  turnOutcome?: undefined | {
-    type: "awaiting-user";
-    interaction: {
-      type: "approval";
-      toolCallId: string;
-    } | {
-      type: "ask-user";
-      toolCallId: string;
-    } | {
-      type: "client-tool";
-      toolCallId: string;
-    };
-  } | {
-    type: "completed";
-  } | {
-    type: "cancelled";
-    reason: T5e702ac6d9;
-  } | {
-    type: "failed";
-    error: ("unknown" | "provider_unavailable" | "quota_exhausted" | "provider_billing" | "provider_credentials_rejected" | "model_unavailable" | "provider_stream_incomplete" | "loop_detected" | "empty_completion");
-  } | {
-    type: "interrupted";
-    reason: Tbcc05c4756;
-  };
-  usage?: undefined | {
-    totalTokens: number;
-    completionTokens: number;
-    promptTokens: number;
-  } & {
-    completionTokensDetails?: undefined | {
-      reasoningTokens?: number;
-    };
-  };
+type Te87ebce9be = {
+  readonly value: T475c8d6c2c;
+  readonly issues?: undefined;
 };
 
 type Te89bc15241 = {
@@ -39477,28 +39418,48 @@ type Te8eee0ded7 = {
   description: string;
 };
 
-type Te8fa9c655e = "open" | "accepted" | "dismissed";
+type Te8fa9c655e = "accepted" | "dismissed" | "open";
 
-type Te903957931 = {
-  type: "tool-call";
-  id: string;
-  name: "delete_reader_annotation";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type Tea0fd307f9 = {
+  success: true;
+  fileName: string;
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+  entityRef: string;
+  matterRef: string;
+  href: string;
+  mention: string;
+} | {
+  fixes?: Array<{
+    code: string;
+    message: string;
+    line?: number | undefined;
+  }> | undefined;
+  warnings?: Array<Ta0a053f749> | undefined;
+  success: true;
+  destination: "draft";
+  fileName: string;
+} | {
+  success: true;
+  destination: "download";
+  fileName: string;
+} | {
+  success: false;
+  message: string;
+  errors?: Array<Ta0a053f749> | undefined;
+};
 
-type Tea2bdb8b92 = null | {
+type Tea2bdb8b92 = {
   siret: string;
   isHeadOffice: Tfddd645dc8;
-  address: (null | {
+  address: {
     textAddress: Tbe0400fa4c;
     street: Tbe0400fa4c;
     postalCode: Tbe0400fa4c;
     city: Tbe0400fa4c;
     country: Tbe0400fa4c;
-  });
+  } | null;
   activityCode: Tbe0400fa4c;
   status: {
     type: "open";
@@ -39510,12 +39471,22 @@ type Tea2bdb8b92 = null | {
   };
   createdAt: Tbe0400fa4c;
   closedAt: Tbe0400fa4c;
-};
+} | null;
 
 type Tea672cd0a4 = {
   escalation?: string;
   rationale?: string;
   talkingPoints?: Array<string>;
+};
+
+type Teab768a417 = {
+  analysis: string;
+  questions: Array<{
+    question: string;
+    reason: string;
+    options?: Array<string> | undefined;
+    default?: string | undefined;
+  }>;
 };
 
 type Teaea18eeca = {
@@ -39528,15 +39499,40 @@ type Teb50de97c7 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "caseLawResearchColumn";
 };
 
-type Teb6f68ab0f = null | T348bff1a92;
+type Teb6f68ab0f = T348bff1a92 | null;
 
 type Teb83a7a10a = {
   code?: string;
   text?: string;
 };
 
+type Tebb9fbb4f8 = {
+  type: "tool-call";
+  id: string;
+  name: "fetch_url";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: T8161ebccd4;
+} & T4d73965770;
+
 type Tebc1c75823 = {
   workspaceId: T8d02a37b3f;
+};
+
+type Tebc5a69b82 = {
+  filters: Array<stll_conditions_ConditionNode>;
+  sorts: Array<T4c703c7179>;
+  hiddenProperties: Array<string>;
+  calculations: Array<T4a5707509f>;
+  version: 1;
+  type: "overview";
+};
+
+type Tebd3ce2c77 = {
+  status: "not-covered";
+  reason: ("subject-type-not-supported" | "tax-id-required");
+  supportedSubjectTypes: Array<T7aebf701ec>;
 };
 
 type Tebe6fae3ef = "approved" | "rejected";
@@ -39549,15 +39545,11 @@ type Tec5d6ccf29 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "aiMemory";
 };
 
-type Tec808acc7a = {
-  type: "tool-call";
-  id: string;
-  name: "show_in_document";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type Teca103477f = {
+  docxEditSnapshot?: T94af9a40b9;
+  templateId: Td4824cf25d;
+  fileName: string;
+};
 
 type Teced05ac51 = "active" | "archived";
 
@@ -39565,35 +39557,17 @@ type Tee12b2a0c6 = {
   status: "saved";
 };
 
+type Tee258ffbbe = {
+  jurisdiction: T61a314e9df;
+  query: string;
+  registry?: "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies" | undefined;
+  detail?: "full" | "standard" | undefined;
+  limit?: number | undefined;
+};
+
 type Tee36eb0f81 = {
   key: string;
   labelKey: T7a0a473ce3;
-};
-
-type Tef6a8c50b8 = {
-  type: "tool-call";
-  id: string;
-  name: "spawn_subagents";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: T0e2086ec76;
-} & T4d73965770;
-
-type Tefa091671d = {
-  query: string;
-  jurisdiction: T16f65ff3fd;
-  results: Array<{
-    id: string;
-    url: string;
-    title: string;
-    snippet: string;
-    publishedAt?: undefined | string;
-    source: string;
-    score?: undefined | number;
-  }>;
-  provider: "tavily";
-  answer?: undefined | string;
 };
 
 type Tefb102e423 = {
@@ -39604,17 +39578,17 @@ type Tefb102e423 = {
   "x-amz-tagging"?: string;
 };
 
-type Tefe86bc66f = {
+type Teff0fd014f = {
   type: "tool-call";
   id: string;
-  name: "save_matter";
+  name: "get_document_outline";
   arguments: string;
   input?: unknown;
   state: Tfafd241922;
   output?: unknown;
 } & T4d73965770;
 
-type Tf058fe611e = null | Tf742ada503;
+type Tf058fe611e = Tf742ada503 | null;
 
 type Tf089417a99 = {
   text: string;
@@ -39623,6 +39597,15 @@ type Tf089417a99 = {
 
 type Tf1da61a84f = {
   status: "pending";
+};
+
+type Tf1e33da2e2 = {
+  subagents: Array<{
+    task: string;
+    context?: string | undefined;
+    expectedOutput?: string | undefined;
+    model?: string | undefined;
+  }>;
 };
 
 type Tf1ef3fc0b0 = {
@@ -39641,13 +39624,14 @@ type Tf1ef3fc0b0 = {
   };
 };
 
-type Tf26698434e = {
-  readonly "~standard": {
-    readonly jsonSchema: Tc49e8b2305;
-    readonly version: 1;
-    readonly vendor: string;
-    readonly types?: undefined | T1060343604;
-  };
+type Tf273198011 = {
+  readonly input: T1ea5eea592;
+  readonly output: T7afaf18a37;
+};
+
+type Tf2f09f50cf = {
+  readonly value: T116d4a6834;
+  readonly issues?: undefined;
 };
 
 type Tf31e28edee = "error" | "warning";
@@ -39677,7 +39661,45 @@ type Tf42adc792b = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "agentSkillComment";
 };
 
-type Tf68c73525f = "docx" | "xlsx" | "csv";
+type Tf540c7cacc = {
+  type: "tool-call";
+  id: string;
+  name: "read-skill-resource";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type Tf580acfc9a = {
+  type: "tool-call";
+  id: string;
+  name: "update_reader_annotation";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type Tf5fa97e79b = {
+  lawId: string;
+  metadata?: false | true | undefined;
+  analysis?: false | true | undefined;
+  fullText?: false | true | undefined;
+  eli?: false | true | undefined;
+};
+
+type Tf666d2dda4 = {
+  type: "tool-call";
+  id: string;
+  name: "delete_contact";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
+type Tf68c73525f = "csv" | "docx" | "xlsx";
 
 type Tf6cee77e2c = {
   authType: "oauth2";
@@ -39694,19 +39716,21 @@ type Tf6d6ffa107 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "sellerProfile";
 };
 
-type Tf72e5821b0 = {
-  jurisdiction: T61a314e9df;
-  query: string;
-  registry?: undefined | "ares" | "brreg" | "companies-house" | "denue" | "edgar" | "gcis" | "krs" | "orsr" | "prh" | "recherche-entreprises" | "rpo" | "vies";
-  detail?: undefined | "standard" | "full";
-  limit?: undefined | number;
-};
+type Tf7089f7953 = {
+  type: "tool-call";
+  id: string;
+  name: "business_registry_lookup";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
 
 type Tf742ada503 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "entity";
 };
 
-type Tf795dc12d5 = "single-select" | "multi-select";
+type Tf795dc12d5 = "multi-select" | "single-select";
 
 type Tf7a762d6ad = {
   level?: number;
@@ -39717,52 +39741,27 @@ type Tf7a762d6ad = {
     text: string;
   }>;
   isDirective?: false | true;
-  directiveKind?: "if" | "elif" | "else" | "endif" | "for" | "endfor";
+  directiveKind?: "elif" | "else" | "endfor" | "endif" | "for" | "if";
   directiveExpression?: string;
   listKind?: "bullet" | "ordered";
   listLevel?: number;
   text: string;
 };
 
-type Tf7f5c58163 = {
-  type: "tool-call";
-  id: string;
-  name: "manage_organization";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
+type Tf8140c6ae1 = "mixed" | "negative" | "neutral" | "positive" | "supportive" | "unclassified";
 
-type Tf8140c6ae1 = "neutral" | "negative" | "positive" | "supportive" | "mixed" | "unclassified";
+type Tf8218060a3 = "accepted" | "draft" | "proposed" | "rejected";
 
-type Tf8218060a3 = "draft" | "accepted" | "rejected" | "proposed";
-
-type Tf879a89ce3 = null | Array<T76156445ff>;
+type Tf879a89ce3 = Array<T76156445ff> | null;
 
 type Tf8c3169b2f = {
   operations: Array<unknown>;
   documentVersion?: string;
 };
 
-type Tf8f2b2e8a8 = {
-  readonly value: Ta1bec2af75;
-  readonly issues?: undefined;
-};
+type Tf930ad797c = T9546dfa359 | null;
 
-type Tf930ad797c = null | T9546dfa359;
-
-type Tf9529310eb = {
-  type: "tool-call";
-  id: string;
-  name: "set_practice_jurisdictions";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
-
-type Tf95e7c72a3 = null | T1d1d28b371;
+type Tf95e7c72a3 = T1d1d28b371 | null;
 
 type Tf9e246ce28 = {
   protocolVersion: number;
@@ -39784,8 +39783,8 @@ type Tfaa06c2259 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListItemSource";
 };
 
-type Tfab89e6ca5 = (Tb896476a72 & {
-  type: T884a45faa8;
+type Tfab89e6ca5 = (Tcbcd8d06b3 & {
+  type: T334757ea46;
   resource: T2a53b33d09;
   entityId: string;
   workspaceId: string;
@@ -39796,18 +39795,18 @@ type Tfab89e6ca5 = (Tb896476a72 & {
   fileFieldId: Tbe0400fa4c;
   filePropertyId: Tbe0400fa4c;
   mimeType: Tbe0400fa4c;
-}) | (Tb896476a72 & {
+}) | (Tcbcd8d06b3 & {
   type: "matter";
   resource: T4c3eeb6df3;
   workspaceId: string;
   workspaceName: string;
   color: Tbe0400fa4c;
-}) | (Tb896476a72 & {
+}) | (Tcbcd8d06b3 & {
   type: "contact";
   resource: T346ea860b1;
   contactId: string;
   contactType: T1dacb02040;
-}) | (Tb896476a72 & {
+}) | (Tcbcd8d06b3 & {
   type: "case-law";
   resource: {
     readonly type: "case_law_decision";
@@ -39824,7 +39823,7 @@ type Tfab89e6ca5 = (Tb896476a72 & {
   languageAlternates: ReadonlyArray<{
     language: string;
   }>;
-}) | (Tb896476a72 & {
+}) | (Tcbcd8d06b3 & {
   type: "chat";
   resource: {
     readonly type: "chat_thread";
@@ -39835,7 +39834,7 @@ type Tfab89e6ca5 = (Tb896476a72 & {
   workspaceName: Tbe0400fa4c;
 });
 
-type Tfafd241922 = "error" | "complete" | "awaiting-input" | "input-streaming" | "input-complete" | "approval-requested" | "approval-responded";
+type Tfafd241922 = "approval-requested" | "approval-responded" | "awaiting-input" | "complete" | "error" | "input-complete" | "input-streaming";
 
 type Tfb7cce8440 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "legalListColumn";
@@ -39846,10 +39845,10 @@ type Tfbf26a7023 = {
   message: string;
 };
 
-type Tfc73a40629 = null | {
+type Tfc73a40629 = {
   token?: unknown;
   roomId?: unknown;
-};
+} | null;
 
 type Tfc773e48e5 = {
   decisionId: T406326c84f;
@@ -39857,6 +39856,15 @@ type Tfc773e48e5 = {
 
 type Tfc7aa41cd2 = string & valibot_Brand<"SafeId"> & {
   readonly __safeIdType?: "workspaceContact";
+};
+
+type Tfc86db9c4b = {
+  readonly issues: ReadonlyArray<{
+    readonly message: string;
+    readonly path?: ReadonlyArray<(number | string | symbol | {
+      readonly key: (number | string | symbol);
+    })> | undefined;
+  }>;
 };
 
 type Tfc8a750351 = string & valibot_Brand<"SafeId"> & {
@@ -39868,6 +39876,16 @@ type Tfce51d6930 = {
   readonly issues?: undefined;
 };
 
+type Tfd761de317 = {
+  type: "tool-call";
+  id: string;
+  name: "list_stories";
+  arguments: string;
+  input?: unknown;
+  state: Tfafd241922;
+  output?: unknown;
+} & T4d73965770;
+
 type Tfddd645dc8 = false | true;
 
 type Tfe2faf9844 = {
@@ -39875,28 +39893,10 @@ type Tfe2faf9844 = {
   result: stll_folio_agents_FolioAgentApplyOperationsSummary;
 };
 
-type Tfe912fcba8 = {
-  datePropertyId: string;
-  endDatePropertyId?: undefined | string;
-  additionalDatePropertyIds?: undefined | Array<string>;
-  mode: ("year" | "month" | "week");
-  filters: Array<stll_conditions_ConditionNode>;
-  sorts: Array<T4c703c7179>;
-  hiddenProperties: Array<string>;
-  calculations: Array<T4a5707509f>;
-  version: 1;
-  type: "calendar";
+type Tfe8087360e = {
+  query: string;
+  limit?: number | undefined;
 };
-
-type Tfed59c6977 = {
-  type: "tool-call";
-  id: string;
-  name: "suggest_changes";
-  arguments: string;
-  input?: unknown;
-  state: Tfafd241922;
-  output?: unknown;
-} & T4d73965770;
 
 type Tff4e0165d4 = Tbc510e9400 | (Ta307d8fb8c & {
   readonly truncated: Tfddd645dc8;

@@ -10,6 +10,7 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
+  isChatTurnRunIdTaken,
   OWNER_LOST_OUTCOME,
   reapOwnerlessChatTurnOnTx,
   CHAT_TURN_RUN_LEASE_MS,
@@ -413,6 +414,24 @@ describe("a run id", () => {
         }),
       ),
     ).toBe("owned");
+    expect(
+      unwrap(
+        await isChatTurnRunIdTaken({
+          execution: first.execution,
+          runId,
+          safeDb,
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      unwrap(
+        await isChatTurnRunIdTaken({
+          execution: second.execution,
+          runId,
+          safeDb,
+        }),
+      ),
+    ).toBe(true);
     // Starting the same run again, as a retried dispatch would, keeps it.
     expect(
       unwrap(
@@ -436,6 +455,15 @@ describe("a run id", () => {
 
     // A turn the caller cannot read holds its id just the same.
     const hidden = await seedRunningTurn(otherMember);
+    expect(
+      unwrap(
+        await isChatTurnRunIdTaken({
+          execution: hidden.execution,
+          runId,
+          safeDb: otherMember.safeDb,
+        }),
+      ),
+    ).toBe(true);
     expect(
       unwrap(
         await startChatTurnRun({

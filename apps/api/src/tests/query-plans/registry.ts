@@ -12,7 +12,10 @@ import {
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { statuteSitemapShardQuery } from "@/api/handlers/legislation/sitemap";
-import { sitemapBucketCountsQuery } from "@/api/lib/case-law/sitemap-shard-refresh";
+import {
+  SITEMAP_REFRESH_PAGE_SIZE,
+  sitemapRefreshPageSql,
+} from "@/api/lib/case-law/sitemap-shard-refresh";
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
@@ -68,7 +71,19 @@ export const QUERY_PLAN_REGISTRY = [
     id: "case-law.sitemap-refresh",
     class: "aggregate",
     role: "root",
-    build: (tx) => sitemapBucketCountsQuery(tx),
+    // A resumed page, so the plan covers the row comparison on the index keys.
+    build: () =>
+      sitemapRefreshPageSql({
+        country: QUERY_PLAN_SAMPLE.caseLaw.country,
+        cursor: {
+          decisionDate: "2010-02-01",
+          id: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+          sourceId: "00000000-0000-0000-0000-000000000000",
+          updatedAt: "2020-01-01T00:00:00Z",
+        },
+        pageSize: SITEMAP_REFRESH_PAGE_SIZE,
+        phase: "dated",
+      }),
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.sitemap-refresh"],

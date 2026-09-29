@@ -404,7 +404,7 @@ const executeRun = async (
   const configResult = await Result.tryPromise({
     try: async () => {
       const settings = await actor.scopedDb(
-        async (tx) => await loadOrgAISettings(tx, actor.organizationId),
+        async (tx) => await loadOrgAISettings(tx, actor),
       );
       if (Result.isError(settings)) {
         return Result.err(settings.error);
