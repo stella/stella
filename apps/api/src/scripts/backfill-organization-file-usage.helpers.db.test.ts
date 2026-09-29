@@ -274,7 +274,9 @@ describe("organization file usage backfill", () => {
     const unexpected = await reportOrganizationFileUsageBackfill({
       counts,
       db: ledgerDb(),
-      log: (line) => lines.push(line),
+      log: (line) => {
+        lines.push(line);
+      },
     });
 
     expect(unexpected).toBe(0);
@@ -287,7 +289,9 @@ describe("organization file usage backfill", () => {
     const blocked = await reportOrganizationFileUsageBackfill({
       counts: { ...counts, mismatchedReservations: 1 },
       db: ledgerDb(),
-      log: (line) => lines.push(line),
+      log: (line) => {
+        lines.push(line);
+      },
     });
     expect(blocked).toBe(1);
     expect(lines).toHaveLength(2);
