@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -7,6 +7,7 @@ import {
   BILLING_STATUS,
   expenses,
   INVOICE_STATUS,
+  invoiceLines,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
@@ -205,6 +206,19 @@ const transitionInvoice = createSafeHandler(
               ),
             )
             .returning({ id: expenses.id });
+
+          // The voided document keeps its lines; releasing them lets the
+          // entries they billed go on another invoice.
+          await tx
+            .update(invoiceLines)
+            .set({ releasedAt: now, updatedAt: now })
+            .where(
+              and(
+                eq(invoiceLines.invoiceId, params.invoiceId),
+                eq(invoiceLines.workspaceId, workspaceId),
+                isNull(invoiceLines.releasedAt),
+              ),
+            );
 
           await recordAuditEvent(
             tx,

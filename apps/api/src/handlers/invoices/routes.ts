@@ -7,6 +7,9 @@ import deleteInvoice from "@/api/handlers/invoices/delete";
 import addEntries from "@/api/handlers/invoices/entries/add";
 import removeEntries from "@/api/handlers/invoices/entries/remove";
 import readInvoiceById from "@/api/handlers/invoices/get";
+import createInvoiceLine from "@/api/handlers/invoices/lines/create";
+import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
+import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import readInvoices from "@/api/handlers/invoices/list";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
@@ -70,4 +73,21 @@ export const invoicesRoute = new Elysia({
     resourceSetUpdated: invoiceRealtimeUpdates,
     params: removeEntries.config.params,
     permissions: removeEntries.config.permissions,
+  })
+  .post("/:invoiceId/lines", createInvoiceLine.handler, {
+    body: createInvoiceLine.config.body,
+    resourceSetUpdated: invoiceRealtimeUpdates,
+    params: createInvoiceLine.config.params,
+    permissions: createInvoiceLine.config.permissions,
+  })
+  .patch("/:invoiceId/lines/:lineId", updateInvoiceLine.handler, {
+    body: updateInvoiceLine.config.body,
+    resourceSetUpdated: invoiceRealtimeUpdates,
+    params: updateInvoiceLine.config.params,
+    permissions: updateInvoiceLine.config.permissions,
+  })
+  .delete("/:invoiceId/lines/:lineId", deleteInvoiceLine.handler, {
+    resourceSetUpdated: invoiceRealtimeUpdates,
+    params: deleteInvoiceLine.config.params,
+    permissions: deleteInvoiceLine.config.permissions,
   });

@@ -88,6 +88,8 @@ describe("addEntries currency enforcement", () => {
       },
     ]);
     const { safeDb } = createScopedDbMock({
+      // The invoice holds no lines yet, so the line limit leaves room.
+      $count: async () => 0,
       query: {
         invoices: {
           findFirst: async () => ({
@@ -110,16 +112,22 @@ describe("addEntries currency enforcement", () => {
             };
           }
 
+          // The preflight read awaits the filter; the legacy-line backfill
+          // orders it and finds no attached entry without a line.
           return {
-            where: async () => [
-              {
-                id: toSafeId<"timeEntry">("te_1"),
-                status: BILLING_STATUS.APPROVED,
-                billable: true,
-                invoiceId: null,
-                currency: "USD",
-              },
-            ],
+            where: (): unknown =>
+              Object.assign(
+                Promise.resolve([
+                  {
+                    id: toSafeId<"timeEntry">("te_1"),
+                    status: BILLING_STATUS.APPROVED,
+                    billable: true,
+                    invoiceId: null,
+                    currency: "USD",
+                  },
+                ]),
+                { orderBy: () => ({ limit: async () => [] }) },
+              ),
           };
         },
       }),
