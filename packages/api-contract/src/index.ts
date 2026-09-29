@@ -9,9 +9,12 @@ export type {
 } from "./agenda";
 
 export {
+  CHAT_SKILL_CONTEXT_NEED,
+  CHAT_SKILL_DOCUMENT,
   SKILL_REF_HREF_PREFIX,
   SKILL_RESOURCE_PATH_PATTERN,
 } from "./agent-skills";
+export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {

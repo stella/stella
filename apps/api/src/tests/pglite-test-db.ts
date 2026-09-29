@@ -22,6 +22,7 @@ import {
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
   installPgliteCorpusProjectionRevisionFence,
+  installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
   installPgliteOrganizationMemberCapacity,
@@ -173,6 +174,9 @@ export const CORPUS_SAMPLE_READER_SELECT_COLUMNS = {
     "document_url",
     "metadata",
     "text_s3_key",
+    "expression_kind",
+    "window_disposition",
+    "window_disposition_basis",
   ],
   legislation_sources: ["id", "adapter_key"],
 } as const;
@@ -651,6 +655,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
+  await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
   await installPgliteCaseLawObservationFence(db);
   await installPglitePdfSigningTokenScopes(db);

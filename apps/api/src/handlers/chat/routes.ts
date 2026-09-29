@@ -68,6 +68,7 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   })
   .get("/skill-availability", listUnavailableChatSkills.handler, {
     permissions: listUnavailableChatSkills.config.permissions,
+    query: listUnavailableChatSkills.config.query,
   })
   .post("/improve-prompt", improvePrompt.handler, {
     body: improvePrompt.config.body,

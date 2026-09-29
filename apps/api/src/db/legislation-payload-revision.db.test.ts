@@ -282,6 +282,9 @@ describe("trigger definitions", () => {
       ORDER BY tgname COLLATE "C"
     `);
     expect(triggers.rows.map(({ tgname }) => tgname)).toEqual([
+      // Reads and writes none of the payload inputs; it only refuses an id
+      // change, so running first changes nothing the others see.
+      "legislation_documents_expression_id_guard",
       "legislation_documents_payload_revision",
       "legislation_documents_payload_revision_ast",
       "legislation_documents_payload_revision_fulltext",

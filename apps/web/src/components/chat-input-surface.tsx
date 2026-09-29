@@ -42,6 +42,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
 type ChatInputSurfaceProps = {
@@ -99,6 +100,12 @@ type ChatInputSurfaceProps = {
    */
   skillsOrganizationId?: string | undefined;
   /**
+   * The chat this composer sends in, so the Skills submenu shows a skill
+   * this chat cannot run disabled, with what it lacks. Omitted, the submenu
+   * answers for the widest chat.
+   */
+  skillChat?: ComposerSkillChatContext | undefined;
+  /**
    * Reserved-command availability for this composer's slash menu. Required:
    * every chat composer must declare its context so command availability is
    * decided centrally (`getReservedChatCommands`), never per surface.
@@ -133,6 +140,7 @@ export const ChatInputSurface = ({
   onNewThread,
   models,
   skillsOrganizationId,
+  skillChat,
   reservedCommands,
   context,
   mcpOrganizationId,
@@ -324,6 +332,7 @@ export const ChatInputSurface = ({
                     skillsOrganizationId
                       ? {
                           activeOrganizationId: skillsOrganizationId,
+                          chat: skillChat,
                           editor,
                           reservedCommands,
                         }
