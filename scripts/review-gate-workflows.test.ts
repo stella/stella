@@ -179,8 +179,19 @@ describe("the publisher's concurrency", () => {
     expect(alternatives[1]).toBe(
       `github.event.workflow_run.event == 'merge_group' && ${OWN_GROUP}`,
     );
-    // Ahead of every key another event could share with the group commit.
-    expect(alternatives[2]).toBe("github.event.workflow_run.head_sha");
+  });
+
+  // Every app's statuses and check runs reach the job, and only the script
+  // can tell a reviewer's from the rest, so none of them may share a group:
+  // a no-op from any app would otherwise replace a pending evaluation.
+  test("never lets a status or check run replace or cancel another run", () => {
+    expect(alternatives[2]).toBe(
+      `contains(fromJSON('["status","check_run"]'), github.event_name) && ${OWN_GROUP}`,
+    );
+    // Ahead of every key such an event could share with another run.
+    expect(alternatives[3]).toBe("github.event.workflow_run.head_sha");
+    expect(group).not.toContain("github.event.sha");
+    expect(group).not.toContain("github.event.check_run.head_sha");
   });
 
   test("never cancels the sweep, the fallback for every group", () => {
@@ -190,45 +201,19 @@ describe("the publisher's concurrency", () => {
     );
   });
 
-  // The job `if:` is decided before concurrency applies, so statuses and
-  // check runs no reviewer sends are skipped without ever joining a group.
-  const condition = job?.if?.replaceAll(/\s+/gu, " ") ?? "";
-  const filterNames = (pattern: RegExp): readonly string[] => {
-    const names: unknown = JSON.parse(
-      pattern.exec(condition)?.groups?.["names"] ?? "null",
-    );
-    return Array.isArray(names) &&
-      names.every((name) => typeof name === "string")
-      ? names.toSorted()
-      : expect.unreachable(`no reviewer filter matching ${pattern.source}`);
-  };
-
-  test("lets through only statuses a configured reviewer sends", () => {
-    expect(
-      filterNames(
-        /\(github\.event_name != 'status' \|\| \(github\.event\.state != 'pending' && contains\(fromJSON\('(?<names>\[[^']*\])'\), github\.event\.context\)\)\)/u,
-      ),
-    ).toEqual(
-      config.reviewers
-        .flatMap(({ done }) =>
-          done.commitStatus === null ? [] : [done.commitStatus.context],
-        )
-        .toSorted(),
-    );
-  });
-
-  test("lets through only check runs a configured reviewer sends", () => {
-    expect(
-      filterNames(
-        /\(github\.event_name != 'check_run' \|\| \(github\.event\.check_run\.app\.slug != 'github-actions' && contains\(fromJSON\('(?<names>\[[^']*\])'\), github\.event\.check_run\.name\)\)\)/u,
-      ),
-    ).toEqual(
-      config.reviewers
-        .flatMap(({ done }) =>
-          done.checkRun === null ? [] : [done.checkRun.name],
-        )
-        .toSorted(),
-    );
+  // Reviewer names live only in .github/review-gate.yml: the workflow must
+  // not keep a copy that could drift from it.
+  test("names no reviewer, leaving the choice to the script and its config", () => {
+    const workflow = JSON.stringify(job ?? {});
+    for (const reviewer of config.reviewers) {
+      const { commitStatus, checkRun } = reviewer.done;
+      if (commitStatus !== null) {
+        expect(workflow).not.toContain(commitStatus.context);
+      }
+      if (checkRun !== null) {
+        expect(workflow).not.toContain(checkRun.name);
+      }
+    }
   });
 });
 
