@@ -48,12 +48,12 @@ const FALLBACK_WEEKLY = 5000;
 
 type Fixture = {
   organizationId: SafeId<"organization">;
-  userId: string;
+  userId: SafeId<"user">;
 };
 
 const setupFixture = async (tx: Transaction): Promise<Fixture> => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
-  const userId = `user_${Bun.randomUUIDv7()}`;
+  const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
 
   await tx.insert(organization).values({
     id: organizationId,
