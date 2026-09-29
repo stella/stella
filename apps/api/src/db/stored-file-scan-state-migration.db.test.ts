@@ -54,8 +54,17 @@ test("marks existing stored files unscanned, rejects unknown states, and replays
         )
       ).rows,
     ).toEqual([{ count: 1 }]);
-    await expect(
-      database.query(`UPDATE ${table} SET scan_state = 'trusted'`),
-    ).rejects.toThrow(/scan_state_check/u);
+    // bun-types declares `.rejects.toThrow` as void, so the rejection is
+    // captured explicitly instead.
+    const rejection: unknown = await database
+      .query(`UPDATE ${table} SET scan_state = 'trusted'`)
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(
+      rejection instanceof Error ? rejection.message : String(rejection),
+    ).toMatch(/scan_state_check/u);
   }
 });
