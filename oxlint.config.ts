@@ -1781,9 +1781,7 @@ export default defineConfig({
       // oxlint's type-aware pass resolves the editor to `error`-typed here
       // (the only web consumer of toggleBold/toggleHeading/isActive), while
       // tsc --noEmit type-checks the file clean.
-      files: [
-        "apps/web/src/routes/knowledge/-components/clause-editor.tsx",
-      ],
+      files: ["apps/web/src/routes/knowledge/-components/clause-editor.tsx"],
       rules: {
         "typescript/no-unsafe-assignment": "off",
         "typescript/no-unsafe-call": "off",
