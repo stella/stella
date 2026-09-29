@@ -11,7 +11,7 @@ import type {
 } from "@stll/business-registries/entity-checks";
 import type { CountryCode } from "@stll/country-codes";
 
-import type { DateOfBirth } from "@/api/handlers/contacts/person-details";
+import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type {
   SanctionsCheckDependencies,

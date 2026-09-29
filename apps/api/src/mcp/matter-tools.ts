@@ -12,7 +12,6 @@ import {
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
-import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries/lookup";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { listContactsPage } from "@/api/handlers/contacts/list-query";
@@ -49,6 +48,7 @@ import {
   runEntityCheckShared,
 } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
   type AssertNoExtraFields,

@@ -3,14 +3,14 @@ import { panic, Result } from "better-result";
 import type { CountryCode } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries/lookup";
-import type { DateOfBirth } from "@/api/handlers/contacts/person-details";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import type {
   BusinessRegistrySlug,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
+import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -122,7 +122,11 @@ export const loadPracticeJurisdictions = async ({
         columns: { practiceJurisdictions: true },
       }),
   );
-  return (row?.practiceJurisdictions ?? []).map(
+  // A firm without settings has not declared any practice jurisdiction.
+  if (row === undefined) {
+    return [];
+  }
+  return row.practiceJurisdictions.map(
     (jurisdiction) => jurisdiction.countryCode,
   );
 };

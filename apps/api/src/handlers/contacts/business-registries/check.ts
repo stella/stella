@@ -4,11 +4,9 @@ import type { Static } from "elysia";
 
 import { isCountryCode } from "@stll/country-codes";
 
-import {
-  dateOfBirthSchema,
-  nationalityCodesSchema,
-} from "@/api/handlers/contacts/person-details";
+import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import {
   COUNTERPARTY_CHECK_KINDS,
   COUNTERPARTY_CHECK_SUBJECT_TYPES,
@@ -112,9 +110,10 @@ const subjectFromBody = (
       if (firstName === undefined || lastName === undefined) {
         return missingSubjectFields("firstName, lastName");
       }
-      const codes = body.nationalityCodes ?? [];
-      const nationalityCodes = codes.filter(isCountryCode);
-      if (nationalityCodes.length !== codes.length) {
+      const codes = body.nationalityCodes;
+      const nationalityCodes =
+        codes === undefined ? [] : codes.filter(isCountryCode);
+      if (codes !== undefined && nationalityCodes.length !== codes.length) {
         return Result.err(
           new HandlerError({
             status: 400,
