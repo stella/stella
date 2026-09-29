@@ -6,6 +6,7 @@ include a Changeset describing the user-visible change and its semver impact:
 <!-- published-packages:start -->
 <!-- Rendered from scripts/changeset-policy.json by `bun scripts/check-published-package-lists.ts --write`. Do not edit by hand. -->
 
+- `@stll/agent-input`
 - `@stll/ai-catalog`
 - `@stll/anonymize-chat`
 - `@stll/auth-model`
@@ -22,6 +23,8 @@ include a Changeset describing the user-visible change and its semver impact:
 - `@stll/stable-stringify`
 - `@stll/start-runtime`
 - `@stll/template-conditions`
+- `@stll/text-normalize`
+- `@stll/time`
 - `@stll/ui`
 - `@stll/workspace-model`
 - `@stll/workspace-ui`
