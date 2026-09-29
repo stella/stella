@@ -15,7 +15,7 @@
  *   AWS_REGION=eu-central-1 bun src/scripts/citation-probe.ts \
  *     --bucket <legal-corpus-bucket> [--sample 18] [--jurisdictions CZE,SVK,POL]
  */
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -26,19 +26,17 @@ import {
   type UsCitationDiagnostics,
   type UsCitationOccurrence,
 } from "@/api/handlers/case-law/ingestion/us-citation-occurrences";
-import { parseUsableDocumentAst } from "@/api/lib/case-law/document-ast";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import { zstdDecompressToString } from "@/api/lib/compression";
 import { isRecord } from "@/api/lib/type-guards";
 import { citationCoverage } from "@/api/scripts/citation-probe-coverage";
+import {
+  CitationProbeS3ReadError,
+  hasNoUsableDocuments,
+  readAst,
+} from "@/api/scripts/citation-probe-read";
 
 const DEFAULT_JURISDICTIONS = ["CZE", "SVK", "POL"] as const;
 const KEY_PREFIX = "legal-corpus/documents/jurisdiction=";
-
-class CitationProbeS3ReadError extends TaggedError("CitationProbeS3ReadError")<{
-  message: string;
-  status: number;
-}> {}
 
 const args = Bun.argv.slice(2);
 const argValue = (name: string): string | undefined => {
@@ -381,29 +379,6 @@ const readObject = async (key: string): Promise<string> => {
   return zstdDecompressToString(await response.bytes());
 };
 
-type AstRead =
-  | { status: "usable"; ast: DocumentAst }
-  | { status: "unavailable" }
-  | { status: "unusable" };
-
-/**
- * The AST stored beside a text object of the same content version. A missing
- * or undecodable one is reported as such: read as no AST, the decision would
- * look like one citing nothing.
- */
-const readAst = async (textKey: string): Promise<AstRead> => {
-  const raw = await Result.tryPromise({
-    try: async () =>
-      await readObject(textKey.replace(/text\.zst$/u, "ast.json.zst")),
-    catch: (cause) => cause,
-  });
-  if (Result.isError(raw)) {
-    return { status: "unavailable" };
-  }
-  const ast = parseUsableDocumentAst(raw.value);
-  return ast === null ? { status: "unusable" } : { status: "usable", ast };
-};
-
 /**
  * A reporter jurisdiction's residuals, since broad detectors would only
  * re-find the references its extractor already located: the references it
@@ -447,7 +422,7 @@ const probeKey = async (
     };
   }
   const astRead = readsUsReporterCitations(jurisdiction)
-    ? await readAst(key)
+    ? await readAst(key, readObject)
     : null;
   if (astRead !== null && astRead.status !== "usable") {
     return {
@@ -528,6 +503,7 @@ const perJurisdiction = JURISDICTIONS.map((_, i) => {
   const base = Math.floor(sampleTarget / JURISDICTIONS.length);
   return base + (i < sampleTarget % JURISDICTIONS.length ? 1 : 0);
 });
+let sampledKeys = 0;
 const docs = (
   await Promise.all(
     JURISDICTIONS.map(async (jurisdiction, i) => {
@@ -536,6 +512,7 @@ const docs = (
         return [];
       }
       const keys = await sampleKeys(jurisdiction, want);
+      sampledKeys += keys.length;
       return await settleInBatches(
         keys.map((key) => async () => await probeKey(jurisdiction, key)),
       );
@@ -569,11 +546,11 @@ console.log(
   `SUMMARY docs=${docs.length - emptyDocs} empty=${emptyDocs} ast-unread=${unreadDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
 );
 
-// A run whose sampled documents are all empty is a failure. An empty listing
-// remains a reported collection shortfall rather than a false probe failure.
-if (docs.length > 0 && docs.every((doc) => doc.empty)) {
+// A run that sampled keys but read no usable document is a failure. An empty
+// listing remains a reported collection shortfall rather than a probe failure.
+if (hasNoUsableDocuments(sampledKeys, docs)) {
   console.error(
-    `citation-probe: no usable documents probed (${docs.length} sampled, ${s3Failures}/${s3Attempts} S3 operations failed); unusable run`,
+    `citation-probe: no usable documents probed (${String(sampledKeys)} sampled, ${s3Failures}/${s3Attempts} S3 operations failed); unusable run`,
   );
   process.exit(1);
 }
