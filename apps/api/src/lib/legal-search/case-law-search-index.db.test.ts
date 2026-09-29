@@ -32,6 +32,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import {
   backfillSearchIndex,
   indexDecision,
+  recordSearchBackfillFailure,
   removeDecisionFromIndex,
 } from "@/api/lib/legal-search/case-law-search-index";
 import { PARTIAL_OBSERVATION_KEY } from "@/api/lib/legal-search/partial-observation-sql";
@@ -455,6 +456,62 @@ test(
       await db
         .delete(caseLawDecisions)
         .where(inArray(caseLawDecisions.id, [failingId, laterId]));
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// An overlapping worker can still record a failure for a row another worker
+// has just parked; the status must keep agreeing with its empty schedule.
+test(
+  "a transient failure keeps a parked marker parked",
+  async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const updatedAt = new Date("2001-02-03T04:05:06Z");
+    await db.insert(caseLawDecisions).values({
+      caseNumber: "13 Cdo 1/1990",
+      country: "CZE",
+      court: "Nejvyšší soud",
+      createdAt: new Date("1989-01-01T00:00:00Z"),
+      fulltext: "Rozhodnutí se zaparkovanou chybou.",
+      id: decisionId,
+      language: "xz",
+      sourceId,
+      updatedAt,
+    });
+    await db.insert(caseLawSearchBackfillFailures).values({
+      decisionId,
+      sourceUpdatedAt: updatedAt,
+      attemptCount: 3,
+      lastErrorClass: "Error",
+      status: CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED,
+      nextEligibleAt: null,
+      lastFailedAt: new Date(),
+    });
+    try {
+      await recordSearchBackfillFailure(scopedDb, {
+        decisionId,
+        sourceUpdatedAt: updatedAt.toISOString(),
+        error: new CorpusSchemaLaneUnavailableError({
+          message: "schema lane is busy",
+          waitedMs: 60_000,
+        }),
+      });
+      const marker = (
+        await db
+          .select()
+          .from(caseLawSearchBackfillFailures)
+          .where(eq(caseLawSearchBackfillFailures.decisionId, decisionId))
+      ).at(0);
+      expect(marker?.status).toBe(
+        CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED,
+      );
+      expect(marker?.attemptCount).toBe(3);
+      expect(marker?.nextEligibleAt).toBeNull();
+    } finally {
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
     }
   },
   DB_TEST_TIMEOUT_MS,

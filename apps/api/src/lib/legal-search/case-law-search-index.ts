@@ -89,7 +89,7 @@ const transientSearchBackfillError = (error: unknown): boolean =>
     PG_ERROR.SERIALIZATION_FAILURE,
   ].some((code) => isPgError(error, code));
 
-const recordSearchBackfillFailure = async (
+export const recordSearchBackfillFailure = async (
   scopedDb: ScopedDb,
   { decisionId, sourceUpdatedAt, error }: SearchBackfillFailure,
 ): Promise<SearchBackfillDisposition> => {
@@ -192,11 +192,13 @@ const recordSearchBackfillFailure = async (
             THEN failure.last_error_class
           ELSE EXCLUDED.last_error_class END,
         status = CASE
+          -- First, so the status always agrees with next_eligible_at, which
+          -- is NULL exactly here: a transient failure keeps a parked row parked.
+          WHEN ${nextAttempts} >= ${SEARCH_BACKFILL_MAX_ATTEMPTS}
+            THEN ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
           WHEN ${transient}
             THEN ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN}
           WHEN ${duplicate} THEN failure.status
-          WHEN ${nextAttempts} >= ${SEARCH_BACKFILL_MAX_ATTEMPTS}
-            THEN ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.PARKED}
           ELSE ${CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS.COOLDOWN}
         END,
         next_eligible_at = ${nextEligibleAt},

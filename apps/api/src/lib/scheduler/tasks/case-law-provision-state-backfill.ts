@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -89,47 +89,69 @@ export const withReservedSession = async <T>({
  * profile that gains or loses a scope in a later release is applied by the
  * next run.
  */
-export const backfillCaseLawProvisionState: SchedulerTask = async ({
-  logger,
-  signal,
-}) => {
-  signal.throwIfAborted();
-  const run = await withLongRunningConnection(
-    {
-      lockTimeout: CONNECTION_LOCK_TIMEOUT_MS,
-      statementTimeout: VALIDATE_STATEMENT_TIMEOUT_MS,
-      signal,
-    },
-    async ({ connection, setTransactionBudget }) =>
-      await runProvisionStateBackfill({
-        connection: {
-          setTransactionBudget,
-          execute: async (query, params = []) => {
-            await connection.unsafe(query, [...params]);
+export const createCaseLawProvisionStateBackfillTask =
+  ({
+    withConnection = withLongRunningConnection,
+  }: {
+    withConnection?: typeof withLongRunningConnection;
+  } = {}): SchedulerTask =>
+  async ({ logger, signal }) => {
+    signal.throwIfAborted();
+    // The connection helper rejects once the signal aborts, even after the work
+    // has returned, so an abort is settled here rather than left to reject.
+    const settled = await Result.tryPromise({
+      try: async () =>
+        await withConnection(
+          {
+            lockTimeout: CONNECTION_LOCK_TIMEOUT_MS,
+            statementTimeout: VALIDATE_STATEMENT_TIMEOUT_MS,
+            signal,
           },
-          query: async (query, params = []) =>
-            readRows(await connection.unsafe(query, [...params])),
-        },
-        deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
-        signal,
-      }),
-  );
-  if (run.isErr()) {
-    // A cancelled statement is the abort itself, not a failure; either way
-    // the unit rolled back and the next run retries it from its cursor.
-    if (signal.aborted) {
-      logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
+          async ({ connection, setTransactionBudget }) =>
+            await runProvisionStateBackfill({
+              connection: {
+                setTransactionBudget,
+                execute: async (query, params = []) => {
+                  await connection.unsafe(query, [...params]);
+                },
+                query: async (query, params = []) =>
+                  readRows(await connection.unsafe(query, [...params])),
+              },
+              deadline:
+                Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
+              signal,
+            }),
+        ),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(settled)) {
+      if (signal.aborted) {
+        logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
+        return;
+      }
+      observeFailure(settled.error, { sink: backfillUnitFailed });
       return;
     }
-    observeFailure(run.error, { sink: backfillUnitFailed });
-    return;
-  }
-  logger.info("scheduler.case_law_provision_state_backfill", {
-    // The step still owed, "complete", "aborted", or "superseded" when a
-    // newer release has applied its admission.
-    "caseLawProvisionStateBackfill.pending":
-      run.value.type === "progress" || run.value.type === "aborted"
-        ? run.value.step
-        : run.value.type,
-  });
-};
+    const run = settled.value;
+    if (run.isErr()) {
+      // A cancelled statement is the abort itself, not a failure; either way
+      // the unit rolled back and the next run retries it from its cursor.
+      if (signal.aborted) {
+        logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
+        return;
+      }
+      observeFailure(run.error, { sink: backfillUnitFailed });
+      return;
+    }
+    logger.info("scheduler.case_law_provision_state_backfill", {
+      // The step still owed, "complete", "aborted", or "superseded" when a
+      // newer release has applied its admission.
+      "caseLawProvisionStateBackfill.pending":
+        run.value.type === "progress" || run.value.type === "aborted"
+          ? run.value.step
+          : run.value.type,
+    });
+  };
+
+export const backfillCaseLawProvisionState: SchedulerTask =
+  createCaseLawProvisionStateBackfillTask();
