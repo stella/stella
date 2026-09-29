@@ -379,6 +379,14 @@ test.each([
     "the reverse order across lines",
     "sql`SELECT id FROM jobs\n  WHERE (created_at < ${before}::timestamptz\n     OR ${before}::timestamptz IS NULL)\n  ORDER BY created_at DESC LIMIT 20`",
   ],
+  [
+    "each operand parenthesized",
+    "connection.query(`SELECT id FROM case_law_decisions WHERE (($1::uuid IS NULL) OR (id > $1::uuid)) ORDER BY id LIMIT 50`, [cursor]);",
+  ],
+  [
+    "each operand parenthesized, in the reverse order",
+    "sql`SELECT id FROM jobs WHERE ( ( id > ${cursor}::uuid ) OR ( ${cursor}::uuid IS NULL ) ) ORDER BY id LIMIT 20`",
+  ],
 ])("flags an optional keyset bound in %s", (_, source) => {
   expect(kinds(source)).toEqual(["optional-keyset"]);
 });
