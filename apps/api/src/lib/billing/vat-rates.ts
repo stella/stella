@@ -64,6 +64,11 @@ type CheckVatRateOverlapOptions = {
   excludeId?: SafeId<"vatRate">;
 };
 
+type CheckVatRateOverlapResult = Result<
+  void,
+  HandlerError<400> | HandlerError<409>
+>;
+
 // Call after lockVatRateOrganization in the same mutation transaction.
 export const checkVatRateOverlap = async (
   tx: Transaction,
@@ -74,7 +79,7 @@ export const checkVatRateOverlap = async (
     endDate,
     excludeId,
   }: CheckVatRateOverlapOptions,
-) => {
+): Promise<CheckVatRateOverlapResult> => {
   if (endDate !== null && endDate <= startDate) {
     return Result.err(
       new HandlerError({
