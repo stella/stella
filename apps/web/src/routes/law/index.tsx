@@ -13,13 +13,6 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { panic } from "better-result";
-import {
-  ActivityIcon,
-  BookOpenIcon,
-  HistoryIcon,
-  LandmarkIcon,
-  SearchIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -28,6 +21,13 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
+import {
+  ActivityIcon,
+  CaseLawIcon,
+  HistoryIcon,
+  LandmarkIcon,
+  SearchIcon,
+} from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
   LANDING_SECTION_HEADING_CLASS,
@@ -62,7 +62,7 @@ import {
 } from "@/features/statutes/statute-query-intent";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
-import { getMessageLocale } from "@/i18n/i18n-store";
+import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { recordLawSearch, useLawSearchHistory } from "@/lib/law-search-history";
@@ -117,9 +117,6 @@ const createLawHomePath = ({ country }: LawHomeSearch): `/law${string}` =>
   country
     ? `/law?country=${encodeURIComponent(country.toLowerCase())}`
     : "/law";
-
-const HOME_DESCRIPTION =
-  "Public legal database: court decisions and consolidated statutes, searchable by identifier or by words.";
 
 /** Whether the entry belongs to the legislation corpus rather than case law. */
 const wantsStatutes = (
@@ -184,15 +181,17 @@ export const Route = createFileRoute("/law/")({
     };
   },
   head: ({ loaderData, match }) => {
+    const t = getTranslator();
     const title = pageTitle("common.legalDatabase");
+    const description = t("caseLaw.seo.homeDescription");
     const path = createLawHomePath(match.search);
 
     return createPublicLawHead({
-      description: HOME_DESCRIPTION,
+      description,
       jsonLd: createLegalCollectionJsonLd({
-        aboutName: "Case-law decisions",
+        t,
         canonicalUrl: createPublicLawCanonicalUrl(path),
-        description: HOME_DESCRIPTION,
+        description,
         kind: "caseLaw",
         items: loaderData
           ? loaderData.decisions.map((decision) => ({
@@ -255,7 +254,7 @@ function LawHomePending() {
 
 /** The section's mark over the question, as the chat home greets. */
 const LawHomeGreeting = ({ children }: { children: string }) => (
-  <LandingGreeting icon={<BookOpenIcon className="size-6" />}>
+  <LandingGreeting icon={<CaseLawIcon className="size-6" />}>
     {children}
   </LandingGreeting>
 );

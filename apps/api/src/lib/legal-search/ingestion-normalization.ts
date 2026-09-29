@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   isDecisionIdentifier,
@@ -115,6 +116,57 @@ export const markListingOnly = (
 };
 
 /**
+ * How an observed docket is stored, read against its jurisdiction's grammar.
+ *
+ * - `kept`: it parses as written, is a placeholder, or its jurisdiction has
+ *   no grammar; stored as written.
+ * - `trimmed`: a tail the grammar has no place for (`- II.`, a stray dot) is
+ *   cut, and the docket is stored without it.
+ * - `unkeyed`: the same tail, left in place because the observation names no
+ *   publisher document. Such a row is found again by its docket, and a tail
+ *   may be all that tells two of a docket's documents apart, so cutting it
+ *   would merge them or orphan the stored row.
+ * - `unparsed`: no docket the grammar accepts is in it; stored as written.
+ */
+export type ObservedDocket =
+  | { type: "kept" }
+  | { type: "trimmed"; caseNumber: string; removed: string }
+  | { type: "unkeyed"; caseNumber: string; removed: string }
+  | { type: "unparsed" };
+
+export const observedDocketOf = (
+  result: Pick<
+    IngestionResult,
+    "caseNumber" | "caseNumberIsPlaceholder" | "country" | "sourceDocumentId"
+  >,
+): ObservedDocket => {
+  if (result.caseNumberIsPlaceholder === true) {
+    return { type: "kept" };
+  }
+  const stored = storedDecisionDocketOf(
+    result.caseNumber.replace(DANGEROUS_CHARS, ""),
+    result.country,
+  );
+  switch (stored.type) {
+    case "canonical":
+    case "ungoverned":
+      return { type: "kept" };
+    case "unparsed":
+      return stored;
+    case "trimmed":
+      return {
+        type: result.sourceDocumentId ? "trimmed" : "unkeyed",
+        caseNumber: stored.caseNumber,
+        removed: stored.removed,
+      };
+    default: {
+      stored satisfies never;
+      return panic(`Unhandled stored docket: ${String(stored)}`);
+    }
+  }
+};
+
+/**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
  * backfill jobs produce the same canonical representation.
@@ -123,6 +175,10 @@ export const markListingOnly = (
  * differently or not at all, and the date column accepts an impossible year
  * as readily as a real one, so a value that cannot be a decision date is
  * dropped here rather than at each publisher boundary.
+ *
+ * The docket is read against its jurisdiction's grammar here too, for the
+ * same reason (`observedDocketOf`). The adapter's metadata keeps the docket
+ * as the publisher wrote it.
  */
 export const sanitizeResult = (result: IngestionResult): IngestionResult => {
   const strip = (value: string | undefined): string | undefined =>
@@ -143,12 +199,13 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
   };
 
   // A listed document must survive a bad date, so an unusable value is
-  // dropped to null instead of failing the row.
+  // dropped to null instead of failing the row. The bounds are the
+  // jurisdiction's own.
   const boundDecisionDate = (raw: string | undefined): string | undefined => {
     if (raw === undefined) {
       return undefined;
     }
-    return canonicalDecisionDate(raw) ?? undefined;
+    return canonicalDecisionDate(raw, result.country) ?? undefined;
   };
 
   const deepSanitize = (value: unknown): unknown => {
@@ -256,9 +313,13 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     });
   }
 
+  const docket = observedDocketOf(result);
   return {
     ...result,
-    caseNumber: result.caseNumber.replace(DANGEROUS_CHARS, ""),
+    caseNumber:
+      docket.type === "trimmed"
+        ? docket.caseNumber
+        : result.caseNumber.replace(DANGEROUS_CHARS, ""),
     identifiers,
     sourceDocumentId,
     sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(

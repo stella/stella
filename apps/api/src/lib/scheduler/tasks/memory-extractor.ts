@@ -19,6 +19,11 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  type ChatDurableRefText,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
+import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { errorTag } from "@/api/lib/errors/utils";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
@@ -323,20 +328,30 @@ const extractCandidates = async (
     ? ""
     : transcriptResult.value;
 
+  // Configuration loading is part of the per-compaction failure boundary:
+  // a bad tenant config must rotate behind untouched work instead of
+  // aborting the global scheduler batch.
+  const settings = Result.flatten(
+    await Result.tryPromise({
+      try: async () =>
+        await loadOrgAISettings(db, {
+          organizationId: compaction.threadOrganizationId,
+          userId: compaction.threadUserId,
+        }),
+      catch: (error: unknown) => error,
+    }),
+  );
+  if (Result.isError(settings)) {
+    return Result.err(settings.error);
+  }
+  const { orgAIConfig, promptCachingEnabled } = settings.value;
+
   let analytics:
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
     | undefined;
 
   const result = await Result.tryPromise({
     try: async () => {
-      // Configuration loading is part of the per-compaction failure boundary:
-      // a bad tenant config must rotate behind untouched work instead of
-      // aborting the global scheduler batch.
-      const { orgAIConfig, promptCachingEnabled } = await loadOrgAISettings(
-        db,
-        compaction.threadOrganizationId,
-      );
-
       analytics = createTanStackAIAnalyticsCallbacks({
         feature: "memory.extractor",
         modelRole: "fast",
@@ -400,7 +415,28 @@ const extractCandidates = async (
     return Result.ok(null);
   }
 
-  return Result.ok(normalizeCandidates(result.value.candidates));
+  // The transcript shows the model this thread's chat refs, which name
+  // nothing outside it: a memory keeps them as canonical links.
+  const names = await Result.tryPromise({
+    try: async () =>
+      await readChatThreadNames({ threadId: compaction.threadId, tx: db }),
+    catch: (error: unknown) => error,
+  });
+  if (Result.isError(names)) {
+    return Result.err(names.error);
+  }
+  const refRegistry = createChatRefRegistry(
+    names.value.refBindings,
+    names.value.retiredRefs,
+  );
+  return Result.ok(
+    normalizeCandidates(
+      result.value.candidates.map(({ content, kind }) => ({
+        content: refRegistry.toDurableRefText(content),
+        kind,
+      })),
+    ),
+  );
 };
 
 const hasCurrentExtractionConsent = async (
@@ -424,7 +460,10 @@ const hasCurrentExtractionConsent = async (
 };
 
 const normalizeCandidates = (
-  candidates: readonly { kind: ExtractableMemoryKind; content: string }[],
+  candidates: readonly {
+    kind: ExtractableMemoryKind;
+    content: ChatDurableRefText;
+  }[],
 ): ExtractedCandidate[] => {
   const normalized: ExtractedCandidate[] = [];
   for (const candidate of candidates) {
@@ -434,7 +473,10 @@ const normalizeCandidates = (
     // These candidates were produced from untrusted matter/chat text, so
     // drop any that carry an injection signal before they reach the
     // suggestions queue; the sanitizer also trims and flattens.
-    const sanitized = sanitizeMemoryContent(candidate.content);
+    const sanitized = sanitizeMemoryContent({
+      origin: "model",
+      text: candidate.content,
+    });
     if (Result.isError(sanitized)) {
       continue;
     }

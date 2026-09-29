@@ -1,7 +1,7 @@
-import { MessageSquareTextIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { MessageSquareTextIcon, AiActionIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 
@@ -122,7 +122,7 @@ const PublicLawRefine = ({
         {isPending ? (
           <Loader label={t("search.aiRefine")} size="sm" />
         ) : (
-          <WandSparklesIcon aria-hidden="true" className="size-4" />
+          <AiActionIcon aria-hidden="true" className="size-4" />
         )}
       </Button>
       {accountDialog}

@@ -5,11 +5,11 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DialogClose, DialogFooter, DialogPanel } from "@stll/ui/dialog";
+import { AlertTriangleIcon } from "@stll/ui/icons";
 
 import {
   bilingualErrorCodeKey,

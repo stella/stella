@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Verificado con {count, plural, one {# hecho} other {# hechos}} tal y como constaban el {checkedAt}. Las ediciones posteriores de la lista no modifican esta verificación.",
       "failedTitle": "Error en la verificación",
+      "history": {
+        "label": "Historial de verificaciones",
+        "loadFailed": "No se pudieron cargar las verificaciones anteriores de este documento."
+      },
       "inProgress": "Contrastando las afirmaciones del documento con los hechos de la lista…",
       "loadFailed": "No se pudo cargar esta verificación.",
       "noClaims": "No se encontraron afirmaciones en este documento.",
@@ -549,6 +553,11 @@
       "tableNamePlaceholder": "p. ej. Estándar 2025"
     },
     "revertToDraft": "Volver a borrador",
+    "savedNarratives": {
+      "empty": "Guarda una descripción para volver a usarla.",
+      "save": "Guardar descripción",
+      "title": "Descripciones guardadas"
+    },
     "selectMatter": "Seleccione un asunto...",
     "selectMatterToStart": "Seleccione un asunto para iniciar el temporizador",
     "selectedCount": "{count, plural, one {# seleccionado} other {# seleccionados}}",
@@ -797,6 +806,12 @@
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Buscar todas las palabras"
     },
+    "seo": {
+      "collectionName": "Jurisprudencia de stella",
+      "description": "Base de datos pública de jurisprudencia con resoluciones judiciales y fuentes jurídicas indexables.",
+      "homeDescription": "Base de datos jurídica pública con resoluciones judiciales y normas consolidadas; búsqueda por identificador o palabras.",
+      "scopedDescription": "Base de datos pública de jurisprudencia de {scope}, con resoluciones judiciales y fuentes jurídicas indexables."
+    },
     "showWholeHeadnote": "Mostrar el sumario completo",
     "sort": {
       "newest": "Más recientes",
@@ -874,6 +889,7 @@
       "apiKey": "Clave de API",
       "none": "Sin configuración"
     },
+    "skillNeedsUnavailableTools": "No se ofrece en el chat. Necesita una herramienta que allí no está disponible: {tools}",
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Crear DOCX",
@@ -967,7 +983,15 @@
       "searchFiles": "Buscar archivos",
       "searchMatters": "Buscar asuntos",
       "searchMcpServers": "Buscar servidores MCP...",
-      "searchSkills": "Buscar habilidades"
+      "searchSkills": "Buscar habilidades",
+      "skillNeeds": {
+        "browserExtension": "Conecta la extensión del navegador para usar esta habilidad",
+        "document": "Abre un documento para usar esta habilidad",
+        "matter": "Inicia un chat en un asunto para usar esta habilidad",
+        "rawSendMode": "No disponible en chats anonimizados",
+        "reviewEdits": "Cambia las ediciones a revisión manual para usar esta habilidad",
+        "webSearch": "Activa la búsqueda web para usar esta habilidad"
+      }
     },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
@@ -1052,6 +1076,10 @@
       "loadError": "Error al cargar elementos"
     },
     "messageTimestampToday": "Hoy, {time}",
+    "mockModel": {
+      "description": "Respuestas predefinidas del modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",
@@ -1470,6 +1498,7 @@
     "displayName": "Nombre para mostrar",
     "document": "Documento",
     "documentName": "Nombre del documento",
+    "documentPage": "<bdi>{document}</bdi> · pág. {page}",
     "documentReference": "Referencia del documento",
     "documentTitle": "Título del documento",
     "documentation": "Documentación",
@@ -1613,6 +1642,7 @@
     "profile": "Perfil",
     "properties": "Propiedades",
     "queued": "En cola",
+    "reason": "Motivo",
     "reconnecting": "Reconectando…",
     "reference": "Referencia",
     "refresh": "Actualizar",
@@ -1924,6 +1954,54 @@
       "organization": "Organización",
       "person": "Persona"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Dirección de correo del asunto",
+    "assertedOriginal": "Cabeceras originales (según quien reenvía)",
+    "authResults": {
+      "fail": "Fallida",
+      "pass": "Correcta",
+      "unknown": "Sin determinar"
+    },
+    "backToList": "Volver a correspondencia",
+    "createAddress": "Crear dirección",
+    "deliveredBy": "Entregado por <address>{sender}</address>",
+    "deliveredByAuthenticated": "Entregado por <address>{sender}</address> · autenticado",
+    "deliveryAuthentication": "Autenticación de la entrega",
+    "drops": {
+      "authenticationHint": "Pida al administrador del correo del remitente que configure <protocol>SPF</protocol>, <protocol>DKIM</protocol> y <protocol>DMARC</protocol> para el dominio de envío.",
+      "reasons": {
+        "attachmentRejected": "Archivo adjunto rechazado",
+        "authenticationFailed": "Error de autenticación de la entrega",
+        "malformedMessage": "No se pudo leer el mensaje",
+        "messageTooLarge": "Mensaje demasiado grande",
+        "revokedAddress": "Dirección de correo revocada",
+        "unauthorizedSender": "Remitente no autorizado",
+        "unknownRecipient": "Destinatario desconocido"
+      },
+      "title": "Entregas rechazadas"
+    },
+    "empty": "Todavía no hay correspondencia.",
+    "filers": "Remitentes",
+    "forwardedBy": "Reenviado por <address>{sender}</address>",
+    "forwardedByAuthenticated": "Reenviado por <address>{sender}</address> · autenticado",
+    "inboundNotConfigured": "El correo entrante no está configurado. Pida al administrador que configure el dominio de correo entrante.",
+    "markHandled": "Marcar como tramitado",
+    "markNew": "Marcar como nuevo",
+    "noAddress": "No hay ninguna dirección de correo activa.",
+    "originalSender": "Remitente original",
+    "originalSenderUnverified": "Remitente original (según lo indicado, sin verificar)",
+    "originalSignatureVerified": "Firma original verificada (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Recibido",
+    "revokeAddress": "Revocar dirección",
+    "rotateAddress": "Cambiar dirección",
+    "sentAt": "Enviado el",
+    "sharedMailboxFiler": "Buzón compartido {address}, aprobado por {approver}",
+    "states": {
+      "handled": "Tramitado"
+    },
+    "title": "Correspondencia",
+    "unknownApprover": "Aprobador desconocido"
   },
   "docxReview": {
     "acceptAll": "Aceptar todo",
@@ -4298,6 +4376,7 @@
     "compareVersionMissing": "La versión con la que comparar no figura en el historial de esta norma.",
     "compareWholeAct": "Comparar la norma completa",
     "compareWithVersion": "Comparar con {version}",
+    "description": "Base de datos pública de normas consolidadas, indexables por norma y versión.",
     "diffInserted": "Añadido:",
     "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versión no tiene texto disponible.",
@@ -5094,6 +5173,57 @@
       "ocrAlreadyProcessed": "El reconocimiento de texto ya se completó",
       "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
       "ocrQueued": "Reconocimiento de texto añadido al próximo lote de OCR",
+      "pdfSigning": {
+        "action": "Firmar en la app de escritorio",
+        "cancelledBaseVersionDescription": "El documento cambió mientras se firmaba. Abre la versión más reciente y fírmalo de nuevo.",
+        "cancelledCertificateDescription": "El certificado elegido no sirve para firmar. Elige uno que permita firmas digitales.",
+        "cancelledCertifiedDescription": "Este PDF está certificado y su certificación no permite más firmas.",
+        "cancelledDescription": "La firma no se completó.",
+        "cancelledDigestDescription": "La firma no coincidía con el documento preparado. Inténtalo de nuevo.",
+        "cancelledFailedDescription": "No se pudo añadir la firma a este PDF.",
+        "cancelledPlatformDescription": "Firmar con un certificado del llavero del sistema funciona por ahora en macOS.",
+        "cancelledRevokedDescription": "El certificado elegido, o uno que lo emitió, ha sido revocado. Elige un certificado válido.",
+        "cancelledSignatureDescription": "La firma de stella desktop no coincidía con el certificado elegido. Inténtalo de nuevo.",
+        "cancelledStampNameDescription": "El nombre del titular del certificado no se puede mostrar en un sello visible. Vuelve a firmar con una firma invisible.",
+        "cancelledStampOverflowDescription": "El texto del sello no cabe en el recuadro que dibujaste. Dibuja un sello más grande, acorta el motivo o el lugar, o usa una firma invisible.",
+        "cancelledTitle": "Firma cancelada",
+        "cancelledUserDescription": "La firma se canceló en stella desktop.",
+        "cancelledWouldBreakSignaturesDescription": "Firmar este PDF invalidaría las firmas que ya contiene.",
+        "encryptedDescription": "Este PDF está protegido con contraseña. Quita la protección antes de firmar.",
+        "expiredDescription": "stella desktop no terminó la firma a tiempo. Ábrelo e inténtalo de nuevo.",
+        "expiredTitle": "Se agotó el tiempo para firmar",
+        "inProgressDescription": "Este archivo ya se está firmando. Termina o cancela esa firma en stella desktop primero.",
+        "noFileDescription": "Este documento no tiene ningún archivo que firmar.",
+        "notAPdfDescription": "Solo se pueden firmar archivos PDF.",
+        "placementBox": "Posición del sello",
+        "placementConfirm": "Abrir stella desktop",
+        "placementDescription": "Elige cómo aparece la firma en el PDF.",
+        "placementHint": "Arrastra el sello para moverlo o arrastra su esquina para cambiar su tamaño. Con el sello seleccionado, las flechas lo mueven y Mayús con una flecha cambia su tamaño.",
+        "placementInvisible": "Firma invisible",
+        "placementInvisibleDescription": "La firma se guarda en el archivo sin ninguna marca en las páginas.",
+        "placementPageLabel": "Página del sello",
+        "placementPageOption": "Página {page, number} de {count, number}",
+        "placementPreview": "Vista previa de la página {page, number}",
+        "placementPreviewFailed": "No se pudo cargar la vista previa de la página.",
+        "placementTitle": "Firmar PDF",
+        "placementTooSmall": "Esta página es demasiado pequeña para un sello. Elige otra página.",
+        "placementVisible": "Sello visible",
+        "placementVisibleDescription": "Un recuadro en la página muestra quién firmó y cuándo.",
+        "readOnlyDescription": "Este documento es de solo lectura.",
+        "signedDescription": "La firma se guardó como la versión {versionNumber, number}.",
+        "signedDescriptionNoVersion": "La firma se guardó como una nueva versión.",
+        "signedTitle": "PDF firmado",
+        "stampLocation": "Lugar",
+        "stampRejectedDescription": "No se puede colocar el sello ahí. Vuelve a colocarlo e inténtalo de nuevo.",
+        "stampSignedBy": "Firmado digitalmente por",
+        "stampTextUnrenderableDescription": "El motivo o el lugar no se pueden mostrar en un sello visible. Cambia el texto o usa una firma invisible.",
+        "startFailedTitle": "No se puede firmar este archivo",
+        "statusUnavailableDescription": "Revisa el historial de versiones para ver si la firma se guardó.",
+        "statusUnavailableTitle": "Estado de la firma no disponible",
+        "tooLargeDescription": "Este PDF es demasiado grande para firmarlo.",
+        "waitingDescription": "Elige un certificado de firma en stella desktop para firmar este PDF.",
+        "waitingTitle": "Esperando a stella desktop"
+      },
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Qué hacer con {fileName}",
@@ -5355,6 +5485,7 @@
         },
         "targets": {
           "automation": "automatización",
+          "correspondence": "correspondencia",
           "court": "registro judicial",
           "document": "documento",
           "documentReview": "revisión de documento",

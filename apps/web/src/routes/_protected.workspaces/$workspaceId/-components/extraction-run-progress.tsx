@@ -1,5 +1,6 @@
-import { LoaderCircleIcon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { LoaderCircleIcon, SparklesIcon } from "@stll/ui/icons";
 
 import { useWorkflowStatus } from "@/lib/workspaces/queries/workspace";
 

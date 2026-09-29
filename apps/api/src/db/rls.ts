@@ -103,6 +103,7 @@ export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
 // without the pin bypass, sealing a workspace to 'deleting' would hide its
 // embedded-data threads from the deletion transaction's own cleanup DELETE,
 // leaving rows that break the workspaces FK.
+// sql-perf-allow: bounded by one row's workspace ID array and one authorization probe per element
 const workspaceArrayCheck = (workspaceIds: SQL) => sql`NOT EXISTS (
   SELECT 1
   FROM pg_catalog.unnest(${workspaceIds}) AS scoped_workspace(workspace_id)
@@ -143,6 +144,7 @@ const authOrganizationCheck = sql`id =
     '${sql.raw(SETTING_ORGANIZATION_ID)}', true
   ))`;
 
+// sql-perf-allow: bounded by one user ID and session organization per RLS row
 const authUserVisibleCheck = sql`(
   id = (SELECT current_setting(
     '${sql.raw(SETTING_USER_ID)}', true
@@ -1529,6 +1531,24 @@ export const chatThreadCompactionPolicies = () => [
     for: "delete",
     to: stella,
     using: chatDerivedThreadScopeCheck(sql`chat_thread_compactions.thread_id`),
+  }),
+];
+
+/**
+ * Append-only: a name keeps its meaning for the thread's life, so rows are
+ * inserted and read, never changed; they go with their thread (the foreign
+ * key cascades).
+ */
+export const chatThreadNamePolicies = () => [
+  p.pgPolicy("chat_thread_name_select", {
+    for: "select",
+    to: stella,
+    using: chatDerivedThreadScopeCheck(sql`chat_thread_names.thread_id`),
+  }),
+  p.pgPolicy("chat_thread_name_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: chatDerivedThreadScopeCheck(sql`chat_thread_names.thread_id`),
   }),
 ];
 

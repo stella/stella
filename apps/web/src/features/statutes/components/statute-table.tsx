@@ -13,6 +13,10 @@ import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { BidiText } from "@stll/ui/bidi-text";
 import {
   CalendarClockIcon,
   CalendarIcon,
@@ -21,12 +25,8 @@ import {
   HistoryIcon,
   ScrollTextIcon,
   ShapesIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
-import { BidiText } from "@stll/ui/bidi-text";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";

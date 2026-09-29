@@ -50,14 +50,24 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
+  observedDocketOf,
   sanitizeResult,
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+
+// An insert whose values can be awaited directly or chained into an upsert,
+// as the refresh path does for identifier rows.
+// oxlint-disable-next-line typescript-eslint/promise-function-async -- the double returns a promise that also carries onConflictDoUpdate; `async` would drop the extra method
+const insertedValues = () =>
+  Object.assign(Promise.resolve(undefined), {
+    onConflictDoUpdate: async () => await Promise.resolve(undefined),
+  });
 
 const baseResult = (
   documentAst: IngestionResult["documentAst"],
@@ -192,6 +202,66 @@ describe("sanitizeResult — decision identifiers", () => {
         value: "12 Test Reporter 34",
       },
     ]);
+  });
+});
+
+describe("sanitizeResult — docket grammar", () => {
+  const observed = (country: string, caseNumber: string): IngestionResult => ({
+    ...baseResult(EMPTY_AST),
+    country,
+    caseNumber,
+    sourceDocumentId: "publisher-document",
+    metadata: { caseNumber },
+  });
+
+  test.each([
+    ["CZE", "33 Cdo 1751/2023- II.", "33 Cdo 1751/2023"],
+    ["SVK", "5Obo/12/2020 - IV.", "5Obo/12/2020"],
+    ["POL", "I ACa 123/20.", "I ACa 123/20"],
+    ["HUN", "Pfv.IV.20.123/2020/5 -", "Pfv.IV.20.123/2020/5"],
+  ])("%s: %s is stored as %s", (country, raw, caseNumber) => {
+    const input = observed(country, raw);
+    expect(observedDocketOf(input)).toEqual({
+      type: "trimmed",
+      caseNumber,
+      removed: raw.slice(raw.indexOf(caseNumber) + caseNumber.length),
+    });
+    const sanitized = sanitizeResult(input);
+    expect(sanitized.caseNumber).toBe(caseNumber);
+    expect(sanitized.metadata["caseNumber"]).toBe(raw);
+  });
+
+  test("a docket keyed row keeps its tail and is reported unkeyed", () => {
+    const input = {
+      ...observed("CZE", "33 Cdo 1751/2023- II."),
+      sourceDocumentId: undefined,
+    };
+    expect(observedDocketOf(input)).toEqual({
+      type: "unkeyed",
+      caseNumber: "33 Cdo 1751/2023",
+      removed: "- II.",
+    });
+    expect(sanitizeResult(input).caseNumber).toBe("33 Cdo 1751/2023- II.");
+  });
+
+  test.each<[string, string, ObservedDocket["type"]]>([
+    ["CZE", "21 Cdo 1234/2020-5", "kept"],
+    ["HUN", "5.P.21.203/2004.", "kept"],
+    ["CZE", "33 Cdo 1751/2023 civil", "unparsed"],
+    ["XXX", "1 A 2/2020 - II.", "kept"],
+  ])("%s: %s is stored as written (%s)", (country, raw, type) => {
+    const input = observed(country, raw);
+    expect(observedDocketOf(input).type).toBe(type);
+    expect(sanitizeResult(input).caseNumber).toBe(raw);
+  });
+
+  test("a placeholder docket is never read against the grammar", () => {
+    expect(
+      observedDocketOf({
+        ...observed("CZE", "NALUS record 7301"),
+        caseNumberIsPlaceholder: true,
+      }),
+    ).toEqual({ type: "kept" });
   });
 });
 
@@ -1097,7 +1167,7 @@ describe("processDecision — corpus storage off", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: async () => undefined }),
+        insert: () => ({ values: insertedValues }),
       };
 
       // SAFETY: the refresh path walks only these chains; anything else
@@ -1190,7 +1260,7 @@ describe("processDecision — the decision's judges", () => {
           }),
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: async () => undefined }),
+        insert: () => ({ values: insertedValues }),
       };
 
       inTransaction = true;
@@ -1303,7 +1373,10 @@ describe("processDecision — fields on an existing row", () => {
                                   decisionDate:
                                     decisionDate === undefined
                                       ? null
-                                      : canonicalDecisionDate(decisionDate),
+                                      : canonicalDecisionDate(
+                                          decisionDate,
+                                          "SVK",
+                                        ),
                                   metadata: storedMetadata,
                                 },
                               ],
@@ -1335,7 +1408,7 @@ describe("processDecision — fields on an existing row", () => {
           },
         }),
         delete: () => ({ where: async () => undefined }),
-        insert: () => ({ values: async () => undefined }),
+        insert: () => ({ values: insertedValues }),
       };
 
       // SAFETY: the refresh path walks only these chains; anything else

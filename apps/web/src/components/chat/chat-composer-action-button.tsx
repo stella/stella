@@ -1,7 +1,6 @@
 import type { ComponentProps } from "react";
 
 import { panic } from "better-result";
-import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -13,6 +12,7 @@ import {
   COMPOSER_CONTROL_BUTTON_SIZE,
   COMPOSER_SEND_BUTTON_CLASS,
 } from "@stll/ui/composer";
+import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { guideAnchor } from "@/features/guides/guide-anchor";

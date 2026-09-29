@@ -1,10 +1,10 @@
 import { useId, useRef, useState } from "react";
 
 import { panic } from "better-result";
-import { PlusIcon, SplitIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PlusIcon, SplitIcon, XIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverClose,

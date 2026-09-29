@@ -1,4 +1,6 @@
 import { panic, Result } from "better-result";
+import { sql } from "drizzle-orm";
+import type { Column, SQL } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -316,6 +318,35 @@ type StoredCorpusWriteColumns = {
   contentHash: string | null;
 };
 
+/** The complete corpus pointer tuple shared by row reads and writes. */
+const storedCorpusWriteValues = <T>({
+  textS3Key,
+  normalizedS3Key,
+  astS3Key,
+  contentHash,
+}: { [K in keyof StoredCorpusWriteColumns]: T }) => [
+  textS3Key,
+  normalizedS3Key,
+  astS3Key,
+  contentHash,
+];
+
+const storedCorpusWriteIsComplete = (
+  row: StoredCorpusWriteColumns,
+): row is { [K in keyof StoredCorpusWriteColumns]: string } =>
+  storedCorpusWriteValues(row).every((value) => value !== null);
+
+/** SQL twin of the complete pointer tuple required by `storedCorpusWrite`. */
+export const storedCorpusWriteIsCompleteSql = (columns: {
+  [K in keyof StoredCorpusWriteColumns]: Column | SQL;
+}): SQL<boolean> =>
+  sql<boolean>`(${sql.join(
+    storedCorpusWriteValues(columns).map(
+      (column) => sql`${column} is not null`,
+    ),
+    sql` and `,
+  )})`;
+
 /**
  * The corpus write a row records, in the shape {@link writeCorpusDocument}
  * compares against, or null when the row records none. All four columns
@@ -325,10 +356,7 @@ type StoredCorpusWriteColumns = {
 export const storedCorpusWrite = (
   row: StoredCorpusWriteColumns,
 ): WriteCorpusResult | null =>
-  row.textS3Key !== null &&
-  row.normalizedS3Key !== null &&
-  row.astS3Key !== null &&
-  row.contentHash !== null
+  storedCorpusWriteIsComplete(row)
     ? {
         textKey: row.textS3Key,
         sectionsKey: row.normalizedS3Key,

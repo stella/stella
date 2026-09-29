@@ -1,19 +1,28 @@
+import { convertMessagesToModelMessages } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import {
+  closeCutShortCalls,
+  CUT_SHORT_OUTCOME,
   errorToolResult,
   findDroppedParts,
+  findUnsettledStoredToolCalls,
   findUnsettledToolCallsForOutcome,
   settleHistoryForRun,
   settleOpenToolCallsForOutcome,
   UNFINISHED_APPROVED_CALL_ERROR,
   UNRESOLVED_CALL_ERROR,
 } from "@/api/handlers/chat/chat-turn-settlement";
+import { answerHistoryCallsInTheirStep } from "@/api/handlers/chat/step-answers";
 import type {
   ChatMessage,
   ChatPart,
   ChatTurnOutcome,
 } from "@/api/handlers/chat/types";
+import { toSafeId } from "@/api/lib/branded-types";
+import { findTranscriptProblems } from "@/api/tests/helpers/provider-request-transcript";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 type ToolCallState = ToolCallPart["state"];
@@ -180,13 +189,57 @@ describe("settling the calls a turn left open", () => {
   });
 });
 
-describe("the history a run hands the engine", () => {
-  const assistant = (id: string, parts: ChatPart[]): ChatMessage => ({
-    id,
-    parts,
+describe("the stored message of a cut-short turn", () => {
+  // Every state a run can leave a call in, so a new one must be decided.
+  const leftByRun = {
+    "approval-requested": pendingApproval,
+    "approval-responded": approvedWithoutOutput,
+    "awaiting-input": call("awaiting", { state: "awaiting-input" }),
+    complete: completed,
+    error: failed,
+    "input-complete": call("server-call", { state: "input-complete" }),
+    "input-streaming": streaming,
+  } as const satisfies Record<ToolCallState, ToolCallPart>;
+  const produced = toPersistableChatMessage({
+    id: toSafeId<"chatMessage">("01a0e22c-ba01-7525-803d-b57dcb87e6fb"),
+    parts: Object.values(leftByRun),
     role: "assistant",
   });
 
+  const isOutcomeType = (key: string): key is ChatTurnOutcome["type"] =>
+    Object.hasOwn(CUT_SHORT_OUTCOME, key);
+  const cutShortOutcomes = Object.keys(CUT_SHORT_OUTCOME)
+    .filter(isOutcomeType)
+    .filter((outcome) => CUT_SHORT_OUTCOME[outcome]);
+
+  test.each(cutShortOutcomes)(
+    "a %s turn stores no call the stored rule leaves open",
+    (outcome) => {
+      // The fixture must reach the fault: the run left calls open.
+      expect(
+        findUnsettledStoredToolCalls({
+          outcome: "completed",
+          parts: produced.parts,
+        }),
+      ).not.toEqual([]);
+
+      expect(
+        findUnsettledStoredToolCalls({
+          outcome,
+          parts: closeCutShortCalls(produced).parts,
+        }),
+      ).toEqual([]);
+    },
+  );
+});
+
+const assistant = (id: string, parts: ChatPart[]): ChatMessage => ({
+  id,
+  parts,
+  role: "assistant",
+});
+
+describe("the history a run hands the engine", () => {
   test("only the resumed message keeps its approved calls open", () => {
     const earlier = assistant("earlier", [approvedWithoutOutput]);
     const resumed = assistant("resumed", [approvedWithoutOutput]);
@@ -272,5 +325,113 @@ describe("the history a run hands the engine", () => {
 
     expect(history[0]?.parts).toEqual(earlier.parts);
     expect(history[1]).toBe(resumed);
+  });
+});
+
+// The engine turns an assistant message into one model message per step, and
+// answers a denial at the end of the message. The history a run dispatches
+// (settled, then answered in its steps for the provider) must still come out
+// with every call answered right after the message making it, so these
+// convert it with the engine's own conversion and hold the result to the
+// provider transcript check.
+describe("the settled history the engine converts", () => {
+  const approval = (id: string, approved?: boolean) =>
+    call(id, {
+      approval: {
+        ...(approved === undefined ? {} : { approved }),
+        id: `approval_${id}`,
+        needsApproval: true,
+      },
+      state:
+        approved === undefined ? "approval-requested" : "approval-responded",
+    });
+  const question = call("question", { state: "error" });
+  const stored = (toolCallId: string) =>
+    ({
+      content: "{}",
+      state: "complete",
+      toolCallId,
+      type: "tool-result",
+    }) satisfies ChatPart;
+
+  const modelRequest = (parts: ChatPart[]) => {
+    const [message] = answerHistoryCallsInTheirStep(
+      settleHistoryForRun({
+        messages: [assistant("earlier", parts)],
+        resumedMessageId: undefined,
+      }),
+    );
+    if (message === undefined) {
+      return panic("The history lost its message");
+    }
+    return {
+      earlierSteps: [],
+      format: "model-messages" as const,
+      messages: convertMessagesToModelMessages([
+        {
+          id: "user-1",
+          parts: [{ content: "Draft", type: "text" }],
+          role: "user",
+        },
+        message,
+        {
+          id: "user-2",
+          parts: [{ content: "Next", type: "text" }],
+          role: "user",
+        },
+      ]),
+    };
+  };
+
+  test("a batch with an unanswered call keeps its calls in one step", () => {
+    const parts = [approval("first", false), question, approval("last", false)];
+    const history = settleHistoryForRun({
+      messages: [assistant("earlier", parts)],
+      resumedMessageId: undefined,
+    });
+
+    expect(history[0]?.parts).toEqual([
+      ...parts,
+      errorToolResult("question", UNRESOLVED_CALL_ERROR),
+    ]);
+    expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
+  });
+
+  test("a denial in a step the message goes on past is answered in that step of the provider's copy", () => {
+    const parts = [
+      approval("denied", false),
+      approval("approved", true),
+      stored("approved"),
+      completed,
+      stored("completed"),
+      { content: "Done.", type: "text" },
+    ] satisfies ChatPart[];
+    const history = settleHistoryForRun({
+      messages: [assistant("earlier", parts)],
+      resumedMessageId: undefined,
+    });
+
+    // The stored parts stay as they are: only the provider's copy moves the
+    // denial's answer into its step, so every request answers it the same way.
+    expect(history[0]?.parts).toEqual(parts);
+    expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
+  });
+
+  test("a denial in the message's last step is left to the engine", () => {
+    const parts = [
+      completed,
+      stored("completed"),
+      approval("denied", false),
+      approval("approved", true),
+      stored("approved"),
+    ] satisfies ChatPart[];
+
+    expect(
+      settleHistoryForRun({
+        messages: [assistant("earlier", parts)],
+        resumedMessageId: undefined,
+      })[0]?.parts,
+    ).toEqual(parts);
+    expect(findTranscriptProblems(modelRequest(parts))).toEqual([]);
   });
 });

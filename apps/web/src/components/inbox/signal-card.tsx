@@ -2,13 +2,13 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
-import { AlarmClockIcon, MessageSquareIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import type { SignalSuggestion } from "@stll/api-contract/signals";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { AlarmClockIcon, MessageSquareIcon, XIcon } from "@stll/ui/icons";
 import { KanbanCardShell } from "@stll/ui/kanban";
 import {
   Menu,

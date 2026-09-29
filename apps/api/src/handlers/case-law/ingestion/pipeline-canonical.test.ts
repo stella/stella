@@ -147,7 +147,9 @@ let persistedCursor: string | null | undefined;
  */
 let rowWrite: "ok" | "fault" | "timeout" = "ok";
 /** The row the dedup lookup finds; undefined makes this a new decision. */
-let existingDecision: Record<string, unknown> | undefined;
+let existingDecision:
+  | (Record<string, unknown> & { hasStoredDocument: boolean })
+  | undefined;
 /** Whether the observation still owns the mirror when it settles. */
 let mirrorSettlementApplied = true;
 let intentStatus: "active" | "cleanup" = "active";
@@ -305,6 +307,7 @@ const scopedDb: ScopedDb = async (callback) => {
         };
         return {
           onConflictDoNothing: () => ({ returning }),
+          onConflictDoUpdate: () => ({ returning }),
           returning: async () => await returning(),
         };
       },
@@ -471,6 +474,7 @@ describe("processDecision — canonical storage mode", () => {
       fulltext: "Recovered decision text.",
       sections: null,
       documentAst: {},
+      hasStoredDocument: true,
     };
 
     const outcome = await processDecision({
@@ -532,6 +536,7 @@ describe("processDecision — canonical storage mode", () => {
       astS3Key: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
+      hasStoredDocument: false,
     };
     failTheTransfer();
 
@@ -564,6 +569,7 @@ describe("processDecision — canonical storage mode", () => {
       redactedAt: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
+      hasStoredDocument: false,
     };
     intentStatus = "cleanup";
 
@@ -644,6 +650,7 @@ describe("processDecision — canonical storage mode", () => {
       textS3Key: recorded.textKey,
       normalizedS3Key: recorded.sectionsKey,
       astS3Key: recorded.astKey,
+      hasStoredDocument: true,
       redactedAt: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
@@ -705,6 +712,7 @@ describe("processDecision — canonical storage mode", () => {
       textS3Key: recorded.textKey,
       normalizedS3Key: recorded.sectionsKey,
       astS3Key: recorded.astKey,
+      hasStoredDocument: true,
       redactedAt: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
@@ -747,6 +755,7 @@ describe("processDecision — canonical storage mode", () => {
       textS3Key: null,
       normalizedS3Key: null,
       astS3Key: null,
+      hasStoredDocument: false,
       redactedAt: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
@@ -780,6 +789,7 @@ describe("processDecision — canonical storage mode", () => {
       textS3Key: settled["textS3Key"],
       normalizedS3Key: settled["normalizedS3Key"],
       astS3Key: settled["astS3Key"],
+      hasStoredDocument: true,
     };
     events.length = 0;
     transferredPacks.length = 0;
@@ -867,6 +877,7 @@ describe("processDecision — a refresh whose raw-source write failed", () => {
       textS3Key: null,
       normalizedS3Key: null,
       astS3Key: null,
+      hasStoredDocument: false,
       redactedAt: null,
       sourceRawS3Key: "case-law/raw/older",
       sourceRawContentType: "text/html",
@@ -919,14 +930,21 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
   });
 
   test("holds the cursor when bounded contention does not converge", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const recorded = recordedCorpusWrite(decisionId);
     existingDecision = {
-      id: createSafeId<"caseLawDecision">(),
+      id: decisionId,
       metadata: {},
       sourceHash: decision.rawHash,
       sourceObservedAt: new Date("2026-07-31T12:00:00.000Z"),
       sourceObservationHash: decision.rawHash,
       sourceObservationOrder: 0n,
       corpusMirrorStatus: "settled",
+      contentHash: recorded.contentHash,
+      textS3Key: recorded.textKey,
+      normalizedS3Key: recorded.sectionsKey,
+      astS3Key: recorded.astKey,
+      hasStoredDocument: true,
       redactedAt: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
@@ -955,5 +973,16 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
     });
     expect(result.haltReason).toContain("Concurrent decision reconciliation");
     expect(persistedCursor).toBe("cursor-1");
+  });
+});
+
+describe("sanitizeResult — decision-date floor", () => {
+  test("bounds a stated date by the decision's own jurisdiction", () => {
+    const dated = (country: IngestionResult["country"], decisionDate: string) =>
+      sanitizeResult({ ...decision, country, decisionDate }).decisionDate;
+    expect(dated("USA", "1791-08-03")).toBe("1791-08-03");
+    expect(dated("USA", "1599-12-31")).toBeUndefined();
+    expect(dated("SVK", "1791-08-03")).toBeUndefined();
+    expect(dated("SVK", "1800-01-01")).toBe("1800-01-01");
   });
 });

@@ -14,6 +14,11 @@ import {
   resolveE2eExecutionProfile,
 } from "../execution-profile";
 import { apiDelete, apiPut } from "../helpers/api";
+import { ROUTE_ERROR_HEADING } from "../helpers/app-shell";
+import {
+  CORRESPONDENCE_SMOKE_SUBJECT,
+  createTestCorrespondence,
+} from "../helpers/correspondence";
 import {
   E2E_CLEANUP_TARGET_TYPE,
   registerDeferredE2eCleanup,
@@ -26,6 +31,7 @@ import {
   assertNetworkBaselineCoverage,
   baselineWaterfallDepth,
   createNetworkCollector,
+  mergeNetworkBaseline,
   mergeResampledMetrics,
   summarizeCapture,
 } from "../helpers/network";
@@ -83,6 +89,7 @@ type SmokeWorld = {
   workspace: TestWorkspace;
   contactId: string;
   documentRoute: { entityId: string; path: string };
+  correspondenceId: string;
 };
 
 // A route case declared at collection time. `path` is a function so dynamic
@@ -205,6 +212,15 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     template: "/verify/$code",
     path: () => `/verify/${NONEXISTENT_VERIFICATION_CODE}`,
   },
+  {
+    template: "/workspaces/$workspaceId/correspondence",
+    path: (world) => `/workspaces/${world.workspace.id}/correspondence`,
+  },
+  {
+    template: "/workspaces/$workspaceId/correspondence/$correspondenceId",
+    path: (world) =>
+      `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
+  },
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
@@ -294,7 +310,8 @@ const declareRouteSmokeGroup = ({
         request: apiRequest,
         workspace,
       });
-      world = { workspace, contactId, documentRoute };
+      const correspondenceId = await createTestCorrespondence(workspace.id);
+      world = { workspace, contactId, documentRoute, correspondenceId };
     });
 
     test.afterAll(async () => {
@@ -354,7 +371,15 @@ const declareRouteSmokeGroup = ({
       declareRouteTest(def);
     }
 
-    test("network manifest matches the committed baseline", () => {
+    test("network manifest matches the committed baseline", async () => {
+      await test.info().attach("observed-network-baseline", {
+        body: JSON.stringify(
+          mergeNetworkBaseline(null, networkResults),
+          null,
+          2,
+        ),
+        contentType: "application/json",
+      });
       assertNetworkBaseline(networkResults, { requireAllRoutes });
     });
   });
@@ -653,12 +678,32 @@ const comparableHref = (url: URL, assertSearch: boolean) =>
 
 const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
   await expect(
-    page.getByRole("heading", { name: "This page couldn’t be opened" }),
+    page.getByRole("heading", { name: ROUTE_ERROR_HEADING }),
     `route error boundary rendered on ${routeTemplate}`,
   ).toHaveCount(0);
 };
 
 const assertRouteContentVisible = async (page: Page, routeTemplate: string) => {
+  if (routeTemplate === "/workspaces/$workspaceId/correspondence") {
+    await expect(
+      page.getByRole("link", { name: CORRESPONDENCE_SMOKE_SUBJECT }),
+      "the correspondence list renders the persisted message",
+    ).toBeVisible();
+    return;
+  }
+  if (
+    routeTemplate ===
+    "/workspaces/$workspaceId/correspondence/$correspondenceId"
+  ) {
+    await expect(
+      page.getByRole("heading", {
+        name: CORRESPONDENCE_SMOKE_SUBJECT,
+        exact: true,
+      }),
+      "the correspondence detail renders the persisted message",
+    ).toBeVisible();
+    return;
+  }
   if (routeTemplate !== "/workspaces") {
     return;
   }

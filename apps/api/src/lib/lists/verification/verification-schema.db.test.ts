@@ -11,6 +11,7 @@ import { organization } from "@/api/db/auth-schema";
 import {
   legalListClaimReviewEvents,
   legalListClaims,
+  legalListVerificationBlocks,
   legalListVerificationRuns,
   workspaces,
 } from "@/api/db/schema";
@@ -124,6 +125,78 @@ describe("verification claims", () => {
         recordConflict: conflict,
       }),
     );
+  });
+});
+
+describe("verification source text", () => {
+  test("one ordinal belongs to one block in a run", async () => {
+    const scopedQuery = createScopedQuery(testDb);
+    const block = {
+      runId,
+      workspaceId,
+      ordinal: 0,
+      blockId: "p1",
+      kind: "docx-block",
+      pageNumber: null,
+      text: "The full statement text.",
+    } satisfies typeof legalListVerificationBlocks.$inferInsert;
+    await scopedQuery([workspaceId], organizationId, async (tx) => {
+      await tx.insert(legalListVerificationBlocks).values(block);
+    });
+    const duplicate = await scopedQuery(
+      [workspaceId],
+      organizationId,
+      async (tx) =>
+        await tx
+          .insert(legalListVerificationBlocks)
+          .values({ ...block, blockId: "p2" }),
+    ).then(
+      () => "stored",
+      () => "rejected",
+    );
+    expect(duplicate).toBe("rejected");
+  });
+
+  test("deleting a run removes its pinned blocks", async () => {
+    const cascadeRunId = createSafeId<"legalListVerificationRun">();
+    await testDb.insert(legalListVerificationRuns).values({
+      id: cascadeRunId,
+      organizationId,
+      workspaceId,
+      entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+      fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+      entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
+      contentSha256: "b".repeat(64),
+      evidence: {
+        listId: toSafeId<"legalList">(Bun.randomUUIDv7()),
+        facts: [],
+      },
+      status: "completed",
+    });
+    const scopedQuery = createScopedQuery(testDb);
+    const remaining = await scopedQuery(
+      [workspaceId],
+      organizationId,
+      async (tx) => {
+        await tx.insert(legalListVerificationBlocks).values({
+          runId: cascadeRunId,
+          workspaceId,
+          ordinal: 0,
+          blockId: "P1",
+          kind: "pdf-page",
+          pageNumber: 1,
+          text: "Page text.",
+        });
+        await tx
+          .delete(legalListVerificationRuns)
+          .where(eq(legalListVerificationRuns.id, cascadeRunId));
+        return await tx
+          .select()
+          .from(legalListVerificationBlocks)
+          .where(eq(legalListVerificationBlocks.runId, cascadeRunId));
+      },
+    );
+    expect(remaining).toEqual([]);
   });
 });
 

@@ -10,7 +10,6 @@ import {
 } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import nodePath from "node:path";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -59,7 +58,6 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { installPgliteMigration } from "@/api/tests/pglite-schema";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Written reasons SAOS publishes apart from their ruling, through the real
@@ -93,15 +91,6 @@ const scopedDb: ScopedDb = async (callback) =>
 beforeAll(async () => {
   client = await createTestPglite();
   db = connect(client);
-  // The schema snapshot carries no triggers; this one fences every write of
-  // a decision's publisher hash on its observation order.
-  await installPgliteMigration({
-    db,
-    migrationPath: nodePath.resolve(
-      import.meta.dir,
-      "../../../../drizzle/20260731190000_case_law_observation_legacy_fence/migration.sql",
-    ),
-  });
 }, 120_000);
 
 afterAll(async () => {
@@ -554,6 +543,66 @@ const ingestStandaloneReasons = async (fixture: Fixture) => {
 };
 
 describe("the standalone row of reasons already stored", () => {
+  test("a textless unmarked row is absorbed when its supplement is placed", async () => {
+    const fixture = await newSource();
+    await ingestDecision(fixture, decisionOf(RULING));
+    await ingestStandaloneReasons(fixture);
+    const before = await decisionBy(fixture.sourceId, "339001");
+    expect(before.fulltext).toContain(REASONS_TEXT);
+    expect(before.metadata?.[ABSORBED_INTO_METADATA_KEY]).toBeUndefined();
+    await db
+      .update(caseLawDecisions)
+      .set({
+        contentHash: null,
+        textS3Key: null,
+        normalizedS3Key: null,
+        astS3Key: null,
+        fulltext: null,
+        documentAst: null,
+        sections: null,
+      })
+      .where(eq(caseLawDecisions.id, before.id));
+    const textless = await decisionBy(fixture.sourceId, "339001");
+    expect(textless.fulltext).toBeNull();
+    expect(textless.sourceHash).toBe(before.sourceHash);
+    expect(textless.sourceRawS3Key).toBe(before.sourceRawS3Key);
+    const supplement = supplementOf(REASONS);
+    await db.insert(caseLawDecisionSupplements).values({
+      sourceId: fixture.sourceId,
+      sourceDocumentId: supplement.document.sourceDocumentId,
+      kind: supplement.kind,
+      caseNumber: supplement.document.caseNumber,
+      court: supplement.document.court,
+      language: supplement.document.language,
+      latestDecisionDate: supplement.target.latestDecisionDate ?? null,
+      judgmentDecisionTypes: [...supplement.target.decisionTypes],
+      fulltext: supplement.document.fulltext ?? null,
+      documentAst: supplement.document.documentAst,
+      sourceHash: supplement.document.rawHash,
+      metadata: supplement.document.metadata,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+    });
+    expect(
+      (await supplementRow(fixture.sourceId, "339001")).decisionId,
+    ).toBeNull();
+
+    const placed = await ingestSupplement(fixture, supplement);
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    expect(placed).toEqual({
+      status: PROCESS_DECISION_STATUS.COMPLETE,
+      disposition: { type: "merged", judgmentId: ruling.id },
+    });
+    expect(ruling.fulltext).toContain(REASONS_TEXT);
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    expect(absorbed.id).toBe(before.id);
+    expect(absorbed.metadata?.[ABSORBED_INTO_METADATA_KEY]).toEqual({
+      decisionId: ruling.id,
+      kind: "reasons",
+      sourceDocumentId: "339001",
+    });
+    expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);
+  });
+
   test("is taken down with a redacted ruling", async () => {
     const fixture = await newSource();
     await ingestDecision(fixture, decisionOf(RULING));

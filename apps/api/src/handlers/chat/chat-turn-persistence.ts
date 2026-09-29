@@ -16,12 +16,15 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import {
   attachTerminalTurnOutcome,
-  cancelPendingChatToolCalls,
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   getAwaitingUserInteractions,
 } from "@/api/handlers/chat/chat-message-parts";
-import { settleOpenToolCallsForOutcome } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  closeCutShortCalls,
+  settleOpenToolCallsForOutcome,
+} from "@/api/handlers/chat/chat-turn-settlement";
+import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import {
   chatTurnViewOf,
   planChatTurnTransition,
@@ -308,34 +311,26 @@ export const canAcceptChatTurnOnTx = async ({
 };
 
 /**
- * A cancelled turn's message, with every call that can no longer run or be
- * answered closed. A pending human interaction is represented twice: its
- * owning turn protects execution ownership, while the assistant message is
- * what reload hydration renders. Ending only the turn leaves that message
- * inviting an action the server can no longer accept, and a call cut off
- * mid-stream reading as one a client still answers.
+ * A cut-short turn's message, with every call that can no longer run or be
+ * answered closed (`closeCutShortCalls`). A pending human interaction is
+ * represented twice: its owning turn protects execution ownership, while the
+ * assistant message is what reload hydration renders. Ending only the turn
+ * leaves that message inviting an action the server can no longer accept,
+ * and a call cut off mid-stream reading as one a client still answers.
  */
-export const cancelAssistantMessage = ({
+export const cutShortAssistantMessage = ({
   message,
-  reason,
+  outcome,
 }: {
   message: PersistableChatMessage;
-  reason: ChatTurnCancellationReason;
-}): PersistableTerminalAssistantMessage => {
-  const cancelled = cancelPendingChatToolCalls(message);
-  return attachTerminalTurnOutcome({
-    message: {
-      ...cancelled,
-      parts: settleOpenToolCallsForOutcome({
-        outcome: "cancelled",
-        parts: cancelled.parts,
-      }),
-    },
-    turnOutcome: { reason, type: "cancelled" },
+  outcome: CutShortOutcome;
+}): PersistableTerminalAssistantMessage =>
+  attachTerminalTurnOutcome({
+    message: closeCutShortCalls(message),
+    turnOutcome: outcome,
   });
-};
 
-/** Store `cancelAssistantMessage` for the awaiting turn `turnId`. */
+/** Store `cutShortAssistantMessage` for the awaiting turn `turnId`, cancelled. */
 const cancelAssistantMessageOnTx = async ({
   reason,
   threadId,
@@ -378,9 +373,9 @@ const cancelAssistantMessageOnTx = async ({
   if (awaitingMessage.role !== "assistant") {
     panic("Awaiting chat turn does not own an assistant message");
   }
-  const cancelledMessage = cancelAssistantMessage({
+  const cancelledMessage = cutShortAssistantMessage({
     message: chatMessageFromPersisted(awaitingMessage),
-    reason,
+    outcome: { reason, type: "cancelled" },
   });
   await storeServerEndedMessageOnTx({
     message: cancelledMessage,

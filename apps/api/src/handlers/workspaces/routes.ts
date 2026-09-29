@@ -13,6 +13,13 @@ import archiveWorkspace from "@/api/handlers/workspaces/archive";
 import cellRetry from "@/api/handlers/workspaces/cells/retry";
 import createWorkspaceContact from "@/api/handlers/workspaces/contacts/create";
 import deleteWorkspaceContact from "@/api/handlers/workspaces/contacts/delete";
+import createMatterInboundAddress from "@/api/handlers/workspaces/correspondence/address/create";
+import deleteMatterInboundAddress from "@/api/handlers/workspaces/correspondence/address/delete";
+import getMatterInboundAddress from "@/api/handlers/workspaces/correspondence/address/get";
+import listCorrespondenceDrops from "@/api/handlers/workspaces/correspondence/drops/list";
+import getCorrespondence from "@/api/handlers/workspaces/correspondence/get";
+import listCorrespondence from "@/api/handlers/workspaces/correspondence/list";
+import updateCorrespondence from "@/api/handlers/workspaces/correspondence/update";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete";
 import duplicateWorkspace from "@/api/handlers/workspaces/duplicate";
@@ -233,6 +240,10 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .get("/search-preview", readSearchPreview.handler, {
           permissions: readSearchPreview.config.permissions,
         })
+        .get("/correspondence/drops", listCorrespondenceDrops.handler, {
+          permissions: listCorrespondenceDrops.config.permissions,
+          query: listCorrespondenceDrops.config.query,
+        })
         .get("/overview/activity", readOverviewActivity.handler, {
           permissions: readOverviewActivity.config.permissions,
           query: readOverviewActivity.config.query,
@@ -331,6 +342,32 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
             params: deleteWorkspaceAnonymizationAllowlistEntry.config.params,
             permissions:
               deleteWorkspaceAnonymizationAllowlistEntry.config.permissions,
+          },
+        )
+        .get("/correspondence", listCorrespondence.handler, {
+          permissions: listCorrespondence.config.permissions,
+          query: listCorrespondence.config.query,
+        })
+        .get("/correspondence/address", getMatterInboundAddress.handler, {
+          permissions: getMatterInboundAddress.config.permissions,
+        })
+        .post("/correspondence/address", createMatterInboundAddress.handler, {
+          permissions: createMatterInboundAddress.config.permissions,
+        })
+        .delete("/correspondence/address", deleteMatterInboundAddress.handler, {
+          permissions: deleteMatterInboundAddress.config.permissions,
+        })
+        .get("/correspondence/:correspondenceId", getCorrespondence.handler, {
+          permissions: getCorrespondence.config.permissions,
+          params: getCorrespondence.config.params,
+        })
+        .patch(
+          "/correspondence/:correspondenceId",
+          updateCorrespondence.handler,
+          {
+            permissions: updateCorrespondence.config.permissions,
+            params: updateCorrespondence.config.params,
+            body: updateCorrespondence.config.body,
           },
         )
         .get("/members", readWorkspaceMembers.handler, {

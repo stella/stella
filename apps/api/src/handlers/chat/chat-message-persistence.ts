@@ -15,7 +15,7 @@ import {
 } from "@/api/handlers/chat/chat-message-parts";
 import {
   canAcceptChatTurnOnTx,
-  cancelAssistantMessage,
+  cutShortAssistantMessage,
   ChatTurnStopRequestedError,
   claimChatTurnForExecutionOnTx,
   insertChatTurnAcceptanceOnTx,
@@ -33,6 +33,7 @@ import {
   ChatTurnUnsettledToolCallError,
   findDroppedParts,
   findUnsettledToolCallsForOutcome,
+  isCutShortOutcome,
   settleOpenToolCallsForOutcome,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
@@ -58,12 +59,20 @@ import {
   expandThreadDataScopeOnTx,
   replaceThreadDataScopeOnTx,
 } from "@/api/lib/chat/data-scope";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  type ChatThreadNamesAdded,
+  type ChatThreadNamesRead,
+  recordChatThreadNamesOnTx,
+} from "@/api/lib/chat/thread-names";
+import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  threadNames?: ChatThreadNamesWrite | undefined;
   messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -170,6 +179,31 @@ const applyChatDataScopeExpansionOnTx = async ({
   });
 };
 
+/** The thread's names as a request read them, and what it adds. */
+export type ChatThreadNamesWrite = {
+  added: ChatThreadNamesAdded;
+  read: ChatThreadNamesRead;
+};
+
+/**
+ * Appends the names a write's messages add to the thread, beside those
+ * messages, so a later request never reads fewer names than the thread shows.
+ */
+const applyThreadNamesOnTx = async ({
+  names,
+  threadId,
+  tx,
+}: {
+  names: ChatThreadNamesWrite | undefined;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  if (names === undefined) {
+    return;
+  }
+  await recordChatThreadNamesOnTx({ ...names, threadId, tx });
+};
+
 const applyChatDataScopeReplacementOnTx = async ({
   recordAuditEvent,
   replacement,
@@ -198,6 +232,7 @@ const applyChatDataScopeReplacementOnTx = async ({
 const insertMessages = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   messages,
   recordAuditEvent,
   safeDb,
@@ -229,6 +264,7 @@ const insertMessages = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -285,6 +321,8 @@ const insertMessages = async ({
 export type PersistMessageProps = {
   acceptedSendMode?: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names this write's messages add to the thread. */
+  threadNames?: ChatThreadNamesWrite | undefined;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -398,9 +436,9 @@ type FinalizedTurn = {
 };
 
 /**
- * The terminal message as its outcome stores it. A cancelled turn closes
+ * The terminal message as its outcome stores it. A cut-short turn closes
  * every call that can no longer run or be answered
- * (`cancelAssistantMessage`), whether it waited on the user or was cut off
+ * (`cutShortAssistantMessage`), whether it waited on the user or was cut off
  * mid-stream; any other outcome keeps what the run produced under its
  * settlement rules.
  */
@@ -408,8 +446,8 @@ const endTerminalAssistantMessage = (
   message: PersistableTerminalAssistantMessage,
   outcome: ChatTurnOutcome,
 ): PersistableTerminalAssistantMessage =>
-  outcome.type === "cancelled"
-    ? cancelAssistantMessage({ message, reason: outcome.reason })
+  isCutShortOutcome(outcome)
+    ? cutShortAssistantMessage({ message, outcome })
     : settleTerminalAssistantMessage(message, outcome);
 
 /**
@@ -455,6 +493,11 @@ const settleHonouringStop = async <T, E extends { cause?: unknown }>(
     : settled;
 };
 
+const ANON_RESTORATION_CONFLICT_SINK = failureSink({
+  event: "chat.anon_restoration_conflict",
+  expected: [],
+});
+
 const mergeContinuationMetadata = ({
   owning,
   run,
@@ -467,10 +510,19 @@ const mergeContinuationMetadata = ({
     owning?.anonRestorations !== undefined &&
     run?.anonRestorations !== undefined
   ) {
-    merged.anonRestorations = mergeAnonRestorations(
+    const { conflicts, restorations } = mergeAnonRestorations(
       owning.anonRestorations,
       run.anonRestorations,
     );
+    if (conflicts > 0) {
+      observeFailure(
+        new TelemetryError({
+          message: "An anonymization placeholder named two originals",
+        }),
+        { sink: ANON_RESTORATION_CONFLICT_SINK },
+      );
+    }
+    merged.anonRestorations = restorations;
   }
   if (owning?.usage !== undefined && run?.usage !== undefined) {
     const reasoningTokens =
@@ -499,6 +551,7 @@ const mergeContinuationMetadata = ({
 export const finalizeAssistantTurn = async ({
   acceptedSendMode,
   dataScopeExpansion,
+  threadNames,
   existingIds,
   execution,
   outcome,
@@ -513,6 +566,8 @@ export const finalizeAssistantTurn = async ({
 }: {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
+  /** The names the assistant message adds to the thread. */
+  threadNames: ChatThreadNamesWrite;
   existingIds: Set<SafeId<"chatMessage">>;
   execution: ChatTurnExecution;
   outcome: ChatTurnOutcome;
@@ -551,6 +606,7 @@ export const finalizeAssistantTurn = async ({
       const persisted = await persistMessage({
         acceptedSendMode,
         dataScopeExpansion,
+        threadNames,
         persistencePlan,
         recordAuditEvent,
         safeDb,
@@ -769,6 +825,7 @@ export const persistStoppedChatTurn = async (
 const runPersistMessage = async ({
   acceptedSendMode = null,
   dataScopeExpansion,
+  threadNames,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -784,6 +841,7 @@ const runPersistMessage = async ({
     return await insertMessages({
       acceptedSendMode,
       dataScopeExpansion,
+      threadNames,
       messages: [persistencePlan.message],
       recordAuditEvent,
       safeDb,
@@ -819,6 +877,7 @@ const runPersistMessage = async ({
         tx,
         workspaceId,
       });
+      await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
       if (deleteMessageIds.length > 0) {
         await tx
           .delete(chatMessages)
@@ -975,6 +1034,7 @@ const runPersistMessage = async ({
       tx,
       workspaceId,
     });
+    await applyThreadNamesOnTx({ names: threadNames, threadId, tx });
     const deletedMessageId = persistencePlan.deleteMessageId;
     await tx
       .delete(chatMessages)

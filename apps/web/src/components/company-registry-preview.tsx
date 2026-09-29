@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
@@ -8,6 +7,7 @@ import type { AresCompany } from "@stll/business-registries/ares";
 import { getAresCourtName } from "@stll/business-registries/ares/court-names";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
 import { Button } from "@stll/ui/button";
+import { ExternalLinkIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,

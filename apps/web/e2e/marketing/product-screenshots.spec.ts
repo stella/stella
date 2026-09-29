@@ -360,7 +360,7 @@ test("capture landing product screenshots", async ({
             caret-color: transparent !important;
             transition-duration: 0s !important;
           }
-          [data-sonner-toaster], [data-testid="devtools"] { display: none !important; }
+          [data-sonner-toaster], [data-testid="devtools"], [data-dev-chrome] { display: none !important; }
         `,
       });
 

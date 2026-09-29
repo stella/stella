@@ -41,6 +41,7 @@ import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { ensureTestUsers } from "./seed-test-user";
 import {
@@ -2594,10 +2595,7 @@ export async function seedTemplates(
 // ─── Standalone CLI entry point ─────────────────────────
 
 if (import.meta.main) {
-  if (process.env.NODE_ENV === "production") {
-    console.error("Refusing to run in production.");
-    process.exit(1);
-  }
+  requireLocalDevOpen("Seeding");
 
   console.log("Seeding templates & clauses...\n");
   await ensureTestUsers(DEFAULT_ORG_ID);

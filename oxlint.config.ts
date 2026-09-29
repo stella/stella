@@ -27,6 +27,10 @@ import {
   RESULT_CONVENTION_ENABLED_GLOBS,
   RESULT_CONVENTION_EXCLUDE_GLOBS,
 } from "./scripts/result-boundary-globs.ts";
+import {
+  SQL_PERF_LINT_EXCLUDES,
+  SQL_PERF_LINT_FILES,
+} from "./scripts/sql-perf-scope.ts";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -141,6 +145,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
     "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts",
+    "forbid-process-env-outside-env-ts/runtime-mode-keys",
   ]),
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
@@ -154,6 +159,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
+  ]),
+  fixtureRuleOverride("request-lifetime.fixture.ts", [
+    "request-lifetime/confine-request-reads",
   ]),
   fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
     "no-ambient-nondeterminism/no-ambient-nondeterminism",
@@ -235,6 +243,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-legal-cliche-glyph.fixture.tsx", [
     "no-legal-cliche-glyph/no-legal-cliche-glyph",
   ]),
+  fixtureRuleOverride("no-ad-hoc-text-mark.fixture.tsx", [
+    "no-ad-hoc-text-mark/no-ad-hoc-text-mark",
+  ]),
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
@@ -255,6 +266,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-direct-property-table-write.fixture.ts", [
     "no-direct-property-table-write/no-direct-property-table-write",
+  ]),
+  fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
+    "no-direct-pdf-save/no-direct-pdf-save",
   ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
@@ -313,6 +327,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-unbounded-response-body.fixture.ts", [
     "no-unbounded-response-body/no-unbounded-response-body",
+  ]),
+  fixtureRuleOverride("no-hand-rolled-execute-rows.fixture.ts", [
+    "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows",
   ]),
   fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
     "require-file-transport-disposition/require-file-transport-disposition",
@@ -495,6 +512,40 @@ const apiPortableSafeIdBrandingImport = {
   message:
     "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
 };
+
+// The model factory builds every provider text adapter and holds its stream
+// to the provider stream contract (one terminal event, last; a cut-off stream
+// is a run error). An adapter built anywhere else skips that contract, so the
+// runtime entry points of the adapter packages, and of the adapter subclass
+// the factory builds, belong to the factory; type-only imports stay allowed.
+export const API_PROVIDER_ADAPTER_MODULES = [
+  "@/api/lib/stella-openrouter-text-adapter",
+  "@tanstack/ai-anthropic",
+  "@tanstack/ai-anthropic/byok",
+  "@tanstack/ai-anthropic/vertex",
+  "@tanstack/ai-bedrock",
+  "@tanstack/ai-bedrock/byok",
+  "@tanstack/ai-gemini",
+  "@tanstack/ai-gemini/byok",
+  "@tanstack/ai-gemini/experimental",
+  "@tanstack/ai-mistral",
+  "@tanstack/ai-mistral/adapters/text",
+  "@tanstack/ai-mistral/byok",
+  "@tanstack/ai-mistral/vertex",
+  "@tanstack/ai-openai",
+  "@tanstack/ai-openai/byok",
+  "@tanstack/ai-openai/compatible",
+  "@tanstack/ai-openrouter",
+  "@tanstack/ai-openrouter/byok",
+  "@tanstack/openai-base",
+] as const;
+
+const apiProviderAdapterImports = API_PROVIDER_ADAPTER_MODULES.map((name) => ({
+  name,
+  allowTypeImports: true,
+  message:
+    "Build provider adapters through createTanStackTextAdapterFactory in '@/api/lib/tanstack-ai-models', which holds their streams to the provider stream contract.",
+}));
 
 // pragmatic-drag-and-drop's element adapter keeps exactly one live drop
 // target, and one draggable, per element behind a private WeakMap registry:
@@ -698,6 +749,10 @@ export default defineConfig({
   },
   rules: {
     ...libraryRules,
+    // The upstream rule treats String#slice like Array#slice and can turn
+    // substring checks into single-character Set membership under --fix.
+    // It has no fix-only option.
+    "unicorn/prefer-set-has": "off",
     // Design-system rules (@shadcn/lint): policy, overlap resolution, and
     // backlog handling live in scripts/design-lint-policy.ts.
     ...SHADCN_LINT_RULES,
@@ -876,6 +931,7 @@ export default defineConfig({
     "no-nanoid/no-nanoid": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
+    "no-direct-lucide-import/no-direct-lucide-import": "error",
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
     "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
     "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
@@ -1101,8 +1157,10 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
+    "./.oxlint-plugins/no-direct-lucide-import.ts",
     "./.oxlint-plugins/no-legal-cliche-glyph.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
@@ -1157,6 +1215,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
+    "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
@@ -1169,6 +1228,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
+    "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",
     "./.oxlint-plugins/no-direct-buffer-cleanup-intent-delete.ts",
     "./.oxlint-plugins/require-buffer-cleanup-intent-status.ts",
@@ -1183,6 +1243,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
+    "./.oxlint-plugins/no-hand-rolled-execute-rows.ts",
     "./.oxlint-plugins/require-derived-check-enum.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
@@ -1238,6 +1299,7 @@ export default defineConfig({
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
@@ -2208,6 +2270,22 @@ export default defineConfig({
       },
     },
     {
+      // A chat turn's run outlives the request that started it (see
+      // `chat-turn-run.ts`), so nothing on the send-to-settlement path may
+      // read the request except the send's own disconnect probe.
+      files: [
+        "apps/api/src/handlers/chat/send-message*.ts",
+        "apps/api/src/handlers/chat/stream-chat.ts",
+        "apps/api/src/handlers/chat/chat-turn-*.ts",
+        "apps/api/src/handlers/chat/chat-message-persistence.ts",
+        "apps/api/src/handlers/chat/tools/**/*.ts",
+      ],
+      excludeFiles: ["apps/api/src/handlers/chat/**/*.test.ts"],
+      rules: {
+        "request-lifetime/confine-request-reads": "error",
+      },
+    },
+    {
       // The other half of the type-cost guard: awaiting a ternary whose
       // branches are two chain states of one query builder instantiates both
       // builder types and their union before `Awaited<>` resolves. Scoped to
@@ -2415,6 +2493,27 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-file-input/no-raw-file-input": "error",
+      },
+    },
+    {
+      // Words in running text are marked through `@stll/ui/text-mark`, so a
+      // search hit, a reader's highlight and a verdict underline share one
+      // shape and differ only in hue and line.
+      files: [...productUiFiles],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "error",
+      },
+    },
+    {
+      // The owner and its test spell the mark out; the review badge's
+      // `highlight` tone is a status colour, not a text mark.
+      files: [
+        "packages/ui/src/review/text-mark.tsx",
+        "packages/ui/src/review/text-mark.test.ts",
+        "packages/ui/src/review/review-status-badge.tsx",
+      ],
+      rules: {
+        "no-ad-hoc-text-mark/no-ad-hoc-text-mark": "off",
       },
     },
     {
@@ -3234,6 +3333,16 @@ export default defineConfig({
       },
     },
     {
+      // The baseline counter reads the same scope.
+      files: SQL_PERF_LINT_FILES,
+      excludeFiles: SQL_PERF_LINT_EXCLUDES,
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/sql-perf.fixture.ts"],
+      rules: { "sql-perf/sql-perf": "error" },
+    },
+    {
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts": [
@@ -3260,6 +3369,12 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/publisher-request-gate.ts",
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/server.ts",
+              // The one reader of NODE_ENV and the local development opt-in.
+              "packages/runtime-mode/src/index.ts",
+              // The web server entrypoint reads its listen address from Bun's
+              // environment before any app module loads; the web app's env
+              // contract is the Vite build, not this process.
+              "apps/web/src/runtime.ts",
               "apps/api/src/lib/analytics/posthog-node.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
@@ -3280,7 +3395,13 @@ export default defineConfig({
               // rather than through env.ts so it stays side-effect-free at
               // import time, matching the two call sites it replaces.
               "apps/api/src/lib/version.ts",
+              // Reads the stack URLs and credentials agent:drive hands it;
+              // e2e infra has no app env module to route through.
+              "apps/web/e2e/agent/drive.ts",
               "apps/web/e2e/helpers/api.ts",
+              // Passes its own environment on to the correspondence seed,
+              // adding the local development opt-in seeds require.
+              "apps/web/e2e/helpers/correspondence.ts",
               // Reads E2E_API_URL (same contract as helpers/api.ts) and the
               // E2E_NETWORK_BASELINE write/rewrite mode switch; e2e infra has
               // no app env module to route through.
@@ -3299,6 +3420,28 @@ export default defineConfig({
               // to tune fast-check at assert time. Never imported by runtime
               // code, so there is no app env module to route through.
               "packages/property-testing/src/index.ts",
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // NODE_ENV and the local development opt-in are read by the runtime
+      // mode owner alone; everything else consumes the resolved mode.
+      files: [
+        "apps/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
+      ],
+      rules: {
+        "forbid-process-env-outside-env-ts/runtime-mode-keys": [
+          "error",
+          {
+            allowedFiles: [
+              // The API test and tooling harness opts its processes in.
+              "apps/api/src/tests/setup-env.ts",
+              // The environment doctor picks which mode's env files to layer.
+              "scripts/env-tool.ts",
             ],
           },
         ],
@@ -3468,6 +3611,7 @@ export default defineConfig({
           { drizzleObjectName: ["db", "tx"] },
         ],
         "security-guards/no-raw-filename-write": "error",
+        "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
     },
     {
@@ -3613,6 +3757,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3669,6 +3814,7 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
             ],
           },
         ],
@@ -3684,6 +3830,28 @@ export default defineConfig({
           {
             paths: [
               noZodImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The model factory and the adapter subclass it builds are the provider
+      // adapters' owners. Only that restriction is lifted.
+      files: [
+        "apps/api/src/lib/tanstack-ai-models.ts",
+        "apps/api/src/lib/stella-openrouter-text-adapter.ts",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
             ],
@@ -3753,6 +3921,22 @@ export default defineConfig({
       ],
       rules: {
         "no-unbounded-response-body/no-unbounded-response-body": "error",
+      },
+    },
+    {
+      // `execute` answers in the driver's shape (rows, or PGlite's `{ rows }`),
+      // so rows are read through the one reader that handles both and panics
+      // on a third. Tests read PGlite results directly, knowing the driver.
+      files: ["apps/api/src/**/*.ts", "apps/api/scripts/**/*.ts"],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/scripts/**/*.test.ts",
+        "apps/api/src/**/test-utils.ts",
+        "apps/api/src/tests/**",
+        "apps/api/src/lib/db/executed-rows.ts",
+      ],
+      rules: {
+        "no-hand-rolled-execute-rows/no-hand-rolled-execute-rows": "error",
       },
     },
     {
@@ -3967,6 +4151,7 @@ export default defineConfig({
                   "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/db",
                 importNames: ["createScopedDb"],
@@ -4076,6 +4261,7 @@ export default defineConfig({
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
+              ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],
@@ -4152,6 +4338,7 @@ export default defineConfig({
         "apps/api/src/handlers/auth/ui-routes.ts",
         "apps/api/src/handlers/dev/routes.ts",
         "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+        "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts",
         "apps/api/src/handlers/feedback/routes.ts",
         "apps/api/src/handlers/folio-collab/routes.ts",
         "apps/api/src/handlers/health/routes.ts",

@@ -1,9 +1,4 @@
-import {
-  EventType,
-  maxIterations,
-  RUN_CANCEL_REASON,
-  toServerSentEventsResponse,
-} from "@tanstack/ai";
+import { EventType, maxIterations, RUN_CANCEL_REASON } from "@tanstack/ai";
 import type {
   AnyServerTool,
   ChatMiddleware,
@@ -28,7 +23,6 @@ import {
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
-import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -56,9 +50,12 @@ import {
   type ChatRunMode,
 } from "@/api/handlers/chat/chat-schema";
 import { USER_STOP_OUTCOME } from "@/api/handlers/chat/chat-turn-persistence";
-import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
-import { registerChatTurnProducer } from "@/api/handlers/chat/chat-turn-producers";
-import { KEEPS_PARTIAL_TOOL_INPUT } from "@/api/handlers/chat/chat-turn-settlement";
+import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
+import {
+  CUT_SHORT_OUTCOME,
+  findHandedOutInteraction,
+} from "@/api/handlers/chat/chat-turn-settlement";
+import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -68,6 +65,8 @@ import {
   shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
+import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
@@ -97,6 +96,7 @@ import {
   prepareUnknownForThirdParty,
   reserveThirdPartyBoundarySourcePlaceholders,
 } from "@/api/handlers/chat/third-party-boundary";
+import { sortToolJsonKeys } from "@/api/handlers/chat/tool-json-key-order";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
   ChatAnonRestoration,
@@ -139,6 +139,7 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
+import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -153,6 +154,10 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
+  ToolCallIdLedger,
+  toolCallIdLedgerMetadata,
+} from "@/api/lib/chat/unique-tool-call-ids";
+import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
   HandlerError,
@@ -161,9 +166,7 @@ import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
-import { withSseHeartbeat } from "@/api/lib/sse";
 import {
-  abortControllerFromSignal,
   chatTurnOutputTokens,
   mergeGenerationOptions,
   resolveTanStackTextModel,
@@ -172,7 +175,7 @@ import {
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
-import { tokenUsageFromRunFinishedChunk } from "@/api/lib/tanstack-ai-usage";
+import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -211,7 +214,6 @@ type StreamChatFinishEvent = {
 };
 
 type StreamChatProps = {
-  abortSignal: AbortSignal;
   /**
    * Explicit chat model override for this turn: the dev-only
    * `body.devModelId`, or (in prod) a validated per-thread selection
@@ -221,8 +223,6 @@ type StreamChatProps = {
   devModelId?: string | undefined;
   /** Explicit effort for a validated manual model selection. */
   reasoningEffort?: ReasoningEffort | undefined;
-  /** The claimed execution this run produces for; a stop aborts it. */
-  execution: ChatTurnExecution;
   latestMessageId: string;
   runId: string;
   parentRunId?: string | undefined;
@@ -251,6 +251,8 @@ type StreamChatProps = {
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  /** The turn's run: it owns the abort, the stop and the settlement. */
+  run: ChatTurnRun;
   safeDb: SafeDb;
   systemSafe: ChatSafePrompt;
   systemUntrusted: ChatUntrustedPromptSuffix;
@@ -262,6 +264,11 @@ type StreamChatProps = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  /**
+   * Every tool call id the thread already holds, the turns outside `messages`
+   * included, so no call of this run reuses one.
+   */
+  threadToolCallIds: readonly string[];
   tools: ChatToolMap;
   externalMcpToolSource?: StellaMcpToolSource | undefined;
   userId: SafeId<"user">;
@@ -342,9 +349,7 @@ export const prepareResumeForThirdParty = async ({
 };
 
 export const streamChat = async ({
-  abortSignal,
   devModelId,
-  execution,
   latestMessageId,
   runId,
   parentRunId,
@@ -364,6 +369,7 @@ export const streamChat = async ({
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
   resolveAssistantValueRefs,
+  run,
   safeDb,
   storedHistory,
   systemSafe,
@@ -371,6 +377,7 @@ export const streamChat = async ({
   tenantWorkspaceIds,
   thirdPartyBoundary,
   threadId,
+  threadToolCallIds,
   tools,
   externalMcpToolSource,
   userId,
@@ -510,17 +517,12 @@ export const streamChat = async ({
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
-  const abortController = abortControllerFromSignal(abortSignal);
-  const producer = registerChatTurnProducer({
-    abortController,
-    execution,
-    safeDb,
-  });
+  const { abortController, deadlineSignal } = run.control;
   const restorationPairs: ChatAnonRestoration[] = [];
 
   const stream = runChatAttempts({
     abortController,
-    abortSignal,
+    abortSignal: deadlineSignal,
     devModelId,
     externalMcpToolSource,
     fallbackModel,
@@ -537,13 +539,19 @@ export const streamChat = async ({
     resume: preparedResume,
     safeDb,
     surfaces: {
-      messages: preparedMessageList,
+      // The provider's copy only: persistence keeps the stored parts.
+      messages: guardProviderHistory({
+        messages: preparedMessageList,
+        workspaceIds: tenantWorkspaceIds,
+      }),
       system: guardedSystem,
       tenantWorkspaceIds,
       tools: modelTools,
     },
     thirdPartyBoundary,
     threadId,
+    // One ledger for the run: every request of it, a fallback's included.
+    toolCallIds: new ToolCallIdLedger(threadToolCallIds),
     userId,
     workspaceId,
   });
@@ -566,15 +574,13 @@ export const streamChat = async ({
     // aborts only this derived controller — that is the abort a client
     // disconnect delivers — while the deadline reaches both.
     abortSignal: abortController.signal,
-    deadlineSignal: abortSignal,
+    deadlineSignal,
     flushPendingSource: persistenceVisibleStream.flushPending,
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
-      try {
+      await run.settle(async () => {
         await onFinish(event);
-      } finally {
-        producer.settled();
-      }
+      });
     },
     owningAssistantMessageId,
     restorationPairs,
@@ -590,12 +596,7 @@ export const streamChat = async ({
     storedHistory,
   });
 
-  return withSseHeartbeat(
-    toServerSentEventsResponse(output, {
-      abortController,
-      headers: { [CHAT_TURN_ID_HEADER]: execution.id },
-    }),
-  );
+  return run.produce(output);
 };
 
 const thirdPartyBoundaryRefusalResponse = (
@@ -902,7 +903,9 @@ type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
  * the model without failing typecheck.
  */
 export type GuardedChatSurfaces = {
-  messages: GuardedModelMessages<ChatMessage[]>;
+  /** Minted by `guardProviderHistory`: guarded, with every call answered
+   *  right after its step. */
+  messages: GuardedProviderHistory;
   system: GuardedSystemPrompt;
   /**
    * The guard's own input, carried alongside its output because the surfaces
@@ -936,6 +939,7 @@ type RunChatAttemptsProps = {
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  toolCallIds: ToolCallIdLedger;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -961,6 +965,7 @@ const runChatAttempts = async function* ({
   surfaces,
   thirdPartyBoundary,
   threadId,
+  toolCallIds,
   userId,
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<PublicStreamChunk> {
@@ -991,6 +996,7 @@ const runChatAttempts = async function* ({
     surfaces,
     thirdPartyBoundary,
     threadId,
+    toolCallIds,
     userId,
     workspaceId,
   });
@@ -1039,6 +1045,7 @@ const runChatAttempts = async function* ({
     surfaces,
     thirdPartyBoundary,
     threadId,
+    toolCallIds,
     userId,
     workspaceId,
   });
@@ -1080,6 +1087,7 @@ type RunChatAttemptProps = {
   surfaces: GuardedChatSurfaces;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
+  toolCallIds: ToolCallIdLedger;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1107,6 +1115,7 @@ const runChatAttempt = async function* ({
   surfaces,
   thirdPartyBoundary,
   threadId,
+  toolCallIds,
   userId,
   workspaceId,
 }: RunChatAttemptProps): AsyncIterable<PublicStreamChunk> {
@@ -1174,8 +1183,9 @@ const runChatAttempt = async function* ({
     const { adapter, middleware: sandboxMiddleware } =
       resolveStellaSandboxRun(sandboxRun);
     yield* streamChatChunks({
-      adapter,
+      adapter: withProviderStreamContract(adapter),
       messages: preparedMessages,
+      metadata: toolCallIdLedgerMetadata(toolCallIds),
       agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
       abortController,
       threadId,
@@ -1207,6 +1217,7 @@ const runChatAttempt = async function* ({
   const stream = streamChatChunks({
     adapter: model.adapter,
     messages: preparedMessages,
+    metadata: toolCallIdLedgerMetadata(toolCallIds),
     tools: projectChatToolSchemasForProvider({
       modelTools,
       provider: model.provider,
@@ -1415,6 +1426,12 @@ const createChatRuntimeMiddleware = ({
       if (guardedCompaction !== undefined) {
         patch.messages = guardedCompaction;
       }
+      const sortedToolJson = sortToolJsonKeys(
+        patch.messages ?? config.messages,
+      );
+      if (sortedToolJson !== undefined) {
+        patch.messages = sortedToolJson;
+      }
 
       return Object.keys(patch).length === 0 ? undefined : patch;
     },
@@ -1438,11 +1455,6 @@ type ProcessServerChatStreamProps = {
   source: AsyncIterable<PublicStreamChunk>;
 };
 
-type ChatCutShortOutcome = Extract<
-  ChatTurnOutcome,
-  { type: "cancelled" | "interrupted" }
->;
-
 /**
  * Which abort cut this run. A stop aborts the run's controller with
  * upstream's explicit-cancel reason. The deadline fires on its own timer and
@@ -1456,7 +1468,7 @@ const chatCutShortOutcome = ({
 }: {
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
-}): ChatCutShortOutcome => {
+}): CutShortOutcome => {
   if (abortSignal.reason === RUN_CANCEL_REASON) {
     return USER_STOP_OUTCOME;
   }
@@ -1625,6 +1637,75 @@ const isRunFinishedOutcome = (
   }
 };
 
+/** The calls bound to the interrupts a run handed out with its final
+ *  finish. */
+const interruptToolCallIdsOf = (
+  chunks: readonly PublicStreamChunk[],
+): ReadonlySet<string> =>
+  new Set(
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.RUN_FINISHED &&
+      chunk.outcome?.type === "interrupt"
+        ? chunk.outcome.interrupts.flatMap(({ toolCallId }) =>
+            toolCallId === undefined ? [] : [toolCallId],
+          )
+        : [],
+    ),
+  );
+
+/**
+ * How a run whose source drained ended. A cut run that handed out no
+ * interaction is cut short; a client-resolved call whose input never finished
+ * (no TOOL_CALL_END) cannot be answered by any client, so the turn fails
+ * instead of waiting.
+ */
+const drainedRunOutcome = ({
+  abortSignal,
+  deadlineSignal,
+  finalRunFinishedChunks,
+  responseMessage,
+  runCancelled,
+  toolCallsWithCompleteInput,
+}: {
+  abortSignal: AbortSignal;
+  deadlineSignal: AbortSignal;
+  finalRunFinishedChunks: readonly PublicStreamChunk[];
+  responseMessage: ChatMessage | null;
+  runCancelled: boolean;
+  toolCallsWithCompleteInput: ReadonlySet<string>;
+}): ChatTurnOutcome => {
+  const awaitingUserInteraction = findHandedOutInteraction({
+    interruptToolCallIds: interruptToolCallIdsOf(finalRunFinishedChunks),
+    message: responseMessage,
+  });
+  if (
+    (abortSignal.aborted || runCancelled) &&
+    awaitingUserInteraction === null
+  ) {
+    // A cancelled run drains like a finished one. TanStack's agent loop
+    // checks its cancellation before it reads each adapter chunk, so the
+    // terminal `RUN_ERROR` the adapter yields for the aborted provider
+    // request is dropped rather than forwarded, and this generator sees a
+    // source that simply ended. Grading that silence as a completion
+    // persists a turn with no answer and no reason; the signal is what says
+    // the turn was cut, and which signal says why. A finish whose outcome is
+    // `cancelled` says the same.
+    return chatCutShortOutcome({ abortSignal, deadlineSignal });
+  }
+  const openInteraction = getAwaitingUserInteraction(responseMessage);
+  if (
+    openInteraction !== null &&
+    awaitsCompleteInput(openInteraction) &&
+    !toolCallsWithCompleteInput.has(openInteraction.toolCallId)
+  ) {
+    return { type: "failed", error: "unknown" };
+  }
+  if (awaitingUserInteraction !== null) {
+    return { type: "awaiting-user", interaction: awaitingUserInteraction };
+  }
+  return { type: "completed" };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
@@ -1655,10 +1736,7 @@ export const processServerChatStream = async function* ({
     if (terminal.state === "settled") {
       return;
     }
-    if (
-      KEEPS_PARTIAL_TOOL_INPUT[outcome.type] &&
-      flushPendingSource !== undefined
-    ) {
+    if (CUT_SHORT_OUTCOME[outcome.type] && flushPendingSource !== undefined) {
       for (const chunk of flushPendingSource()) {
         trackIncompleteToolCallInput(chunk, rawArgumentsByIncompleteToolCallId);
         processor.processChunk(chunk);
@@ -1681,7 +1759,7 @@ export const processServerChatStream = async function* ({
         "Persistence processor dropped an assistant turn that carried a complete tool call",
       );
     }
-    const responseMessage = KEEPS_PARTIAL_TOOL_INPUT[outcome.type]
+    const responseMessage = CUT_SHORT_OUTCOME[outcome.type]
       ? restoreInterruptedToolCallInputs(
           getResponseMessage(),
           rawArgumentsByIncompleteToolCallId,
@@ -1785,7 +1863,7 @@ export const processServerChatStream = async function* ({
           panic("Unhandled TanStack completed stream event");
         }
         if (chunk.usage) {
-          usage = tokenUsageFromRunFinishedChunk(chunk);
+          usage = tokenUsageFromTerminalChunk(chunk);
         }
         // TanStack's agent loop can emit continuation events after a model
         // run finishes, notably `approval-requested` for a gated server tool.
@@ -1813,6 +1891,7 @@ export const processServerChatStream = async function* ({
         if (chunk.type !== EventType.RUN_ERROR) {
           panic("Unhandled TanStack failed stream event");
         }
+        usage = tokenUsageFromTerminalChunk(chunk) ?? usage;
         await terminalize({
           flushProcessor: true,
           outcome: { type: "failed", error: classifyRunErrorChunk(chunk) },
@@ -1836,39 +1915,18 @@ export const processServerChatStream = async function* ({
     // is what ends the message; it is the same call the SDK makes when it
     // drives the stream itself, and repeating it later is a no-op.
     processor.finalizeStream();
-    const awaitingUserInteraction =
-      getAwaitingUserInteraction(getResponseMessage());
-    // A client-resolved call whose input never finished (no TOOL_CALL_END)
-    // cannot be answered by any client, so the turn fails instead of waiting.
-    const incompleteClientInteraction =
-      awaitingUserInteraction !== null &&
-      awaitsCompleteInput(awaitingUserInteraction) &&
-      !toolCallsWithCompleteInput.has(awaitingUserInteraction.toolCallId);
-    let outcome: ChatTurnOutcome;
-    if (incompleteClientInteraction) {
-      outcome = { type: "failed", error: "unknown" };
-    } else if (awaitingUserInteraction !== null) {
-      outcome = {
-        type: "awaiting-user",
-        interaction: awaitingUserInteraction,
-      };
-    } else if (abortSignal.aborted || runCancelled) {
-      // A cancelled run drains like a finished one. TanStack's agent loop
-      // checks its cancellation before it reads each adapter chunk, so the
-      // terminal `RUN_ERROR` the adapter yields for the aborted provider
-      // request is dropped rather than forwarded, and this generator sees a
-      // source that simply ended. Grading that silence as a completion
-      // persists a turn with no answer and no reason; the signal is what says
-      // the turn was cut, and which signal says why. A finish whose outcome is
-      // `cancelled` says the same.
-      outcome = chatCutShortOutcome({ abortSignal, deadlineSignal });
-    } else {
-      outcome = { type: "completed" };
-    }
+    const outcome = drainedRunOutcome({
+      abortSignal,
+      deadlineSignal,
+      finalRunFinishedChunks,
+      responseMessage: getResponseMessage(),
+      runCancelled,
+      toolCallsWithCompleteInput,
+    });
     await terminalize({
       // A cut-short outcome flushes the pending source into the processor,
       // which has to be finalized again for that content to reach the message.
-      flushProcessor: KEEPS_PARTIAL_TOOL_INPUT[outcome.type],
+      flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
     for (const chunk of finalRunFinishedChunks) {
@@ -1988,20 +2046,22 @@ const createTerminalResponseMessage = ({
     });
   }
 
-  const persistableMessage =
-    responseMessage === null
-      ? toPersistableChatMessage({
-          id: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-          parts: [],
-          role: "assistant",
-        })
-      : attachUsageMetadata({
-          message: normalizeFinalAssistantMessageId({
+  // A turn that failed before its first part still spent what the provider
+  // reported, so the usage rides on the message it writes either way.
+  const persistableMessage = attachUsageMetadata({
+    message:
+      responseMessage === null
+        ? toPersistableChatMessage({
+            id: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+            parts: [],
+            role: "assistant",
+          })
+        : normalizeFinalAssistantMessageId({
             mapMessageId,
             message: responseMessage,
           }),
-          usage,
-        });
+    usage,
+  });
   return attachTerminalTurnOutcome({
     message: persistableMessage,
     turnOutcome: outcome,

@@ -1252,11 +1252,14 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
 
 type RunToolCallRoundTripProbeOptions = {
   context: CanaryContext;
+  /** The provider model resolution; tests pass a scripted model. */
+  resolveTextModel?: typeof resolveTanStackTextModel;
   signal: AbortSignal;
 };
 
-const runToolCallRoundTripProbe = async ({
+export const runToolCallRoundTripProbe = async ({
   context,
+  resolveTextModel,
   signal,
 }: RunToolCallRoundTripProbeOptions): Promise<void> => {
   const observedInputs: unknown[] = [];
@@ -1274,7 +1277,7 @@ const runToolCallRoundTripProbe = async ({
   await runToolProbe({
     context,
     prompt: toolRoundTripPromptForProvider(context.provider),
-    requiredToolName: TOOL_ROUND_TRIP_NAME,
+    resolveTextModel,
     role: TOOL_CALL_ROLE,
     signal,
     tool,
@@ -1360,7 +1363,7 @@ const runWeeklyToolShapeProbe = async ({
 type RunToolProbeOptions = {
   context: CanaryContext;
   prompt: string;
-  requiredToolName?: string;
+  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
   role: ModelRole;
   signal: AbortSignal;
   tool: AnyClientTool | AnyServerTool;
@@ -1368,36 +1371,17 @@ type RunToolProbeOptions = {
 
 type CanaryToolProbeModelOptions = {
   model: ResolvedTanStackTextModel;
-  requiredToolName: string | undefined;
 };
 
-export const canaryToolProbeModelOptions = ({
-  model,
-  requiredToolName,
-}: CanaryToolProbeModelOptions) => {
-  const modelOptions = mergeGenerationOptions({
+// Tool choice stays with the model, as on every product request.
+const canaryToolProbeModelOptions = ({ model }: CanaryToolProbeModelOptions) =>
+  mergeGenerationOptions({
     caching: NO_CACHING,
     model,
     maxOutputTokens: TOOL_CALL_PROBE_MAX_OUTPUT_TOKENS,
     serviceTier: "standard",
     temperature: 0,
   });
-  if (model.provider !== "anthropic" || requiredToolName === undefined) {
-    return modelOptions;
-  }
-
-  return {
-    ...modelOptions,
-    tool_choice: { type: "tool", name: requiredToolName },
-  };
-};
-
-export const canaryToolProbeIterationLimit = (
-  requiredToolName: string | undefined,
-): number =>
-  // A forced choice applies to every agent iteration. Stop after execution or
-  // Anthropic must call the same tool again instead of returning final text.
-  requiredToolName === undefined ? 2 : 1;
 
 // Every tool-execution probe gets the reasoning budget here, not at the call
 // site, so a caller cannot hand a reasoning-capable model a short-reply budget
@@ -1405,12 +1389,12 @@ export const canaryToolProbeIterationLimit = (
 const runToolProbe = async ({
   context: { config, provider },
   prompt,
-  requiredToolName,
+  resolveTextModel = resolveTanStackTextModel,
   role,
   signal,
   tool,
 }: RunToolProbeOptions): Promise<string> => {
-  const model = resolveTanStackTextModel({
+  const model = resolveTextModel({
     organizationId: null,
     orgAIConfig: config,
     role,
@@ -1427,11 +1411,9 @@ const runToolProbe = async ({
   const stream = streamChatChunks({
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
-    agentLoopStrategy: maxIterations(
-      canaryToolProbeIterationLimit(requiredToolName),
-    ),
+    agentLoopStrategy: maxIterations(2),
     messages: [{ role: "user", content: prompt }],
-    modelOptions: canaryToolProbeModelOptions({ model, requiredToolName }),
+    modelOptions: canaryToolProbeModelOptions({ model }),
     tools: [projectedTool],
   });
   let output = "";
@@ -1515,7 +1497,7 @@ type CreateCanaryConfigOptions = {
   rotatedModelId?: string;
 };
 
-const createCanaryConfig = ({
+export const createCanaryConfig = ({
   apiKey,
   provider,
   rotatedModelId,

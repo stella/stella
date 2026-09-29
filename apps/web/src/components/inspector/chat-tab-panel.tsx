@@ -24,12 +24,12 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Maximize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/button";
+import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -686,6 +686,15 @@ export const ChatTabPanel = ({
             pendingCount={0}
             queueWhileGenerating
             reservedCommands={{ hasPersistedThread: hasThreadMessages }}
+            skillChat={{
+              contextMatterIds: tab.contextMatterIds,
+              document: null,
+              threadRef,
+              webSearch: {
+                available: data.webSearchAvailable,
+                enabled: data.webSearchEnabled,
+              },
+            }}
             skillsOrganizationId={activeOrganizationId}
             status={isGenerating ? "generating" : "idle"}
             dock={

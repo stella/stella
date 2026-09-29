@@ -4,11 +4,10 @@
  */
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { FileCheckIcon, PlayIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
+import { FileCheckIcon, PlayIcon } from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
@@ -16,11 +15,8 @@ import {
   documentFileKey,
   latestVerificationsOptions,
 } from "@/features/avt/queries";
-import type {
-  VerificationRunStatus,
-  VerificationRunSummary,
-} from "@/features/avt/types";
-import { RUN_STATUS_LABEL_KEYS } from "@/features/avt/types";
+import type { VerificationRunSummary } from "@/features/avt/types";
+import { RUN_STATUS_LABEL_KEYS, RUN_STATUS_TONES } from "@/features/avt/types";
 import type { VerificationTarget } from "@/features/avt/use-start-verification";
 import { useStartVerification } from "@/features/avt/use-start-verification";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -218,13 +214,6 @@ const DocumentRow = ({
     </li>
   );
 };
-
-const RUN_STATUS_TONES = {
-  queued: "neutral",
-  running: "neutral",
-  completed: "success",
-  failed: "destructive",
-} as const satisfies Record<VerificationRunStatus, ReviewStatusTone>;
 
 const LatestRunSummary = ({
   latest,

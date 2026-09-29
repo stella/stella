@@ -6,6 +6,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatDurableRefText } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
@@ -74,6 +75,9 @@ type CreateRememberToolProps = {
   // scoped memories keep this provenance too, preventing later cross-matter
   // replay after access to a source matter is revoked.
   resolveSourceDataWorkspaceIds: () => readonly SafeId<"workspace">[];
+  // A memory outlives this thread, whose chat refs name nothing elsewhere:
+  // the registry turns them into canonical links before storage.
+  toDurableRefText: (text: string) => ChatDurableRefText;
   userId: SafeId<"user">;
   // The matter this chat is bound to, when any. Required for
   // workspace-scoped memory and for the matter-specific kinds.
@@ -86,6 +90,7 @@ export const createRememberTool = ({
   recordAuditEvent,
   safeDb,
   resolveSourceDataWorkspaceIds,
+  toDurableRefText,
   userId,
   workspaceId,
 }: CreateRememberToolProps) =>
@@ -136,7 +141,10 @@ export const createRememberTool = ({
       // The stored content is replayed into future system prompts across
       // this scope, so refuse anything carrying model-control sequences
       // before it can become a persistent injection vector.
-      const sanitizedContentResult = sanitizeMemoryContent(content).mapError(
+      const sanitizedContentResult = sanitizeMemoryContent({
+        origin: "model",
+        text: toDurableRefText(content),
+      }).mapError(
         () =>
           new ChatToolError({
             kind: "invalid-input",

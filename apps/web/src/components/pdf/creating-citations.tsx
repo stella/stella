@@ -1,5 +1,6 @@
-import { Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Loader2Icon } from "@stll/ui/icons";
 
 import { useIsCreatingBBoxes } from "@/components/workspaces/hooks/use-create-b-boxes";
 

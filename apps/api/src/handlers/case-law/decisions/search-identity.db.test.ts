@@ -2,10 +2,23 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
+import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
+
+import {
+  caseLawDecisionIdentifiers,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import { findDecisionIdsByIdentity } from "@/api/handlers/case-law/decisions/search";
-import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  citationKeyOf,
+  normalizeDecisionIdentifierValueIn,
+} from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -19,6 +32,24 @@ import {
 const sourceId = createSafeId<"caseLawSource">();
 const plenaryId = createSafeId<"caseLawDecision">();
 const supremeId = createSafeId<"caseLawDecision">();
+const reportedId = createSafeId<"caseLawDecision">();
+
+/** A row as ingestion writes it for a decision of `jurisdiction`. */
+const identifierRow = (
+  jurisdiction: string,
+  decisionId: SafeId<"caseLawDecision">,
+  type: DecisionIdentifierType,
+  value: string,
+) => ({
+  decisionId,
+  type,
+  value,
+  normalizedValue: normalizeDecisionIdentifierValueIn(
+    jurisdiction,
+    type,
+    value,
+  ),
+});
 
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -72,6 +103,44 @@ beforeAll(
         language: "cs",
         languageGroupKey: "identity-supreme",
       },
+      {
+        id: reportedId,
+        sourceId,
+        caseNumber: "1",
+        citationKey: citationKeyOf("1"),
+        court: "Supreme Court of the United States",
+        courtId: "scotus",
+        country: "USA",
+        language: "cs",
+        languageGroupKey: "identity-reported",
+      },
+    ]);
+    await db.insert(caseLawDecisionIdentifiers).values([
+      identifierRow(
+        "CZE",
+        supremeId,
+        DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+        "23 Cdo 1572/2012",
+      ),
+      identifierRow(
+        "CZE",
+        supremeId,
+        DECISION_IDENTIFIER_TYPES.ECLI,
+        "ECLI:CZ:NS:2012:23.CDO.1572.2012.1",
+      ),
+      identifierRow(
+        "USA",
+        reportedId,
+        DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+        "347 U. S. Rep. 483",
+      ),
+      // The other spelling the plenary decision declares.
+      identifierRow(
+        "CZE",
+        plenaryId,
+        DECISION_IDENTIFIER_TYPES.ECLI,
+        "ECLI:CZ:US:2011:Pl.US.24.10",
+      ),
     ]);
   },
   { timeout: DB_TEST_TIMEOUT_MS },
@@ -120,6 +189,19 @@ test("an ECLI resolves by equality regardless of the reader's case", async () =>
   expect(ids).toEqual([supremeId]);
 });
 
+test("an ECLI resolves by a spelling the decision declares as an identifier", async () => {
+  const ids = await findDecisionIdsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    identity: {
+      type: "identifier",
+      kind: "ecli",
+      value: "ECLI:CZ:US:2011:Pl.US.24.10",
+    },
+  });
+  expect(ids).toEqual([plenaryId]);
+});
+
 test("an identifier nobody holds, or held in another jurisdiction, resolves to nothing", async () => {
   const unknown = await findDecisionIdsByIdentity({
     caseLawDb,
@@ -144,4 +226,65 @@ test("an identifier nobody holds, or held in another jurisdiction, resolves to n
     },
   });
   expect(elsewhere).toEqual([]);
+});
+
+test("a docket or ECLI held in both the row and its identifiers is one hit", async () => {
+  const byDocket = await findDecisionIdsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    identity: {
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "CZE",
+      value: "23 Cdo 1572/2012",
+    },
+  });
+  expect(byDocket).toEqual([supremeId]);
+
+  const byEcli = await findDecisionIdsByIdentity({
+    caseLawDb,
+    country: undefined,
+    identity: {
+      type: "identifier",
+      kind: "ecli",
+      value: "ECLI:CZ:NS:2012:23.CDO.1572.2012.1",
+    },
+  });
+  expect(byEcli).toEqual([supremeId]);
+});
+
+test("a reporter citation resolves through the typed identifiers", async () => {
+  // The entry as the query box reads it, spaced differently from the row.
+  const intent = parseDecisionQuery("347 U. S. 483, 495", {
+    reporters: decisionReporterGrammarForJurisdiction("USA"),
+  });
+  if (intent.type !== "identifier") {
+    throw new Error(`Read as ${intent.type}, not as an identifier`);
+  }
+  expect(intent.kind).toBe("reporter");
+
+  const ids = await findDecisionIdsByIdentity({
+    caseLawDb,
+    country: "USA",
+    identity: intent,
+  });
+  expect(ids).toEqual([reportedId]);
+
+  const elsewhere = await findDecisionIdsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    identity: intent,
+  });
+  expect(elsewhere).toEqual([]);
+});
+
+test("a reporter-shaped entry elsewhere stays text", () => {
+  expect(
+    parseDecisionQuery("347 U.S. 483", {
+      reporters: decisionReporterGrammarForJurisdiction("CZE"),
+    }),
+  ).toEqual({
+    type: "text",
+    text: "347 U.S. 483",
+  });
 });

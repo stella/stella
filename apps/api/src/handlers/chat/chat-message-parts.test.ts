@@ -21,6 +21,7 @@ import {
   isServerOwnedChatPart,
   getChatAttachmentFilename,
   legacyAiSdkFilePartToTanStack,
+  mergeAnonRestorations,
   normalizePersistedChatMessageContent,
   restoreServerOwnedChatParts,
   toChatMessageContent,
@@ -939,5 +940,26 @@ describe("chat attachment parts", () => {
       type: "persist",
       part,
     });
+  });
+});
+
+describe("merging a message's anonymization restorations", () => {
+  test("holds each placeholder once, under its first original", () => {
+    const merged = mergeAnonRestorations(
+      { pairs: [{ placeholder: "[PERSON_1]", original: "Alice" }] },
+      {
+        pairs: [
+          { placeholder: "[PERSON_1]", original: "Alice" },
+          { placeholder: "[PERSON_1]", original: "Bob" },
+          { placeholder: "[PERSON_2]", original: "Bob" },
+        ],
+      },
+    );
+
+    expect(merged.restorations.pairs).toEqual([
+      { placeholder: "[PERSON_1]", original: "Alice" },
+      { placeholder: "[PERSON_2]", original: "Bob" },
+    ]);
+    expect(merged.conflicts).toBe(1);
   });
 });

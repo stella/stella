@@ -15,7 +15,12 @@ import type {
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 
+import { env } from "@/api/env";
 import { detached } from "@/api/lib/analytics/capture";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import {
   isMcpSession,
@@ -52,6 +57,7 @@ import {
   type McpChallengeError,
 } from "@/api/mcp/metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
+import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import type {
   McpToolDefinition,
   McpToolFeatureFlag,
@@ -59,8 +65,10 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   closestToolNames,
+  didYouMean,
   MCP_INTERNAL_ERROR_HINT,
   oauthScopeRecoveryHint,
+  quoteToolName,
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -596,13 +604,13 @@ const retryableServerErrorResponse = () => {
  * handling a `tools/call` (e.g. a gateway load fault surfaced before dispatch).
  * Details never reach the caller; they are captured at the failure site.
  */
-const retryableToolErrorResult = (): CallToolResult =>
+const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
   mcpStructuredErrorResult({
     code: "internal_error",
     message:
       "The request could not be completed due to a temporary server error",
     retryable: true,
-    hint: MCP_INTERNAL_ERROR_HINT,
+    hint: scopeHintToSurface(MCP_INTERNAL_ERROR_HINT, mode),
   });
 
 export const createMcpHttpRequestHandler = ({
@@ -693,7 +701,7 @@ export const createMcpHttpRequestHandler = ({
         if (!(error instanceof McpGatewayLoadError)) {
           captureError(error, { phase: "tools/call", mode, source: "mcp" });
         }
-        return retryableToolErrorResult();
+        return retryableToolErrorResult(mode);
       }
       if (!definition) {
         // Suggest the closest names the caller can actually see (scope-filtered
@@ -712,7 +720,7 @@ export const createMcpHttpRequestHandler = ({
           message: `Unknown tool: ${formatUnknownToolName(toolName)}`,
           hint:
             suggestions.length > 0
-              ? `No such tool. Did you mean: ${suggestions.join(", ")}? Call tools/list for the full set.`
+              ? `No such tool. ${didYouMean(suggestions.map(quoteToolName))} Call tools/list for the full set.`
               : "No such tool. Call tools/list for the tools available to this session.",
         });
       }
@@ -729,12 +737,46 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
-      return await handleMcpToolCall({
-        args: toolRequest.params.arguments ?? {},
-        context,
-        mode,
-        toolName,
+      const run = async (signal?: AbortSignal) => {
+        signal?.throwIfAborted();
+        const result = await handleMcpToolCall({
+          args: toolRequest.params.arguments ?? {},
+          context,
+          mode,
+          toolName,
+        });
+        signal?.throwIfAborted();
+        return result;
+      };
+      if (!env.FEATURE_ACTION_ADMISSION) {
+        return await run();
+      }
+
+      const admitted = await withActionAdmission({
+        enabled: true,
+        organizationId: context.organizationId,
+        userId: context.userId,
+        run,
       });
+      if (Result.isOk(admitted)) {
+        return admitted.value;
+      }
+      if (
+        ActionAdmissionError.is(admitted.error) &&
+        admitted.error.reason === "busy"
+      ) {
+        return mcpStructuredErrorResult({
+          code: "rate_limited",
+          message: "Concurrent action limit reached",
+          hint: "Wait for an active action to finish, then retry this call.",
+          retryable: true,
+        });
+      }
+      captureError(admitted.error, {
+        phase: "action-admission",
+        source: "mcp",
+      });
+      return retryableToolErrorResult(mode);
     });
 
     return server;

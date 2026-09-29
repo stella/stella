@@ -5,6 +5,7 @@ import type {
   ChatSourceDocument,
   ChatUITools,
 } from "@/api/handlers/chat/types";
+import type { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import type { memoriesRoute } from "@/api/handlers/memories/routes";
 import type { PositionDecisionSummary } from "@/api/lib/document-review/position-decisions";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
@@ -38,19 +39,41 @@ type ApiEntityRoutes = ApiV1Routes["entities"];
 type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
 type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
 type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
+// Registered only in an open runtime (server.ts), so the inferred app type
+// does not carry them; the browser's local Dev menu still calls them.
+type LocalDevPublicRoutes = (typeof devPublicRoute)["~Routes"];
+type LocalDevV1Routes = (typeof devRoute)["~Routes"];
+type ApiWorkspaceRoutes = ApiV1Routes["workspaces"];
+type ApiWorkspaceByIdRoutes = ApiWorkspaceRoutes[":workspaceId"];
 
 /**
  * Main browser Eden route tree. Routes whose addition would breach the
  * recursive type-cost budget use their own small, typed Eden client instead.
  */
-type WebRoutes = Omit<ApiRoutes, "v1"> & {
-  v1: Omit<ApiV1Routes, "entities" | "memories" | "time-entries"> & {
-    entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
-      ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
-        entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
-          ":entityId": Omit<ApiEntityByIdRoutes, "ocr">;
+type WebRoutes = Omit<ApiRoutes, "v1"> &
+  LocalDevPublicRoutes & {
+    v1: Omit<
+      ApiV1Routes,
+      "entities" | "memories" | "time-entries" | "workspaces"
+    > &
+      LocalDevV1Routes & {
+        entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
+          ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
+            entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
+              ":entityId": Omit<ApiEntityByIdRoutes, "ocr">;
+            };
+          };
+        };
+        workspaces: Omit<ApiWorkspaceRoutes, ":workspaceId"> & {
+          ":workspaceId": Omit<ApiWorkspaceByIdRoutes, "correspondence">;
         };
       };
+  };
+
+type CorrespondenceRoutes = {
+  v1: {
+    workspaces: {
+      ":workspaceId": Pick<ApiWorkspaceByIdRoutes, "correspondence">;
     };
   };
 };
@@ -63,6 +86,7 @@ type WebRoutes = Omit<ApiRoutes, "v1"> & {
  */
 export type WebApiContract = {
   WebRoutes: WebRoutes;
+  CorrespondenceRoutes: CorrespondenceRoutes;
   MemoriesRoutes: (typeof memoriesRoute)["~Routes"];
   ChatAnonRestoration: ChatAnonRestoration;
   ChatMessage: ChatMessage;

@@ -1,0 +1,119 @@
+1. stop_reason refusal finishes as content_filter; it read as stop.
+2. The max_tokens RUN_ERROR carries the message_delta usage, so a reply cut
+   off at the output ceiling still reports what it spent.
+3. A stream with no stop reason ends in a RUN_ERROR (code
+   incomplete-stream) instead of no terminal event, or a stop when
+   message_stop arrives alone, and every RUN_ERROR carries the latest
+   usage message_start or message_delta reported.
+   Upstream PR to be opened for 1-3; remove when released.
+4. The terminal event of a stop reason carries it as
+   metadata.providerStopReason, so the service decides every stop reason from
+   the SDK's union (apps/api/src/lib/chat/provider-stop-reasons.ts) instead
+   of reading an unhandled one as "stop". Remove when upstream exposes the
+   raw reason.
+
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -508,9 +508,12 @@
+ 		let hasEmittedTextMessageStart = false;
+ 		let hasEmittedRunFinished = false;
+ 		let currentBlockType = null;
++		let reportedUsage;
+ 		try {
+ 			for await (const event of stream) {
+ 				logger.provider(`provider=anthropic type=${event.type}`, { chunk: event });
++				if (event.type === "message_start" && event.message.usage) reportedUsage = event.message.usage;
++				if (event.type === "message_delta" && event.usage) reportedUsage = event.usage;
+ 				if (!hasEmittedRunStarted) {
+ 					hasEmittedRunStarted = true;
+ 					yield {
+@@ -779,14 +782,6 @@
+ 							timestamp: Date.now()
+ 						};
+ 					}
+-					if (!hasEmittedRunFinished) yield {
+-						type: EventType.RUN_FINISHED,
+-						runId,
+-						threadId,
+-						model,
+-						timestamp: Date.now(),
+-						finishReason: "stop"
+-					};
+ 				} else if (event.type === "message_delta") {
+ 					if (event.delta.stop_reason) {
+ 						hasEmittedRunFinished = true;
+@@ -814,7 +809,8 @@
+ 									model,
+ 									timestamp: Date.now(),
+ 									finishReason: "tool_calls",
+-									usage: buildAnthropicUsage(event.usage)
++									usage: buildAnthropicUsage(event.usage),
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
+ 							case "max_tokens":
+@@ -832,12 +828,26 @@
+ 									timestamp: Date.now(),
+ 									message: "The response was cut off because the maximum token limit was reached.",
+ 									code: "max_tokens",
++									usage: buildAnthropicUsage(event.usage),
+ 									error: {
+ 										message: "The response was cut off because the maximum token limit was reached.",
+ 										code: "max_tokens"
+-									}
++									},
++									metadata: { providerStopReason: event.delta.stop_reason }
+ 								};
+ 								break;
++							case "refusal":
++								yield {
++									type: EventType.RUN_FINISHED,
++									runId,
++									threadId,
++									model,
++									timestamp: Date.now(),
++									finishReason: "content_filter",
++									usage: buildAnthropicUsage(event.usage),
++									metadata: { providerStopReason: event.delta.stop_reason }
++								};
++								break;
+ 							default: yield {
+ 								type: EventType.RUN_FINISHED,
+ 								runId,
+@@ -845,12 +855,26 @@
+ 								model,
+ 								timestamp: Date.now(),
+ 								finishReason: "stop",
+-								usage: buildAnthropicUsage(event.usage)
++								usage: buildAnthropicUsage(event.usage),
++								metadata: { providerStopReason: event.delta.stop_reason }
+ 							};
+ 						}
+ 					}
+ 				}
+ 			}
++			// No message_delta carried a stop reason: the stream was cut off.
++			if (!hasEmittedRunFinished) yield {
++				type: EventType.RUN_ERROR,
++				model,
++				timestamp: Date.now(),
++				message: "The provider stream ended before a stop reason.",
++				code: "incomplete-stream",
++				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage) },
++				error: {
++					message: "The provider stream ended before a stop reason.",
++					code: "incomplete-stream"
++				}
++			};
+ 		} catch (error) {
+ 			const err = error;
+ 			const rawEvent = toRunErrorRawEvent(error);
+@@ -865,6 +889,7 @@
+ 				message: err.message || "Unknown error occurred",
+ 				code: err.code || String(err.status),
+ 				...rawEvent !== void 0 && { rawEvent },
++				...reportedUsage && { usage: buildAnthropicUsage(reportedUsage) },
+ 				error: {
+ 					message: err.message || "Unknown error occurred",
+ 					code: err.code || String(err.status)

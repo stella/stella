@@ -571,6 +571,18 @@ export const CAPABILITY_DISPATCH = {
   "matters.contacts.delete": {
     load: async () => await import("@/api/handlers/workspaces/contacts/delete"),
   },
+  "matters.correspondence.get": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/correspondence/get"),
+  },
+  "matters.correspondence.list": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/correspondence/list"),
+  },
+  "matters.correspondence.update": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/correspondence/update"),
+  },
   "matters.create": {
     load: async () => await import("@/api/handlers/workspaces/create"),
   },
@@ -624,6 +636,26 @@ export const CAPABILITY_DISPATCH = {
   "organization-settings.anonymization-blacklist.update": {
     load: async () =>
       await import("@/api/handlers/organization-settings/anonymization-blacklist/update"),
+  },
+  "organization-settings.correspondence.allowed-senders.create": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/create"),
+  },
+  "organization-settings.correspondence.allowed-senders.delete": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/delete"),
+  },
+  "organization-settings.correspondence.allowed-senders.list": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/list"),
+  },
+  "organization-settings.correspondence.allowed-senders.scope.add": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/scope/add"),
+  },
+  "organization-settings.correspondence.allowed-senders.scope.remove": {
+    load: async () =>
+      await import("@/api/handlers/organization-settings/correspondence/allowed-senders/scope/remove"),
   },
   "organization-settings.deepl-availability.get": {
     load: async () =>
@@ -751,6 +783,40 @@ export const CAPABILITY_DISPATCH = {
   },
   "reports.views.export": {
     load: async () => await import("@/api/handlers/reports/views/export"),
+  },
+  "saved-time-narratives.create": {
+    load: async () =>
+      await import("@/api/handlers/saved-time-narratives/create"),
+  },
+  "saved-time-narratives.delete": {
+    load: async () =>
+      await import("@/api/handlers/saved-time-narratives/delete"),
+  },
+  "saved-time-narratives.list": {
+    load: async () => await import("@/api/handlers/saved-time-narratives/list"),
+  },
+  "saved-time-narratives.update": {
+    load: async () =>
+      await import("@/api/handlers/saved-time-narratives/update"),
+  },
+  "seller-profiles.archive": {
+    load: async () => await import("@/api/handlers/seller-profiles/archive"),
+  },
+  "seller-profiles.create": {
+    load: async () => await import("@/api/handlers/seller-profiles/create"),
+  },
+  "seller-profiles.default.update": {
+    load: async () =>
+      await import("@/api/handlers/seller-profiles/default/update"),
+  },
+  "seller-profiles.get": {
+    load: async () => await import("@/api/handlers/seller-profiles/get"),
+  },
+  "seller-profiles.list": {
+    load: async () => await import("@/api/handlers/seller-profiles/list"),
+  },
+  "seller-profiles.update": {
+    load: async () => await import("@/api/handlers/seller-profiles/update"),
   },
   "signals.acceptances.create": {
     load: async () => await import("@/api/handlers/signals/acceptances/create"),

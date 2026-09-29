@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
 import {
   BrainIcon,
   FlaskConicalIcon,
@@ -14,10 +16,8 @@ import {
   TagsIcon,
   UserIcon,
   UsersIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { env } from "@/env";

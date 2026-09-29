@@ -1,9 +1,9 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import { LandmarkIcon } from "lucide-react";
 
 import { isEntityKind } from "@stll/api-contract";
 import type { EntityKind } from "@stll/api-contract";
+import { LandmarkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import type { ChatReferenceCategory } from "@/components/chat-mention-extension";

@@ -10,10 +10,10 @@ import * as React from "react";
 
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { PencilIcon, ShieldAlertIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { PencilIcon, ShieldAlertIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,
@@ -26,6 +26,7 @@ import { cn } from "@stll/ui/utils";
 
 import { FactDate } from "@/features/avt/fact-date";
 import { factItems, orderHeldFirst } from "@/features/avt/fact-details.logic";
+import { FactSource } from "@/features/avt/fact-source";
 import {
   InterpNote,
   MediumChip,
@@ -181,6 +182,14 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
             {fact.name}
           </p>
           <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            {fact.firstSource !== null && (
+              <FactSource
+                documentId={fact.firstSource.documentId}
+                documentName={fact.firstSource.documentName}
+                locator={fact.firstSource.locator}
+                workspaceId={workspaceId}
+              />
+            )}
             {evidenceKind !== null && <span>{evidenceKind}</span>}
             <FactDate
               occurredOn={details?.occurredOn ?? null}

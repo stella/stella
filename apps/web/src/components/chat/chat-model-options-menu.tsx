@@ -1,13 +1,13 @@
 import { useId, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { InfoIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { InfoIcon } from "@stll/ui/icons";
 import {
   MenuCheckboxItem,
   MenuRadioGroup,

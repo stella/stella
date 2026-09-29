@@ -198,7 +198,7 @@ export type BusinessRegistryHit = {
   details?: BusinessRegistryHitDetails;
 };
 
-export type BusinessRegistryHitDetails =
+type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
   | { registry: "companies-house"; company: CompaniesHouseCompany }
@@ -250,7 +250,7 @@ export const LOOKUP_DETAIL_DESCRIPTION =
   "full adds history, filings, and linked persons where the register " +
   "keeps them (ORSR, RPO). Default: standard.";
 
-export type RegistryLookupOptions = {
+type RegistryLookupOptions = {
   credential?: string | undefined;
   /** Registers without more to read answer `full` with their standard record. */
   detail?: BusinessRegistryLookupDetail | undefined;

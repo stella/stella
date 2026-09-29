@@ -6,10 +6,13 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   canonicalDecisionDocket,
+  canonicalDecisionIdentifierKey,
   DECISION_DOCKET_GRAMMARS,
   decisionDocketGrammarForJurisdiction,
+  foldDecisionIdentifierInput,
   formatDecisionDocket,
   parseDecisionDocket,
+  storedDecisionDocketOf,
 } from "./decision-docket-grammar";
 import type { DecisionDocketJurisdiction } from "./decision-docket-grammar";
 import { DECISION_DOCKET_GRAMMAR_FIXTURES } from "./decision-docket-grammar.fixtures";
@@ -142,6 +145,17 @@ const canonicalDocketArbitraries = {
       )
       .map(([senate, ordinal, year]) => `${senate}. ÚS ${ordinal}/${year}`),
   ),
+  USA: fc
+    .tuple(
+      fc.integer({ min: 0, max: 99 }),
+      fc.integer({ min: 1, max: 9999 }),
+      fc.constantFrom("-", "A", "O"),
+      fc.boolean(),
+    )
+    .map(
+      ([term, number, separator, labelled]) =>
+        `${labelled ? "No. " : ""}${term.toString().padStart(2, "0")}${separator}${number}`,
+    ),
 } as const satisfies Record<DecisionDocketJurisdiction, Arbitrary<string>>;
 
 describe("declared decision docket grammars", () => {
@@ -219,6 +233,87 @@ describe("declared decision docket grammars", () => {
       expect(
         DECISION_DOCKET_GRAMMARS.CZE.parse(`8 As 287/2020${dash}33`),
       ).toEqual(canonical);
+    }
+  });
+
+  test("a United States docket keeps every digit of its number", () => {
+    const canonicalOf = (docket: string) => {
+      const parsed = DECISION_DOCKET_GRAMMARS.USA.parse(docket);
+      expect(parsed, docket).not.toBeNull();
+      return parsed === null ? null : canonicalDecisionDocket(parsed);
+    };
+    expect(canonicalOf("21-123")).toBe("21-123");
+    expect(canonicalOf("21-123")).not.toBe(canonicalOf("21-456"));
+    expect(canonicalOf("20A87")).not.toBe(canonicalOf("20A870"));
+    expect(canonicalOf("No. 8, Orig.")).not.toBe(canonicalOf("No. 8"));
+    // An original case's electronic and printed forms are one docket.
+    expect(canonicalOf("22O141")).toBe(canonicalOf("No. 141, Orig."));
+    expect(canonicalOf("22O141")).not.toBe(canonicalOf("22O142"));
+    // The generic key other identifiers compare under is unchanged: it still
+    // reads a trailing number as a sheet.
+    expect(canonicalDecisionIdentifierKey("21-123")).toBe("21");
+  });
+
+  test("a United States docket is read only under its own scope", () => {
+    for (const {
+      canonical,
+      variants,
+    } of DECISION_DOCKET_GRAMMAR_FIXTURES.USA) {
+      for (const docket of [canonical, ...variants]) {
+        expect([docket, parseDecisionDocket(docket)]).toEqual([docket, null]);
+        expect(
+          parseDecisionDocket(docket, { grammar: DECISION_DOCKET_GRAMMARS.USA })
+            ?.jurisdiction,
+        ).toBe("USA");
+      }
+    }
+    for (const text of ["10-12", "No. 5", "20A87", "No. 8, Orig."]) {
+      expect([text, parseDecisionDocket(text)]).toEqual([text, null]);
+    }
+    expect(decisionDocketGrammarForJurisdiction("usa")).toBe(
+      DECISION_DOCKET_GRAMMARS.USA,
+    );
+  });
+
+  test("a bare number or prose is not a United States docket", () => {
+    for (const text of [
+      "1",
+      "2079",
+      "123-45",
+      "1-2",
+      "2021-123",
+      "21 123",
+      "A87",
+      "Orig.",
+      "No.",
+      "the 21-123 case",
+    ]) {
+      expect(DECISION_DOCKET_GRAMMARS.USA.parse(text), text).toBeNull();
+    }
+  });
+
+  test("no other jurisdiction's docket reads as a United States one", () => {
+    // Unscoped parsing takes the first grammar that accepts, so a new grammar
+    // must not reach a docket another jurisdiction already reads.
+    for (const [jurisdiction, fixtures] of Object.entries(
+      DECISION_DOCKET_GRAMMAR_FIXTURES,
+    )) {
+      if (jurisdiction === "USA") {
+        continue;
+      }
+      for (const { canonical, variants } of fixtures) {
+        for (const docket of [canonical, ...variants]) {
+          const claimed = parseDecisionDocket(docket)?.jurisdiction;
+          expect([docket, claimed !== undefined && claimed !== "USA"]).toEqual([
+            docket,
+            true,
+          ]);
+          expect([docket, DECISION_DOCKET_GRAMMARS.USA.parse(docket)]).toEqual([
+            docket,
+            null,
+          ]);
+        }
+      }
     }
   });
 
@@ -334,5 +429,112 @@ describe("Slovak Constitutional Court dockets", () => {
       ),
       propertyConfig(),
     );
+  });
+});
+
+describe("stored dockets", () => {
+  const JUNK_TAILS = [
+    "- II.",
+    "-III.",
+    " - IV",
+    ".",
+    " -",
+    "- ",
+    " (I.)",
+    " - XXIV.",
+  ] as const;
+
+  for (const grammar of Object.values(DECISION_DOCKET_GRAMMARS)) {
+    test(`${grammar.jurisdiction} docket with a trailing part marker trims to the docket`, () => {
+      fc.assert(
+        fc.property(
+          canonicalDocketArbitraries[grammar.jurisdiction],
+          fc.constantFrom(...JUNK_TAILS),
+          (docket, tail) => {
+            expect(
+              storedDecisionDocketOf(docket, grammar.jurisdiction),
+            ).toEqual({ type: "canonical", caseNumber: docket });
+            const stored = storedDecisionDocketOf(
+              `${docket}${tail}`,
+              grammar.jurisdiction,
+            );
+            if (stored.type === "canonical") {
+              // The grammar itself accepts the tail (a closing dot).
+              return;
+            }
+            expect(stored.type).toBe("trimmed");
+            if (stored.type === "trimmed") {
+              // The shortest accepted cut: the docket itself, or more of the
+              // tail where a looser form of the grammar accepts that too.
+              expect(grammar.parse(stored.caseNumber)).not.toBeNull();
+              expect(
+                stored.caseNumber.startsWith(
+                  foldDecisionIdentifierInput(docket),
+                ),
+              ).toBe(true);
+            }
+          },
+        ),
+        propertyConfig(),
+      );
+    });
+  }
+
+  test.each([
+    ["CZE", "33 Cdo 1751/2023- II.", "33 Cdo 1751/2023"],
+    ["CZE", "Pl. ÚS 5/01 - IV.", "Pl. ÚS 5/01"],
+    ["SVK", "5Obo/12/2020 - II.", "5Obo/12/2020"],
+    ["SVK", "II. ÚS 55/98-I", "II. ÚS 55/98"],
+    ["POL", "I ACa 123/20 - II", "I ACa 123/20"],
+    ["POL", "II FSK 1226/21.", "II FSK 1226/21"],
+    ["HUN", "Kfv.35.123/2021/8 - I.", "Kfv.35.123/2021/8"],
+    ["EU", "C-1/20 - II.", "C-1/20"],
+  ])("%s %s trims to %s", (jurisdiction, raw, caseNumber) => {
+    const stored = storedDecisionDocketOf(raw, jurisdiction);
+    expect(stored.type).toBe("trimmed");
+    expect(stored.type === "trimmed" ? stored.caseNumber : null).toBe(
+      caseNumber,
+    );
+  });
+
+  test.each([
+    // A sheet number and a closing dot the grammar declares stay.
+    ["CZE", "21 Cdo 1234/2020-5"],
+    ["HUN", "5.P.21.203/2004."],
+  ])("%s %s is kept as written", (jurisdiction, raw) => {
+    expect(storedDecisionDocketOf(raw, jurisdiction)).toEqual({
+      type: "canonical",
+      caseNumber: raw,
+    });
+  });
+
+  test.each([
+    // A word, a numeral that is not a part number, or a digit is never cut.
+    ["CZE", "33 Cdo 1751/2023 civil"],
+    ["CZE", "33 Cdo 1751/2023-XL"],
+    ["POL", "I ACa 123/20 - wyrok"],
+    ["SVK", "NALUS record 7301"],
+  ])("%s %s is unparsed, not trimmed", (jurisdiction, raw) => {
+    expect(storedDecisionDocketOf(raw, jurisdiction)).toEqual({
+      type: "unparsed",
+    });
+  });
+
+  test("a jurisdiction without a grammar is ungoverned", () => {
+    expect(storedDecisionDocketOf("1 A 2/2020 - II.", "XXX")).toEqual({
+      type: "ungoverned",
+    });
+  });
+
+  test("the trimmed docket is folded the way the grammar reads it", () => {
+    const stored = storedDecisionDocketOf(
+      "33\u00a0Cdo 1751/2023\u2011 II.",
+      "CZE",
+    );
+    expect(stored).toEqual({
+      type: "trimmed",
+      caseNumber: foldDecisionIdentifierInput("33 Cdo 1751/2023"),
+      removed: "- II.",
+    });
   });
 });

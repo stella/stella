@@ -93,3 +93,82 @@ export const orderCoverageCountriesByName = <TCountry>({
     compare(nameOf(left), nameOf(right)),
   );
 };
+
+/** Where the globe looks and how close: a longitude in degrees, a tilt in radians. */
+export type CoverageGlobeFrame = {
+  readonly longitude: number;
+  readonly tilt: number;
+  readonly scale: number;
+};
+
+/** Zoomed on Central Europe; the disc clip hides the cropped rim. */
+export const CENTRAL_EUROPE_GLOBE_FRAME: CoverageGlobeFrame = {
+  longitude: 17,
+  tilt: 0.85,
+  scale: 1.6,
+};
+
+/** How far from the disc's centre a pin may sit, as a share of its radius. */
+const PIN_REACH = 0.9;
+
+type Vector = readonly [number, number, number];
+
+const radians = (degrees: number): number => (degrees * Math.PI) / 180;
+
+const unitVector = (latitude: number, longitude: number): Vector => [
+  Math.cos(radians(latitude)) * Math.cos(radians(longitude)),
+  Math.cos(radians(latitude)) * Math.sin(radians(longitude)),
+  Math.sin(radians(latitude)),
+];
+
+/**
+ * A place's distance from the centre of an unzoomed disc looking at `frame`,
+ * as a share of its radius: the sine of the arc between them. A place on the
+ * far side is out of reach at any zoom.
+ */
+const distanceFromCentre = (
+  frame: CoverageGlobeFrame,
+  [latitude, longitude]: readonly [number, number],
+): number => {
+  const centre = unitVector((frame.tilt * 180) / Math.PI, frame.longitude);
+  const place = unitVector(latitude, longitude);
+  const cosine =
+    centre[0] * place[0] + centre[1] * place[1] + centre[2] * place[2];
+  return cosine <= 0
+    ? Number.POSITIVE_INFINITY
+    : Math.sqrt(Math.max(0, 1 - cosine * cosine));
+};
+
+/**
+ * Central Europe while every pin shows there. Otherwise the globe turns to the
+ * pins' mean direction and zooms out until each sits inside the disc, never
+ * closer than Central Europe's zoom nor wider than the whole face.
+ */
+export const coverageGlobeFrame = (
+  locations: readonly (readonly [number, number])[],
+): CoverageGlobeFrame => {
+  const reachOf = (frame: CoverageGlobeFrame): number =>
+    Math.max(0, ...locations.map((place) => distanceFromCentre(frame, place)));
+  const europe = CENTRAL_EUROPE_GLOBE_FRAME;
+  if (europe.scale * reachOf(europe) <= PIN_REACH) {
+    return europe;
+  }
+  let [x, y, z] = [0, 0, 0];
+  for (const [latitude, longitude] of locations) {
+    const vector = unitVector(latitude, longitude);
+    x += vector[0];
+    y += vector[1];
+    z += vector[2];
+  }
+  const length = Math.hypot(x, y, z);
+  if (length === 0) {
+    return europe;
+  }
+  const centred = {
+    longitude: (Math.atan2(y, x) * 180) / Math.PI,
+    tilt: Math.asin(z / length),
+    scale: 1,
+  };
+  const scale = Math.min(europe.scale, PIN_REACH / reachOf(centred));
+  return { ...centred, scale: Math.max(1, scale) };
+};

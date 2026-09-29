@@ -87,6 +87,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   ensureActiveWorkspace,
@@ -97,7 +98,6 @@ import {
   ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
-  structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -964,6 +964,20 @@ const checkCounterpartySubjectSchema = v.variant("type", [
   }),
   v.strictObject({
     type: v.pipe(
+      v.literal("tax-id"),
+      v.description("A taxpayer, by its tax ID."),
+    ),
+    tax_id: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(32),
+      v.description(
+        "Tax ID in the check's country, e.g. the Czech DIČ CZ45274649",
+      ),
+    ),
+  }),
+  v.strictObject({
+    type: v.pipe(
       v.literal("person"),
       v.description("A natural person, by name and birth date."),
     ),
@@ -987,28 +1001,37 @@ const checkCounterpartySubjectSchema = v.variant("type", [
   }),
 ]);
 
+/** Shared with the chat tool, so both surfaces accept the same call. */
+export const CHECK_COUNTERPARTY_INPUT_SCHEMA = v.strictObject({
+  check: v.pipe(
+    v.picklist(ENTITY_CHECK_KINDS),
+    v.description(
+      "Source to screen against. cz-insolvency: the Czech insolvency " +
+        "register (ISIR), pending and ended proceedings; takes a company " +
+        "or a person. cz-vat-reliability: the Czech VAT register, " +
+        "unreliable-payer status and published bank accounts; takes a " +
+        "tax ID, or a company ID sent as CZ + IČO and marked derived.",
+    ),
+  ),
+  subject: v.pipe(
+    checkCounterpartySubjectSchema,
+    v.description("The company or person to screen"),
+  ),
+});
+
 const checkCounterpartyArgsSchema = nullAsAbsent(
-  v.strictObject({
-    check: v.pipe(
-      v.picklist(ENTITY_CHECK_KINDS),
-      v.description(
-        "Source to screen against. cz-insolvency: the Czech insolvency " +
-          "register (ISIR), pending and ended proceedings.",
-      ),
-    ),
-    subject: v.pipe(
-      checkCounterpartySubjectSchema,
-      v.description("The company or person to screen"),
-    ),
-  }),
+  CHECK_COUNTERPARTY_INPUT_SCHEMA,
 );
 
-const toEntityCheckSubject = (
+export const toEntityCheckSubject = (
   subject: v.InferOutput<typeof checkCounterpartySubjectSchema>,
 ): EntityCheckSubject => {
   switch (subject.type) {
     case "company-id": {
       return { type: "company-id", value: subject.company_id };
+    }
+    case "tax-id": {
+      return { type: "tax-id", value: subject.tax_id };
     }
     case "person": {
       return {
@@ -1340,12 +1363,7 @@ const handleListTasksTool: TypedMcpToolHandler<
   const cursor =
     input.cursor === undefined ? null : decodeTaskListCursor(input.cursor);
   if (input.cursor !== undefined && cursor === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
+    return invalidCursorResult({ cursor: input.cursor, tool: "list_tasks" });
   }
 
   const listed = await listTasksPage({
@@ -2278,7 +2296,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "identifier (company/registration number, VAT number) for an exact " +
       "match, or a company name to search where the register supports it. " +
       "Result IDs belong to the external registry, not stella's contact " +
-      "directory; create a contact with save_contact before using " +
+      "directory. Create a contact with save_contact before using " +
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
@@ -2295,14 +2313,17 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     description:
       "Screen a company or a person against an official register for due " +
-      "diligence. `check` picks the source; `subject` is a company by " +
-      "national business ID or a person by name and birth date. Returns one " +
-      "outcome: clear (the source answered and lists nothing), found (the " +
-      "records it lists, each with a public link), unavailable (the source " +
-      "did not answer: the subject is NOT cleared; retry later or say the " +
-      "check could not run), or not-covered (the source cannot screen this " +
-      "subject type). Person matches rely on name and birth date: compare " +
-      "the debtor as registered before relying on one.",
+      "diligence. `check` picks the source; `subject` is a company ID, a " +
+      "tax ID or a person by name and birth date. Returns one outcome: clear " +
+      "(the source answered and lists nothing adverse), found (the adverse " +
+      "records), not-registered (the source holds no record, e.g. not a VAT " +
+      "payer; not a clearance), unavailable (the source did not answer: the " +
+      "subject is NOT cleared; retry later or say the check could not run), " +
+      "or not-covered (the source cannot screen this subject type, or needs " +
+      "the tax ID because one derived from the company ID was not on file). " +
+      "Person " +
+      "matches rely on name and birth date: compare the record before " +
+      "relying on one.",
     inputSchema: checkCounterpartyArgsSchema,
     inputNormalization: {
       check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },

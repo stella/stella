@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Geprüft anhand von {count, plural, one {# Fakt} other {# Fakten}}, wie sie am {checkedAt} vorlagen. Spätere Änderungen an der Liste wirken sich nicht auf diese Prüfung aus.",
       "failedTitle": "Prüfung fehlgeschlagen",
+      "history": {
+        "label": "Prüfverlauf",
+        "loadFailed": "Frühere Prüfungen dieses Dokuments konnten nicht geladen werden."
+      },
       "inProgress": "Die Behauptungen des Dokuments werden mit den Fakten der Liste abgeglichen …",
       "loadFailed": "Diese Prüfung konnte nicht geladen werden.",
       "noClaims": "In diesem Dokument wurden keine Behauptungen gefunden.",
@@ -549,6 +553,11 @@
       "tableNamePlaceholder": "z.B. Standard 2025"
     },
     "revertToDraft": "In Entwurf zurückversetzen",
+    "savedNarratives": {
+      "empty": "Speichern Sie eine Beschreibung zur erneuten Verwendung.",
+      "save": "Beschreibung speichern",
+      "title": "Gespeicherte Beschreibungen"
+    },
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
@@ -797,6 +806,12 @@
       "resultsFor": "Ergebnisse für: <bdi>{query}</bdi>",
       "searchEveryWord": "Alle Wörter suchen"
     },
+    "seo": {
+      "collectionName": "Stella Rechtsprechung",
+      "description": "Öffentliche Rechtsprechungsdatenbank mit indexierbaren Gerichtsentscheidungen und Rechtsquellen.",
+      "homeDescription": "Öffentliche Rechtsdatenbank mit Gerichtsentscheidungen und konsolidierten Rechtsvorschriften; Suche nach Kennung oder Stichwörtern.",
+      "scopedDescription": "Öffentliche Rechtsprechungsdatenbank für {scope} mit indexierbaren Gerichtsentscheidungen und Rechtsquellen."
+    },
     "showWholeHeadnote": "Ganzen Leitsatz anzeigen",
     "sort": {
       "newest": "Neueste",
@@ -874,6 +889,7 @@
       "apiKey": "API-Schlüssel",
       "none": "Keine Einrichtung"
     },
+    "skillNeedsUnavailableTools": "Wird im Chat nicht angeboten. Benötigt ein Tool, das dort nicht verfügbar ist: {tools}",
     "toolNames": {
       "anonymize": "Anonymisieren",
       "createDocx": "DOCX erstellen",
@@ -967,7 +983,15 @@
       "searchFiles": "Dateien suchen",
       "searchMatters": "Akten suchen",
       "searchMcpServers": "MCP-Server suchen...",
-      "searchSkills": "Skills suchen"
+      "searchSkills": "Skills suchen",
+      "skillNeeds": {
+        "browserExtension": "Verbinden Sie die Browsererweiterung, um diesen Skill zu nutzen",
+        "document": "Öffnen Sie ein Dokument, um diesen Skill zu nutzen",
+        "matter": "Starten Sie einen Chat in einer Akte, um diesen Skill zu nutzen",
+        "rawSendMode": "In anonymisierten Chats nicht verfügbar",
+        "reviewEdits": "Stellen Sie Bearbeitungen auf manuelle Prüfung um, um diesen Skill zu nutzen",
+        "webSearch": "Schalten Sie die Websuche ein, um diesen Skill zu nutzen"
+      }
     },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
@@ -1052,6 +1076,10 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "mockModel": {
+      "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
+      "label": "Simulierte KI"
+    },
     "modelSelector": {
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
@@ -1470,6 +1498,7 @@
     "displayName": "Anzeigename",
     "document": "Dokument",
     "documentName": "Dokumentname",
+    "documentPage": "<bdi>{document}</bdi> · S. {page}",
     "documentReference": "Aktenzeichen des Dokuments",
     "documentTitle": "Dokumenttitel",
     "documentation": "Dokumentation",
@@ -1613,6 +1642,7 @@
     "profile": "Profil",
     "properties": "Eigenschaften",
     "queued": "Eingereiht",
+    "reason": "Grund",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
     "refresh": "Aktualisieren",
@@ -1924,6 +1954,54 @@
       "organization": "Organisation",
       "person": "Person"
     }
+  },
+  "correspondence": {
+    "addressTitle": "E-Mail-Adresse der Akte",
+    "assertedOriginal": "Ursprüngliche Kopfzeilen (laut Weiterleitung)",
+    "authResults": {
+      "fail": "Fehlgeschlagen",
+      "pass": "Bestanden",
+      "unknown": "Nicht ermittelt"
+    },
+    "backToList": "Zurück zur Korrespondenz",
+    "createAddress": "Adresse erstellen",
+    "deliveredBy": "Zugestellt von <address>{sender}</address>",
+    "deliveredByAuthenticated": "Zugestellt von <address>{sender}</address> · authentifiziert",
+    "deliveryAuthentication": "Authentifizierung der Zustellung",
+    "drops": {
+      "authenticationHint": "Bitten Sie die E-Mail-Administration des Absenders, <protocol>SPF</protocol>, <protocol>DKIM</protocol> und <protocol>DMARC</protocol> für die Absenderdomain einzurichten.",
+      "reasons": {
+        "attachmentRejected": "Anhang abgewiesen",
+        "authenticationFailed": "Authentifizierung der Zustellung fehlgeschlagen",
+        "malformedMessage": "Nachricht konnte nicht gelesen werden",
+        "messageTooLarge": "Nachricht zu groß",
+        "revokedAddress": "E-Mail-Adresse widerrufen",
+        "unauthorizedSender": "Absender nicht berechtigt",
+        "unknownRecipient": "Unbekannter Empfänger"
+      },
+      "title": "Abgewiesene Zustellungen"
+    },
+    "empty": "Noch keine Korrespondenz.",
+    "filers": "Einreicher",
+    "forwardedBy": "Weitergeleitet von <address>{sender}</address>",
+    "forwardedByAuthenticated": "Weitergeleitet von <address>{sender}</address> · authentifiziert",
+    "inboundNotConfigured": "Der E-Mail-Empfang ist nicht eingerichtet. Bitten Sie Ihre Administration, die Domain für eingehende E-Mails einzurichten.",
+    "markHandled": "Als erledigt markieren",
+    "markNew": "Als neu markieren",
+    "noAddress": "Es ist keine E-Mail-Adresse aktiv.",
+    "originalSender": "Ursprünglicher Absender",
+    "originalSenderUnverified": "Ursprünglicher Absender (laut Angabe, nicht verifiziert)",
+    "originalSignatureVerified": "Ursprüngliche Signatur verifiziert (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Empfangen",
+    "revokeAddress": "Adresse widerrufen",
+    "rotateAddress": "Adresse erneuern",
+    "sentAt": "Gesendet am",
+    "sharedMailboxFiler": "Geteiltes Postfach {address}, genehmigt von {approver}",
+    "states": {
+      "handled": "Erledigt"
+    },
+    "title": "Korrespondenz",
+    "unknownApprover": "Unbekannte genehmigende Person"
   },
   "docxReview": {
     "acceptAll": "Alle annehmen",
@@ -4298,6 +4376,7 @@
     "compareVersionMissing": "Die Vergleichsfassung ist in der Historie dieses Gesetzes nicht vorhanden.",
     "compareWholeAct": "Ganzes Gesetz vergleichen",
     "compareWithVersion": "Mit Fassung {version} vergleichen",
+    "description": "Öffentliche Datenbank konsolidierter Rechtsvorschriften, nach Rechtsakt und Fassung indexierbar.",
     "diffInserted": "Eingefügt:",
     "diffRemoved": "Gestrichen:",
     "emptyDocument": "Für diese Fassung ist kein Text verfügbar.",
@@ -5094,6 +5173,57 @@
       "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
       "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
+      "pdfSigning": {
+        "action": "Im Desktop signieren",
+        "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
+        "cancelledCertificateDescription": "Das gewählte Zertifikat lässt sich nicht zum Signieren verwenden. Wählen Sie eines, das digitale Signaturen erlaubt.",
+        "cancelledCertifiedDescription": "Dieses PDF ist zertifiziert, und die Zertifizierung erlaubt keine weiteren Signaturen.",
+        "cancelledDescription": "Das Signieren wurde nicht abgeschlossen.",
+        "cancelledDigestDescription": "Die Signatur passte nicht zum vorbereiteten Dokument. Versuchen Sie es erneut.",
+        "cancelledFailedDescription": "Die Signatur konnte diesem PDF nicht hinzugefügt werden.",
+        "cancelledPlatformDescription": "Das Signieren mit einem Zertifikat aus dem Systemschlüsselbund funktioniert vorerst unter macOS.",
+        "cancelledRevokedDescription": "Das gewählte Zertifikat oder eines, das es ausgestellt hat, wurde widerrufen. Wählen Sie ein gültiges Zertifikat.",
+        "cancelledSignatureDescription": "Die Signatur aus stella desktop passte nicht zum gewählten Zertifikat. Versuchen Sie es erneut.",
+        "cancelledStampNameDescription": "Der Name des Zertifikatsinhabers kann nicht in einem sichtbaren Stempel angezeigt werden. Signieren Sie erneut mit einer unsichtbaren Signatur.",
+        "cancelledStampOverflowDescription": "Der Text des Stempels passt nicht in den gezeichneten Rahmen. Zeichnen Sie einen größeren Stempel, kürzen Sie Grund oder Ort, oder verwenden Sie eine unsichtbare Signatur.",
+        "cancelledTitle": "Signieren abgebrochen",
+        "cancelledUserDescription": "Das Signieren wurde in stella desktop abgebrochen.",
+        "cancelledWouldBreakSignaturesDescription": "Eine Signatur würde die Signaturen, die dieses PDF bereits trägt, ungültig machen.",
+        "encryptedDescription": "Dieses PDF ist passwortgeschützt. Entfernen Sie den Schutz vor dem Signieren.",
+        "expiredDescription": "stella desktop hat das Signieren nicht rechtzeitig abgeschlossen. Starten Sie die App und versuchen Sie es erneut.",
+        "expiredTitle": "Zeit zum Signieren abgelaufen",
+        "inProgressDescription": "Diese Datei wird bereits signiert. Schließen Sie diese Signatur in stella desktop zuerst ab oder brechen Sie sie ab.",
+        "noFileDescription": "Zu diesem Dokument gibt es keine Datei zum Signieren.",
+        "notAPdfDescription": "Nur PDF-Dateien können signiert werden.",
+        "placementBox": "Position des Stempels",
+        "placementConfirm": "stella desktop öffnen",
+        "placementDescription": "Wählen Sie, wie die Signatur im PDF erscheint.",
+        "placementHint": "Ziehen Sie den Stempel, um ihn zu verschieben, oder ziehen Sie an seiner Ecke, um die Größe zu ändern. Ist der Stempel ausgewählt, verschieben ihn die Pfeiltasten; mit Umschalt und einer Pfeiltaste ändern Sie seine Größe.",
+        "placementInvisible": "Unsichtbare Signatur",
+        "placementInvisibleDescription": "Die Signatur wird in der Datei gespeichert, ohne Markierung auf einer Seite.",
+        "placementPageLabel": "Seite des Stempels",
+        "placementPageOption": "Seite {page, number} von {count, number}",
+        "placementPreview": "Vorschau von Seite {page, number}",
+        "placementPreviewFailed": "Die Seitenvorschau konnte nicht geladen werden.",
+        "placementTitle": "PDF signieren",
+        "placementTooSmall": "Diese Seite ist zu klein für einen Stempel. Wählen Sie eine andere Seite.",
+        "placementVisible": "Sichtbarer Stempel",
+        "placementVisibleDescription": "Ein Feld auf der Seite zeigt, wer wann signiert hat.",
+        "readOnlyDescription": "Dieses Dokument ist schreibgeschützt.",
+        "signedDescription": "Die Signatur wurde als Version {versionNumber, number} gespeichert.",
+        "signedDescriptionNoVersion": "Die Signatur wurde als neue Version gespeichert.",
+        "signedTitle": "PDF signiert",
+        "stampLocation": "Ort",
+        "stampRejectedDescription": "Der Stempel kann dort nicht platziert werden. Platzieren Sie ihn erneut und versuchen Sie es noch einmal.",
+        "stampSignedBy": "Digital signiert von",
+        "stampTextUnrenderableDescription": "Grund oder Ort können nicht in einem sichtbaren Stempel angezeigt werden. Ändern Sie den Text oder verwenden Sie eine unsichtbare Signatur.",
+        "startFailedTitle": "Diese Datei lässt sich nicht signieren",
+        "statusUnavailableDescription": "Prüfen Sie im Versionsverlauf, ob die Signatur gespeichert wurde.",
+        "statusUnavailableTitle": "Signaturstatus nicht verfügbar",
+        "tooLargeDescription": "Dieses PDF ist zu groß zum Signieren.",
+        "waitingDescription": "Wählen Sie in stella desktop ein Signaturzertifikat, um dieses PDF zu signieren.",
+        "waitingTitle": "Warten auf stella desktop"
+      },
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Was mit {fileName} geschehen soll",
@@ -5355,6 +5485,7 @@
         },
         "targets": {
           "automation": "Automatisierung",
+          "correspondence": "Korrespondenz",
           "court": "Gerichtseintrag",
           "document": "Dokument",
           "documentReview": "Dokumentenprüfung",

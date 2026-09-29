@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import nodeOs from "node:os";
+import nodePath from "node:path";
 
 import {
   allChecksPassed,
@@ -14,6 +16,31 @@ import {
   streamPrefixHasError,
   streamPrefixHasMeaningfulFrame,
 } from "@/api/scripts/post-deploy-smoke";
+
+describe("post-deploy smoke module graph", () => {
+  test("loads without the app environment", async () => {
+    // Without an explicit empty `--env-file`, Bun loads `apps/api/.env` from
+    // the working directory and the app environment leaks back in.
+    const emptyEnvFile = nodePath.join(
+      nodeOs.tmpdir(),
+      "stella-post-deploy-smoke-empty.env",
+    );
+    await Bun.write(emptyEnvFile, "");
+    const moduleUrl = new URL("post-deploy-smoke.ts", import.meta.url).href;
+    const imported = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        `--env-file=${emptyEnvFile}`,
+        "-e",
+        `await import(${JSON.stringify(moduleUrl)})`,
+      ],
+      env: { HOME: process.env["HOME"], PATH: process.env["PATH"] },
+    });
+
+    expect(imported.stderr.toString()).toBe("");
+    expect(imported.exitCode).toBe(0);
+  });
+});
 
 describe("isServerError", () => {
   test("only 5xx counts as a server error", () => {

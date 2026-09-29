@@ -8,6 +8,8 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
+import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
   assertRunSizeConfirmedForHandler,
   createSafeHandler,
@@ -238,9 +240,11 @@ const createContext = (
   safeDb: SafeDb,
   {
     orgAIConfig = null,
+    orgAIConfigStatus = ORG_AI_CONFIG_STATUS.ok,
     role = "owner",
   }: {
     orgAIConfig?: OrgAIConfig | null;
+    orgAIConfigStatus?: OrgAIConfigStatus;
     role?: "owner" | "admin" | "member" | "intern" | "external";
   } = {},
 ): Parameters<typeof endpoint.handler>[0] =>
@@ -264,7 +268,7 @@ const createContext = (
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,
     orgAIConfig,
-    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    orgAIConfigStatus,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,
@@ -280,6 +284,70 @@ const createOrgAIConfig = (): OrgAIConfig => ({
     reasoning: { provider: "openai", modelId: "o3" },
   },
   decision: null,
+});
+
+describe("createSafeRootHandler member AI access", () => {
+  const unreadableLedger: SafeDb = async <T>() =>
+    Result.err<T, SafeDbError>(
+      new DatabaseError({ message: "the ledger should not be read" }),
+    );
+
+  test("refuses an AI handler for a member without a seat assignment, own key included", async () => {
+    const previousEnforcement = env.USAGE_ENFORCEMENT_ENABLED;
+    env.USAGE_ENFORCEMENT_ENABLED = true;
+    try {
+      let bodyRan = false;
+      const endpoint = createSafeRootHandler(
+        {
+          permissions: { workspace: ["read"] },
+          mcp: { type: "internal", reason: "health_infra" },
+          requiresUsage: { actionType: "chat", laneRouting: true },
+        },
+        async function* () {
+          bodyRan = true;
+          return Result.ok({ ok: true });
+        },
+      );
+
+      const result = await endpoint.handler(
+        createContext(endpoint, unreadableLedger, {
+          orgAIConfig: createOrgAIConfig(),
+          orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+        }),
+      );
+
+      expect(bodyRan).toBe(false);
+      if (!("code" in result)) {
+        throw new Error("expected a status response");
+      }
+      expect(result.code).toBe(403);
+      expect(result.response).toMatchObject({
+        code: AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE,
+      });
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
+    }
+  });
+
+  test("runs a handler that declares no AI usage for the same member", async () => {
+    const endpoint = createSafeRootHandler(
+      {
+        permissions: { workspace: ["read"] },
+        mcp: { type: "internal", reason: "health_infra" },
+      },
+      async function* () {
+        return Result.ok({ ok: true });
+      },
+    );
+
+    const result = await endpoint.handler(
+      createContext(endpoint, unreadableLedger, {
+        orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+      }),
+    );
+
+    expect(result).toEqual({ ok: true });
+  });
 });
 
 describe("createSafeRootHandler permission gate", () => {

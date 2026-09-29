@@ -1,0 +1,80 @@
+{
+  "case-law.ecli-identity": {
+    "scans": [
+      {
+        "position": "root/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_country_date_idx"
+      },
+      {
+        "position": "root/0/1/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decisions_ecli_idx"
+      },
+      {
+        "position": "root/0/1/0/1",
+        "relation": "case_law_decision_identifiers",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decision_identifiers_lookup_idx"
+      }
+    ]
+  },
+  "case-law.sitemap-refresh": {
+    "scans": [
+      {
+        "position": "root/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_sitemap_shard_idx"
+      }
+    ]
+  },
+  "case-law.sitemap-shard-read": {
+    "scans": [
+      {
+        "position": "root/0/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_date_idx"
+      }
+    ]
+  },
+  "legislation.sitemap-shard-read": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0/0/0/1",
+        "relation": "legislation_documents",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "legislation_documents_sitemap_bucket_idx"
+      }
+    ]
+  },
+  "case-law.decisions-list": {
+    "scans": [
+      {
+        "position": "root/0/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_corpus_generation_date_cursor_idx"
+      },
+      {
+        "position": "root/0/0/1/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_lang_group_idx"
+      }
+    ]
+  },
+  "case-law.decision-text-presence": {
+    "scans": [
+      {
+        "position": "root/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_pkey"
+      }
+    ]
+  }
+}

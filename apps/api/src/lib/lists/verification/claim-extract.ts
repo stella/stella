@@ -64,7 +64,7 @@ export type ExtractedClaim = {
 
 const SYSTEM_PROMPT = `You list the claims a legal document makes, so each can later be checked against a record of evidence.
 
-A claim is one assertion the document's author makes: a thing that happened, a state of affairs, a date, an amount, who did or knew what. Split compound sentences into separate claims when each part could be true or false on its own. Skip headings, definitions, procedural boilerplate and statements of truth.
+A claim is one central assertion a reviewer would check as a unit: a thing that happened, a state of affairs, a date, an amount, who did or knew what. Keep that assertion with its own qualifiers, including dates, amounts, parties, negation and limits on the author's knowledge. When later prose in the same passage only restates or characterises that assertion, do not list it as another claim; a supporting detail the record could confirm or contradict on its own (a time, a document, a payment, a witness) is a claim of its own. Keep a distinct opinion or conditional assertion when it is itself a point the author advances. Split a sentence only when it makes distinct points a reviewer would decide independently. Skip identity, background and procedural sentences, as well as headings, definitions, boilerplate and statements of truth.
 
 For each claim give:
 - blockId: the id of the block it is in, exactly as supplied.

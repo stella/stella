@@ -3,9 +3,13 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { FileTextIcon, MessageSquareIcon, PanelRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  FileTextIcon,
+  MessageSquareIcon,
+  PanelRightIcon,
+} from "@stll/ui/icons";
 import {
   entityTabGlyph,
   InspectorEntityTab,

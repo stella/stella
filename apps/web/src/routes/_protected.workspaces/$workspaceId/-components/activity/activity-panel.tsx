@@ -5,20 +5,8 @@ import {
   useInfiniteQuery,
   useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import {
-  BotIcon,
-  ChevronDownIcon,
-  Clock3Icon,
-  DownloadIcon,
-  LanguagesIcon,
-  LandmarkIcon,
-  ListChecksIcon,
-  ListIcon,
-  ListFilterIcon,
-  UsersIcon,
-  WorkflowIcon,
-} from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -33,6 +21,20 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import {
+  BotIcon,
+  ChevronDownIcon,
+  Clock3Icon,
+  DownloadIcon,
+  LanguagesIcon,
+  LandmarkIcon,
+  ListChecksIcon,
+  ListIcon,
+  ListFilterIcon,
+  MailIcon,
+  UsersIcon,
+  WorkflowIcon,
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,
@@ -140,6 +142,7 @@ const categoryLabelKeys = {
   all: "workspaces.overview.activity.filters.all",
   automation: "workspaces.overview.activity.filters.automation",
   court: "workspaces.overview.activity.filters.court",
+  correspondence: "correspondence.title",
   documents: "workspaces.overview.activity.filters.documents",
   matter: "workspaces.overview.activity.filters.matter",
   tasks: "workspaces.overview.activity.filters.tasks",
@@ -1358,6 +1361,7 @@ const ActivityDetailsSheet = ({
 }) => {
   const format = useFormatter();
   const t = useTranslations();
+  const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   if (!group) {
     return null;
   }
@@ -1367,10 +1371,21 @@ const ActivityDetailsSheet = ({
     resolveVisibleActivityTriggerType(item.trigger.type) !== null;
   // Every decision in a folded review sitting is about the same document, so
   // the group opens it the way a single row does.
-  const openTarget =
-    group.items.length === 1 || group.type === "review_decisions"
-      ? getOpenTarget(item, workspaceId)
-      : undefined;
+  let openTarget: (() => void) | undefined;
+  if (group.items.length === 1 || group.type === "review_decisions") {
+    if (item.target.kind === "correspondence") {
+      openTarget = () =>
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId/correspondence/$correspondenceId",
+            params: { workspaceId, correspondenceId: item.target.id },
+          }),
+          "activity.open-correspondence",
+        );
+    } else {
+      openTarget = getOpenTarget(item, workspaceId);
+    }
+  }
   const rows = [
     {
       label: t("workspaces.overview.activity.details.dateTime"),
@@ -1796,6 +1811,8 @@ const targetIcon = (item: MatterActivityItem) => {
       return <UsersIcon className="text-muted-foreground size-3.5" />;
     case "court":
       return <LandmarkIcon className="text-muted-foreground size-3.5" />;
+    case "correspondence":
+      return <MailIcon className="text-muted-foreground size-3.5" />;
     case "automation":
       return <WorkflowIcon className="text-muted-foreground size-3.5" />;
     default: {

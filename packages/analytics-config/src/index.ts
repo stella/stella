@@ -12,7 +12,8 @@ type EnabledPostHogConfig = {
 };
 
 type PostHogEnvironment = PostHogConfig & {
-  isDev: boolean;
+  /** A local development process sends nothing unless `localDebug` is set. */
+  suppressTelemetry: boolean;
   localDebug: boolean;
 };
 
@@ -34,13 +35,14 @@ export const hasPostHogProject = <Config extends PostHogConfig>(
 };
 
 /**
- * Whether to send analytics at all: only to a real project, and from a dev
- * build only when the local debug flag asks for it.
+ * Whether to send analytics at all: only to a real project, and from a
+ * suppressed (local development) process only when the local debug flag asks
+ * for it.
  */
 export const shouldEnablePostHog = <Config extends PostHogEnvironment>(
   config: Config,
 ): config is Config & EnabledPostHogConfig =>
-  hasPostHogProject(config) && (!config.isDev || config.localDebug);
+  hasPostHogProject(config) && (!config.suppressTelemetry || config.localDebug);
 
 /**
  * The PostHog group type organization-level events are filed under. The

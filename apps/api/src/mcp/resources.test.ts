@@ -7,6 +7,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
@@ -29,6 +30,7 @@ import {
   buildWorkflowReference,
   TEMPLATE_WORKFLOW_TOOL_NAMES,
 } from "@/api/mcp/template-workflow-reference";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const MARKER_REFERENCE_URI = "stella://reference/template-markers";
 const FIELD_REFERENCE_URI = "stella://reference/template-fields";
@@ -75,6 +77,12 @@ const advertisedEnumValues = (schema: unknown): string[] => {
   );
 };
 
+const TEMPLATE_REFERENCE_URIS: ReadonlySet<string> = new Set([
+  MARKER_REFERENCE_URI,
+  FIELD_REFERENCE_URI,
+  WORKFLOW_REFERENCE_URI,
+]);
+
 describe("MCP resources", () => {
   test("shares the official MCP Apps resource MIME type", () => {
     expect(MCP_APP_RESOURCE_MIME_TYPE).toBe(RESOURCE_MIME_TYPE);
@@ -82,23 +90,43 @@ describe("MCP resources", () => {
 
   test("lists the public static resources on every matter-bearing surface", () => {
     for (const mode of ["default", "anonymized"] as const) {
-      const resources = listMcpResources(mode);
-      const uris = resources.map((resource) => resource.uri);
+      const uris = listMcpResources(mode).map((resource) => resource.uri);
       expect(uris).toContain(PRODUCT_IDENTITY_URI);
-      expect(uris).toContain(MARKER_REFERENCE_URI);
-      expect(uris).toContain(FIELD_REFERENCE_URI);
-      expect(uris).toContain(WORKFLOW_REFERENCE_URI);
       expect(uris).toContain(LEGISLATION_WORKFLOW_REFERENCE_URI);
+    }
+    const defaultUris = listMcpResources("default").map((r) => r.uri);
+    expect(defaultUris).toContain(MARKER_REFERENCE_URI);
+    expect(defaultUris).toContain(FIELD_REFERENCE_URI);
+    expect(defaultUris).toContain(WORKFLOW_REFERENCE_URI);
+  });
+
+  test("a template reference is served only where its authoring tools are listed", () => {
+    // Each names create_template or configure_template_fields, which the
+    // anonymized and documents audiences do not list.
+    for (const mode of ["anonymized", "documents", "law"] as const) {
+      const uris = listMcpResources(mode).map((resource) => resource.uri);
+      for (const uri of [
+        MARKER_REFERENCE_URI,
+        FIELD_REFERENCE_URI,
+        WORKFLOW_REFERENCE_URI,
+      ]) {
+        expect(uris).not.toContain(uri);
+      }
     }
   });
 
   test("only a surface that lists both feedback tools serves their workflow", () => {
     const defaultUris = listMcpResources("default").map((r) => r.uri);
     expect(defaultUris).toContain(FEEDBACK_WORKFLOW_REFERENCE_URI);
-    // The anonymized surface differs from the default one by exactly this
-    // reference: its tools are excluded there, so the procedure is too.
+    // The anonymized surface differs from the default one by this reference
+    // and the template authoring references: their tools are excluded there,
+    // so the procedures are too.
     expect(listMcpResources("anonymized").map((r) => r.uri)).toEqual(
-      defaultUris.filter((uri) => uri !== FEEDBACK_WORKFLOW_REFERENCE_URI),
+      defaultUris.filter(
+        (uri) =>
+          uri !== FEEDBACK_WORKFLOW_REFERENCE_URI &&
+          !TEMPLATE_REFERENCE_URIS.has(uri),
+      ),
     );
     for (const mode of ["anonymized", "documents", "law"] as const) {
       expect(listMcpResources(mode).map((r) => r.uri)).not.toContain(
@@ -118,7 +146,8 @@ describe("MCP resources", () => {
         .filter(
           (uri) =>
             uri !== LEGISLATION_WORKFLOW_REFERENCE_URI &&
-            uri !== FEEDBACK_WORKFLOW_REFERENCE_URI,
+            uri !== FEEDBACK_WORKFLOW_REFERENCE_URI &&
+            !TEMPLATE_REFERENCE_URIS.has(uri),
         ),
     );
   });
@@ -481,9 +510,10 @@ describe("MCP resources", () => {
 
   test("lists and reads the legislation workflow only behind its own gate", async () => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
-    const previousIsDev = env.isDev;
     env.FEATURE_PUBLIC_LAW = false;
-    env.isDev = false;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
     try {
       // The four corpus tools are filtered out of tools/list on this
       // deployment, so a reference telling a model to call them would hand it
@@ -509,7 +539,7 @@ describe("MCP resources", () => {
       );
     } finally {
       env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
-      env.isDev = previousIsDev;
+      restoreRuntimeMode();
     }
   });
 

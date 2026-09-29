@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatThreads } from "@/api/db/schema";
@@ -14,9 +15,11 @@ import {
 } from "@/api/handlers/chat/send-message-side-effects";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -46,6 +49,7 @@ const loadExternalMcpToolsForTest = async () => {
 };
 
 const sendMessage = createSendMessage({
+  createRefRegistry: createChatRefRegistry,
   indexThread: async () => undefined,
   loadExternalMcpTools: loadExternalMcpToolsForTest,
   loadWebSearchProviders: async () => ({
@@ -73,12 +77,17 @@ const RUN = Bun.randomUUIDv7().slice(-12);
 const PICKED_SLUG = `picked-review-${RUN}`;
 const PICKED_BODY = `Apply the picked review methodology ${RUN}.`;
 const MISSING_SLUG = `never-installed-${RUN}`;
+// Requires the browser tool, which a chat registers only while the browser
+// extension is connected; these sends connect none.
+const NEEDS_TOOL_SLUG = `needs-browser-${RUN}`;
+const NEEDS_TOOL_BODY = `Drive the browser for the review ${RUN}.`;
 
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 let pickedSkillId: SafeId<"agentSkill">;
+let needsToolSkillId: SafeId<"agentSkill">;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
 beforeAll(async () => {
@@ -105,6 +114,21 @@ beforeAll(async () => {
     body: PICKED_BODY,
     enabled: true,
   });
+  needsToolSkillId = toSafeId<"agentSkill">(Bun.randomUUIDv7());
+  await testDb.insert(agentSkills).values({
+    id: needsToolSkillId,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+    scope: "private",
+    origin: "authored",
+    slug: NEEDS_TOOL_SLUG,
+    name: "Needs the browser",
+    description: "Skill that cannot finish without the browser tool.",
+    metadata: { [SKILL_REQUIRED_TOOLS_METADATA_KEY]: "use-browser" },
+    contentHash: "0".repeat(64),
+    body: NEEDS_TOOL_BODY,
+    enabled: true,
+  });
 });
 
 afterAll(async () => {
@@ -115,7 +139,7 @@ afterAll(async () => {
   }
   await testDb
     .delete(agentSkills)
-    .where(inArray(agentSkills.id, [pickedSkillId]));
+    .where(inArray(agentSkills.id, [pickedSkillId, needsToolSkillId]));
   await releaseRlsFixture();
 });
 
@@ -133,15 +157,18 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
 };
 
 const createContext = ({
+  activeSkill,
   auditEvents,
   message,
   threadId,
 }: {
+  activeSkill?: { skillId: SafeId<"agentSkill">; skillName: string };
   auditEvents: AuditEvent[];
   message: ChatSendRequest["message"];
   threadId: SafeId<"chatThread">;
 }): SendMessageCtx => {
   const forwardedProps = {
+    ...(activeSkill === undefined ? {} : { activeSkill }),
     contextMatterIds: [],
     message,
     runId: `run-${message.id}`,
@@ -171,6 +198,7 @@ const createContext = ({
     getWorkspaceAccess: async () => null,
     memberRole: { role: "owner" },
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
@@ -226,5 +254,88 @@ describe("explicit skill references in a user message", () => {
         },
       }),
     ]);
+  });
+
+  test("a skill whose tools this chat lacks is neither offered nor loaded", async () => {
+    const threadId = await seedThread();
+    const auditEvents: AuditEvent[] = [];
+    streamChatMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        auditEvents,
+        message: {
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          parts: [
+            {
+              content: `Use [Needs the browser](#stella-skill-ref=${NEEDS_TOOL_SLUG}) on this.`,
+              type: "text",
+            },
+          ],
+          role: "user",
+        },
+        threadId,
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    const call = asTestRaw<
+      {
+        systemSafe?: string;
+        systemUntrusted?: string;
+        tools?: Record<string, unknown>;
+      }[][]
+    >(streamChatMock.mock.calls)
+      .at(0)
+      ?.at(0);
+    const systemUntrusted = call?.systemUntrusted ?? "";
+    const systemPrompt = `${call?.systemSafe ?? ""}${systemUntrusted}`;
+    // The catalog lists each skill with its description. It still offers the
+    // skill that needs nothing, so the absence below is the filter, not an
+    // empty catalog.
+    expect(systemPrompt).toContain("Skill picked from the composer.");
+    expect(systemPrompt).not.toContain(
+      "Skill that cannot finish without the browser tool.",
+    );
+    expect(Object.keys(call?.tools ?? {})).not.toContain("use-browser");
+    expect(systemUntrusted).not.toContain(NEEDS_TOOL_BODY);
+    expect(systemUntrusted).toContain("UNAVAILABLE SKILLS");
+    expect(systemUntrusted).toContain(NEEDS_TOOL_SLUG);
+    expect(
+      auditEvents.filter((event) => event.resourceId === needsToolSkillId),
+    ).toEqual([]);
+  });
+
+  test("an active skill this chat cannot run keeps its context but is not runnable", async () => {
+    const threadId = await seedThread();
+    streamChatMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        activeSkill: { skillId: needsToolSkillId, skillName: NEEDS_TOOL_SLUG },
+        auditEvents: [],
+        message: {
+          id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+          parts: [{ content: "Help me improve this skill.", type: "text" }],
+          role: "user",
+        },
+        threadId,
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    const call = asTestRaw<
+      { systemSafe?: string; systemUntrusted?: string }[][]
+    >(streamChatMock.mock.calls)
+      .at(0)
+      ?.at(0);
+    const systemPrompt = `${call?.systemSafe ?? ""}${call?.systemUntrusted ?? ""}`;
+    expect(systemPrompt).toContain("ACTIVE SKILL CONTEXT");
+    expect(systemPrompt).toContain("This skill cannot run in this chat.");
+    expect(systemPrompt).toContain("use-browser");
+    expect(systemPrompt).toContain("Skill picked from the composer.");
+    expect(systemPrompt).not.toContain(
+      "Skill that cannot finish without the browser tool.",
+    );
   });
 });

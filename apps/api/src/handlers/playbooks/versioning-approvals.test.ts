@@ -15,6 +15,7 @@ import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import listPlaybookVersions from "@/api/handlers/playbooks/versions/list";
 import restorePlaybookVersion from "@/api/handlers/playbooks/versions/restore";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -53,6 +54,7 @@ const createOrgContext = (
     createAuditRecorder: () => noopAuditRecorder,
     memberRole: { role: "owner" as const },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     request: new Request("https://example.test/playbooks"),

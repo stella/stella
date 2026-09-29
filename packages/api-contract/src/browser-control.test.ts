@@ -157,6 +157,7 @@ describe("browser control result contract", () => {
         { name: "Search", ref: "e:1:0.2.s.1", role: "textbox", value: "" },
       ],
       revision: "revision-1",
+      tabId: 7,
       text: "Page text",
       textOffset: 0,
       textTotalChars: 9,
@@ -200,26 +201,69 @@ describe("browser control result contract", () => {
     ).toBeNull();
   });
 
-  test("requires the controller and durable tool-call id on commands", () => {
+  test("rejects a snapshot that does not name its tab", () => {
+    const { tabId: _tabId, ...untabbed } = success.snapshot;
     expect(
-      parseBrowserExtensionRequest({
-        command: COMMAND_EXAMPLES.click,
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        requestId: "request-1",
-        source: "stella-web",
-        type: "command",
-      }),
+      parseBrowserControlResult({ ...success, snapshot: untabbed }),
     ).toBeNull();
+  });
+
+  test("requires the controller, tool call, turn and observed tab on commands", () => {
+    const command = {
+      command: COMMAND_EXAMPLES.click,
+      controllerId: "controller-1",
+      observedTab: { revision: "revision-1", tabId: 7 },
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      requestId: "request-1",
+      source: "stella-web",
+      toolCallId: "tool-call-1",
+      turnId: "turn-1",
+      type: "command",
+    } as const;
+    expect(parseBrowserExtensionRequest(command)).not.toBeNull();
     expect(
-      parseBrowserExtensionRequest({
-        command: COMMAND_EXAMPLES.click,
-        controllerId: "controller-1",
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-        requestId: "request-1",
-        source: "stella-web",
-        toolCallId: "tool-call-1",
-        type: "command",
-      }),
+      parseBrowserExtensionRequest({ ...command, observedTab: null }),
     ).not.toBeNull();
+    for (const field of [
+      "controllerId",
+      "observedTab",
+      "toolCallId",
+      "turnId",
+    ] as const) {
+      const { [field]: _omitted, ...incomplete } = command;
+      expect(parseBrowserExtensionRequest(incomplete)).toBeNull();
+    }
+  });
+
+  test("a cancel names the controller and the turn it stops", () => {
+    const cancel = {
+      controllerId: "controller-1",
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      requestId: "request-2",
+      source: "stella-web",
+      turnId: "turn-1",
+      type: "cancel",
+    } as const;
+    expect(parseBrowserExtensionRequest(cancel)).toEqual(cancel);
+    const { turnId: _turnId, ...anyTurn } = cancel;
+    expect(parseBrowserExtensionRequest(anyTurn)).toBeNull();
+    expect(
+      parseBrowserExtensionRequest({ ...cancel, toolCallId: "tool-call-1" }),
+    ).toBeNull();
+  });
+
+  test("an extension status reports the controlled tab", () => {
+    const pong = {
+      allSitesGranted: true,
+      controlledTabId: 7,
+      controllerId: "controller-1",
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      requestId: "request-3",
+      source: "stella-browser-extension",
+      type: "pong",
+    } as const;
+    expect(parseBrowserExtensionResponse(pong)).toEqual(pong);
+    const { controlledTabId: _tabId, ...previousVersion } = pong;
+    expect(parseBrowserExtensionResponse(previousVersion)).toBeNull();
   });
 });

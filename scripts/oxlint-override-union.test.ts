@@ -16,7 +16,7 @@
 
 import { expect, test } from "bun:test";
 
-import config from "../oxlint.config.ts";
+import config, { API_PROVIDER_ADAPTER_MODULES } from "../oxlint.config.ts";
 import {
   isRecord,
   lintedRepoFiles,
@@ -38,6 +38,11 @@ const TRACKED_RULES = [
 ] as const;
 
 type UnionRule = (typeof TRACKED_RULES)[number];
+
+/** The keys of the provider adapter import bans, which allow type imports. */
+const PROVIDER_ADAPTER_IMPORT_KEYS = API_PROVIDER_ADAPTER_MODULES.map(
+  (name) => `path:${name}+types`,
+);
 
 // Restrictions a scope drops on purpose. `scope` is the override's `files`
 // list joined with ", "; `drops` are the entry keys the guard reports. An
@@ -79,9 +84,18 @@ const DELIBERATE_NARROWINGS = [
       "path:@/api/lib/api-handlers#createHandler,createRootHandler",
       "path:@/api/lib/branded-types#toSafeId",
       "path:@stll/api-contract/safe-id#toSafeId",
+      ...PROVIDER_ADAPTER_IMPORT_KEYS,
     ],
     reason:
-      "Tests build handler context and owner-level DB handles directly; that is the fixture surface the production restrictions exist to keep out of handlers.",
+      "Tests build handler context, owner-level DB handles and provider adapters directly; that is the fixture surface the production restrictions exist to keep out of handlers.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope:
+      "apps/api/src/lib/tanstack-ai-models.ts, apps/api/src/lib/stella-openrouter-text-adapter.ts",
+    drops: PROVIDER_ADAPTER_IMPORT_KEYS,
+    reason:
+      "The model factory and its OpenRouter adapter subclass are the provider adapters' owners: every adapter they build is held to the provider stream contract.",
   },
   {
     rule: "no-restricted-imports",

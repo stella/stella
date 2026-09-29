@@ -3,11 +3,13 @@ import { describe, expect, mock, test } from "bun:test";
 
 import {
   auditLogs,
+  correspondence,
   desktopEditSessions,
   timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -50,6 +52,7 @@ const createContext = ({
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     params: { userId: "user_lead" },
     request: recorderBindings.request,
     session: {
@@ -185,6 +188,10 @@ describe("removeWorkspaceMember", () => {
     expect(result).toEqual({ id: deletedWorkspaceMemberId });
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
     expect(updates).toEqual([
+      {
+        table: correspondence,
+        value: { assigneeId: null, updatedAt: expect.any(Date) },
+      },
       { table: workspaces, value: { leadUserId: null } },
       {
         table: desktopEditSessions,

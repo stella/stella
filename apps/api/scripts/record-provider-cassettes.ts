@@ -22,16 +22,25 @@
 // are always recorded together: the replay tests play them as one
 // conversation, on one model.
 //
-// Nothing but the synthetic prompts is sent. Request bodies and request
-// headers are never stored; response headers are kept only when an SDK reads
-// them; response and request identifiers are replaced, one placeholder per
-// value; a response that
-// contains the key fails the recording. Review the diff before committing.
+//   bun run record:provider-cassettes --update-request-shapes
+//
+// pins the request each cassette's scenario sends today as its shape, with
+// no key and no network, as a snapshot is updated: the replay test fails a
+// request that differs from its shape. A recorded cassette listed as changed
+// was answered for another request; record it again when the provider could
+// answer the new one differently.
+//
+// Nothing but the synthetic prompts is sent. Of a request, only its shape is
+// stored: the protocol headers, never a credential, and the body with the
+// prompt replaced by a placeholder; response headers are kept only
+// when an SDK reads them; response and request identifiers are replaced, one
+// placeholder per value; a response that contains the key fails the
+// recording. Review the diff before committing.
 
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -43,6 +52,7 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
   cassetteKey,
   cassettePath,
+  loadProviderWireCassettes,
   PROVIDER_WIRE_PROVIDERS,
   PROVIDER_WIRE_SCENARIOS,
   providerWireCassetteSchema,
@@ -52,19 +62,25 @@ import type {
   ProviderWireExchange,
   ProviderWireExpectation,
   ProviderWireProvider,
+  ProviderWireRequestShape,
   ProviderWireScenario,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import {
+  cassettePrompt,
   EXPECTED_TEXT,
+  findRequestShapeDrift,
   findWireContractViolations,
   replayWireScenario,
   runWireScenario,
+  scenarioPrompt,
   UNKNOWN_MODEL_ID,
   wireChatModel,
+  wireRequestShape,
 } from "@/api/tests/helpers/provider-wire-contract";
 import {
   cassetteRequestPath,
   decodeAwsEventStream,
+  effectiveRequest,
   installProviderWireReplay,
 } from "@/api/tests/helpers/provider-wire-replay";
 import { matchesUnmetEntry } from "@/api/tests/helpers/provider-wire-unmet";
@@ -352,9 +368,11 @@ const readBounded = async (response: Response): Promise<Uint8Array> => {
 
 /** A fetch that forwards to the provider and keeps what it answered. */
 const installRecorder = ({
+  prompt,
   provider,
   secret,
 }: {
+  prompt: string;
   provider: ProviderWireProvider;
   secret: string;
 }) => {
@@ -369,8 +387,7 @@ const installRecorder = ({
     input: string | URL | Request,
     init?: RequestInit,
   ): Promise<Response> => {
-    const request =
-      input instanceof Request ? input : new Request(input.toString(), init);
+    const request = effectiveRequest(input, init);
     const url = new URL(request.url);
     if (!origins.has(url.origin)) {
       return panic(`The recorder refuses a request to ${url.origin}`);
@@ -378,7 +395,13 @@ const installRecorder = ({
     if (exchanges.length >= MAX_REQUESTS_PER_SCENARIO) {
       return panic("The recorder's request limit is reached");
     }
-    const response = await upstream(input, { ...init, redirect: "error" });
+    const shape = wireRequestShape({
+      body: await request.clone().text(),
+      headers: request.headers,
+      prompt,
+    });
+    refuseSecret(JSON.stringify(shape), secret);
+    const response = await upstream(request, { redirect: "error" });
     const bytes = await readBounded(response);
     // Every stored byte and header, whatever its framing.
     refuseSecret(new TextDecoder().decode(bytes), secret);
@@ -403,7 +426,7 @@ const installRecorder = ({
           text: sanitizeTextBody(new TextDecoder().decode(bytes), redaction),
         };
     exchanges.push({
-      request: { method: "POST", path: cassetteRequestPath(url) },
+      request: { method: "POST", path: cassetteRequestPath(url), shape },
       response: { body, headers, status: response.status },
     });
     // The SDK reads exactly the bytes that were recorded, already decoded.
@@ -476,6 +499,8 @@ const expectationFor = (
     case "refusal":
     case "server-error":
     case "text-terminal-only":
+    case "unlisted-stop":
+    case "unusable-stop":
       return panic(`${scenario} is not recordable`);
     default: {
       scenario satisfies never;
@@ -573,7 +598,8 @@ export const recordOne = async ({
   secret: string;
 }): Promise<ProviderWireCassette> => {
   const model = recordingModel({ chatModel, provider, scenario });
-  const recorder = installRecorder({ provider, secret });
+  const prompt = scenarioPrompt(provider, scenario);
+  const recorder = installRecorder({ prompt, provider, secret });
   try {
     await runWireScenario({ apiKey: secret, model, provider, scenario });
   } finally {
@@ -591,6 +617,7 @@ export const recordOne = async ({
     expect: expectationFor(scenario, recorder.exchanges),
     format: 1,
     model,
+    prompt,
     provider,
     recordedAt: new Date().toISOString(),
     scenario,
@@ -626,8 +653,102 @@ export const scenariosToRecord = (
   );
 };
 
+/** The repository's formatter, so a written cassette's diff is only what
+ *  changed in it. */
+const FORMATTER = path.resolve(
+  import.meta.dir,
+  "../../../scripts/run-oxfmt.ts",
+);
+
+const formatCassettes = (files: readonly string[]): void => {
+  if (files.length === 0) {
+    return;
+  }
+  const { exitCode } = Bun.spawnSync([process.execPath, FORMATTER, ...files], {
+    stderr: "inherit",
+    stdout: "ignore",
+  });
+  if (exitCode !== 0) {
+    panic("The written cassettes could not be formatted");
+  }
+};
+
+/**
+ * `--update-request-shapes`: replays every corpus cassette and pins the
+ * request the adapter sends today as the shape of each exchange it answers,
+ * the way a snapshot is updated. Nothing reaches a provider. Returns the
+ * cassettes it changed.
+ */
+export const updateRequestShapes = async (): Promise<string[]> => {
+  const replay = installProviderWireReplay();
+  const changed: string[] = [];
+  const written: string[] = [];
+  try {
+    for (const cassette of loadProviderWireCassettes()) {
+      const { sent } = await replayWireScenario({ cassette, replay });
+      if (findRequestShapeDrift({ cassette, sent }).length === 0) {
+        continue;
+      }
+      const shapes = new Map<number, ProviderWireRequestShape>();
+      for (const request of sent) {
+        if (
+          typeof request.exchange === "number" &&
+          !shapes.has(request.exchange)
+        ) {
+          shapes.set(
+            request.exchange,
+            wireRequestShape({ ...request, prompt: cassettePrompt(cassette) }),
+          );
+        }
+      }
+      // Edited as written, so nothing but the shapes moves.
+      const file = cassettePath(
+        cassette.provider,
+        cassette.scenario,
+        cassette.variant,
+      );
+      const raw: unknown = JSON.parse(readFileSync(file, "utf-8"));
+      const exchanges = isJsonRecord(raw) ? raw["exchanges"] : undefined;
+      for (const [index, shape] of shapes) {
+        const exchange: unknown = Array.isArray(exchanges)
+          ? exchanges[index]
+          : undefined;
+        const request = isJsonRecord(exchange) ? exchange["request"] : null;
+        if (!isJsonRecord(request)) {
+          return panic(`${file}: exchange ${String(index)} has no request`);
+        }
+        request["shape"] = shape;
+      }
+      writeFileSync(file, `${JSON.stringify(raw, null, 2)}\n`);
+      written.push(file);
+      // A recording was answered for the request it was made with; one whose
+      // request changed may need recording again.
+      changed.push(
+        `${cassetteKey(cassette)}${cassette.source === "recorded" ? " (recorded)" : ""}`,
+      );
+    }
+  } finally {
+    replay.restore();
+  }
+  formatCassettes(written);
+  return changed;
+};
+
 const main = async (): Promise<number> => {
   env.USE_MOCK_AI = false;
+  if (process.argv.includes("--update-request-shapes")) {
+    // Were a Bedrock request ever to bypass `fetch`, it would go to a host
+    // that does not resolve rather than to AWS.
+    process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
+      "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
+    const changed = await updateRequestShapes();
+    console.log(
+      changed.length === 0
+        ? "Every request shape is current."
+        : `Request shapes updated; review the diff:\n${changed.join("\n")}`,
+    );
+    return 0;
+  }
   const providers = (
     listArgument("--provider") ?? PROVIDER_WIRE_PROVIDERS
   ).filter((name): name is ProviderWireProvider =>
@@ -648,6 +769,7 @@ const main = async (): Promise<number> => {
   }
   let failures = 0;
   let requested = false;
+  const written: string[] = [];
   for (const provider of providers) {
     const { name: keyName, value: secret } = recordingKey(provider);
     if (secret === "") {
@@ -671,7 +793,7 @@ const main = async (): Promise<number> => {
         let violations: ReturnType<typeof findWireContractViolations>;
         let accepted: boolean;
         try {
-          const { findings, run } = await replayWireScenario({
+          const { findings, run, sent } = await replayWireScenario({
             cassette,
             replay,
           });
@@ -680,7 +802,14 @@ const main = async (): Promise<number> => {
             replay: findings,
             run,
           });
-          const shape = scenarioShapeProblems(scenario, run.chunks);
+          // The replayed request must be the one the provider answered.
+          const shape = [
+            ...scenarioShapeProblems(scenario, run.chunks),
+            ...violationsOf(
+              CHAT_ORACLE.providerWireRequestShape,
+              findRequestShapeDrift({ cassette, sent }),
+            ),
+          ];
           violations = [...contract, ...shape];
           // A run on the unmet ledger fails at exactly its entry's oracles,
           // as the replay test requires of the corpus entry.
@@ -697,6 +826,7 @@ const main = async (): Promise<number> => {
         const file = accepted ? corpusFile : `${corpusFile}.rejected`;
         mkdirSync(path.dirname(file), { recursive: true });
         writeFileSync(file, `${JSON.stringify(cassette, null, 2)}\n`);
+        written.push(file);
         if (!accepted) {
           failures += 1;
         }
@@ -712,6 +842,7 @@ const main = async (): Promise<number> => {
       }
     }
   }
+  formatCassettes(written);
   return failures === 0 ? 0 : 1;
 };
 

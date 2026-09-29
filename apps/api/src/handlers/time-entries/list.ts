@@ -301,6 +301,7 @@ const readTimeEntries = createSafeHandler(
         rateAtEntry: row.rateAtEntry,
         currency: row.currency,
         narrative: row.narrative,
+        narrativeLanguage: row.narrativeLanguage,
         invoiceNarrative: row.invoiceNarrative,
         billable: row.billable,
         noCharge: row.noCharge,

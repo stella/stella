@@ -6,8 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   evaluateMergeBar,
+  isReleasePullRequest,
   mergeBarRepositoryPolicy,
+  mergeWhenReadyAction,
   readMergeHandoff,
+  requiredChecksSucceeded,
   type MergeBarSnapshot,
 } from "./merge-bar";
 
@@ -34,7 +37,10 @@ describe("merge handoff state", () => {
       data: {
         repository: {
           pullRequest: {
+            id: "PR_fixture",
             number: 123,
+            title: "fix: something",
+            isCrossRepository: false,
             state: "OPEN",
             isDraft: false,
             mergeable: "MERGEABLE",
@@ -100,7 +106,10 @@ esac
       data: {
         repository: {
           pullRequest: {
+            id: "PR_fixture",
             number: 123,
+            title: "fix: something",
+            isCrossRepository: false,
             state: "OPEN",
             isDraft: false,
             mergeable: "UNKNOWN",
@@ -181,7 +190,10 @@ const passingSnapshot = (
   overrides: Partial<MergeBarSnapshot> = {},
 ): MergeBarSnapshot => ({
   pullRequest: {
+    id: "PR_fixture",
     number: 2137,
+    title: "fix: something",
+    isCrossRepository: false,
     baseRefName: "main",
     state: "OPEN",
     isDraft: false,
@@ -403,9 +415,7 @@ describe("merge bar", () => {
     expect(
       failedGate(
         passingSnapshot({
-          checkRuns: [
-            checkRun("ci-result", "in_progress", null),
-          ],
+          checkRuns: [checkRun("ci-result", "in_progress", null)],
         }),
       ),
     ).toEqual({ decision: "abort", reasons: ["REQUIRED_CHECK_INCOMPLETE"] });
@@ -419,9 +429,7 @@ describe("merge bar", () => {
       evaluateMergeBar(
         passingSnapshot({
           landing: "merge-when-ready",
-          checkRuns: [
-            checkRun("ci-result", "in_progress", null),
-          ],
+          checkRuns: [checkRun("ci-result", "in_progress", null)],
         }),
       ).decision,
     ).toBe("merge");
@@ -434,9 +442,7 @@ describe("merge bar", () => {
       failedGate(
         passingSnapshot({
           landing: "merge-when-ready",
-          checkRuns: [
-            checkRun("ci-result", "completed", "failure"),
-          ],
+          checkRuns: [checkRun("ci-result", "completed", "failure")],
         }),
       ),
     ).toEqual({
@@ -445,13 +451,39 @@ describe("merge bar", () => {
     });
   });
 
+  test("a skipped CI plan on a ready head is refused even when ci-result passed", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      expect(
+        failedGate(
+          passingSnapshot({
+            landing,
+            checkRuns: [
+              checkRun("ci-plan", "completed", "skipped", { id: 3 }),
+              checkRun("ci-result", "completed", "success"),
+            ],
+          }),
+        ),
+        landing,
+      ).toEqual({ decision: "abort", reasons: ["CI_PLAN_SKIPPED"] });
+    }
+    // A plan that ran is not in the way.
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          checkRuns: [
+            checkRun("ci-plan", "completed", "success", { id: 3 }),
+            checkRun("ci-result", "completed", "success"),
+          ],
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
   test("a completed but unsuccessful ci-result is refused", () => {
     expect(
       failedGate(
         passingSnapshot({
-          checkRuns: [
-            checkRun("ci-result", "completed", "failure"),
-          ],
+          checkRuns: [checkRun("ci-result", "completed", "failure")],
         }),
       ),
     ).toEqual({
@@ -513,9 +545,7 @@ describe("merge bar", () => {
     expect(
       failedGate(
         passingSnapshot({
-          checkRuns: [
-            checkRun("ci-result", "completed", "skipped"),
-          ],
+          checkRuns: [checkRun("ci-result", "completed", "skipped")],
         }),
       ),
     ).toEqual({
@@ -632,5 +662,128 @@ describe("merge bar", () => {
       "required-check",
       "review-threads",
     ]);
+  });
+});
+
+describe("release pull requests jump the merge queue", () => {
+  const release = {
+    title: "chore: release v0.9.40",
+    isDraft: false,
+    isCrossRepository: false,
+    baseRefName: "main",
+  };
+
+  test("recognizes a ready same-repository release pull request into main", () => {
+    expect(isReleasePullRequest(release)).toBe(true);
+    expect(isReleasePullRequest({ ...release, isDraft: true })).toBe(false);
+    expect(isReleasePullRequest({ ...release, isCrossRepository: true })).toBe(
+      false,
+    );
+    expect(isReleasePullRequest({ ...release, baseRefName: "release-1" })).toBe(
+      false,
+    );
+    expect(
+      isReleasePullRequest({ ...release, title: "chore: version packages" }),
+    ).toBe(false);
+    expect(
+      isReleasePullRequest({ ...release, title: "fix: chore: release v1" }),
+    ).toBe(false);
+  });
+
+  test("a jump enqueues at the front once checks have succeeded, even over an armed auto-merge", () => {
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "pending" },
+        jump: true,
+        checksSucceeded: true,
+      }),
+    ).toEqual({ kind: "enqueue-jump" });
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
+        jump: true,
+        checksSucceeded: true,
+      }),
+    ).toEqual({ kind: "enqueue-jump" });
+  });
+
+  test("a jump waits for the checks: auto-merge is armed and the jump deferred", () => {
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "pending" },
+        jump: true,
+        checksSucceeded: false,
+      }),
+    ).toEqual({ kind: "arm", jumpDeferred: true });
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
+        jump: true,
+        checksSucceeded: false,
+      }),
+    ).toEqual({
+      kind: "already-armed",
+      enabledAt: "2026-09-28T09:00:00Z",
+      jumpDeferred: true,
+    });
+  });
+
+  test("a queued pull request keeps its place", () => {
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "queued", entryId: "MQE_1" },
+        jump: true,
+        checksSucceeded: true,
+      }),
+    ).toEqual({ kind: "already-queued", entryId: "MQE_1" });
+  });
+
+  test("without a jump, arming is unchanged", () => {
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "pending" },
+        jump: false,
+        checksSucceeded: true,
+      }),
+    ).toEqual({ kind: "arm", jumpDeferred: false });
+    expect(
+      mergeWhenReadyAction({
+        handoff: { status: "armed", enabledAt: "2026-09-28T09:00:00Z" },
+        jump: false,
+        checksSucceeded: false,
+      }),
+    ).toEqual({
+      kind: "already-armed",
+      enabledAt: "2026-09-28T09:00:00Z",
+      jumpDeferred: false,
+    });
+  });
+
+  test("required checks succeed only when every one completed successfully", () => {
+    const required = ["ci-result", "dependency-review"];
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          checkRun("dependency-review", "completed", "success"),
+        ],
+        requiredCheckRuns: required,
+      }),
+    ).toBe(true);
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: [
+          checkRun("ci-result", "in_progress", null),
+          checkRun("dependency-review", "completed", "success"),
+        ],
+        requiredCheckRuns: required,
+      }),
+    ).toBe(false);
+    expect(
+      requiredChecksSucceeded({
+        checkRuns: [checkRun("dependency-review", "completed", "success")],
+        requiredCheckRuns: required,
+      }),
+    ).toBe(false);
   });
 });

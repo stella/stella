@@ -451,6 +451,29 @@ describe("splitting properties to fit a provider budget", () => {
     );
   });
 
+  test("builds each chunk's schema a logarithmic number of times, not once per property", () => {
+    // A workspace-sized batch that fits one OpenAI request whole: building
+    // the chunk once per added property would project ~45 000 properties.
+    const properties = Array.from({ length: 300 }, (_, index) => `p${index}`);
+    const smallSchema = (chunk: readonly string[]) => ({ properties: chunk });
+    let projected = 0;
+
+    const chunks = expectValue(
+      splitPropertiesForBudget({
+        provider: "openai",
+        modelId: OPENAI_MODEL_ID,
+        properties,
+        buildSchema: (chunk) => {
+          projected += chunk.length;
+          return smallSchema(chunk);
+        },
+      }),
+    );
+
+    expect(chunks).toEqual([properties]);
+    expect(projected).toBeLessThanOrEqual(4 * properties.length);
+  });
+
   test("returns no chunks for no properties", () => {
     expect(
       expectValue(

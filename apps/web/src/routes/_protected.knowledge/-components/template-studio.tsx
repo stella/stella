@@ -11,7 +11,6 @@ import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BracesIcon, RepeatIcon, SplitIcon } from "lucide-react";
 import type { NodeType, Node as PMNode, ResolvedPos } from "prosemirror-model";
 import type { EditorState, Transaction } from "prosemirror-state";
 import { TextSelection } from "prosemirror-state";
@@ -30,6 +29,7 @@ import {
   setTemplatePreviewValues,
 } from "@stll/folio-react";
 import { isClauseSlotName, isFieldPath } from "@stll/template-conditions";
+import { BracesIcon, RepeatIcon, SplitIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import "@stll/folio-react/editor.css";
 

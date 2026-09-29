@@ -5,13 +5,9 @@
 import * as React from "react";
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";
-import {
-  ChevronDownIcon,
-  ChevronsUpDownIcon,
-  ChevronUpIcon,
-} from "lucide-react";
 
 import { useLatest } from "../hooks/use-latest";
+import { ChevronDownIcon, ChevronsUpDownIcon, ChevronUpIcon } from "../icons";
 import { CONTROL_SIZE } from "../lib/control-size";
 import type { ControlSize } from "../lib/control-size";
 import { OVERLAY_LAYER_CLASS_NAMES } from "../lib/overlay-layer";

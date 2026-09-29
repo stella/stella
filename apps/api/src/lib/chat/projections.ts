@@ -22,6 +22,8 @@ import type { SearchTotal } from "@stll/api-contract/search";
 import {
   CZ_INSOLVENCY_MATCH_BASES,
   CZ_INSOLVENCY_PHASES,
+  CZ_VAT_FINDING_TYPES,
+  CZ_VAT_SUBJECT_TYPES,
   ENTITY_CHECK_KINDS,
   ENTITY_CHECK_NOT_COVERED_REASONS,
   ENTITY_CHECK_SUBJECT_TYPES,
@@ -39,6 +41,7 @@ import {
   DECISION_READ_ABSENCE_STATUSES,
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
+import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1118,6 +1121,7 @@ const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
     rateAtEntry: v.number(),
     currency: v.string(),
     narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
     invoiceNarrative: v.nullable(v.string()),
     billable: v.boolean(),
     noCharge: v.boolean(),
@@ -1392,7 +1396,10 @@ export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
       // phrasing that required every word it carried and found something.
       warnings: v.array(
         v.strictObject({
-          code: v.picklist(CASE_LAW_SEARCH_WARNING_CODES),
+          code: v.picklist([
+            ...CASE_LAW_SEARCH_WARNING_CODES,
+            ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
+          ]),
           message: v.string(),
           hint: v.string(),
         }),
@@ -2028,6 +2035,14 @@ const entityCheckSourceProjection = v.strictObject({
 const entityCheckSubjectProjection = v.variant("type", [
   v.strictObject({ type: v.literal("company-id"), value: v.string() }),
   v.strictObject({
+    type: v.literal("tax-id"),
+    value: v.string(),
+    // Set when the check derived the tax ID from a company ID.
+    derivedFrom: v.nullable(
+      v.strictObject({ type: v.literal("company-id"), value: v.string() }),
+    ),
+  }),
+  v.strictObject({
     type: v.literal("person"),
     firstName: v.string(),
     lastName: v.string(),
@@ -2054,6 +2069,26 @@ const czInsolvencyFindingProjection = v.strictObject({
   url: v.nullable(publicUrl()),
 });
 
+const czVatFindingProjection = v.strictObject({
+  type: v.picklist(CZ_VAT_FINDING_TYPES),
+  publishedOn: v.nullable(v.string()),
+});
+
+// What the VAT register holds beyond the reliability answer.
+const czVatPayerRecordProjection = v.strictObject({
+  subjectType: v.picklist(CZ_VAT_SUBJECT_TYPES),
+  name: v.nullable(v.string()),
+  address: v.nullable(v.string()),
+  taxOfficeCode: v.nullable(v.string()),
+  publishedAccounts: v.array(
+    v.strictObject({
+      account: v.string(),
+      publishedOn: v.string(),
+      withdrawnOn: v.nullable(v.string()),
+    }),
+  ),
+});
+
 const entityCheckOutcomeEntries = {
   kind: v.picklist(ENTITY_CHECK_KINDS),
   source: entityCheckSourceProjection,
@@ -2072,6 +2107,7 @@ export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
       ...entityCheckOutcomeEntries,
       checkedAt: v.string(),
       sourceDataAsOf: v.nullable(v.string()),
+      record: v.nullable(czVatPayerRecordProjection),
     }),
   ),
   projectionBranch(
@@ -2080,8 +2116,19 @@ export const CHECK_COUNTERPARTY_PROJECTION = v.variant("status", [
       ...entityCheckOutcomeEntries,
       checkedAt: v.string(),
       sourceDataAsOf: v.nullable(v.string()),
-      findings: v.array(czInsolvencyFindingProjection),
+      findings: v.array(
+        v.union([czInsolvencyFindingProjection, czVatFindingProjection]),
+      ),
       totalMatches: v.number(),
+      record: v.nullable(czVatPayerRecordProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("not-registered"),
+      ...entityCheckOutcomeEntries,
+      checkedAt: v.string(),
+      sourceDataAsOf: v.nullable(v.string()),
     }),
   ),
   projectionBranch(
@@ -2445,6 +2492,10 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),
+  timeMinimumUnitMinutes: v.optional(v.number()),
+  timeEditWindowDays: v.optional(v.number()),
+  timeLockedThroughMonth: v.optional(v.nullable(v.string())),
+  timeNarrativeRequired: v.optional(v.boolean()),
 });
 
 export const MANAGE_ORGANIZATION_PROJECTION = v.union([

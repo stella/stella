@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
 
-import { AlertTriangleIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { AlertTriangleIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
 

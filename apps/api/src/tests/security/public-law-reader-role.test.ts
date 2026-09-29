@@ -33,13 +33,13 @@ import {
 import {
   listSitemapShardDecisionsHandler,
   listSitemapShardsHandler,
-  readSitemapBucketShards,
   readSitemapDecisionAlternates,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { readCaseLawCorpusStatusQuery } from "@/api/handlers/case-law/decisions/status";
 import { readCaseLawCourtActivityQuery } from "@/api/handlers/case-law/decisions/status-courts";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
 import { rehydrateLegislationCandidates } from "@/api/handlers/legislation/search";
+import { listStatuteSitemapShardsHandler } from "@/api/handlers/legislation/sitemap";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -70,6 +70,7 @@ import {
 } from "@/api/lib/public-law-read-db";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+  PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
   ROLLOUT_CASE_LAW_RELATIONS,
   ROLLOUT_CASE_LAW_SOURCE_COLUMNS,
@@ -138,9 +139,33 @@ const forbiddenColumnRead = async (
     `SELECT ${quoted(column)} FROM ${quoted(relation)}`,
   );
 
+const pregrantProvisionColumns = new Set(
+  publicLawColumnPairs(PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION)
+    .filter(({ grant }) => grant === "permitted")
+    .map(({ relation, column }) => `${relation}.${column}`),
+);
+
+const pregrantReaderColumns = (relation: string, columns: string[]) =>
+  columns.filter(
+    (column) => !pregrantProvisionColumns.has(`${relation}.${column}`),
+  );
+
+const pregrantReaderRelations = Object.entries(
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+)
+  .filter(
+    ([relation, columns]) =>
+      pregrantReaderColumns(relation, Object.keys(columns)).length > 0,
+  )
+  .map(([relation]) => relation);
+
 const expectedQualifiedColumns = publicLawColumnPairs(
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
 )
+  .filter(
+    ({ relation, column }) =>
+      !pregrantProvisionColumns.has(`${relation}.${column}`),
+  )
   .map(({ relation, column }) => `${relation}.${column}`)
   .toSorted();
 
@@ -280,7 +305,7 @@ afterAll(async () => {
 });
 
 describe("public-law reader role", () => {
-  test("can read exactly the allowlisted columns", async () => {
+  test("can read exactly the columns granted in this phase", async () => {
     const result = await testDb.execute<{ qualified: string }>(sql`
       SELECT tables.relname || '.' || columns.attname AS qualified
       FROM pg_attribute AS columns
@@ -431,13 +456,11 @@ describe("public-law reader role", () => {
     });
   });
 
-  // A release attests against its own map, and cannot know a relation a later
-  // map adds. Holding the later release's grants, it reads them as
-  // over-privilege: the migration that grants a relation and the release that
-  // declares it are one cutover.
+  // A relation that is entirely permitted and ungranted cannot appear as
+  // over-privilege yet; exercise the relations this release actually grants.
   test("startup attestation under an older map refuses a later release's grants", async () => {
     const accepted: string[] = [];
-    for (const relation of Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)) {
+    for (const relation of pregrantReaderRelations) {
       const olderMap = Object.fromEntries(
         Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).filter(
           ([name]) => name !== relation,
@@ -622,9 +645,16 @@ describe("public-law reader role", () => {
       for (const [relation, columns] of Object.entries(
         PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
       )) {
+        const readableColumns = pregrantReaderColumns(
+          relation,
+          Object.keys(columns),
+        );
+        if (readableColumns.length === 0) {
+          continue;
+        }
         await tx.execute(
           sql.raw(
-            `SELECT ${Object.keys(columns).map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
+            `SELECT ${readableColumns.map(quoted).join(", ")} FROM ${quoted(relation)} LIMIT 0`,
           ),
         );
       }
@@ -747,6 +777,10 @@ describe("public-law reader role", () => {
         return await fn(tx as unknown as LegislationReadTransaction);
       });
 
+    expect(await listStatuteSitemapShardsHandler(legislationDb)).toMatchObject({
+      items: [],
+    });
+
     const result = await rehydrateLegislationCandidates({
       body: { query: "reader role census" },
       candidates: [{ id: createSafeId<"legislationDocument">(), score: 1 }],
@@ -780,9 +814,6 @@ describe("public-law reader role", () => {
     const shards = await listSitemapShardsHandler(caseLawDb);
     expect(shards).toMatchObject({ items: [] });
     await caseLawDb(async (tx) => {
-      await readSitemapBucketShards(tx, [
-        { country: PUBLIC_COUNTRY, month: "08", year: "2026" },
-      ]);
       await readSitemapDecisionAlternates(tx, ["reader-role-census"]);
     });
 
@@ -1050,7 +1081,7 @@ describe("public-law reader role", () => {
     );
   });
 
-  test("has a SELECT policy on every allowlisted relation and no other", async () => {
+  test("has a SELECT policy on every granted relation and no other", async () => {
     const result = await testDb.execute<{ tablename: string }>(sql`
       SELECT tablename
       FROM pg_policies
@@ -1061,7 +1092,7 @@ describe("public-law reader role", () => {
     `);
 
     expect(result.rows.map(({ tablename }) => tablename)).toEqual(
-      Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).toSorted(),
+      pregrantReaderRelations.toSorted(),
     );
   });
 

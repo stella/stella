@@ -16,8 +16,10 @@ import {
 } from "@/api/handlers/chat/send-message-side-effects";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -47,6 +49,7 @@ const loadExternalMcpToolsForTest = async () => {
 };
 
 const sendMessage = createSendMessage({
+  createRefRegistry: createChatRefRegistry,
   indexThread: async () => undefined,
   loadExternalMcpTools: loadExternalMcpToolsForTest,
   loadWebSearchProviders: async () => ({
@@ -165,6 +168,7 @@ const createContext = ({
     getWorkspaceAccess: async () => null,
     memberRole: { role: "owner" },
     orgAIConfig,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},

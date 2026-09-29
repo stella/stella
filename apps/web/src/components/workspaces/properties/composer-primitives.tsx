@@ -1,14 +1,14 @@
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   AlertTriangleIcon,
   AtSignIcon,
   FileTextIcon,
   PlusIcon,
   XIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverClose,

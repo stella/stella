@@ -18,6 +18,11 @@ import {
   BUFFER_INTENT_WRITE_TIMEOUT_MS,
   abandonBufferIntent,
   reserveBufferIntent,
+  reserveObjectCleanupIntent,
+  lockObjectCleanupIntentsForWriter,
+  retirePublishedObjectCleanupIntentsInTransaction,
+  settleObjectCleanupIntentsAfterWriter,
+  objectWriterSettlementAfterCleanup,
   startBufferIntentHeartbeat,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
@@ -37,6 +42,8 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -52,11 +59,16 @@ const ENTITY_BUFFER_INTENT_TELEMETRY = {
   heartbeatUnhandled: "buffer-entity-intent-heartbeat-unhandled",
 };
 
+const cleanupSettlementFailure = failureSink({
+  event: "entities.buffer_cleanup_settlement_failed",
+  expected: [],
+});
+
 type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   recordAuditEvent: AuditRecorder;
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
@@ -204,28 +216,45 @@ export const createEntityFromBuffer = async ({
   // the S3 write can therefore be distinguished from a committed entity and
   // cleaned by the bounded scheduler without adding a repair query to every
   // request.
-  const intent = await reserveBufferIntent({
-    safeDb,
-    organizationId,
-    workspaceId,
-    userId,
-    purpose: "entity_create",
-    purposeData: {
-      type: "entity_create",
-      propertyId: fileProperty.id,
-      reservedFileId: fileId,
-    },
-    fileName,
-    mimeType,
-    sizeBytes: bytes.byteLength,
-    sha256Hex,
-  });
-
-  const stopIntentHeartbeat = startBufferIntentHeartbeat({
-    safeDb,
-    intent,
-    telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
-  });
+  const publication = await (async () => {
+    if (userId === null) {
+      // Service-owned documents have no human upload owner. The existing
+      // exact-key intent protects their bytes through crash recovery.
+      const reserved = await reserveObjectCleanupIntent({
+        safeDb,
+        organizationId,
+        workspaceId,
+        objectKey: s3Key,
+      });
+      if (reserved.isErr()) {
+        throw reserved.error;
+      }
+      return { type: "service" as const, id: reserved.value };
+    }
+    const intent = await reserveBufferIntent({
+      safeDb,
+      organizationId,
+      workspaceId,
+      userId,
+      purpose: "entity_create",
+      purposeData: {
+        type: "entity_create",
+        propertyId: fileProperty.id,
+        reservedFileId: fileId,
+      },
+      fileName,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      sha256Hex,
+    });
+    const stopHeartbeat = startBufferIntentHeartbeat({
+      safeDb,
+      intent,
+      telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
+    });
+    return { type: "user" as const, intent, stopHeartbeat };
+  })();
+  let writeState: "confirmed" | "uncertain" = "uncertain";
 
   try {
     const cleanupObject = async (): Promise<boolean> => {
@@ -260,9 +289,27 @@ export const createEntityFromBuffer = async ({
       // A transport failure is ambiguous: S3 may publish after this immediate
       // delete completes. Keep the intent recoverable so later sweeps remove
       // any late publication; the heartbeat stops in finally below.
-      await cleanupObject();
+      const cleanupSucceeded = await cleanupObject();
+      if (publication.type === "service") {
+        const settled = await settleObjectCleanupIntentsAfterWriter({
+          safeDb,
+          intentIds: [publication.id],
+          objectState: objectWriterSettlementAfterCleanup({
+            cleanupSucceeded,
+            writeState,
+          }),
+        });
+        if (settled.isErr()) {
+          observeFailure(settled.error, {
+            sink: cleanupSettlementFailure,
+            ctx: { entityId },
+          });
+        }
+      }
       throw error;
     }
+
+    writeState = "confirmed";
 
     // `scopedDb` cannot distinguish a callback rollback from a lost COMMIT
     // acknowledgement. The intent finalization is atomic with the entity rows;
@@ -275,6 +322,9 @@ export const createEntityFromBuffer = async ({
         // See `lockWorkspacesForEntityCap` for the canonical lock
         // order every entity-creating path follows (issue #1139).
         await lockWorkspacesForEntityCap(tx, [workspaceId]);
+        if (publication.type === "service") {
+          await lockObjectCleanupIntentsForWriter(tx, [publication.id]);
+        }
 
         // The authoritative limit check must stay in the same
         // transaction as the insert, behind the lock above, to avoid
@@ -390,48 +440,73 @@ export const createEntityFromBuffer = async ({
           fileName,
         });
 
-        const finalizedResult: Extract<
-          PendingUploadFinalizedResult,
-          { type: "entity_create" }
-        > = {
-          type: "entity_create",
-          entityId,
-          fileId,
-          fileName,
-          renamed: false,
-        };
-        // audit: skip — intent bookkeeping is atomic with the audited entity.
-        const finalizedRows = await tx
-          .update(pendingUploads)
-          .set({
-            status: "finalized",
-            finalizedResult,
-            finalizedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(pendingUploads.id, intent.id),
-              eq(pendingUploads.status, "scanning"),
-              eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
-            ),
-          )
-          .returning({ id: pendingUploads.id });
-        if (!finalizedRows.at(0)) {
-          panic("Entity buffer intent finalize returned no row");
+        if (publication.type === "service") {
+          await retirePublishedObjectCleanupIntentsInTransaction({
+            tx,
+            intentIds: [publication.id],
+          });
+        } else {
+          const finalizedResult: Extract<
+            PendingUploadFinalizedResult,
+            { type: "entity_create" }
+          > = {
+            type: "entity_create",
+            entityId,
+            fileId,
+            fileName,
+            renamed: false,
+          };
+          // audit: skip — intent bookkeeping is atomic with the audited entity.
+          const finalizedRows = await tx
+            .update(pendingUploads)
+            .set({
+              status: "finalized",
+              finalizedResult,
+              finalizedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(pendingUploads.id, publication.intent.id),
+                eq(pendingUploads.status, "scanning"),
+                eq(
+                  pendingUploads.claimedByRequestId,
+                  publication.intent.claimRequestId,
+                ),
+              ),
+            )
+            .returning({ id: pendingUploads.id });
+          if (!finalizedRows.at(0)) {
+            panic("Entity buffer intent finalize returned no row");
+          }
         }
         transactionState.durableReferencePrepared = true;
       });
     } catch (error) {
-      if (
-        !transactionState.durableReferencePrepared &&
-        (await cleanupObject())
-      ) {
-        await abandonBufferIntent({
-          safeDb,
-          intent,
-          reason: "Server-generated entity transaction failed",
-          telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
-        });
+      if (!transactionState.durableReferencePrepared) {
+        const cleanupSucceeded = await cleanupObject();
+        if (publication.type === "service") {
+          const settled = await settleObjectCleanupIntentsAfterWriter({
+            safeDb,
+            intentIds: [publication.id],
+            objectState: objectWriterSettlementAfterCleanup({
+              cleanupSucceeded,
+              writeState,
+            }),
+          });
+          if (settled.isErr()) {
+            observeFailure(settled.error, {
+              sink: cleanupSettlementFailure,
+              ctx: { entityId },
+            });
+          }
+        } else if (cleanupSucceeded) {
+          await abandonBufferIntent({
+            safeDb,
+            intent: publication.intent,
+            reason: "Server-generated entity transaction failed",
+            telemetry: ENTITY_BUFFER_INTENT_TELEMETRY,
+          });
+        }
       }
 
       if (EntityLimitError.is(error) || InvalidParentError.is(error)) {
@@ -441,7 +516,9 @@ export const createEntityFromBuffer = async ({
       throw error;
     }
   } finally {
-    await stopIntentHeartbeat();
+    if (publication.type === "user") {
+      await publication.stopHeartbeat();
+    }
   }
 
   // LOOP-GUARD INVARIANT: this is the server-side entity-creation path (flow

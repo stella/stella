@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import type { ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import type {
@@ -9,6 +12,7 @@ import type {
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   apiSourceRoot,
   collectApiModuleGraph,
@@ -192,8 +196,12 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
+  [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [LIST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  "apps/api/src/handlers/case-law/decisions/lookup-by-identity.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
   [PUBLIC_SUBJECT_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [SEARCH_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/decisions/shelf-courts.ts": {
@@ -220,6 +228,11 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The read handle the gated reads run through.",
   },
+  "apps/api/src/lib/case-law/decision-court-id-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "The court-id CHECK fragment and the jurisdictions it covers; no query.",
+  },
   "apps/api/src/lib/case-law/decision-row-columns.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "The column list a public row is selected with; no query.",
@@ -235,6 +248,10 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law/search-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
+  "apps/api/src/lib/case-law/sitemap-shard-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Sitemap shard naming fragments; no query.",
+  },
   "apps/api/src/lib/decision-date-bounds-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Date-bound fragments; no query.",
@@ -246,6 +263,10 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Ingestion-side mirror upload intents; not a public read.",
+  },
+  "apps/api/src/lib/legal-search/case-law-legacy-reference-sql.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Predicate fragment only; issues no query.",
   },
   "apps/api/src/lib/legal-search/case-law-search-index.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
@@ -292,10 +313,21 @@ const publicRouteBlock = (source: string): string => {
 
 describe("public case-law route boundary", () => {
   test("public case-law API is dark-launched outside local development", async () => {
-    const source = await readRoutesSource();
+    const previousFeature = env.FEATURE_PUBLIC_LAW;
+    env.FEATURE_PUBLIC_LAW = false;
+    const restoreRuntimeMode = setRuntimeModeForTesting({
+      mode: RUNTIME_MODE.strict,
+    });
+    try {
+      const response = await publicCaseLawRoute.handle(
+        new Request("http://localhost/case/coverage"),
+      );
 
-    expect(source).toContain("env.isDev || env.FEATURE_PUBLIC_LAW");
-    expect(source).toContain("set.status = 404");
+      expect(response.status).toBe(404);
+    } finally {
+      restoreRuntimeMode();
+      env.FEATURE_PUBLIC_LAW = previousFeature;
+    }
   });
 
   test("public read transaction cannot mutate data", () => {
@@ -467,9 +499,10 @@ describe("public case-law route boundary", () => {
     }
 
     expect(handlerSource).toContain("LIMITS.caseLawFacetLimit");
-    expect(pgFtsSource).toContain("caseLawDecisions.country");
-    expect(pgFtsSource).toContain("caseLawDecisions.court");
-    expect(pgFtsSource).toContain("caseLawDecisions.decisionDate");
+    expect(pgFtsSource).toContain("caseLawBrowseFacetCounts.country");
+    expect(pgFtsSource).toContain('eq(caseLawBrowseFacetCounts.kind, "court")');
+    expect(pgFtsSource).toContain('eq(caseLawBrowseFacetCounts.kind, "year")');
+    expect(pgFtsSource).toContain("redistributableCaseLawSource");
     expect(corpusIndexSource).toContain('field: "jurisdiction"');
     expect(corpusIndexSource).toContain('field: "court"');
     expect(corpusIndexSource).toContain(
@@ -545,12 +578,18 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("language: caseLawDecisions.language");
     expect(source).toContain("languageAlternates:");
     expect(source).toContain("updatedAt: caseLawDecisions.updatedAt");
-    expect(source).toContain("SITEMAP_SHARD_BUCKET_COUNT");
+    expect(source).toContain("decisionBucketSql");
     expect(source).toContain("SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE");
     expect(source).toContain("normalizeLanguageSegment");
     expect(source).toContain("LIMITS.caseLawSitemapShardUrlLimit");
-    expect(source).toContain("bucketRowsByNaturalShard");
-    expect(source).toContain("Case-law sitemap bucket exceeds shard capacity");
+    // The index lists the refreshed snapshot's own columns, never a count.
+    expect(source).toContain(".from(caseLawSitemapShards)");
+    expect(source).toContain(
+      "lastModifiedAt: caseLawSitemapShards.lastModifiedAt",
+    );
+    expect(source).toContain(
+      "Case-law sitemap shard count exceeds sitemap index capacity",
+    );
     expect(source).toContain("LIMITS.caseLawSitemapIndexEntryLimit");
   });
 

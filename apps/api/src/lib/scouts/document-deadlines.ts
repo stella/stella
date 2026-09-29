@@ -237,140 +237,155 @@ export const runDocumentDeadlineScout = async ({
     workspaceIds: [run.workspaceId],
   });
 
-  const observed = await Result.tryPromise(
-    async () =>
-      await runScout({
-        db: scopedDb,
+  // The config is read before the scout run opens: an organization barred
+  // from the instance provider without a key of its own cannot observe.
+  const observed = Result.flatten(
+    await Result.tryPromise(async () => {
+      const orgAIConfigResult = await loadOrgAIConfig(db, {
         organizationId: run.organizationId,
-        scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
-        observe: async () => {
-          const source = await loadCurrentSource(db, run);
-          if (!source) {
-            return [];
-          }
-          const text = capText(
-            await decryptContent(
-              run.organizationId,
-              source.ciphertext,
-              source.iv,
-            ),
-          );
-          if (text.length < DEADLINE_TEXT_MIN_CHARS) {
-            return [];
-          }
+        userId: actorUserId,
+      });
+      if (Result.isError(orgAIConfigResult)) {
+        return Result.err(orgAIConfigResult.error);
+      }
+      const orgAIConfig = orgAIConfigResult.value;
+      return Result.ok(
+        await runScout({
+          db: scopedDb,
+          organizationId: run.organizationId,
+          scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
+          observe: async () => {
+            const source = await loadCurrentSource(db, run);
+            if (!source) {
+              return [];
+            }
+            const text = capText(
+              await decryptContent(
+                run.organizationId,
+                source.ciphertext,
+                source.iv,
+              ),
+            );
+            if (text.length < DEADLINE_TEXT_MIN_CHARS) {
+              return [];
+            }
 
-          const orgAIConfig = await loadOrgAIConfig(db, run.organizationId);
-          const analytics = createTanStackAIAnalyticsCallbacks({
-            feature: "inbox.deadline-scout",
-            modelRole: "chat",
-            orgAIConfig,
-            properties: {
-              organization_id: run.organizationId,
-              workspace_id: run.workspaceId,
-            },
-            traceId: Bun.randomUUIDv7(),
-            usageMetering: {
-              actionType: "background",
-              organizationId: run.organizationId,
-              safeDb,
-              serviceTier: "flex",
-              userId: actorUserId,
-              workspaceId: run.workspaceId,
-            },
-          });
-          const extraction = await generateTanStackObjectForRole({
-            role: "chat",
-            organizationId: run.organizationId,
-            tenantWorkspaceIds: [run.workspaceId],
-            orgAIConfig,
-            analytics,
-            system: DEADLINE_SYSTEM_PROMPT,
-            prompt: `Document "${source.entityName}":\n\n${text}`,
-            maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
-            caching: resolveCaching({
-              promptCachingEnabled: false,
-              role: "chat",
-              scopeKey: run.organizationId,
-            }),
-            serviceTier: "flex",
-            abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
-            outputSchema: deadlineExtractionSchema,
-          });
-
-          const now = new Date();
-          const kept = filterDeadlines(extraction.deadlines, text, now);
-          const sourceIdentity = [
-            run.entityVersionId,
-            run.fieldId,
-            run.sourceFileId,
-            run.sourceSha256Hex,
-          ].join(":");
-          return kept.map((deadline): NewSignal => {
-            const dueAt = `${deadline.dueDate}T00:00:00.000Z`;
-            return {
-              kind: SIGNAL_KIND.DEADLINE_DETECTED,
-              scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
-              workspaceId: run.workspaceId,
-              severity: deadlineSeverity(deadline.dueDate, now),
-              confidence: deadline.confidence,
-              title: `${deadline.label} due ${deadline.dueDate}`,
-              summary: `${source.entityName}: "${deadline.quote}"`,
-              subject: {
-                type: "entity",
+            const analytics = createTanStackAIAnalyticsCallbacks({
+              feature: "inbox.deadline-scout",
+              modelRole: "chat",
+              orgAIConfig,
+              properties: {
+                organization_id: run.organizationId,
+                workspace_id: run.workspaceId,
+              },
+              traceId: Bun.randomUUIDv7(),
+              usageMetering: {
+                actionType: "background",
+                organizationId: run.organizationId,
+                safeDb,
+                serviceTier: "flex",
+                userId: actorUserId,
                 workspaceId: run.workspaceId,
-                entityId: run.entityId,
               },
-              evidence: {
+            });
+            const extraction = await generateTanStackObjectForRole({
+              role: "chat",
+              organizationId: run.organizationId,
+              tenantWorkspaceIds: [run.workspaceId],
+              orgAIConfig,
+              analytics,
+              system: DEADLINE_SYSTEM_PROMPT,
+              prompt: `Document "${source.entityName}":\n\n${text}`,
+              maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
+              caching: resolveCaching({
+                promptCachingEnabled: false,
+                role: "chat",
+                scopeKey: run.organizationId,
+              }),
+              serviceTier: "flex",
+              abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
+              outputSchema: deadlineExtractionSchema,
+            });
+
+            const now = new Date();
+            const kept = filterDeadlines(extraction.deadlines, text, now);
+            const sourceIdentity = [
+              run.entityVersionId,
+              run.fieldId,
+              run.sourceFileId,
+              run.sourceSha256Hex,
+            ].join(":");
+            return kept.map((deadline): NewSignal => {
+              const dueAt = `${deadline.dueDate}T00:00:00.000Z`;
+              return {
                 kind: SIGNAL_KIND.DEADLINE_DETECTED,
-                dueAt,
-                label: deadline.label,
-                quote: deadline.quote,
-                entityId: run.entityId,
-                entityName: source.entityName,
-              },
-              suggestions: [
-                {
-                  kind: SUGGESTION_KIND.CREATE_DEADLINE,
+                scoutKey: SCOUT_KEY.DOCUMENT_DEADLINES,
+                workspaceId: run.workspaceId,
+                severity: deadlineSeverity(deadline.dueDate, now),
+                confidence: deadline.confidence,
+                title: `${deadline.label} due ${deadline.dueDate}`,
+                summary: `${source.entityName}: "${deadline.quote}"`,
+                subject: {
+                  type: "entity",
                   workspaceId: run.workspaceId,
-                  name: deadline.label,
+                  entityId: run.entityId,
+                },
+                evidence: {
+                  kind: SIGNAL_KIND.DEADLINE_DETECTED,
                   dueAt,
+                  label: deadline.label,
+                  quote: deadline.quote,
+                  entityId: run.entityId,
+                  entityName: source.entityName,
                 },
-                {
-                  kind: SUGGESTION_KIND.OPEN_CHAT,
-                  prompt: `What does "${source.entityName}" require by ${deadline.dueDate} regarding: ${deadline.label}?`,
-                },
-              ],
-              dedupeKey: deadlineDedupeKey(
-                sourceIdentity,
-                deadline.dueDate,
-                deadline.quote,
-              ),
-            };
-          });
-        },
-        validate: async (tx) => {
-          const current = await tx
-            .select({ entityId: extractedContent.entityId })
-            .from(extractedContent)
-            .innerJoin(
-              entities,
-              and(
-                eq(entities.id, extractedContent.entityId),
-                eq(entities.workspaceId, extractedContent.workspaceId),
-              ),
-            )
-            .innerJoin(
-              workspaces,
-              and(
-                eq(workspaces.id, extractedContent.workspaceId),
-                eq(workspaces.organizationId, extractedContent.organizationId),
-              ),
-            )
-            .where(currentSourceWhere(run))
-            .limit(1);
-          return current.length === 1;
-        },
-      }),
+                suggestions: [
+                  {
+                    kind: SUGGESTION_KIND.CREATE_DEADLINE,
+                    workspaceId: run.workspaceId,
+                    name: deadline.label,
+                    dueAt,
+                  },
+                  {
+                    kind: SUGGESTION_KIND.OPEN_CHAT,
+                    prompt: `What does "${source.entityName}" require by ${deadline.dueDate} regarding: ${deadline.label}?`,
+                  },
+                ],
+                dedupeKey: deadlineDedupeKey(
+                  sourceIdentity,
+                  deadline.dueDate,
+                  deadline.quote,
+                ),
+              };
+            });
+          },
+          validate: async (tx) => {
+            const current = await tx
+              .select({ entityId: extractedContent.entityId })
+              .from(extractedContent)
+              .innerJoin(
+                entities,
+                and(
+                  eq(entities.id, extractedContent.entityId),
+                  eq(entities.workspaceId, extractedContent.workspaceId),
+                ),
+              )
+              .innerJoin(
+                workspaces,
+                and(
+                  eq(workspaces.id, extractedContent.workspaceId),
+                  eq(
+                    workspaces.organizationId,
+                    extractedContent.organizationId,
+                  ),
+                ),
+              )
+              .where(currentSourceWhere(run))
+              .limit(1);
+            return current.length === 1;
+          },
+        }),
+      );
+    }),
   );
 
   if (Result.isError(observed)) {

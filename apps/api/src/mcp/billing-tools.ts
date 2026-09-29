@@ -13,7 +13,11 @@ import { createTimeEntryHandler } from "@/api/handlers/time-entries/time-entry-i
 import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update";
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/entitlement/get";
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
-import { resolveRate } from "@/api/lib/billing-rates";
+import {
+  NARRATIVE_LANGUAGE_MAX_LENGTH,
+  NARRATIVE_LANGUAGE_PATTERN,
+} from "@/api/lib/billing/narrative-language";
+import { resolveRate } from "@/api/lib/billing/rates";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DELETE_TIME_ENTRY_PROJECTION,
@@ -57,6 +61,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   DEFAULT_LIST_LIMIT,
@@ -68,7 +73,6 @@ import {
   MAX_LIST_LIMIT,
   notFoundResult,
   nullAsAbsent,
-  structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -466,6 +470,7 @@ const timeEntryColumns = {
   rateAtEntry: timeEntries.rateAtEntry,
   currency: timeEntries.currency,
   narrative: timeEntries.narrative,
+  narrativeLanguage: timeEntries.narrativeLanguage,
   invoiceNarrative: timeEntries.invoiceNarrative,
   billable: timeEntries.billable,
   noCharge: timeEntries.noCharge,
@@ -587,12 +592,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
   if (input.cursor !== undefined) {
     boundary = decodeTimeEntryPageCursor(input.cursor);
     if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
+      return invalidCursorResult({ cursor: input.cursor });
     }
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
@@ -751,9 +751,24 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
       narrative: v.optional(
         v.pipe(
           v.string(),
-          v.minLength(1),
+          v.minLength(0),
           v.maxLength(10_000),
           v.description("Description of the work; required when creating"),
+        ),
+      ),
+      narrative_language: v.optional(
+        v.pipe(
+          v.nullable(
+            v.pipe(
+              v.string(),
+              v.minLength(2),
+              v.maxLength(NARRATIVE_LANGUAGE_MAX_LENGTH),
+              v.regex(new RegExp(NARRATIVE_LANGUAGE_PATTERN, "u")),
+            ),
+          ),
+          v.description(
+            "BCP-47 language tag for the narrative; pass null to clear",
+          ),
         ),
       ),
       invoice_narrative: v.optional(
@@ -839,6 +854,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
         ["date_worked"],
         ["duration_minutes"],
         ["narrative"],
+        ["narrative_language"],
         ["invoice_narrative"],
         ["billable"],
         ["no_charge"],
@@ -851,6 +867,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
         i.date_worked !== undefined ||
         i.duration_minutes !== undefined ||
         i.narrative !== undefined ||
+        i.narrative_language !== undefined ||
         i.invoice_narrative !== undefined ||
         i.billable !== undefined ||
         i.no_charge !== undefined ||
@@ -894,6 +911,7 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
         organizationId: context.organizationId,
         workspaceId,
         userId: context.userId,
+        memberRole: { role: context.memberRole },
         recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
         body: {
           ...(input.entity_id === undefined
@@ -908,6 +926,9 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
           timezoneId: input.timezone_id ?? "",
           durationMinutes: input.duration_minutes ?? 0,
           narrative: input.narrative ?? "",
+          ...(input.narrative_language === undefined
+            ? {}
+            : { narrativeLanguage: input.narrative_language }),
           ...(input.billable === undefined ? {} : { billable: input.billable }),
           ...(input.task_code === undefined
             ? {}
@@ -968,6 +989,9 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
         ...(input.narrative === undefined
           ? {}
           : { narrative: input.narrative }),
+        ...(input.narrative_language === undefined
+          ? {}
+          : { narrativeLanguage: input.narrative_language }),
         ...(input.invoice_narrative === undefined
           ? {}
           : { invoiceNarrative: input.invoice_narrative }),
@@ -1302,12 +1326,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   const cursor =
     input.cursor === undefined ? null : invoicePageCursor.decode(input.cursor);
   if (input.cursor !== undefined && cursor === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
+    return invalidCursorResult({ cursor: input.cursor });
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
 

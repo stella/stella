@@ -5,7 +5,7 @@
       "kind": "permanent",
       "rule": "require-search-scope/require-search-scope",
       "file": "apps/api/src/lib/search/index-chat.ts",
-      "symbol": "backfillChatThreadSearchIndex",
+      "symbol": "chatThreadBackfillCandidatesQuery",
       "count": 1,
       "reason": "tenant-wide repair job, not a request path: it selects only the ids of threads whose projection row is missing or stale and returns no projection content to any caller",
       "evidence": "apps/api/src/lib/search/index-chat.test.ts"

@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import {
+  caseLawBrowseFacetCounts,
+  caseLawDecisions,
+  caseLawSources,
+} from "@/api/db/schema";
 import {
   caseLawPublicReadDb,
   type CaseLawPublicReadTransaction,
@@ -20,19 +24,65 @@ import {
 } from "@/api/lib/public-law-shared-query";
 import type { FacetBucket } from "@/api/lib/search/types";
 
-/**
- * Browse-page facets for a deployment without a corpus index: three grouped
- * scans of `case_law_decisions`. This is the self-host path and the reason the
- * capability is provider-dispatched rather than corpus-index-only. It is slow
- * on a large corpus (the aggregation path exists because of that), so the
- * caller is expected to keep it behind its TTL cache.
- */
-
-const decisionYear = sql<string>`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`;
+/** Refreshed hourly, so visible bucket counts can be up to one hour stale. */
 
 const toFacetBuckets = (
   rows: readonly { count: number; value: string }[],
 ): FacetBucket[] => rows.map((row) => ({ count: row.count, value: row.value }));
+
+/** Serve fresh installs before the first scheduled snapshot refresh. */
+const readLivePgFtsBrowseFacets = async (
+  tx: CaseLawPublicReadTransaction,
+  query: LegalBrowseFacetsQuery,
+): Promise<LegalBrowseFacets> => {
+  const scope: SQL[] = [redistributableCaseLawSource, publishedCaseLawDecision];
+  if (query.jurisdiction) {
+    scope.push(eq(caseLawDecisions.country, query.jurisdiction));
+  }
+
+  const countryRows = await tx
+    .select({
+      value: caseLawDecisions.country,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(and(...scope))
+    .groupBy(caseLawDecisions.country)
+    .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
+    .limit(query.limit);
+
+  const courtRows = await tx
+    .select({
+      value: caseLawDecisions.court,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(and(...scope))
+    .groupBy(caseLawDecisions.court)
+    .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
+    .limit(query.limit);
+
+  const decisionYear = sql<string>`to_char(${caseLawDecisions.decisionDate}, 'YYYY')`;
+  const yearRows = await tx
+    .select({
+      value: decisionYear,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(caseLawDecisions)
+    .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
+    .where(and(isNotNull(caseLawDecisions.decisionDate), ...scope))
+    .groupBy(decisionYear)
+    .orderBy(desc(decisionYear))
+    .limit(query.limit);
+
+  return {
+    country: toFacetBuckets(countryRows),
+    court: toFacetBuckets(courtRows),
+    year: toFacetBuckets(yearRows),
+  };
+};
 
 export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawBrowseFacets,
@@ -40,57 +90,70 @@ export const readPgFtsBrowseFacets = definePublicLawSharedQuery(
     tx: CaseLawPublicReadTransaction,
     query: LegalBrowseFacetsQuery,
   ): Promise<LegalBrowseFacets> => {
-    const scope: SQL[] = [
-      redistributableCaseLawSource,
-      publishedCaseLawDecision,
-    ];
-    if (query.jurisdiction) {
-      scope.push(eq(caseLawDecisions.country, query.jurisdiction));
+    const snapshotRows = await tx
+      .select({ kind: caseLawBrowseFacetCounts.kind })
+      .from(caseLawBrowseFacetCounts)
+      .limit(1);
+    if (snapshotRows.length === 0) {
+      return await readLivePgFtsBrowseFacets(tx, query);
     }
+
+    const scope = and(
+      redistributableCaseLawSource,
+      query.jurisdiction
+        ? eq(caseLawBrowseFacetCounts.country, query.jurisdiction)
+        : undefined,
+    );
 
     const countryRows = await tx
       .select({
-        value: caseLawDecisions.country,
-        count: sql<number>`count(*)::int`,
+        value: caseLawBrowseFacetCounts.value,
+        count: sql<number>`sum(${caseLawBrowseFacetCounts.total})::int`,
       })
-      .from(caseLawDecisions)
+      .from(caseLawBrowseFacetCounts)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, caseLawBrowseFacetCounts.sourceId),
       )
-      .where(and(...scope))
-      .groupBy(caseLawDecisions.country)
-      .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
+      .where(and(scope, eq(caseLawBrowseFacetCounts.kind, "country")))
+      .groupBy(caseLawBrowseFacetCounts.value)
+      .orderBy(
+        desc(sql`sum(${caseLawBrowseFacetCounts.total})`),
+        desc(caseLawBrowseFacetCounts.value),
+      )
       .limit(query.limit);
 
     const courtRows = await tx
       .select({
-        value: caseLawDecisions.court,
-        count: sql<number>`count(*)::int`,
+        value: caseLawBrowseFacetCounts.value,
+        count: sql<number>`sum(${caseLawBrowseFacetCounts.total})::int`,
       })
-      .from(caseLawDecisions)
+      .from(caseLawBrowseFacetCounts)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, caseLawBrowseFacetCounts.sourceId),
       )
-      .where(and(...scope))
-      .groupBy(caseLawDecisions.court)
-      .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.court))
+      .where(and(scope, eq(caseLawBrowseFacetCounts.kind, "court")))
+      .groupBy(caseLawBrowseFacetCounts.value)
+      .orderBy(
+        desc(sql`sum(${caseLawBrowseFacetCounts.total})`),
+        desc(caseLawBrowseFacetCounts.value),
+      )
       .limit(query.limit);
 
     const yearRows = await tx
       .select({
-        value: decisionYear,
-        count: sql<number>`count(*)::int`,
+        value: caseLawBrowseFacetCounts.value,
+        count: sql<number>`sum(${caseLawBrowseFacetCounts.total})::int`,
       })
-      .from(caseLawDecisions)
+      .from(caseLawBrowseFacetCounts)
       .innerJoin(
         caseLawSources,
-        eq(caseLawSources.id, caseLawDecisions.sourceId),
+        eq(caseLawSources.id, caseLawBrowseFacetCounts.sourceId),
       )
-      .where(and(isNotNull(caseLawDecisions.decisionDate), ...scope))
-      .groupBy(decisionYear)
-      .orderBy(desc(decisionYear))
+      .where(and(scope, eq(caseLawBrowseFacetCounts.kind, "year")))
+      .groupBy(caseLawBrowseFacetCounts.value)
+      .orderBy(desc(caseLawBrowseFacetCounts.value))
       .limit(query.limit);
 
     return {

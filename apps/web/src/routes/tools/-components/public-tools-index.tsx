@@ -3,9 +3,15 @@ import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
+
+import type { LoadedCatalogueEntry } from "@stll/catalogue";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ArrowRightIcon,
-  BookOpenIcon,
+  CaseLawIcon,
   Building2Icon,
   CircleHelpIcon,
   FileOutputIcon,
@@ -15,13 +21,7 @@ import {
   SlidersHorizontalIcon,
   XIcon,
   type LucideIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import type { LoadedCatalogueEntry } from "@stll/catalogue";
-import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
+} from "@stll/ui/icons";
 import {
   InputGroup,
   InputGroupAddon,
@@ -67,7 +67,7 @@ const TASK_LABEL_KEY = {
 const TASK_ICON = {
   "prepare-documents": FileOutputIcon,
   "protect-client-data": ShieldCheckIcon,
-  "research-precedents": BookOpenIcon,
+  "research-precedents": CaseLawIcon,
   "review-agreements": FileSearchIcon,
   "verify-organizations": Building2Icon,
 } as const satisfies Record<PublicToolTask, LucideIcon>;
@@ -462,7 +462,7 @@ function FeaturedTools() {
         <OutcomeToolCard
           body={t("publicTools.discovery.jurisRankBody")}
           entry={jurisRank}
-          icon={BookOpenIcon}
+          icon={CaseLawIcon}
           task="research-precedents"
         >
           <PreviewFrame label={t("common.preview")}>

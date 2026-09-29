@@ -61,8 +61,18 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
+To see a change working, `bun run agent:up` starts this checkout's own
+seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
+write evidence, and `agent:attach` is this repository's attach command for
+pull request screenshots. See the `dev` skill.
+
 Database deployments use committed migrations via
 `bun --filter @stll/api db:migrate`; `db:push` is local schema sync only.
+
+CI autofix formats changed files outside `.github/workflows/`, applies safe
+lint fixes, and regenerates selected outputs on same-repository pull requests.
+Local formatting and generator runs are optional, except that workflow files
+must be formatted locally.
 
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
@@ -72,9 +82,9 @@ instead. Passing does not certify `ci-result`: a pull request runs the core
 checks, the web and landing builds, and the path-scoped image smokes (the API
 image on arm64 only), while browser and e2e suites, service-backed suites, the
 other release architectures, and the mobile, Windows, and desktop Rust checks
-run only in the merge queue; label a pull request `ci:full` to run them before
-a merge that bypasses the queue. Confirm `ci-result` succeeds on the
-current PR head before merging.
+run only in the merge queue; land through `bun scripts/merge-bar.ts <pr>`
+(see Merging), which also refuses a head whose CI plan, and with it
+`ci-checks`, was skipped.
 `--all` checks every package instead of only those affected vs `origin/main`.
 
 The scoped test run is filtered by `scripts/test-scope.ts`, not `--affected`: a
@@ -89,7 +99,9 @@ and on a declared input no test reads any more.
 Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
 mergeability, the required checks on the exact head SHA, unresolved review
 threads, and migration ordering against the live base in one invocation, then
-arms "merge when ready" pinned to that head. Main has a merge queue: GitHub
+arms "merge when ready" pinned to that head; a release pull request
+(`chore: release v…`) is instead enqueued at the front of the queue, and
+`--jump` does the same for any pull request. Main has a merge queue: GitHub
 builds main plus the pull request, runs CI on that commit, and merges only if
 it passes, so nothing needs a rebase to land and nothing lands past a red
 check. Run the bar once the PR is ready and the user has authorized merging;

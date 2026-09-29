@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogFooter, DialogPopup } from "@stll/ui/dialog";
+import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { stellaToast } from "@stll/ui/toast";

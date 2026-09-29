@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -12,12 +12,21 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_DATE_OUT_OF_BOUNDS,
+  DECISION_DOCKET_NOT_CANONICAL,
   MAX_LOGGED_DECISION_DATE_LENGTH,
+  MAX_LEGACY_DOCKET_CANDIDATES,
+  MAX_LOGGED_DOCKET_LENGTH,
   MAX_SOURCE_IDENTITY_CANDIDATES,
 } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { planSupplementComposition } from "@/api/handlers/case-law/ingestion/supplement-composition";
+import { rowHoldsDocumentFor } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
-import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { resolveDecisionCourtId } from "@/api/lib/case-law/decision-court-identity";
+import { DANGEROUS_CHARS } from "@/api/lib/legal-search/corpus-sanitize";
+import {
+  observedDocketOf,
+  sanitizeResult,
+} from "@/api/lib/legal-search/ingestion-normalization";
 import { logger } from "@/api/lib/observability/logger";
 
 /** An ECLI's lookup spelling, or undefined when nothing searchable remains. */
@@ -61,6 +70,12 @@ export type ObservedDecision = {
   exactSourceIdentityCandidates: string[];
   repairSourceIdentityCandidates: string[];
   sourceIdentityCandidates: string[];
+  /**
+   * The dockets a legacy null-id row of this document may be stored under:
+   * the observed docket, and the publisher's spelling where ingestion cut a
+   * tail from it, since an older release stored that spelling as it came.
+   */
+  legacyCaseNumbers: string[];
 };
 
 type ObserveDecisionOptions = {
@@ -77,6 +92,32 @@ export const observeDecision = ({
   sourceId,
 }: ObserveDecisionOptions): ObservedDecision => {
   const observed = sanitizeResult(input);
+  const docket = observedDocketOf(input);
+  if (docket.type !== "kept") {
+    // The row is written either way; the event is the flag an operator
+    // counts and samples by source.
+    logger.warn(DECISION_DOCKET_NOT_CANONICAL, {
+      sourceId,
+      country: input.country,
+      outcome: docket.type,
+      caseNumber: input.caseNumber.slice(0, MAX_LOGGED_DOCKET_LENGTH),
+      ...(docket.type === "unparsed"
+        ? {}
+        : { canonical: docket.caseNumber.slice(0, MAX_LOGGED_DOCKET_LENGTH) }),
+    });
+  }
+  const legacyCaseNumbers =
+    docket.type === "trimmed"
+      ? [observed.caseNumber, input.caseNumber.replace(DANGEROUS_CHARS, "")]
+      : [observed.caseNumber];
+  // An adapter maps its source's court to a directory id and rejects what the
+  // directory does not admit before a result gets here. One that reaches the
+  // write path unresolved is an adapter defect, and writing it would store a
+  // court the index cannot partition, so the run stops on it.
+  const courtId = resolveDecisionCourtId(observed);
+  if (Result.isError(courtId)) {
+    return panic(courtId.error.message, courtId.error);
+  }
   const rejectedDecisionDate =
     observed.decisionDate === undefined ? input.decisionDate : undefined;
   if (rejectedDecisionDate !== undefined) {
@@ -129,6 +170,7 @@ export const observeDecision = ({
     exactSourceIdentityCandidates,
     repairSourceIdentityCandidates,
     sourceIdentityCandidates,
+    legacyCaseNumbers,
   };
 };
 
@@ -158,9 +200,14 @@ const IDENTITY_COLUMNS = {
   sourceUrl: true,
 } as const;
 
+const IDENTITY_EXTRAS = {
+  hasStoredDocument: rowHoldsDocumentFor,
+};
+
 type FindExistingDecisionOptions = Pick<
   ObservedDecision,
   | "exactSourceIdentityCandidates"
+  | "legacyCaseNumbers"
   | "observed"
   | "repairSourceIdentityCandidates"
 > & {
@@ -179,6 +226,7 @@ const findExistingDecisionTx = async (
   tx: Transaction,
   {
     exactSourceIdentityCandidates,
+    legacyCaseNumbers,
     observed,
     repairSourceIdentityCandidates,
     sourceId,
@@ -200,6 +248,7 @@ const findExistingDecisionTx = async (
           })
         : { id: { eq: provisionalClaimedDecisionId } },
     columns: IDENTITY_COLUMNS,
+    extras: IDENTITY_EXTRAS,
   });
   if (
     exactClaimedDecisionId !== undefined &&
@@ -216,6 +265,7 @@ const findExistingDecisionTx = async (
         sourceDocumentId: { in: exactSourceIdentityCandidates },
       },
       columns: IDENTITY_COLUMNS,
+      extras: IDENTITY_EXTRAS,
       limit: MAX_SOURCE_IDENTITY_CANDIDATES,
     });
     const rolloutWinnerIds = [...new Set(rolloutWinners.map(({ id }) => id))];
@@ -269,6 +319,7 @@ const findExistingDecisionTx = async (
             sourceId,
           }),
           columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
         });
   const identified =
     exactIdentified ??
@@ -283,6 +334,7 @@ const findExistingDecisionTx = async (
             },
           },
           columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
         })
       : undefined);
 
@@ -290,42 +342,47 @@ const findExistingDecisionTx = async (
   // release may adopt a legacy null-id row, but only after proving which
   // publisher document produced it. A docket can publish siblings, so
   // encounter order is not identity.
-  const legacy =
+  const legacyCandidates =
     identified || !observed.sourceDocumentId || claimedDecisionId !== undefined
-      ? undefined
-      : await tx.query.caseLawDecisions.findFirst({
+      ? []
+      : await tx.query.caseLawDecisions.findMany({
           where: {
             sourceId: { eq: sourceId },
-            caseNumber: observed.caseNumber,
+            caseNumber: { in: legacyCaseNumbers },
             language: observed.language,
             sourceDocumentId: { isNull: true },
           },
           columns: IDENTITY_COLUMNS,
+          extras: IDENTITY_EXTRAS,
+          orderBy: { id: "asc" },
+          limit: MAX_LEGACY_DOCKET_CANDIDATES,
         });
   // ECLIs compare the way identifiers are looked up: an adapter release
   // may spell the same identifier with different case or separators.
-  // The legacy candidate is already pinned to this exact docket.
-  const legacyEcliKey =
-    legacy?.ecli === null || legacy?.ecli === undefined
-      ? undefined
-      : ecliComparisonKey(legacy.ecli);
+  // Every legacy candidate is already pinned to this document's docket;
+  // each one is proved on its own, since siblings share that docket.
   const incomingEcliKeys = [observed.ecli, observed.legacyEcli].flatMap(
     (ecli) => {
       const key = ecli === undefined ? undefined : ecliComparisonKey(ecli);
       return key === undefined ? [] : [key];
     },
   );
-  const ecliMatches =
-    legacyEcliKey !== undefined && incomingEcliKeys.includes(legacyEcliKey);
-  const legacyEcliContradicts =
-    legacyEcliKey !== undefined && incomingEcliKeys.length > 0 && !ecliMatches;
-  const sourceUrlMatches =
-    legacy !== undefined &&
-    !legacyEcliContradicts &&
-    legacy.sourceUrl !== null &&
-    observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
-  const legacyMatches = ecliMatches || sourceUrlMatches;
-  const existing = identified ?? (legacyMatches ? legacy : undefined);
+  const legacyMatches = (legacy: (typeof legacyCandidates)[number]) => {
+    const legacyEcliKey =
+      legacy.ecli === null ? undefined : ecliComparisonKey(legacy.ecli);
+    const ecliMatches =
+      legacyEcliKey !== undefined && incomingEcliKeys.includes(legacyEcliKey);
+    const legacyEcliContradicts =
+      legacyEcliKey !== undefined &&
+      incomingEcliKeys.length > 0 &&
+      !ecliMatches;
+    const sourceUrlMatches =
+      !legacyEcliContradicts &&
+      legacy.sourceUrl !== null &&
+      observed.legacySourceUrls?.includes(legacy.sourceUrl) === true;
+    return ecliMatches || sourceUrlMatches;
+  };
+  const existing = identified ?? legacyCandidates.find(legacyMatches);
   return {
     claimedDecisionId,
     existing,
@@ -352,6 +409,7 @@ export const resolveDecisionIdentityTx = async (
   {
     observed,
     exactSourceIdentityCandidates,
+    legacyCaseNumbers,
     repairSourceIdentityCandidates,
     sourceIdentityCandidates,
     sourceId,
@@ -406,6 +464,7 @@ export const resolveDecisionIdentityTx = async (
       : undefined;
   const { claimedDecisionId, existing } = await findExistingDecisionTx(tx, {
     exactSourceIdentityCandidates,
+    legacyCaseNumbers,
     observed,
     repairSourceIdentityCandidates,
     sourceId,

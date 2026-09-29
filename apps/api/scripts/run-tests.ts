@@ -23,6 +23,13 @@ import {
   type TestBatchKind,
 } from "./test-batch-plan";
 import {
+  acquireCurrentSnapshot,
+  snapshotCacheDir,
+  snapshotDigest,
+  snapshotKey,
+  SnapshotBuildError,
+} from "./test-db-snapshot-cache";
+import {
   deriveTestLaneCount,
   laneRunExitCode,
   orderBatchesForLanes,
@@ -52,10 +59,10 @@ const REGULAR_TEST_BATCH_SIZE = 10;
 // process; on the Linux runners four DB-backed mock files exceeded the DB
 // batch budget, while three stayed below it. Keep these batches small.
 const MODULE_MOCK_TEST_BATCH_SIZE = 3;
-// The test database is embedded PGlite. The schema is built once per run
-// (scripts/build-pglite-snapshot.ts, spawned below) and every DB-touching
-// test process boots from that dumpDataDir snapshot, skipping the ~2.2 GB
-// drizzle-kit push peak that used to dominate each process (measured
+// The test database is embedded PGlite. The schema snapshot is built once
+// per cache key (scripts/build-pglite-snapshot.ts, spawned below). Every
+// DB-touching test process boots from that dumpDataDir snapshot, skipping
+// the ~2.2 GB drizzle-kit push peak that used to dominate each process (measured
 // per-file solo sweep, 2026-07-20). Each further DB file in a shared
 // process still retains its PGlite WASM memory (never shrinks), so
 // DB-touching tests keep running in small dedicated batches; pure-logic
@@ -285,8 +292,8 @@ const printError = (text: string) => {
 };
 
 // Every child process the runner started and has not reaped yet. An interrupt
-// stops them and waits for them before the run ends, because the `exit` hook
-// below then deletes the snapshot file they may still be reading.
+// stops them and waits for them before the run ends and releases its cache
+// lease or deletes its private snapshot.
 const liveChildren = new Set<Bun.Subprocess>();
 const runnerShutdown = new AbortController();
 const CHILD_STOP_GRACE_MS = 10_000;
@@ -319,7 +326,7 @@ const stopLiveChildren = async (signal: NodeJS.Signals): Promise<void> => {
 
 // The handler never exits by itself: aborting stops new batches, the running
 // ones end once signalled, and the run then finishes through its normal path,
-// which prints the summary and removes the snapshot in the `exit` hook. A
+// which prints the summary and runs snapshot cleanup in the `exit` hook. A
 // second signal skips the grace period.
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
@@ -340,19 +347,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-const buildTestDbSnapshot = async (): Promise<string> => {
-  const snapshotPath = path.join(
-    tmpdir(),
-    `stella-pglite-test-snapshot-${process.pid}.tar`,
-  );
+const runSnapshotBuilder = async (snapshotPath: string): Promise<void> => {
   console.log("Building the PGlite test-database snapshot ...");
-  // Registered before the build so a failed build's partial file is also
-  // removed.
-  process.on("exit", () => {
-    rmSync(snapshotPath, { force: true });
-  });
   if (runnerShutdown.signal.aborted) {
-    process.exit(1);
+    throw new SnapshotBuildError({
+      message: "PGlite snapshot build interrupted.",
+      exitCode: 1,
+    });
   }
   const builder = Bun.spawn({
     cmd: [
@@ -367,19 +368,74 @@ const buildTestDbSnapshot = async (): Promise<string> => {
   });
   const builderExitCode = await awaitChild(builder);
   if (builderExitCode !== 0) {
-    console.error("PGlite snapshot build failed; aborting the test run.");
-    process.exit(builderExitCode);
+    throw new SnapshotBuildError({
+      message: "PGlite snapshot build failed; aborting the test run.",
+      exitCode: builderExitCode,
+    });
   }
+};
+
+const buildPrivateSnapshot = async (): Promise<string> => {
+  const snapshotPath = path.join(
+    tmpdir(),
+    `stella-pglite-test-snapshot-${process.pid}.tar`,
+  );
+  process.on("exit", () => {
+    rmSync(snapshotPath, { force: true });
+  });
+  await runSnapshotBuilder(snapshotPath);
   return snapshotPath;
 };
 
-const testProcessEnv: Record<string, string | undefined> = {
-  ...process.env,
-  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
+const validateSnapshot = async (snapshotPath: string): Promise<boolean> => {
+  const digestPath = snapshotPath.replace(/\.tar$/u, ".sha256");
+  if (
+    readFileSync(digestPath, "utf-8") !== (await snapshotDigest(snapshotPath))
+  ) {
+    return false;
+  }
+  const check = Bun.spawn({
+    cmd: ["tar", "-tf", snapshotPath],
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return (await check.exited) === 0;
 };
-if (dbTests.length > 0 || moduleMockTests.length > 0) {
-  testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
-}
+
+const buildTestDbSnapshot = async (): Promise<string> => {
+  if (
+    process.env["CI"] !== undefined &&
+    !process.env["STELLA_PGLITE_SNAPSHOT_CACHE_DIR"]
+  ) {
+    return await buildPrivateSnapshot();
+  }
+  try {
+    const repositoryRoot = path.resolve(apiRoot, "../..");
+    const entryPoint = path.join(apiRoot, "scripts/build-pglite-snapshot.ts");
+    const result = await acquireCurrentSnapshot({
+      cacheDir: snapshotCacheDir(process.env),
+      key: () => snapshotKey(repositoryRoot, entryPoint),
+      build: runSnapshotBuilder,
+      validate: validateSnapshot,
+      signal: runnerShutdown.signal,
+    });
+    if (result.status === "hit") {
+      process.on("exit", result.snapshot.release);
+      return result.snapshot.path;
+    }
+    printError(
+      `PGlite snapshot cache unavailable (${result.reason}); building privately.`,
+    );
+  } catch (error) {
+    if (error instanceof SnapshotBuildError) {
+      throw error;
+    }
+    printError(
+      `PGlite snapshot cache unavailable (${String(error)}); building privately.`,
+    );
+  }
+  return await buildPrivateSnapshot();
+};
 
 type PlannedTestBatch = {
   isolate: boolean;
@@ -462,6 +518,29 @@ const plannedBatches = orderBatchesForLanes([
     ),
   }),
 ]);
+
+const testProcessEnv: Record<string, string | undefined> = {
+  ...process.env,
+  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
+};
+// Only a run that selected a DB-backed or module-mock batch boots PGlite, so
+// a run of logic test files skips the snapshot build.
+if (
+  plannedBatches.some(
+    ({ kind }) =>
+      kind === TEST_BATCH_KIND.db || kind === TEST_BATCH_KIND.moduleMock,
+  )
+) {
+  try {
+    testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+  } catch (error) {
+    if (error instanceof SnapshotBuildError) {
+      printError(error.message);
+      process.exit(error.exitCode);
+    }
+    throw error;
+  }
+}
 
 const testLanes = deriveTestLaneCount({
   availableParallelism: availableParallelism(),

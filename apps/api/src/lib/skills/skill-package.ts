@@ -15,6 +15,7 @@ import {
 import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
+import { validateSkillRequiredTools } from "@/api/lib/agent-skills/required-tools-validation";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -838,7 +839,10 @@ const checkFrontmatterMetadata = (
       return rejectSkillPackage("Skill metadata value is too large");
     }
   }
-  return Result.ok();
+  const requiredTools = validateSkillRequiredTools(metadata);
+  return Result.isError(requiredTools)
+    ? rejectSkillPackage(requiredTools.error.message)
+    : Result.ok();
 };
 
 const fetchGithubSkillPackage = async (

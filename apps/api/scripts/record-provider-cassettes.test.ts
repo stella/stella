@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { env } from "@/api/env";
 import {
   cassetteFor,
+  cassetteKey,
   loadProviderWireCassettes,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import type {
@@ -13,8 +14,10 @@ import type {
   ProviderWireScenario,
 } from "@/api/tests/helpers/provider-wire-cassette";
 import {
+  findRequestShapeDrift,
   findWireContractViolations,
   replayWireScenario,
+  scenarioPrompt,
   UNKNOWN_MODEL_ID,
   wireChatModel,
 } from "@/api/tests/helpers/provider-wire-contract";
@@ -240,8 +243,23 @@ describe("provider cassette recording redaction", () => {
 // (the replay, which answers at the same `fetch` boundary the network would),
 // is a cassette the replay test accepts.
 const cassettes = loadProviderWireCassettes();
+
+// A prompt that changed after a recording also moves its request shape;
+// this names the cause.
+test("every recording answers the prompt the recorder sends today", () => {
+  expect(
+    cassettes
+      .filter(
+        (cassette) =>
+          cassette.source === "recorded" &&
+          cassette.prompt !==
+            scenarioPrompt(cassette.provider, cassette.scenario),
+      )
+      .map(cassetteKey),
+  ).toEqual([]);
+});
 let upstream: ProviderWireReplay;
-let previousMockAI: boolean;
+let previousMockAI: typeof env.USE_MOCK_AI;
 
 const recordAndReplay = async (
   provider: ProviderWireProvider,
@@ -275,18 +293,26 @@ const recordAndReplay = async (
   // The same request and status; the body with its identifiers replaced.
   const [recordedExchange] = recorded.exchanges;
   const [sourceExchange] = source.exchanges;
-  expect(recordedExchange?.request).toEqual(sourceExchange?.request);
+  expect(recordedExchange?.request.method).toBe(sourceExchange?.request.method);
+  expect(recordedExchange?.request.path).toBe(sourceExchange?.request.path);
   expect(recordedExchange?.response.status).toBe(
     sourceExchange?.response.status,
   );
+  // The shape the recording pins is the request it sent: the prompt is out
+  // of it, and replaying the recording sends that request again.
+  expect(recordedExchange?.request.shape?.body).toBeDefined();
+  expect(JSON.stringify(recordedExchange?.request.shape)).not.toContain(
+    scenarioPrompt(provider, scenario),
+  );
 
-  const { findings, run } = await replayWireScenario({
+  const { findings, run, sent } = await replayWireScenario({
     cassette: recorded,
     replay: upstream,
   });
   expect(
     findWireContractViolations({ cassette: recorded, replay: findings, run }),
   ).toEqual([]);
+  expect(findRequestShapeDrift({ cassette: recorded, sent })).toEqual([]);
 };
 
 describe("a recording replays", () => {

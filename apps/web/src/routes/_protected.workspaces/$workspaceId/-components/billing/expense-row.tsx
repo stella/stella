@@ -1,8 +1,8 @@
-import { PencilIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { PencilIcon, TrashIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";

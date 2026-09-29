@@ -4,12 +4,80 @@
   "scenario": "length",
   "source": "recorded",
   "recordedAt": "2026-09-27T08:32:16.547Z",
+  "prompt": "Count from 1 to 500 in words, separated by commas.",
   "model": "gemini-3.8-flash",
   "exchanges": [
     {
       "request": {
         "method": "POST",
-        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse"
+        "path": "/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse",
+        "shape": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "contents": [
+              {
+                "parts": [
+                  {
+                    "text": "[prompt]"
+                  }
+                ],
+                "role": "user"
+              }
+            ],
+            "serviceTier": "standard",
+            "safetySettings": [
+              {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+              },
+              {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_ONLY_HIGH"
+              },
+              {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_ONLY_HIGH"
+              },
+              {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_ONLY_HIGH"
+              }
+            ],
+            "tools": [
+              {
+                "functionDeclarations": [
+                  {
+                    "name": "mcp__external__delete",
+                    "description": "Delete a draft by name.",
+                    "parametersJsonSchema": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["name"],
+                      "additionalProperties": false
+                    }
+                  }
+                ]
+              }
+            ],
+            "generationConfig": {
+              "maxOutputTokens": 16,
+              "thinkingConfig": {
+                "includeThoughts": false,
+                "thinkingLevel": "LOW"
+              }
+            }
+          }
+        }
       },
       "response": {
         "status": 200,

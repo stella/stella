@@ -274,6 +274,10 @@
       },
       "evidencePinned": "Zweryfikowano względem {count, plural, one {# faktu} few {# faktów} many {# faktów} other {# faktów}} w stanie na dzień {checkedAt}. Późniejsze zmiany na liście nie wpływają na tę weryfikację.",
       "failedTitle": "Weryfikacja nie powiodła się",
+      "history": {
+        "label": "Historia weryfikacji",
+        "loadFailed": "Nie udało się wczytać wcześniejszych weryfikacji tego dokumentu."
+      },
       "inProgress": "Sprawdzanie twierdzeń dokumentu względem faktów z listy…",
       "loadFailed": "Nie udało się wczytać tej weryfikacji.",
       "noClaims": "W tym dokumencie nie znaleziono żadnych twierdzeń.",
@@ -549,6 +553,11 @@
       "tableNamePlaceholder": "np. Standard 2025"
     },
     "revertToDraft": "Przywróć do wersji roboczej",
+    "savedNarratives": {
+      "empty": "Zapisz opis, aby użyć go ponownie.",
+      "save": "Zapisz opis",
+      "title": "Zapisane opisy"
+    },
     "selectMatter": "Wybierz sprawę...",
     "selectMatterToStart": "Wybierz sprawę, aby rozpocząć mierzenie czasu",
     "selectedCount": "{count, plural, one {# zaznaczony} few {# zaznaczone} many {# zaznaczonych} other {# zaznaczonego}}",
@@ -797,6 +806,12 @@
       "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
       "searchEveryWord": "Szukaj wszystkich słów"
     },
+    "seo": {
+      "collectionName": "Orzecznictwo stella",
+      "description": "Publiczna baza orzecznictwa z orzeczeniami sądów i źródłami prawa, które można indeksować.",
+      "homeDescription": "Publiczna baza prawna: orzeczenia sądów i ujednolicone akty prawne, z wyszukiwaniem według identyfikatora lub słów.",
+      "scopedDescription": "Publiczna baza orzecznictwa ({scope}) z orzeczeniami sądów i źródłami prawa, które można indeksować."
+    },
     "showWholeHeadnote": "Pokaż całą tezę",
     "sort": {
       "newest": "Najnowsze",
@@ -874,6 +889,7 @@
       "apiKey": "Klucz API",
       "none": "Bez konfiguracji"
     },
+    "skillNeedsUnavailableTools": "Niedostępna w czacie. Wymaga narzędzia, które nie jest tam dostępne: {tools}",
     "toolNames": {
       "anonymize": "Anonimizuj",
       "createDocx": "Utwórz DOCX",
@@ -967,7 +983,15 @@
       "searchFiles": "Szukaj plików",
       "searchMatters": "Szukaj spraw",
       "searchMcpServers": "Szukaj serwerów MCP...",
-      "searchSkills": "Szukaj umiejętności"
+      "searchSkills": "Szukaj umiejętności",
+      "skillNeeds": {
+        "browserExtension": "Połącz rozszerzenie przeglądarki, aby użyć tej umiejętności",
+        "document": "Otwórz dokument, aby użyć tej umiejętności",
+        "matter": "Rozpocznij czat w sprawie, aby użyć tej umiejętności",
+        "rawSendMode": "Niedostępne w zanonimizowanych czatach",
+        "reviewEdits": "Przełącz edycje na ręczną weryfikację, aby użyć tej umiejętności",
+        "webSearch": "Włącz wyszukiwanie w sieci, aby użyć tej umiejętności"
+      }
     },
     "contextMeter": {
       "attachments": "Załączone dokumenty",
@@ -1052,6 +1076,10 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "mockModel": {
+      "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
+      "label": "Symulowane AI"
+    },
     "modelSelector": {
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
@@ -1470,6 +1498,7 @@
     "displayName": "Nazwa wyświetlana",
     "document": "Dokument",
     "documentName": "Nazwa dokumentu",
+    "documentPage": "<bdi>{document}</bdi> · s. {page}",
     "documentReference": "Numer referencyjny dokumentu",
     "documentTitle": "Tytuł dokumentu",
     "documentation": "Dokumentacja",
@@ -1613,6 +1642,7 @@
     "profile": "Profil",
     "properties": "Właściwości",
     "queued": "W kolejce",
+    "reason": "Powód",
     "reconnecting": "Ponowne łączenie…",
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
@@ -1924,6 +1954,54 @@
       "organization": "Organizacja",
       "person": "Osoba"
     }
+  },
+  "correspondence": {
+    "addressTitle": "Adres e-mail sprawy",
+    "assertedOriginal": "Pierwotne nagłówki (według przekazującego)",
+    "authResults": {
+      "fail": "Niepowodzenie",
+      "pass": "Zaliczono",
+      "unknown": "Nieustalone"
+    },
+    "backToList": "Wróć do korespondencji",
+    "createAddress": "Utwórz adres",
+    "deliveredBy": "Dostarczone przez <address>{sender}</address>",
+    "deliveredByAuthenticated": "Dostarczone przez <address>{sender}</address> · uwierzytelniono",
+    "deliveryAuthentication": "Uwierzytelnienie dostarczenia",
+    "drops": {
+      "authenticationHint": "Poproś administratora poczty nadawcy o skonfigurowanie <protocol>SPF</protocol>, <protocol>DKIM</protocol> i <protocol>DMARC</protocol> dla domeny nadawczej.",
+      "reasons": {
+        "attachmentRejected": "Załącznik został odrzucony",
+        "authenticationFailed": "Uwierzytelnienie dostarczenia nie powiodło się",
+        "malformedMessage": "Nie udało się odczytać wiadomości",
+        "messageTooLarge": "Wiadomość jest zbyt duża",
+        "revokedAddress": "Adres e-mail został unieważniony",
+        "unauthorizedSender": "Nadawca nie ma uprawnień",
+        "unknownRecipient": "Nieznany odbiorca"
+      },
+      "title": "Odrzucone wiadomości"
+    },
+    "empty": "Brak korespondencji.",
+    "filers": "Nadawcy",
+    "forwardedBy": "Przekazane przez <address>{sender}</address>",
+    "forwardedByAuthenticated": "Przekazane przez <address>{sender}</address> · uwierzytelniono",
+    "inboundNotConfigured": "Poczta przychodząca nie jest skonfigurowana. Poproś administratora o skonfigurowanie domeny poczty przychodzącej.",
+    "markHandled": "Oznacz jako obsłużone",
+    "markNew": "Oznacz jako nowe",
+    "noAddress": "Brak aktywnego adresu e-mail.",
+    "originalSender": "Pierwotny nadawca",
+    "originalSenderUnverified": "Pierwotny nadawca (podany, niezweryfikowany)",
+    "originalSignatureVerified": "Pierwotny podpis zweryfikowany (<identifier>d={domain}</identifier>)",
+    "receivedAt": "Odebrano",
+    "revokeAddress": "Unieważnij adres",
+    "rotateAddress": "Zmień adres",
+    "sentAt": "Wysłano",
+    "sharedMailboxFiler": "Wspólna skrzynka {address}, zatwierdzona przez {approver}",
+    "states": {
+      "handled": "Obsłużone"
+    },
+    "title": "Korespondencja",
+    "unknownApprover": "Nieznany zatwierdzający"
   },
   "docxReview": {
     "acceptAll": "Zaakceptuj wszystkie",
@@ -4298,6 +4376,7 @@
     "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
     "compareWholeAct": "Porównaj cały akt",
     "compareWithVersion": "Porównaj z brzmieniem {version}",
+    "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
     "diffInserted": "Dodano:",
     "diffRemoved": "Usunięto:",
     "emptyDocument": "Ta wersja nie ma dostępnego tekstu.",
@@ -5094,6 +5173,57 @@
       "ocrAlreadyProcessed": "Rozpoznawanie tekstu zostało już ukończone",
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
       "ocrQueued": "Rozpoznawanie tekstu dodane do następnej partii OCR",
+      "pdfSigning": {
+        "action": "Podpisz w aplikacji desktopowej",
+        "cancelledBaseVersionDescription": "Dokument zmienił się w trakcie podpisywania. Otwórz najnowszą wersję i podpisz go ponownie.",
+        "cancelledCertificateDescription": "Wybrany certyfikat nie nadaje się do podpisu. Wybierz taki, który pozwala na podpis cyfrowy.",
+        "cancelledCertifiedDescription": "Ten PDF jest certyfikowany, a jego certyfikacja nie pozwala na kolejne podpisy.",
+        "cancelledDescription": "Podpisywanie nie zostało ukończone.",
+        "cancelledDigestDescription": "Podpis nie pasował do przygotowanego dokumentu. Spróbuj podpisać ponownie.",
+        "cancelledFailedDescription": "Nie udało się dodać podpisu do tego PDF.",
+        "cancelledPlatformDescription": "Podpisywanie certyfikatem z pęku kluczy systemu działa na razie w macOS.",
+        "cancelledRevokedDescription": "Wybrany certyfikat lub certyfikat, który go wystawił, został unieważniony. Wybierz ważny certyfikat.",
+        "cancelledSignatureDescription": "Podpis ze stella desktop nie pasował do wybranego certyfikatu. Spróbuj podpisać ponownie.",
+        "cancelledStampNameDescription": "Nazwy właściciela certyfikatu nie można pokazać w widocznej pieczęci. Podpisz ponownie niewidocznym podpisem.",
+        "cancelledStampOverflowDescription": "Tekst pieczęci nie mieści się w narysowanym polu. Narysuj większą pieczęć, skróć powód lub miejsce albo użyj niewidocznego podpisu.",
+        "cancelledTitle": "Podpisywanie anulowane",
+        "cancelledUserDescription": "Podpisywanie anulowano w stella desktop.",
+        "cancelledWouldBreakSignaturesDescription": "Podpisanie tego PDF unieważniłoby podpisy, które już zawiera.",
+        "encryptedDescription": "Ten plik PDF jest chroniony hasłem. Usuń zabezpieczenie przed podpisaniem.",
+        "expiredDescription": "stella desktop nie ukończył podpisywania na czas. Uruchom go i spróbuj ponownie.",
+        "expiredTitle": "Czas na podpis minął",
+        "inProgressDescription": "Ten plik jest już podpisywany. Najpierw dokończ lub anuluj to podpisywanie w stella desktop.",
+        "noFileDescription": "Ten dokument nie ma pliku do podpisania.",
+        "notAPdfDescription": "Podpisać można tylko pliki PDF.",
+        "placementBox": "Położenie pieczęci",
+        "placementConfirm": "Otwórz stella desktop",
+        "placementDescription": "Wybierz, jak podpis ma wyglądać w pliku PDF.",
+        "placementHint": "Przeciągnij pieczęć, aby ją przesunąć, albo jej róg, aby zmienić rozmiar. Gdy pieczęć jest zaznaczona, strzałki ją przesuwają, a Shift ze strzałką zmienia jej rozmiar.",
+        "placementInvisible": "Niewidoczny podpis",
+        "placementInvisibleDescription": "Podpis zostanie zapisany w pliku bez znaku na żadnej stronie.",
+        "placementPageLabel": "Strona pieczęci",
+        "placementPageOption": "Strona {page, number} z {count, number}",
+        "placementPreview": "Podgląd strony {page, number}",
+        "placementPreviewFailed": "Nie udało się wczytać podglądu strony.",
+        "placementTitle": "Podpisz PDF",
+        "placementTooSmall": "Ta strona jest za mała na pieczęć. Wybierz inną stronę.",
+        "placementVisible": "Widoczna pieczęć",
+        "placementVisibleDescription": "Ramka na stronie pokazuje, kto i kiedy podpisał.",
+        "readOnlyDescription": "Ten dokument jest tylko do odczytu.",
+        "signedDescription": "Podpis zapisano jako wersję {versionNumber, number}.",
+        "signedDescriptionNoVersion": "Podpis zapisano jako nową wersję.",
+        "signedTitle": "PDF podpisany",
+        "stampLocation": "Miejsce",
+        "stampRejectedDescription": "Nie można umieścić pieczęci w tym miejscu. Umieść ją ponownie i spróbuj jeszcze raz.",
+        "stampSignedBy": "Podpisany cyfrowo przez",
+        "stampTextUnrenderableDescription": "Powodu lub miejsca nie można pokazać w widocznej pieczęci. Zmień tekst albo użyj niewidocznego podpisu.",
+        "startFailedTitle": "Nie można podpisać tego pliku",
+        "statusUnavailableDescription": "Sprawdź w historii wersji, czy podpis został zapisany.",
+        "statusUnavailableTitle": "Stan podpisywania niedostępny",
+        "tooLargeDescription": "Ten plik PDF jest za duży, aby go podpisać.",
+        "waitingDescription": "Wybierz w stella desktop certyfikat podpisu, aby podpisać ten plik PDF.",
+        "waitingTitle": "Czekam na stella desktop"
+      },
       "rateLimited": "Ograniczenie szybkości; wznowienie za {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Co zrobić z plikiem {fileName}",
@@ -5355,6 +5485,7 @@
         },
         "targets": {
           "automation": "automatyzacja",
+          "correspondence": "korespondencja",
           "court": "wpis sądowy",
           "document": "dokument",
           "documentReview": "przegląd dokumentu",

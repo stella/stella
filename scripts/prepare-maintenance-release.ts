@@ -746,6 +746,7 @@ const main = async () => {
             `  package versions, changelogs and ${String(prepared.changesets.length)} consumed changeset(s): ${prepared.changesets.join(", ")}`,
           ]),
       "Review the diff, commit it, and open the release PR.",
+      "Once its CI is green, land it with `bun scripts/merge-bar.ts <pr>`: a release PR enters the merge queue at the front.",
       "",
     ].join("\n"),
   );

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { load } from "cheerio";
 
 import { MAX_EMAIL_CITATION_BLOCKS } from "@stll/api-contract";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
@@ -13,6 +14,7 @@ import {
   type ParsedEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
+  sanitizeEmailBodyHtml,
   resolveEmailAttachmentMimeType,
   isEmailAttachmentPreviewable,
 } from "./email-to-html";
@@ -125,6 +127,28 @@ describe("renderEmailHtml", () => {
     ],
     attachments: [],
     ...overrides,
+  });
+
+  test.each([
+    "<p>Retained message</p>",
+    '<html><head><meta http-equiv="Content-Security-Policy" content="default-src *"></head><body><p>Retained message</p><meta http-equiv="refresh" content="0;url=https://tracker.example"></body></html>',
+    '<META HTTP-EQUIV="CONTENT-SECURITY-POLICY" CONTENT="default-src *"><p>Retained message</p><meta http-equiv="Content-Security-Policy" content="img-src *">',
+  ])("stored HTML receives only the canonical preview CSP: %s", (source) => {
+    const preview = load(renderEmailBodyHtml(htmlEmail()));
+    const expectedPolicy = preview(
+      'meta[http-equiv="Content-Security-Policy"]',
+    ).attr("content");
+    expect(expectedPolicy).toContain("default-src 'none'");
+    const sanitized = sanitizeEmailBodyHtml(source);
+    const document = load(sanitized);
+    expect(document("meta[http-equiv]")).toHaveLength(1);
+    expect(
+      document('head > meta[http-equiv="Content-Security-Policy"]').attr(
+        "content",
+      ),
+    ).toBe(expectedPolicy);
+    expect(document("body").text()).toBe("Retained message");
+    expect(sanitizeEmailBodyHtml(sanitized)).toBe(sanitized);
   });
 
   test("strips scripts, inline handlers, and javascript: URLs", () => {

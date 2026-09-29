@@ -1,12 +1,12 @@
+import { useTranslations } from "use-intl";
+
 import {
   FileDiffIcon,
   LockIcon,
   UserCheckIcon,
-  WandSparklesIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
+  AiActionIcon,
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 import {
   MenuRadioGroup,
   MenuRadioItem,
@@ -31,7 +31,7 @@ import {
 // version", which is a different (and destructive-sounding) promise.
 const OPTION_ICON = {
   [CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges]: FileDiffIcon,
-  [CHAT_EDIT_MODE_OPTION_ID.autoDirect]: WandSparklesIcon,
+  [CHAT_EDIT_MODE_OPTION_ID.autoDirect]: AiActionIcon,
   [CHAT_EDIT_MODE_OPTION_ID.manual]: UserCheckIcon,
 } as const satisfies Record<ChatEditModeOptionId, LucideIcon>;
 

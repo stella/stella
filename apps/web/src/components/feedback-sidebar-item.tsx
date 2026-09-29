@@ -1,7 +1,8 @@
 import { lazy, Suspense, useState } from "react";
 
-import { MegaphoneIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { MegaphoneIcon } from "@stll/ui/icons";
 
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { useAnalytics } from "@/lib/analytics/provider";
