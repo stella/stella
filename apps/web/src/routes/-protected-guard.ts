@@ -1,0 +1,106 @@
+import type { QueryClient } from "@tanstack/react-query";
+import { redirect } from "@tanstack/react-router";
+
+import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { roleOptions } from "@/lib/auth-queries";
+import { detached } from "@/lib/detached";
+import { notificationsOptions } from "@/lib/notification-queries";
+import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
+import { usePinnedStore } from "@/lib/pinned-store";
+import {
+  prefetchNonCriticalInfiniteQuery,
+  prefetchRouteQuery,
+} from "@/lib/react-query";
+import { returnPathOf } from "@/lib/redirect";
+import { loadAuthContext } from "@/routes/-auth-context";
+
+// The signed-in routes' guard, apart from the signed-in frame so a route can
+// run it without loading the frame.
+
+type ProtectedRouteArgs = {
+  context: { queryClient: QueryClient };
+  location: { pathname: string; searchStr: string };
+};
+
+/**
+ * `_protected`'s `beforeLoad`: sends a visitor without a session to sign in
+ * and one without an organization to pick one, starts the shell's optional
+ * data, and returns the signed-in user as route context.
+ */
+export const loadProtectedContext = async ({
+  context,
+  location,
+}: ProtectedRouteArgs) => {
+  const authContext = await loadAuthContext(context.queryClient);
+
+  const redirectTo = returnPathOf(location);
+
+  if (!authContext.session || !authContext.user) {
+    throw redirect({ to: "/auth", search: { redirectTo } });
+  }
+
+  if (!authContext.session.activeOrganizationId) {
+    throw redirect({
+      to: "/auth/organization",
+      search: { redirectTo },
+      replace: true,
+    });
+  }
+
+  const activeOrganizationId = authContext.session.activeOrganizationId;
+
+  // Start optional shell data immediately. The loader settles the role before
+  // chrome mounts, while child loaders fetch their independent data in parallel.
+  const onPrefetchError = (error: unknown) => {
+    getAnalytics().captureError(error);
+  };
+  detached(
+    prefetchRouteQuery(
+      context.queryClient,
+      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+      onPrefetchError,
+    ),
+    "protected-layout.prefetch",
+  );
+  // Prefetched here so the bell's first page joins the shell's request wave
+  // instead of chaining a new sequential round after hydration.
+  if (isInboxPreviewEnabled()) {
+    detached(
+      prefetchNonCriticalInfiniteQuery(
+        context.queryClient,
+        notificationsOptions({ organizationId: activeOrganizationId }),
+        onPrefetchError,
+      ),
+      "protected-layout.notifications-prefetch",
+    );
+  }
+  // Seed the pinned-matters store from localStorage before the
+  // sidebar renders. The store's `init` is idempotent (skips when
+  // the same userId is already loaded), so re-runs on navigation
+  // cost nothing and a render-time effect is unnecessary.
+  usePinnedStore.getState().init(authContext.session.userId);
+
+  return {
+    user: {
+      id: authContext.session.userId,
+      activeOrganizationId,
+      name: authContext.user.name || undefined,
+      email: authContext.user.email,
+      image: authContext.user.image,
+      preferredName: authContext.user.preferredName,
+      timezoneId: authContext.user.timezoneId,
+      wordEditShortcut: authContext.user.wordEditShortcut,
+    },
+  };
+};
+
+/** `_protected`'s `loader`: settles the member role before chrome mounts. */
+export const prefetchProtectedShell = async ({
+  context,
+}: {
+  context: { queryClient: QueryClient };
+}) =>
+  await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
+    getAnalytics().captureError(error);
+  });

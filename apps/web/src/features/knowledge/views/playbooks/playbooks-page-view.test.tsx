@@ -77,4 +77,25 @@ describe("playbooks page", () => {
     expect(html).toContain("NDA review");
     expect(html).not.toContain("Updated");
   });
+
+  test("ready-made playbooks that could not be read say so, with a retry where there is one", () => {
+    const failed = {
+      status: "error",
+      items: [],
+      pendingStarterId: null,
+    } as const;
+    const withRetry = render(
+      { starters: { ...failed, retry: noop } },
+      { ...ACTIONS, startFrom: noop },
+    );
+    expect(withRetry).toContain("The catalogue is not available right now.");
+    expect(withRetry).toContain("Retry");
+
+    const withoutRetry = render(
+      { starters: failed },
+      { ...ACTIONS, startFrom: noop },
+    );
+    expect(withoutRetry).toContain("The catalogue is not available right now.");
+    expect(withoutRetry).not.toContain("Retry");
+  });
 });

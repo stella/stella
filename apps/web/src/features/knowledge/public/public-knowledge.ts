@@ -13,6 +13,7 @@ import type {
   KnowledgeCatalogueTemplate,
   KnowledgeTemplate,
 } from "@/features/knowledge/views/templates/templates-seam";
+import { detached } from "@/lib/detached";
 
 /** A catalogue template's id in the shared views: its pack and its slug. */
 const catalogueTemplateKey = (template: CatalogueTemplate): string =>
@@ -113,10 +114,36 @@ const useCatalogueTemplatePreview = (
 };
 
 /** The ready-made playbooks, as the playbooks page lists them. */
-const useCatalogueStarters = (): KnowledgeSource<"playbooks">["starters"] => {
-  const { data, isLoading } = useQuery(catalogueStartersOptions());
+/** A published ready-made playbook, as the catalogue lists it. */
+type CatalogueStarter = {
+  id: string;
+  name: string;
+  description: string;
+  positionCount: number;
+};
+
+type CatalogueStartersRead = {
+  data: readonly CatalogueStarter[] | undefined;
+  isLoading: boolean;
+  isError: boolean;
+};
+
+/**
+ * The ready-made playbooks as the page shows them. A read that failed with
+ * nothing to show is an error the visitor can retry, never an empty list.
+ */
+export const toCatalogueStarters = (
+  { data, isLoading, isError }: CatalogueStartersRead,
+  retry: () => void,
+): KnowledgeSource<"playbooks">["starters"] => {
+  if (isLoading) {
+    return { status: "loading", items: [], pendingStarterId: null };
+  }
+  if (isError && data === undefined) {
+    return { status: "error", items: [], pendingStarterId: null, retry };
+  }
   return {
-    status: isLoading ? "loading" : "ready",
+    status: "ready",
     items: (data ?? []).map((starter) => ({
       starterId: starter.id,
       name: starter.name,
@@ -125,6 +152,13 @@ const useCatalogueStarters = (): KnowledgeSource<"playbooks">["starters"] => {
     })),
     pendingStarterId: null,
   };
+};
+
+const useCatalogueStarters = (): KnowledgeSource<"playbooks">["starters"] => {
+  const read = useQuery(catalogueStartersOptions());
+  return toCatalogueStarters(read, () => {
+    detached(read.refetch(), "public-knowledge.starters-retry");
+  });
 };
 
 /**

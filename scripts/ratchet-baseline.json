@@ -588,7 +588,7 @@
       "apps/web/src/routes/_protected.settings/account.profile.tsx": 3,
       "apps/web/src/routes/_protected.settings/organization.members.tsx": 1,
       "apps/web/src/routes/_protected.settings/organization.route.tsx": 1,
-      "apps/web/src/routes/-protected-app.tsx": 2,
+      "apps/web/src/routes/-protected-guard.ts": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,

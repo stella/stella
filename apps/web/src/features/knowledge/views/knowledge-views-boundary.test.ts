@@ -310,3 +310,33 @@ describe("Knowledge section dispatchers", () => {
     expect([...eager.keys()].some(isMemberModule)).toBe(true);
   });
 });
+
+const SIGNED_IN_FRAME = fromSource("routes/-protected-app.tsx");
+
+/** Modules every page loads, or pages for visitors without an account. */
+const FRAME_FREE_ENTRIES = [
+  "routes/__root.tsx",
+  "routes/-app-frame-host.tsx",
+  "routes/-knowledge-public-frame.tsx",
+  "routes/-protected-guard.ts",
+  "routes/-protected-pending-skeleton.tsx",
+  "routes/_protected.tsx",
+  "routes/knowledge/route.tsx",
+].map(fromSource);
+
+describe("the signed-in frame", () => {
+  test.each(FRAME_FREE_ENTRIES.map((file) => [relative(file), file]))(
+    "%s does not load the signed-in frame eagerly",
+    async (_name, file) => {
+      const graph = await collectGraph(file, { followDynamic: false });
+      expect(graph.has(SIGNED_IN_FRAME)).toBe(false);
+    },
+  );
+
+  test("the frame host loads it lazily, once a member is known", async () => {
+    const lazy = await collectDynamicImports(
+      fromSource("routes/-app-frame-host.tsx"),
+    );
+    expect(lazy.has(SIGNED_IN_FRAME)).toBe(true);
+  });
+});

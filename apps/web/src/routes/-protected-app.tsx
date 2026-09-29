@@ -6,11 +6,10 @@ import {
   useRef,
   useState,
 } from "react";
-import type { MouseEvent, ReactElement, ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
-import type { QueryClient } from "@tanstack/react-query";
-import { redirect, useMatch } from "@tanstack/react-router";
+import { useMatch } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -26,7 +25,6 @@ import {
   InspectorDock,
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
-  SIDE_RAIL_WIDTH,
   useInspectorPaneWidth,
 } from "@stll/ui/inspector";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
@@ -76,34 +74,20 @@ import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import {
-  isInboxPreviewEnabled,
-  useInboxPreviewEnabled,
-} from "@/hooks/use-inbox-preview";
+import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { roleOptions } from "@/lib/auth-queries";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { detached } from "@/lib/detached";
 import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
 import type { MatterChromeStyle } from "@/lib/matter-colors";
-import { notificationsOptions } from "@/lib/notification-queries";
-import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { usePinnedStore } from "@/lib/pinned-store";
-import {
-  prefetchNonCriticalInfiniteQuery,
-  prefetchRouteQuery,
-} from "@/lib/react-query";
-import { returnPathOf } from "@/lib/redirect";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
-import { loadAuthContext } from "@/routes/-auth-context";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
 
 const LazyInspectorPanel = lazy(
@@ -166,185 +150,6 @@ const MobileInspectorFallback = () => (
     </div>
   </div>
 );
-
-type ProtectedRouteArgs = {
-  context: { queryClient: QueryClient };
-  location: { pathname: string; searchStr: string };
-};
-
-/**
- * `_protected`'s `beforeLoad`: sends a visitor without a session to sign in
- * and one without an organization to pick one, starts the shell's optional
- * data, and returns the signed-in user as route context.
- */
-export const loadProtectedContext = async ({
-  context,
-  location,
-}: ProtectedRouteArgs) => {
-  const authContext = await loadAuthContext(context.queryClient);
-
-  const redirectTo = returnPathOf(location);
-
-  if (!authContext.session || !authContext.user) {
-    throw redirect({ to: "/auth", search: { redirectTo } });
-  }
-
-  if (!authContext.session.activeOrganizationId) {
-    throw redirect({
-      to: "/auth/organization",
-      search: { redirectTo },
-      replace: true,
-    });
-  }
-
-  const activeOrganizationId = authContext.session.activeOrganizationId;
-
-  // Start optional shell data immediately. The loader settles the role before
-  // chrome mounts, while child loaders fetch their independent data in parallel.
-  const onPrefetchError = (error: unknown) => {
-    getAnalytics().captureError(error);
-  };
-  detached(
-    prefetchRouteQuery(
-      context.queryClient,
-      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-      onPrefetchError,
-    ),
-    "protected-layout.prefetch",
-  );
-  // Prefetched here so the bell's first page joins the shell's request wave
-  // instead of chaining a new sequential round after hydration.
-  if (isInboxPreviewEnabled()) {
-    detached(
-      prefetchNonCriticalInfiniteQuery(
-        context.queryClient,
-        notificationsOptions({ organizationId: activeOrganizationId }),
-        onPrefetchError,
-      ),
-      "protected-layout.notifications-prefetch",
-    );
-  }
-  // Seed the pinned-matters store from localStorage before the
-  // sidebar renders. The store's `init` is idempotent (skips when
-  // the same userId is already loaded), so re-runs on navigation
-  // cost nothing and a render-time effect is unnecessary.
-  usePinnedStore.getState().init(authContext.session.userId);
-
-  return {
-    user: {
-      id: authContext.session.userId,
-      activeOrganizationId,
-      name: authContext.user.name || undefined,
-      email: authContext.user.email,
-      image: authContext.user.image,
-      preferredName: authContext.user.preferredName,
-      timezoneId: authContext.user.timezoneId,
-      wordEditShortcut: authContext.user.wordEditShortcut,
-    },
-  };
-};
-
-/** `_protected`'s `loader`: settles the member role before chrome mounts. */
-export const prefetchProtectedShell = async ({
-  context,
-}: {
-  context: { queryClient: QueryClient };
-}) =>
-  await prefetchRouteQuery(context.queryClient, roleOptions, (error) => {
-    getAnalytics().captureError(error);
-  });
-
-// Static, SSR-safe placeholder for the client-only `_protected`
-// subtree. Mirrors the real shell's shape (left side-rail → sidebar
-// column → main content with a header bar) using the same layout
-// constants so the skeleton lines up with the chrome that replaces
-// it. Intentionally free of hooks, context, data, and Suspense. A page that
-// is the same for every visitor can take the content column's place.
-export function ProtectedPendingSkeleton({
-  content,
-}: {
-  content?: ReactElement | undefined;
-}) {
-  return (
-    <div
-      aria-hidden={content === undefined ? "true" : undefined}
-      className="bg-background flex h-full min-h-dvh"
-    >
-      {/* Sidebar column — matches AppSidebar's 16rem width with a
-          header row, a few stacked nav rows, and a footer row. */}
-      <div className="bg-sidebar hidden w-64 shrink-0 flex-col gap-2 border-e p-2 md:flex">
-        <div
-          className={cn("flex shrink-0 items-center gap-2", TOOLBAR_ROW_HEIGHT)}
-        >
-          <Skeleton className="size-6 rounded-md" />
-          <Skeleton className="h-4 w-28" />
-        </div>
-        <div className="mt-2 flex flex-col gap-2">
-          {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton className="h-8 w-full rounded-md" key={index} />
-          ))}
-        </div>
-        <div className="flex-1" />
-        <Skeleton className="h-8 w-full shrink-0 rounded-md" />
-      </div>
-
-      {/* Main content column — header-height bar + a handful of
-          content blocks. */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div
-          className={cn(
-            "flex shrink-0 items-center gap-3 border-b px-4",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-        >
-          <Skeleton className="h-4 w-40" />
-          <div className="ms-auto flex items-center gap-2">
-            <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
-            <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
-          </div>
-        </div>
-        {content === undefined ? (
-          <div className="flex flex-1 flex-col gap-4 p-6">
-            <Skeleton className="h-8 w-1/3" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-40 w-full rounded-md" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-24 w-full rounded-md" />
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col">{content}</div>
-        )}
-      </div>
-
-      {/* Right side-rail — same width as the real rail with muted
-          icon-sized blocks top and bottom. */}
-      <div
-        className={cn(
-          "bg-muted/50 hidden shrink-0 flex-col border-s md:flex",
-          SIDE_RAIL_WIDTH,
-        )}
-      >
-        <div
-          className={cn(
-            "flex w-full shrink-0 items-center justify-center border-b",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-        >
-          <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
-        </div>
-        <div className="flex-1" />
-        <div
-          className={cn(
-            "flex w-full shrink-0 items-center justify-center border-t",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-        >
-          <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * The signed-in app chrome: sidebar, inspector dock, chat providers and the

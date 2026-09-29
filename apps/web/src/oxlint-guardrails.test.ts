@@ -77,10 +77,13 @@ describe("custom oxlint guardrails", () => {
     );
     // The signed-in guard and frame live beside the `_protected` route, which
     // only wires them up.
-    const protectedGuardSource = readRootFixture(
+    const protectedRouteFileSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
     );
-    const protectedRouteSource = readRootFixture(
+    const protectedGuardSource = readRootFixture(
+      "apps/web/src/routes/-protected-guard.ts",
+    );
+    const protectedFrameSource = readRootFixture(
       "apps/web/src/routes/-protected-app.tsx",
     );
     const sidebarUserMenuSource = readRootFixture(
@@ -96,43 +99,37 @@ describe("custom oxlint guardrails", () => {
       "apps/web/src/lib/workspaces/queries.ts",
     );
 
-    expect(protectedRouteSource).not.toContain("ensureRouteQueryData");
-    expect(protectedRouteSource).toContain("prefetchRouteQuery");
-    expect(protectedRouteSource).toContain("aiAvailabilityOptions");
-    expect(protectedRouteSource).toContain("roleOptions");
-    expect(protectedRouteSource).not.toContain("organizationOptions");
+    expect(protectedGuardSource).not.toContain("ensureRouteQueryData");
+    expect(protectedGuardSource).toContain("prefetchRouteQuery");
+    expect(protectedGuardSource).toContain("aiAvailabilityOptions");
+    expect(protectedGuardSource).toContain("roleOptions");
+    expect(protectedGuardSource).not.toContain("organizationOptions");
 
     // The route definition (beforeLoad, loader) must never seed the matter
     // list: route commit cannot wait on it. The rendered shell may subscribe
     // to it, but only as deferred chrome, which dedupes with the sidebar's
     // identical subscription instead of adding a request.
-    expect(protectedGuardSource).toContain("beforeLoad: loadProtectedContext,");
-    expect(protectedGuardSource).toContain("loader: prefetchProtectedShell,");
-    const routeDefinitionStart = protectedRouteSource.indexOf(
+    expect(protectedRouteFileSource).toContain(
+      "beforeLoad: loadProtectedContext,",
+    );
+    expect(protectedRouteFileSource).toContain(
+      "loader: prefetchProtectedShell,",
+    );
+    expect(protectedGuardSource).toContain(
       "export const loadProtectedContext = async",
     );
-    const routeDefinitionEnd = protectedRouteSource.indexOf(
-      "export const ProtectedAppFrame = (",
-      routeDefinitionStart,
-    );
-    expect(routeDefinitionStart).toBeGreaterThan(-1);
-    expect(routeDefinitionEnd).toBeGreaterThan(routeDefinitionStart);
-    const routeDefinition = protectedRouteSource.slice(
-      routeDefinitionStart,
-      routeDefinitionEnd,
-    );
-    expect(routeDefinition).not.toContain("workspacesNavigationOptions");
+    expect(protectedGuardSource).not.toContain("workspacesNavigationOptions");
     const navigationListReads =
-      protectedRouteSource.match(/workspacesNavigationOptions\(/gu) ?? [];
+      protectedFrameSource.match(/workspacesNavigationOptions\(/gu) ?? [];
     const chromeNavigationListReads =
-      protectedRouteSource.match(
+      protectedFrameSource.match(
         /useChromeQuery\(\s*workspacesNavigationOptions\(/gu,
       ) ?? [];
     expect(chromeNavigationListReads).toHaveLength(navigationListReads.length);
 
-    expect(protectedRouteSource).toContain("AIAvailabilityProvider");
-    expect(protectedRouteSource).toContain("AppSidebar");
-    expect(protectedRouteSource).toContain("ChatMentionProviders");
+    expect(protectedFrameSource).toContain("AIAvailabilityProvider");
+    expect(protectedFrameSource).toContain("AppSidebar");
+    expect(protectedFrameSource).toContain("ChatMentionProviders");
     expect(sidebarUserMenuSource).not.toContain("organizationOptions");
     expect(sidebarUserMenuSource).toContain("organizationListOptions");
     expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");

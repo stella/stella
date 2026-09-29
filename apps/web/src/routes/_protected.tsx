@@ -3,8 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   loadProtectedContext,
   prefetchProtectedShell,
-  ProtectedPendingSkeleton,
-} from "@/routes/-protected-app";
+} from "@/routes/-protected-guard";
+import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 
 // The signed-in frame itself renders from the root (`AppFrameHost`), above
 // this guard, so it stays mounted across every signed-in route.

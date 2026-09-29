@@ -5,8 +5,8 @@ import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
 import {
   loadProtectedContext,
   prefetchProtectedShell,
-  ProtectedPendingSkeleton,
-} from "@/routes/-protected-app";
+} from "@/routes/-protected-guard";
+import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 
 // Knowledge sits beside the signed-in routes rather than under them, so it can
 // be readable without an account. Until that is switched on it keeps exactly

@@ -19,10 +19,15 @@ import { detached } from "@/lib/detached";
 import { resetVisitorCache } from "@/lib/knowledge/knowledge-cache";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
-import {
-  ProtectedAppFrame,
-  ProtectedPendingSkeleton,
-} from "@/routes/-protected-app";
+import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
+
+// The signed-in frame (sidebar, inspector, chat and their registrations) loads
+// only once a member is known, so sign-in and pages for visitors never
+// evaluate it.
+const LazyProtectedAppFrame = lazy(async () => {
+  const module = await import("@/routes/-protected-app");
+  return { default: module.ProtectedAppFrame };
+});
 
 // Only visitors without an account see this shell, so its chunk loads on
 // their first Knowledge page and never for members.
@@ -137,18 +142,18 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
     if (!resetting || visitor === null) {
       return undefined;
     }
-    let current = true;
+    const superseded = new AbortController();
     detached(
       (async () => {
         await resetVisitorCache(queryClient, VISITOR_INDEPENDENT_KEYS);
-        if (current) {
+        if (!superseded.signal.aborted) {
           setShownVisitor(visitor);
         }
       })(),
       "app-frame.reset-visitor",
     );
     return () => {
-      current = false;
+      superseded.abort();
     };
   }, [queryClient, resetting, visitor]);
 
@@ -162,12 +167,12 @@ export const AppFrameHost = ({ children }: { children: ReactElement }) => {
         <ProtectedPendingSkeleton />
       ) : (
         <Suspense fallback={<ProtectedPendingSkeleton />}>
-          <ProtectedAppFrame
+          <LazyProtectedAppFrame
             key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
             user={memberUser}
           >
             {children}
-          </ProtectedAppFrame>
+          </LazyProtectedAppFrame>
         </Suspense>
       );
     case "public":
