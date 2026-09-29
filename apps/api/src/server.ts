@@ -484,8 +484,9 @@ const api = new Elysia()
       .use(ratesRoute)
       .use(expensesRoute)
       .use(invoicesRoute)
-      .use(sellerProfilesRoute)
-      .use(numberSeriesRoute)
+      // Issuer settings share one link: every `.use` here deepens the
+      // app's type, and the chain sits at TypeScript's instantiation limit.
+      .use(new Elysia().use(sellerProfilesRoute).use(numberSeriesRoute))
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
       .use(sharepointRoute)
