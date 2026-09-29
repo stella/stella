@@ -179,6 +179,7 @@
     "fast-xml-parser": "5.11.1",
     "ip-address": "10.7.2",
     "lucide-react": "1.41.0",
+    "mailauth/joi": "18.2.9",
     "mailauth/nodemailer": "9.1.0",
     "nanoid": "3.3.18",
     "postcss": "8.5.28",
@@ -187,7 +188,7 @@
     "prosemirror-view": "1.42.5",
     "react-native-screens": "4.26.2",
     "svgo": "4.1.0",
-    "undici": "8.10.0"
+    "undici": "8.10.2"
   },
   "packageManager": "bun@1.4.2",
   "catalog": {
