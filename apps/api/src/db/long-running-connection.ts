@@ -4,12 +4,17 @@ import type { ReservedSQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
-import { errorClassName } from "@/api/lib/errors/error-tag";
-import { logger } from "@/api/lib/observability/logger";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 const CONNECTION_TIMEOUT_SECONDS = 10;
 const CANCELLATION_STATEMENT_TIMEOUT_MS = 5000;
+// A cancellation that fails leaves the statement running to its own deadline.
+const CANCEL_FAILED_SINK = failureSink({
+  event: "db.long_running.cancel_failed",
+  expected: [],
+});
 
 type LongRunningConnectionOptions = {
   /** Milliseconds; these budgets belong only to this dedicated connection. */
@@ -97,11 +102,9 @@ export const withDedicatedReservedSession = async <
         Promise.resolve().then(() => cancelBackend(pid)),
       ]).then(([result]) => {
         if (result?.status === "rejected") {
-          logger.error("db.long_running.cancel_failed", {
-            "error.type":
-              result.reason instanceof Error
-                ? errorClassName(result.reason)
-                : "Unknown",
+          observeFailure(result.reason, {
+            sink: CANCEL_FAILED_SINK,
+            ctx: { step: "cancel_backend" },
           });
         }
         return undefined;
