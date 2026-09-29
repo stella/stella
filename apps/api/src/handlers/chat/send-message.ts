@@ -81,6 +81,7 @@ import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
+  isChatTurnNotOwned,
   isChatTurnRunIdTaken,
   startChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -2514,6 +2515,15 @@ export const createSendMessage = (
                       indexThread: dependencies.indexThread,
                     });
 
+                    if (
+                      Result.isError(persistResult) &&
+                      isChatTurnNotOwned(persistResult.error)
+                    ) {
+                      // Another execution or the reaper settled the turn
+                      // first: its outcome stands, and this run has nothing
+                      // left to store.
+                      return;
+                    }
                     if (Result.isError(persistResult)) {
                       captureError(persistResult.error, {
                         threadId: body.threadId,

@@ -14,6 +14,10 @@ import {
   createApprovalHarness,
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -159,5 +163,51 @@ describe("a turn's run", () => {
         .from(chatTurns)
         .where(eq(chatTurns.threadId, threadId)),
     ).toEqual([{ status: "interrupted" }]);
+  });
+
+  test("records no defect when given up after another owner took its turn over", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+    const logger = installRecordingLogger();
+    const analytics = installRecordingAnalytics();
+    try {
+      const client = await harness.openWebClient(threadId);
+      harness.script(threadId, [{ type: "stall" }]);
+      harness.crashDuringNextRequest(threadId);
+      await client.sendUserMessage(Bun.randomUUIDv7(), "Draft the NDA");
+      await client.settle();
+      client.dispose();
+      // The reaper takes over the turn the crashed request's run still holds
+      // in this process, and settles it.
+      await harness.reapOwnerlessTurns();
+      const reaped = await testDb
+        .select({
+          interruptionReason: chatTurns.interruptionReason,
+          status: chatTurns.status,
+        })
+        .from(chatTurns)
+        .where(eq(chatTurns.threadId, threadId));
+      expect(reaped).toEqual([
+        { interruptionReason: "owner-lost", status: "interrupted" },
+      ]);
+    } finally {
+      // The stale run meets the ownership fence while it is given up.
+      await harness.close();
+      logger.restore();
+      analytics.restore();
+    }
+
+    expect(
+      await testDb
+        .select({
+          interruptionReason: chatTurns.interruptionReason,
+          status: chatTurns.status,
+        })
+        .from(chatTurns)
+        .where(eq(chatTurns.threadId, threadId)),
+    ).toEqual([{ interruptionReason: "owner-lost", status: "interrupted" }]);
+    expect(logger.at("ERROR")).toEqual([]);
+    expect(analytics.exceptions()).toEqual([]);
   });
 });

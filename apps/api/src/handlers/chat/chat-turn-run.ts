@@ -7,6 +7,7 @@ import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import type { SafeDb } from "@/api/db/safe-db";
 import { persistFailedChatTurn } from "@/api/handlers/chat/chat-message-persistence";
 import {
+  isChatTurnNotOwned,
   readChatTurnExecutionStanding,
   renewChatTurnExecutionLease,
 } from "@/api/handlers/chat/chat-turn-persistence";
@@ -116,7 +117,11 @@ type ChatTurnRunState =
   | { status: "producing"; heartbeat: ChatTurnRunHeartbeatHandle }
   | { status: "settled" };
 
-/** Whether a run stored the turn's outcome (its own, or its failure). */
+/**
+ * Whether the run's turn has its outcome stored: the run's own, its failure,
+ * or the outcome of whoever settled the turn after taking it over. Only an
+ * unstored turn is left to the reaper.
+ */
 type ChatTurnRunEnd = "stored" | "unstored";
 
 type ChatTurnClaim = { execution: ChatTurnExecution; safeDb: SafeDb };
@@ -351,13 +356,15 @@ export class ChatTurnRun {
       userId: owner.userId,
       workspaceId: owner.workspaceId,
     });
-    if (Result.isError(failure)) {
+    if (Result.isOk(failure) || isChatTurnNotOwned(failure.error)) {
+      // A turn another execution or the reaper settled first keeps that
+      // outcome: the fence refused this run, and nothing is left to store.
+      this.stored = true;
+    } else {
       observeFailure(failure.error, {
         sink: SETTLEMENT_FAILED_SINK,
         ctx: { threadId: owner.threadId },
       });
-    } else {
-      this.stored = true;
     }
     if (status !== "handed-over") {
       return;
