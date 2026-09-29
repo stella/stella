@@ -314,11 +314,18 @@ const screenList = async ({
   ) {
     return unavailableList(base, freshness.reason ?? "not-loaded", freshness);
   }
-  const index = await indexCache.get({ db, source: freshness.source, edition });
+  // Each list degrades on its own: a cache that rejects instead of answering
+  // `load-failed` still leaves the other lists screening.
+  const index = await Result.tryPromise(
+    async () => await indexCache.get({ db, source: freshness.source, edition }),
+  );
   if (index.isErr()) {
-    return unavailableList(base, index.error.code, freshness);
+    return unavailableList(base, "load-failed", freshness);
   }
-  const screened = screen(index.value, query, {
+  if (index.value.isErr()) {
+    return unavailableList(base, index.value.error.code, freshness);
+  }
+  const screened = screen(index.value.value, query, {
     cutoff: DEFAULT_CUTOFF,
     limit: SANCTIONS_MATCH_LIMIT,
   });

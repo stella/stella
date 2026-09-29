@@ -4,7 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
-import { SANCTIONS_SOURCES } from "@stll/sanctions";
+import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import type { Transaction } from "@/api/db/root";
@@ -16,7 +16,11 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
+import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
+import {
+  createSanctionsIndexCache,
+  SANCTIONS_INDEX_FAILURE_MEMO_MS,
+} from "@/api/lib/lists/sanctions/screening-index";
 import type { SanctionsActiveEdition } from "@/api/lib/lists/sanctions/screening-index";
 import {
   SANCTIONS_MATCH_LIMIT,
@@ -394,6 +398,7 @@ describe("sanctions screening service", () => {
             source === "uk"
               ? Result.err({ code: "load-failed" })
               : await createSanctionsIndexCache().get({ source, ...props }),
+          refresh: async () => {},
         },
       });
       const screening = result.unwrap();
@@ -439,6 +444,111 @@ describe("sanctions screening service", () => {
   );
 
   test(
+    "keeps the other lists answering when one list's index cannot be built, and retries it after a pause",
+    async () => {
+      let clock = FRESH_NOW.getTime();
+      let failing = true;
+      const builds = new Map<SanctionsSource, number>();
+      const reported: { source: SanctionsSource; editionId: string }[] = [];
+      const indexCache = createSanctionsIndexCache({
+        nowMs: () => clock,
+        build: (lists) => {
+          const source = lists.at(0)?.version.source;
+          if (source !== undefined) {
+            builds.set(source, (builds.get(source) ?? 0) + 1);
+          }
+          if (failing && source === "ch") {
+            throw new Error("index build failed");
+          }
+          return buildScreeningIndex(lists);
+        },
+        reportFailure: (failure, ids) => {
+          expect(failure.stage).toBe("build-failed");
+          reported.push(ids);
+        },
+      });
+      const run = async () =>
+        (
+          await screenSanctionsSubject({
+            db: requestDb,
+            subject: {
+              type: "organization",
+              name: "Blue Meadow Bakery",
+              identifiers: [],
+            },
+            practiceJurisdictions: ["CH"],
+            now: FRESH_NOW,
+            indexCache,
+          })
+        ).unwrap();
+
+      const first = await run();
+      expect(first.status).toBe("unavailable");
+      expect(listOf(first.lists, "ch")).toMatchObject({
+        status: "unavailable",
+        reason: "load-failed",
+        classification: "binding",
+        editionId: editionIds.get("ch"),
+      });
+      for (const list of first.lists.filter(({ source }) => source !== "ch")) {
+        expect(list.status).toBe("clear");
+      }
+      // Telemetry names the list and edition, nothing about the subject.
+      expect(reported).toEqual([
+        { source: "ch", editionId: editionIds.get("ch") ?? "" },
+      ]);
+
+      // Inside the pause the failed edition is not read or built again.
+      const second = await run();
+      expect(listOf(second.lists, "ch").reason).toBe("load-failed");
+      expect(builds.get("ch")).toBe(1);
+      expect(reported).toHaveLength(1);
+
+      // After it, the next screening tries again.
+      failing = false;
+      clock += SANCTIONS_INDEX_FAILURE_MEMO_MS;
+      const third = await run();
+      expect(third.status).toBe("clear");
+      expect(listOf(third.lists, "ch").status).toBe("clear");
+      expect(builds.get("ch")).toBe(2);
+      // The lists that built the first time were never built again.
+      expect(builds.get("eu")).toBe(1);
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "makes a list unavailable when its index read rejects outright, and the rest still answer",
+    async () => {
+      const healthy = createSanctionsIndexCache();
+      const result = await screenSanctionsSubject({
+        db: requestDb,
+        subject: {
+          type: "organization",
+          name: "Blue Meadow Bakery",
+          identifiers: [],
+        },
+        practiceJurisdictions: [],
+        now: FRESH_NOW,
+        indexCache: {
+          get: async (props) =>
+            props.source === "eu"
+              ? await Promise.reject(new Error("connection reset"))
+              : await healthy.get(props),
+          refresh: async () => {},
+        },
+      });
+      const screening = result.unwrap();
+      expect(listOf(screening.lists, "eu")).toMatchObject({
+        status: "unavailable",
+        reason: "load-failed",
+      });
+      expect(listOf(screening.lists, "un").status).toBe("clear");
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test(
     "reports an update held for review on its list, which still screens the edition it had",
     async () => {
       const held = await seedHeldEdition("ch");
@@ -468,6 +578,73 @@ describe("sanctions screening service", () => {
         expect(listOf(screening.lists, "eu").pendingUpdate).toBeNull();
       } finally {
         await clearHeldEdition("ch");
+      }
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "builds a newly activated edition ahead of the next check only for a list already in use",
+    async () => {
+      const held = await seedHeldEdition("uk");
+      try {
+        let builds = 0;
+        const indexCache = createSanctionsIndexCache({
+          build: (lists) => {
+            builds += 1;
+            return buildScreeningIndex(lists);
+          },
+        });
+        const freshness = await readSanctionsFreshness({
+          db: requestDb,
+          now: FRESH_NOW,
+        });
+        const active = (source: SanctionsSource) => {
+          const edition = freshness.find(
+            (sourceFreshness) => sourceFreshness.source === source,
+          )?.edition;
+          if (edition === null || edition === undefined) {
+            throw new Error(`No active ${source} edition`);
+          }
+          return edition;
+        };
+
+        // A list this process never screened stays cold.
+        await indexCache.refresh({
+          db: requestDb,
+          source: "uk",
+          edition: held,
+        });
+        expect(builds).toBe(0);
+
+        await indexCache.get({
+          db: requestDb,
+          source: "uk",
+          edition: active("uk"),
+        });
+        expect(builds).toBe(1);
+        await indexCache.refresh({
+          db: requestDb,
+          source: "uk",
+          edition: held,
+        });
+        expect(builds).toBe(2);
+
+        // The next check of the new edition answers from the prepared index.
+        let reads = 0;
+        const next = await indexCache.get({
+          db: async (fn) => {
+            reads += 1;
+            return await requestDb(fn);
+          },
+          source: "uk",
+          edition: held,
+        });
+        expect(next.isOk()).toBe(true);
+        expect(reads).toBe(0);
+        expect(builds).toBe(2);
+      } finally {
+        await clearHeldEdition("uk");
       }
     },
     DB_TEST_TIMEOUT_MS,
