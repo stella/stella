@@ -612,21 +612,13 @@ describe("invoice lines", () => {
         {
           linesAdded: {
             old: null,
-            new: legacy.timeEntries.map((entry) => ({
-              id: expect.any(String),
-              source: "time_entry",
-              netAmount: entry.netAmount,
-              vatRateBps: 0,
-            })),
-          },
-        },
-        backfill,
-      ),
-      invoiceEvent(
-        {
-          linesAdded: {
-            old: null,
             new: [
+              ...legacy.timeEntries.map((entry) => ({
+                id: expect.any(String),
+                source: "time_entry",
+                netAmount: entry.netAmount,
+                vatRateBps: 0,
+              })),
               {
                 id: expect.any(String),
                 source: "expense",

@@ -379,10 +379,12 @@ export const checkInvoiceLineCapacity = async (
 };
 
 /**
- * Entries read and lines written per round: 16 bound columns per line stays
- * far below the 65,535-parameter cap.
+ * An invoice holds at most `LIMITS.invoiceLinesPerInvoice` lines, so one read
+ * past that bound finds every attached entry a draft can bill; one insert of
+ * that many lines (16 bound columns each) stays far below the 65,535-parameter
+ * cap.
  */
-const MATERIALISE_BATCH_SIZE = 500;
+const MATERIALISE_LIMIT = LIMITS.invoiceLinesPerInvoice + 1;
 
 /**
  * Drafts created before invoice lines existed carry attached time entries and
@@ -393,8 +395,7 @@ const MATERIALISE_BATCH_SIZE = 500;
  * (same builders, same 0 % VAT), appended after existing lines: time entries
  * by date then id, then expenses the same way. An entry that already holds an
  * unreleased line (here, or anywhere the partial unique indexes would refuse
- * a second one) is skipped, so a second call writes nothing; the same filter
- * pages through large invoices, since each written round drops out of it.
+ * a second one) is skipped, so a second call writes nothing.
  * Runs in the caller's transaction under the invoice row lock; returns how
  * many lines it wrote. Its lines are audited as backfilled.
  */
@@ -431,7 +432,7 @@ const materialiseAttachedEntryLines = async (
         ),
       )
       .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
-      .limit(MATERIALISE_BATCH_SIZE);
+      .limit(MATERIALISE_LIMIT);
   const unlinedExpenses = () =>
     tx
       .select({
@@ -460,39 +461,32 @@ const materialiseAttachedEntryLines = async (
         ),
       )
       .orderBy(asc(expenses.dateIncurred), asc(expenses.id))
-      .limit(MATERIALISE_BATCH_SIZE);
+      .limit(MATERIALISE_LIMIT);
 
-  const backfill = { materialisedFromAttachedEntries: true };
-  let written = 0;
-  for (;;) {
-    const batch = await unlinedTimeEntries();
-    written += batch.length;
-    await insertInvoiceLines(
-      tx,
-      scope,
-      batch.map((entry) => timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT)),
-      { recordAuditEvent, metadata: backfill },
+  const [unlinedEntries, unlinedExpenseRows] = await Promise.all([
+    unlinedTimeEntries(),
+    unlinedExpenses(),
+  ]);
+  const missing = unlinedEntries.length + unlinedExpenseRows.length;
+  if (missing > LIMITS.invoiceLinesPerInvoice) {
+    return panic(
+      `Invoice ${scope.invoiceId} has more attached entries than an invoice holds lines`,
     );
-    if (batch.length < MATERIALISE_BATCH_SIZE) {
-      break;
-    }
   }
-  for (;;) {
-    const batch = await unlinedExpenses();
-    written += batch.length;
-    await insertInvoiceLines(
-      tx,
-      scope,
-      batch.map((expense) =>
+  await insertInvoiceLines(
+    tx,
+    scope,
+    [
+      ...unlinedEntries.map((entry) =>
+        timeEntryLineDraft(entry, ATTACHED_ENTRY_LINE_VAT),
+      ),
+      ...unlinedExpenseRows.map((expense) =>
         expenseLineDraft(expense, ATTACHED_ENTRY_LINE_VAT),
       ),
-      { recordAuditEvent, metadata: backfill },
-    );
-    if (batch.length < MATERIALISE_BATCH_SIZE) {
-      break;
-    }
-  }
-  return written;
+    ],
+    { recordAuditEvent, metadata: { materialisedFromAttachedEntries: true } },
+  );
+  return missing;
 };
 
 /**
