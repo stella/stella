@@ -23,6 +23,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { ClauseDetailView } from "@/routes/knowledge/-components/clause-detail";
 import { ClauseFormDialog } from "@/routes/knowledge/-components/clause-form-dialog";
 import { ClauseList } from "@/routes/knowledge/-components/clause-list";
+import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 // ── Type extraction ──────────────────────────────────
 
@@ -80,7 +81,7 @@ export const Route = createFileRoute("/knowledge/clauses")({
       "knowledge-clauses.prefetch",
     );
   },
-  component: RouteComponent,
+  component: GuardedClausesPage,
 });
 
 const SIDEBAR_CATEGORY_KEYS = ["a", "b", "c", "d", "e"];
@@ -370,5 +371,13 @@ function RouteComponent() {
         open={createOpen}
       />
     </>
+  );
+}
+
+function GuardedClausesPage() {
+  return (
+    <KnowledgeMemberOnly pending={<ClausesPageSkeleton />}>
+      {(organizationId) => <RouteComponent key={organizationId} />}
+    </KnowledgeMemberOnly>
   );
 }

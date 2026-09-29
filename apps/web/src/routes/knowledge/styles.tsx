@@ -49,6 +49,7 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
+import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 const UNEXPECTED_ERROR_TRANSLATION_KEY = "common.unexpectedError";
 
@@ -362,7 +363,7 @@ export const Route = createFileRoute("/knowledge/styles")({
       "knowledge-styles.prefetch",
     );
   },
-  component: StyleSetsPage,
+  component: GuardedStyleSetsPage,
 });
 
 const StyleSetRow = ({
@@ -568,3 +569,11 @@ const showThrownError = (
     description: userErrorFromThrown(error, fallbackMessage),
   });
 };
+
+function GuardedStyleSetsPage() {
+  return (
+    <KnowledgeMemberOnly pending={null}>
+      {(organizationId) => <StyleSetsPage key={organizationId} />}
+    </KnowledgeMemberOnly>
+  );
+}

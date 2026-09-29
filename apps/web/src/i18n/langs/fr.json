@@ -3241,6 +3241,10 @@
       "notFound": "Ce modèle ne figure pas dans le catalogue.",
       "unavailable": "Le catalogue n'est pas disponible pour le moment."
     },
+    "landing": {
+      "accountLine": "Avec un compte gratuit, conservez les modèles, clauses et playbooks propres à votre organisation.",
+      "withAccount": "Avec un compte gratuit"
+    },
     "mcp": {
       "addAndConnect": "Ajouter et connecter",
       "addServer": "Ajouter un serveur",

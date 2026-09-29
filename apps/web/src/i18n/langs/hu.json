@@ -3241,6 +3241,10 @@
       "notFound": "Ez a sablon nincs a katalógusban.",
       "unavailable": "A katalógus jelenleg nem érhető el."
     },
+    "landing": {
+      "accountLine": "Ingyenes fiókkal szervezete saját sablonjait, záradékait és playbookjait is kezelheti.",
+      "withAccount": "Ingyenes fiókkal"
+    },
     "mcp": {
       "addAndConnect": "Hozzáadás és csatlakozás",
       "addServer": "Szerver hozzáadása",

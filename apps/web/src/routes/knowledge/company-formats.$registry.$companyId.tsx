@@ -3,11 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
 import { DefaultNotFoundComponent } from "@/components/route-components";
 import { isLookupRegistry } from "@/components/templates/template-field-manifest";
+import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 export const Route = createFileRoute(
   "/knowledge/company-formats/$registry/$companyId",
 )({
-  component: CompanyFormatPage,
+  component: GuardedCompanyFormatPage,
 });
 
 function CompanyFormatPage() {
@@ -28,5 +29,13 @@ function CompanyFormatPage() {
         registry={registry}
       />
     </div>
+  );
+}
+
+function GuardedCompanyFormatPage() {
+  return (
+    <KnowledgeMemberOnly pending={null}>
+      {(organizationId) => <CompanyFormatPage key={organizationId} />}
+    </KnowledgeMemberOnly>
   );
 }

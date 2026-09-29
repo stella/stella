@@ -3244,6 +3244,10 @@ type Messages = {
       "notFound": "This template is not in the catalogue.";
       "unavailable": "The catalogue is not available right now.";
     };
+    "landing": {
+      "accountLine": "Keep your organization's own templates, clauses and playbooks with a free account.";
+      "withAccount": "With a free account";
+    };
     "mcp": {
       "addAndConnect": "Add and connect";
       "addServer": "Add server";

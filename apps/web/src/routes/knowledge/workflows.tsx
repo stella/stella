@@ -30,6 +30,7 @@ import type {
   FlowDefinitionDetail,
   FlowListItem,
 } from "@/routes/knowledge/-components/flow-types";
+import { KnowledgeMemberOnly } from "@/routes/knowledge/-knowledge-member-only";
 
 type View =
   | { kind: "list" }
@@ -41,7 +42,7 @@ export const Route = createFileRoute("/knowledge/workflows")({
       throw redirect({ to: "/knowledge" });
     }
   },
-  component: RouteComponent,
+  component: GuardedWorkflowsPage,
 });
 
 const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
@@ -231,5 +232,13 @@ function RouteComponent() {
         togglingId={togglingId}
       />
     </div>
+  );
+}
+
+function GuardedWorkflowsPage() {
+  return (
+    <KnowledgeMemberOnly pending={<WorkflowsPageSkeleton />}>
+      {(organizationId) => <RouteComponent key={organizationId} />}
+    </KnowledgeMemberOnly>
   );
 }
