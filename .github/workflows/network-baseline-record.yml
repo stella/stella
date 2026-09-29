@@ -21,6 +21,17 @@ on:
         default: false
         type: boolean
 
+# A newer recording for the same pull request supersedes the running one.
+# Other labels get their own group, so adding one never cancels a recording.
+concurrency:
+  group: >-
+    network-baseline-record-${{ github.event.pull_request.number || inputs.pr }}-${{
+      (github.event_name == 'workflow_dispatch' || github.event.label.name == 'baseline:record')
+      && 'record'
+      || github.event.label.name
+    }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
