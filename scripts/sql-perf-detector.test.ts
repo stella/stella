@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   analyzeSqlPerf,
+  isBaselinedSqlPerfKind,
   listSqlPerfAllowComments,
   reportSqlPerfOrColumns,
 } from "./sql-perf-detector.ts";
@@ -359,4 +360,87 @@ test("reports SQL-text cross-column OR but leaves a keyset continuation alone", 
       (hit) => hit.line,
     ),
   ).toEqual([1]);
+});
+
+test.each([
+  [
+    "a plain string",
+    "connection.query(`SELECT id FROM case_law_decisions WHERE ($1::uuid IS NULL OR id > $1::uuid) ORDER BY id LIMIT $2`, [cursor, size]);",
+  ],
+  [
+    "a quoted string",
+    "connection.query('SELECT id FROM decisions WHERE $1 IS NULL OR id >= $1 ORDER BY id LIMIT 50', [cursor]);",
+  ],
+  [
+    "a sql template",
+    "sql`SELECT e.id FROM entities e WHERE (${state.cursor}::uuid IS NULL OR e.id > ${state.cursor}::uuid) ORDER BY e.id LIMIT ${size}`",
+  ],
+  [
+    "the reverse order across lines",
+    "sql`SELECT id FROM jobs\n  WHERE (created_at < ${before}::timestamptz\n     OR ${before}::timestamptz IS NULL)\n  ORDER BY created_at DESC LIMIT 20`",
+  ],
+  [
+    "each operand parenthesized",
+    "connection.query(`SELECT id FROM case_law_decisions WHERE (($1::uuid IS NULL) OR (id > $1::uuid)) ORDER BY id LIMIT 50`, [cursor]);",
+  ],
+  [
+    "each operand parenthesized, in the reverse order",
+    "sql`SELECT id FROM jobs WHERE ( ( id > ${cursor}::uuid ) OR ( ${cursor}::uuid IS NULL ) ) ORDER BY id LIMIT 20`",
+  ],
+  [
+    "operands in doubled parentheses",
+    "connection.query('SELECT id FROM t WHERE (($1 IS NULL)) OR ((id > $1)) LIMIT 10', [cursor]);",
+  ],
+  [
+    "a schema-qualified cast",
+    "connection.query('SELECT id FROM t WHERE $1::pg_catalog.uuid IS NULL OR id > $1::pg_catalog.uuid LIMIT 10', [cursor]);",
+  ],
+  [
+    "a schema-qualified cast, in the reverse order",
+    "connection.query('SELECT id FROM t WHERE id > $1::pg_catalog.uuid OR $1::pg_catalog.uuid IS NULL LIMIT 10', [cursor]);",
+  ],
+])("flags an optional keyset bound in %s", (_, source) => {
+  expect(kinds(source)).toEqual(["optional-keyset"]);
+});
+
+test.each([
+  [
+    "separate first and later pages",
+    "connection.query(`SELECT id FROM case_law_decisions WHERE id > $1::uuid ORDER BY id LIMIT 50`, [cursor]);",
+  ],
+  [
+    "a nullable column rather than a parameter",
+    "sql`SELECT id FROM versions WHERE valid_from IS NULL OR valid_from <= ${asOf} ORDER BY id LIMIT 10`",
+  ],
+  [
+    "a different parameter in the range",
+    "sql`SELECT id FROM decisions WHERE ${from}::date IS NULL OR decision_date >= ${to}::date ORDER BY id LIMIT 10`",
+  ],
+  [
+    "an unpaged optional filter",
+    "sql`UPDATE citations SET status = 'pending' WHERE ${date}::date IS NULL OR decision_date >= ${date}::date`",
+  ],
+  [
+    "a placeholder interpolated into a plain string",
+    "const text = `SELECT id FROM t WHERE ${cursor} IS NULL OR id > ${cursor} LIMIT 5`;",
+  ],
+  [
+    "the shape inside a SQL string",
+    "sql`SELECT 'x IS NULL OR id > x' AS note FROM t WHERE id > ${cursor} LIMIT 5`",
+  ],
+])("accepts %s", (_, source) => {
+  expect(kinds(source)).toEqual([]);
+});
+
+test("an optional keyset bound takes a reason and is never baselined", () => {
+  const source = [
+    "// sql-perf-allow: small table sessions",
+    "const page = sql`SELECT id FROM sessions WHERE ${cursor}::uuid IS NULL OR id > ${cursor}::uuid LIMIT 10`;",
+  ].join("\n");
+  expect(analyzeSqlPerf(source, "apps/api/src/handlers/example.ts")).toEqual({
+    hits: [],
+    commentErrors: [],
+  });
+  expect(isBaselinedSqlPerfKind("optional-keyset")).toBe(false);
+  expect(isBaselinedSqlPerfKind("leading-wildcard")).toBe(true);
 });

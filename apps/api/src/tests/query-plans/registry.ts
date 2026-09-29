@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -12,6 +13,10 @@ import {
   sitemapShardDecisionsQuery,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import { statuteSitemapShardQuery } from "@/api/handlers/legislation/sitemap";
+import {
+  decisionPageSql,
+  ID_PAGE_SIZE,
+} from "@/api/lib/case-law/provision-state-backfill/backfill";
 import {
   SITEMAP_REFRESH_PAGE_SIZE,
   sitemapRefreshPageSql,
@@ -47,6 +52,15 @@ if (!Array.isArray(shardConditions)) {
 }
 const sampleCountry =
   publicCaseLawCountry("CZE") ?? panic("The query-plan country must be public");
+
+/** A raw `$1` statement with its one parameter bound, as a Drizzle query. */
+const withFirstParameter = (text: string, value: string): SQLWrapper => {
+  const [head, tail, ...rest] = text.split("$1");
+  if (head === undefined || tail === undefined || rest.length > 0) {
+    return panic("The statement must use $1 exactly once");
+  }
+  return sql`${sql.raw(head)}${value}${sql.raw(tail)}`;
+};
 
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
@@ -87,6 +101,19 @@ export const QUERY_PLAN_REGISTRY = [
     seed: "case-law",
     planMode: "covering-index",
     contract: planContracts["case-law.sitemap-refresh"],
+  },
+  {
+    // A resumed page. Its generic plan is checked in the backfill's own test.
+    id: "case-law.provision-backfill-page",
+    class: "page",
+    role: "root",
+    build: () =>
+      withFirstParameter(
+        decisionPageSql("after", ID_PAGE_SIZE),
+        QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+      ),
+    seed: "case-law",
+    contract: planContracts["case-law.provision-backfill-page"],
   },
   {
     id: "case-law.sitemap-shard-read",

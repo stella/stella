@@ -5,7 +5,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
-import { analyzeSqlPerf, reportSqlPerfOrColumns } from "./sql-perf-detector";
+import {
+  analyzeSqlPerf,
+  isBaselinedSqlPerfKind,
+  reportSqlPerfOrColumns,
+} from "./sql-perf-detector";
 import { isSqlPerfSource, SQL_PERF_LINT_FILES } from "./sql-perf-scope.ts";
 
 export const SQL_PERF_BASELINE_PATH = BASELINE_PATHS.sqlPerf;
@@ -28,9 +32,10 @@ export const countSqlPerfHits = (source: string, filename: string): number => {
       .join("\n");
     return panic(errors);
   }
-  // The OR/subquery ban starts at zero; existing per-file allowances cover
-  // only the kinds that were present when the baseline was introduced.
-  return result.hits.filter((hit) => hit.kind !== "or-subquery").length;
+  // The OR/subquery and optional-keyset bans start at zero; existing per-file
+  // allowances cover only the kinds that were present when the baseline was
+  // introduced.
+  return result.hits.filter((hit) => isBaselinedSqlPerfKind(hit.kind)).length;
 };
 
 export const scanSqlPerfCounts = (root: string): SqlPerfCounts => {
