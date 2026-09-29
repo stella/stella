@@ -10,7 +10,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
- * Migration `20261003121100_contact_person_details`: a person's partial date
+ * Migration `20261003122000_contact_person_details`: a person's partial date
  * of birth and nationality codes, and the CHECKs that keep them well shaped.
  * A partial date only ever drops trailing parts (year, year-month, full date),
  * a day exists in its month, and each nationality element is exactly one
@@ -21,7 +21,7 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_SQL = readFileSync(
   new URL(
-    "../../drizzle/20261003121100_contact_person_details/migration.sql",
+    "../../drizzle/20261003122000_contact_person_details/migration.sql",
     import.meta.url,
   ),
   "utf-8",
