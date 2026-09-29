@@ -628,10 +628,11 @@ describe("inputSchemaByteSize", () => {
 
 describe("serializeCatalog", () => {
   test("writes one compact entry per line, sorted by id, between fixed wrapper lines", () => {
-    const serialized = serializeCatalog([
+    const entries = [
       { id: "c.d", access: "write" },
       { id: "a.b", access: "read" },
-    ]);
+    ];
+    const serialized = serializeCatalog(entries);
     expect(serialized).toBe(
       '[\n{"id":"a.b","access":"read"},\n{"id":"c.d","access":"write"}\n]\n',
     );

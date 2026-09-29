@@ -447,11 +447,13 @@ const CATALOG_CLOSE = "]";
  * entry compact JSON (pretty-printing the full catalog produced a 6.6MB
  * artifact), sorted by id, between fixed `[` and `]` lines. Nothing else is
  * stored: no count, no total, no header. Two changes that add or edit
- * different capabilities touch different lines and merge cleanly (unless both
- * insert at the same sorted slot); a reader that needs a count computes it.
+ * capabilities that are not neighbours in id order touch non-adjacent lines
+ * and merge cleanly; changes to neighbouring entries still abut, which Git
+ * reports as a conflict whatever the layout. A reader that needs a count
+ * computes it.
  */
-export const serializeCatalog = <Entry extends { readonly id: string }>(
-  entries: readonly Entry[],
+export const serializeCatalog = (
+  entries: readonly { readonly id: string }[],
 ): string => {
   const lines = entries
     .toSorted((a, b) => compareCapabilityIds(a.id, b.id))
