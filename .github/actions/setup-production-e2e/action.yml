@@ -46,6 +46,8 @@ runs:
         name: e2e-web-build
         path: apps/web/dist
 
+    # The manifest is written by the build, so this only catches a build
+    # artifact from another commit; it is not an integrity check.
     - name: Validate production web build
       if: steps.stack.outputs.status == 'ready'
       shell: bash

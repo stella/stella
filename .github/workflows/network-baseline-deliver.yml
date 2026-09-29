@@ -2,8 +2,16 @@ name: Deliver network baseline
 
 # workflow_run loads this definition from main. The recording workflow runs PR
 # code without secrets; this job reads its artifact as untrusted data only.
+# The validator is checked out at github.workflow_sha, no PR cache is restored,
+# and the App token is created only after validation passes.
+#
+# The recorded values come from the PR's own code. Validation checks schema
+# and which entries change, not the values, so every delivered commit opens a
+# review thread that must be resolved before merge. The App pushes only to PR
+# branches; main stays protected because the App is not a bypass actor in
+# .github/branch-protection/ruleset-main.json.
 on:
-  workflow_run: # zizmor: ignore[dangerous-triggers] trusted main script validates the artifact; no PR code executes in this workflow
+  workflow_run: # zizmor: ignore[dangerous-triggers] main's script checks the artifact's schema and scope; no PR code executes in this workflow
     workflows: [Record network baseline]
     types: [completed]
 
@@ -21,6 +29,11 @@ jobs:
       contents: read
       issues: write
       pull-requests: read
+    outputs:
+      pr: ${{ steps.pr.outputs.pr }}
+      committed: ${{ steps.commit.outputs.operation == 'committed' }}
+      commit-sha: ${{ steps.commit.outputs.commit-sha }}
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
       - name: Locate the single recorded baseline artifact
         id: artifact
@@ -145,9 +158,9 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
-          mkdir -p "$RUNNER_TEMP/trusted-baseline/scripts"
-          cp package.json "$RUNNER_TEMP/trusted-baseline/package.json"
-          cp scripts/network-baseline-scope.ts "$RUNNER_TEMP/trusted-baseline/scripts/network-baseline-scope.ts"
+          mkdir -p "$RUNNER_TEMP/main-validator/scripts"
+          cp package.json "$RUNNER_TEMP/main-validator/package.json"
+          cp scripts/network-baseline-scope.ts "$RUNNER_TEMP/main-validator/scripts/network-baseline-scope.ts"
 
       - name: Checkout the recorded pull request head
         if: steps.artifact.outputs.found == 'true' && steps.pr.outputs.push-allowed == 'true'
@@ -161,12 +174,13 @@ jobs:
         if: steps.artifact.outputs.found == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version-file: ${{ runner.temp }}/trusted-baseline/package.json
+          bun-version-file: ${{ runner.temp }}/main-validator/package.json
+          no-cache: true
 
       - name: Validate recorded JSON schema
         if: steps.artifact.outputs.found == 'true'
         run: |
-          cd "$RUNNER_TEMP/trusted-baseline"
+          cd "$RUNNER_TEMP/main-validator"
           bun --no-install --no-env-file scripts/network-baseline-scope.ts validate "$RUNNER_TEMP/recorded/network-baseline.json"
 
       - name: Validate recorded data and route scope
@@ -199,7 +213,7 @@ jobs:
             fi
             args+=(--all)
           fi
-          cd "$RUNNER_TEMP/trusted-baseline"
+          cd "$RUNNER_TEMP/main-validator"
           bun --no-install --no-env-file scripts/network-baseline-scope.ts scope \
             --base "$RUNNER_TEMP/base-baseline.json" \
             --recorded "$RUNNER_TEMP/scoped-baseline.json" \
@@ -208,6 +222,22 @@ jobs:
             --route-tree "$GITHUB_WORKSPACE/apps/web/src/routeTree.gen.ts" "${args[@]}"
           cmp "$recorded" "$RUNNER_TEMP/scoped-baseline.json"
           cp "$recorded" "$GITHUB_WORKSPACE/apps/web/e2e/network-baseline.json"
+
+      - name: Summarize budget changes for review
+        if: steps.pr.outputs.push-allowed == 'true'
+        id: summary
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/main-validator"
+          bun --no-install --no-env-file scripts/network-baseline-scope.ts summary \
+            --base "$RUNNER_TEMP/base-baseline.json" \
+            --recorded "$RUNNER_TEMP/recorded/network-baseline.json" > "$RUNNER_TEMP/budget-summary.md"
+          delimiter="summary-$(openssl rand -hex 16)"
+          {
+            echo "summary<<$delimiter"
+            cat "$RUNNER_TEMP/budget-summary.md"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create CI-triggering app token
         if: steps.pr.outputs.push-allowed == 'true'
@@ -222,13 +252,19 @@ jobs:
       # at the recorded head, so a concurrent push cannot receive stale data.
       - name: Commit baseline to same-repository pull request
         if: steps.pr.outputs.push-allowed == 'true'
+        id: commit
         uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: append
           branch: ${{ steps.pr.outputs.branch }}
           paths: apps/web/e2e/network-baseline.json
-          commit-message: "chore(web): record network baseline"
+          commit-message: |
+            chore(web): record network baseline
+
+            Records the network baseline from this pull request's run. The
+            values come from the pull request's own code; review them as a
+            budget change.
 
       - name: Remove recording label
         if: always() && steps.pr.outcome == 'success'
@@ -240,6 +276,41 @@ jobs:
           set -euo pipefail
           if gh api "repos/$REPOSITORY/issues/$PR_NUMBER/labels" --jq '.[].name' | grep -Fxq 'baseline:record'; then
             gh api -X DELETE "repos/$REPOSITORY/issues/$PR_NUMBER/labels/baseline%3Arecord" --silent
+          fi
+
+  # Only this job's token may write pull request review comments. An
+  # unresolved review thread blocks merging on main, so the recorded budgets
+  # get a fresh review after every delivered commit.
+  request-budget-review:
+    needs: deliver
+    # always(): a later deliver step failing must not skip the thread for a
+    # commit that was already pushed.
+    if: always() && needs.deliver.outputs.committed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Open a budget review thread on the recorded baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.deliver.outputs.pr }}
+          COMMIT_SHA: ${{ needs.deliver.outputs.commit-sha }}
+          BODY: ${{ needs.deliver.outputs.summary }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$COMMIT_SHA" =~ ^[a-f0-9]{40}$ || -z "$BODY" ]]; then
+            echo "::error::The baseline was pushed to #$PR_NUMBER, but no review thread could be prepared. Review the baseline diff before merging."
+            exit 1
+          fi
+          if ! gh api -X POST "repos/$REPOSITORY/pulls/$PR_NUMBER/comments" \
+            -f body="$BODY" \
+            -f commit_id="$COMMIT_SHA" \
+            -f path=apps/web/e2e/network-baseline.json \
+            -f subject_type=file --silent; then
+            echo "::error::The baseline was pushed to #$PR_NUMBER, but the review thread was not opened. Review the baseline diff before merging."
+            exit 1
           fi
 
   remove-label-after-failure:

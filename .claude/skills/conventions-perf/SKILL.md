@@ -51,7 +51,7 @@ request, the deeper wait, or the bigger chunk is worth it).
 
 The network baseline has two write modes for exactly this distinction:
 
-For a new or changed smoked route, add the `baseline:record` label to its pull request; CI records and commits the network baseline entry.
+For a new or changed smoked route, add the `baseline:record` label to its pull request; CI records the entry with the pull request's own code, commits it, and opens a review thread on it. Review the recorded values as budget changes and resolve the thread to accept them.
 
 - `E2E_NETWORK_BASELINE=write` merges into the existing baseline: requests
   accumulate as a union, depth and DB-query budgets take the max. Safe to run

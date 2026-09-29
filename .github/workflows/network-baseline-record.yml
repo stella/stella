@@ -1,5 +1,11 @@
 name: Record network baseline
 
+# Runs pull request code: no secrets, contents: read tokens, and checkouts with
+# persist-credentials: false. Everything it uploads is untrusted PR data: the
+# recorded JSON reflects the PR's own code, the build's version.json commit
+# only catches mixed-up artifacts, and the fork patch needs ordinary diff
+# review before anyone applies it. The deliver workflow validates the JSON
+# with main's script and opens a review thread on each commit it pushes.
 on:
   pull_request:
     types: [labeled]
@@ -194,7 +200,7 @@ jobs:
         run: |
           {
             echo "### Network baseline for pull request #$PR_NUMBER"
-            echo "Download the network-baseline-patch-$PR_NUMBER-$HEAD_SHA artifact, then run \`git apply network-baseline.patch\` on the pull request branch. The JSON artifact contains the complete result."
+            echo "Download the network-baseline-patch-$PR_NUMBER-$HEAD_SHA artifact, review it like any other diff, then run \`git apply network-baseline.patch\` on the pull request branch. The patch was produced by this pull request's code; review its budgets as budget changes. The JSON artifact contains the complete result."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload failure diagnostics

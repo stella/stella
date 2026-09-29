@@ -209,11 +209,116 @@ export const scopeBaseline = ({
   return scoped;
 };
 
+// Route and request keys come from the recording, so they are rendered as
+// inert code spans: no markdown, mentions or line breaks reach the comment.
+const code = (value: string): string =>
+  `\`${value.replaceAll(/[`\p{Cc}]/gu, " ")}\``;
+
+const NUMBER_FIELDS = ["requestCounts", "dbQueries", "responseSizes"] as const;
+// GitHub rejects comment bodies over 65536 characters.
+const MAX_SUMMARY_CHARS = 60_000;
+
+const numberChanges = (
+  before: BaselineEntry,
+  after: BaselineEntry,
+): string[] => {
+  const changes: string[] = [];
+  if (before.depth !== after.depth) {
+    changes.push(`depth ${before.depth} → ${after.depth}`);
+  }
+  for (const field of NUMBER_FIELDS) {
+    const previous = before[field] ?? {};
+    const next = after[field] ?? {};
+    const keys = [
+      ...new Set([...Object.keys(previous), ...Object.keys(next)]),
+    ].toSorted();
+    for (const key of keys) {
+      if (previous[key] !== next[key]) {
+        changes.push(
+          `${field} ${code(key)} ${previous[key] ?? "none"} → ${next[key] ?? "none"}`,
+        );
+      }
+    }
+  }
+  const previousRequests = new Set(before.requests);
+  const nextRequests = new Set(after.requests);
+  for (const request of [...nextRequests].toSorted()) {
+    if (!previousRequests.has(request)) {
+      changes.push(`request ${code(request)} added`);
+    }
+  }
+  for (const request of [...previousRequests].toSorted()) {
+    if (!nextRequests.has(request)) {
+      changes.push(`request ${code(request)} removed`);
+    }
+  }
+  return changes;
+};
+
+/**
+ * Markdown for the review thread opened on a recorded baseline commit: every
+ * budget change against the base branch, per route, before → after.
+ */
+export const summarizeBudgetChanges = ({
+  base,
+  recorded,
+}: {
+  base: Baseline;
+  recorded: Baseline;
+}): string => {
+  const lines: string[] = [];
+  const routes = [
+    ...new Set([...Object.keys(base), ...Object.keys(recorded)]),
+  ].toSorted();
+  for (const route of routes) {
+    const before = base[route];
+    const after = recorded[route];
+    if (before === undefined && after !== undefined) {
+      lines.push(
+        `- ${code(route)}: added, depth ${after.depth}, allowed requests ${after.requests.length}`,
+      );
+    } else if (before !== undefined && after === undefined) {
+      lines.push(`- ${code(route)}: removed`);
+    } else if (before !== undefined && after !== undefined) {
+      const changes = numberChanges(before, after);
+      if (changes.length > 0) {
+        lines.push(`- ${code(route)}: ${changes.join("; ")}`);
+      }
+    }
+  }
+  const header = [
+    "This network baseline was recorded by this pull request's own code.",
+    "",
+    lines.length === 0
+      ? "No budget changes against the base branch."
+      : "Budget changes against the base branch:",
+    "",
+  ];
+  const footer = [
+    "",
+    "Review these as budget changes and resolve this thread to accept them.",
+  ];
+  const kept: string[] = [];
+  let length = [...header, ...footer].join("\n").length + 100;
+  for (const [index, line] of lines.entries()) {
+    if (length + line.length + 1 > MAX_SUMMARY_CHARS) {
+      kept.push(
+        `- ${lines.length - index} more routes changed; see the file diff.`,
+      );
+      break;
+    }
+    kept.push(line);
+    length += line.length + 1;
+  }
+  return [...header, ...kept, ...footer].join("\n");
+};
+
 const usage = `Usage:
   bun scripts/network-baseline-scope.ts scope --base FILE --recorded FILE --changed FILE --base-route-tree FILE --route-tree FILE [--all]
   bun scripts/network-baseline-scope.ts validate FILE
+  bun scripts/network-baseline-scope.ts summary --base FILE --recorded FILE
 
---changed is a newline-separated list of changed route source paths. scope validates both baselines and writes the scoped result to --recorded. validate checks the trusted artifact schema and size.`;
+--changed is a newline-separated list of changed route source paths. scope validates both baselines and limits the recorded file to entries of new or changed routes, restoring every other entry from --base. It limits which entries change; it does not check the recorded values. validate checks the artifact schema and size. summary prints the budget changes as markdown for review.`;
 
 const option = (args: string[], name: string): string => {
   const index = args.indexOf(name);
@@ -236,6 +341,15 @@ const main = (): void => {
       fail(usage);
     }
     validateBaselineFile(file);
+    return;
+  }
+  if (command === "summary") {
+    process.stdout.write(
+      `${summarizeBudgetChanges({
+        base: validateBaselineFile(option(args, "--base")),
+        recorded: validateBaselineFile(option(args, "--recorded")),
+      })}\n`,
+    );
     return;
   }
   if (command !== "scope") {

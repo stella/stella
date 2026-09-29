@@ -1,9 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { scopeBaseline, validateBaselineFile } from "./network-baseline-scope";
+import {
+  scopeBaseline,
+  summarizeBudgetChanges,
+  validateBaselineFile,
+} from "./network-baseline-scope";
 
 const entry = (depth: number) => ({ depth, requests: [`GET /${depth}`] });
 
@@ -163,5 +173,193 @@ describe("network baseline scope", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe("network baseline budget summary", () => {
+  test("lists added, removed and changed budgets per route", () => {
+    const summary = summarizeBudgetChanges({
+      base: {
+        "/chat": {
+          depth: 2,
+          requests: ["GET /a", "GET /old"],
+          requestCounts: { "GET /a": 1 },
+          dbQueries: { "GET /a": 4 },
+        },
+        "/gone": entry(1),
+        "/same": entry(3),
+      },
+      recorded: {
+        "/chat": {
+          depth: 3,
+          requests: ["GET /a", "GET /b"],
+          requestCounts: { "GET /a": 2 },
+          dbQueries: { "GET /a": 4, "GET /b": 1 },
+          responseSizes: { "GET /b": 900 },
+        },
+        "/new": entry(5),
+        "/same": entry(3),
+      },
+    });
+    expect(summary).toBe(
+      [
+        "This network baseline was recorded by this pull request's own code.",
+        "",
+        "Budget changes against the base branch:",
+        "",
+        "- `/chat`: depth 2 → 3; requestCounts `GET /a` 1 → 2; dbQueries `GET /b` none → 1; responseSizes `GET /b` none → 900; request `GET /b` added; request `GET /old` removed",
+        "- `/gone`: removed",
+        "- `/new`: added, depth 5, allowed requests 1",
+        "",
+        "Review these as budget changes and resolve this thread to accept them.",
+      ].join("\n"),
+    );
+  });
+
+  test("says so when nothing changed against the base branch", () => {
+    const baseline = { "/": entry(1) };
+    expect(
+      summarizeBudgetChanges({ base: baseline, recorded: baseline }),
+    ).toContain("No budget changes against the base branch.");
+  });
+
+  test("renders recorded keys as inert code spans", () => {
+    const summary = summarizeBudgetChanges({
+      base: {},
+      recorded: { "/x`\n@team **bold**": entry(1) },
+    });
+    expect(summary).toContain("- `/x  @team **bold**`: added");
+    expect(summary.split("\n")).toHaveLength(7);
+  });
+
+  test("stays under the comment size limit", () => {
+    const recorded = Object.fromEntries(
+      Array.from({ length: 5000 }, (_, index) => [
+        `/route-${index}-${"x".repeat(40)}`,
+        entry(1),
+      ]),
+    );
+    const summary = summarizeBudgetChanges({ base: {}, recorded });
+    expect(summary.length).toBeLessThan(65_536);
+    expect(summary).toMatch(/- \d+ more routes changed; see the file diff\./u);
+    expect(summary).toEndWith("resolve this thread to accept them.");
+  });
+
+  test("prints the summary from the command line", () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
+    const basePath = path.join(directory, "base.json");
+    const recordedPath = path.join(directory, "recorded.json");
+    try {
+      writeFileSync(basePath, JSON.stringify({ "/": entry(1) }));
+      writeFileSync(recordedPath, JSON.stringify({ "/": entry(2) }));
+      const result = Bun.spawnSync([
+        "bun",
+        "scripts/network-baseline-scope.ts",
+        "summary",
+        "--base",
+        basePath,
+        "--recorded",
+        recordedPath,
+      ]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString()).toContain("- `/`: depth 1 → 2");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+// The recorder runs pull request code and the deliver workflow holds write
+// tokens; these assertions fail the edit that would move either boundary.
+type WorkflowJob = {
+  if?: string;
+  needs?: string | string[];
+  permissions?: unknown;
+  outputs?: Record<string, string>;
+  steps: readonly {
+    id?: string;
+    name?: string;
+    uses?: string;
+    run?: string;
+    with?: Record<string, unknown>;
+  }[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isWorkflowJobs = (value: unknown): value is Record<string, WorkflowJob> =>
+  isRecord(value) &&
+  Object.values(value).every(
+    (job) => isRecord(job) && Array.isArray(job["steps"]),
+  );
+
+const workflowSource = (file: string): string =>
+  readFileSync(
+    path.join(import.meta.dirname, "..", ".github", "workflows", file),
+    "utf-8",
+  );
+
+const readWorkflowJobs = (file: string): Record<string, WorkflowJob> => {
+  const parsed: unknown = Bun.YAML.parse(workflowSource(file));
+  const jobs = isRecord(parsed) ? parsed["jobs"] : undefined;
+  return isWorkflowJobs(jobs)
+    ? jobs
+    : expect.unreachable(`${file} has no jobs`);
+};
+
+describe("network baseline workflows", () => {
+  test("the recorder passes no secrets and keeps read-only credentials", () => {
+    const source = workflowSource("network-baseline-record.yml");
+    expect(source).not.toMatch(/\bsecrets\.\w/u);
+    expect(source).not.toMatch(/\bsecrets:\s*inherit\b/u);
+    for (const [name, job] of Object.entries(
+      readWorkflowJobs("network-baseline-record.yml"),
+    )) {
+      const levels = isRecord(job.permissions)
+        ? Object.values(job.permissions)
+        : [];
+      expect(levels.length, name).toBeGreaterThan(0);
+      expect(
+        levels.every((level) => level === "read"),
+        name,
+      ).toBe(true);
+      for (const step of job.steps) {
+        if (step.uses?.startsWith("actions/checkout@")) {
+          expect(step.with?.["persist-credentials"], name).toBe(false);
+        }
+      }
+    }
+  });
+
+  test("a delivered commit opens a budget review thread", () => {
+    const jobs = readWorkflowJobs("network-baseline-deliver.yml");
+    const deliver = jobs["deliver"] ?? expect.unreachable("deliver job");
+    const stepIds = deliver.steps.map((step) => step.id);
+    const summaryIndex = stepIds.indexOf("summary");
+    const tokenIndex = stepIds.indexOf("app-token");
+    const commitIndex = stepIds.indexOf("commit");
+    expect(summaryIndex).toBeGreaterThan(-1);
+    expect(tokenIndex).toBeGreaterThan(summaryIndex);
+    expect(commitIndex).toBeGreaterThan(tokenIndex);
+    expect(deliver.outputs?.["committed"]).toContain(
+      "steps.commit.outputs.operation == 'committed'",
+    );
+    expect(deliver.outputs?.["commit-sha"]).toContain(
+      "steps.commit.outputs.commit-sha",
+    );
+
+    const review =
+      jobs["request-budget-review"] ?? expect.unreachable("review job");
+    expect(review.needs).toBe("deliver");
+    expect(review.if).toContain("needs.deliver.outputs.committed == 'true'");
+    expect(review.permissions).toEqual({ "pull-requests": "write" });
+    const post = review.steps.find((step) =>
+      step.run?.includes('"repos/$REPOSITORY/pulls/$PR_NUMBER/comments"'),
+    );
+    expect(post?.run).toContain('commit_id="$COMMIT_SHA"');
+    expect(post?.run).toContain("path=apps/web/e2e/network-baseline.json");
+    expect(post?.run).toContain("subject_type=file");
+    expect(post?.run).not.toContain("${{");
   });
 });
