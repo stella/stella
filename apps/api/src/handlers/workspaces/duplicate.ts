@@ -40,6 +40,7 @@ import {
 import type { EntityVersionValues } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { copyOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -53,7 +54,7 @@ import {
   assertPropertyDependencyReadWithinLimit,
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
-import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import {
   nativeExtractionRunRequestForFields,
@@ -440,7 +441,10 @@ const cleanupCopiedS3Keys = async ({
     await Promise.all(
       copiedS3Keys.map(async (key) =>
         env.FEATURE_FILE_USAGE_LIMITS
-          ? await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000))
+          ? await deleteOrganizationFileWithSignal(
+              key,
+              AbortSignal.timeout(10_000),
+            )
           : await getS3().delete(key),
       ),
     );

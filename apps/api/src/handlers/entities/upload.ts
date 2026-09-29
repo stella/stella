@@ -47,6 +47,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -59,11 +60,7 @@ import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import {
-  deleteS3ObjectWithSignal,
-  getS3,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -281,7 +278,10 @@ const cleanupUploadedS3Keys = async ({
   const results = await Promise.allSettled(
     keys.map(async (key) =>
       env.FEATURE_FILE_USAGE_LIMITS
-        ? await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000))
+        ? await deleteOrganizationFileWithSignal(
+            key,
+            AbortSignal.timeout(10_000),
+          )
         : await getS3().delete(key),
     ),
   );

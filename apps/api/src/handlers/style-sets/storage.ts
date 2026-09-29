@@ -12,14 +12,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
-import {
-  deleteS3ObjectWithSignal,
-  getS3,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   enqueueStyleSetPackageCleanup,
   STYLE_SET_PACKAGE_ABANDON_DELAY_MS,
@@ -176,7 +173,7 @@ export const createStoredStyleSet = async ({
         const cleanup = await Result.tryPromise({
           try: async () =>
             env.FEATURE_FILE_USAGE_LIMITS
-              ? await deleteS3ObjectWithSignal(
+              ? await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
                 )
@@ -457,7 +454,7 @@ export const replaceStoredStyleSet = async ({
         const cleanup = await Result.tryPromise({
           try: async () =>
             env.FEATURE_FILE_USAGE_LIMITS
-              ? await deleteS3ObjectWithSignal(
+              ? await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
                 )

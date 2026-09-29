@@ -53,6 +53,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -63,7 +64,7 @@ import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { LIMITS } from "@/api/lib/limits";
-import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -593,7 +594,10 @@ export const finalizeEntityCreate = async function* ({
   const cleanupFinalObject = async (stage: string) => {
     await (
       env.FEATURE_FILE_USAGE_LIMITS
-        ? deleteS3ObjectWithSignal(finalKey, AbortSignal.timeout(10_000))
+        ? deleteOrganizationFileWithSignal(
+            finalKey,
+            AbortSignal.timeout(10_000),
+          )
         : getS3().delete(finalKey)
     ).catch((deleteError: unknown) =>
       captureError(deleteError, {

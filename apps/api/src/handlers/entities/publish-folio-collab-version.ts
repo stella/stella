@@ -43,6 +43,7 @@ import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-fil
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import type { MintedFileId } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -55,7 +56,6 @@ import {
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
-  deleteS3ObjectWithSignal,
   readS3ArrayBuffer,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -363,7 +363,10 @@ const cleanupPublicationSource = async ({
 }: CleanupPublicationSourceOptions): Promise<void> => {
   const cleanup = await Result.tryPromise({
     try: async () =>
-      await deleteS3ObjectWithSignal(source.key, AbortSignal.timeout(10_000)),
+      await deleteOrganizationFileWithSignal(
+        source.key,
+        AbortSignal.timeout(10_000),
+      ),
     catch: (cause) => cause,
   });
   if (Result.isError(cleanup)) {

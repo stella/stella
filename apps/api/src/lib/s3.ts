@@ -14,7 +14,6 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
-import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { errorSystemFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -849,14 +848,9 @@ export const readS3ObjectIfPresent = async (
   await presentOrNull(async () => await getS3ObjectWithSignal(key, signal));
 
 /** Delete one object while allowing the caller to cancel the HTTP request. */
-type DeleteS3ObjectOptions = {
-  fileUsageDb?: Pick<MaintenanceDb, "transaction">;
-};
-
 export const deleteS3ObjectWithSignal = async (
   key: string,
   signal: AbortSignal,
-  { fileUsageDb }: DeleteS3ObjectOptions = {},
 ): Promise<void> => {
   await documentsCredentials.run(
     async () =>
@@ -865,16 +859,6 @@ export const deleteS3ObjectWithSignal = async (
         { abortSignal: signal },
       ),
   );
-  const { env } = await import("@/api/env");
-  if (!env.FEATURE_FILE_USAGE_LIMITS) {
-    return;
-  }
-  const { removeOrganizationFileBytes } =
-    await import("@/api/lib/files/organization-file-usage");
-  const removed = await removeOrganizationFileBytes(key, fileUsageDb);
-  if (Result.isError(removed)) {
-    throw removed.error;
-  }
 };
 
 /** Publish one object while allowing the caller to cancel the HTTP request. */

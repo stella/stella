@@ -23,6 +23,7 @@ import {
 import { carryVerificationCodes } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -35,7 +36,6 @@ import { copyOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -524,11 +524,12 @@ const remapFieldFileId = ({
 export const rollbackS3Copies = async (keys: string[]): Promise<void> => {
   await Promise.all(
     keys.map(async (key) => {
-      await deleteS3ObjectWithSignal(key, AbortSignal.timeout(10_000)).catch(
-        (error: unknown) => {
-          captureError(error, { source: "entity-copy-rollback" });
-        },
-      );
+      await deleteOrganizationFileWithSignal(
+        key,
+        AbortSignal.timeout(10_000),
+      ).catch((error: unknown) => {
+        captureError(error, { source: "entity-copy-rollback" });
+      });
     }),
   );
 };

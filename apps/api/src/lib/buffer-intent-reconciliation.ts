@@ -17,11 +17,9 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  deleteS3ObjectWithSignal,
-  S3_OBJECT_WRITE_CERTAINTY,
-} from "@/api/lib/s3";
+import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -691,13 +689,13 @@ const reconcileStaleBufferIntentBatch = async ({
   scope,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteOrganizationFileWithSignal,
 }: {
   safeDb: SafeDb;
   scope?: BufferIntentScope | undefined;
   limit: number;
   signal?: AbortSignal | undefined;
-  deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteObject?: typeof deleteOrganizationFileWithSignal;
 }): Promise<number> => {
   signal?.throwIfAborted();
   const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
@@ -848,12 +846,12 @@ export const reconcileBufferObjectCleanupIntents = async ({
   safeDb,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteOrganizationFileWithSignal,
 }: {
   safeDb: SafeDb;
   limit: number;
   signal?: AbortSignal | undefined;
-  deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteObject?: typeof deleteOrganizationFileWithSignal;
 }): Promise<number> => {
   if (limit === 0) {
     return 0;
@@ -1000,12 +998,12 @@ export const reconcileStaleBufferIntentsGlobally = async ({
   safeDb,
   limit,
   signal,
-  deleteObject = deleteS3ObjectWithSignal,
+  deleteObject = deleteOrganizationFileWithSignal,
 }: {
   safeDb: SafeDb;
   limit: number;
   signal?: AbortSignal | undefined;
-  deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteObject?: typeof deleteOrganizationFileWithSignal;
 }): Promise<number> => {
   const pendingLimit = Math.ceil(limit / 2);
   const transferredLimit = Math.floor(limit / 2);

@@ -53,6 +53,7 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   generateImageThumbnail,
   shouldGenerateImageThumbnail,
@@ -61,7 +62,7 @@ import {
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
+import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
@@ -832,7 +833,7 @@ export const uploadUserFile = async ({
     if (Result.isError(writeSourceResult)) {
       const cleanupResult = await Result.tryPromise({
         try: async () =>
-          await deleteS3ObjectWithSignal(
+          await deleteOrganizationFileWithSignal(
             s3Key,
             AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
           ),
@@ -911,7 +912,7 @@ export const uploadUserFile = async ({
         });
         const cleanupResult = await Result.tryPromise({
           try: async () =>
-            await deleteS3ObjectWithSignal(
+            await deleteOrganizationFileWithSignal(
               preparedThumbnail.key,
               AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
             ),
@@ -931,7 +932,7 @@ export const uploadUserFile = async ({
         if (Result.isError(settlement)) {
           const sourceCleanup = await Result.tryPromise({
             try: async () =>
-              await deleteS3ObjectWithSignal(
+              await deleteOrganizationFileWithSignal(
                 s3Key,
                 AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
               ),
@@ -1036,7 +1037,7 @@ export const uploadUserFile = async ({
 
     const sourceCleanupResult = await Result.tryPromise({
       try: async () =>
-        await deleteS3ObjectWithSignal(
+        await deleteOrganizationFileWithSignal(
           s3Key,
           AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
         ),
@@ -1054,7 +1055,7 @@ export const uploadUserFile = async ({
         ? Result.ok(undefined)
         : await Result.tryPromise({
             try: async () =>
-              await deleteS3ObjectWithSignal(
+              await deleteOrganizationFileWithSignal(
                 thumbnailKey,
                 AbortSignal.timeout(CHAT_ATTACHMENT_DELETE_TIMEOUT_MS),
               ),

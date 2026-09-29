@@ -22,6 +22,7 @@ import type {
 } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { errorTag } from "@/api/lib/errors/utils";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
@@ -31,7 +32,7 @@ import {
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
+import { getS3 } from "@/api/lib/s3";
 import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";
 import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -270,7 +271,10 @@ export const deleteQueuedStyleSetPackages = async (
   await Promise.all(
     s3Keys.map(async (s3Key) => {
       if (env.FEATURE_FILE_USAGE_LIMITS) {
-        await deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000));
+        await deleteOrganizationFileWithSignal(
+          s3Key,
+          AbortSignal.timeout(10_000),
+        );
         return;
       }
       await getS3().delete(s3Key);
@@ -306,7 +310,7 @@ export const deleteUnreferencedStyleSetPackage = async (
     return;
   }
   if (env.FEATURE_FILE_USAGE_LIMITS) {
-    await deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000));
+    await deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000));
   } else {
     await getS3().delete(s3Key);
   }

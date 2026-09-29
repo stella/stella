@@ -12,6 +12,7 @@ import {
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { createSafeId } from "@/api/lib/branded-types";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   commitOrganizationFileBytes,
   copyOrganizationFile,
@@ -196,6 +197,27 @@ describe("organization file usage", () => {
     await removeOrganizationFileBytes("fixture/write", db());
     await removeOrganizationFileBytes("fixture/write", db());
     expect((await counter())?.committedBytes).toBe(0n);
+  });
+
+  test("deleting a stored object removes its committed bytes", async () => {
+    const key = "fixture/tracked-delete";
+    const fake = startFakeS3();
+    try {
+      fake.put(envBase.S3_BUCKET, key, "stored");
+      expect(
+        Result.isOk(await reconcileOrganizationFileObject(input(key, 6), db())),
+      ).toBe(true);
+      expect((await counter())?.committedBytes).toBe(6n);
+
+      await deleteOrganizationFileWithSignal(key, AbortSignal.timeout(10_000), {
+        fileUsageDb: db(),
+      });
+
+      expect(fake.objects.has(`${envBase.S3_BUCKET}/${key}`)).toBe(false);
+      expect((await counter())?.committedBytes).toBe(0n);
+    } finally {
+      fake.stop();
+    }
   });
 
   test("reconciliation is idempotent and corrects changed lengths", async () => {

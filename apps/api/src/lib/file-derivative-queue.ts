@@ -36,6 +36,7 @@ import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   resolveQueuedFileObject,
@@ -60,11 +61,7 @@ import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import {
-  deleteS3ObjectWithSignal,
-  putS3ObjectWithSignal,
-  readS3ArrayBuffer,
-} from "@/api/lib/s3";
+import { putS3ObjectWithSignal, readS3ArrayBuffer } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -137,7 +134,8 @@ const cleanupUnpublishedDerivative = async ({
   const cleanup = await Result.tryPromise({
     try: async () =>
       await withTimeout(
-        async (signal) => await deleteS3ObjectWithSignal(objectKey, signal),
+        async (signal) =>
+          await deleteOrganizationFileWithSignal(objectKey, signal),
         {
           label: "file-derivative-compensating-delete",
           timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,

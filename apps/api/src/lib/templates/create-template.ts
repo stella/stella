@@ -30,13 +30,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  deleteS3ObjectWithSignal,
-  getS3,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
@@ -235,7 +232,7 @@ export const createStoredTemplate = async function* ({
   // object behind. Best-effort delete it so failed creates don't accrue S3 junk.
   if (!txResult.ok) {
     const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
-      ? deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000))
+      ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
       : getS3().delete(s3Key);
     deleteCandidate.catch(captureError);
     return Result.err(
@@ -252,7 +249,7 @@ export const createStoredTemplate = async function* ({
   }
   if (!txResult.row) {
     const deleteCandidate = env.FEATURE_FILE_USAGE_LIMITS
-      ? deleteS3ObjectWithSignal(s3Key, AbortSignal.timeout(10_000))
+      ? deleteOrganizationFileWithSignal(s3Key, AbortSignal.timeout(10_000))
       : getS3().delete(s3Key);
     deleteCandidate.catch(captureError);
     return Result.err(

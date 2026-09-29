@@ -7,7 +7,7 @@ import {
   createUserFileKey,
   getFileExtension,
 } from "@/api/lib/file-key";
-import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export {
@@ -124,7 +124,8 @@ export const deleteS3Keys = async (
           chunk.map(
             async (key) =>
               await withTimeout(
-                async (signal) => await deleteS3ObjectWithSignal(key, signal),
+                async (signal) =>
+                  await deleteOrganizationFileWithSignal(key, signal),
                 {
                   label: "s3-object-delete",
                   timeoutMs: S3_DELETE_TIMEOUT_MS,

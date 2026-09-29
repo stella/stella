@@ -41,13 +41,13 @@ describe("file derivative reservation recovery", () => {
   });
 
   test("ordinary write failures keep the bounded BullMQ failure path", async () => {
-    const error = new OrganizationFileUsageError({
+    const usageError = new OrganizationFileUsageError({
       message: "Organization file capacity exceeded",
       reason: "capacity_exceeded",
     });
     const delayed: number[] = [];
     const rejection = await deferFileDerivativeForPendingReservation({
-      error,
+      error: usageError,
       job: {
         moveToDelayed: async (timestamp) => {
           delayed.push(timestamp);
@@ -57,7 +57,7 @@ describe("file derivative reservation recovery", () => {
       () => null,
       (error: unknown) => error,
     );
-    expect(rejection).toBe(error);
+    expect(rejection).toBe(usageError);
     expect(delayed).toEqual([]);
   });
 });

@@ -40,6 +40,7 @@ import {
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -49,12 +50,7 @@ import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import {
-  deleteS3ObjectWithSignal,
-  getS3,
-  readS3ArrayBuffer,
-  writeS3ObjectWithRetry,
-} from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   processExtraction,
@@ -126,7 +122,10 @@ export const finalizeDesktopEditSessionHandler = async ({
   const deleteCheckpointKey = async (checkpointKey: string) => {
     await (
       env.FEATURE_FILE_USAGE_LIMITS
-        ? deleteS3ObjectWithSignal(checkpointKey, AbortSignal.timeout(10_000))
+        ? deleteOrganizationFileWithSignal(
+            checkpointKey,
+            AbortSignal.timeout(10_000),
+          )
         : getS3().delete(checkpointKey)
     ).catch((error: unknown) => {
       captureError(error, {
@@ -146,7 +145,10 @@ export const finalizeDesktopEditSessionHandler = async ({
   const deleteUploadedKey = async (uploadedKey: string) => {
     await (
       env.FEATURE_FILE_USAGE_LIMITS
-        ? deleteS3ObjectWithSignal(uploadedKey, AbortSignal.timeout(10_000))
+        ? deleteOrganizationFileWithSignal(
+            uploadedKey,
+            AbortSignal.timeout(10_000),
+          )
         : getS3().delete(uploadedKey)
     ).catch((error: unknown) => {
       captureError(error, {

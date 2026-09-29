@@ -340,8 +340,9 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         committed += 1;
         continue;
       }
-      const { deleteS3ObjectWithSignal } = await import("@/api/lib/s3");
-      await deleteS3ObjectWithSignal(
+      const { deleteOrganizationFileWithSignal } =
+        await import("@/api/lib/files/delete-organization-file");
+      await deleteOrganizationFileWithSignal(
         candidate.objectKey,
         signal ?? AbortSignal.timeout(30_000),
         { fileUsageDb: db },

@@ -29,6 +29,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
@@ -36,7 +37,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
+import { putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import {
   processExtraction,
@@ -226,7 +227,8 @@ export const createEntityVersionFromBuffer = async ({
       const cleanup = await Result.tryPromise({
         try: async () =>
           await withTimeout(
-            async (signal) => await deleteS3ObjectWithSignal(objectKey, signal),
+            async (signal) =>
+              await deleteOrganizationFileWithSignal(objectKey, signal),
             {
               label: "buffer-version-writer-cleanup.delete",
               timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,

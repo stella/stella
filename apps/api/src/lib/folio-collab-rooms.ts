@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
@@ -47,7 +48,6 @@ import {
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
-  deleteS3ObjectWithSignal,
   readS3ObjectIfPresent,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -135,7 +135,7 @@ const deleteStoredRoomFile = async ({
     workspaceId,
   });
 
-  await deleteS3ObjectWithSignal(
+  await deleteOrganizationFileWithSignal(
     key,
     AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
   ).catch((error: unknown) => {
@@ -806,7 +806,7 @@ export const storeFolioCollabSnapshot = async ({
   ): Promise<void> => {
     const cleanup = await Result.tryPromise({
       try: async () =>
-        await deleteS3ObjectWithSignal(
+        await deleteOrganizationFileWithSignal(
           nextKey,
           AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
         ),

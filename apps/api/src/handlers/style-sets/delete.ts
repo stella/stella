@@ -14,7 +14,8 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { deleteS3ObjectWithSignal, getS3 } from "@/api/lib/s3";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { getS3 } from "@/api/lib/s3";
 import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanup-queue";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
@@ -115,7 +116,7 @@ export default createSafeRootHandler(
             deleteQueuedStyleSetPackages(params.styleSetId),
             ...deleted.s3Keys.map(async (s3Key) => {
               if (env.FEATURE_FILE_USAGE_LIMITS) {
-                await deleteS3ObjectWithSignal(
+                await deleteOrganizationFileWithSignal(
                   s3Key,
                   AbortSignal.timeout(10_000),
                 );

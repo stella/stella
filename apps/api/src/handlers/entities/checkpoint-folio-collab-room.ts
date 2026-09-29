@@ -35,6 +35,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { materializeYjsOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
@@ -43,7 +44,6 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
 import {
-  deleteS3ObjectWithSignal,
   readS3ArrayBuffer,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
@@ -288,7 +288,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
     ): Promise<void> => {
       const cleanup = await Result.tryPromise({
         try: async () =>
-          await deleteS3ObjectWithSignal(
+          await deleteOrganizationFileWithSignal(
             checkpointKey,
             AbortSignal.timeout(10_000),
           ),
