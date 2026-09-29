@@ -169,19 +169,70 @@ const unitLabel = (element: Element | undefined): string => {
 const childElements = (element: Element): Element[] =>
   element.children.filter((child): child is Element => isTag(child));
 
-const renderTable = (element: Element, state: RenderState): string => {
-  const rows = childElements(element)
-    .filter((row) => row.name === "xRow")
-    .map((row) => {
-      const cells = childElements(row)
-        .filter((cell) => cell.name === "xClmn")
-        .map((cell) => `<td>${renderBlocks(cell, state)}</td>`)
-        .join("\n");
-      return `<tr>${cells}</tr>`;
-    })
-    .join("\n");
-  return `<table>${rows}</table>`;
+/**
+ * A table's or a list's children in document order: each run of its items
+ * rendered together by `renderRun`, and any other child as a block of its
+ * own where it stands. The court's editor can leave paragraphs directly in a
+ * table or a list, outside every row or item; they are the judgment's text
+ * all the same, and a rendering that kept only the items dropped them
+ * without a word.
+ */
+type ItemRuns = {
+  /** The container's own item: `xRow` in a table, `xEnumElem` in a list. */
+  item: string;
+  renderRun: (items: Element[]) => string;
+  /** Children with nothing to render in place. */
+  skip: ReadonlySet<string>;
 };
+
+const renderItemRuns = (
+  element: Element,
+  state: RenderState,
+  { item, renderRun, skip }: ItemRuns,
+): string => {
+  const parts: string[] = [];
+  let run: Element[] = [];
+  const flush = (): void => {
+    if (run.length > 0) {
+      parts.push(renderRun(run));
+      run = [];
+    }
+  };
+  for (const child of childElements(element)) {
+    if (child.name === item) {
+      run.push(child);
+    } else if (!skip.has(child.name)) {
+      flush();
+      parts.push(renderBlock(child, state));
+    }
+  }
+  flush();
+  return parts.join("\n");
+};
+
+const renderTable = (element: Element, state: RenderState): string =>
+  renderItemRuns(element, state, {
+    item: "xRow",
+    renderRun: (rows) =>
+      `<table>${rows
+        .map((row) => {
+          // A paragraph straight in a row, outside its cells, is a cell of
+          // its own rather than lost.
+          const cells = childElements(row)
+            .filter((cell) => !LAYOUT_TAGS.has(cell.name))
+            .map(
+              (cell) =>
+                `<td>${cell.name === "xClmn" ? renderBlocks(cell, state) : renderBlock(cell, state)}</td>`,
+            )
+            .join("\n");
+          return `<tr>${cells}</tr>`;
+        })
+        .join("\n")}</table>`,
+    skip: LAYOUT_TAGS,
+  });
+
+/** The list's own marker, stated once for every item. */
+const LIST_MARKER_TAGS = new Set([...LAYOUT_TAGS, "xBullet"]);
 
 const renderList = (element: Element, state: RenderState): string => {
   const bullet = childElements(element).find(
@@ -190,11 +241,16 @@ const renderList = (element: Element, state: RenderState): string => {
   const marker = bullet === undefined ? "" : escapeHtml(textOf(bullet).trim());
   // A term per item for the bullet and the item's paragraphs as its
   // definition, as the publisher renders a list.
-  const items = childElements(element)
-    .filter((child) => child.name === "xEnumElem")
-    .map((item) => `<dt>${marker}</dt>\n<dd>${renderBlocks(item, state)}</dd>`)
-    .join("\n");
-  return `<dl>${items}</dl>`;
+  return renderItemRuns(element, state, {
+    item: "xEnumElem",
+    renderRun: (items) =>
+      `<dl>${items
+        .map(
+          (item) => `<dt>${marker}</dt>\n<dd>${renderBlocks(item, state)}</dd>`,
+        )
+        .join("\n")}</dl>`,
+    skip: LIST_MARKER_TAGS,
+  });
 };
 
 const renderUnit = (element: Element, state: RenderState): string => {
