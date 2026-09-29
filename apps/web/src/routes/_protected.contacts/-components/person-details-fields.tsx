@@ -1,10 +1,10 @@
 import { useState } from "react";
 
-import { CheckIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { CheckIcon, SearchIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   InputGroup,

@@ -139,11 +139,11 @@ export const contacts = p.pgTable(
     ),
     p.check(
       "contacts_date_of_birth_check",
-      sql`(${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL) OR (${table.dateOfBirthYear} BETWEEN 1000 AND 9999 AND (${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL OR ${table.dateOfBirthMonth} BETWEEN 1 AND 12 AND (${table.dateOfBirthDay} IS NULL OR ${table.dateOfBirthDay} BETWEEN 1 AND CASE WHEN ${table.dateOfBirthMonth} = 2 THEN CASE WHEN mod(${table.dateOfBirthYear}, 400) = 0 OR (mod(${table.dateOfBirthYear}, 4) = 0 AND mod(${table.dateOfBirthYear}, 100) <> 0) THEN 29 ELSE 28 END WHEN ${table.dateOfBirthMonth} IN (4, 6, 9, 11) THEN 30 ELSE 31 END)))`,
+      sql`(${table.dateOfBirthYear} IS NULL AND ${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL) OR (${table.dateOfBirthYear} IS NOT NULL AND ${table.dateOfBirthYear} BETWEEN 1000 AND 9999 AND (${table.dateOfBirthMonth} IS NULL AND ${table.dateOfBirthDay} IS NULL OR ${table.dateOfBirthMonth} IS NOT NULL AND ${table.dateOfBirthMonth} BETWEEN 1 AND 12 AND (${table.dateOfBirthDay} IS NULL OR ${table.dateOfBirthDay} BETWEEN 1 AND CASE WHEN ${table.dateOfBirthMonth} = 2 THEN CASE WHEN mod(${table.dateOfBirthYear}, 400) = 0 OR (mod(${table.dateOfBirthYear}, 4) = 0 AND mod(${table.dateOfBirthYear}, 100) <> 0) THEN 29 ELSE 28 END WHEN ${table.dateOfBirthMonth} IN (4, 6, 9, 11) THEN 30 ELSE 31 END)))`,
     ),
     p.check(
       "contacts_nationality_codes_check",
-      sql`array_position(${table.nationalityCodes}, NULL) IS NULL AND (cardinality(${table.nationalityCodes}) = 0 OR array_to_string(${table.nationalityCodes}, ',') ~ '^([A-Z]{2})(,[A-Z]{2})*$')`,
+      sql`array_position(${table.nationalityCodes}, NULL) IS NULL AND (cardinality(${table.nationalityCodes}) = 0 OR (array_to_string(${table.nationalityCodes}, ',') ~ '^([A-Z]{2})(,[A-Z]{2})*$' AND char_length(array_to_string(${table.nationalityCodes}, '')) = 2 * cardinality(${table.nationalityCodes})))`,
     ),
     ...orgPolicies(),
   ],
