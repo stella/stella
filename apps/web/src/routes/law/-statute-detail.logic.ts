@@ -2,6 +2,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { redirect, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
+import type { LegislationInconsistentVersion } from "@stll/api-contract/legislation-expression";
 import {
   createStatutePath,
   createStatuteRouteParams,
@@ -46,6 +48,12 @@ type PublicStatuteRouteParams = {
 export type PublicStatuteRouteData = {
   statute: PublicStatute | null;
   versions: readonly PublicStatuteVersion[];
+  /**
+   * The versions whose inconsistent publisher dates leave the requested day
+   * without an in-force reading; null when that is not why `statute` is
+   * null, or when it is not null at all.
+   */
+  windowGap: readonly LegislationInconsistentVersion[] | null;
   work: PublicStatute;
 };
 
@@ -90,17 +98,45 @@ const canonicalStatuteParams = ({
 }): StatuteRouteParams => {
   const defaultVersion = versions.find((version) => version.isDefault);
 
-  return createStatuteRouteParams({
-    country: statute.country,
-    documentId: statute.id,
-    eli: statute.eli,
-    slug: statute.slug,
-    version:
-      defaultVersion === undefined || defaultVersion.id === statute.id
-        ? null
-        : statute.versionValidFrom,
+  return statuteVersionRouteParams({
+    isDefault: defaultVersion === undefined || defaultVersion.id === statute.id,
+    version: statute,
   });
 };
+
+/**
+ * The address one version of a Work is read at: the bare slug path for the
+ * Work's default, its opening day's `/v/` path for any other version that
+ * can apply, and the id form for one that cannot. A day is answered by the
+ * version in force then, so it never names a version that was not; the
+ * id names it directly.
+ */
+export const statuteVersionRouteParams = ({
+  isDefault,
+  version,
+}: {
+  isDefault: boolean;
+  version: Pick<
+    PublicStatute,
+    | "country"
+    | "eli"
+    | "expressionKind"
+    | "id"
+    | "slug"
+    | "versionValidFrom"
+    | "windowDisposition"
+  >;
+}): StatuteRouteParams =>
+  createStatuteRouteParams({
+    country: version.country,
+    documentId: version.id,
+    eli: version.eli,
+    slug:
+      isDefault || isEligibleLegislationExpression(version)
+        ? version.slug
+        : null,
+    version: isDefault ? null : version.versionValidFrom,
+  });
 
 const currentStatutePath = (params: PublicStatuteRouteParams): string =>
   createStatutePath({
@@ -167,6 +203,8 @@ const redirectToCanonicalStatutePath = ({
 type SettleStatuteRouteOptions = LoadPublicStatuteRouteOptions & {
   /** Null when no consolidation of the Work covered the requested day. */
   statute: PublicStatute | null;
+  /** Why nothing covered it, when the publisher's own dates are the reason. */
+  windowGap: readonly LegislationInconsistentVersion[] | null;
   /** A member of the Work, which carries its chrome while no text resolves. */
   work: PublicStatute;
 };
@@ -181,6 +219,7 @@ const settleStatuteRoute = async ({
   queryClient,
   search,
   statute,
+  windowGap,
   work,
 }: SettleStatuteRouteOptions): Promise<PublicStatuteRouteData> => {
   const versions = await ensureRouteQueryData(
@@ -200,7 +239,7 @@ const settleStatuteRoute = async ({
       });
     }
 
-    return { statute: null, versions, work };
+    return { statute: null, versions, windowGap, work };
   }
 
   const canonicalParams = canonicalStatuteParams({ statute, versions });
@@ -211,7 +250,7 @@ const settleStatuteRoute = async ({
     redirectToCanonicalStatutePath({ canonicalParams, hash, search });
   }
 
-  return { statute, versions, work: statute };
+  return { statute, versions, windowGap: null, work: statute };
 };
 
 /**
@@ -230,7 +269,7 @@ export const loadPublicStatuteRoute = async ({
   queryClient,
   search,
 }: LoadPublicStatuteRouteOptions): Promise<PublicStatuteRouteData> => {
-  const resolution = await resolveStatuteRoute(
+  const resolution = await resolveStatuteRoute<PublicStatute>(
     { ...params, asOf: search.asOf },
     {
       byId: async (documentId) =>
@@ -256,6 +295,17 @@ export const loadPublicStatuteRoute = async ({
         queryClient,
         search,
         statute: resolution.statute,
+        windowGap: null,
+        work: resolution.work,
+      });
+    case "window-gap":
+      return await settleStatuteRoute({
+        hash,
+        params,
+        queryClient,
+        search,
+        statute: null,
+        windowGap: resolution.versions,
         work: resolution.work,
       });
     default:

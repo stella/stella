@@ -82,6 +82,7 @@ import { organizationSettingsRoute } from "@/api/handlers/organization-settings/
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
+import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { reportsRoute } from "@/api/handlers/reports/routes";
@@ -497,6 +498,7 @@ const api = new Elysia()
       .use(legislationRoute)
       .use(legislationCorpusRoute)
       .use(publicLegislationRoute)
+      .use(publicKnowledgeRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)
       .use(savedTimeNarrativesRoute)

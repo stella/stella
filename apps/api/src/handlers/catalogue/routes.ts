@@ -15,7 +15,12 @@ const catalogueRealtimeUpdates = organizationResourceSetUpdates(
   RESOURCE_TYPE.AGENT_SKILL,
 );
 
+const TENANT_CACHE_CONTROL = "private, no-store";
+
 const sessionCatalogueRoute = new Elysia({ prefix: "/catalogue" })
+  .onRequest(({ set }) => {
+    set.headers["Cache-Control"] = TENANT_CACHE_CONTROL;
+  })
   .use(sessionAuthMacro)
   .guard({ validateSession: true })
   .get(
@@ -24,6 +29,9 @@ const sessionCatalogueRoute = new Elysia({ prefix: "/catalogue" })
   );
 
 const authenticatedCatalogueRoute = new Elysia({ prefix: "/catalogue" })
+  .onRequest(({ set }) => {
+    set.headers["Cache-Control"] = TENANT_CACHE_CONTROL;
+  })
   .use(authMacro)
   .use(permissionMacro)
   .use(resourceRealtime)

@@ -1,9 +1,15 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import * as v from "valibot";
 
+import {
+  LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
+  LEGISLATION_WINDOW_DISPOSITION_BASES,
+} from "@stll/api-contract/legislation-expression";
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
 
 import { DEFAULT_PUBLIC_LAW_PAGE_SIZE } from "@/components/public-law-table/public-law-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-pagination.logic";
+import type { StatuteWindowGap } from "@/features/statutes/statute-expression";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { APIError } from "@/lib/errors/api";
@@ -247,10 +253,27 @@ export const publicStatuteOptions = (documentId: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
+const windowGapBodySchema = v.object({
+  code: v.literal(LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE),
+  versions: v.array(
+    v.object({
+      id: v.string(),
+      language: v.string(),
+      versionValidFrom: v.nullable(v.string()),
+      versionValidTo: v.nullable(v.string()),
+      basis: v.nullable(
+        v.picklist(Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES).flat()),
+      ),
+    }),
+  ),
+});
+
 /**
  * The statute a public URL names, or null when nothing answers to it: an
  * unknown segment, or a date no consolidation of the Work covers. Both are
  * answers the route acts on (not found, or the empty reader), not failures.
+ * A date the publisher's inconsistent dates leave unanswered is an answer
+ * too, carried with the versions responsible so the reader can say why.
  */
 export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
   queryOptions({
@@ -267,7 +290,12 @@ export const statuteBySlugOptions = ({ asOf, country, slug }: StatuteSlugKey) =>
         response.error &&
         isPublicLawMiss(response.error, "readPublicStatuteBySlug")
       ) {
-        return null;
+        const gap = v.safeParse(windowGapBodySchema, response.error.value);
+        if (!gap.success) {
+          return null;
+        }
+        const windowGap: StatuteWindowGap = { windowGap: gap.output.versions };
+        return windowGap;
       }
 
       return unwrapPublicLawEden(response, "readPublicStatuteBySlug");

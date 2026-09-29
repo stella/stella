@@ -4389,7 +4389,13 @@
     "diffRemoved": "Išbraukta:",
     "emptyDocument": "Ši redakcija neturi teksto.",
     "emptyState": "Teisės aktų nerasta.",
+    "expression": {
+      "invalidWindow": "Prieštaringos leidėjo datos",
+      "promulgated": "Paskelbtas tekstas",
+      "withdrawn": "Leidėjas jo nebeskelbia"
+    },
     "inForceSince": "Galioja nuo {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Pagrindiniai sprendimai",
     "noVersionInForce": "Pasirinktą dieną negaliojo nė viena šio akto redakcija.",
     "openEnded": "dabar",
@@ -4409,18 +4415,22 @@
     "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
     "resolvedAlias": "Atpažinta kaip {label}",
     "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
     "showInText": "Rodyti tekste",
+    "statedWindow": "Leidėjo nurodytos datos: {range}",
     "status": {
       "current": "Galiojantis",
       "draft": "Projektinis",
       "ended": "Nebegalioja",
       "future": "Būsimas",
       "historical": "Pakeistas",
-      "repealed": "Panaikintas"
+      "neverInForce": "Niekada neįsigaliojo",
+      "repealed": "Panaikintas",
+      "unknown": "Būsena neaiški"
     },
     "title": "Teisės aktai",
     "validity": "Galioja nuo {from} iki {to}"

@@ -20,13 +20,20 @@ const renderWithIntl = (children: ReactNode) =>
     </IntlProvider>,
   );
 
+const EFFECTIVE = {
+  expressionKind: "consolidation",
+  windowDisposition: "effective",
+} as const;
+
 const currentVersion = {
+  ...EFFECTIVE,
   id: "00000000-0000-4000-8000-000000000002",
   versionValidFrom: "2020-01-01",
   versionValidTo: null,
 } satisfies StatuteVersion;
 
 const supersededVersion = {
+  ...EFFECTIVE,
   id: "00000000-0000-4000-8000-000000000001",
   versionValidFrom: "2014-01-01",
   versionValidTo: "2019-12-31",
@@ -61,6 +68,26 @@ describe("StatuteVersionSwitcher", () => {
     // An open-ended window must read as still in force, not as a missing date.
     expect(markup).toContain("Jan 1, 2020");
     expect(markup).toContain(messages.statutes.openEnded);
+  });
+
+  test("names a version that cannot apply beside the dates its publisher stated", () => {
+    const neverInForce = {
+      expressionKind: "consolidation",
+      id: "00000000-0000-4000-8000-000000000003",
+      versionValidFrom: "2021-01-01",
+      versionValidTo: null,
+      windowDisposition: "never-in-force",
+    } satisfies StatuteVersion;
+    const markup = renderWithIntl(
+      <StatuteVersionSwitcher
+        currentVersionId={neverInForce.id}
+        onVersionChange={noop}
+        versions={[neverInForce, ...versions]}
+      />,
+    );
+
+    expect(markup).toContain(messages.statutes.status.neverInForce);
+    expect(markup).toContain("Jan 1, 2021");
   });
 });
 

@@ -3,14 +3,24 @@ import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import {
+  LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
+  LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
+  LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
+} from "@stll/api-contract/legislation-expression";
+import type { LegislationInconsistentVersion } from "@stll/api-contract/legislation-expression";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
+  eligibleExpression,
   inForceOn,
+  legislationVersionRef,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { selectInconsistentWindowVersions } from "@/api/lib/legal-search/legislation-window-gap";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
 export const readStatuteByEliQuerySchema = t.Object({
@@ -25,14 +35,35 @@ type ReadStatuteByEliQuery = Static<typeof readStatuteByEliQuerySchema>;
 /**
  * Which Expression a Work-plus-date address names, or why it names none.
  *
- * The three cases are not interchangeable: a caller who asked for a date the
- * corpus does not cover needs to hear that the act exists, and a caller who
- * misspelled an ELI needs to hear that it does not.
+ * The cases are not interchangeable: a caller who asked for a date the
+ * corpus does not cover needs to hear that the act exists, a caller who
+ * misspelled an ELI needs to hear that it does not, and a caller whose date
+ * falls where the publisher's own dates contradict each other needs to hear
+ * that, with the versions responsible, rather than that nothing covers it.
  */
 export type StatuteExpressionResolution =
   | { type: "expression"; id: SafeId<"legislationDocument"> }
   | { type: "unknown-work" }
-  | { type: "uncovered-date" };
+  | { type: "uncovered-date" }
+  | {
+      type: typeof LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT;
+      versions: LegislationInconsistentVersion[];
+    };
+
+const documentRef = legislationVersionRef(legislationDocuments);
+
+/**
+ * The 404 body for a date the publisher's inconsistent windows leave without
+ * an in-force reading: the shared message, a code to branch on, and the
+ * versions responsible with their stated dates.
+ */
+export const publisherWindowInconsistentBody = (
+  versions: readonly LegislationInconsistentVersion[],
+) => ({
+  code: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_CODE,
+  message: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
+  versions,
+});
 
 /**
  * Point-in-time resolution: the Expression of a Work that applied on a date.
@@ -73,7 +104,9 @@ const workConditionsFor = ({
  * Expression and every one of its consolidations is still readable history.
  * So this deliberately ignores validity and answers with the latest window
  * the corpus holds, which is all a Work-walking read needs to establish the
- * Work key from.
+ * Work key from. Every version counts, so a Work whose versions all have
+ * inconsistent windows still has a history; an eligible one is preferred, so
+ * the Work key comes from a version that can apply whenever one exists.
  */
 export const resolveStatuteWorkVersion = async (
   query: { eli: string; language?: string | undefined },
@@ -91,6 +124,7 @@ export const resolveStatuteWorkVersion = async (
       )
       .where(and(...conditions))
       .orderBy(
+        desc(eligibleExpression(documentRef)),
         desc(versionSortKey(legislationDocuments.versionValidFrom)),
         asc(legislationDocuments.language),
         desc(legislationDocuments.id),
@@ -120,16 +154,7 @@ export const resolveStatuteExpression = async (
         legislationSources,
         eq(legislationSources.id, legislationDocuments.sourceId),
       )
-      .where(
-        and(
-          ...workConditions,
-          inForceOn(
-            legislationDocuments.versionValidFrom,
-            legislationDocuments.versionValidTo,
-            asOf,
-          ),
-        ),
-      )
+      .where(and(...workConditions, inForceOn(documentRef, asOf)))
       .orderBy(
         desc(versionSortKey(legislationDocuments.versionValidFrom)),
         asc(legislationDocuments.language),
@@ -139,6 +164,19 @@ export const resolveStatuteExpression = async (
 
     if (expression !== undefined) {
       return { type: "expression", id: expression.id } as const;
+    }
+
+    // Why nothing answers is decided before anything else: an inconsistent
+    // publisher window is a stated gap, not a date the corpus lacks.
+    const inconsistent = await selectInconsistentWindowVersions(tx, {
+      conditions: workConditions,
+      asOf,
+    });
+    if (inconsistent.length > 0) {
+      return {
+        type: LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
+        versions: inconsistent,
+      } as const;
     }
 
     // Separating "no such work" from "no window covers that date" is the
@@ -175,6 +213,10 @@ export const readStatuteByEliHandler = async (
     return status(404, {
       message: "No version of this legislation was in force on the given date",
     });
+  }
+
+  if (resolved.type === LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT) {
+    return status(404, publisherWindowInconsistentBody(resolved.versions));
   }
 
   return await readPublicLegislationHandler(resolved.id, legislationDb);

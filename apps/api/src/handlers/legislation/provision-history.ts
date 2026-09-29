@@ -17,6 +17,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import { derivedAiLegislationSource } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   UNVERSIONED_SORT_DATE,
@@ -88,6 +89,7 @@ const versionColumns = {
   ...versionAstColumns,
   versionValidFrom: legislationDocuments.versionValidFrom,
   versionValidTo: legislationDocuments.versionValidTo,
+  ...legislationExpressionLabelColumns,
   // Displaying a consolidation's wording and feeding it to a model are
   // separate publisher permissions. The reader ignores this; the agent-facing
   // history withholds the text of a version whose source bars derived AI use,
@@ -181,6 +183,9 @@ export const readProvisionHistoryHandler = async ({
       documentId: version.id,
       versionValidFrom: version.versionValidFrom,
       versionValidTo: version.versionValidTo,
+      expressionKind: version.expressionKind,
+      windowDisposition: version.windowDisposition,
+      windowDispositionBasis: version.windowDispositionBasis,
       text: texts[index] ?? null,
     })),
     limit,

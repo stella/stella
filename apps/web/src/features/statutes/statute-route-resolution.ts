@@ -1,3 +1,4 @@
+import type { LegislationInconsistentVersion } from "@stll/api-contract/legislation-expression";
 import {
   extractStatuteDocumentIdFromRouteParam,
   normalizeStatuteVersionSegment,
@@ -6,12 +7,14 @@ import {
 } from "@stll/api-contract/statute-route";
 
 import type { StatuteSlugKey } from "@/features/statutes/queries/statutes";
+import { isStatuteWindowGap } from "@/features/statutes/statute-expression";
+import type { StatuteWindowGap } from "@/features/statutes/statute-expression";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 /** The corpus reads an address resolves through: by document id, and by slug. */
 export type StatuteRouteReads<Statute> = {
   byId: (documentId: string) => Promise<Statute | null>;
-  bySlug: (key: StatuteSlugKey) => Promise<Statute | null>;
+  bySlug: (key: StatuteSlugKey) => Promise<Statute | StatuteWindowGap | null>;
 };
 
 /** A statute address, and the `?asOf` lookup the page also answers. */
@@ -22,12 +25,21 @@ export type StatuteRouteRequest = StatuteRouteParams & {
 /**
  * What a statute address names. `found` carries the consolidation to show,
  * null when nothing of the Work was in force on the requested day, and the
- * Work's member that answers for its chrome either way.
+ * Work's member that answers for its chrome either way. `window-gap` is a
+ * day the publisher's own inconsistent dates leave without an in-force
+ * reading, with the versions responsible.
  */
 export type StatuteRouteResolution<Statute> =
   | { type: "unserved" }
   | { type: "missing" }
-  | { type: "found"; statute: Statute | null; work: Statute };
+  | { type: "found"; statute: Statute | null; work: Statute }
+  | {
+      type: "window-gap";
+      /** The day asked about, which only the act's page read on it explains. */
+      asOf: string;
+      versions: readonly LegislationInconsistentVersion[];
+      work: Statute;
+    };
 
 /**
  * The one reading of a statute address, shared by the act's page and every
@@ -64,7 +76,10 @@ export const resolveStatuteRoute = async <Statute>(
       ? { country: countrySegment, slug }
       : { asOf, country: countrySegment, slug },
   );
-  if (addressed !== null) {
+  let windowGap: readonly LegislationInconsistentVersion[] | null = null;
+  if (isStatuteWindowGap(addressed)) {
+    windowGap = addressed.windowGap;
+  } else if (addressed !== null) {
     return { type: "found", statute: addressed, work: addressed };
   }
 
@@ -75,7 +90,10 @@ export const resolveStatuteRoute = async <Statute>(
   // Nothing was in force on the requested day; the Work still has chrome to
   // answer with, so it is read without one.
   const work = await reads.bySlug({ country: countrySegment, slug });
-  return work === null
-    ? { type: "missing" }
-    : { type: "found", statute: null, work };
+  if (work === null || isStatuteWindowGap(work)) {
+    return { type: "missing" };
+  }
+  return windowGap === null
+    ? { type: "found", statute: null, work }
+    : { type: "window-gap", asOf, versions: windowGap, work };
 };

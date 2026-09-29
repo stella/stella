@@ -30,6 +30,7 @@ const pack = ({
   description: "",
   license: "CC0-1.0",
   licenseUrl: "https://example.invalid/license",
+  publicDisplay: false,
   source: SOURCE,
   authors: AUTHORS,
   jurisdictions,

@@ -5,13 +5,13 @@
       "chars": {
         "name": 1149,
         "title": 1184,
-        "description": 28603,
+        "description": 28664,
         "inputSchema": 82351,
-        "outputSchema": 54739,
+        "outputSchema": 55266,
         "annotations": 7250,
         "instructions": 1699
       },
-      "payloadUtf8Bytes": 181400,
+      "payloadUtf8Bytes": 181988,
       "largestDescription": {
         "tool": "create_template",
         "chars": 807
@@ -55,13 +55,13 @@
       "chars": {
         "name": 472,
         "title": 496,
-        "description": 12876,
+        "description": 12937,
         "inputSchema": 26219,
-        "outputSchema": 31640,
+        "outputSchema": 32167,
         "annotations": 2756,
         "instructions": 1005
       },
-      "payloadUtf8Bytes": 76958,
+      "payloadUtf8Bytes": 77546,
       "largestDescription": {
         "tool": "search_case_law",
         "chars": 803
@@ -80,13 +80,13 @@
       "chars": {
         "name": 161,
         "title": 176,
-        "description": 6038,
+        "description": 6099,
         "inputSchema": 12263,
-        "outputSchema": 8719,
+        "outputSchema": 9687,
         "annotations": 956,
         "instructions": 1188
       },
-      "payloadUtf8Bytes": 29174,
+      "payloadUtf8Bytes": 30203,
       "largestDescription": {
         "tool": "search_case_law",
         "chars": 803

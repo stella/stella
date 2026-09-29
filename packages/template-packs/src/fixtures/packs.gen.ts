@@ -9,6 +9,7 @@ export const GENERATED_TEMPLATE_PACKS: readonly GeneratedTemplatePack[] = [
     description: "Test fixture pack with one employment agreement template.",
     license: "CC-BY-4.0",
     licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
+    publicDisplay: false,
     source: {"name":"Fixture source","url":"https://example.invalid/source","retrievedAt":"2026-01-15"},
     authors: [{"name":"Fixture Drafter","organization":"Example Org","role":"drafter","date":"2025-11-01"},{"name":"Fixture Reviewer","role":"reviewer","date":"2026-01-10"},{"name":"Fixture Converter","url":"https://example.invalid/converter","role":"converter"}],
     jurisdictions: [{"country":"CZ"}],

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -6,12 +6,14 @@ import {
   parseCaseLawDecisionPath,
 } from "@stll/api-contract/case-law-decision-route";
 import {
+  createStatuteRouteParams,
   parseStatutePath,
   type StatuteRouteParams,
 } from "@stll/api-contract/statute-route";
 
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
 import { publicStatuteSearchSchema } from "@/features/statutes/statute-page-search";
+import type { StatuteRouteResolution } from "@/features/statutes/statute-route-resolution";
 
 /**
  * A statute page's address, the `?asOf` day it asks the act on, and the
@@ -75,6 +77,58 @@ export const createStatuteLinkTab = (
     versionValidFrom: statute.versionValidFrom,
     ...(anchor === null ? {} : { anchorId: anchor }),
   });
+
+/**
+ * What a resolved statute link opens: a `wording` to show (a tab beside the
+ * chat, or its page on a phone), or the act's page on a `day` the
+ * publisher's own inconsistent dates leave unanswered. Only that page says
+ * why; the Work's default wording would read as the answer for the day.
+ */
+export type StatuteLinkOpening<Statute> =
+  | { type: "wording"; statute: Statute }
+  | { type: "day"; asOf: string; work: Statute };
+
+export const statuteLinkOpening = <Statute>(
+  resolution: StatuteRouteResolution<Statute>,
+): StatuteLinkOpening<Statute> | null => {
+  switch (resolution.type) {
+    case "found":
+      // A day nothing was in force on opens the act, as the page redirects.
+      return {
+        type: "wording",
+        statute: resolution.statute ?? resolution.work,
+      };
+    case "window-gap":
+      return { type: "day", asOf: resolution.asOf, work: resolution.work };
+    case "missing":
+    case "unserved":
+      return null;
+    default:
+      resolution satisfies never;
+      return panic(`Unhandled resolution: ${String(resolution)}`);
+  }
+};
+
+/**
+ * The act's page read on a day: the bare address with `?asOf`, never the
+ * `/v/` opening, which names a consolidation and so redirects away from a
+ * day none answers.
+ */
+export const createStatuteDayTarget = (work: LinkedStatute, asOf: string) => {
+  const params = createStatuteRouteParams({
+    country: work.country,
+    documentId: work.id,
+    eli: work.eli,
+    slug: work.slug,
+    version: null,
+  });
+
+  return {
+    params: { country: params.country, slug: params.slug },
+    search: { asOf },
+    to: "/law/$country/statutes/$slug",
+  } as const;
+};
 
 /** `appOrigins`: the origins this app answers on (the page's, the public URL). */
 export const classifyChatHttpLink = (

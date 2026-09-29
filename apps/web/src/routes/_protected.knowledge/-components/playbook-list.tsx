@@ -1,27 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  ClipboardCheckIcon,
-  Clock3Icon,
-  PlusIcon,
-  RotateCcwIcon,
-} from "@stll/ui/icons";
-import { Skeleton } from "@stll/ui/skeleton";
+import { PlusIcon } from "@stll/ui/icons";
+import { stellaToast } from "@stll/ui/toast";
 
-import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
+import {
+  memberKnowledgeActions,
+  memberKnowledgeSource,
+} from "@/features/knowledge/member/member-knowledge";
+import { PlaybooksPageView } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useFormatter } from "@/i18n/formatting-context";
-import type {
-  PlaybookListItem,
-  RecentPlaybookItem,
-} from "@/lib/knowledge/playbook-types";
-import { recentPlaybooksOptions } from "@/lib/knowledge/queries";
-import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { PlaybookStarterCards } from "@/routes/_protected.knowledge/-components/playbook-starter-cards";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 
 type PlaybookListProps = {
   playbooks: PlaybookListItem[];
@@ -34,8 +27,8 @@ type PlaybookListProps = {
   onRefresh: () => void;
 };
 
-const RECENT_SKELETON_KEYS = ["recent-a", "recent-b", "recent-c"];
-
+/** The organization's playbooks: the shared page with the member's starters,
+ *  recent and full lists, and the create button in its toolbar. */
 export const PlaybookList = ({
   playbooks,
   nextCursor,
@@ -48,230 +41,80 @@ export const PlaybookList = ({
 }: PlaybookListProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ playbook: ["create"] });
-  const { data: recentData, isLoading: recentLoading } = useQuery({
-    ...recentPlaybooksOptions(organizationId),
-    refetchOnWindowFocus: false,
+  const recent = memberKnowledgeSource.useRecentPlaybooks(organizationId);
+  const starters = memberKnowledgeSource.usePlaybookStarters(
+    organizationId,
+    canCreate,
+  );
+  const playbookActions =
+    memberKnowledgeActions.usePlaybookActions(organizationId);
+
+  const create = useMutation({
+    mutationFn: playbookActions.createFromStarter,
+    onSuccess: ({ id, outcome }) => {
+      playbookActions.invalidatePlaybooks();
+      if (outcome === "created") {
+        stellaToast.add({
+          title: t("knowledge.playbooks.starters.addedToast"),
+          type: "success",
+        });
+      }
+      onSelect(id);
+    },
+    onError: (error) => {
+      stellaToast.add({
+        title: t("common.unexpectedError"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
+        type: "error",
+      });
+    },
   });
-  const recentPlaybooks = recentData ? recentData.items : [];
+
+  const startFrom = (starterId: string) => {
+    // The card hands back the id it was given; start from the matching
+    // ready-made playbook.
+    const starter = starters.items.find(
+      (candidate) => candidate.starterId === starterId,
+    );
+    if (starter) {
+      create.mutate(starter.starterId);
+    }
+  };
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
-        <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t("common.playbooks")}
-            </h1>
-            <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-              {t("knowledge.playbooks.homeDescription")}
-            </p>
-          </div>
-          {canCreate && (
-            <Button
-              className="h-11 shrink-0"
-              onClick={onNewPlaybook}
-              {...guideAnchor(GUIDE_ANCHORS.playbooksCreate)}
-            >
-              <PlusIcon />
-              {t("knowledge.playbooks.createPlaybook")}
-            </Button>
-          )}
-        </header>
-
-        {canCreate && (
-          <section aria-labelledby="recommended-playbooks-heading">
-            <SectionHeading
-              id="recommended-playbooks-heading"
-              title={t("knowledge.playbooks.recommended")}
-            />
-            <PlaybookStarterCards
-              onCreated={onSelect}
-              organizationId={organizationId}
-            />
-          </section>
-        )}
-
-        {(recentLoading || recentPlaybooks.length > 0) && (
-          <section aria-labelledby="recent-playbooks-heading">
-            <SectionHeading
-              id="recent-playbooks-heading"
-              title={t("knowledge.playbooks.recent")}
-            />
-            {recentLoading ? (
-              <div className="divide-y rounded-xl border">
-                {RECENT_SKELETON_KEYS.map((key) => (
-                  <div
-                    className="flex min-h-16 items-center gap-3 px-4"
-                    key={key}
-                  >
-                    <Skeleton className="size-9 rounded-lg" />
-                    <div className="flex-1 space-y-1.5">
-                      <Skeleton className="h-4 w-48" />
-                      <Skeleton className="h-3 w-28" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <ul className="divide-y rounded-xl border">
-                {recentPlaybooks.map((playbook) => (
-                  <RecentPlaybookRow
-                    key={playbook.id}
-                    onSelect={() => onSelect(playbook.id)}
-                    playbook={playbook}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-
-        <section aria-labelledby="all-playbooks-heading">
-          <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
-            <h2 className="text-base font-semibold" id="all-playbooks-heading">
-              {t("knowledge.playbooks.all")}
-            </h2>
-            <Button
-              aria-label={t("common.refresh")}
-              className="size-11"
-              onClick={onRefresh}
-              size="icon"
-              title={t("common.refresh")}
-              variant="ghost"
-            >
-              <RotateCcwIcon />
-            </Button>
-          </div>
-
-          {playbooks.length === 0 && !loading ? (
-            <div className="rounded-xl border border-dashed px-5 py-8">
-              <p className="text-sm font-medium">
-                {t("knowledge.playbooks.empty")}
-              </p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {t("knowledge.playbooks.emptyDescription")}
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-y rounded-xl border">
-              {playbooks.map((playbook) => (
-                <PlaybookRow
-                  key={playbook.id}
-                  onSelect={() => onSelect(playbook.id)}
-                  playbook={playbook}
-                />
-              ))}
-            </ul>
-          )}
-
-          {nextCursor && (
-            <div className="flex justify-center pt-3">
-              <Button
-                className="min-h-11"
-                disabled={loading}
-                onClick={onLoadMore}
-                variant="ghost"
-              >
-                {t("common.loadMore")}
-              </Button>
-            </div>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-};
-
-type SectionHeadingProps = {
-  id: string;
-  title: string;
-};
-
-const SectionHeading = ({ id, title }: SectionHeadingProps) => (
-  <div className="mb-3">
-    <h2 className="text-base font-semibold" id={id}>
-      {title}
-    </h2>
-  </div>
-);
-
-const RecentPlaybookRow = ({
-  playbook,
-  onSelect,
-}: {
-  playbook: RecentPlaybookItem;
-  onSelect: () => void;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  return (
-    <li>
-      <button
-        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <Clock3Icon className="text-muted-foreground size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {playbook.name}
-          </p>
-          <p className="text-muted-foreground mt-0.5 truncate text-xs">
-            {t("knowledge.playbooks.lastUsed", {
-              date: format.dateTime(
-                new Date(playbook.lastUsedAt),
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              ),
-            })}
-          </p>
-        </div>
-        <PlaybookStatusBadge status={playbook.status} />
-      </button>
-    </li>
-  );
-};
-
-const PlaybookRow = ({
-  playbook,
-  onSelect,
-}: {
-  playbook: PlaybookListItem;
-  onSelect: () => void;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-
-  return (
-    <li>
-      <button
-        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
-        onClick={onSelect}
-        type="button"
-      >
-        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <ClipboardCheckIcon className="text-muted-foreground size-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {playbook.name}
-          </p>
-          <p
-            className="text-muted-foreground mt-0.5 truncate text-xs"
-            dir="auto"
+    <PlaybooksPageView
+      actions={{
+        startFrom: canCreate
+          ? (starter) => startFrom(starter.starterId)
+          : undefined,
+        open: onSelect,
+        loadMore: onLoadMore,
+        refresh: onRefresh,
+      }}
+      source={{
+        starters: {
+          ...starters,
+          pendingStarterId: create.isPending ? create.variables : null,
+        },
+        recent,
+        library: {
+          playbooks,
+          hasNextPage: Boolean(nextCursor),
+          isFetchingNextPage: loading,
+        },
+      }}
+      toolbar={
+        canCreate && (
+          <Button
+            className="h-11 shrink-0"
+            onClick={onNewPlaybook}
+            {...guideAnchor(GUIDE_ANCHORS.playbooksCreate)}
           >
-            {playbook.description ??
-              t("knowledge.playbooks.updatedAt", {
-                date: format.dateTime(new Date(playbook.updatedAt), {
-                  dateStyle: "medium",
-                }),
-              })}
-          </p>
-        </div>
-        <PlaybookStatusBadge status={playbook.status} />
-        <span className="sr-only">{t("common.edit")}</span>
-      </button>
-    </li>
+            <PlusIcon />
+            {t("knowledge.playbooks.createPlaybook")}
+          </Button>
+        )
+      }
+    />
   );
 };
