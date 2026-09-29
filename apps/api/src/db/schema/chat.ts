@@ -1,3 +1,5 @@
+import type { StreamChunk } from "@tanstack/ai";
+
 import { REASONING_EFFORTS } from "@stll/ai-catalog";
 
 import {
@@ -557,6 +559,84 @@ export const chatTurns = p.pgTable(
       .on(table.organizationId, table.status, table.leaseExpiresAt, table.id)
       .where(sql`${table.status} IN ('accepted', 'running')`),
     ...chatTurnPolicies(),
+  ],
+);
+
+const chatRunLogOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_logs'::regclass)`;
+const chatRunLogEntryOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.chat_run_log_entries'::regclass)`;
+
+/** Transient delivery log for one execution run; the turn remains authoritative. */
+export const chatRunLogs = p.pgTable(
+  "chat_run_logs",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    runId: p.text("run_id").notNull(),
+    turnId: safeUuid<"chatTurn">("turn_id")
+      .notNull()
+      .references(() => chatTurns.id, { onDelete: "cascade" }),
+    nextSeq: p.bigint("next_seq", { mode: "bigint" }).notNull().default(1n),
+    bytesUsed: p.bigint("bytes_used", { mode: "bigint" }).notNull().default(0n),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    closedAt: timestamptz("closed_at"),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "chat_run_logs_pkey",
+      columns: [table.organizationId, table.runId],
+    }),
+    p.check("chat_run_logs_next_seq_check", sql`${table.nextSeq} > 0`),
+    p.check("chat_run_logs_bytes_used_check", sql`${table.bytesUsed} >= 0`),
+    p.index("chat_run_logs_turn_id_idx").on(table.turnId),
+    p
+      .index("chat_run_logs_closed_at_idx")
+      .on(table.closedAt, table.organizationId, table.runId)
+      .where(sql`${table.closedAt} IS NOT NULL`),
+    p.pgPolicy("chat_run_logs_owner_access", {
+      for: "all",
+      to: "public",
+      using: chatRunLogOwner,
+      withCheck: chatRunLogOwner,
+    }),
+  ],
+);
+
+/** Ordered chunks; deleting a log header removes its whole transient prefix. */
+export const chatRunLogEntries = p.pgTable(
+  "chat_run_log_entries",
+  {
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    runId: p.text("run_id").notNull(),
+    seq: p.bigint("seq", { mode: "bigint" }).notNull(),
+    batchId: p.uuid("batch_id").notNull(),
+    batchIndex: p.integer("batch_index").notNull(),
+    chunk: jsonb("chunk").$type<StreamChunk>().notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "chat_run_log_entries_pkey",
+      columns: [table.organizationId, table.runId, table.seq],
+    }),
+    p
+      .foreignKey({
+        name: "chat_run_log_entries_log_fk",
+        columns: [table.organizationId, table.runId],
+        foreignColumns: [chatRunLogs.organizationId, chatRunLogs.runId],
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("chat_run_log_entries_batch_uidx")
+      .on(table.organizationId, table.runId, table.batchId, table.batchIndex),
+    p.check("chat_run_log_entries_seq_check", sql`${table.seq} > 0`),
+    p.check(
+      "chat_run_log_entries_batch_index_check",
+      sql`${table.batchIndex} >= 0`,
+    ),
+    p.pgPolicy("chat_run_log_entries_owner_access", {
+      for: "all",
+      to: "public",
+      using: chatRunLogEntryOwner,
+      withCheck: chatRunLogEntryOwner,
+    }),
   ],
 );
 
