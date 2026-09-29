@@ -6,7 +6,7 @@ import type {
 } from "@stll/api-contract/legislation-expression";
 
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
-import { formatValidityRange } from "@/features/statutes/statute-format";
+import { formatStatedWindow } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type StatedWindow = {
@@ -23,7 +23,7 @@ const StatedWindowText = ({
   const format = useFormatter();
 
   return t("statutes.statedWindow", {
-    range: formatValidityRange({
+    range: formatStatedWindow({
       format,
       openEnded: t("statutes.openEnded"),
       validFrom: versionValidFrom,

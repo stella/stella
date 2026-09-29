@@ -35,6 +35,8 @@ export type StatuteRouteResolution<Statute> =
   | { type: "found"; statute: Statute | null; work: Statute }
   | {
       type: "window-gap";
+      /** The day asked about, which only the act's page read on it explains. */
+      asOf: string;
       versions: readonly LegislationInconsistentVersion[];
       work: Statute;
     };
@@ -93,5 +95,5 @@ export const resolveStatuteRoute = async <Statute>(
   }
   return windowGap === null
     ? { type: "found", statute: null, work }
-    : { type: "window-gap", versions: windowGap, work };
+    : { type: "window-gap", asOf, versions: windowGap, work };
 };
