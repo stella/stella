@@ -54,7 +54,7 @@ export const AddMcpServerSheet = ({
   const invalidate = () => {
     detached(
       queryClient.invalidateQueries({
-        queryKey: catalogueKeys.list(organizationId),
+        queryKey: catalogueKeys.all(organizationId),
       }),
       "add-mcp-server-sheet.invalidate",
     );

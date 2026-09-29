@@ -8,19 +8,21 @@ import { toAuthClientError } from "@/lib/errors/auth";
 const SESSION_LIST_DEDUPLICATION_WINDOW_MS = 5000;
 
 export const sessionsKeys = {
-  all: ["sessions"],
+  all: ["sessions"] as const,
+  list: (userId: string) => [...sessionsKeys.all, userId] as const,
 };
 
-export const sessionsOptions = queryOptions({
-  staleTime: SESSION_LIST_DEDUPLICATION_WINDOW_MS,
-  queryKey: sessionsKeys.all,
-  queryFn: async () => {
-    const result = await listAuthSessions();
+export const sessionsOptions = (userId: string) =>
+  queryOptions({
+    staleTime: SESSION_LIST_DEDUPLICATION_WINDOW_MS,
+    queryKey: sessionsKeys.list(userId),
+    queryFn: async () => {
+      const result = await listAuthSessions();
 
-    if (result.error) {
-      throw toAuthClientError(result.error);
-    }
+      if (result.error) {
+        throw toAuthClientError(result.error);
+      }
 
-    return result.data;
-  },
-});
+      return result.data;
+    },
+  });

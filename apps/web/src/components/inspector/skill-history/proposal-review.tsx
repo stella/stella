@@ -35,9 +35,9 @@ export const ProposalReview = ({
   userId,
   onClose,
 }: ProposalReviewProps) => {
-  const actions = useSkillHistoryActions({ organizationId, skillId });
+  const actions = useSkillHistoryActions({ organizationId, skillId, userId });
   const { data: proposal } = useQuery(
-    skillProposalOptions(organizationId, skillId, proposalId),
+    skillProposalOptions(organizationId, userId, skillId, proposalId),
   );
 
   const isAuthor = proposal?.authorId === userId;

@@ -43,12 +43,17 @@ export const SignalInspectorView = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
   const {
     data: signal,
     isError,
     isPending,
     refetch,
-  } = useQuery(inboxSignalOptions(activeOrganizationId, tab.payload.signalId));
+  } = useQuery(
+    inboxSignalOptions(activeOrganizationId, userId, tab.payload.signalId),
+  );
 
   return (
     <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden">

@@ -165,6 +165,7 @@ export const useReaderAnnotations = (
 
   const annotationsQuery = readerAnnotationsOptions({
     activeOrganizationId: user?.activeOrganizationId ?? "",
+    userId: user?.id ?? "visitor",
     ...targetKey,
   });
   const queryKey = annotationsQuery.queryKey;

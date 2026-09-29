@@ -74,9 +74,9 @@ export const InspectorRail = ({
     return () => routeErrorLifecycle.updateInspectorState("unavailable");
   }, [routeErrorLifecycle, inspectorState]);
   const activeTab = tabs.find((tab) => tab.id === activeId);
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: activeSkillCatalogueData } = useQuery({
-    ...catalogueOptions(activeOrganizationId),
+    ...catalogueOptions(activeOrganizationId, userId),
     enabled: activeTab?.type === "view" && activeTab.viewType === "tool-detail",
   });
   const activeSkill = getActiveSkillChatContext(

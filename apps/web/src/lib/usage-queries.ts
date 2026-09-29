@@ -49,13 +49,15 @@ export const usageEntitlementOptions = ({
 
 type UsageLaneKey = {
   organizationId: string;
+  userId: string;
 };
 
 const usageLaneKeys = {
   all: ["usage", "lane"] as const,
-  byOrganization: ({ organizationId }: UsageLaneKey) => [
+  byOrganization: ({ organizationId, userId }: UsageLaneKey) => [
     ...usageLaneKeys.all,
     organizationId,
+    userId,
   ],
 };
 
@@ -86,9 +88,12 @@ const fetchUsageLane = async ({
  */
 const USAGE_LANE_STALE_TIME_MS = 30_000;
 
-export const usageLaneOptions = ({ organizationId }: UsageLaneOptionsInput) =>
+export const usageLaneOptions = ({
+  organizationId,
+  userId,
+}: UsageLaneOptionsInput) =>
   queryOptions({
-    queryKey: usageLaneKeys.byOrganization({ organizationId }),
+    queryKey: usageLaneKeys.byOrganization({ organizationId, userId }),
     queryFn: fetchUsageLane,
     staleTime: USAGE_LANE_STALE_TIME_MS,
   });

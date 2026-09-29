@@ -45,7 +45,7 @@ export const Route = createFileRoute("/agent-claim")({
       });
     }
 
-    return authContext;
+    return { ...authContext, userId: authContext.session.userId };
   },
   head: () => ({
     meta: [{ title: pageTitle("agentClaim.title") }],
@@ -61,7 +61,8 @@ function AgentClaimPage() {
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });
-  const { data: organizations } = useQuery(organizationListOptions);
+  const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
+  const { data: organizations } = useQuery(organizationListOptions(userId));
 
   const [userCode, setUserCode] = useState(initialUserCode);
   const [status, setStatus] = useState<ClaimStatus>("idle");

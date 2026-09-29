@@ -68,42 +68,69 @@ type TeamTimeEntrySummary = {
   viewerTotalMinutes: number;
 };
 
+const timeEntriesListKey = (key: TimeEntriesListKey) => ({
+  userId: key.userId,
+  scope: key.scope,
+  workItemId: key.workItemId,
+  dateFrom: key.dateFrom,
+  dateTo: key.dateTo,
+  status: key.status,
+  source: key.source,
+  billable: key.billable,
+  hasActiveTimer: key.hasActiveTimer,
+});
+
 export const timeEntriesKeys = {
   all: (workspaceId: string) => ["timeEntries", workspaceId],
   list: (workspaceId: string, key: TimeEntriesListKey) => [
     ...timeEntriesKeys.all(workspaceId),
-    {
-      userId: key.userId,
-      scope: key.scope,
-      workItemId: key.workItemId,
-      dateFrom: key.dateFrom,
-      dateTo: key.dateTo,
-      status: key.status,
-      source: key.source,
-      billable: key.billable,
-      hasActiveTimer: key.hasActiveTimer,
-    },
+    timeEntriesListKey(key),
   ],
+  // The signed-in user's entries (`scope: "me"`).
+  personalList: (
+    workspaceId: string,
+    userId: string,
+    key: TimeEntriesListKey & { scope: "me" },
+  ) => [...timeEntriesKeys.all(workspaceId), userId, timeEntriesListKey(key)],
   byId: (workspaceId: string, id: string) => [
     ...timeEntriesKeys.all(workspaceId),
     id,
   ],
-  activeTimer: (workspaceId: string) => [
+  activeTimer: (workspaceId: string, userId: string) => [
     ...timeEntriesKeys.all(workspaceId),
+    userId,
     "timer",
   ],
-  summary: (workspaceId: string, dateFrom: string, dateTo: string) => [
+  summary: (
+    workspaceId: string,
+    userId: string,
+    dateFrom: string,
+    dateTo: string,
+  ) => [
     ...timeEntriesKeys.all(workspaceId),
+    userId,
     "summary",
     { dateFrom, dateTo },
   ],
-  teamSummary: (workspaceId: string, dateFrom: string, dateTo: string) => [
+  teamSummary: (
+    workspaceId: string,
+    userId: string,
+    dateFrom: string,
+    dateTo: string,
+  ) => [
     ...timeEntriesKeys.all(workspaceId),
+    userId,
     "teamSummary",
     { dateFrom, dateTo },
   ],
-  suggestions: (workspaceId: string, date: string, timezoneId: string) => [
+  suggestions: (
+    workspaceId: string,
+    userId: string,
+    date: string,
+    timezoneId: string,
+  ) => [
     ...timeEntriesKeys.all(workspaceId),
+    userId,
     "suggestions",
     { date, timezoneId },
   ],
@@ -188,10 +215,14 @@ export const timeEntriesOptions = (
 
 export const timeEntriesInfiniteOptions = (
   workspaceId: string,
-  filters: TimeEntriesFilters = {},
+  userId: string,
+  filters: TimeEntriesFilters & { scope: "me" },
 ) =>
   infiniteQueryOptions({
-    queryKey: [...timeEntriesKeys.list(workspaceId, filters), "infinite"],
+    queryKey: [
+      ...timeEntriesKeys.personalList(workspaceId, userId, filters),
+      "infinite",
+    ],
     initialPageParam: "",
     queryFn: async ({ pageParam, signal }) =>
       await listPersonalTimeEntries({
@@ -205,11 +236,12 @@ export const timeEntriesInfiniteOptions = (
 
 export const timeEntrySummaryOptions = (
   workspaceId: string,
+  userId: string,
   dateFrom: string,
   dateTo: string,
 ) =>
   queryOptions({
-    queryKey: timeEntriesKeys.summary(workspaceId, dateFrom, dateTo),
+    queryKey: timeEntriesKeys.summary(workspaceId, userId, dateFrom, dateTo),
     queryFn: async ({ signal }) => {
       const summary = await fetchTimeEntrySummary({
         workspaceId,
@@ -229,11 +261,17 @@ export const timeEntrySummaryOptions = (
 
 export const timeEntryTeamSummaryOptions = (
   workspaceId: string,
+  userId: string,
   dateFrom: string,
   dateTo: string,
 ) =>
   queryOptions({
-    queryKey: timeEntriesKeys.teamSummary(workspaceId, dateFrom, dateTo),
+    queryKey: timeEntriesKeys.teamSummary(
+      workspaceId,
+      userId,
+      dateFrom,
+      dateTo,
+    ),
     queryFn: async ({ signal }) => {
       const summary = await fetchTimeEntrySummary({
         workspaceId,
@@ -247,7 +285,7 @@ export const timeEntryTeamSummaryOptions = (
         viewerTotalMinutes: summary.viewerTotalMinutes,
         totalTeamMinutes: summary.totalTeamMinutes,
         members: summary.members.map(
-          ({ daily, email, image, name, userId }) => ({
+          ({ daily, email, image, name, userId: memberUserId }) => ({
             daily: daily.map(({ dateWorked, totalMinutes }) => ({
               dateWorked,
               totalMinutes,
@@ -255,7 +293,7 @@ export const timeEntryTeamSummaryOptions = (
             email,
             image,
             name,
-            userId,
+            userId: memberUserId,
           }),
         ),
       } satisfies TeamTimeEntrySummary;
@@ -264,11 +302,17 @@ export const timeEntryTeamSummaryOptions = (
 
 export const timeEntrySuggestionsOptions = (
   workspaceId: string,
+  userId: string,
   date: string,
   timezoneId: string,
 ) =>
   queryOptions({
-    queryKey: timeEntriesKeys.suggestions(workspaceId, date, timezoneId),
+    queryKey: timeEntriesKeys.suggestions(
+      workspaceId,
+      userId,
+      date,
+      timezoneId,
+    ),
     queryFn: async ({ signal }) =>
       await fetchTimeEntrySuggestions({
         workspaceId,
@@ -277,10 +321,10 @@ export const timeEntrySuggestionsOptions = (
       }),
   });
 
-export const activeTimerOptions = (workspaceId: string) =>
+export const activeTimerOptions = (workspaceId: string, userId: string) =>
   queryOptions({
     staleTime: 0,
-    queryKey: timeEntriesKeys.activeTimer(workspaceId),
+    queryKey: timeEntriesKeys.activeTimer(workspaceId, userId),
     queryFn: async ({ signal }) => {
       const page = await fetchTimeEntries({
         workspaceId,

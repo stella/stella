@@ -21,10 +21,11 @@ import {
  */
 export const useChatUnavailableSkills = (
   organizationId: string | undefined,
+  userId: string | undefined,
 ): ReadonlyMap<string, readonly string[]> | undefined => {
   const { data } = useQuery({
-    ...chatUnavailableSkillsOptions(organizationId ?? ""),
-    enabled: organizationId !== undefined,
+    ...chatUnavailableSkillsOptions(organizationId ?? "", userId ?? "visitor"),
+    enabled: organizationId !== undefined && userId !== undefined,
   });
   return useMemo(
     () =>
@@ -43,8 +44,9 @@ export const useChatUnavailableSkills = (
 /** The ids of {@link useChatUnavailableSkills}, as the slash menus take them. */
 export const useChatUnavailableSkillIds = (
   organizationId: string | undefined,
+  userId: string | undefined,
 ): UnavailableSkillIds => {
-  const unavailable = useChatUnavailableSkills(organizationId);
+  const unavailable = useChatUnavailableSkills(organizationId, userId);
   return useMemo(
     () => (unavailable === undefined ? undefined : new Set(unavailable.keys())),
     [unavailable],
@@ -62,11 +64,13 @@ export const useComposerSkillAvailability = ({
   chat,
   enabled,
   organizationId,
+  userId,
 }: {
   chat: ComposerSkillChatContext | undefined;
   /** Fetch only while the menu is open; a cached answer still reads. */
   enabled: boolean;
   organizationId: string;
+  userId: string;
 }): ChatSkillMenuAvailability => {
   const anonymized = useOptionalChatAnonymized(chat?.threadRef);
   const browserExtension = useBrowserClientConnected();
@@ -76,7 +80,7 @@ export const useComposerSkillAvailability = ({
       : chatSkillAvailabilityQuery({ anonymized, browserExtension, chat });
   const known = query !== null;
   const { data } = useQuery({
-    ...chatUnavailableSkillsOptions(organizationId, query ?? undefined),
+    ...chatUnavailableSkillsOptions(organizationId, userId, query ?? undefined),
     enabled: enabled && known,
   });
   // A chat not known yet reads no answer, not the widest chat's cached one.

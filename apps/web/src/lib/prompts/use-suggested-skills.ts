@@ -22,16 +22,17 @@ export const useSuggestedSkills = (): ChatPrompt[] => {
   // this hook also renders inside the public law workspace, where no
   // /_protected match exists. Anonymous visitors (pre-signup AI
   // surfaces) simply have no suggested skills.
-  const activeOrganizationId =
-    useMaybeAuthenticatedUser()?.activeOrganizationId;
+  const user = useMaybeAuthenticatedUser();
+  const activeOrganizationId = user?.activeOrganizationId;
+  const userId = user?.id;
   const {
     data: skillPages,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId ?? ""),
-    enabled: activeOrganizationId !== undefined,
+    ...skillsOptions(activeOrganizationId ?? "", userId ?? "visitor"),
+    enabled: activeOrganizationId !== undefined && userId !== undefined,
   });
   useExternalSyncEffect(() => {
     if (
@@ -43,7 +44,10 @@ export const useSuggestedSkills = (): ChatPrompt[] => {
     }
     detached(fetchNextPage(), "use-suggested-skills.fetch-next-page");
   }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
-  const unavailableSkillIds = useChatUnavailableSkillIds(activeOrganizationId);
+  const unavailableSkillIds = useChatUnavailableSkillIds(
+    activeOrganizationId,
+    userId,
+  );
   const rows = commandShortcutRowsFromSkillPages(
     skillPages?.pages,
     unavailableSkillIds,

@@ -38,10 +38,12 @@ const companyFormatKeys = {
   list: ({
     organizationId,
     registry,
+    userId,
   }: {
     organizationId: string;
     registry: LookupRegistryOption["slug"];
-  }) => ["company-output-formats", organizationId, registry] as const,
+    userId: string;
+  }) => ["company-output-formats", organizationId, userId, registry] as const,
 };
 
 export const useCompanyFormatLibrary = ({
@@ -54,7 +56,7 @@ export const useCompanyFormatLibrary = ({
   onSelect: (format: string) => void;
 }) => {
   const t = useTranslations();
-  const { activeOrganizationId } = useAuthenticatedUser();
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const queryClient = useQueryClient();
   const canCreate = usePermissions({ template: ["create"] });
   const canUpdate = usePermissions({ template: ["update"] });
@@ -63,6 +65,7 @@ export const useCompanyFormatLibrary = ({
   const queryKey = companyFormatKeys.list({
     organizationId: activeOrganizationId,
     registry,
+    userId,
   });
   const saved = useInfiniteQuery({
     queryKey,

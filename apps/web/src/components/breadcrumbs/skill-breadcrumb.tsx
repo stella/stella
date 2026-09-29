@@ -11,9 +11,12 @@ export const SkillBreadcrumb = () => {
   const activeOrganizationId = protectedRoute.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const userId = protectedRoute.useRouteContext({
+    select: (ctx) => ctx.user.id,
+  });
   const skillId = skillRoute.useParams({ select: (params) => params.skillId });
   const { data: skill } = useQuery(
-    skillDetailOptions(activeOrganizationId, skillId),
+    skillDetailOptions(activeOrganizationId, userId, skillId),
   );
 
   return (

@@ -55,6 +55,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -207,6 +208,7 @@ function ProfilePage() {
 function ProfilePageBody() {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const authenticatedUser = useAuthenticatedUser();
   const { data: session } = useSuspenseQuery(sessionOptions);
   const deleteAccountConfirmation = useDestructiveActionConfirmation(
     t("settings.account.deleteAccountConfirmationPhrase"),
@@ -239,7 +241,7 @@ function ProfilePageBody() {
     isFetching: isPendingTasksFetching,
     refetch: refetchPendingTasks,
   } = useQuery({
-    queryKey: ["me", "delete", "pending-tasks"],
+    queryKey: ["me", "delete", "pending-tasks", authenticatedUser.id],
     queryFn: async ({ signal }) => {
       const res = await api.me.delete["pending-tasks"].get({
         fetch: { signal },

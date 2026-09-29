@@ -68,12 +68,13 @@ export function AddToStella({
   const organizationId = authStatus.isAuthenticated
     ? authStatus.user.activeOrganizationId
     : "";
+  const userId = authStatus.isAuthenticated ? authStatus.user.id : "visitor";
   const roleQuery = useQuery({
     ...roleOptions,
     enabled: authStatus.isAuthenticated,
   });
   const catalogueQuery = useQuery({
-    ...catalogueOptions(organizationId),
+    ...catalogueOptions(organizationId, userId),
     enabled: authStatus.isAuthenticated,
   });
   const canInstall = resolveInstallPermission({
