@@ -37,6 +37,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
+import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import {
   atFindokFixture,
   atRisFixture,
@@ -128,6 +129,11 @@ const storedValueOf = (
   target: SourceFieldTarget,
 ): unknown => {
   switch (target.type) {
+    case "raw":
+      return readSourceRawField(
+        decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {},
+        target,
+      );
     case "metadata":
       return decision.metadata[target.key];
     case "textField":
@@ -150,6 +156,8 @@ const storedValueOf = (
 
 const describeTarget = (target: SourceFieldTarget): string => {
   switch (target.type) {
+    case "raw":
+      return `raw.${target.part}.${target.path.join(".")}`;
     case "metadata":
       return `metadata.${target.key}`;
     case "textField":
