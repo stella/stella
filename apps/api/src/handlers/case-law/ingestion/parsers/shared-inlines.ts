@@ -12,7 +12,7 @@
  */
 
 import type * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
+import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
 import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
@@ -96,7 +96,15 @@ export type WalkInlinesOptions = {
    * style attributes at all.
    */
   emphasisClasses?: { bold: readonly string[]; italic: readonly string[] };
+  /**
+   * Read an element as a publisher page boundary. An element it answers
+   * for becomes that zero-width anchor, and its printed label leaves the
+   * text axis; any other element is walked as usual.
+   */
+  pageAnchor?: (element: Element) => InlinePageAnchor | undefined;
 };
+
+type InlinePageAnchor = Extract<Inline, { type: "page-anchor" }>;
 
 export const walkInlines = (
   $: cheerio.CheerioAPI,
@@ -122,6 +130,12 @@ export const walkInlines = (
       const tag = child.tagName.toLowerCase();
       // isTag() also matches <script>/<style>; never emit their raw text.
       if (tag === "script" || tag === "style") {
+        return;
+      }
+
+      const anchor = options.pageAnchor?.(child);
+      if (anchor !== undefined) {
+        inlines.push(anchor);
         return;
       }
 
