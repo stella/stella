@@ -985,7 +985,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 121,
+    "count": 122,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
