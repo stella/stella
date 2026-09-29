@@ -452,6 +452,19 @@ describe("reading a document folio handed over", () => {
     expect(parsed.decisionDate).toBe("2021-03-03");
   });
 
+  test("a certification that a body paragraph runs on into dates nothing", () => {
+    const parsed = parseDocument(
+      bodyOf([
+        softBrokenParagraph([
+          "[1] A Kúria a jogerős ítéletet hatályában fenntartja.",
+          "A kiadmány hiteléül:",
+          "Budapest, 2021. március 10.",
+        ]),
+      ]),
+    );
+    expect(parsed.decisionDate).toBeUndefined();
+  });
+
   test("a footnote's closing-shaped line after a soft break dates nothing", () => {
     const parsed = parseDocument(
       bodyOf(

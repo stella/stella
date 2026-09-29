@@ -647,10 +647,16 @@ const DATE_ENDS_LINE = /\d{1,2}\.(?:\s*napján\.?)?$/u;
  * has to be the formula and nothing more: it ends with the date.
  */
 const closingDateAfterSoftBreak = (text: string): string | undefined => {
-  for (const rawLine of text.split("\n").slice(1)) {
+  const lines = text.split("\n");
+  for (const [index, rawLine] of lines.entries()) {
+    // The certification's own place and date follow its marker; a paragraph
+    // that runs on into it has no decision date past that point.
+    if (headingKey(rawLine).includes(KIADMANY)) {
+      return undefined;
+    }
     const trimmed = rawLine.trim();
     const date =
-      CLOSING_LINE.test(trimmed) && DATE_ENDS_LINE.test(trimmed)
+      index > 0 && CLOSING_LINE.test(trimmed) && DATE_ENDS_LINE.test(trimmed)
         ? huDecisionDateFrom(trimmed)
         : undefined;
     if (date !== undefined) {
