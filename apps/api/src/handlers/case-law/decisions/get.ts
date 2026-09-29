@@ -301,11 +301,11 @@ const emptyCitationPage = () => ({
 });
 
 /** The stored projection read through the transaction that admitted this subject. */
-const readDecisionRecord = async ({
-  id: decisionId,
-  tx,
-}: RedistributableDecisionSubject) =>
-  await tx.query.caseLawDecisions.findFirst({
+export const decisionRecordQuery = (
+  tx: CaseLawPublicReadTransaction,
+  decisionId: SafeId<"caseLawDecision">,
+) =>
+  tx.query.caseLawDecisions.findFirst({
     where: { id: { eq: decisionId } },
     columns: {
       id: true,
@@ -347,6 +347,9 @@ const readDecisionRecord = async ({
       },
     },
   });
+
+const readDecisionRecord = async (subject: RedistributableDecisionSubject) =>
+  await decisionRecordQuery(subject.tx, subject.id);
 
 export const readDecisionHandler = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawDecisionRead,
