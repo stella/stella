@@ -85,8 +85,8 @@
       "documents": {"title": 14, "description": 402, "inputSchema": 1112, "outputSchema": 392, "annotations": 92, "payloadUtf8Bytes": 2111}
     },
     "list_invoices": {
-      "anonymized": {"title": 13, "description": 315, "inputSchema": 655, "outputSchema": 1395, "annotations": 91, "payloadUtf8Bytes": 2567},
-      "default": {"title": 13, "description": 315, "inputSchema": 655, "outputSchema": 1395, "annotations": 91, "payloadUtf8Bytes": 2567}
+      "anonymized": {"title": 13, "description": 408, "inputSchema": 655, "outputSchema": 2446, "annotations": 91, "payloadUtf8Bytes": 3711},
+      "default": {"title": 13, "description": 408, "inputSchema": 655, "outputSchema": 2446, "annotations": 91, "payloadUtf8Bytes": 3711}
     },
     "list_matters": {
       "anonymized": {"title": 12, "description": 348, "inputSchema": 677, "outputSchema": 1577, "annotations": 90, "payloadUtf8Bytes": 2801},

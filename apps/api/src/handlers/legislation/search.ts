@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
@@ -24,7 +24,9 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { loadPublicFtsSearchConfigs } from "@/api/lib/case-law/public-case-law-config";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   blendedRankSql,
   noCourtTierSql,
@@ -52,16 +54,35 @@ import {
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 import { currentLegislationCorpusProjection } from "@/api/lib/legal-search/legislation-corpus-projection";
+import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
 import {
   redistributableLegislationSource,
   publishedLegislationDocument,
   publishedLegislationCountryFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
+  eligibleExpression,
+  inForceToday,
   legislationVersionRef,
   legislationVersionRefAt,
   notWithdrawn,
+  versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import {
+  collapseLegislationHitsByWork,
+  pinnedLegislationWorks,
+  pinnedLegislationWorkScore,
+  shownLegislationVersionId,
+} from "@/api/lib/legal-search/legislation-work-collapse";
+import type { LegislationWorkRepresentative } from "@/api/lib/legal-search/legislation-work-collapse";
+import {
+  legislationWorkRefKey,
+  readNamedLegislationWorks,
+} from "@/api/lib/legal-search/legislation-work-names";
+import type {
+  LegislationWorkRef,
+  NamedLegislationWork,
+} from "@/api/lib/legal-search/legislation-work-names";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
@@ -84,6 +105,7 @@ import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
+import { isRecord } from "@/api/lib/type-guards";
 
 type LegislationHit = {
   documentId: string;
@@ -133,142 +155,6 @@ const toNullableString = (x: unknown): string | null => {
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
-type LegislationSearchHitsOptions = {
-  body: SearchLegislationBody;
-  configs: readonly FtsSearchConfig[];
-  limit: number;
-  parsedCursor: SearchCursor | null;
-};
-
-/**
- * The Postgres search's one statement: a page of hits plus one row that says
- * whether another page follows. Exported so the reader-role suite executes
- * this exact statement under SET ROLE.
- */
-export const readLegislationSearchHits = definePublicLawSharedQuery(
-  PUBLIC_LAW_SHARED_QUERY.legislationSearchHits,
-  async (
-    tx: LegislationReadTransaction,
-    { body, configs, limit, parsedCursor }: LegislationSearchHitsOptions,
-  ): Promise<RawRow[]> => {
-    const ftsSearch = buildPgFtsSearchSql({
-      configs,
-      query: body.query,
-      refs: {
-        language: sql`sd.language`,
-        regconfig: sql`sd.regconfig`,
-        vector: sql`sd.tsv`,
-      },
-    });
-
-    const filters = sql`
-    ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}
-    ${body.documentType ? sql`AND d.document_type = ${body.documentType}` : sql``}
-    ${body.status ? sql`AND d.status = ${body.status}` : sql``}
-    ${body.source ? sql`AND d.source_id = ${body.source}` : sql``}
-    ${body.language ? sql`AND d.language = ${body.language}` : sql``}
-    ${body.dateFrom ? sql`AND d.effective_date >= ${body.dateFrom}` : sql``}
-    ${body.dateTo ? sql`AND d.effective_date <= ${body.dateTo}` : sql``}
-  `;
-
-    // One fragment for the ORDER BY and the cursor predicate alike: keyset
-    // pagination is only stable while the two are the same expression.
-    const scoreExpr = blendedRankSql({
-      authority: sql`d.citation_authority`,
-      courtTier: noCourtTierSql(),
-      lexicalRank: ftsSearch.rank,
-    });
-    const cursorFilter = parsedCursor
-      ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
-      : sql``;
-
-    const rows: RawRow[] = await tx.execute(sql`
-    SELECT
-      sd.document_id,
-      d.eli,
-      d.slug,
-      d.title,
-      d.country,
-      d.language,
-      d.document_type,
-      d.status,
-      d.effective_date,
-      d.source_url,
-      ts_headline(
-        ${headlineRegconfig},
-        left(
-          coalesce(nullif(d.fulltext, ''), sd.searchable_text),
-          ${LIMITS.searchHeadlineDocumentMaxChars}
-        ),
-        ${ftsSearch.headlineQuery},
-        ${TS_HEADLINE_CONFIG}
-      ) AS headline,
-      ${scoreExpr} AS score
-    FROM legislation_search_documents sd
-    JOIN legislation_documents d ON d.id = sd.document_id
-    JOIN legislation_sources
-      ON legislation_sources.id = d.source_id
-     AND ${redistributableLegislationSource}
-    WHERE ${ftsSearch.predicate}
-      AND ${publishedLegislationCountryFor(sql`d.country`)}
-      AND sd.retry_after IS NULL
-      AND ${notWithdrawn(legislationVersionRefAt("d"))}
-      ${filters}
-      ${cursorFilter}
-    ORDER BY score DESC, sd.document_id DESC
-    LIMIT ${limit + 1}
-  `);
-    return rows;
-  },
-);
-
-const pgSearch = async (
-  body: SearchLegislationBody,
-  parsedCursor: SearchCursor | null,
-  legislationDb: LegislationReadDb,
-  dependencies: SearchLegislationDependencies,
-): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const configs = await dependencies.loadSearchConfigs();
-  const result = await legislationDb(
-    async (tx) =>
-      await readLegislationSearchHits(tx, {
-        body,
-        configs,
-        limit,
-        parsedCursor,
-      }),
-  );
-  const hasMore = result.length > limit;
-  const pageRows = hasMore ? result.slice(0, limit) : result;
-  const lastRow = pageRows.at(-1);
-  const nextCursor =
-    hasMore && lastRow
-      ? encodeCursor(Number(lastRow["score"]), String(lastRow["document_id"]))
-      : null;
-
-  const hits = pageRows.map((row) => mapRowHit(row));
-  return { hits, nextCursor };
-};
-
-const mapRowHit = (row: RawRow): LegislationHit => {
-  const headline = toNullableString(row["headline"]);
-  return {
-    documentId: String(row["document_id"]),
-    eli: String(row["eli"]),
-    slug: toNullableString(row["slug"]),
-    title: String(row["title"]),
-    country: String(row["country"]),
-    language: String(row["language"]),
-    documentType: toNullableString(row["document_type"]),
-    status: String(row["status"]),
-    effectiveDate: toNullableString(row["effective_date"]),
-    sourceUrl: toNullableString(row["source_url"]),
-    headline: headline ? escapeAndHighlight(headline) : null,
-    score: Number(row["score"]) || 0,
-  };
-};
-
 const buildCorpusIndexQuery = (body: SearchLegislationBody): string | null => {
   const freeText = corpusFreeTextClause(body.query);
   if (freeText === null) {
@@ -315,17 +201,219 @@ type RehydrateLegislationCandidatesOptions = {
   /** The generation the hits were read from; it decides row currency. */
   generation: string;
   legislationDb: LegislationReadDb;
+  /**
+   * The document the page cursor names. Its Work was shown on an earlier
+   * page, so it is not shown again.
+   */
+  cursorId?: string | undefined;
+  /**
+   * The Works the query names, read once per request by the caller; read
+   * here when absent.
+   */
+  namedWorks?: readonly NamedLegislationWork[] | undefined;
+  /**
+   * Tokens of Works earlier scan windows showed (the cursor's
+   * `excludedGroups`), not shown again.
+   */
+  excludedWorkTokens?: readonly string[] | undefined;
 };
+
+/** The request filters a stored version must satisfy to stand for a hit. */
+const legislationRequestFilters = (body: SearchLegislationBody): SQL[] => {
+  const filters: SQL[] = [
+    publishedLegislationDocument,
+    // A withdrawn version stays openable by id, never found by a search,
+    // including while its index entry still waits to be erased.
+    notWithdrawn(legislationVersionRef(legislationDocuments)),
+  ];
+  if (body.jurisdiction) {
+    filters.push(eq(legislationDocuments.country, body.jurisdiction));
+  }
+  if (body.documentType) {
+    filters.push(eq(legislationDocuments.documentType, body.documentType));
+  }
+  if (body.status) {
+    filters.push(eq(legislationDocuments.status, body.status));
+  }
+  if (body.source) {
+    filters.push(eq(legislationDocuments.sourceId, body.source));
+  }
+  if (body.language) {
+    filters.push(eq(legislationDocuments.language, body.language));
+  }
+  if (body.dateFrom) {
+    filters.push(
+      sql`${legislationDocuments.effectiveDate} >= ${body.dateFrom}`,
+    );
+  }
+  if (body.dateTo) {
+    filters.push(sql`${legislationDocuments.effectiveDate} <= ${body.dateTo}`);
+  }
+  return filters;
+};
+
+/** The columns a hit is rendered from, for a matched and a shown version alike. */
+type LegislationSearchRow = {
+  id: SafeId<"legislationDocument">;
+  sourceId: SafeId<"legislationSource">;
+  eli: string;
+  slug: string | null;
+  title: string;
+  country: string;
+  language: string;
+  documentType: string | null;
+  statusValue: string;
+  effectiveDate: string | null;
+  sourceUrl: string | null;
+  citationAuthority: number;
+};
+
+const documentRef = legislationVersionRef(legislationDocuments);
+
+type LegislationWorkRepresentativesQueryOptions = {
+  works: readonly LegislationWorkRef[];
+  filters: readonly SQL[];
+};
+
+/**
+ * Per Work, the version a hit shows: the current version when the Work has
+ * one (in force today and `isCurrentVersionOfWork`, the definition the
+ * listing uses), else its latest eligible version, else its latest version.
+ * Only versions the request filters admit are considered.
+ *
+ * One seek per Work on its `(source, eli, …, language)` index through a
+ * lateral join, so the read is bounded by the page's Works. Exported so the
+ * plan test EXPLAINs the statement search runs.
+ */
+export const legislationWorkRepresentativesQuery = ({
+  works,
+  filters,
+}: LegislationWorkRepresentativesQueryOptions): SQL => {
+  const workValues = sql.join(
+    works.map(
+      (work) =>
+        sql`(${work.sourceId}::uuid, ${work.eli}::varchar, ${work.language}::varchar)`,
+    ),
+    sql`, `,
+  );
+  return sql`
+    SELECT
+      r.id,
+      r.source_id,
+      r.eli,
+      r.slug,
+      r.title,
+      r.country,
+      r.language,
+      r.document_type,
+      r.status,
+      r.effective_date,
+      r.source_url,
+      r.citation_authority,
+      r.is_current
+    FROM (VALUES ${workValues}) AS work(source_id, eli, language)
+    CROSS JOIN LATERAL (
+      SELECT
+        ${legislationDocuments.id} AS id,
+        ${legislationDocuments.sourceId} AS source_id,
+        ${legislationDocuments.eli} AS eli,
+        ${legislationDocuments.slug} AS slug,
+        ${legislationDocuments.title} AS title,
+        ${legislationDocuments.country} AS country,
+        ${legislationDocuments.language} AS language,
+        ${legislationDocuments.documentType} AS document_type,
+        ${legislationDocuments.status} AS status,
+        ${legislationDocuments.effectiveDate}::text AS effective_date,
+        ${legislationDocuments.sourceUrl} AS source_url,
+        ${legislationDocuments.citationAuthority} AS citation_authority,
+        (${inForceToday(documentRef)} AND ${isCurrentVersionOfWork}) AS is_current,
+        ${eligibleExpression(documentRef)} AS eligible,
+        ${versionSortKey(legislationDocuments.versionValidFrom)} AS sort_key
+      FROM ${legislationDocuments}
+      JOIN ${legislationSources}
+        ON ${legislationSources.id} = ${legislationDocuments.sourceId}
+      WHERE ${legislationDocuments.sourceId} = work.source_id
+        AND ${legislationDocuments.eli} = work.eli
+        AND ${legislationDocuments.language} = work.language
+        AND ${and(...filters)}
+      ORDER BY is_current DESC, eligible DESC, sort_key DESC, id DESC
+      LIMIT 1
+    ) AS r
+  `;
+};
+
+const requireString = (row: RawRow, column: string): string => {
+  const value = row[column];
+  return typeof value === "string"
+    ? value
+    : panic(`Representative row has no ${column}`);
+};
+
+type RepresentativeRow = LegislationSearchRow & { isCurrent: boolean };
+
+const representativeRow = (row: RawRow): RepresentativeRow => ({
+  id: toSafeId<"legislationDocument">(requireString(row, "id")),
+  sourceId: toSafeId<"legislationSource">(requireString(row, "source_id")),
+  eli: requireString(row, "eli"),
+  slug: toNullableString(row["slug"]),
+  title: requireString(row, "title"),
+  country: requireString(row, "country"),
+  language: requireString(row, "language"),
+  documentType: toNullableString(row["document_type"]),
+  statusValue: requireString(row, "status"),
+  effectiveDate: toNullableString(row["effective_date"]),
+  sourceUrl: toNullableString(row["source_url"]),
+  citationAuthority: Number(row["citation_authority"]) || 0,
+  isCurrent: row["is_current"] === true,
+});
+
+/** `legislationWorkRepresentativesQuery` read, one row per Work that has one. */
+const readLegislationWorkRepresentatives = async (
+  tx: LegislationReadTransaction,
+  works: readonly LegislationWorkRef[],
+  filters: readonly SQL[],
+): Promise<RepresentativeRow[]> => {
+  const unique = new Map(
+    works.map((work) => [
+      legislationWorkRefKey(work),
+      { sourceId: work.sourceId, eli: work.eli, language: work.language },
+    ]),
+  );
+  if (unique.size === 0) {
+    return [];
+  }
+  return executedRows(
+    await tx.execute(
+      legislationWorkRepresentativesQuery({
+        works: [...unique.values()],
+        filters,
+      }),
+    ),
+  ).flatMap((row) => (isRecord(row) ? [representativeRow(row)] : []));
+};
+
+/**
+ * Above every blended score a scanned version can reach: a lexical score is
+ * at most 1, so a named Work placed here outranks every hit the scan finds.
+ */
+const NAMED_WORK_SCORE_FLOOR = stableBlendUpperBound(1) + 1;
 
 /**
  * The production corpus-index rehydration query, exported so the reader-role
  * suite executes this exact query surface under SET ROLE.
+ *
+ * The matched versions are read back and blended, then folded to one hit per
+ * Work (`collapseLegislationHitsByWork`), each shown as the version that
+ * applies today, with the Works the query names first.
  */
 export const rehydrateLegislationCandidates = async ({
   body,
   candidates,
   generation,
   legislationDb,
+  cursorId,
+  namedWorks,
+  excludedWorkTokens,
 }: RehydrateLegislationCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
     toSafeId<"legislationDocument">(candidate.id),
@@ -333,51 +421,21 @@ export const rehydrateLegislationCandidates = async ({
   // Reapply the request filters against the current rows: a stale corpus hit
   // (metadata changed, async re-index/delete pending) must not satisfy filters
   // it no longer matches.
+  const requestFilters = legislationRequestFilters(body);
   const rehydrationFilters: SQL[] = [
-    publishedLegislationDocument,
-    // A withdrawn version stays openable by id, never found by a search,
-    // including while its index entry still waits to be erased.
-    notWithdrawn(legislationVersionRef(legislationDocuments)),
+    ...requestFilters,
     // Accept only hits this generation currently holds, read from its
     // projection state.
     currentLegislationCorpusProjection(generation),
   ];
-  if (body.jurisdiction) {
-    rehydrationFilters.push(
-      eq(legislationDocuments.country, body.jurisdiction),
-    );
-  }
-  if (body.documentType) {
-    rehydrationFilters.push(
-      eq(legislationDocuments.documentType, body.documentType),
-    );
-  }
-  if (body.status) {
-    rehydrationFilters.push(eq(legislationDocuments.status, body.status));
-  }
-  if (body.source) {
-    rehydrationFilters.push(eq(legislationDocuments.sourceId, body.source));
-  }
-  if (body.language) {
-    rehydrationFilters.push(eq(legislationDocuments.language, body.language));
-  }
-  if (body.dateFrom) {
-    rehydrationFilters.push(
-      sql`${legislationDocuments.effectiveDate} >= ${body.dateFrom}`,
-    );
-  }
-  if (body.dateTo) {
-    rehydrationFilters.push(
-      sql`${legislationDocuments.effectiveDate} <= ${body.dateTo}`,
-    );
-  }
-  const rows =
-    ids.length === 0
-      ? []
-      : await legislationDb((tx) =>
-          tx
+  const read = await legislationDb(async (tx) => {
+    const rows: LegislationSearchRow[] =
+      ids.length === 0
+        ? []
+        : await tx
             .select({
               id: legislationDocuments.id,
+              sourceId: legislationDocuments.sourceId,
               eli: legislationDocuments.eli,
               slug: legislationDocuments.slug,
               title: legislationDocuments.title,
@@ -396,21 +454,428 @@ export const rehydrateLegislationCandidates = async ({
             )
             .where(
               and(inArray(legislationDocuments.id, ids), ...rehydrationFilters),
-            ),
-        );
+            );
+    const named =
+      namedWorks ??
+      (await readNamedLegislationWorks(tx, {
+        query: body.query,
+        country: body.jurisdiction,
+      }));
+    const [cursorWork] =
+      cursorId === undefined || !isUuid(cursorId)
+        ? []
+        : await tx
+            .select({
+              sourceId: legislationDocuments.sourceId,
+              eli: legislationDocuments.eli,
+              language: legislationDocuments.language,
+            })
+            .from(legislationDocuments)
+            .where(
+              eq(
+                legislationDocuments.id,
+                toSafeId<"legislationDocument">(cursorId),
+              ),
+            );
+    const representatives = await readLegislationWorkRepresentatives(
+      tx,
+      [...rows, ...named],
+      requestFilters,
+    );
+    return { rows, named, cursorWork, representatives };
+  });
 
-  const byId = new Map(rows.map((row) => [String(row.id), row]));
-  const authorityById = new Map(
-    rows.map((row) => [String(row.id), row.citationAuthority]),
+  const matchedIds = new Set(read.rows.map((row) => String(row.id)));
+  const byId = new Map<string, LegislationSearchRow>(
+    read.rows.map((row) => [String(row.id), row]),
   );
+  const authorityById = new Map(
+    read.rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+  const workOf = new Map(
+    read.rows.map((row) => [String(row.id), legislationWorkRefKey(row)]),
+  );
+  const representatives = new Map<string, LegislationWorkRepresentative>();
+  for (const { isCurrent, ...row } of read.representatives) {
+    byId.set(String(row.id), row);
+    representatives.set(legislationWorkRefKey(row), {
+      id: String(row.id),
+      isCurrent,
+    });
+  }
+
+  const collapsed = collapseLegislationHitsByWork({
+    ranked: blendStableCitationAuthority({
+      candidates: candidates.filter((candidate) =>
+        matchedIds.has(candidate.id),
+      ),
+      authorityById,
+    }),
+    workOf,
+    representatives,
+    // Named Works that apply today are placed first; a name only repealed or
+    // not-yet-effective acts carry still places those.
+    namedWorks: pinnedLegislationWorks(
+      read.named.map((work) => legislationWorkRefKey(work)),
+      representatives,
+    ),
+    namedScoreFloor: NAMED_WORK_SCORE_FLOOR,
+    excludedWork:
+      read.cursorWork === undefined
+        ? null
+        : legislationWorkRefKey(read.cursorWork),
+    excludedWorkTokens: new Set(excludedWorkTokens),
+  });
 
   return {
     context: { byId },
-    ranked: blendStableCitationAuthority({
-      candidates: candidates.filter((candidate) => byId.has(candidate.id)),
-      authorityById,
-    }),
+    ranked: collapsed.ranked,
+    groups: collapsed.workTokens,
   };
+};
+
+/** A named Work placed first on the Postgres path, with its keyset key. */
+type PinnedLegislationWork = LegislationWorkRef & {
+  /** The version the Work is shown as; also its keyset id. */
+  keyId: SafeId<"legislationDocument">;
+  score: number;
+};
+
+/**
+ * Above every score the Postgres ranking gives a matched version (a text
+ * rank plus a bounded authority term), so a named Work placed here comes
+ * first on the Postgres path as it does on the corpus path.
+ */
+const PG_NAMED_WORK_SCORE_FLOOR = 1_000_000;
+
+type LegislationSearchHitsOptions = {
+  body: SearchLegislationBody;
+  configs: readonly FtsSearchConfig[];
+  limit: number;
+  parsedCursor: SearchCursor | null;
+  /** Named Works, placed by their pinned scores instead of their matches. */
+  pinned: readonly PinnedLegislationWork[];
+};
+
+/**
+ * The Postgres search's one statement: a page of acts plus one row that says
+ * whether another page follows. Exported so the reader-role suite executes
+ * this exact statement under SET ROLE.
+ *
+ * One row per Work: every matching version is scored, and each Work keeps its
+ * best-scoring version (`DISTINCT ON` the Work key), which is the row's
+ * keyset key. A named Work is placed by its pinned score and keyed by the
+ * version it is shown as, and none of its matched versions stands for it
+ * again. The list the keyset walks therefore holds each Work once, in an
+ * order that depends on the stored rows and the query alone, so no page can
+ * repeat an act another page showed.
+ */
+export const readLegislationSearchHits = definePublicLawSharedQuery(
+  PUBLIC_LAW_SHARED_QUERY.legislationSearchHits,
+  async (
+    tx: LegislationReadTransaction,
+    {
+      body,
+      configs,
+      limit,
+      parsedCursor,
+      pinned,
+    }: LegislationSearchHitsOptions,
+  ): Promise<RawRow[]> => {
+    const ftsSearch = buildPgFtsSearchSql({
+      configs,
+      query: body.query,
+      refs: {
+        language: sql`sd.language`,
+        regconfig: sql`sd.regconfig`,
+        vector: sql`sd.tsv`,
+      },
+    });
+
+    const filters = sql`
+    ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}
+    ${body.documentType ? sql`AND d.document_type = ${body.documentType}` : sql``}
+    ${body.status ? sql`AND d.status = ${body.status}` : sql``}
+    ${body.source ? sql`AND d.source_id = ${body.source}` : sql``}
+    ${body.language ? sql`AND d.language = ${body.language}` : sql``}
+    ${body.dateFrom ? sql`AND d.effective_date >= ${body.dateFrom}` : sql``}
+    ${body.dateTo ? sql`AND d.effective_date <= ${body.dateTo}` : sql``}
+  `;
+
+    const scoreExpr = blendedRankSql({
+      authority: sql`d.citation_authority`,
+      courtTier: noCourtTierSql(),
+      lexicalRank: ftsSearch.rank,
+    });
+    // One key for the ORDER BY and the cursor predicate alike: keyset
+    // pagination is only stable while the two are the same expression.
+    const cursorFilter = parsedCursor
+      ? sql`WHERE (works.score, works.key_id) < (${parsedCursor.score}::float8, ${parsedCursor.id}::uuid)`
+      : sql``;
+
+    const pinnedValues =
+      pinned.length === 0
+        ? null
+        : sql.join(
+            pinned.map(
+              (work) =>
+                sql`(${work.sourceId}::uuid, ${work.eli}::varchar, ${work.language}::varchar, ${work.keyId}::uuid, ${work.score}::float8)`,
+            ),
+            sql`, `,
+          );
+    const pinnedWorks =
+      pinnedValues === null
+        ? sql``
+        : sql`
+      UNION ALL
+      SELECT pinned.key_id, pinned.source_id, pinned.eli, pinned.language,
+        pinned.score, false AS matched
+      FROM (VALUES ${pinnedValues})
+        AS pinned(source_id, eli, language, key_id, score)`;
+    const notPinned =
+      pinnedValues === null
+        ? sql``
+        : sql`WHERE NOT EXISTS (
+          SELECT 1
+          FROM (VALUES ${pinnedValues})
+            AS pinned(source_id, eli, language, key_id, score)
+          WHERE pinned.source_id = best.source_id
+            AND pinned.eli = best.eli
+            AND pinned.language = best.language
+        )`;
+
+    const result = await tx.execute(sql`
+    WITH matched AS (
+      SELECT sd.document_id, d.source_id, d.eli, d.language,
+        ${scoreExpr} AS score
+      FROM legislation_search_documents sd
+      JOIN legislation_documents d ON d.id = sd.document_id
+      JOIN legislation_sources
+        ON legislation_sources.id = d.source_id
+       AND ${redistributableLegislationSource}
+      WHERE ${ftsSearch.predicate}
+        AND ${publishedLegislationCountryFor(sql`d.country`)}
+        AND sd.retry_after IS NULL
+        AND ${notWithdrawn(legislationVersionRefAt("d"))}
+        ${filters}
+    ),
+    best AS (
+      SELECT DISTINCT ON (source_id, eli, language)
+        document_id, source_id, eli, language, score
+      FROM matched
+      ORDER BY source_id, eli, language, score DESC, document_id DESC
+    ),
+    works AS (
+      SELECT best.document_id AS key_id, best.source_id, best.eli,
+        best.language, best.score, true AS matched
+      FROM best
+      ${notPinned}
+      ${pinnedWorks}
+    ),
+    page AS (
+      SELECT works.*
+      FROM works
+      ${cursorFilter}
+      ORDER BY works.score DESC, works.key_id DESC
+      LIMIT ${limit + 1}
+    )
+    SELECT
+      page.key_id AS document_id,
+      page.source_id,
+      page.score,
+      page.matched,
+      d.eli,
+      d.slug,
+      d.title,
+      d.country,
+      d.language,
+      d.document_type,
+      d.status,
+      d.effective_date::text AS effective_date,
+      d.source_url,
+      CASE WHEN page.matched THEN ts_headline(
+        ${headlineRegconfig},
+        left(
+          coalesce(nullif(d.fulltext, ''), sd.searchable_text),
+          ${LIMITS.searchHeadlineDocumentMaxChars}
+        ),
+        ${ftsSearch.headlineQuery},
+        ${TS_HEADLINE_CONFIG}
+      ) END AS headline
+    FROM page
+    JOIN legislation_documents d ON d.id = page.key_id
+    LEFT JOIN legislation_search_documents sd ON sd.document_id = page.key_id
+    ORDER BY page.score DESC, page.key_id DESC
+  `);
+    return executedRows(result).flatMap((row) => (isRecord(row) ? [row] : []));
+  },
+);
+
+/** A Postgres page row: the Work's keyset key and its matched version. */
+type PgWorkRow = {
+  keyId: SafeId<"legislationDocument">;
+  work: LegislationWorkRef;
+  score: number;
+  matched: boolean;
+  version: LegislationSearchRow;
+  headline: string | null;
+};
+
+const pgWorkRow = (row: RawRow): PgWorkRow => {
+  const keyId = toSafeId<"legislationDocument">(
+    requireString(row, "document_id"),
+  );
+  const sourceId = toSafeId<"legislationSource">(
+    requireString(row, "source_id"),
+  );
+  const eli = requireString(row, "eli");
+  const language = requireString(row, "language");
+  return {
+    keyId,
+    work: { sourceId, eli, language },
+    score: Number(row["score"]) || 0,
+    matched: row["matched"] === true,
+    version: {
+      id: keyId,
+      sourceId,
+      eli,
+      slug: toNullableString(row["slug"]),
+      title: requireString(row, "title"),
+      country: requireString(row, "country"),
+      language,
+      documentType: toNullableString(row["document_type"]),
+      statusValue: requireString(row, "status"),
+      effectiveDate: toNullableString(row["effective_date"]),
+      sourceUrl: toNullableString(row["source_url"]),
+      citationAuthority: 0,
+    },
+    headline: toNullableString(row["headline"]),
+  };
+};
+
+/**
+ * The Postgres path of the same contract the corpus path keeps: one hit per
+ * act, shown as the version that applies today, the acts the query names
+ * first, and pages that never repeat an act. The collapse is in SQL
+ * (`readLegislationSearchHits`); the named Works, the version each act is
+ * shown as and the pin order come from the helpers the corpus path uses.
+ */
+const pgSearch = async (
+  body: SearchLegislationBody,
+  parsedCursor: SearchCursor | null,
+  legislationDb: LegislationReadDb,
+  dependencies: SearchLegislationDependencies,
+): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
+  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const configs = await dependencies.loadSearchConfigs();
+  const requestFilters = legislationRequestFilters(body);
+  const read = await legislationDb(async (tx) => {
+    const named = await readNamedLegislationWorks(tx, {
+      query: body.query,
+      country: body.jurisdiction,
+    });
+    const namedRepresentatives = await readLegislationWorkRepresentatives(
+      tx,
+      named,
+      requestFilters,
+    );
+    const namedByKey = new Map(
+      namedRepresentatives.map((row) => [legislationWorkRefKey(row), row]),
+    );
+    const pinnedKeys = pinnedLegislationWorks(
+      named.map((work) => legislationWorkRefKey(work)),
+      new Map(
+        namedRepresentatives.map((row) => [
+          legislationWorkRefKey(row),
+          { id: String(row.id), isCurrent: row.isCurrent },
+        ]),
+      ),
+    );
+    const pinned = pinnedKeys.flatMap((key, index): PinnedLegislationWork[] => {
+      const representative = namedByKey.get(key);
+      return representative === undefined
+        ? []
+        : [
+            {
+              sourceId: representative.sourceId,
+              eli: representative.eli,
+              language: representative.language,
+              keyId: representative.id,
+              score: pinnedLegislationWorkScore(
+                PG_NAMED_WORK_SCORE_FLOOR,
+                index,
+                pinnedKeys.length,
+              ),
+            },
+          ];
+    });
+    const rows = (
+      await readLegislationSearchHits(tx, {
+        body,
+        configs,
+        limit,
+        parsedCursor,
+        pinned,
+      })
+    ).map((row) => pgWorkRow(row));
+    const pageRows = rows.slice(0, limit);
+    const representatives = await readLegislationWorkRepresentatives(
+      tx,
+      pageRows.filter((row) => row.matched).map((row) => row.work),
+      requestFilters,
+    );
+    return {
+      hasMore: rows.length > limit,
+      pageRows,
+      representatives: [...namedRepresentatives, ...representatives],
+    };
+  });
+
+  const representativeByWork = new Map(
+    read.representatives.map((row) => [legislationWorkRefKey(row), row]),
+  );
+  const lastRow = read.pageRows.at(-1);
+  const nextCursor =
+    read.hasMore && lastRow ? encodeCursor(lastRow.score, lastRow.keyId) : null;
+
+  const hits = read.pageRows.map((row): LegislationHit => {
+    const representative = representativeByWork.get(
+      legislationWorkRefKey(row.work),
+    );
+    const shownId = row.matched
+      ? shownLegislationVersionId(
+          row.keyId,
+          representative === undefined
+            ? undefined
+            : {
+                id: String(representative.id),
+                isCurrent: representative.isCurrent,
+              },
+        )
+      : row.keyId;
+    const shown =
+      shownId === row.keyId || representative === undefined
+        ? row.version
+        : representative;
+    // The matched version's excerpt is shown only under that version: another
+    // version's wording may not contain it.
+    const headline = shown.id === row.keyId ? row.headline : null;
+    return {
+      documentId: shown.id,
+      eli: shown.eli,
+      slug: shown.slug,
+      title: shown.title,
+      country: shown.country,
+      language: shown.language,
+      documentType: shown.documentType,
+      status: shown.statusValue,
+      effectiveDate: shown.effectiveDate,
+      sourceUrl: shown.sourceUrl,
+      headline: headline ? escapeAndHighlight(headline) : null,
+      score: row.score,
+    };
+  });
+  return { hits, nextCursor };
 };
 
 const corpusIndexSearch = async (
@@ -431,6 +896,16 @@ const corpusIndexSearch = async (
   if (query === null) {
     return { hits: [], nextCursor: null };
   }
+
+  // The Works the query names depend on the query alone, so they are read
+  // once rather than on every scan round.
+  const namedWorks = await legislationDb(
+    async (tx) =>
+      await readNamedLegislationWorks(tx, {
+        query: body.query,
+        country: body.jurisdiction,
+      }),
+  );
 
   const searchPage = await readCorpusIndexSearchPage({
     cluster: serving.cluster,
@@ -457,6 +932,9 @@ const corpusIndexSearch = async (
         candidates,
         generation,
         legislationDb,
+        cursorId: parsedCursor?.id,
+        namedWorks,
+        excludedWorkTokens: parsedCursor?.excludedGroups,
       }),
   });
 
