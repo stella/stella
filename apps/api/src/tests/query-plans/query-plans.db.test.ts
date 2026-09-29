@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import { CITATION_SUMMARY_SCAN_LIMIT } from "@/api/handlers/case-law/decisions/citation-graph";
@@ -230,12 +232,12 @@ test("citation summary caps both indexed citation scans before joining decisions
     ({ relation }) => relation === "case_law_citations",
   );
   expect(citations).toHaveLength(2);
-  expect(citations.map(({ index }) => index).toSorted()).toEqual(
-    [
-      "case_law_citations_cited_page_idx",
-      "case_law_citations_citing_page_idx",
-    ].toSorted(),
-  );
+  expect(
+    citations.map(({ index }) => index ?? "").toSorted(compareCodeUnit),
+  ).toEqual([
+    "case_law_citations_cited_page_idx",
+    "case_law_citations_citing_page_idx",
+  ]);
   for (const { limitAbove, limitRows } of citations) {
     expect(limitAbove).toBe(true);
     expect(limitRows).toBeLessThanOrEqual(CITATION_SUMMARY_SCAN_LIMIT + 1);
