@@ -14,27 +14,27 @@ export const hasCurrentTimerMatterAccess = async ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 }): Promise<boolean> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
   const [access] = await tx.execute(sql<{ hasAccess: boolean }>`
-    SELECT EXISTS (
-      SELECT 1
-      FROM workspaces AS workspace
-      INNER JOIN member AS organization_member
-        ON organization_member.organization_id = workspace.organization_id
-        AND organization_member.user_id = ${userId}
-      LEFT JOIN workspace_members AS workspace_member
-        ON workspace_member.workspace_id = workspace.id
-        AND workspace_member.user_id = ${userId}
-      WHERE workspace.id = ${workspaceId}
-        AND workspace.organization_id = ${organizationId}
-        AND workspace.status = 'active'
-        AND (
-          workspace_member.id IS NOT NULL
-          OR (
-            organization_member.role IN ('owner', 'admin')
-            AND workspace.client_id IS NOT NULL
-          )
+    SELECT true AS "hasAccess"
+    FROM workspaces AS workspace
+    INNER JOIN member AS organization_member
+      ON organization_member.organization_id = workspace.organization_id
+      AND organization_member.user_id = ${userId}
+    WHERE workspace.id = ${workspaceId}
+      AND workspace.organization_id = ${organizationId}
+      AND workspace.status = 'active'
+      AND CASE
+        WHEN organization_member.role IN ('owner', 'admin') AND workspace.client_id IS NOT NULL THEN true
+        ELSE EXISTS (
+          SELECT 1 FROM workspace_members AS workspace_member
+          WHERE workspace_member.workspace_id = workspace.id
+            AND workspace_member.user_id = ${userId}
+          FOR SHARE
         )
-    ) AS "hasAccess"
+      END
+    LIMIT 1
+    FOR SHARE OF workspace, organization_member
   `);
   return access?.["hasAccess"] === true;
 };

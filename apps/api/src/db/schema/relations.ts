@@ -10,6 +10,8 @@ import {
   sellerProfiles,
   savedTimeNarratives,
   timeEntries,
+  timeTimers,
+  timeTimerConfirmations,
 } from "./billing";
 import {
   caseLawCitations,
@@ -182,6 +184,8 @@ export const relations = defineRelations(
     templateVersions,
     reportExports,
     timeEntries,
+    timeTimers,
+    timeTimerConfirmations,
     billingCodes,
     sellerProfiles,
     numberSeries,

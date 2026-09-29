@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -42,6 +42,8 @@ type PrepareTimeEntryInsertProps = {
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
   body: TimeEntryInsertInput;
+  dateWindow?: "entry" | "timer_completion";
+  billingSnapshot?: { hourlyRate: number; currency: string } | undefined;
 };
 
 type PreparedTimeEntry = {
@@ -61,7 +63,7 @@ type PreparedTimeEntry = {
 
 // Validation and rate resolution shared by every path that creates a time
 // entry: the date window, the optional work item, and the effective rate.
-// Runs outside the insert transaction so the transaction stays short.
+// May reuse a caller-owned transaction when a timer must be consumed atomically.
 export const prepareTimeEntryInsert = async function* ({
   safeDb,
   policy,
@@ -69,6 +71,8 @@ export const prepareTimeEntryInsert = async function* ({
   workspaceId,
   userId,
   body,
+  dateWindow = "entry",
+  billingSnapshot,
 }: PrepareTimeEntryInsertProps) {
   const todayStr = yield* formatTodayInTimeZone({
     timezoneId: body.timezoneId,
@@ -77,7 +81,8 @@ export const prepareTimeEntryInsert = async function* ({
     policy,
     dateWorked: body.dateWorked,
     today: todayStr,
-    canApprove,
+    // Completing a previously started timer preserves the original stop semantics.
+    canApprove: canApprove || dateWindow === "timer_completion",
     narrative: body.narrative,
   });
   if (policyViolation) {
@@ -109,13 +114,17 @@ export const prepareTimeEntryInsert = async function* ({
     }
   }
 
-  const resolvedRate = yield* resolveRate({
-    safeDb,
-    workspaceId,
-    userId,
-    dateWorked: body.dateWorked,
-  });
-  const billable = body.billable ?? true;
+  const resolvedRate =
+    billingSnapshot ??
+    (yield* resolveRate({
+      safeDb,
+      workspaceId,
+      userId,
+      dateWorked: body.dateWorked,
+    }));
+  const billable =
+    body.billable ??
+    (dateWindow === "timer_completion" ? resolvedRate !== null : true);
   if (billable && !resolvedRate) {
     return yield* Result.err(
       new HandlerError({
@@ -152,14 +161,23 @@ type TimeEntryCapacityCheck = Result<void, HandlerError<400>>;
  * before any write in the caller's transaction, so a full matter is answered
  * with a `Result.err` and nothing to roll back.
  */
-export const lockTimeEntryCapacity = async (
-  tx: Transaction,
-  workspaceId: SafeId<"workspace">,
-): Promise<TimeEntryCapacityCheck> => {
+type LockTimeEntryCapacityOptions = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  replacedEntryId?: SafeId<"timeEntry"> | undefined;
+};
+export const lockTimeEntryCapacity = async ({
+  tx,
+  workspaceId,
+  replacedEntryId,
+}: LockTimeEntryCapacityOptions): Promise<TimeEntryCapacityCheck> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
   const count = await tx.$count(
     timeEntries,
-    eq(timeEntries.workspaceId, workspaceId),
+    and(
+      eq(timeEntries.workspaceId, workspaceId),
+      replacedEntryId ? ne(timeEntries.id, replacedEntryId) : undefined,
+    ),
   );
   if (count >= LIMITS.timeEntriesPerWorkspace) {
     return Result.err(
@@ -226,6 +244,7 @@ export const insertPreparedTimeEntry = async ({
     action: AUDIT_ACTION.CREATE,
     resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
     resourceId: entry.id,
+    workspaceId,
     changes: {
       created: {
         old: null,
@@ -282,7 +301,7 @@ export const createTimeEntryHandler = async function* ({
 
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
-      const capacity = await lockTimeEntryCapacity(tx, workspaceId);
+      const capacity = await lockTimeEntryCapacity({ tx, workspaceId });
       if (capacity.isErr()) {
         return capacity;
       }

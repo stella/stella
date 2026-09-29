@@ -63,6 +63,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/tasks/**/*.ts",
   "apps/api/src/handlers/template-packs/**/*.ts",
   "apps/api/src/handlers/template-recipes/**/*.ts",
+  "apps/api/src/handlers/time-timers/**/*.ts",
   "apps/api/src/handlers/uploads/**/*.ts",
   "apps/api/src/handlers/usage/**/*.ts",
   "apps/api/src/handlers/user-files/**/*.ts",

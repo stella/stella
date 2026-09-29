@@ -9,7 +9,12 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
-import { organizationSettings, timeEntries, workspaces } from "@/api/db/schema";
+import {
+  organizationSettings,
+  timeEntries,
+  timeTimers,
+  workspaces,
+} from "@/api/db/schema";
 import { getAuth } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -76,6 +81,18 @@ const createMemberWithActiveTimer = async (dateWorked: string) => {
     name: "Timer matter",
     reference: `T-${workspaceId.slice(-8)}`,
   });
+  const globalTimerId = createSafeId<"timeTimer">();
+  await testDb.insert(timeTimers).values({
+    id: globalTimerId,
+    organizationId,
+    userId,
+    workspaceId,
+    state: "running",
+    startedAt: new Date(Date.now() - 120_000),
+    lastResumedAt: new Date(Date.now() - 120_000),
+    accumulatedSeconds: 17,
+    description: "Research",
+  });
   await testDb.insert(timeEntries).values({
     id: timerId,
     organizationId,
@@ -98,6 +115,7 @@ const createMemberWithActiveTimer = async (dateWorked: string) => {
     organizationId,
     owner,
     timerId,
+    globalTimerId,
     userId,
   };
 };
@@ -139,6 +157,13 @@ describe("member removal with an active timer", () => {
       .where(eq(timeEntries.id, fixture.timerId));
     expect(remainingMember).toBeDefined();
     expect(activeTimer?.timerStartedAt).toBeInstanceOf(Date);
+    const globalTimer = await testDb.query.timeTimers.findFirst({
+      where: { id: { eq: fixture.globalTimerId } },
+    });
+    expect(globalTimer).toMatchObject({
+      state: "running",
+      accumulatedSeconds: 17,
+    });
   });
 
   test("closes an unlocked timer and removes the member", async () => {
@@ -181,5 +206,10 @@ describe("member removal with an active timer", () => {
     expect(stoppedTimer?.timerStartedAt).toBeNull();
     expect(stoppedTimer?.timerStoppedAt).toBeInstanceOf(Date);
     expect(stoppedTimer?.billedMinutes).toBe(15);
+    const globalTimer = await testDb.query.timeTimers.findFirst({
+      where: { id: { eq: fixture.globalTimerId } },
+    });
+    expect(globalTimer).toMatchObject({ state: "paused", lastResumedAt: null });
+    expect(globalTimer?.accumulatedSeconds).toBeGreaterThanOrEqual(137);
   });
 });

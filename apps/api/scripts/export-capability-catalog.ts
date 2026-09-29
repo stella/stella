@@ -236,6 +236,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   "template-recipes": "stella:templates",
   templates: "stella:templates",
   "time-entries": "stella:billing_write",
+  "time-timers": "stella:billing_write",
   // Presigned-upload coordination (presign / finalize / abort). One domain,
   // three upload purposes with different underlying permissions
   // (entity:create, entity:update, agentSkill:create), so the domain takes the
@@ -462,6 +463,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   "saved-time-narratives": "FEATURE_TIME_BILLING",
   "template-packs": "FEATURE_TEMPLATE_PACKS",
   "time-entries": "FEATURE_TIME_BILLING",
+  "time-timers": "FEATURE_TIME_BILLING",
   "work-obligations": "FEATURE_GOVERNED_WORKFLOW",
 };
 

@@ -145,7 +145,7 @@ const acceptSuggestion = async function* ({
     safeDb(async (tx) => {
       // audit: skip — insertPreparedTimeEntry records the created entry in
       // this transaction; the decision row is the timekeeper's private state.
-      const capacity = await lockTimeEntryCapacity(tx, workspaceId);
+      const capacity = await lockTimeEntryCapacity({ tx, workspaceId });
       if (capacity.isErr()) {
         return capacity;
       }

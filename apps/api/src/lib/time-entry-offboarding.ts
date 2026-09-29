@@ -5,6 +5,10 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { timeEntries, workspaces } from "@/api/db/schema";
 import {
+  lockTimerOwner,
+  pauseRunningTimers,
+} from "@/api/handlers/time-timers/shared";
+import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
@@ -29,6 +33,8 @@ export const closeRemovedMemberActiveTimer = async ({
   tx: Transaction;
   userId: SafeId<"user">;
 }) => {
+  const owner = { organizationId, userId };
+  await lockTimerOwner(tx, owner);
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 
   const [activeTimer] = await tx
@@ -163,5 +169,11 @@ export const closeRemovedMemberActiveTimer = async ({
       });
     }
   }
+  await pauseRunningTimers({
+    tx,
+    owner,
+    now: new Date(),
+    recordAuditEvent,
+  });
   return Result.ok(undefined);
 };

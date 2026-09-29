@@ -39,6 +39,7 @@ import {
   savedSearches,
   sellerProfiles,
   signals,
+  timeTimers,
   WORK_OBLIGATION_STATUS,
   workObligations,
 } from "@/api/db/schema";
@@ -101,6 +102,7 @@ import listSignals from "@/api/handlers/signals/list";
 import readTaskById from "@/api/handlers/tasks/get";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
+import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
@@ -213,6 +215,9 @@ const documentTranslationSourceFileB = toSafeId<"userFile">(
 );
 const workObligationEntityB = toSafeId<"entity">(
   "22222222-2222-4222-8222-222222222250",
+);
+const timeTimerB = toSafeId<"timeTimer">(
+  "22222222-2222-4222-8222-222222222260",
 );
 const notificationB = toSafeId<"notification">(
   "22222222-2222-4222-8222-222222222251",
@@ -806,6 +811,24 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectRecordFieldEquals(result, "id", testIds.timeEntryB1),
+  },
+  {
+    name: "time timers across organizations",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listMyTimeTimers, workspaceA, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listMyTimeTimers, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, timeTimerB),
+    expectPositive: (result) => expectPageContainsId(result, timeTimerB),
+  },
+  {
+    name: "time timers (same organization, other owner)",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(listMyTimeTimers, workspaceB, { query: {} }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listMyTimeTimers, sameUserWorkspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, timeTimerB),
+    expectPositive: (result) => expectPageContainsId(result, timeTimerB),
   },
   {
     name: "rate table entries list",
@@ -1770,6 +1793,17 @@ beforeAll(async () => {
     workspaceId: ids.wsB1,
     status: WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
     ownerUserId: ids.userB1,
+  });
+  await testDb.insert(timeTimers).values({
+    id: timeTimerB,
+    organizationId: ids.orgB,
+    userId: ids.userA1,
+    workspaceId: null,
+    description: "timer B",
+    state: "paused",
+    startedAt: new Date("2026-09-01T10:00:00Z"),
+    lastResumedAt: null,
+    accumulatedSeconds: 300,
   });
   await testDb.insert(notifications).values({
     id: notificationB,
