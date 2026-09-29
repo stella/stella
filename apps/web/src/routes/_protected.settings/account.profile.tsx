@@ -51,6 +51,7 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { pendingDeletionTasksOptions } from "@/lib/account/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -241,13 +242,7 @@ function ProfilePageBody() {
     isFetching: isPendingTasksFetching,
     refetch: refetchPendingTasks,
   } = useQuery({
-    queryKey: ["me", "delete", "pending-tasks", authenticatedUser.id],
-    queryFn: async ({ signal }) => {
-      const res = await api.me.delete["pending-tasks"].get({
-        fetch: { signal },
-      });
-      return unwrapEden(res);
-    },
+    ...pendingDeletionTasksOptions(authenticatedUser.id),
     enabled: isDeleteDialogOpen,
   });
 

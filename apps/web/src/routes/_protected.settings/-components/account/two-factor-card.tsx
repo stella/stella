@@ -33,6 +33,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { SecretInput } from "@/components/secret-input";
+import { linkedAccountsOptions } from "@/lib/account/queries";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
@@ -42,6 +43,7 @@ import {
   isTwoFactorEnabledUser,
 } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -50,10 +52,10 @@ import { downloadFile } from "@/lib/utils";
 const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;
 const BACKUP_CODES_FILE_NAME = "stella-backup-codes.txt";
-const ACCOUNTS_QUERY_KEY = ["auth", "accounts"] as const;
 
 export const TwoFactorCard = () => {
   const t = useTranslations();
+  const { id: userId } = useAuthenticatedUser();
   const { data: session } = useSuspenseQuery(sessionOptions);
   const enabled = isTwoFactorEnabledUser(session?.user);
   const [isEnableOpen, setIsEnableOpen] = useState(false);
@@ -69,15 +71,7 @@ export const TwoFactorCard = () => {
   // while keeping the fresh-email-OTP step-up as the gate.
   const isAnyDialogOpen = isEnableOpen || isDisableOpen || isRegenerateOpen;
   const accountsQuery = useQuery({
-    queryKey: ACCOUNTS_QUERY_KEY,
-    queryFn: async () => {
-      const { data, error } = await authClient.listAccounts();
-      if (error) {
-        throw toAuthClientError(error);
-      }
-      return data;
-    },
-    staleTime: 5 * 60 * 1000,
+    ...linkedAccountsOptions(userId),
     // Account-type detection is only needed once a management dialog opens;
     // fetching lazily keeps the settings routes' network manifest unchanged.
     enabled: isAnyDialogOpen,

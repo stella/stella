@@ -2,6 +2,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { commandShortcutRowsFromSkillPages } from "@/components/chat-editor-slash-items";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/lib/knowledge/queries";
@@ -31,7 +32,10 @@ export const useSuggestedSkills = (): ChatPrompt[] => {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId ?? "", userId ?? "visitor"),
+    ...skillsOptions(
+      activeOrganizationId ?? "",
+      userId ?? SIGNED_OUT_QUERY_OWNER,
+    ),
     enabled: activeOrganizationId !== undefined && userId !== undefined,
   });
   useExternalSyncEffect(() => {

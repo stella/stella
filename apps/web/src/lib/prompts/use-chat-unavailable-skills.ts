@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import type { UnavailableSkillIds } from "@/components/chat-editor-slash-items";
 import { useBrowserClientConnected } from "@/features/chat/browser-control/browser-extension-bridge";
+import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useOptionalChatAnonymized } from "@/lib/chat-anonymized-store";
 import { chatUnavailableSkillsOptions } from "@/lib/knowledge/queries";
 import {
@@ -24,7 +25,10 @@ export const useChatUnavailableSkills = (
   userId: string | undefined,
 ): ReadonlyMap<string, readonly string[]> | undefined => {
   const { data } = useQuery({
-    ...chatUnavailableSkillsOptions(organizationId ?? "", userId ?? "visitor"),
+    ...chatUnavailableSkillsOptions(
+      organizationId ?? "",
+      userId ?? SIGNED_OUT_QUERY_OWNER,
+    ),
     enabled: organizationId !== undefined && userId !== undefined,
   });
   return useMemo(

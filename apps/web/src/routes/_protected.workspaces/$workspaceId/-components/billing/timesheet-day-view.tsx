@@ -52,7 +52,7 @@ export const TimesheetDayView = ({
   });
 
   const { data: entries } = useSuspenseQuery(
-    timeEntriesOptions(workspaceId, {
+    timeEntriesOptions(workspaceId, userId, {
       dateFrom: date,
       dateTo: date,
     }),

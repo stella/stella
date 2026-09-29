@@ -82,16 +82,13 @@ const timeEntriesListKey = (key: TimeEntriesListKey) => ({
 
 export const timeEntriesKeys = {
   all: (workspaceId: string) => ["timeEntries", workspaceId],
-  list: (workspaceId: string, key: TimeEntriesListKey) => [
+  // What the list shows depends on who asks (their own entries, or everyone's
+  // for a reviewer), so it is keyed by the signed-in user too.
+  list: (workspaceId: string, userId: string, key: TimeEntriesListKey) => [
     ...timeEntriesKeys.all(workspaceId),
+    userId,
     timeEntriesListKey(key),
   ],
-  // The signed-in user's entries (`scope: "me"`).
-  personalList: (
-    workspaceId: string,
-    userId: string,
-    key: TimeEntriesListKey & { scope: "me" },
-  ) => [...timeEntriesKeys.all(workspaceId), userId, timeEntriesListKey(key)],
   byId: (workspaceId: string, id: string) => [
     ...timeEntriesKeys.all(workspaceId),
     id,
@@ -205,10 +202,11 @@ const listPersonalTimeEntries = async ({
 
 export const timeEntriesOptions = (
   workspaceId: string,
+  userId: string,
   filters: TimeEntriesFilters = {},
 ) =>
   queryOptions({
-    queryKey: timeEntriesKeys.list(workspaceId, filters),
+    queryKey: timeEntriesKeys.list(workspaceId, userId, filters),
     queryFn: async ({ signal }) =>
       (await listTimeEntries({ workspaceId, filters, signal })).items,
   });
@@ -220,7 +218,7 @@ export const timeEntriesInfiniteOptions = (
 ) =>
   infiniteQueryOptions({
     queryKey: [
-      ...timeEntriesKeys.personalList(workspaceId, userId, filters),
+      ...timeEntriesKeys.list(workspaceId, userId, filters),
       "infinite",
     ],
     initialPageParam: "",

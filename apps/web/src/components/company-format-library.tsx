@@ -34,7 +34,7 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 const FORMAT_PAGE_SIZE = 25;
 const FORMAT_NAME_MAX_LENGTH = 120;
 const BUILT_IN_FORMAT_ID = "built-in";
-const companyFormatKeys = {
+export const companyFormatKeys = {
   list: ({
     organizationId,
     registry,
