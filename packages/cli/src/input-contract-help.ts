@@ -188,6 +188,16 @@ const scalarTypeLabel = (schema: JsonSchema): string => {
   if (schema["type"] === "RegExp" || typeof schema["source"] === "string") {
     return "string";
   }
+  const items = schema["items"];
+  if (schemaTypes(schema).includes("array") && isRecord(items)) {
+    return `${scalarTypeLabel(items)}[]`;
+  }
+  const alternatives = alternativeGroupsOf(schema);
+  if (alternatives.length > 0) {
+    return alternatives
+      .flatMap(({ variants }) => variants.map(scalarTypeLabel))
+      .join("|");
+  }
   const types = schemaTypes(schema);
   if (types.length > 0) {
     return types.join(" | ");
@@ -205,10 +215,21 @@ const scalarTypeLabel = (schema: JsonSchema): string => {
   return "any JSON value";
 };
 
+const discriminatorValue = (schema: JsonSchema): unknown => {
+  if (schema["const"] !== undefined) {
+    return schema["const"];
+  }
+  const values = schema["enum"];
+  return Array.isArray(values) && values.length === 1
+    ? values.at(0)
+    : undefined;
+};
+
 const variantLabel = (schema: JsonSchema, index: number): string => {
   for (const [name, child] of Object.entries(propertiesOf(schema))) {
-    if (child["const"] !== undefined) {
-      return `variant ${index + 1}, ${name} = ${JSON.stringify(child["const"])}`;
+    const value = discriminatorValue(child);
+    if (value !== undefined) {
+      return `variant ${index + 1}, ${name} = ${JSON.stringify(value)}`;
     }
   }
   return `variant ${index + 1}`;
@@ -1017,17 +1038,27 @@ const exampleFor = (schema: JsonSchema): unknown => {
   return stringExample(schema);
 };
 
-const setExamplePath = (
-  schema: JsonSchema,
-  target: Record<string, unknown>,
-  path: string,
-): void => {
+const setExamplePath = ({
+  schema,
+  target,
+  path,
+  value,
+}: {
+  schema: JsonSchema;
+  target: Record<string, unknown>;
+  path: string;
+  value?: unknown;
+}): void => {
   const segments = path.split(".");
   let current = target;
   let currentSchema = schema;
-  for (const segment of segments) {
+  for (const [index, segment] of segments.entries()) {
     const childSchema = propertiesOf(currentSchema)[segment];
     if (childSchema === undefined) {
+      return;
+    }
+    if (index === segments.length - 1 && value !== undefined) {
+      current[segment] = value;
       return;
     }
     const existing = current[segment];
@@ -1036,7 +1067,7 @@ const setExamplePath = (
       currentSchema = childSchema;
       continue;
     }
-    const example = exampleFor(childSchema);
+    const example = value === undefined ? exampleFor(childSchema) : {};
     current[segment] = example;
     if (isRecord(example)) {
       current = example;
@@ -1095,7 +1126,7 @@ export const buildInputContractHelp = ({
   const rootExample = exampleFor(schema);
   const example = isRecord(rootExample) ? rootExample : {};
   for (const path of [...inputOnly, ...requiredPaths]) {
-    setExamplePath(schema, example, path);
+    setExamplePath({ schema, target: example, path });
   }
   return {
     fields,
@@ -1105,37 +1136,88 @@ export const buildInputContractHelp = ({
   };
 };
 
-const discriminatorValue = (schema: JsonSchema): unknown => {
-  if (schema["const"] !== undefined) {
-    return schema["const"];
+const nonNullVariants = (schema: JsonSchema): readonly JsonSchema[] => {
+  const group = alternativeGroupsAcrossAllOf(schema).at(0);
+  const base = {
+    ...collapseAllOfForExample(schema),
+    anyOf: undefined,
+    oneOf: undefined,
+  };
+  const variants =
+    group?.variants
+      .filter((variant) => !schemaTypes(variant).includes("null"))
+      .map((variant) =>
+        combineSchemasForExample(base, collapseAllOfForExample(variant)),
+      ) ?? [];
+  const only = variants.length === 1 ? variants.at(0) : undefined;
+  if (only !== undefined && alternativeGroupsAcrossAllOf(only).length > 0) {
+    return nonNullVariants(only);
   }
-  const values = schema["enum"];
-  return Array.isArray(values) && values.length === 1
-    ? values.at(0)
-    : undefined;
+  return variants;
 };
 
-const compactRequiredKeys = (
+const discriminatorOf = (
+  variants: readonly JsonSchema[],
+): string | undefined => {
+  const first = variants.at(0);
+  if (first === undefined || variants.length < 2) {
+    return undefined;
+  }
+  return [...requiredOf(first)].find((name) =>
+    variants.every((variant) => {
+      const child = propertiesOf(variant)[name];
+      return (
+        requiredOf(variant).has(name) &&
+        child !== undefined &&
+        discriminatorValue(child) !== undefined
+      );
+    }),
+  );
+};
+
+const compactChildShape = (schema: JsonSchema): string => {
+  const variants = nonNullVariants(schema);
+  const discriminator = discriminatorOf(variants);
+  if (discriminator !== undefined) {
+    const values = variants.map((variant) => {
+      const child = propertiesOf(variant)[discriminator];
+      return child === undefined
+        ? ""
+        : JSON.stringify(discriminatorValue(child));
+    });
+    return `{${discriminator}=${values.join("|")}}`;
+  }
+  const object = variants.length === 1 ? (variants.at(0) ?? schema) : schema;
+  if (describesObject(object)) {
+    const required = [...requiredAcrossAllOf(object)];
+    return required.length === 0 ? "object" : `{${required.join(", ")}}`;
+  }
+  const choices = scalarTypeLabel(schema);
+  return Array.isArray(schema["enum"]) && choices.length > 48
+    ? schemaTypes(schema).join("|")
+    : choices;
+};
+
+const compactVariantKeys = (
   schema: JsonSchema,
-  discriminator: string | undefined,
-): string =>
-  [...requiredOf(schema)]
-    .map((name) => {
-      const child = propertiesOf(schema)[name];
-      if (child === undefined || name === discriminator) {
-        return name;
-      }
-      const values = child["enum"];
-      const choices = Array.isArray(values)
-        ? values.map((value) => JSON.stringify(value)).join("|")
-        : "";
-      if (choices.length > 0 && choices.length <= 48) {
-        return `${name} (${choices})`;
-      }
-      const nested = [...requiredOf(child)];
-      return nested.length === 0 ? name : `${name} {${nested.join(", ")}}`;
-    })
-    .join(", ") || "none";
+  discriminator: string,
+): string => {
+  const required = requiredAcrossAllOf(schema);
+  const keys = Object.entries(propertiesOf(schema))
+    .filter(
+      ([name, child]) =>
+        name !== discriminator &&
+        (required.has(name) ||
+          describesObject(child) ||
+          schemaTypes(child).includes("array") ||
+          alternativeGroupsAcrossAllOf(child).length > 0),
+    )
+    .map(
+      ([name, child]) =>
+        `${name}${required.has(name) ? "" : "?"}:${compactChildShape(child)}`,
+    );
+  return keys.join(", ") || "none";
+};
 
 type CompactInputUnionHint = {
   path: string;
@@ -1157,52 +1239,44 @@ export const buildCompactInputUnionHints = ({
     if (field === undefined) {
       continue;
     }
-    const group = alternativeGroupsOf(field).at(0);
-    const first = group?.variants.at(0);
-    if (group === undefined || first === undefined) {
+    const items = field["items"];
+    const array = schemaTypes(field).includes("array") && isRecord(items);
+    const unionSchema = array ? items : field;
+    const branches = nonNullVariants(unionSchema);
+    const discriminator = discriminatorOf(branches);
+    if (discriminator === undefined) {
       continue;
     }
-    const discriminator = [...requiredOf(first)].find((name) =>
-      group.variants.every((variant) => {
-        const child = propertiesOf(variant)[name];
-        return (
-          requiredOf(variant).has(name) &&
-          child !== undefined &&
-          discriminatorValue(child) !== undefined
-        );
-      }),
-    );
-    const variants = group.variants
-      .map((variant, index) => {
-        const child =
-          discriminator === undefined
-            ? undefined
-            : propertiesOf(variant)[discriminator];
+    const variants = branches
+      .map((variant) => {
+        const child = propertiesOf(variant)[discriminator];
         const label =
-          child === undefined
-            ? `variant ${index + 1}`
-            : `${discriminator}=${JSON.stringify(discriminatorValue(child))}`;
-        return `${label}: required ${compactRequiredKeys(variant, discriminator)}`;
+          child === undefined ? "" : JSON.stringify(discriminatorValue(child));
+        return `${discriminator}=${label}: ${compactVariantKeys(variant, discriminator)}`;
       })
       .join("; ");
-    const value = exampleFor(
-      combineSchemasForExample(
-        { ...field, anyOf: undefined, oneOf: undefined },
-        first,
-      ),
-    );
-    let payload = value;
-    for (const segment of path.split(".").toReversed()) {
-      payload = { [segment]: payload };
+    let example: InputContractExample = { status: "unavailable" };
+    for (const branch of branches) {
+      const selected = combineSchemasForExample(
+        {
+          ...collapseAllOfForExample(unionSchema),
+          anyOf: undefined,
+          oneOf: undefined,
+        },
+        branch,
+      );
+      const value = exampleFor(
+        array ? { ...field, items: selected } : selected,
+      );
+      if (!validateAgainstSchema(field, value).valid) {
+        continue;
+      }
+      const payload: Record<string, unknown> = {};
+      setExamplePath({ schema, target: payload, path, value });
+      example = { status: "complete", value: payload };
+      break;
     }
-    hints.push({
-      path,
-      variants,
-      example:
-        isRecord(payload) && validateAgainstSchema(field, value).valid
-          ? { status: "complete", value: payload }
-          : { status: "unavailable" },
-    });
+    hints.push({ path: array ? `${path}[]` : path, variants, example });
   }
   return hints;
 };

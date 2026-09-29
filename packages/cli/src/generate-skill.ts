@@ -179,12 +179,11 @@ const commandFlagsBlock = (spec: LeafCommandSpec): string => {
     schema: spec.inputSchema,
     inputOnly: spec.inputOnly,
   }).map(({ path, variants, example }) => {
-    if (example.status !== "complete") {
-      throw new RouteGenerationError(
-        `generateCliSkill: no valid first-variant example for ${command} input ${path}`,
-      );
-    }
-    return `  - ${path}: ${variants}. Example: \`${formatInputExample(example.value)}\``;
+    const suffix =
+      example.status === "complete"
+        ? `. Example: \`${formatInputExample(example.value)}\``
+        : "";
+    return `  - ${path}: ${variants}${suffix}`;
   });
   const flags = spec.flags.filter((flag) => !CONVENTION_FLAGS.has(flag.flag));
   if (flags.length === 0) {
@@ -228,7 +227,7 @@ const renderCommandFlagsSection = (
     "Required: `--flag — description (type)`. Optional: one `optional: --a,",
     "--b (enum1|enum2)` line, names only (`--help` has full descriptions).",
     "Global flags (output/cursor/limit/all/yes/input; see Conventions above)",
-    "are omitted here.",
+    "are omitted here. Input union keys are required unless marked `?`.",
     "",
     leaves.map((spec) => commandFlagsBlock(spec)).join("\n"),
   ].join("\n");
