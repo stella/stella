@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 
 import { useTranslations } from "use-intl";
@@ -10,8 +11,6 @@ import {
   FileBadgeIcon,
   KeyRoundIcon,
   LinkIcon,
-  LoaderIcon,
-  PencilIcon,
   TagIcon,
   UserIcon,
   XIcon,
@@ -21,46 +20,32 @@ import { cn } from "@stll/ui/utils";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
+import type { KnowledgeToolDetail } from "@/features/knowledge/views/tools/tools-seam";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
-import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
-import { useCatalogueRemoval } from "./use-catalogue-removal";
-
-type CatalogueDetailPanelProps = {
-  entry: CatalogueEntry;
-  installing: boolean;
-  removing: boolean;
-  onInstall: () => void;
-  onRemove: () => void;
+type ToolDetailPanelViewProps = {
+  tool: KnowledgeToolDetail;
   onClose: () => void;
-  /**
-   * Open the full skill editor sheet. Only invoked for installed
-   * skill entries; safe to omit on surfaces that don't expose editing.
-   */
-  onEditSkill?: (() => void) | undefined;
+  /** Long-form content after the summary, e.g. a tool's full documentation. */
+  body?: ReactNode;
+  /** The panel's actions; the footer bar renders only when given. */
+  footer?: ReactNode;
+  /** Dialogs the route owns. */
+  children?: ReactNode;
 };
 
-export const CatalogueDetailPanel = ({
-  entry,
-  installing,
-  removing,
-  onInstall,
-  onRemove,
+export const ToolDetailPanelView = ({
+  tool,
   onClose,
-  onEditSkill,
-}: CatalogueDetailPanelProps) => {
+  body,
+  footer,
+  children,
+}: ToolDetailPanelViewProps) => {
   const t = useTranslations();
-  const isFirstParty = entry.author === "stella";
-  const installed = isEffectivelyInstalled(entry);
-  const installable = !installed && entry.installState !== "unavailable";
-  const { removal, requestRemoval, confirmDialog } = useCatalogueRemoval({
-    entry,
-    onRemove,
-  });
-  const canRemove = removal !== "none";
-  const homepageUrl = sanitizeHref(entry.homepage ?? entry.authorUrl);
-  const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+  const isFirstParty = tool.author === "stella";
+  const homepageUrl = sanitizeHref(tool.homepage ?? tool.authorUrl);
+  const labelKey = nativeToolLabelKey({ slug: tool.slug, kind: tool.kind });
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -74,13 +59,13 @@ export const CatalogueDetailPanel = ({
           className="text-foreground min-w-0 truncate text-sm font-semibold"
           dir="auto"
         >
-          {labelKey ? t(labelKey) : entry.displayName}
+          {labelKey ? t(labelKey) : tool.displayName}
         </h2>
         {homepageUrl && (
           <a
             aria-label={t("catalogue.openHomepage")}
             className="text-muted-foreground hover:text-foreground shrink-0"
-            href={sanitizeHref(entry.homepage ?? entry.authorUrl)}
+            href={sanitizeHref(tool.homepage ?? tool.authorUrl)}
             onClick={(e) => e.stopPropagation()}
             rel="noreferrer"
             target="_blank"
@@ -101,37 +86,41 @@ export const CatalogueDetailPanel = ({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
-        {entry.description && (
+        {tool.description && (
           <Section title={t("onboarding.catalogueDetailAbout")}>
             {/* Remount per entry so expanded/overflow state starts fresh
                 (the panel itself is not remounted per selection). */}
-            <ExpandableText key={entry.description} text={entry.description} />
+            <ExpandableText key={tool.description} text={tool.description} />
           </Section>
         )}
 
-        {installed && entry.kind === "mcp" && (
+        {tool.connection && (
           <Section title={t("catalogue.configuration")}>
             <div className="flex flex-col gap-2">
               <Field
                 ariaLabel={t("knowledge.mcp.urlLabel")}
                 icon={LinkIcon}
-                value={entry.url}
+                value={tool.connection.url}
               />
               <Field
                 ariaLabel={t("catalogue.detailAuthMethod")}
                 icon={KeyRoundIcon}
-                value={t(`knowledge.mcp.auth.${authKey(entry.authType)}`)}
+                value={t(
+                  `knowledge.mcp.auth.${authKey(tool.connection.authType)}`,
+                )}
               />
-              {entry.serverVersion && (
+              {tool.connection.serverVersion && (
                 <Field
                   ariaLabel={t("common.version")}
                   icon={TagIcon}
-                  value={entry.serverVersion}
+                  value={tool.connection.serverVersion}
                 />
               )}
             </div>
           </Section>
         )}
+
+        {body}
 
         <div className="mt-auto flex flex-col gap-5">
           <Divider />
@@ -139,95 +128,51 @@ export const CatalogueDetailPanel = ({
             <div className="grid grid-cols-2 gap-3">
               <AuthorField
                 ariaLabel={t("common.author")}
-                authorUrl={entry.authorUrl}
-                value={isFirstParty ? "stella" : entry.author}
+                authorUrl={tool.authorUrl}
+                value={isFirstParty ? "stella" : tool.author}
               />
-              {entry.license && (
+              {tool.license && (
                 <Field
                   ariaLabel={t("onboarding.catalogueDetailLicense")}
                   icon={FileBadgeIcon}
-                  value={entry.license}
+                  value={tool.license}
                 />
               )}
-              {entry.cost && (
+              {tool.cost && (
                 <Field
                   ariaLabel={t("onboarding.catalogueDetailCost")}
                   icon={BanknoteIcon}
-                  value={t(`catalogue.cost.${entry.cost}`)}
+                  value={t(`catalogue.cost.${tool.cost}`)}
                 />
               )}
               <Field
                 ariaLabel={t("onboarding.catalogueDetailSetup")}
                 icon={CogIcon}
-                value={t(`catalogue.setup.${setupKey(entry.setup)}`)}
+                value={t(`catalogue.setup.${setupKey(tool.setup)}`)}
               />
             </div>
-            {entry.jurisdictions.length > 0 && (
+            {tool.jurisdictions.length > 0 && (
               <ChipRow
                 ariaLabel={t("onboarding.catalogueDetailJurisdictions")}
                 icon={TagIcon}
-                values={entry.jurisdictions}
+                values={tool.jurisdictions}
               />
             )}
           </Section>
         </div>
       </div>
 
-      <footer
-        className={cn(
-          "border-border flex shrink-0 items-center gap-2 border-t px-3",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        {installable && (
-          <Button
-            className="flex-1"
-            disabled={installing}
-            onClick={onInstall}
-            type="button"
-          >
-            {installing && <LoaderIcon className="size-4 animate-spin" />}
-            {t("common.add")}
-          </Button>
-        )}
-        {installed &&
-          entry.kind === "skill" &&
-          entry.installedSkillId !== null &&
-          onEditSkill && (
-            <Button
-              className="flex-1"
-              onClick={onEditSkill}
-              type="button"
-              variant="outline"
-            >
-              <PencilIcon className="size-4" />
-              {t("knowledge.agentSkills.editSkill")}
-            </Button>
+      {footer !== undefined && (
+        <footer
+          className={cn(
+            "border-border flex shrink-0 items-center gap-2 border-t px-3",
+            TOOLBAR_ROW_HEIGHT,
           )}
-        {canRemove && (
-          <Button
-            className="flex-1"
-            disabled={removing}
-            onClick={requestRemoval}
-            type="button"
-            variant="destructive-outline"
-          >
-            {removing && <LoaderIcon className="size-4 animate-spin" />}
-            {t("common.remove")}
-          </Button>
-        )}
-        {installed && !canRemove && (
-          <p className="text-muted-foreground flex-1 text-center text-xs">
-            {t("catalogue.installedShort")}
-          </p>
-        )}
-        {entry.installState === "unavailable" && (
-          <p className="text-muted-foreground flex-1 text-center text-xs">
-            {t("catalogue.unavailable")}
-          </p>
-        )}
-      </footer>
-      {confirmDialog}
+        >
+          {footer}
+        </footer>
+      )}
+      {children}
     </div>
   );
 };

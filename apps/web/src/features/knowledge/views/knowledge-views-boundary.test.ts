@@ -109,6 +109,8 @@ describe("shared Knowledge views", () => {
       expect.arrayContaining([
         "features/knowledge/views/templates/template-list-view.tsx",
         "features/knowledge/views/playbooks/playbooks-page-view.tsx",
+        "features/knowledge/views/tools/tools-catalogue-view.tsx",
+        "features/knowledge/views/tools/tool-detail-panel-view.tsx",
       ]),
     );
   });

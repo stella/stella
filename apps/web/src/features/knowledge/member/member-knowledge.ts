@@ -6,6 +6,10 @@ import {
   memberTemplatesActions,
   memberTemplatesSource,
 } from "@/features/knowledge/member/member-templates";
+import {
+  memberToolsActions,
+  memberToolsSource,
+} from "@/features/knowledge/member/member-tools";
 
 /**
  * The organization's own Knowledge, for member routes only. A member route
@@ -15,9 +19,11 @@ import {
 export const memberKnowledgeSource = {
   ...memberTemplatesSource,
   ...memberPlaybooksSource,
+  ...memberToolsSource,
 };
 
 export const memberKnowledgeActions = {
   ...memberTemplatesActions,
   ...memberPlaybooksActions,
+  ...memberToolsActions,
 };
