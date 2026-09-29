@@ -99,34 +99,40 @@ describe("deriveAutoAsks — save resilience", () => {
     }
   });
 
-  test("an unreadable stored AI config makes no model call and still saves, dropping a stale `derived`", async () => {
-    let calls = 0;
-    const generate: DeriveAskGenerate = async () => {
-      calls += 1;
-      return { question: "Derived on the wrong key", contentType: "text" };
-    };
-    const stale = graded();
-    stale.ask = {
-      mode: "auto",
-      derived: {
-        question: "A question derived from older rules",
-        content: { version: 1, type: "text" },
-        rulesHash: "stale",
-      },
-    };
+  test.each([
+    ORG_AI_CONFIG_STATUS.unreadable,
+    ORG_AI_CONFIG_STATUS.ownKeyRequired,
+  ])(
+    "an unusable AI config (%s) makes no model call and still saves, dropping a stale `derived`",
+    async (orgAIConfigStatus) => {
+      let calls = 0;
+      const generate: DeriveAskGenerate = async () => {
+        calls += 1;
+        return { question: "Derived on the wrong key", contentType: "text" };
+      };
+      const stale = graded();
+      stale.ask = {
+        mode: "auto",
+        derived: {
+          question: "A question derived from older rules",
+          content: { version: 1, type: "text" },
+          rulesHash: "stale",
+        },
+      };
 
-    const result = await deriveAutoAsks(container(stale), {
-      ...deps,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
-      generate,
-    });
+      const result = await deriveAutoAsks(container(stale), {
+        ...deps,
+        orgAIConfigStatus,
+        generate,
+      });
 
-    expect(calls).toBe(0);
-    const [item] = result.items;
-    expect(item?.mode === "graded" ? item.ask : null).toEqual({
-      mode: "auto",
-    });
-  });
+      expect(calls).toBe(0);
+      const [item] = result.items;
+      expect(item?.mode === "graded" ? item.ask : null).toEqual({
+        mode: "auto",
+      });
+    },
+  );
 
   test("a thrown derivation still saves, with `derived` absent", async () => {
     const generate: DeriveAskGenerate = async () => {

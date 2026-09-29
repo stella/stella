@@ -56,6 +56,7 @@ import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { loadLocalCourtWeights } from "@/api/lib/case-law/local-case-law-config";
 import { publishedCaseLawDecisionSqlFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -64,17 +65,6 @@ type CitationAuthorityTx = {
 };
 
 const SECONDS_PER_YEAR = 365.25 * 86_400;
-
-/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
-const executedRows = (result: unknown): unknown[] => {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return result["rows"];
-  }
-  return [];
-};
 
 const firstNumber = (result: unknown, key: string): number => {
   const row = executedRows(result).at(0);

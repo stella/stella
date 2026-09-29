@@ -10,6 +10,7 @@ import type {
   SanctionsName,
   SanctionsSource,
 } from "./entry";
+import { SANCTIONS_SOURCES } from "./sources";
 import {
   invalidValue,
   missingField,
@@ -198,6 +199,7 @@ const entry = (
     const listedOn = cell(6) === "" ? null : yield* czechDate(cell(6));
     const parsed: SanctionsEntry = {
       source: SOURCE,
+      issuer: SANCTIONS_SOURCES[SOURCE].issuer,
       // The list has no entry ids; the primary name and birth date identify a row.
       sourceId: [primary, givenNames.at(0), born]
         .filter((part) => part !== undefined && part !== null)

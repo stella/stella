@@ -51,7 +51,11 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { USER_STOP_OUTCOME } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
-import { KEEPS_PARTIAL_TOOL_INPUT } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  CUT_SHORT_OUTCOME,
+  findHandedOutInteraction,
+} from "@/api/handlers/chat/chat-turn-settlement";
+import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -61,6 +65,8 @@ import {
   shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
+import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
+import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
@@ -90,6 +96,7 @@ import {
   prepareUnknownForThirdParty,
   reserveThirdPartyBoundarySourcePlaceholders,
 } from "@/api/handlers/chat/third-party-boundary";
+import { sortToolJsonKeys } from "@/api/handlers/chat/tool-json-key-order";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
   ChatAnonRestoration,
@@ -532,7 +539,11 @@ export const streamChat = async ({
     resume: preparedResume,
     safeDb,
     surfaces: {
-      messages: preparedMessageList,
+      // The provider's copy only: persistence keeps the stored parts.
+      messages: guardProviderHistory({
+        messages: preparedMessageList,
+        workspaceIds: tenantWorkspaceIds,
+      }),
       system: guardedSystem,
       tenantWorkspaceIds,
       tools: modelTools,
@@ -892,7 +903,9 @@ type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
  * the model without failing typecheck.
  */
 export type GuardedChatSurfaces = {
-  messages: GuardedModelMessages<ChatMessage[]>;
+  /** Minted by `guardProviderHistory`: guarded, with every call answered
+   *  right after its step. */
+  messages: GuardedProviderHistory;
   system: GuardedSystemPrompt;
   /**
    * The guard's own input, carried alongside its output because the surfaces
@@ -1413,6 +1426,12 @@ const createChatRuntimeMiddleware = ({
       if (guardedCompaction !== undefined) {
         patch.messages = guardedCompaction;
       }
+      const sortedToolJson = sortToolJsonKeys(
+        patch.messages ?? config.messages,
+      );
+      if (sortedToolJson !== undefined) {
+        patch.messages = sortedToolJson;
+      }
 
       return Object.keys(patch).length === 0 ? undefined : patch;
     },
@@ -1436,11 +1455,6 @@ type ProcessServerChatStreamProps = {
   source: AsyncIterable<PublicStreamChunk>;
 };
 
-type ChatCutShortOutcome = Extract<
-  ChatTurnOutcome,
-  { type: "cancelled" | "interrupted" }
->;
-
 /**
  * Which abort cut this run. A stop aborts the run's controller with
  * upstream's explicit-cancel reason. The deadline fires on its own timer and
@@ -1454,7 +1468,7 @@ const chatCutShortOutcome = ({
 }: {
   abortSignal: AbortSignal;
   deadlineSignal: AbortSignal;
-}): ChatCutShortOutcome => {
+}): CutShortOutcome => {
   if (abortSignal.reason === RUN_CANCEL_REASON) {
     return USER_STOP_OUTCOME;
   }
@@ -1623,6 +1637,75 @@ const isRunFinishedOutcome = (
   }
 };
 
+/** The calls bound to the interrupts a run handed out with its final
+ *  finish. */
+const interruptToolCallIdsOf = (
+  chunks: readonly PublicStreamChunk[],
+): ReadonlySet<string> =>
+  new Set(
+    chunks.flatMap((chunk) =>
+      chunk.type === EventType.RUN_FINISHED &&
+      chunk.outcome?.type === "interrupt"
+        ? chunk.outcome.interrupts.flatMap(({ toolCallId }) =>
+            toolCallId === undefined ? [] : [toolCallId],
+          )
+        : [],
+    ),
+  );
+
+/**
+ * How a run whose source drained ended. A cut run that handed out no
+ * interaction is cut short; a client-resolved call whose input never finished
+ * (no TOOL_CALL_END) cannot be answered by any client, so the turn fails
+ * instead of waiting.
+ */
+const drainedRunOutcome = ({
+  abortSignal,
+  deadlineSignal,
+  finalRunFinishedChunks,
+  responseMessage,
+  runCancelled,
+  toolCallsWithCompleteInput,
+}: {
+  abortSignal: AbortSignal;
+  deadlineSignal: AbortSignal;
+  finalRunFinishedChunks: readonly PublicStreamChunk[];
+  responseMessage: ChatMessage | null;
+  runCancelled: boolean;
+  toolCallsWithCompleteInput: ReadonlySet<string>;
+}): ChatTurnOutcome => {
+  const awaitingUserInteraction = findHandedOutInteraction({
+    interruptToolCallIds: interruptToolCallIdsOf(finalRunFinishedChunks),
+    message: responseMessage,
+  });
+  if (
+    (abortSignal.aborted || runCancelled) &&
+    awaitingUserInteraction === null
+  ) {
+    // A cancelled run drains like a finished one. TanStack's agent loop
+    // checks its cancellation before it reads each adapter chunk, so the
+    // terminal `RUN_ERROR` the adapter yields for the aborted provider
+    // request is dropped rather than forwarded, and this generator sees a
+    // source that simply ended. Grading that silence as a completion
+    // persists a turn with no answer and no reason; the signal is what says
+    // the turn was cut, and which signal says why. A finish whose outcome is
+    // `cancelled` says the same.
+    return chatCutShortOutcome({ abortSignal, deadlineSignal });
+  }
+  const openInteraction = getAwaitingUserInteraction(responseMessage);
+  if (
+    openInteraction !== null &&
+    awaitsCompleteInput(openInteraction) &&
+    !toolCallsWithCompleteInput.has(openInteraction.toolCallId)
+  ) {
+    return { type: "failed", error: "unknown" };
+  }
+  if (awaitingUserInteraction !== null) {
+    return { type: "awaiting-user", interaction: awaitingUserInteraction };
+  }
+  return { type: "completed" };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   deadlineSignal,
@@ -1653,10 +1736,7 @@ export const processServerChatStream = async function* ({
     if (terminal.state === "settled") {
       return;
     }
-    if (
-      KEEPS_PARTIAL_TOOL_INPUT[outcome.type] &&
-      flushPendingSource !== undefined
-    ) {
+    if (CUT_SHORT_OUTCOME[outcome.type] && flushPendingSource !== undefined) {
       for (const chunk of flushPendingSource()) {
         trackIncompleteToolCallInput(chunk, rawArgumentsByIncompleteToolCallId);
         processor.processChunk(chunk);
@@ -1679,7 +1759,7 @@ export const processServerChatStream = async function* ({
         "Persistence processor dropped an assistant turn that carried a complete tool call",
       );
     }
-    const responseMessage = KEEPS_PARTIAL_TOOL_INPUT[outcome.type]
+    const responseMessage = CUT_SHORT_OUTCOME[outcome.type]
       ? restoreInterruptedToolCallInputs(
           getResponseMessage(),
           rawArgumentsByIncompleteToolCallId,
@@ -1835,39 +1915,18 @@ export const processServerChatStream = async function* ({
     // is what ends the message; it is the same call the SDK makes when it
     // drives the stream itself, and repeating it later is a no-op.
     processor.finalizeStream();
-    const awaitingUserInteraction =
-      getAwaitingUserInteraction(getResponseMessage());
-    // A client-resolved call whose input never finished (no TOOL_CALL_END)
-    // cannot be answered by any client, so the turn fails instead of waiting.
-    const incompleteClientInteraction =
-      awaitingUserInteraction !== null &&
-      awaitsCompleteInput(awaitingUserInteraction) &&
-      !toolCallsWithCompleteInput.has(awaitingUserInteraction.toolCallId);
-    let outcome: ChatTurnOutcome;
-    if (incompleteClientInteraction) {
-      outcome = { type: "failed", error: "unknown" };
-    } else if (awaitingUserInteraction !== null) {
-      outcome = {
-        type: "awaiting-user",
-        interaction: awaitingUserInteraction,
-      };
-    } else if (abortSignal.aborted || runCancelled) {
-      // A cancelled run drains like a finished one. TanStack's agent loop
-      // checks its cancellation before it reads each adapter chunk, so the
-      // terminal `RUN_ERROR` the adapter yields for the aborted provider
-      // request is dropped rather than forwarded, and this generator sees a
-      // source that simply ended. Grading that silence as a completion
-      // persists a turn with no answer and no reason; the signal is what says
-      // the turn was cut, and which signal says why. A finish whose outcome is
-      // `cancelled` says the same.
-      outcome = chatCutShortOutcome({ abortSignal, deadlineSignal });
-    } else {
-      outcome = { type: "completed" };
-    }
+    const outcome = drainedRunOutcome({
+      abortSignal,
+      deadlineSignal,
+      finalRunFinishedChunks,
+      responseMessage: getResponseMessage(),
+      runCancelled,
+      toolCallsWithCompleteInput,
+    });
     await terminalize({
       // A cut-short outcome flushes the pending source into the processor,
       // which has to be finalized again for that content to reach the message.
-      flushProcessor: KEEPS_PARTIAL_TOOL_INPUT[outcome.type],
+      flushProcessor: CUT_SHORT_OUTCOME[outcome.type],
       outcome,
     });
     for (const chunk of finalRunFinishedChunks) {

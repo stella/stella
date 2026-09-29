@@ -395,18 +395,116 @@
       "oracle": "chat.provider-wire.tool-input"
     },
     {
+      "id": "tool-input-array-union-items-are-alternatives",
+      "fix": "maintenance",
+      "behaviour": "Tool input under a union of arrays reads its items against the members' item schemas as alternatives, so a null one member declares is kept.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "      itemSchemas.length === 1 ? itemSchemas[0] : { anyOf: itemSchemas };",
+      "replace": "      itemSchemas[0];",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a null one array member's items declare stays, though a sibling member's refuse it"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-fits-value",
+      "fix": "maintenance",
+      "behaviour": "Tool input under a union reads its placeholders against the branches whose shape takes the value, so a branch the value cannot fit does not keep a null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  const matched = fitting.length > 0 ? fitting : matching;",
+      "replace": "  const matched = matching;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a null is omitted though a sibling branch the value cannot fit declares it"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-const-applies-whole",
+      "fix": "maintenance",
+      "behaviour": "A union branch whose object constant the tool input does not equal is not one it fits, so it keeps no null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "    return isDeepStrictEqual(schema[\"const\"], value);",
+      "replace": "    return typeof value === \"object\" || schema[\"const\"] === value;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a sibling branch whose constant the value does not equal keeps no null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-union-branch-patterns-name-fields",
+      "fix": "maintenance",
+      "behaviour": "A closed union branch with patternProperties refuses a field no pattern names, so it keeps no null.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  if (matched) {",
+      "replace": "  if (matched || isRecord(patternProperties)) {",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "a closed sibling branch whose patterns do not name a field keeps no null"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
+      "id": "tool-input-array-member-fits-array",
+      "fix": "maintenance",
+      "behaviour": "Only union array members that take the whole array lend their item schemas to reading its placeholders.",
+      "status": "active",
+      "file": "src/lib/json-schema/null-optionals.ts",
+      "search": "  const fitting = members.filter((member) => shapeTakes(member, value));",
+      "replace": "  const fitting = members;",
+      "scenario": {
+        "file": "src/lib/json-schema/null-optionals.test.ts",
+        "test": "an array member too short for the array keeps no null in its items"
+      },
+      "oracle": "chat.provider-wire.tool-input"
+    },
+    {
       "id": "stream-ends-in-one-terminal-event",
       "fix": "maintenance",
-      "behaviour": "A provider stream that stops before its terminal event ends in a run error.",
+      "behaviour": "A provider stream that stops before its terminal event ends in a run error, also from an adapter that reports no terminal event of its own.",
       "status": "active",
       "file": "src/lib/chat/provider-stream-contract.ts",
       "search": "if (!ended && signal?.aborted !== true) {\n    yield runError(options.model, {",
       "replace": "if (false) {\n    yield runError(options.model, {",
       "scenario": {
         "file": "src/lib/tanstack-ai-provider-wire.test.ts",
-        "test": "anthropic early-eof"
+        "test": "a cut-off stream an adapter leaves unended"
       },
       "oracle": "chat.provider-wire.one-terminal"
+    },
+    {
+      "id": "openai-tool-schema-strict",
+      "fix": "maintenance",
+      "behaviour": "The OpenAI adapter offers a tool whose schema strict mode accepts as a strict tool.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/openai-base/dist/esm/tools/function-tool.js",
+      "search": "\t\tparameters: jsonSchema,\n\t\tstrict: true",
+      "replace": "\t\tparameters: jsonSchema,\n\t\tstrict: false",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "openai tool-call"
+      },
+      "oracle": "chat.provider-wire.request-shape"
+    },
+    {
+      "id": "wire-request-shape-reads-init-headers",
+      "fix": "maintenance",
+      "behaviour": "A request's shape is read from what fetch sends, with the init's headers over the request's.",
+      "status": "active",
+      "file": "src/tests/helpers/provider-wire-replay.ts",
+      "search": "? new Request(input, init)",
+      "replace": "? input",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "a header fetch's init overrides is the header the request is pinned by"
+      },
+      "oracle": "chat.provider-wire.request-shape"
     },
     {
       "id": "new-message-resets-interrupts",
@@ -428,8 +526,8 @@
       "behaviour": "The engine is handed an ended turn's open calls with a result, so it runs the model instead of asking the client about them again.",
       "status": "active",
       "file": "src/handlers/chat/chat-turn-settlement.ts",
-      "search": "    ENGINE_ASKS_CLIENT_AGAIN[part.state] &&",
-      "replace": "    false &&",
+      "search": "      !ENGINE_ASKS_CLIENT_AGAIN[part.state]",
+      "replace": "      true",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "continues a fork taken while a question waits"
@@ -439,7 +537,7 @@
     {
       "id": "run-continues-stored-thread",
       "fix": "#3885",
-      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it.",
+      "behaviour": "A turn that supersedes an awaiting message runs on the thread as its acceptance stored it, so it reads a replaced call the way every later request does.",
       "status": "active",
       "file": "src/handlers/chat/send-message.ts",
       "search": "message.id === supersededMessage.id",
@@ -448,7 +546,7 @@
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"
       },
-      "oracle": "chat.live.equals-reload"
+      "oracle": "chat.provider.transcript-settled"
     },
     {
       "id": "superseding-turn-opens-with-stored-message",
@@ -526,13 +624,13 @@
       "behaviour": "A turn the user stops mid-stream stores no call that reads as waiting on the user, whether or not its input finished streaming.",
       "status": "active",
       "file": "src/handlers/chat/chat-message-persistence.ts",
-      "search": "  outcome.type === \"cancelled\"\n    ? cancelAssistantMessage({ message, reason: outcome.reason })\n    : settleTerminalAssistantMessage(message, outcome);",
+      "search": "  isCutShortOutcome(outcome)\n    ? cutShortAssistantMessage({ message, outcome })\n    : settleTerminalAssistantMessage(message, outcome);",
       "replace": "  settleTerminalAssistantMessage(message, outcome);",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "stops an answer while it streams (before-tool-end)"
       },
-      "oracle": "chat.persisted.pending-owned"
+      "oracle": "chat.persisted.calls-settled"
     },
     {
       "id": "run-independent-of-request",
@@ -561,6 +659,384 @@
         "test": "lets a new message replace an approval that still waits"
       },
       "oracle": "chat.wire.snapshot-served"
+    },
+    {
+      "id": "gemini-malformed-call-fails",
+      "fix": "#4002",
+      "behaviour": "A Gemini response that ends on a tool call the model could not form fails the run instead of finishing as an empty answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "  MALFORMED_FUNCTION_CALL: \"failed\",",
+      "replace": "  MALFORMED_FUNCTION_CALL: \"ended\",",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract google unusable-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "anthropic-pause-turn-unfinished",
+      "fix": "#4002",
+      "behaviour": "An Anthropic turn the provider paused mid-way reads as unfinished, not as a finished answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "  pause_turn: \"unfinished\",",
+      "replace": "  pause_turn: \"ended\",",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract anthropic unusable-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "no-stop-reason-unfinished",
+      "fix": "#4002",
+      "behaviour": "A stream that ends without the provider stating why it stopped reads as unfinished, not as a finished answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "    return \"unfinished\";",
+      "replace": "    return \"ended\";",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "that never arrived leaves the answer unfinished"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-answer-finishes",
+      "fix": "#4053",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet finishes when the step wrote an answer and called no tool, instead of failing the turn.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "    : \"unrecognized\";",
+      "replace": "    : \"failed\";",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "satisfies the wire contract anthropic unlisted-stop"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-silent-fails",
+      "fix": "#4053",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet fails when the step wrote nothing the user sees, instead of finishing as an empty answer.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "      if (!answered || leftCalls || chunk.type === EventType.RUN_ERROR) {",
+      "replace": "      if (leftCalls || chunk.type === EventType.RUN_ERROR) {",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "finishes a step that wrote an answer and called no tool, else fails it, on every provider"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-shorthand-call-fails",
+      "fix": "#4053",
+      "behaviour": "A response the provider ends with a stop reason no SDK lists yet fails when the step called a tool in the shorthand chunk shape, instead of finishing with the call dropped.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "      chunk.type === EventType.TOOL_CALL_START ||\n      chunk.type === EventType.TOOL_CALL_CHUNK;",
+      "replace": "      chunk.type === EventType.TOOL_CALL_START;",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "finishes a step that wrote an answer and called no tool, else fails it, on every provider"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "unlisted-stop-adapter-failure-kept",
+      "fix": "#4053",
+      "behaviour": "A failure the adapter reported with a stop reason no SDK lists yet (an incomplete response) stays a failure even after text was written.",
+      "status": "active",
+      "file": "src/lib/chat/provider-stop-reasons.ts",
+      "search": "      if (!answered || leftCalls || chunk.type === EventType.RUN_ERROR) {",
+      "replace": "      if (!answered || leftCalls) {",
+      "scenario": {
+        "file": "src/lib/chat/provider-stop-reasons.test.ts",
+        "test": "keeps a failure the adapter reported, answer or not"
+      },
+      "oracle": "chat.provider-wire.finish"
+    },
+    {
+      "id": "split-multibyte-character-decoded",
+      "fix": "#4002",
+      "behaviour": "A multi-byte character cut across two reads of a stream decodes as the character, not as replacement characters.",
+      "status": "active",
+      "file": "../../node_modules/@tanstack/ai-mistral/dist/esm/adapters/text.js",
+      "search": "buffer += decoder.decode(value, { stream: true });",
+      "replace": "buffer += decoder.decode(value);",
+      "scenario": {
+        "file": "src/lib/tanstack-ai-provider-wire.test.ts",
+        "test": "reads a stream cut anywhere as it reads it whole mistral text"
+      },
+      "oracle": "chat.provider-wire.split"
+    },
+    {
+      "id": "approval-answer-in-its-step",
+      "fix": "#4020",
+      "behaviour": "A call the SDK answers only at the end of its message (a denial) is answered right after its own step in every provider request, so a message that goes on past the step still extends the request that answered the call.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "    if (answer !== undefined && at < parts.length) {",
+      "replace": "    if (answer !== undefined && at < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "stays answered right after its step when the model asks for a call after a denial"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "approval-answer-in-its-step-dispatched",
+      "fix": "#4020",
+      "behaviour": "The history a chat attempt dispatches, the only one its surfaces accept, has each call answered in its own step.",
+      "status": "active",
+      "file": "src/handlers/chat/provider-history.ts",
+      "search": "      messages: answerHistoryCallsInTheirStep(withoutRepeatedCalls(messages)),",
+      "replace": "      messages: withoutRepeatedCalls(messages),",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "keeps a denial ahead of the approved call it was answered with"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "interrupted-closes-cut-off-calls",
+      "fix": "#3994",
+      "behaviour": "A turn a dropped connection cuts off stores no call that reads as waiting on the user.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-persistence.ts",
+      "search": "  isCutShortOutcome(outcome)\n",
+      "replace": "  outcome.type === \"cancelled\"\n",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (before-tool-end)"
+      },
+      "oracle": "chat.persisted.calls-settled"
+    },
+    {
+      "id": "waits-only-on-handed-out-interrupts",
+      "fix": "#3994",
+      "behaviour": "A run waits on the user only for a call among the interrupts it handed out, never for a server call cut off before it ran.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    interruptToolCallIds.has(toolCallId),",
+      "replace": "    interruptToolCallIds.size >= 0 || toolCallId === \"\",",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "leaves nothing waiting when a dropped connection cuts an answer off (after-tool-end)"
+      },
+      "oracle": "chat.ledger.pending"
+    },
+    {
+      "id": "denied-step-ends-at-its-recorded-step",
+      "fix": "#4038",
+      "behaviour": "A step whose every call was denied ends where the next step's first call records a step of its own, so its answers go right after it even when no text separates the two steps.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "  while (callOfSameStep(call, parts[end])) {",
+      "replace": "  while (parts[end]?.type === \"tool-call\") {",
+      "scenario": {
+        "file": "src/handlers/chat/approval-answer-order.test.ts",
+        "test": "answers each call right after its own step in every request"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "reader-decodes-v2-envelope",
+      "fix": "saved-state",
+      "behaviour": "The reader keeps decoding the v2 content envelope that releases before canonical tool calls stored, instead of reading it as v3.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-message-parts.ts",
+      "search": "  if (content.version === 3) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "replace": "  if (content.version >= 2) {\n    return normalizePersistedV3ChatMessageContent(content);\n  }",
+      "scenario": {
+        "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
+        "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
+      },
+      "oracle": "chat.persisted.past-release-loads"
+    },
+    {
+      "id": "prompt-prefix-system-stable",
+      "fix": "#4007",
+      "behaviour": "A request of a thread sends the system prompt the request before it sent, so an approval's continuation extends the cached prompt instead of rewriting it.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    ...systemPromptsPatch({ caching, model, system: baseSystem }),",
+      "replace": "    ...systemPromptsPatch({ caching, model, system: `${baseSystem}\\nRequest time: ${String(performance.now())}` }),",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "prompt-prefix-tools-stable-on-the-wire",
+      "fix": "#4007",
+      "behaviour": "A provider's SDK writes a thread's tools in the same order on every request of the thread.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }),",
+      "replace": "    tools: projectChatToolSchemasForProvider({\n      modelTools,\n      provider: model.provider,\n    }).toSorted(() => Math.random() - 0.5),",
+      "scenario": {
+        "file": "src/handlers/chat/provider-wire-replay.integration.test.ts",
+        "test": "anthropic: a tool call reaches its card, runs once approved, and the answer reloads"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-json-keys-sorted",
+      "fix": "#4007",
+      "behaviour": "A tool call's arguments and a tool result reach the model with their JSON keys in one order, so the call and result rebuilt from the stored thread on its next request repeat them byte for byte.",
+      "status": "active",
+      "file": "src/handlers/chat/stream-chat.ts",
+      "search": "        patch.messages = sortedToolJson;",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps every card after an approval on a message that already holds a tool result"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "tool-arguments-canonical-spacing",
+      "fix": "#4007",
+      "behaviour": "A tool call's arguments reach the model as compact JSON with sorted keys however the model spaced them, as the stored input is written back on every later request.",
+      "status": "active",
+      "file": "src/handlers/chat/tool-json-key-order.ts",
+      "search": "    const args = toolArgumentsWithSortedKeys(call.function.arguments);",
+      "replace": "    const args = withSortedJsonKeys(call.function.arguments);",
+      "scenario": {
+        "file": "src/handlers/chat/tool-json-key-order.test.ts",
+        "test": "of a call's arguments reach the model alike however the model spaced them"
+      },
+      "oracle": "chat.provider.prefix-stable"
+    },
+    {
+      "id": "snapshot-reasoning-keeps-its-step",
+      "fix": "#4017",
+      "behaviour": "The page takes each reasoning message of an interrupt snapshot as a thinking part with its own step, so the run that continues the answer adds its reasoning beside the earlier step's instead of overwriting it.",
+      "status": "active",
+      "file": "../web/src/features/chat/chat-snapshot-history.ts",
+      "search": "keepPostedMessages(posted, keepReasoningSteps(chunk.messages))",
+      "replace": "keepPostedMessages(posted, chunk.messages)",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps the first step's reasoning when the answer continues after an approval"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "rejected-input-call-kept",
+      "fix": "#4068",
+      "behaviour": "A call the engine answered with an error is stored as a failed call whatever its input, so a turn whose model recovers from input the tool's schema rejected stores the whole turn instead of failing to persist it.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-schema.ts",
+      "search": "  if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === \"error\") {\n    return validateErrorToolCallPart({ part, tool });\n  }",
+      "replace": "  if (\n    TOOL_CALL_OUTPUT_VALIDATION[part.state] === \"error\" &&\n    tool !== undefined &&\n    Result.isOk(validateToolCallInput({ part, tool }))\n  ) {\n    return validateErrorToolCallPart({ part, tool });\n  }",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "keeps a turn whose model corrects a tool input the tool rejected"
+      },
+      "oracle": "chat.live.equals-reload"
+    },
+    {
+      "id": "transcript-closing-results-join-their-step",
+      "fix": "#4006",
+      "behaviour": "A result the engine history adds to close a call of an ended turn joins its step's results, so the step's calls stay in one model message and every one of them is answered right after it.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "replace": "    closed.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace a thought-out mixed batch that still waits"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-denial-answered-in-its-step",
+      "fix": "#4006",
+      "behaviour": "A denied call in a step its message goes on past is answered in that step's results in the provider request, not at the end of the message.",
+      "status": "active",
+      "file": "src/handlers/chat/step-answers.ts",
+      "search": "    if (answer !== undefined && at < parts.length) {",
+      "replace": "    if (answer !== undefined && at < 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "replays a denied call's answer before the later steps of its message"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-thinking-keeps-its-step",
+      "fix": "#4006",
+      "behaviour": "A replayed message keeps each signed thinking block in place, on the step that produced it.",
+      "status": "active",
+      "file": "src/handlers/chat/third-party-boundary.ts",
+      "search": "      if (isProviderVisibleChatPart(part)) {\n        parts.push(part);\n      }",
+      "replace": "      if (isProviderVisibleChatPart(part)) {\n        if (part.type === \"thinking\") {\n          parts.unshift(part);\n        } else {\n          parts.push(part);\n        }\n      }",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "replays each step's signed thinking on its own step"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "transcript-repeated-call-sent-once",
+      "fix": "#4006",
+      "behaviour": "A tool call a stored thread repeats in later messages is sent to the provider once, in the first message holding it.",
+      "status": "active",
+      "file": "src/handlers/chat/provider-history.ts",
+      "search": "    if (repeated.size === 0) {",
+      "replace": "    if (repeated.size >= 0) {",
+      "scenario": {
+        "file": "src/handlers/chat/saved-state-compat.integration.test.ts",
+        "test": "v0.7.22 (3952f790b2) reloads, takes a denial and a follow-up"
+      },
+      "oracle": "chat.provider.transcript-settled"
+    },
+    {
+      "id": "skill-menu-follows-edit-mode",
+      "fix": "#4086",
+      "behaviour": "The composer's skill availability decides over the chat's own edit mode, as a send does, instead of assuming an open document always queues edits for review.",
+      "status": "active",
+      "file": "src/handlers/chat/skill-availability/offered-tools.ts",
+      "search": "    editApplyMode: chatContext.editApplyMode,",
+      "replace": "    editApplyMode: CHAT_EDIT_APPLY_MODE.manual,",
+      "scenario": {
+        "file": "src/handlers/chat/skill-availability/send-parity.integration.test.ts",
+        "test": "an anonymized global chat over a file, in the default edit mode"
+      },
+      "oracle": "chat.skills.menu-matches-send"
+    },
+    {
+      "id": "stored-result-content-stable",
+      "fix": "#4007",
+      "behaviour": "The result that closes a call of a turn that already ended exists only for the model and is rebuilt on every request, so it reads the same each time instead of changing an earlier turn's result.",
+      "status": "active",
+      "file": "src/handlers/chat/chat-turn-settlement.ts",
+      "search": "    stepResults.push(errorToolResult(part.id, UNRESOLVED_CALL_ERROR));",
+      "replace": "    stepResults.push(errorToolResult(part.id, `${UNRESOLVED_CALL_ERROR} ${String(performance.now())}`));",
+      "scenario": {
+        "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
+        "test": "lets a new message replace an ask-user card that still waits"
+      },
+      "oracle": "chat.provider.results-stable"
+    },
+    {
+      "id": "code-mode-misplaced-call-explained",
+      "fix": "#4083",
+      "behaviour": "A code-mode script that calls a direct tool gets back the tool's name and the instruction to call it outside the script, instead of a bare ReferenceError.",
+      "status": "active",
+      "file": "src/handlers/chat/tools/execute/chat-code-mode.ts",
+      "search": "      nameGuide: (bindingNames) =>\n        buildScriptCallGuide(\n          chatScriptCallCatalog({ bindingNames, turnTools: scriptCallTools() }),\n        ),\n",
+      "replace": "",
+      "scenario": {
+        "file": "src/handlers/chat/code-mode-misplaced-call.integration.test.ts",
+        "test": "is told to call it directly, and the turn completes with the direct call"
+      },
+      "oracle": "chat.code-mode.misplaced-call-explained"
     }
   ]
 }

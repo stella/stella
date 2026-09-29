@@ -13,10 +13,12 @@ import {
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
+import { installScriptedProvider } from "@/api/tests/helpers/chat-scripted-provider";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -36,8 +38,12 @@ env.OPENAI_API_KEY = "test-openai-instance-key";
 env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
 env.BEDROCK_API_KEY = "test-bedrock-instance-key";
 env.MISTRAL_API_KEY = "test-mistral-instance-key";
+// Importing the scripted provider registers the dev mock; these cases resolve
+// real adapters unless one switches the mock on itself.
+env.USE_MOCK_AI = false;
 
 const {
+  clearByokAdapterCache,
   getTanStackTextModelInfoForRole,
   getTanStackTextModelById,
   getTanStackTextModelForRole,
@@ -45,7 +51,9 @@ const {
   isAllowedBYOKModel,
   isAllowedBYOKModelForRole,
   isDeferredServiceTierAvailableForRole,
+  isMockTextAdapter,
   isTanStackAIProviderSupported,
+  mockAnswersForOrganization,
   modelAcceptsPdfDocumentInput,
   modelAcceptsStreamingToolUse,
   modelAcceptsTextualDocumentInput,
@@ -623,19 +631,32 @@ describe("TanStack text model resolution", () => {
     }
   });
 
-  test("an unreadable stored organization config is not treated as absent", () => {
-    // A stored config that failed to decrypt must not fall back to the
-    // shared instance provider, which would route the call somewhere the
-    // organization never configured.
-    const unreadable = requireTanStackAIAvailableForRole({
-      configStatus: ORG_AI_CONFIG_STATUS.unreadable,
-      orgConfig: null,
-      role: "chat",
-    });
+  test("a null organization config reaches the instance provider only with an ok status", () => {
+    // A stored config that failed to decrypt, or an organization barred from
+    // the instance provider, must not fall back to the shared instance
+    // provider, which would route the call somewhere the organization never
+    // configured.
+    const refusalStatus = {
+      ok: null,
+      unreadable: 503,
+      own_key_required: 403,
+    } as const satisfies Record<OrgAIConfigStatus, number | null>;
 
-    expect(unreadable.isErr()).toBe(true);
-    if (unreadable.isErr()) {
-      expect(unreadable.error.status).toBe(503);
+    for (const configStatus of Object.values(ORG_AI_CONFIG_STATUS)) {
+      const status = refusalStatus[configStatus];
+      if (status === null) {
+        continue;
+      }
+      const refused = requireTanStackAIAvailableForRole({
+        configStatus,
+        orgConfig: null,
+        role: "chat",
+      });
+
+      expect(refused.isErr()).toBe(true);
+      if (refused.isErr()) {
+        expect(refused.error.status).toBe(status);
+      }
     }
   });
 
@@ -960,6 +981,89 @@ describe("tanStackModelOptionsForRole", () => {
     });
 
     expect(options).toEqual({});
+  });
+});
+
+describe("who answers while the local mock is on", () => {
+  // The scripted provider registers through the mock seam and switches it on;
+  // each case then picks the mock mode it exercises.
+  const answeredBy = ({
+    mode,
+    orgConfig,
+  }: {
+    mode: boolean | "force";
+    orgConfig: OrgAIConfig | null;
+  }) => {
+    const provider = installScriptedProvider();
+    env.USE_MOCK_AI = mode;
+    // A factory an earlier case cached must not answer for this one.
+    clearByokAdapterCache();
+    try {
+      const model = getTanStackTextModelForRole("chat", orgConfig, {
+        organizationId: orgId,
+      });
+      return {
+        adapter: isMockTextAdapter(model.adapter) ? "mock" : model.adapter.name,
+        keySource: model.keySource,
+        organizationMocked: mockAnswersForOrganization(orgConfig),
+      };
+    } finally {
+      provider.restore();
+    }
+  };
+
+  test("an organization key answers for real instead of the mock", () => {
+    expect(
+      answeredBy({ mode: true, orgConfig: orgConfigForProvider("mistral") }),
+    ).toEqual({
+      adapter: "mistral",
+      keySource: "byok",
+      organizationMocked: false,
+    });
+  });
+
+  test("the mock answers where no organization key is configured", () => {
+    expect(answeredBy({ mode: true, orgConfig: null })).toEqual({
+      adapter: "mock",
+      keySource: "instance",
+      organizationMocked: true,
+    });
+  });
+
+  test("force keeps an organization key on the mock", () => {
+    expect(
+      answeredBy({ mode: "force", orgConfig: orgConfigForProvider("mistral") }),
+    ).toEqual({
+      adapter: "mock",
+      keySource: "byok",
+      organizationMocked: true,
+    });
+  });
+
+  test("reports no mock where dispatch refuses the deployment's provider", () => {
+    const provider = installScriptedProvider();
+    const requirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
+    env.USE_MOCK_AI = true;
+    env.REQUIRE_PERSONAL_AI_KEY = true;
+    try {
+      expect(mockAnswersForOrganization(null)).toBe(false);
+      expect(() =>
+        getTanStackTextModelForRole("chat", null, { organizationId: orgId }),
+      ).toThrow(HandlerError);
+    } finally {
+      env.REQUIRE_PERSONAL_AI_KEY = requirePersonalKey;
+      provider.restore();
+    }
+  });
+
+  test("with the mock off, an organization key answers for real", () => {
+    expect(
+      answeredBy({ mode: false, orgConfig: orgConfigForProvider("mistral") }),
+    ).toEqual({
+      adapter: "mistral",
+      keySource: "byok",
+      organizationMocked: false,
+    });
   });
 });
 

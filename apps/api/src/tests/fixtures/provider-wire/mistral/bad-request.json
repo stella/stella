@@ -9,7 +9,51 @@
     {
       "request": {
         "method": "POST",
-        "path": "/v1/chat/completions"
+        "path": "/v1/chat/completions",
+        "shape": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "model": "stella-cassette-no-such-model",
+            "temperature": 0,
+            "tools": [
+              {
+                "type": "function",
+                "function": {
+                  "name": "mcp__external__delete",
+                  "description": "Delete a draft by name.",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": ["string", "null"],
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["name", "note"],
+                    "additionalProperties": false
+                  },
+                  "strict": true
+                }
+              }
+            ],
+            "messages": [
+              {
+                "role": "user",
+                "content": "[prompt]"
+              }
+            ],
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "max_tokens": 262144
+          }
+        }
       },
       "response": {
         "status": 400,

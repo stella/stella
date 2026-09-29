@@ -8,6 +8,8 @@ import type {
 } from "@stll/agent-input";
 import {
   AGENT_INPUT_NORMALIZATION_KIND,
+  askForFix,
+  askSentence,
   COUNTRY_INPUT_MAX_CHARS,
 } from "@stll/agent-input";
 import {
@@ -49,6 +51,7 @@ import type {
   InternalToolSuccess,
   RuntimeMcpToolOutputContract,
 } from "@/api/mcp/tool-types";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -148,6 +151,21 @@ export const countryNormalization = ({
     ...(tool === undefined ? {} : { tool }),
   },
 });
+
+/**
+ * An optional search filter whose values live in the corpus rather than in the
+ * schema (a court, a decision type, a language). The shared reader drops the
+ * placeholder a caller writes for "not filtering" (`" "`, `"all"`, `"-"`);
+ * matching the value against the data is the handler's.
+ */
+export const FILTER_NORMALIZATION: AgentInputNormalizationAnnotation = {
+  kind: AGENT_INPUT_NORMALIZATION_KIND.filter,
+};
+
+/** A statute's ELI, read back from the short and reordered spellings. */
+export const ELI_NORMALIZATION: AgentInputNormalizationAnnotation = {
+  kind: AGENT_INPUT_NORMALIZATION_KIND.eli,
+};
 
 /**
  * An MCP tool's declared input: `v.strictObject(...)`, or a pipe over one.
@@ -722,27 +740,46 @@ const sortedWords = (name: string): string =>
   name.split(/[._-]/u).toSorted().join(" ");
 
 /**
- * Up to `limit` known tool names closest to `target` by Levenshtein distance,
- * used to hint an agent that fat-fingered a tool name. The distance is the
- * smaller of the plain comparison and the word-order-insensitive one, so a name
- * whose words were regrouped (`widgets.delete-part` against
- * `widgets.parts.delete`) still finds its match. Only candidates within a
- * lenient edit budget (roughly half the longer name) are kept, so an unrelated
- * miss returns nothing rather than a confusing suggestion. No dependency: a tiny
- * DP implementation is enough for the short, small candidate set.
+ * A tool name as an agent may have meant it: lowercased, without separators
+ * and without a leading `external` (the prefix chat scripts put on read
+ * functions). `listMatters`, `LIST_MATTERS`, `list-matters` and
+ * `external_list_matters` all share the key of `list_matters`.
+ */
+export const toolNameKey = (name: string): string =>
+  name
+    .toLowerCase()
+    .replaceAll(/[-_.]/gu, "")
+    .replace(/^external/u, "");
+
+/**
+ * How far `target` is from the tool name `name`: the smallest of the plain
+ * edit distance, the word-order-insensitive one (`widgets.delete-part` against
+ * `widgets.parts.delete`) and the distance between their keys (case,
+ * separators and an `external_` prefix ignored).
+ */
+export const toolNameDistance = (target: string, name: string): number =>
+  Math.min(
+    levenshtein(target, name),
+    levenshtein(sortedWords(target), sortedWords(name)),
+    levenshtein(toolNameKey(target), toolNameKey(name)),
+  );
+
+/**
+ * Up to `limit` known tool names closest to `target` by
+ * {@link toolNameDistance}, used to hint an agent that fat-fingered a tool
+ * name. Only candidates within a lenient edit budget (roughly half the longer
+ * name) are kept, so an unrelated miss returns nothing rather than a confusing
+ * suggestion. No dependency: a tiny DP implementation is enough for the short,
+ * small candidate set.
  */
 export const closestToolNames = (
   target: string,
   candidates: readonly string[],
   limit = 3,
 ): string[] => {
-  const targetWords = sortedWords(target);
   const scored: { name: string; distance: number }[] = [];
   for (const name of candidates) {
-    const distance = Math.min(
-      levenshtein(target, name),
-      levenshtein(targetWords, sortedWords(name)),
-    );
+    const distance = toolNameDistance(target, name);
     if (distance <= Math.ceil(name.length / 2)) {
       scored.push({ name, distance });
     }
@@ -755,6 +792,24 @@ export const closestToolNames = (
     )
     .slice(0, limit)
     .map(({ name }) => name);
+};
+
+/** A tool name as agent-facing text quotes it. */
+export const quoteToolName = (name: string): string => `\`${name}\``;
+
+/**
+ * The one "did you mean" sentence every unknown-name answer uses (MCP
+ * `unknown_tool` hints, capability ids, chat script functions), over labels
+ * the caller already quoted. Empty when there is nothing to suggest.
+ */
+export const didYouMean = (labels: readonly string[]): string => {
+  const [only, ...rest] = labels;
+  if (only === undefined) {
+    return "";
+  }
+  return rest.length === 0
+    ? `Did you mean ${only}?`
+    : `Did you mean one of ${labels.join(", ")}?`;
 };
 
 const levenshtein = (a: string, b: string): number => {
@@ -780,24 +835,6 @@ const levenshtein = (a: string, b: string): number => {
   }
   return cell(previous, b.length);
 };
-
-/**
- * `validation_error` envelope for a bad argument, hinting at the fix. `path` is
- * the offending property name, surfaced as the single structured issue so this
- * hand-rolled parser produces the same `error.issues` shape as the Valibot
- * `safeParse` paths.
- */
-const argValidationError = (
-  message: string,
-  hint: string,
-  path: string,
-): InternalToolErrorResult =>
-  structuredErrorResult({
-    code: "validation_error",
-    hint,
-    issues: [{ path, message }],
-    message,
-  });
 
 export const isToolErrorResult = (
   value: unknown,
@@ -853,6 +890,42 @@ export const cursorInput = ({
     ),
   );
 
+/**
+ * The one refusal for a cursor inside the issued class that does not decode:
+ * one the caller invented on a later call, or a real one that arrived cut
+ * short.
+ *
+ * It asks rather than restarting at page one. Both readings mean the
+ * position is lost, and a silent restart would hand a paging caller its
+ * first page again as if it were the next one: results repeat, and a caller
+ * that stops at a page it has seen concludes it has read everything. Asking
+ * costs one round trip and keeps every page a caller is given the one it
+ * asked for, so the hint names the restart explicitly instead.
+ */
+export const invalidCursorResult = ({
+  cursor,
+  tool,
+}: {
+  cursor: string;
+  /** The tool that issues this cursor, named in the hint; omit when shared. */
+  tool?: string | undefined;
+}): InternalToolErrorResult => {
+  const ask = askForFix({
+    input: cursor,
+    expected: `a cursor ${tool ?? "this tool"} issued`,
+    hint:
+      `This cursor does not decode, so the position it held is lost. Call ` +
+      `${tool ?? "the tool"} again without cursor to start from the first ` +
+      "page, or pass nextCursor exactly as the previous response returned it.",
+  });
+  return structuredErrorResult({
+    code: "validation_error",
+    message: "Invalid cursor",
+    issues: [{ path: "cursor", message: askSentence(ask) }],
+    hint: ask.hint,
+  });
+};
+
 export type TextWindowResult = {
   text: string;
   charCount: number;
@@ -896,11 +969,7 @@ const decodeTextWindowOffset = (
     !Number.isInteger(candidate) ||
     candidate < 0
   ) {
-    return argValidationError(
-      "Invalid cursor",
-      "Pass the 'cursor' verbatim as returned by a previous call, or omit it to read from the start.",
-      "cursor",
-    );
+    return invalidCursorResult({ cursor });
   }
   return candidate;
 };
@@ -1005,7 +1074,7 @@ export const buildMatterUrl = (workspaceId: string) =>
 export { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
 
 export const isPublicLawAppUrlEnabled = (): boolean =>
-  env.isDev || env.FEATURE_PUBLIC_LAW;
+  isLocalDevOpen() || env.FEATURE_PUBLIC_LAW;
 
 export const buildCaseLawDecisionAppUrl = (
   input: CaseLawDecisionRouteInput,

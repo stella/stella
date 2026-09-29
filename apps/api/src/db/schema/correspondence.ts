@@ -341,6 +341,11 @@ export const matterInboundAddresses = p.pgTable.withRLS(
         foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
+    p.pgPolicy("matter_inbound_addresses_owner_token_lookup", {
+      for: "select",
+      to: "public",
+      using: sql`current_user = pg_catalog.pg_get_userbyid((SELECT relowner FROM pg_catalog.pg_class WHERE oid = 'public.matter_inbound_addresses'::regclass)) AND ${table.token} = current_setting('app.inbound_token', true)`,
+    }),
     p.uniqueIndex("matter_inbound_addresses_token_uidx").on(table.token),
     p
       .uniqueIndex("matter_inbound_addresses_active_uidx")
@@ -349,11 +354,6 @@ export const matterInboundAddresses = p.pgTable.withRLS(
     p
       .index("matter_inbound_addresses_ws_created_idx")
       .on(table.workspaceId, table.createdAt.desc()),
-    p.pgPolicy("matter_inbound_addresses_owner_lookup", {
-      for: "select",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.matter_inbound_addresses'::regclass)`,
-    }),
     ...wsOrganizationPolicies("matter_inbound_addresses"),
   ],
 );
@@ -468,11 +468,6 @@ export const correspondenceAllowedSenderMatters = p.pgTable.withRLS(
     p
       .index("correspondence_allowed_sender_matters_ws_sender_idx")
       .on(table.workspaceId, table.allowedSenderId),
-    p.pgPolicy("correspondence_allowed_sender_matters_owner_lookup", {
-      for: "select",
-      to: "public",
-      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.correspondence_allowed_sender_matters'::regclass)`,
-    }),
     ...wsOrganizationPolicies("correspondence_allowed_sender_matters"),
   ],
 );

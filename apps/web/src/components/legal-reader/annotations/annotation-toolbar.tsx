@@ -3,6 +3,10 @@ import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { panic, Result } from "better-result";
+import { useTranslations } from "use-intl";
+
+import { copyToClipboard } from "@stll/clipboard";
+import { Button } from "@stll/ui/button";
 import {
   Building2Icon,
   ChevronDownIcon,
@@ -15,11 +19,7 @@ import {
   Trash2Icon,
   UnderlineIcon,
   WavesIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { copyToClipboard } from "@stll/clipboard";
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";

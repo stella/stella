@@ -1,5 +1,27 @@
 # @stll/chat
 
+## 0.1.29
+
+### Patch Changes
+
+- [#4067](https://github.com/stella/stella/pull/4067) [`8b243c4`](https://github.com/stella/stella/commit/8b243c4aadc1b002c6b5978046f2991b7eaa4de2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/icons`, one module for every icon, with semantic entries such as `SkillIcon` and `AiActionIcon`. `@stll/chat` and `@stll/workspace-ui` import their icons from it.
+- Updated dependencies [[`8b243c4`](https://github.com/stella/stella/commit/8b243c4aadc1b002c6b5978046f2991b7eaa4de2)]:
+  - @stll/ui@0.37.0
+
+## 0.1.28
+
+### Patch Changes
+
+- Updated dependencies [[`0dcdbf1`](https://github.com/stella/stella/commit/0dcdbf12af4bfcd80dfc9d3863258455580ad612)]:
+  - @stll/ui@0.36.0
+
+## 0.1.27
+
+### Patch Changes
+
+- Updated dependencies [[`9d57661`](https://github.com/stella/stella/commit/9d576613d04dd842c18c3074baf7c9f30927deeb)]:
+  - @stll/ui@0.35.0
+
 ## 0.1.26
 
 ### Patch Changes

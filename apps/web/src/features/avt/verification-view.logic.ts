@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 
-import type { ClaimAnchor, VerificationClaim } from "@/features/avt/types";
+import type {
+  ClaimAnchor,
+  VerificationClaim,
+  VerificationRun,
+} from "@/features/avt/types";
 
 /**
  * Pure presentation logic for a claim span in the document view. Takes only
@@ -85,3 +89,129 @@ export const passageReadingOrder = (
   passages: readonly ClaimPassage[],
 ): VerificationClaim["id"][] =>
   passages.flatMap((passage) => passage.claims.map((claim) => claim.id));
+
+type VerificationBlock = VerificationRun["blocks"][number];
+
+export type ProseSegment =
+  | { type: "plain"; text: string }
+  | { type: "claim"; text: string; claim: VerificationClaim };
+
+export type ProseBlock = {
+  ordinal: number;
+  pageNumber: number | null;
+  segments: ProseSegment[];
+};
+
+const claimBelongsToBlock = (
+  claim: VerificationClaim,
+  block: VerificationBlock,
+): boolean => {
+  switch (block.kind) {
+    case "docx-block": {
+      return (
+        claim.anchor.type === "docx-block" &&
+        claim.anchor.blockId === block.blockId
+      );
+    }
+    case "pdf-page": {
+      return (
+        claim.anchor.type === "pdf-page" &&
+        claim.anchor.pageNumber === block.pageNumber
+      );
+    }
+    default: {
+      block.kind satisfies never;
+      return panic(`Unhandled verification block kind: ${String(block.kind)}`);
+    }
+  }
+};
+
+/** Partition stored text without changing its UTF-16 offsets or repeating overlap. */
+export const segmentProseBlock = (
+  block: VerificationBlock,
+  claims: readonly VerificationClaim[],
+): ProseSegment[] => {
+  const segments: ProseSegment[] = [];
+  const anchored = claims
+    .filter((claim) => claimBelongsToBlock(claim, block))
+    .toSorted(
+      (a, b) =>
+        a.anchor.start - b.anchor.start ||
+        b.anchor.end - a.anchor.end ||
+        a.position - b.position,
+    );
+  let cursor = 0;
+  for (const claim of anchored) {
+    const start = Math.max(cursor, claim.anchor.start);
+    const end = Math.min(block.text.length, claim.anchor.end);
+    if (start >= end) {
+      continue;
+    }
+    if (start > cursor) {
+      segments.push({ type: "plain", text: block.text.slice(cursor, start) });
+    }
+    segments.push({ type: "claim", text: block.text.slice(start, end), claim });
+    cursor = end;
+  }
+  if (cursor < block.text.length) {
+    segments.push({ type: "plain", text: block.text.slice(cursor) });
+  }
+  return segments;
+};
+
+export const segmentProse = (
+  blocks: readonly VerificationBlock[],
+  claims: readonly VerificationClaim[],
+): ProseBlock[] =>
+  blocks
+    .toSorted((a, b) => a.ordinal - b.ordinal)
+    .map((block) => ({
+      ordinal: block.ordinal,
+      pageNumber: block.kind === "pdf-page" ? block.pageNumber : null,
+      segments: segmentProseBlock(block, claims),
+    }));
+
+export const proseReadingOrder = (
+  blocks: readonly ProseBlock[],
+): VerificationClaim["id"][] =>
+  blocks.flatMap((block) =>
+    block.segments.flatMap((segment) =>
+      segment.type === "claim" ? [segment.claim.id] : [],
+    ),
+  );
+
+export type ClaimPresentation =
+  | {
+      type: "prose";
+      blocks: ProseBlock[];
+      readingOrder: VerificationClaim["id"][];
+    }
+  | {
+      type: "passages";
+      passages: ClaimPassage[];
+      readingOrder: VerificationClaim["id"][];
+    };
+
+/** Use segmented source text only when it preserves every claim. */
+export const selectClaimPresentation = (
+  blocks: readonly VerificationBlock[],
+  claims: readonly VerificationClaim[],
+): ClaimPresentation => {
+  const prose = segmentProse(blocks, claims);
+  const proseOrder = proseReadingOrder(prose);
+  const proseClaimIds = new Set(proseOrder);
+  if (
+    prose.length > 0 &&
+    proseClaimIds.size === claims.length &&
+    claims.every((claim) => proseClaimIds.has(claim.id))
+  ) {
+    return { type: "prose", blocks: prose, readingOrder: proseOrder };
+  }
+
+  const passages = groupClaimsIntoPassages(claims);
+  return {
+    type: "passages",
+    passages,
+    readingOrder: passageReadingOrder(passages),
+  };
+};

@@ -12,10 +12,12 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const deleteTimeEntryBodySchema = t.Object({
   id: tSafeId("timeEntry", {
@@ -52,10 +54,12 @@ export const deleteTimeEntryHandler = async function* ({
           workspaceId: { eq: workspaceId },
         },
         columns: {
+          organizationId: true,
           status: true,
           workItemId: true,
           userId: true,
           dateWorked: true,
+          timezoneId: true,
           durationMinutes: true,
           billedMinutes: true,
           rateAtEntry: true,
@@ -105,6 +109,27 @@ export const deleteTimeEntryHandler = async function* ({
         message: "Cannot delete a billed entry; revert the invoice first",
       }),
     );
+  }
+
+  // An already written-off entry needs no write or policy check.
+  if (existing.status === BILLING_STATUS.WRITTEN_OFF) {
+    return Result.ok({ deleted: false });
+  }
+
+  const policy = yield* Result.await(
+    readTimePolicy({ safeDb, organizationId: existing.organizationId }),
+  );
+  const today = yield* formatTodayInTimeZone({
+    timezoneId: existing.timezoneId,
+  });
+  const policyViolation = getTimePolicyViolation({
+    policy,
+    dateWorked: existing.dateWorked,
+    today,
+    canApprove: canApproveTimeEntries(actor.memberRole),
+  });
+  if (policyViolation) {
+    return Result.err(policyViolation);
   }
 
   if (existing.status === BILLING_STATUS.DRAFT) {
@@ -159,12 +184,6 @@ export const deleteTimeEntryHandler = async function* ({
       );
     }
     return Result.ok({ deleted: true });
-  }
-
-  // Already written off: avoid a no-op UPDATE that would emit a
-  // misleading audit event recording old and new status as identical.
-  if (existing.status === BILLING_STATUS.WRITTEN_OFF) {
-    return Result.ok({ deleted: false });
   }
 
   // Non-draft entries get written off instead of deleted

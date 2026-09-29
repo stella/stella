@@ -28,6 +28,10 @@ export const brandPersistedWorkspaceId = (
   workspaceId: string,
 ): SafeId<"workspace"> => toSafeId<"workspace">(workspaceId);
 
+export const brandPersistedSavedTimeNarrativeId = (
+  id: string,
+): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
+
 export const brandPersistedTemplateId = (
   templateId: string,
 ): SafeId<"template"> => toSafeId<"template">(templateId);
@@ -35,6 +39,10 @@ export const brandPersistedTemplateId = (
 export const brandPersistedStyleSetId = (
   styleSetId: string,
 ): SafeId<"styleSet"> => toSafeId<"styleSet">(styleSetId);
+
+export const brandPersistedSellerProfileId = (
+  sellerProfileId: string,
+): SafeId<"sellerProfile"> => toSafeId<"sellerProfile">(sellerProfileId);
 
 export const brandPersistedAiMemoryId = (
   aiMemoryId: string,
@@ -277,6 +285,11 @@ export const brandPersistedTimeEntryId = (
 export const brandPersistedUserId = (userId: string): SafeId<"user"> =>
   toSafeId<"user">(userId);
 
+export const brandNullablePersistedUserId = (
+  userId: string | null,
+): SafeId<"user"> | null =>
+  userId === null ? null : brandPersistedUserId(userId);
+
 export const brandPersistedOrganizationId = (
   organizationId: string,
 ): SafeId<"organization"> => toSafeId<"organization">(organizationId);
@@ -348,3 +361,20 @@ export const brandPersistedSignalId = (signalId: string): SafeId<"signal"> =>
 export const brandPersistedNotificationId = (
   notificationId: string,
 ): SafeId<"notification"> => toSafeId<"notification">(notificationId);
+
+// UUIDv8 keeps a replayed drop tenant-scoped without retaining its source bytes.
+export const brandDerivedCorrespondenceDropId = (
+  workspaceId: SafeId<"workspace">,
+  deliveryKey: string,
+): SafeId<"correspondenceDropLog"> => {
+  const hex = new Bun.CryptoHasher("sha256")
+    .update(`${workspaceId}:${deliveryKey}`)
+    .digest("hex");
+  return toSafeId<"correspondenceDropLog">(
+    `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`,
+  );
+};
+
+export const brandPersistedCorrespondenceDropId = (
+  id: string,
+): SafeId<"correspondenceDropLog"> => toSafeId<"correspondenceDropLog">(id);

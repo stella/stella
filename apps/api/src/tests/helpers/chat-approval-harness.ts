@@ -5,7 +5,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
+import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
@@ -29,9 +29,13 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  type ChatRefRegistry,
+  createChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import {
   findLiveViewViolations,
@@ -64,6 +68,7 @@ import {
 } from "@/api/tests/helpers/chat-thread-invariants";
 import { createWebChatClient } from "@/api/tests/helpers/chat-web-client";
 import type { WebChatClient } from "@/api/tests/helpers/chat-web-client";
+import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -85,6 +90,13 @@ export const APPROVAL_TOOL_NAME = "mcp__external__delete";
  */
 export const PLAIN_TOOL_NAME = "list_templates";
 export const PLAIN_TOOL_ARGUMENTS = "{}";
+/**
+ * A server tool, behind an approval like every external tool, whose output
+ * shows the model document refs minted by the request's own registry, as a
+ * direct tool does (`create_matter_document`, `save_document`). Registered
+ * only when a harness asks for it.
+ */
+export const DIRECT_REF_TOOL_NAME = "mcp__external__list_documents";
 
 /** Arguments the scripted provider passes to the approval-gated tool. */
 export const approvalToolArguments = (name: string): string =>
@@ -141,9 +153,11 @@ const CHAT_TURN_CANCEL_PATH =
   /^\/v1\/chat\/threads\/(?<threadId>[^/]+)\/turns\/(?<turnId>[^/]+)\/cancel$/u;
 const LIVE_TURN_STATUSES = ["accepted", "running"] as const;
 const MAX_BARRIER_POLLS = 2000;
-/** The checks a hand-built send answers for: the stored thread's, and the
- *  run's independence from its request. */
+/** The checks a hand-built send answers for: the stored thread's, the
+ *  requests the provider was handed, and the run's independence from its
+ *  request. */
 const STORED_THREAD_ORACLES: ReadonlySet<ChatOracleId> = new Set([
+  CHAT_ORACLE.providerTranscriptSettled,
   CHAT_ORACLE.persistedCallsSettled,
   CHAT_ORACLE.persistedPendingOwned,
   CHAT_ORACLE.persistedRefsStable,
@@ -186,7 +200,14 @@ const statusResponse = (answer: unknown): Response => {
  */
 export type HarnessModel = Pick<
   ReturnType<typeof installScriptedProvider>,
-  "modelOptionsOf" | "restore" | "script" | "stalled" | "takeFindings"
+  | "modelOptionsOf"
+  | "promptLedgerOf"
+  | "promptsOf"
+  | "restore"
+  | "script"
+  | "stalled"
+  | "takeFindings"
+  | "takeRequests"
 >;
 
 export const createApprovalHarness = ({
@@ -196,8 +217,11 @@ export const createApprovalHarness = ({
   safeDb,
   scopedDb,
   testDb,
+  withDirectRefTool = false,
 }: {
   ids: TestIds;
+  /** Registers `DIRECT_REF_TOOL_NAME` too. */
+  withDirectRefTool?: boolean | undefined;
   /** Defaults to the scripted provider. */
   model?: HarnessModel | undefined;
   /** The organization's model selection; defaults to the harness's own. */
@@ -225,6 +249,26 @@ export const createApprovalHarness = ({
     return await Promise.resolve({ deleted: name });
   });
   const refLedger = createRefStabilityLedger();
+  /** The registry the newest request built: the one a running tool uses. */
+  let requestRegistry: ChatRefRegistry | undefined;
+  const directRefTool = toolDefinition({
+    name: DIRECT_REF_TOOL_NAME,
+    description: "Lists the documents the user can access, by ref",
+    inputSchema: toTanStackToolSchema(v.object({})),
+    needsApproval: true,
+  }).server(async () => {
+    const registry =
+      requestRegistry ?? panic("A tool runs inside a request that built one");
+    return await Promise.resolve({
+      documents: [
+        { entityId: ids.entityA2, name: "entityA2", workspaceId: ids.wsA2 },
+        { entityId: ids.entityA1, name: "entityA1", workspaceId: ids.wsA1 },
+      ].map(({ entityId, name, workspaceId }) => ({
+        id: registry.toEntityRef({ entityId, workspaceId }),
+        name,
+      })),
+    });
+  });
   const sendMessageDependencies = {
     indexThread: async () => await Promise.resolve(undefined),
     loadExternalMcpTools: async () => {
@@ -236,7 +280,12 @@ export const createApprovalHarness = ({
           closeClients: close,
           sourceTools: {},
         }),
-        tools: { [APPROVAL_TOOL_NAME]: approvalTool },
+        tools: {
+          [APPROVAL_TOOL_NAME]: approvalTool,
+          ...(withDirectRefTool
+            ? { [DIRECT_REF_TOOL_NAME]: directRefTool }
+            : {}),
+        },
       });
     },
     loadWebSearchProviders: async () =>
@@ -257,8 +306,10 @@ export const createApprovalHarness = ({
     }
     const created = createSendMessage({
       ...sendMessageDependencies,
-      createRefRegistry: (bindings, retired) =>
-        refLedger.track(threadId, createChatRefRegistry(bindings, retired)),
+      createRefRegistry: (bindings, retired) => {
+        requestRegistry = createChatRefRegistry(bindings, retired);
+        return refLedger.track(threadId, requestRegistry);
+      },
     });
     handlers.set(threadId, created);
     return created;
@@ -296,6 +347,7 @@ export const createApprovalHarness = ({
       getWorkspaceAccess: async () => await Promise.resolve(null),
       memberRole: { role: "owner" },
       orgAIConfig: organizationAIConfig,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),
@@ -580,6 +632,7 @@ export const createApprovalHarness = ({
         }),
         ...(await findPersistedViolations(threadId)),
         ...(await findUnstableRefs(threadId)),
+        ...findTranscriptViolations(provider.takeRequests(threadId)),
       ],
     } as const;
   };
@@ -640,6 +693,10 @@ export const createApprovalHarness = ({
   const crashDuring = async (body: SendBody): Promise<Response> => {
     const threadId = body.threadId;
     const stalled = provider.stalled(threadId);
+    // What the dying process sent the model and never stored is gone: the
+    // thread's next request cannot repeat it.
+    const prompts = provider.promptLedgerOf(threadId);
+    const beforeCrash = prompts.mark();
     // The dying process never sees the page go away, so no signal reaches it.
     const result = await handle(contextFromBody(body));
     if (!(result instanceof Response && result.ok)) {
@@ -648,6 +705,7 @@ export const createApprovalHarness = ({
     // Reading the stream is what runs the turn; it stops at the stall.
     void drainResponse(result);
     await stalled;
+    prompts.loseSince(beforeCrash);
     // The earliest lease the row allows: just after the turn was created.
     await testDb
       .update(chatTurns)
@@ -850,6 +908,9 @@ export const createApprovalHarness = ({
       };
     }
     const endRecord = beginRecord(raw);
+    if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
+      provider.promptLedgerOf(raw.threadId).replacesTail();
+    }
     if (crashingThreads.delete(raw.threadId)) {
       try {
         const refused = await crashDuring(raw);
@@ -995,7 +1056,7 @@ export const createApprovalHarness = ({
       reloadView(threadId),
       findPersistedViolations(threadId),
     ]);
-    const { unconsumedScripts, unscriptedCalls } =
+    const { changedToolResults, unconsumedScripts, unscriptedCalls } =
       provider.takeFindings(threadId);
     const requests = clientFindings.splice(0);
     const refusals = requests.filter(
@@ -1019,6 +1080,12 @@ export const createApprovalHarness = ({
         ...unconsumedScripts.map((script) => ({ unconsumed: script })),
         ...unscriptedCalls.map((call) => ({ unscripted: call })),
       ]),
+      ...violationsOf(
+        CHAT_ORACLE.providerPrefixStable,
+        provider.promptLedgerOf(threadId).takeBreaks(),
+      ),
+      ...findTranscriptViolations(provider.takeRequests(threadId)),
+      ...violationsOf(CHAT_ORACLE.providerResultsStable, changedToolResults),
       ...violationsOf(CHAT_ORACLE.clientNoErrors, [
         ...(expectsError ? [] : errors),
         ...(expectsError && errors.length === 0
@@ -1074,12 +1141,15 @@ export const createApprovalHarness = ({
    * approval goes through `openWebClient` instead.
    */
   const approveContext = ({
+    approved = true,
     call,
     interruptedRunId,
     messageId,
     parts,
     threadId,
   }: {
+    /** Deny the call instead. */
+    approved?: boolean | undefined;
     call: ApprovalCall;
     interruptedRunId: string;
     messageId: SafeId<"chatMessage">;
@@ -1093,7 +1163,7 @@ export const createApprovalHarness = ({
           part.type === "tool-call" && part.id === call.id
             ? {
                 ...call,
-                approval: { ...call.approval, approved: true },
+                approval: { ...call.approval, approved },
                 state: "approval-responded",
               }
             : part,
@@ -1105,7 +1175,7 @@ export const createApprovalHarness = ({
         items: [
           {
             interruptId: call.approval.id,
-            payload: { approved: true },
+            payload: { approved },
             status: "resolved",
           },
         ],
@@ -1164,6 +1234,8 @@ export const createApprovalHarness = ({
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>
       provider.modelOptionsOf(threadId),
+    /** The prompt of each of `threadId`'s model calls so far. */
+    promptsOf: (threadId: SafeId<"chatThread">) => provider.promptsOf(threadId),
     /** Queues the model's runs for `threadId`'s next requests, one each. */
     script: (threadId: SafeId<"chatThread">, ...runs: ScriptedRun[]) => {
       provider.script(threadId, ...runs);

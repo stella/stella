@@ -27,6 +27,8 @@ const runSelector = (
   outputs: readonly string[],
   suiteDepth = "fast",
   e2eLandingRequired = "false",
+  event = "pull_request",
+  title = "",
 ) => {
   const process = Bun.spawnSync({
     cmd: [
@@ -42,7 +44,9 @@ printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
     ],
     env: {
       E2E_LANDING_REQUIRED: e2eLandingRequired,
+      EVENT_NAME: event,
       PATH: Bun.env["PATH"] ?? "",
+      PR_TITLE: title,
       SUITE_DEPTH: suiteDepth,
     },
     stdout: "pipe",
@@ -212,6 +216,53 @@ test("the generated-output guards skip unrelated pull requests but never full de
   }
 });
 
+test("route tree freshness follows route inputs and full-depth runs", () => {
+  for (const file of [
+    "apps/web/src/routes/index.tsx",
+    "apps/web/src/routes/law/route.tsx",
+    "apps/web/vite.config.ts",
+    "apps/web/route-tree.config.ts",
+    "apps/web/scripts/generate-route-tree.ts",
+    "apps/web/src/routeTree.gen.ts",
+    "bun.lock",
+  ]) {
+    expect(runSelector([file], ["route_tree_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+  expect(runSelector(["docs/changelog/x.md"], ["route_tree_required"])).toEqual(
+    ["false"],
+  );
+  expect(
+    runSelector(["docs/changelog/x.md"], ["route_tree_required"], "full"),
+  ).toEqual(["true"]);
+});
+
+test("the lockfile release-age guard follows every tracked lockfile", () => {
+  for (const file of [
+    "bun.lock",
+    ".claude/mcp/bun.lock",
+    "tools/nested/bun.lock",
+    "scripts/check-lockfile-release-ages.ts",
+    "scripts/check-lockfile-release-ages.test.ts",
+    "scripts/check-stll-quarantine-excludes.ts",
+  ]) {
+    expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
+      "true",
+    ]);
+  }
+  for (const file of [
+    "package.json",
+    "bunfig.toml",
+    "apps/web/package.json",
+    "docs/bun.lock.md",
+  ]) {
+    expect(runSelector([file], ["lockfile_ages_required"]), file).toEqual([
+      "false",
+    ]);
+  }
+});
+
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
 
 const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
@@ -224,6 +275,37 @@ const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
     )
     .map(({ platform }) => platform)
     .toSorted();
+
+test("a fix pull request that changes an API test plans the fix-tests-on-base check", () => {
+  const plan = (event: string, title: string, files: readonly string[]) =>
+    runSelector(
+      files,
+      ["fix_tests_on_base_required"],
+      "fast",
+      "false",
+      event,
+      title,
+    )[0];
+  const apiTest = "apps/api/src/handlers/chat/stream-chat.test.ts";
+  for (const title of [
+    "fix: keep ids",
+    "fix(chat): keep ids",
+    "fix(api)!: keep ids",
+  ]) {
+    expect(plan("pull_request", title, ["README.md", apiTest]), title).toBe(
+      "true",
+    );
+  }
+  expect(plan("pull_request", "feat(chat): keep ids", [apiTest])).toBe("false");
+  expect(plan("pull_request", "fixup: keep ids", [apiTest])).toBe("false");
+  expect(plan("merge_group", "", [apiTest])).toBe("false");
+  expect(
+    plan("pull_request", "fix(chat): keep ids", [
+      "apps/api/src/handlers/chat/stream-chat.ts",
+      "packages/ai/src/stream.test.ts",
+    ]),
+  ).toBe("false");
+});
 
 test("a pull request builds the API image for arm64 unless it releases", () => {
   fc.assert(
@@ -753,6 +835,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
   ).steps;
   for (const [name, scope] of [
     ["Web API types drift guard", "web_api_types_required"],
+    ["Route tree drift guard", "route_tree_required"],
     ["Published export map guard", "published_exports_required"],
   ] as const) {
     const condition = steps.find((step) => step.name === name)?.if ?? "";

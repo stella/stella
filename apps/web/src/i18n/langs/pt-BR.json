@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "por exemplo Padrão 2025"
     },
     "revertToDraft": "Reverter para rascunho",
+    "savedNarratives": {
+      "empty": "Salve uma descrição para usá-la novamente.",
+      "save": "Salvar descrição",
+      "title": "Descrições salvas"
+    },
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
@@ -801,6 +806,12 @@
       "resultsFor": "Resultados de: <bdi>{query}</bdi>",
       "searchEveryWord": "Pesquisar todas as palavras"
     },
+    "seo": {
+      "collectionName": "Jurisprudência stella",
+      "description": "Base pública de jurisprudência com decisões judiciais e fontes jurídicas indexáveis.",
+      "homeDescription": "Base jurídica pública com decisões judiciais e normas consolidadas; busca por identificador ou por palavras.",
+      "scopedDescription": "Base pública de jurisprudência de {scope}, com decisões judiciais e fontes jurídicas indexáveis."
+    },
     "showWholeHeadnote": "Mostrar a ementa completa",
     "sort": {
       "newest": "Mais recentes",
@@ -878,6 +889,7 @@
       "apiKey": "Chave de API",
       "none": "Sem configuração"
     },
+    "skillNeedsUnavailableTools": "Não é oferecida no chat. Precisa de uma ferramenta que não está disponível lá: {tools}",
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Criar DOCX",
@@ -971,7 +983,15 @@
       "searchFiles": "Pesquisar arquivos",
       "searchMatters": "Pesquisar casos",
       "searchMcpServers": "Pesquisar servidores MCP...",
-      "searchSkills": "Pesquisar habilidades"
+      "searchSkills": "Pesquisar habilidades",
+      "skillNeeds": {
+        "browserExtension": "Conecte a extensão do navegador para usar esta habilidade",
+        "document": "Abra um documento para usar esta habilidade",
+        "matter": "Inicie um chat em um caso para usar esta habilidade",
+        "rawSendMode": "Indisponível em chats anonimizados",
+        "reviewEdits": "Mude as edições para revisão manual para usar esta habilidade",
+        "webSearch": "Ative a busca na web para usar esta habilidade"
+      }
     },
     "contextMeter": {
       "attachments": "Documentos anexados",
@@ -1056,6 +1076,10 @@
       "loadError": "Falha ao carregar itens"
     },
     "messageTimestampToday": "Hoje, {time}",
+    "mockModel": {
+      "description": "Respostas prontas do modelo simulado local",
+      "label": "IA simulada"
+    },
     "modelSelector": {
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
@@ -1474,6 +1498,7 @@
     "displayName": "Nome de exibição",
     "document": "Documento",
     "documentName": "Nome do documento",
+    "documentPage": "<bdi>{document}</bdi> · pág. {page}",
     "documentReference": "Referência do documento",
     "documentTitle": "Título do documento",
     "documentation": "Documentação",
@@ -1617,6 +1642,7 @@
     "profile": "Perfil",
     "properties": "Propriedades",
     "queued": "Na fila",
+    "reason": "Motivo",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
     "refresh": "Atualizar",
@@ -1942,6 +1968,19 @@
     "deliveredBy": "Entregue por <address>{sender}</address>",
     "deliveredByAuthenticated": "Entregue por <address>{sender}</address> · autenticado",
     "deliveryAuthentication": "Autenticação da entrega",
+    "drops": {
+      "authenticationHint": "Peça ao administrador de e-mail do remetente para configurar <protocol>SPF</protocol>, <protocol>DKIM</protocol> e <protocol>DMARC</protocol> para o domínio de envio.",
+      "reasons": {
+        "attachmentRejected": "Anexo rejeitado",
+        "authenticationFailed": "Falha na autenticação da entrega",
+        "malformedMessage": "Não foi possível ler a mensagem",
+        "messageTooLarge": "Mensagem muito grande",
+        "revokedAddress": "Endereço de e-mail revogado",
+        "unauthorizedSender": "Remetente não autorizado",
+        "unknownRecipient": "Destinatário desconhecido"
+      },
+      "title": "Entregas rejeitadas"
+    },
     "empty": "Ainda não há correspondência.",
     "filers": "Remetentes",
     "forwardedBy": "Encaminhado por <address>{sender}</address>",
@@ -4337,6 +4376,7 @@
     "compareVersionMissing": "A versão a comparar não está no histórico deste ato.",
     "compareWholeAct": "Comparar o ato inteiro",
     "compareWithVersion": "Comparar com {version}",
+    "description": "Base pública de normas consolidadas, indexáveis por norma e versão.",
     "diffInserted": "Inserido:",
     "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versão não tem texto disponível.",
@@ -5133,6 +5173,57 @@
       "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
       "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
+      "pdfSigning": {
+        "action": "Assinar no desktop",
+        "cancelledBaseVersionDescription": "O documento mudou durante a assinatura. Abra a versão mais recente e assine novamente.",
+        "cancelledCertificateDescription": "O certificado escolhido não pode ser usado para assinar. Escolha um que permita assinaturas digitais.",
+        "cancelledCertifiedDescription": "Este PDF é certificado, e a certificação não permite novas assinaturas.",
+        "cancelledDescription": "A assinatura não foi concluída.",
+        "cancelledDigestDescription": "A assinatura não correspondeu ao documento preparado. Tente assinar novamente.",
+        "cancelledFailedDescription": "Não foi possível adicionar a assinatura a este PDF.",
+        "cancelledPlatformDescription": "Assinar com um certificado do chaveiro do sistema funciona, por enquanto, no macOS.",
+        "cancelledRevokedDescription": "O certificado escolhido, ou um que o emitiu, foi revogado. Escolha um certificado válido.",
+        "cancelledSignatureDescription": "A assinatura do stella desktop não correspondeu ao certificado escolhido. Tente assinar novamente.",
+        "cancelledStampNameDescription": "O nome do titular do certificado não pode ser exibido em um carimbo visível. Assine novamente com uma assinatura invisível.",
+        "cancelledStampOverflowDescription": "O texto do carimbo não cabe na área desenhada. Desenhe um carimbo maior, encurte o motivo ou o local, ou use uma assinatura invisível.",
+        "cancelledTitle": "Assinatura cancelada",
+        "cancelledUserDescription": "A assinatura foi cancelada no stella desktop.",
+        "cancelledWouldBreakSignaturesDescription": "Assinar este PDF invalidaria as assinaturas que ele já contém.",
+        "encryptedDescription": "Este PDF está protegido por senha. Remova a proteção antes de assinar.",
+        "expiredDescription": "O stella desktop não concluiu a assinatura a tempo. Inicie-o e tente novamente.",
+        "expiredTitle": "Tempo de assinatura esgotado",
+        "inProgressDescription": "Este arquivo já está sendo assinado. Conclua ou cancele essa assinatura no stella desktop primeiro.",
+        "noFileDescription": "Este documento não tem arquivo para assinar.",
+        "notAPdfDescription": "Somente arquivos PDF podem ser assinados.",
+        "placementBox": "Posição do carimbo",
+        "placementConfirm": "Abrir o stella desktop",
+        "placementDescription": "Escolha como a assinatura aparece no PDF.",
+        "placementHint": "Arraste o carimbo para movê-lo ou arraste o canto dele para redimensioná-lo. Com o carimbo selecionado, as setas o movem e Shift com uma seta o redimensiona.",
+        "placementInvisible": "Assinatura invisível",
+        "placementInvisibleDescription": "A assinatura fica gravada no arquivo, sem marca em nenhuma página.",
+        "placementPageLabel": "Página do carimbo",
+        "placementPageOption": "Página {page, number} de {count, number}",
+        "placementPreview": "Prévia da página {page, number}",
+        "placementPreviewFailed": "Não foi possível carregar a prévia da página.",
+        "placementTitle": "Assinar PDF",
+        "placementTooSmall": "Esta página é pequena demais para um carimbo. Escolha outra página.",
+        "placementVisible": "Carimbo visível",
+        "placementVisibleDescription": "Um quadro na página mostra quem assinou e quando.",
+        "readOnlyDescription": "Este documento é somente leitura.",
+        "signedDescription": "A assinatura foi salva como a versão {versionNumber, number}.",
+        "signedDescriptionNoVersion": "A assinatura foi salva como uma nova versão.",
+        "signedTitle": "PDF assinado",
+        "stampLocation": "Local",
+        "stampRejectedDescription": "Não é possível colocar o carimbo nesse local. Posicione-o novamente e tente outra vez.",
+        "stampSignedBy": "Assinado digitalmente por",
+        "stampTextUnrenderableDescription": "O motivo ou o local não pode ser exibido em um carimbo visível. Altere o texto ou use uma assinatura invisível.",
+        "startFailedTitle": "Não é possível assinar este arquivo",
+        "statusUnavailableDescription": "Confira o histórico de versões para ver se a assinatura foi salva.",
+        "statusUnavailableTitle": "Status da assinatura indisponível",
+        "tooLargeDescription": "Este PDF é grande demais para ser assinado.",
+        "waitingDescription": "Escolha um certificado de assinatura no stella desktop para assinar este PDF.",
+        "waitingTitle": "Aguardando o stella desktop"
+      },
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "O que fazer com {fileName}",

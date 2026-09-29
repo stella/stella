@@ -12,6 +12,7 @@ export const timeEntryReadColumns = {
   rateAtEntry: timeEntries.rateAtEntry,
   currency: timeEntries.currency,
   narrative: timeEntries.narrative,
+  narrativeLanguage: timeEntries.narrativeLanguage,
   invoiceNarrative: timeEntries.invoiceNarrative,
   billable: timeEntries.billable,
   noCharge: timeEntries.noCharge,

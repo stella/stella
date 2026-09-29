@@ -46,6 +46,7 @@ export type TimeEntryFormValues = {
   dateWorked: string;
   durationMinutes: number;
   narrative: string;
+  narrativeLanguage: string | null;
   invoiceNarrative?: string;
   billable: boolean;
   taskCode?: string;
@@ -97,6 +98,7 @@ export const TimeEntryForm = ({
     dateWorked: v.string(),
     durationMinutes: v.number(),
     narrative: v.string(),
+    narrativeLanguage: v.nullable(v.string()),
     invoiceNarrative: v.string(),
     billable: v.boolean(),
     taskCode: v.string(),
@@ -114,6 +116,7 @@ export const TimeEntryForm = ({
         dateWorked: defaultValues?.dateWorked ?? today,
         durationMinutes: defaultValues?.durationMinutes ?? 6,
         narrative: defaultValues?.narrative ?? "",
+        narrativeLanguage: defaultValues?.narrativeLanguage ?? null,
         invoiceNarrative: defaultValues?.invoiceNarrative ?? "",
         billable: defaultValues?.billable ?? true,
         taskCode: defaultValues?.taskCode ?? "",
@@ -160,6 +163,10 @@ export const TimeEntryForm = ({
   }, [resolved, rateOverride, form]);
 
   const currentRate = useSelector(form.store, (s) => s.values.rateAtEntry);
+  const narrativeLanguage = useSelector(
+    form.store,
+    (s) => s.values.narrativeLanguage,
+  );
   const currentCurrency = useSelector(form.store, (s) => s.values.currency);
   const formErrors = useSelector(form.store, (state) =>
     toFormErrors(state.fieldMeta),
@@ -286,6 +293,10 @@ export const TimeEntryForm = ({
           <TimeEntryNarrativeField
             id="billing-time-entry-narrative"
             onChange={field.handleChange}
+            onLanguageChange={(language) =>
+              form.setFieldValue("narrativeLanguage", language)
+            }
+            narrativeLanguage={narrativeLanguage}
             rows={3}
             value={field.state.value}
             workspaceId={workspaceId}

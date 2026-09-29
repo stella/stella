@@ -1,9 +1,9 @@
-import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { formatMoneyCents } from "@stll/money";
 import { parsePlainDate, Temporal } from "@stll/time";
 import { BidiText } from "@stll/ui/bidi-text";
+import { Loader2Icon, SquareMinusIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 import {
   ClipFieldValue,

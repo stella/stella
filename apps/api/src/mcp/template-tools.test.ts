@@ -260,6 +260,8 @@ const createContext = ({
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const TEMPLATE_ID = "00000000-0000-4000-8000-000000000000";
+/** A well-formed id this organization holds no template under. */
+const UNKNOWN_TEMPLATE_ID = "5f0c9d2e-8b7a-4c1d-9e3f-6a2b4c8d0e1f";
 const ENTITY_ID = "00000000-0000-4000-8000-000000000001";
 const FOLDER_ID = "00000000-0000-4000-8000-000000000002";
 const MISSING_FOLDER_ID = "00000000-0000-4000-8000-000000000003";
@@ -396,7 +398,7 @@ describe("MCP template tools", () => {
     configureTemplateFieldsMock.mockReset();
     templateDecideConditionsLogicMock.mockReset();
     loadOrgAIConfigMock.mockReset();
-    loadOrgAIConfigMock.mockResolvedValue(null);
+    loadOrgAIConfigMock.mockResolvedValue(Result.ok(null));
     anonymizeTextFieldsMock.mockReset();
   });
 
@@ -2942,11 +2944,9 @@ describe("MCP template tools", () => {
   });
 
   /**
-   * A model that fills every property invents a `template_id`: one wrote
-   * `00000000-0000-0000-0000-000000000000` beside a name and a document. An id
-   * the organization does not own must be a `not_found`, never a silent create
-   * and never a reach into another tenant's template. The writer resolves the
-   * template under the caller's organization, so a foreign id is
+   * An id the organization does not own must be a `not_found`, never a silent
+   * create and never a reach into another tenant's template. The writer
+   * resolves the template under the caller's organization, so a foreign id is
    * indistinguishable from a missing one, which is the point.
    */
   test("create_template with an unknown template_id is not found, and creates nothing", async () => {
@@ -2959,7 +2959,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        template_id: "00000000-0000-0000-0000-000000000000",
+        template_id: UNKNOWN_TEMPLATE_ID,
         name: "NDA",
         docx_base64: await makeValidDocxBase64(),
       },
@@ -2982,7 +2982,7 @@ describe("MCP template tools", () => {
 
     const result = await handleMcpToolCall({
       args: {
-        template_id: "00000000-0000-0000-0000-000000000000",
+        template_id: UNKNOWN_TEMPLATE_ID,
         name: "Renamed",
       },
       context: createContext(),
@@ -2991,6 +2991,34 @@ describe("MCP template tools", () => {
 
     expect(result.isError).toBe(true);
     expect(validationEnvelope(result)["code"]).toBe("not_found");
+    expect(createStoredTemplateMock).not.toHaveBeenCalled();
+    expect(writeStoredTemplateMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A model that fills every property invents a `template_id`: one wrote
+   * `00000000-0000-0000-0000-000000000000` beside a name and a document. On a
+   * write that id decides between updating a template and creating one, so a
+   * placeholder there is asked about: never a silent create, and never an
+   * update of a record nobody named.
+   */
+  test("create_template with a placeholder template_id asks, and writes nothing", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "00000000-0000-0000-0000-000000000000",
+        name: "NDA",
+        docx_base64: await makeValidDocxBase64(),
+      },
+      context: createContext(),
+      toolName: "create_template",
+    });
+
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      expect.objectContaining({ path: "template_id" }),
+    ]);
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
     expect(writeStoredTemplateMock).not.toHaveBeenCalled();
   });

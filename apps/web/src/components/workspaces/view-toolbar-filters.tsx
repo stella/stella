@@ -1,12 +1,5 @@
 import { useState } from "react";
 
-import {
-  CircleDotIcon,
-  FlagIcon,
-  MoreHorizontalIcon,
-  ShapesIcon,
-  SlidersHorizontalIcon,
-} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -23,6 +16,13 @@ import {
   CommandList,
   CommandSeparator,
 } from "@stll/ui/command";
+import {
+  CircleDotIcon,
+  FlagIcon,
+  MoreHorizontalIcon,
+  ShapesIcon,
+  SlidersHorizontalIcon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Menu,

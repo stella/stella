@@ -59,10 +59,12 @@ import type {
   McpToolResponse,
 } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   closestToolNames,
   confirmationUnavailableResult,
   cursorInput,
   DEFAULT_LIST_LIMIT,
+  didYouMean,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
   getWorkspaceStatus,
@@ -71,6 +73,7 @@ import {
   notFoundResult,
   nullAsAbsent,
   oauthScopeRecoveryHint,
+  quoteToolName,
   structuredErrorResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -584,6 +587,9 @@ const validatePart = ({
   // fields surface as issues rather than a whole-object "expected object" error.
   const base = value === undefined ? {} : structuredClone(value);
   const normalized = normalizeInputAtBoundary({
+    // A capability can write, and its catalog entry is not the tool's access,
+    // so a placeholder is asked about rather than read as "not set".
+    access: "write",
     path: part,
     schema,
     value: base,
@@ -863,11 +869,9 @@ const listCapabilitiesHandler: McpToolHandler<
   const afterId =
     cursor === undefined ? undefined : decodeCapabilityCursor(cursor);
   if (afterId === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Malformed cursor" }],
-      hint: "Pass the cursor verbatim as returned by a previous call, or omit it for the first page.",
+    return invalidCursorResult({
+      cursor: cursor ?? "",
+      tool: "list_capabilities",
     });
   }
 
@@ -950,7 +954,7 @@ const featureDisabledResult = (
 const hintForUnknownId = (id: string): string => {
   const suggestions = closestToolNames(id, CATALOG_IDS);
   return suggestions.length > 0
-    ? `Did you mean: ${suggestions.join(", ")}? Call list_capabilities to browse the full set.`
+    ? `${didYouMean(suggestions.map(quoteToolName))} Call list_capabilities to browse the full set.`
     : "Call list_capabilities to browse available capability ids.";
 };
 

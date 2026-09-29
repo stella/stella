@@ -129,7 +129,7 @@ const handleLawCompatSearchTool: McpToolHandler<
 
   const position = decodeCompatSearchCursor(cursor);
   if (position === null) {
-    return compatSearchCursorError();
+    return compatSearchCursorError(cursor ?? "");
   }
 
   const corpus = await searchCompatCorpus({

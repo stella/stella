@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
 import { loadPublicCourtWeightsForCountry } from "@/api/lib/case-law/public-case-law-config";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { LegalBrowseFacets } from "@/api/lib/legal-search/types";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -44,15 +45,6 @@ export type ShelfCourt = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-/** Drivers disagree: bun-sql returns the rows, pglite wraps them in `{ rows }`. */
-const rowsOf = (result: unknown): Record<string, unknown>[] => {
-  let rows: unknown = result;
-  if (!Array.isArray(result) && isRecord(result)) {
-    rows = result["rows"];
-  }
-  return Array.isArray(rows) ? rows.filter(isRecord) : [];
-};
-
 type ReadCourtNamesOptions = {
   caseLawDb: CaseLawPublicReadDb;
   country: string;
@@ -74,9 +66,11 @@ type ReadCourtNamesOptions = {
  *
  * Join-free by design: source policy is applied by the shelf statement that
  * follows, which drops a court whose public rows are none; the cap on shown
- * courts is taken after that, so a withheld court cannot hold a slot.
+ * courts is taken after that, so a withheld court cannot hold a slot. The
+ * agent court-filter reader uses the same list as its vocabulary: it maps a
+ * spelling onto a stored court, and the search it feeds applies the policy.
  */
-const readCourtNames = async ({
+export const readCourtNames = async ({
   caseLawDb,
   country,
 }: ReadCourtNamesOptions): Promise<string[]> => {
@@ -102,10 +96,12 @@ const readCourtNames = async ({
         WHERE court_walk.court IS NOT NULL
       `),
   );
-  return rowsOf(result).flatMap((row) => {
-    const court = row["court"];
-    return typeof court === "string" && court.length > 0 ? [court] : [];
-  });
+  return executedRows(result)
+    .filter(isRecord)
+    .flatMap((row) => {
+      const court = row["court"];
+      return typeof court === "string" && court.length > 0 ? [court] : [];
+    });
 };
 
 type CourtDocketSizesOptions = {

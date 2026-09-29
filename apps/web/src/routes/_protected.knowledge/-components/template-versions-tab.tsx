@@ -1,9 +1,9 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { DownloadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { DownloadIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { VersionList, VersionRow } from "@/components/versions/version-list";

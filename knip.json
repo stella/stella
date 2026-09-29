@@ -36,10 +36,13 @@
         "src/server.ts!",
         // Read by scripts/generate-web-api-types.ts through the compiler.
         "src/eden-contract.ts",
+        // Callable receiver boundary for authenticated mail transport hosts.
+        "src/lib/email/inbound/runtime.ts",
         "src/lib/files/pdf-worker.ts!",
         "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
         "src/lib/ocr-local/ocr-local-worker.ts!",
+        "src/lib/ocr-searchable-pdf-worker.ts!",
         "scripts/*.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
@@ -64,6 +67,9 @@
         "src/server.ts!",
         "src/runtime.ts!",
         "vite.config.ts",
+        // The generated route tree is ignored; this route owns billing dialogs
+        // loaded by the router and must remain in Knip's usage graph.
+        "src/routes/_protected.workspaces/$workspaceId/timesheets.tsx",
         "src/**/*.test.ts",
         "src/**/*.test.tsx",
         "e2e/**/*.spec.ts",
@@ -73,12 +79,15 @@
       // tailwindcss: imported by the app's Tailwind entry and consumed by
       // @tailwindcss/vite at build time, never at runtime, so the production
       // gate must not read the CSS import as a runtime dependency (the same
-      // shape as apps/landing's @tailwindcss/postcss).
+      // shape as apps/landing's @tailwindcss/postcss). lucide-react: source
+      // imports it through @stll/ui/icons; the app keeps the dependency so
+      // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
         "react-grab",
         "@libpdf/core",
         "@stll/docx-core",
         "@stll/docx-utils",
+        "lucide-react",
         "tailwindcss"
       ]
     },
@@ -132,6 +141,9 @@
     },
     "packages/permissions": {
       "entry": ["src/index.ts"]
+    },
+    "packages/runtime-mode": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/sanctions": {
       "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]

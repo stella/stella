@@ -1,7 +1,7 @@
-import { ListFilterIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { ComposerPicker } from "@stll/ui/composer";
+import { ListFilterIcon } from "@stll/ui/icons";
 
 import type { TranslationKey } from "@/i18n/types";
 import type { LawScope } from "@/routes/law/-law-home/jurisdictions";

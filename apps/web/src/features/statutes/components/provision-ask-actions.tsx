@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { ArrowUpIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { ArrowUpIcon, AiActionIcon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
@@ -162,7 +162,7 @@ export const ProvisionAskActions = ({
         size="sm"
         variant="outline"
       >
-        <WandSparklesIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
         {t("statutes.provisionAskSummarize")}
       </Button>
       <form

@@ -18,6 +18,7 @@ import type {
   PublicLawColumnGrantsByRelation,
   PublicLawColumnPair,
 } from "@/api/lib/public-law-relations";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
 
@@ -131,6 +132,7 @@ export const publicLawDatabaseRolePermissionsSql = (
   const requiredColumns = grantedColumns.filter(
     ({ grant }) => grant === "required",
   );
+  // sql-perf-allow: small table pg_catalog and information_schema role metadata
   return sql`
       WITH required(relation, column_name) AS (
         ${columnTupleSource(requiredColumns)}
@@ -459,7 +461,7 @@ const getPublicLawDatabase = async (): Promise<typeof rootDb> => {
     const database = drizzle({
       client,
       relations: databaseRelations,
-      logger: envBase.isDev ? queryCountLogger : undefined,
+      logger: isLocalDevOpen() ? queryCountLogger : undefined,
     });
     externalPublicLawDatabase = {
       database,

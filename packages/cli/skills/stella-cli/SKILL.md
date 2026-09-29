@@ -276,12 +276,12 @@ are omitted here.
 - `stella legislation boe-search`
   - optional: --query, --title, --department-code, --legal-range-code, --matter-code, --date-from, --date-to, --law-id, --block-id, --relation-type (modifies|modifiedBy|derogates|derogatedBy|all), --full-text
 - `stella legislation history`
-  - `--eli` — European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. (string)
+  - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - `--anchor` — Anchor of the provision in the publisher's own scheme. read_statute's outline lists a consolidation's provision anchors (par_1729); a subdivision of one of them is accepted too and narrows the answer to that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors are not derivable from a section number. (string)
   - optional: --language
 - `stella legislation provisions` — no flags; pass `--input` with items
 - `stella legislation read`
-  - `--eli` — European Legislation Identifier of the work, exactly as search_legislation returns it (for example /eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. (string)
+  - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - optional: --language, --as-of
 - `stella legislation search`
   - `--query` — Search query (string)
@@ -357,7 +357,7 @@ are omitted here.
 - `stella time-entry list`
   - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|approved|billed|written_off)
 - `stella time-entry save`
-  - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
+  - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --narrative-language, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
 - `stella usage get` — no arguments
 
 ## Exit codes
@@ -384,7 +384,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 360
+Beyond the curated commands above, the CLI generates 370
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;
@@ -407,7 +407,7 @@ invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `contacts`, `document-translations`, `document-types`, `documents`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `uploads`, `usage`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"00000000-0000-4000-8000-000000000000","fieldId":"00000000-0000-4000-8000-000000000000","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id> --input '{"body":{"serviceTier":"standard"}}'`.

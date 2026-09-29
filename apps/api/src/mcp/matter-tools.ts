@@ -87,6 +87,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
+  invalidCursorResult,
   bindWorkspaceRecorder,
   cursorInput,
   ensureActiveWorkspace,
@@ -97,7 +98,6 @@ import {
   ISO_DATE_SCHEMA,
   notFoundResult,
   nullAsAbsent,
-  structuredErrorResult,
   toolDataResult,
   uuidInputSchema,
   validationErrorResult,
@@ -1363,12 +1363,7 @@ const handleListTasksTool: TypedMcpToolHandler<
   const cursor =
     input.cursor === undefined ? null : decodeTaskListCursor(input.cursor);
   if (input.cursor !== undefined && cursor === null) {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Invalid cursor",
-      issues: [{ path: "cursor", message: "Invalid cursor" }],
-      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-    });
+    return invalidCursorResult({ cursor: input.cursor, tool: "list_tasks" });
   }
 
   const listed = await listTasksPage({

@@ -2,17 +2,18 @@ import type { ReactNode } from "react";
 import { useRef } from "react";
 
 import { panic } from "better-result";
-import { MessageSquarePlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ComposerStatusRow } from "@stll/ui/composer";
+import { MessageSquarePlusIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel } from "@stll/ui/popover";
 
 import {
   ChatContextMeter,
   type ChatContextUsage,
 } from "@/components/chat/chat-context-meter";
+import { ChatMockModelBadge } from "@/components/chat/chat-mock-model-badge";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatModelSelector } from "@/components/chat/chat-model-selector";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
@@ -116,8 +117,9 @@ const resolveChatComposerDockRenderState = (
 // The one organism that assembles a chat surface's status row. It
 // derives the standard controls from the thread session itself and
 // renders them through `ComposerStatusRow` in the canonical order
-// (context -> globe -> shield -> extras -> new chat -> model -> meter), so every
-// surface gets the full set by construction and cannot omit one.
+// (context -> globe -> shield -> extras -> new chat -> mock badge -> model ->
+// meter), so every surface gets the full set by construction and cannot omit
+// one.
 //
 // Anonymize source: the shield reads and writes the shared per-thread
 // send-mode store keyed by `threadRef` — the same store each surface's
@@ -191,6 +193,9 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
               </Popover>
             </>
           )}
+          {/* Beside the model it qualifies: while the local mock answers,
+              the selected model is not the one replying. */}
+          <ChatMockModelBadge />
           {models && <ChatModelSelector models={models} />}
           {/* The meter renders on every surface: it shows an empty ring
               for a brand-new thread (context null) and fills in once an

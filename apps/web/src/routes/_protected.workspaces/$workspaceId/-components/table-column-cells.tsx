@@ -1,5 +1,8 @@
 import { useState, type PropsWithChildren } from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
   EqualIcon,
@@ -7,11 +10,8 @@ import {
   MinusIcon,
   RefreshCwIcon,
   XIcon,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
+} from "@stll/ui/icons";
+import type { LucideIcon } from "@stll/ui/icons";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import Tooltip from "@/components/tooltip";

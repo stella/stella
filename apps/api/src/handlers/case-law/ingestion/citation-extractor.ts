@@ -16,6 +16,10 @@ import {
   polishKioDocketKey,
 } from "@stll/api-contract/decision-docket-grammar";
 import {
+  canonicalUsReporterCitation,
+  readsUsReporterCitations,
+} from "@stll/api-contract/us-reporter-citation";
+import {
   CZ_FILE_NUMBER_PREFIX_SOURCE,
   stripCitationPrefix,
 } from "@stll/legal-ast/citation-prefix";
@@ -1301,10 +1305,17 @@ type DecisionMetadata = {
   caseNumber: string;
   ecli?: string | null;
   identifiers?: DecisionIdentifiers | undefined;
+  /**
+   * The decision's jurisdiction. Identifiers are deduplicated under the key
+   * the row is stored with, which for some kinds depends on it: two spellings
+   * of one reporter citation are one row, not a primary-key collision.
+   */
+  jurisdiction?: string | undefined;
 };
 
 type StoredDecisionMetadata = {
   caseNumber: string;
+  country?: string | undefined;
   ecli: string | null;
   metadata: Record<string, unknown>;
 };
@@ -1315,6 +1326,7 @@ export const decisionIdentifiersFromMetadata = ({
   caseNumber,
   ecli,
   identifiers,
+  jurisdiction,
 }: DecisionMetadata): DecisionIdentifiers => {
   const caseNumberIdentifier = {
     type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
@@ -1342,7 +1354,7 @@ export const decisionIdentifiersFromMetadata = ({
     `${caseNumberIdentifier.type}:${normalizedCaseNumber}`,
   ]);
   const additional = candidates.slice(1).filter((identifier) => {
-    const normalized = normalizeDecisionIdentifier(identifier);
+    const normalized = normalizeDecisionIdentifierIn(jurisdiction, identifier);
     if (!normalized) {
       return false;
     }
@@ -1398,6 +1410,7 @@ const expandCompositeReporterIdentifier = (
 
 export const decisionIdentifiersFromStoredMetadata = ({
   caseNumber,
+  country,
   ecli,
   metadata,
 }: StoredDecisionMetadata): DecisionIdentifiers => {
@@ -1411,6 +1424,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
     return decisionIdentifiersFromMetadata({
       caseNumber,
       ecli,
+      jurisdiction: country,
       identifiers:
         firstIdentifier === undefined
           ? undefined
@@ -1471,6 +1485,7 @@ export const decisionIdentifiersFromStoredMetadata = ({
   return decisionIdentifiersFromMetadata({
     caseNumber,
     ecli,
+    jurisdiction: country,
     identifiers:
       firstIdentifier === undefined
         ? undefined
@@ -1543,6 +1558,38 @@ export const normalizeDecisionIdentifierValue = (
     }
   }
 };
+
+/**
+ * An identifier's stored key in the jurisdiction that holds it. Decision
+ * identifier rows are written through it, by ingestion and by the backfill,
+ * and exact lookup and search read through it, so writer and reader agree.
+ * In the reporter jurisdiction a reporter citation is keyed by its canonical
+ * volume, reporter and first page, so a variant abbreviation or a pin names
+ * the same decision. Everywhere else, and for every other type, the key is
+ * `normalizeDecisionIdentifier`'s, unchanged, so no stored key moves.
+ */
+export const normalizeDecisionIdentifierIn = (
+  jurisdiction: string | undefined,
+  identifier: DecisionIdentifier,
+): string =>
+  identifier.type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION &&
+  readsUsReporterCitations(jurisdiction)
+    ? normalizeStructuredDecisionIdentifier({
+        type: identifier.type,
+        value:
+          canonicalUsReporterCitation(identifier.value) ?? identifier.value,
+      })
+    : normalizeDecisionIdentifier(identifier);
+
+/** `normalizeDecisionIdentifierIn` for a value whose type is known apart. */
+export const normalizeDecisionIdentifierValueIn = (
+  jurisdiction: string | undefined,
+  type: DecisionIdentifierType,
+  value: string,
+): string =>
+  type === DECISION_IDENTIFIER_TYPES.REPORTER_CITATION
+    ? normalizeDecisionIdentifierIn(jurisdiction, { type, value })
+    : normalizeDecisionIdentifierValue(type, value);
 
 /**
  * Check whether a citation text refers to the same decision that

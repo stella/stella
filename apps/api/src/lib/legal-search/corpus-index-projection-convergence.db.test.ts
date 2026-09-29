@@ -107,7 +107,7 @@ test("the launch probe requires populated current state before census", async ()
         eq(corpusIndexProjectionStates.entityId, ENTITY_ID),
       ),
     );
-  expect(await readStatus()).toBe("blocked");
+  expect(await readStatus()).toBe("known_blocked");
 
   await db.insert(corpusIndexProjectionIntents).values({
     id: APPLIED_INTENT_ID,

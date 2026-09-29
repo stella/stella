@@ -193,6 +193,8 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   rate_table: null,
   report_export: null,
   saved_search: null,
+  seller_profile: null,
+  saved_time_narrative: null,
   signal: null,
   style_set: null,
   template: null,
@@ -203,6 +205,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   usage_entitlement: null,
   usage_event: null,
   view: null,
+  pdf_signing_session: null,
   view_template: null,
 } as const satisfies Record<AuditResourceType, ActivityTargetSource | null>;
 

@@ -19,6 +19,10 @@ export const CHAT_ORACLE = {
   persistedRefsStable: "chat.persisted.refs-stable",
   /** A settled turn's status and reason are the outcome its answer stores. */
   persistedTurnOutcome: "chat.persisted.turn-outcome",
+  /** A thread an earlier release stored loads on the current code, serves
+   *  every message, part and answer it held, and keeps them once continued;
+   *  and what the current code stores has a fixture. */
+  persistedPastReleaseLoads: "chat.persisted.past-release-loads",
   /** A turn's run does not depend on the request that started it: once the
    *  handler hands its response back, nothing reads the request, and its end
    *  cuts no turn short whose response is read to the end. */
@@ -43,6 +47,9 @@ export const CHAT_ORACLE = {
   liveEqualsReload: "chat.live.equals-reload",
   /** (d) Every tool call and result appears exactly once, live and reloaded. */
   liveToolPartsOnce: "chat.live.tool-parts-once",
+  /** The skills the composer offers in a chat are exactly the ones a send
+   *  from that chat runs rather than names unavailable. */
+  skillsMenuMatchesSend: "chat.skills.menu-matches-send",
   /** The route accepts every request the web client builds for its own
    *  thread. */
   clientRequestsAccepted: "chat.client.requests-accepted",
@@ -50,6 +57,19 @@ export const CHAT_ORACLE = {
   clientNoErrors: "chat.client.no-errors",
   /** Every scripted model run was requested, and no request went unscripted. */
   providerScriptsConsumed: "chat.provider.scripts-consumed",
+  /** Every request handed to a provider answers each tool call exactly once,
+   *  right after the message making it, with no result for a call it does
+   *  not hold; each signed thinking block stays, once and in order, first on
+   *  the message holding the calls it was produced with. */
+  providerTranscriptSettled: "chat.provider.transcript-settled",
+  /** Every model request of a thread begins with the whole prompt of the
+   *  one before it: its tools, system prompt and messages, in cache order
+   *  (`chat-prompt-prefix.ts`), so the provider's prompt cache holds. */
+  providerPrefixStable: "chat.provider.prefix-stable",
+  /** Once a turn is over, every later model call of the thread is handed
+   *  each of its tool results in the same text: a request
+   *  reads the earlier turns as stored, as the next one will. */
+  providerResultsStable: "chat.provider.results-stable",
   /** The cards on screen and the interactions stored are exactly the ones the
    *  conversation's ledger expects. */
   ledgerPending: "chat.ledger.pending",
@@ -60,6 +80,10 @@ export const CHAT_ORACLE = {
   /** Every action the page offers on the live view is one the conversation
    *  model's commands may take there. */
   modelCoversPageActions: "chat.model.covers-page-actions",
+  /** A code-mode script that calls a direct tool gets back that tool's name
+   *  and the instruction to call it outside the script, never a bare
+   *  "not defined" the model reads as a missing tool. */
+  codeModeMisplacedCallExplained: "chat.code-mode.misplaced-call-explained",
   // Reported by the web app's rendered replay of recorded conversations
   // (`apps/web/src/components/chat/recorded-conversations.dom.test.tsx`).
   /** The rendered page shows what the stored thread says: open cards,
@@ -80,7 +104,7 @@ export const CHAT_ORACLE = {
    *  throws. */
   providerWireOneTerminal: "chat.provider-wire.one-terminal",
   /** The run ends the way the wire did: the declared finish reason, or a
-   *  run error. */
+   *  run error; a stop reason no answer stands on never reads as one. */
   providerWireFinish: "chat.provider-wire.finish",
   /** The answer's text reaches the text deltas. */
   providerWireText: "chat.provider-wire.text",
@@ -95,6 +119,13 @@ export const CHAT_ORACLE = {
   providerWireError: "chat.provider-wire.error",
   /** A cancelled run ends promptly, unfinished, with no further request. */
   providerWireCancel: "chat.provider-wire.cancel",
+  /** A body cut into reads anywhere (inside a multi-byte character, a
+   *  `data:` line, a CRLF) yields the events the whole body does. */
+  providerWireSplit: "chat.provider-wire.split",
+  /** Every request the adapter sends is the one its cassette pins: the
+   *  protocol headers, and the body with its key order, minus the prompt
+   *  text. */
+  providerWireRequestShape: "chat.provider-wire.request-shape",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

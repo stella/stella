@@ -438,7 +438,7 @@ const handleCompatSearchTool: McpToolHandler<
     ? decodeCompatSearchCursor(cursor)
     : matterOnlyPosition(cursor);
   if (position === null) {
-    return compatSearchCursorError();
+    return compatSearchCursorError(cursor ?? "");
   }
 
   const matter =

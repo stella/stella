@@ -1252,11 +1252,14 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
 
 type RunToolCallRoundTripProbeOptions = {
   context: CanaryContext;
+  /** The provider model resolution; tests pass a scripted model. */
+  resolveTextModel?: typeof resolveTanStackTextModel;
   signal: AbortSignal;
 };
 
-const runToolCallRoundTripProbe = async ({
+export const runToolCallRoundTripProbe = async ({
   context,
+  resolveTextModel,
   signal,
 }: RunToolCallRoundTripProbeOptions): Promise<void> => {
   const observedInputs: unknown[] = [];
@@ -1274,6 +1277,7 @@ const runToolCallRoundTripProbe = async ({
   await runToolProbe({
     context,
     prompt: toolRoundTripPromptForProvider(context.provider),
+    resolveTextModel,
     role: TOOL_CALL_ROLE,
     signal,
     tool,
@@ -1359,6 +1363,7 @@ const runWeeklyToolShapeProbe = async ({
 type RunToolProbeOptions = {
   context: CanaryContext;
   prompt: string;
+  resolveTextModel?: typeof resolveTanStackTextModel | undefined;
   role: ModelRole;
   signal: AbortSignal;
   tool: AnyClientTool | AnyServerTool;
@@ -1369,9 +1374,7 @@ type CanaryToolProbeModelOptions = {
 };
 
 // Tool choice stays with the model, as on every product request.
-export const canaryToolProbeModelOptions = ({
-  model,
-}: CanaryToolProbeModelOptions) =>
+const canaryToolProbeModelOptions = ({ model }: CanaryToolProbeModelOptions) =>
   mergeGenerationOptions({
     caching: NO_CACHING,
     model,
@@ -1386,11 +1389,12 @@ export const canaryToolProbeModelOptions = ({
 const runToolProbe = async ({
   context: { config, provider },
   prompt,
+  resolveTextModel = resolveTanStackTextModel,
   role,
   signal,
   tool,
 }: RunToolProbeOptions): Promise<string> => {
-  const model = resolveTanStackTextModel({
+  const model = resolveTextModel({
     organizationId: null,
     orgAIConfig: config,
     role,
@@ -1493,7 +1497,7 @@ type CreateCanaryConfigOptions = {
   rotatedModelId?: string;
 };
 
-const createCanaryConfig = ({
+export const createCanaryConfig = ({
   apiKey,
   provider,
   rotatedModelId,

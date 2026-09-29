@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { isBuiltInRegistryFormat } from "@stll/business-registries/default-formats";
@@ -17,6 +16,7 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
+import { XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import {
   Select,

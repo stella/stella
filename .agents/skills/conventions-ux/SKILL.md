@@ -1,6 +1,6 @@
 ---
 name: conventions-ux
-description: 'Apply when building or modifying user-facing UI components.'
+description: "Apply when building or modifying user-facing UI components."
 ---
 
 # UX Conventions
@@ -60,15 +60,21 @@ Small, almost invisible touches. Linear is a good reference.
 
 ## Icon Semantics
 
-- Use the magic wand icon for AI text rewrite/refine/redraft
-  actions, including search query refinement and prompt editing.
-  Do not use generic sparkles for this function.
+- Every icon comes from `@stll/ui/icons` (`packages/ui/src/icons.ts`),
+  the only module that imports `lucide-react`
+  (`no-direct-lucide-import` enforces it). Reuse an entry first; a
+  product concept gets a semantic entry with a one-line reason, and
+  `bun scripts/codemod-icons.ts` rewrites any direct import.
+- A skill or saved prompt is `SkillIcon` (the open book) everywhere it
+  appears: menus, composer chip, sent message, landing.
+- `AiActionIcon` (the magic wand) is for AI actions: rewrite, refine,
+  redraft, search query refinement, prompt editing, AI rename. Do not
+  use generic sparkles for this function, and never for a skill.
 - Never draw scales of justice or a gavel (lucide `Scale`, `Gavel`).
   Legal cliché is decoration every product in the category already
   uses; name the concept instead — a court is `Landmark`, a decision
-  `FileText` (`BookOpen` for a collection of them), and the case-law
-  section takes the glyph its sidebar entry already uses.
-  `no-legal-cliche-glyph` enforces it.
+  `FileText` (`Library` for a collection of them), and the case-law
+  section is `CaseLawIcon`. `no-legal-cliche-glyph` enforces it.
 
 ## Review chrome
 
@@ -160,7 +166,7 @@ through Folio gains one it does not have.
   cohesive reveal rather than a sudden block.
 - **Optical alignment over geometric:** icons inside circles,
   play-button triangles, and asymmetric glyphs should be nudged
-  visually until they *look* centred, even if that means offset
+  visually until they _look_ centred, even if that means offset
   from the geometric centre.
 
 ## Empty States & Inline Help

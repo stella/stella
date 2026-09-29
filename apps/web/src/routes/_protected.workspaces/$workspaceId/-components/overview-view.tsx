@@ -8,6 +8,12 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
+
+import { compareCodeUnit } from "@stll/collation";
+import { Temporal } from "@stll/time";
+import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import {
   CalendarClockIcon,
   ClockIcon,
@@ -17,13 +23,7 @@ import {
   SquareCheckIcon,
   UploadIcon,
   WorkflowIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { compareCodeUnit } from "@stll/collation";
-import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
-import { openFilePicker } from "@stll/ui/file-picker";
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,

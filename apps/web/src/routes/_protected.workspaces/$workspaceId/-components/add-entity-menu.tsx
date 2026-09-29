@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/button";
+import { openFilePicker } from "@stll/ui/file-picker";
 import {
   FolderPlusIcon,
   FilePlus2Icon,
@@ -8,11 +12,7 @@ import {
   PlusIcon,
   SquareCheckIcon,
   UploadIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
-
-import { Button } from "@stll/ui/button";
-import { openFilePicker } from "@stll/ui/file-picker";
+} from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,

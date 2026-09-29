@@ -13,7 +13,10 @@ import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/li
 import {
   SANDBOX_CONSOLE_BRIDGE_GLOBAL,
   SANDBOX_HOST_BRIDGE_GLOBAL,
+  SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL,
+  SANDBOX_NAME_GUIDE_ERROR_NAME,
   buildHostBridgePrelude,
+  buildNameGuidePrelude,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox-prelude";
 import { transpileSandboxSource } from "@/api/handlers/chat/tools/execute/sandbox/transpile";
 import { SandboxError } from "@/api/lib/errors/tagged-errors";
@@ -75,11 +78,36 @@ const dumpVmError = (
     err: () => undefined,
   });
 
+/** What a guided name stands for, decided by the host when it is called. */
+export type SandboxNameVerdict =
+  /** Run the registry function `target` in its place, and log `note`. */
+  | { kind: "run"; target: string; note: string }
+  /** Fail the call with `message`, which names the call to make instead. */
+  | { kind: "explain"; message: string }
+  /** Not a guided name: the script gets the ReferenceError it would have. */
+  | { kind: "none" };
+
+/**
+ * Names a script may call that are not script functions (a tool it must call
+ * directly, a function spelled without its prefix, a tool this run does not
+ * offer), and what each stands for. `names` are predefined as globals the
+ * script can still shadow; `resolve` answers when one is called, so a script
+ * that catches the failure still reads the explanation. `explainMissing`
+ * rewrites an uncaught ReferenceError for a name the guide did not predefine
+ * (a typo), or keeps it when it returns undefined.
+ */
+export type SandboxNameGuide = {
+  names: readonly string[];
+  resolve: (name: string) => SandboxNameVerdict;
+  explainMissing: (name: string) => string | undefined;
+};
+
 export type RunSandboxInput = {
   concurrencyKey: string;
   source: string;
   registry: SandboxFunctionRegistry;
   limits?: Partial<SandboxLimits>;
+  nameGuide?: SandboxNameGuide | undefined;
 };
 
 type RunSandboxSuccess = {
@@ -274,8 +302,11 @@ export const awaitSandboxAdmissionIdle = async ({
   }
 };
 
-const buildSandboxScript = (transpiledBody: string): string =>
-  `${buildHostBridgePrelude()}\n${transpiledBody}`;
+const buildSandboxScript = (
+  transpiledBody: string,
+  nameGuide: SandboxNameGuide | undefined,
+): string =>
+  `${buildHostBridgePrelude()}\n${nameGuide === undefined ? "" : buildNameGuidePrelude(nameGuide.names)}\n${transpiledBody}`;
 
 /**
  * Whether the script is spending its own budget or parked in
@@ -469,6 +500,12 @@ const createMemoryError = (message: string): SandboxError =>
     message: `Sandbox exceeded memory limit: ${message}`,
   });
 
+const createNotAScriptFunctionError = (message: string): SandboxError =>
+  new SandboxError({
+    reason: "not-a-script-function",
+    message,
+  });
+
 const createRuntimeError = (message: string, cause?: unknown): SandboxError =>
   new SandboxError({
     reason: "runtime",
@@ -656,6 +693,7 @@ export const runSandbox = async ({
   source,
   registry,
   limits: partialLimits,
+  nameGuide,
 }: RunSandboxInput): Promise<RunSandboxResult> => {
   const releaseSandboxAdmission = await acquireSandboxAdmission(concurrencyKey);
 
@@ -671,10 +709,11 @@ export const runSandbox = async ({
       const transpiled = yield* transpileSandboxSource(source);
       const execution = yield* Result.await(
         executeSandboxScript({
-          script: buildSandboxScript(transpiled),
+          script: buildSandboxScript(transpiled, nameGuide),
           registry,
           limits,
           clock,
+          nameGuide,
         }),
       );
 
@@ -742,6 +781,7 @@ type ExecuteSandboxScriptProps = {
   registry: SandboxFunctionRegistry;
   limits: SandboxLimits;
   clock: SandboxClock;
+  nameGuide: SandboxNameGuide | undefined;
 };
 
 type CreateSandboxContextResult = Result<QuickJSAsyncContext, SandboxError>;
@@ -762,6 +802,7 @@ const executeSandboxScript = async ({
   registry,
   limits,
   clock,
+  nameGuide,
 }: ExecuteSandboxScriptProps): Promise<ExecuteSandboxScriptResult> => {
   const state = createHostBridgeState();
   const logCapture = createSandboxLogCapture();
@@ -808,6 +849,36 @@ const executeSandboxScript = async ({
     scope.manage(consoleCall);
     ctx.setProp(ctx.global, SANDBOX_CONSOLE_BRIDGE_GLOBAL, consoleCall);
 
+    if (nameGuide !== undefined) {
+      // Each redirected name is noted once per run, however often it is
+      // called, so the log keeps room for the script's own output.
+      const notedNames = new Set<string>();
+      const nameGuideCall = ctx.newFunction(
+        SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL,
+        (nameHandle) => {
+          const answer = answerGuidedName({
+            name: ctx.getString(nameHandle),
+            nameGuide,
+            registry,
+            onNote: (name, note) => {
+              if (notedNames.has(name)) {
+                return;
+              }
+              notedNames.add(name);
+              appendSandboxLog({
+                capture: logCapture,
+                method: "warn",
+                text: note,
+              });
+            },
+          });
+          return ctx.newString(JSON.stringify(answer ?? {}));
+        },
+      );
+      scope.manage(nameGuideCall);
+      ctx.setProp(ctx.global, SANDBOX_NAME_GUIDE_BRIDGE_GLOBAL, nameGuideCall);
+    }
+
     try {
       return (
         await runScriptInContext({
@@ -817,6 +888,7 @@ const executeSandboxScript = async ({
           script,
           limits,
           clock,
+          nameGuide,
         })
       )
         .map((value) => ({
@@ -832,6 +904,73 @@ const executeSandboxScript = async ({
       state.closed = true;
     }
   });
+};
+
+type GuidedNameAnswer = { run: string } | { explain: string } | undefined;
+
+type AnswerGuidedNameProps = {
+  name: string;
+  nameGuide: SandboxNameGuide;
+  registry: SandboxFunctionRegistry;
+  onNote: (name: string, note: string) => void;
+};
+
+/**
+ * The guest-side answer for a guided name. A `run` verdict only ever names a
+ * function already in this run's registry, which the guest then calls through
+ * the same host bridge (and host-call cap) as any script call, so a guide can
+ * redirect a call but never widen what a script can reach.
+ */
+const answerGuidedName = ({
+  name,
+  nameGuide,
+  registry,
+  onNote,
+}: AnswerGuidedNameProps): GuidedNameAnswer => {
+  const verdict = nameGuide.resolve(name);
+  switch (verdict.kind) {
+    case "run": {
+      if (!Object.hasOwn(registry, verdict.target)) {
+        return undefined;
+      }
+      onNote(name, verdict.note);
+      return { run: verdict.target };
+    }
+    case "explain": {
+      return { explain: verdict.message };
+    }
+    case "none": {
+      return undefined;
+    }
+    default: {
+      verdict satisfies never;
+      return panic("Unhandled sandbox name verdict");
+    }
+  }
+};
+
+/** The name an uncaught `ReferenceError` reports as undefined. */
+const MISSING_NAME_PATTERN = /^'?([A-Za-z_$][\w$]*)'? is not defined$/u;
+
+const explainVmError = (
+  err: DumpedError | undefined,
+  nameGuide: SandboxNameGuide | undefined,
+): SandboxError | undefined => {
+  if (nameGuide === undefined || err?.message === undefined) {
+    return undefined;
+  }
+  if (err.name === SANDBOX_NAME_GUIDE_ERROR_NAME) {
+    return createNotAScriptFunctionError(err.message);
+  }
+  if (err.name !== "ReferenceError") {
+    return undefined;
+  }
+  const missing = MISSING_NAME_PATTERN.exec(err.message)?.[1];
+  const explained =
+    missing === undefined ? undefined : nameGuide.explainMissing(missing);
+  return explained === undefined
+    ? undefined
+    : createNotAScriptFunctionError(explained);
 };
 
 type ConfigureSandboxRuntimeProps = {
@@ -1098,6 +1237,7 @@ type RunScriptInContextProps = {
   script: string;
   limits: SandboxLimits;
   clock: SandboxClock;
+  nameGuide: SandboxNameGuide | undefined;
 };
 
 const runScriptInContext = async ({
@@ -1107,13 +1247,19 @@ const runScriptInContext = async ({
   script,
   limits,
   clock,
+  nameGuide,
 }: RunScriptInContextProps): Promise<RunScriptInContextResult> => {
   const evalResult = ctx.evalCode(script, "sandbox.js");
   if (evalResult.error) {
     const errHandle = scope.manage(evalResult.error);
     const dumpedError = dumpVmError(ctx, errHandle);
     return Result.err(
-      classifyVmError(dumpedError, limits, clock, state.hostCallLimitTripped),
+      classifyVmError(dumpedError, {
+        limits,
+        clock,
+        hostCallLimitTripped: state.hostCallLimitTripped,
+        nameGuide,
+      }),
     );
   }
 
@@ -1125,6 +1271,7 @@ const runScriptInContext = async ({
     promiseHandle,
     limits,
     clock,
+    nameGuide,
   });
   if (Result.isError(settled)) {
     return settled;
@@ -1133,12 +1280,12 @@ const runScriptInContext = async ({
   if (settled.value.kind === "error") {
     const errHandle = scope.manage(settled.value.handle);
     return Result.err(
-      classifyVmError(
-        dumpVmError(ctx, errHandle),
+      classifyVmError(dumpVmError(ctx, errHandle), {
         limits,
         clock,
-        state.hostCallLimitTripped,
-      ),
+        hostCallLimitTripped: state.hostCallLimitTripped,
+        nameGuide,
+      }),
     );
   }
 
@@ -1158,6 +1305,7 @@ type DriveVmUntilSettledProps = {
   promiseHandle: QuickJSHandle;
   limits: SandboxLimits;
   clock: SandboxClock;
+  nameGuide: SandboxNameGuide | undefined;
 };
 
 const driveVmUntilSettled = async ({
@@ -1167,6 +1315,7 @@ const driveVmUntilSettled = async ({
   promiseHandle,
   limits,
   clock,
+  nameGuide,
 }: DriveVmUntilSettledProps): Promise<DriveVmUntilSettledResult> => {
   let idlePasses = 0;
 
@@ -1176,7 +1325,12 @@ const driveVmUntilSettled = async ({
       const errHandle = scope.manage(drained.error);
       const dumpedError = dumpVmError(ctx, errHandle);
       return Result.err(
-        classifyVmError(dumpedError, limits, clock, state.hostCallLimitTripped),
+        classifyVmError(dumpedError, {
+          limits,
+          clock,
+          hostCallLimitTripped: state.hostCallLimitTripped,
+          nameGuide,
+        }),
       );
     }
 
@@ -1196,7 +1350,11 @@ const driveVmUntilSettled = async ({
 
     if (sandboxLimitExceeded(clock) !== undefined) {
       return Result.err(
-        classifyVmError(undefined, limits, clock, state.hostCallLimitTripped),
+        classifyVmError(undefined, {
+          limits,
+          clock,
+          hostCallLimitTripped: state.hostCallLimitTripped,
+        }),
       );
     }
 
@@ -1273,11 +1431,16 @@ const waitForHostProgress = async ({
   }
 };
 
+type VmErrorContext = {
+  limits: SandboxLimits;
+  clock: SandboxClock;
+  hostCallLimitTripped: boolean;
+  nameGuide?: SandboxNameGuide | undefined;
+};
+
 const classifyVmError = (
-  err: { name?: string; message?: string } | undefined,
-  limits: SandboxLimits,
-  clock: SandboxClock,
-  hostCallLimitTripped: boolean,
+  err: DumpedError | undefined,
+  { limits, clock, hostCallLimitTripped, nameGuide }: VmErrorContext,
 ): SandboxError => {
   const message = err?.message ?? "Unknown sandbox error";
   if (hostCallLimitTripped) {
@@ -1286,6 +1449,10 @@ const classifyVmError = (
   const exceeded = sandboxLimitExceeded(clock);
   if (exceeded !== undefined) {
     return createTimeoutError(limits, exceeded);
+  }
+  const explained = explainVmError(err, nameGuide);
+  if (explained !== undefined) {
+    return explained;
   }
   if (/out of memory|memory/iu.test(message)) {
     return createMemoryError(message);

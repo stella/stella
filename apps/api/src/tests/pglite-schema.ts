@@ -45,6 +45,11 @@ const LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH = nodePath.join(
   "20260926150000_legislation_payload_revision",
   "migration.sql",
 );
+const LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003120000_legislation_expression_identity",
+  "migration.sql",
+);
 const PROVISION_EXTRACTION_STATE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260926160000_case_law_provision_extraction_state",
@@ -274,6 +279,38 @@ export const installPgliteAgentSkillRevisionTrigger = async (
   });
 };
 
+const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260928101000_pdf_signing_sessions",
+  "migration.sql",
+);
+
+const PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES = [
+  'ALTER TABLE "pdf_signing_sessions"\n  FORCE ROW LEVEL SECURITY',
+  "CREATE FUNCTION",
+  "REVOKE ALL ON FUNCTION",
+  "GRANT EXECUTE ON FUNCTION",
+] as const;
+
+/**
+ * Install what schema push cannot say about PDF signing sessions: forced row
+ * security and the token-scope lookups the desktop's calls go through.
+ */
+export const installPglitePdfSigningTokenScopes = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    PDF_SIGNING_SESSIONS_MIGRATION_PATH,
+  ).filter((statement) =>
+    PDF_SIGNING_TOKEN_SCOPE_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 const STATUTE_CITATION_COUNT_STATEMENT_PREFIXES = [
   'INSERT INTO "case_law_statute_citation_count_state"',
   "CREATE FUNCTION",
@@ -377,6 +414,27 @@ export const installPgliteLegislationPayloadRevision = async (
     LEGISLATION_PAYLOAD_REVISION_MIGRATION_PATH,
   ).filter((statement) =>
     LEGISLATION_PAYLOAD_REVISION_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+const LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES = [
+  "CREATE OR REPLACE FUNCTION",
+  "CREATE TRIGGER",
+] as const;
+
+/** Install the namespace and expression-id guards that schema push omits. */
+export const installPgliteLegislationExpressionIdentity = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    LEGISLATION_EXPRESSION_IDENTITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    LEGISLATION_EXPRESSION_IDENTITY_STATEMENT_PREFIXES.some((prefix) =>
       executableSql(statement).startsWith(prefix),
     ),
   );

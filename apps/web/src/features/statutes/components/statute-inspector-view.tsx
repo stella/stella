@@ -3,11 +3,11 @@ import type { MouseEvent } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Maximize2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
+import { Maximize2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 

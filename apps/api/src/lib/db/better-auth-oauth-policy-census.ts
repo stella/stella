@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
 type BetterAuthOAuthResourcePolicy = {
@@ -42,16 +43,6 @@ export class BetterAuthOAuthPolicyCensusError extends TaggedError(
   failedChecks: readonly BetterAuthOAuthPolicyCheck[];
   message: string;
 }> {}
-
-const rowsFromQueryResult = (result: unknown): readonly unknown[] | null => {
-  if (Array.isArray(result)) {
-    return Array.from(result, (entry: unknown) => entry);
-  }
-  if (isRecord(result) && Array.isArray(result["rows"])) {
-    return Array.from(result["rows"], (entry: unknown) => entry);
-  }
-  return null;
-};
 
 const parseCensusRow = (
   value: unknown,
@@ -148,7 +139,7 @@ export const assertBetterAuthOAuthPolicyCensus = async (
               WHERE expected.identifier IS NULL
            ) AS "linksUseConfiguredResources"
   `);
-  const row = parseCensusRow(rowsFromQueryResult(result)?.at(0));
+  const row = parseCensusRow(executedRows(result).at(0));
   if (row === null) {
     throw new BetterAuthOAuthPolicyCensusError({
       failedChecks: [],
@@ -186,7 +177,7 @@ const initializePristineBetterAuthOAuthPolicy = async (
       AS "isPristine"
   `);
   const isPristine = requiredBooleanRow(
-    rowsFromQueryResult(stateResult)?.at(0),
+    executedRows(stateResult).at(0),
     "isPristine",
   );
   if (isPristine === null) {

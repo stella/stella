@@ -1,9 +1,11 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import { Buffer } from "node:buffer";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -13,6 +15,9 @@ import {
   corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
   CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+  CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+  CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+  CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
   CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS,
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -24,6 +29,25 @@ const FIRST_REVISION = toSafeId<"corpusIndexProjectionIntent">(
 const SECOND_REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000002",
 );
+
+test("request budget stays below the single-revision ingest cap", () => {
+  expect(CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES).toBe(
+    CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES - 512 * 1024,
+  );
+  expect(LIMITS.corpusIndexIngestMaxBytes).toBeLessThanOrEqual(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+  );
+});
+
+const largeRevisionEntry = (revision: typeof FIRST_REVISION) => ({
+  revision,
+  documents: Array.from({ length: 12 }, (_, seq) => ({
+    document_id: `0198e331-e578-7000-8000-${String(seq + 10).padStart(12, "0")}`,
+    projection_revision: revision,
+    seq,
+    text: "x".repeat(1_000_000),
+  })),
+});
 
 test("projection deletes select exact unique append attempts", () => {
   expect(
@@ -184,6 +208,110 @@ test("append requests are byte-planned before any external effect", () => {
   }
 });
 
+test("single-document cap admits exactly 9.5 MiB and rejects the next byte", () => {
+  const base = {
+    document_id: "0198e331-e578-7000-8000-000000000011",
+    projection_revision: FIRST_REVISION,
+    text: "",
+  };
+  const overhead = Buffer.byteLength(JSON.stringify(base), "utf-8");
+  const text = "x".repeat(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES - overhead,
+  );
+  const atCap = planCorpusProjectionAppendRequests([
+    {
+      revision: FIRST_REVISION,
+      documents: [{ ...base, text }],
+    },
+  ]);
+  expect(atCap.isOk()).toBe(true);
+  if (atCap.isOk()) {
+    expect(atCap.value).toHaveLength(1);
+    expect(Buffer.byteLength(atCap.value[0]?.ndjson ?? "", "utf-8")).toBe(
+      CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+    );
+  }
+  const overCap = planCorpusProjectionAppendRequests([
+    {
+      revision: FIRST_REVISION,
+      documents: [{ ...base, text: `${text}x` }],
+    },
+  ]);
+  expect(overCap.isErr()).toBe(true);
+  if (overCap.isErr()) {
+    expect(overCap.error.code).toBe("revision_too_large");
+  }
+});
+
+test("multi-document requests stay within 8 MiB around a large singleton", () => {
+  const documents = [
+    {
+      document_id: "0198e331-e578-7000-8000-000000000011",
+      projection_revision: FIRST_REVISION,
+      text: "x".repeat(LIMITS.corpusIndexIngestMaxBytes),
+    },
+    {
+      document_id: "0198e331-e578-7000-8000-000000000012",
+      projection_revision: FIRST_REVISION,
+      text: "small",
+    },
+  ];
+  const planned = planCorpusProjectionAppendRequests([
+    { revision: FIRST_REVISION, documents },
+  ]);
+  expect(planned.isOk()).toBe(true);
+  if (planned.isOk()) {
+    expect(planned.value).toHaveLength(2);
+    expect(
+      Buffer.byteLength(planned.value[0]?.ndjson ?? "", "utf-8"),
+    ).toBeGreaterThan(CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES);
+    expect(
+      Buffer.byteLength(planned.value[1]?.ndjson ?? "", "utf-8"),
+    ).toBeLessThanOrEqual(CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES);
+  }
+});
+
+test("one revision is split into requests under both byte ceilings", () => {
+  const entry = largeRevisionEntry(FIRST_REVISION);
+  const planned = planCorpusProjectionAppendRequests([entry]);
+
+  expect(planned.isOk()).toBe(true);
+  if (planned.isOk()) {
+    expect(planned.value.length).toBeGreaterThan(1);
+    const requestBytes = planned.value.map(({ ndjson }) =>
+      Buffer.byteLength(ndjson, "utf-8"),
+    );
+    expect(
+      requestBytes.every(
+        (bytes) => bytes <= CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
+      ),
+    ).toBe(true);
+    const revisionBytes = entry.documents.reduce(
+      (total, document) =>
+        total + Buffer.byteLength(JSON.stringify(document), "utf-8") + 1,
+      0,
+    );
+    expect(revisionBytes).toBeGreaterThan(
+      CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES,
+    );
+    expect(revisionBytes).toBeLessThanOrEqual(
+      CORPUS_PROJECTION_APPEND_MAX_REVISION_BYTES,
+    );
+    expect(
+      planned.value.flatMap(({ entries }) =>
+        entries.map(({ revision }) => revision),
+      ),
+    ).toEqual(
+      Array.from({ length: planned.value.length }, () => FIRST_REVISION),
+    );
+    expect(
+      planned.value.flatMap(({ ndjson }) =>
+        ndjson.split("\n").map((line) => JSON.parse(line).seq),
+      ),
+    ).toEqual(entry.documents.map(({ seq }) => seq));
+  }
+});
+
 test("append rejects a document carrying another attempt revision", async () => {
   const result = await appendCorpusProjectionBatch({
     client: {
@@ -263,6 +391,33 @@ test("append failure reports the exact revisions with unknown outcomes", async (
     expect(result.error.unknownOutcomeObservedAt).toEqual(
       unknownOutcomeObservedAt,
     );
+  }
+});
+
+test("a later part failure leaves an earlier accepted revision unknown", async () => {
+  let requestCount = 0;
+  const result = await appendCorpusProjectionBatch({
+    client: {
+      ingestCommittedBatch: async () => {
+        requestCount += 1;
+        return requestCount === 1
+          ? Result.ok(undefined)
+          : Result.err(new CorpusIndexError({ message: "second part failed" }));
+      },
+    },
+    indexId: "case_law_v5_cs_sk",
+    clock: () => new Date("2026-08-25T12:00:00.000Z"),
+    entries: [largeRevisionEntry(FIRST_REVISION)],
+  });
+
+  expect(requestCount).toBeGreaterThan(1);
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.stage).toBe("append");
+    expect(result.error.code).toBe("append_unknown");
+    expect(result.error.committedRevisions).toEqual([]);
+    expect(result.error.unknownRevisions).toEqual([FIRST_REVISION]);
+    expect(result.error.unattemptedRevisions).toEqual([]);
   }
 });
 

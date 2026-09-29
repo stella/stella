@@ -12,26 +12,13 @@ import { panic } from "better-result";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
 import {
-  classifyNodeEnv,
   envBaseInvariantViolation,
   envBaseServerSchema,
-  KNOWN_NODE_ENVS,
-  NODE_ENV_KIND,
   resolveApiEnvironmentPlaceholders,
 } from "@/api/env-base-schema";
 import { resolveCorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { resolveCorpusMemberLayout } from "@/api/lib/legal-search/corpus-member-layout";
-
-export { DEPLOYED_NODE_ENVS } from "@/api/env-base-schema";
-
-const nodeEnv = process.env.NODE_ENV;
-const nodeEnvKind = classifyNodeEnv(nodeEnv);
-// An unset NODE_ENV classifies as local, so only a set value can be unknown.
-if (nodeEnv !== undefined && nodeEnvKind === NODE_ENV_KIND.unknown) {
-  panic(
-    `NODE_ENV="${nodeEnv}" is not a recognized environment. Set one of ${KNOWN_NODE_ENVS.join(", ")}, or leave it unset for local development.`,
-  );
-}
+import { runtimeMode } from "@/api/runtime-mode";
 
 const baseRuntimeEnv = resolveApiEnvironmentPlaceholders({
   schema: envBaseServerSchema,
@@ -47,11 +34,13 @@ export const envBase = createEnv({
   runtimeEnv: {
     ...baseRuntimeEnv.runtimeEnv,
     DATABASE_URL: resolveDatabaseUrl(baseRuntimeEnv.runtimeEnv),
-    isDev: nodeEnvKind === NODE_ENV_KIND.local,
   },
 });
 
-const invariantViolation = envBaseInvariantViolation(envBase);
+const invariantViolation = envBaseInvariantViolation({
+  ...envBase,
+  runtimeMode: runtimeMode(),
+});
 if (invariantViolation !== null) {
   panic(invariantViolation);
 }

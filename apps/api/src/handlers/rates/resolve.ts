@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { resolveRate } from "@/api/lib/billing-rates";
+import { resolveRate } from "@/api/lib/billing/rates";
 import { tUserId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";

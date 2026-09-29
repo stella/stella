@@ -1,7 +1,7 @@
 import { panic } from "better-result";
-import { FilterIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { FilterIcon } from "@stll/ui/icons";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 

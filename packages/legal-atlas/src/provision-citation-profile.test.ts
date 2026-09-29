@@ -61,6 +61,13 @@ const effectiveWindow = ({
   };
 };
 
+/** Whether an entry carries a window; one without is read wherever none applies. */
+const bounded = ({ citedFrom, citedUntil }: ActAliasSpec | ActTitleSpec) =>
+  citedFrom !== undefined || citedUntil !== undefined;
+
+/** Recodifications before this day are older than the case law the tables serve. */
+const CASE_LAW_HORIZON = "1990-01-01";
+
 const sameAct = (left: WorkIdentifier, right: WorkIdentifier): boolean =>
   left.collection === right.collection &&
   left.number === right.number &&
@@ -89,7 +96,12 @@ describe.each(PROFILES)("$name profile act tables", ({ profile }) => {
     const ambiguous: string[] = [];
     for (const [index, left] of entries.entries()) {
       for (const right of entries.slice(index + 1)) {
-        if (sameAct(left.spec.identifier, right.spec.identifier)) {
+        // A windowed entry is the reading on its days; an unwindowed one
+        // only where no windowed entry of its spelling applies.
+        if (
+          sameAct(left.spec.identifier, right.spec.identifier) ||
+          bounded(left.spec) !== bounded(right.spec)
+        ) {
           continue;
         }
         const leftWindow = effectiveWindow(left.spec);
@@ -106,6 +118,36 @@ describe.each(PROFILES)("$name profile act tables", ({ profile }) => {
     }
 
     expect(ambiguous).toEqual([]);
+  });
+
+  // Windowing the newer act from a switch older than the case law would make
+  // every later decision a date pick and leave undated ones with no reading;
+  // only the older act takes the window there.
+  test("a name recodified before the case law reads its newer act without a window", () => {
+    const windowedSince = entries.filter((entry) => {
+      const { citedFrom, citedUntil, identifier } = entry.spec;
+      if (
+        citedUntil !== undefined ||
+        citedFrom === undefined ||
+        citedFrom >= CASE_LAW_HORIZON
+      ) {
+        return false;
+      }
+      return entries.some(
+        (older) =>
+          !sameAct(older.spec.identifier, identifier) &&
+          older.spec.citedUntil !== undefined &&
+          older.spec.citedUntil <= citedFrom &&
+          collides(older, entry),
+      );
+    });
+
+    expect(
+      windowedSince.map(
+        ({ spec }) =>
+          `${workLabel(spec.identifier)} from ${String(spec.citedFrom)}`,
+      ),
+    ).toEqual([]);
   });
 
   test("section and article anchors never render alike", () => {

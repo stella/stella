@@ -553,6 +553,11 @@
       "tableNamePlaceholder": "piem. Standarta 2025"
     },
     "revertToDraft": "Atgriezt kā melnrakstu",
+    "savedNarratives": {
+      "empty": "Saglabājiet aprakstu, lai to izmantotu vēlreiz.",
+      "save": "Saglabāt aprakstu",
+      "title": "Saglabātie apraksti"
+    },
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "selectedCount": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
@@ -801,6 +806,12 @@
       "resultsFor": "Rezultāti vaicājumam: <bdi>{query}</bdi>",
       "searchEveryWord": "Meklēt visus vārdus"
     },
+    "seo": {
+      "collectionName": "Stella tiesu prakse",
+      "description": "Publiska tiesu prakses datubāze ar indeksējamiem tiesu nolēmumiem un tiesību avotiem.",
+      "homeDescription": "Publiska juridiskā datubāze: tiesu nolēmumi un konsolidēti tiesību akti, meklējami pēc identifikatora vai vārdiem.",
+      "scopedDescription": "Publiska tiesu prakses datubāze ({scope}) ar indeksējamiem tiesu nolēmumiem un tiesību avotiem."
+    },
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
@@ -878,6 +889,7 @@
       "apiKey": "API atslēga",
       "none": "Nav jāiestata"
     },
+    "skillNeedsUnavailableTools": "Tērzēšanā netiek piedāvāta. Nepieciešams rīks, kas tur nav pieejams: {tools}",
     "toolNames": {
       "anonymize": "Anonimizēt",
       "createDocx": "Izveidot DOCX",
@@ -971,7 +983,15 @@
       "searchFiles": "Meklēt failus",
       "searchMatters": "Meklēt lietas",
       "searchMcpServers": "Meklēt MCP serverus...",
-      "searchSkills": "Meklēt prasmes"
+      "searchSkills": "Meklēt prasmes",
+      "skillNeeds": {
+        "browserExtension": "Lai izmantotu šo prasmi, pievienojiet pārlūka paplašinājumu",
+        "document": "Lai izmantotu šo prasmi, atveriet dokumentu",
+        "matter": "Lai izmantotu šo prasmi, sāciet tērzēšanu lietā",
+        "rawSendMode": "Nav pieejams anonimizētās tērzēšanās",
+        "reviewEdits": "Lai izmantotu šo prasmi, pārslēdziet labojumus uz manuālu pārskatīšanu",
+        "webSearch": "Lai izmantotu šo prasmi, ieslēdziet meklēšanu tīmeklī"
+      }
     },
     "contextMeter": {
       "attachments": "Pievienotie dokumenti",
@@ -1056,6 +1076,10 @@
       "loadError": "Neizdevās ielādēt vienumus"
     },
     "messageTimestampToday": "Šodien, {time}",
+    "mockModel": {
+      "description": "Iepriekš sagatavotas lokālā simulētā modeļa atbildes",
+      "label": "Simulēts AI"
+    },
     "modelSelector": {
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
@@ -1474,6 +1498,7 @@
     "displayName": "Attēlojamais vārds",
     "document": "Dokuments",
     "documentName": "Dokumenta nosaukums",
+    "documentPage": "<bdi>{document}</bdi> · {page}. lpp.",
     "documentReference": "Dokumenta atsauces numurs",
     "documentTitle": "Dokumenta nosaukums",
     "documentation": "Dokumentācija",
@@ -1617,6 +1642,7 @@
     "profile": "Profils",
     "properties": "Rekvizīti",
     "queued": "Rindā",
+    "reason": "Iemesls",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
@@ -1942,6 +1968,19 @@
     "deliveredBy": "Piegādāja <address>{sender}</address>",
     "deliveredByAuthenticated": "Piegādāja <address>{sender}</address> · autentificēts",
     "deliveryAuthentication": "Piegādes autentifikācija",
+    "drops": {
+      "authenticationHint": "Lūdziet sūtītāja e-pasta administratoram konfigurēt <protocol>SPF</protocol>, <protocol>DKIM</protocol> un <protocol>DMARC</protocol> sūtīšanas domēnam.",
+      "reasons": {
+        "attachmentRejected": "Pielikums noraidīts",
+        "authenticationFailed": "Piegādes autentifikācija neizdevās",
+        "malformedMessage": "Ziņojumu neizdevās nolasīt",
+        "messageTooLarge": "Ziņojums ir pārāk liels",
+        "revokedAddress": "E-pasta adrese ir atsaukta",
+        "unauthorizedSender": "Sūtītājam nav atļaujas",
+        "unknownRecipient": "Nezināms saņēmējs"
+      },
+      "title": "Noraidītās piegādes"
+    },
     "empty": "Sarakstes vēl nav.",
     "filers": "Iesniedzēji",
     "forwardedBy": "Pārsūtīja <address>{sender}</address>",
@@ -4337,6 +4376,7 @@
     "compareVersionMissing": "Salīdzināmās redakcijas šī akta vēsturē nav.",
     "compareWholeAct": "Salīdzināt visu aktu",
     "compareWithVersion": "Salīdzināt ar redakciju {version}",
+    "description": "Publiska konsolidētu tiesību aktu datubāze, indeksējama pēc akta un tā redakcijas.",
     "diffInserted": "Pievienots:",
     "diffRemoved": "Svītrots:",
     "emptyDocument": "Šai redakcijai nav pieejams teksts.",
@@ -5133,6 +5173,57 @@
       "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
       "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
+      "pdfSigning": {
+        "action": "Parakstīt datora lietotnē",
+        "cancelledBaseVersionDescription": "Dokuments parakstīšanas laikā mainījās. Atveriet jaunāko versiju un parakstiet to vēlreiz.",
+        "cancelledCertificateDescription": "Izvēlēto sertifikātu nevar izmantot parakstīšanai. Izvēlieties tādu, kas atļauj digitālo parakstu.",
+        "cancelledCertifiedDescription": "Šis PDF ir sertificēts, un tā sertifikācija neatļauj pievienot citus parakstus.",
+        "cancelledDescription": "Parakstīšana netika pabeigta.",
+        "cancelledDigestDescription": "Paraksts neatbilda sagatavotajam dokumentam. Mēģiniet parakstīt vēlreiz.",
+        "cancelledFailedDescription": "Parakstu neizdevās pievienot šim PDF.",
+        "cancelledPlatformDescription": "Parakstīšana ar sistēmas atslēgu saišķa sertifikātu pagaidām darbojas macOS.",
+        "cancelledRevokedDescription": "Izvēlētais sertifikāts vai tā izdevēja sertifikāts ir atsaukts. Izvēlieties derīgu sertifikātu.",
+        "cancelledSignatureDescription": "stella desktop paraksts neatbilda izvēlētajam sertifikātam. Mēģiniet parakstīt vēlreiz.",
+        "cancelledStampNameDescription": "Sertifikāta turētāja vārdu nevar parādīt redzamā zīmogā. Parakstiet vēlreiz ar neredzamu parakstu.",
+        "cancelledStampOverflowDescription": "Zīmoga teksts neietilpst uzzīmētajā rāmī. Uzzīmējiet lielāku zīmogu, saīsiniet iemeslu vai vietu vai izmantojiet neredzamu parakstu.",
+        "cancelledTitle": "Parakstīšana atcelta",
+        "cancelledUserDescription": "Parakstīšana tika atcelta lietotnē stella desktop.",
+        "cancelledWouldBreakSignaturesDescription": "Šī PDF parakstīšana padarītu nederīgus parakstus, kas tajā jau ir.",
+        "encryptedDescription": "Šis PDF ir aizsargāts ar paroli. Pirms parakstīšanas noņemiet aizsardzību.",
+        "expiredDescription": "stella desktop nepaspēja pabeigt parakstīšanu. Palaidiet to un mēģiniet vēlreiz.",
+        "expiredTitle": "Parakstīšanas laiks beidzies",
+        "inProgressDescription": "Šis fails jau tiek parakstīts. Vispirms pabeidziet vai atceliet šo parakstīšanu stella desktop.",
+        "noFileDescription": "Šim dokumentam nav faila, ko parakstīt.",
+        "notAPdfDescription": "Parakstīt var tikai PDF failus.",
+        "placementBox": "Zīmoga novietojums",
+        "placementConfirm": "Atvērt stella desktop",
+        "placementDescription": "Izvēlieties, kā paraksts tiks parādīts PDF failā.",
+        "placementHint": "Velciet zīmogu, lai to pārvietotu, vai tā stūri, lai mainītu izmēru. Kad zīmogs ir atlasīts, bulttaustiņi to pārvieto, bet Shift ar bulttaustiņu maina tā izmēru.",
+        "placementInvisible": "Neredzams paraksts",
+        "placementInvisibleDescription": "Paraksts tiek saglabāts failā bez atzīmes nevienā lapā.",
+        "placementPageLabel": "Zīmoga lappuse",
+        "placementPageOption": "{page, number}. lapa no {count, number}",
+        "placementPreview": "{page, number}. lapas priekšskatījums",
+        "placementPreviewFailed": "Neizdevās ielādēt lapas priekšskatījumu.",
+        "placementTitle": "Parakstīt PDF",
+        "placementTooSmall": "Šī lapa ir par mazu zīmogam. Izvēlieties citu lapu.",
+        "placementVisible": "Redzams zīmogs",
+        "placementVisibleDescription": "Rāmis lapā parāda, kas un kad parakstīja.",
+        "readOnlyDescription": "Šis dokuments ir tikai lasāms.",
+        "signedDescription": "Paraksts saglabāts kā {versionNumber, number}. versija.",
+        "signedDescriptionNoVersion": "Paraksts saglabāts kā jauna versija.",
+        "signedTitle": "PDF parakstīts",
+        "stampLocation": "Vieta",
+        "stampRejectedDescription": "Zīmogu tur nevar novietot. Novietojiet to vēlreiz un mēģiniet vēlreiz.",
+        "stampSignedBy": "Digitāli parakstījis",
+        "stampTextUnrenderableDescription": "Iemeslu vai vietu nevar parādīt redzamā zīmogā. Mainiet tekstu vai izmantojiet neredzamu parakstu.",
+        "startFailedTitle": "Šo failu nevar parakstīt",
+        "statusUnavailableDescription": "Pārbaudiet versiju vēsturē, vai paraksts tika saglabāts.",
+        "statusUnavailableTitle": "Parakstīšanas statuss nav pieejams",
+        "tooLargeDescription": "Šis PDF ir pārāk liels, lai to parakstītu.",
+        "waitingDescription": "Lietotnē stella desktop izvēlieties parakstīšanas sertifikātu, lai parakstītu šo PDF.",
+        "waitingTitle": "Gaida stella desktop"
+      },
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Ko darīt ar failu {fileName}",

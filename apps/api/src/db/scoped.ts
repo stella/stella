@@ -17,12 +17,17 @@ import {
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
+import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
-import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import {
+  getPgDriverErrorCode,
+  getPgErrorCode,
+  PG_ERROR,
+} from "@/api/lib/pg-error";
 
 import { runUnderCorpusSchemaLane } from "./corpus-schema-lane";
 
@@ -86,7 +91,7 @@ type RunScopedTransactionOptions<
   database: RlsDatabase<TTransaction>;
   fn: (tx: TTransaction) => Promise<T>;
   organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
+  userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
 };
 
@@ -107,13 +112,27 @@ const runScopedTransaction = async <
   const wsIds = `{${workspaceIds.join(",")}}`;
 
   return await database.transaction(async (tx: TTransaction) => {
+    if (userId === null) {
+      // A service actor has no membership-derived authority. Resolve its
+      // explicit workspace IDs against the tenant before changing the role.
+      await tx.execute(sql`SELECT set_config(
+        '${sql.raw(SETTING_WORKSPACE_IDS)}',
+        coalesce((
+          SELECT pg_catalog.array_agg(${workspaces.id})::text
+          FROM ${workspaces}
+          WHERE ${workspaces.id} = ANY(${wsIds}::uuid[])
+            AND ${workspaces.organizationId} = ${organizationId}
+        ), '{}'),
+        true
+      )`);
+    }
     await tx.execute(
       sql`SELECT
         set_config('role', '${sql.raw(stella.name)}', true),
-        set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${wsIds}, true),
+        set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${userId === null ? sql`pg_catalog.current_setting('${sql.raw(SETTING_WORKSPACE_IDS)}', true)` : sql`${wsIds}`}, true),
         set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
         set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
-        set_config('${sql.raw(SETTING_USER_ID)}', ${userId}, true)`,
+        set_config('${sql.raw(SETTING_USER_ID)}', ${userId ?? ""}, true)`,
     );
 
     return await fn(tx);
@@ -130,7 +149,7 @@ export const createScopedDb =
     database: RlsDatabase<TTransaction>,
     workspaceIds: SafeId<"workspace">[],
     organizationId: SafeId<"organization">,
-    userId: SafeId<"user">,
+    userId: SafeId<"user"> | null,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
@@ -142,6 +161,23 @@ export const createScopedDb =
       organizationId,
       userId,
       fn,
+    });
+
+/**
+ * A transaction on the application role with no tenant settings, for a call
+ * that carries only a token. Every row policy is closed in it, so it reaches
+ * nothing but what a SECURITY DEFINER lookup hands back for that token.
+ */
+export const createTenantlessDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+  ) =>
+  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await database.transaction(async (tx: TTransaction) => {
+      await tx.execute(
+        sql`SELECT set_config('role', '${sql.raw(stella.name)}', true)`,
+      );
+      return await fn(tx);
     });
 
 type MembershipScopedDbOptions = {
@@ -221,6 +257,7 @@ export const createIngestionDb =
 
 const toSafeDbError = (cause: unknown): SafeDbError => {
   const code = getPgErrorCode(cause);
+  const driverCode = getPgDriverErrorCode(cause);
 
   if (code === PG_ERROR.INSUFFICIENT_PRIVILEGE) {
     return new DatabaseRlsError({
@@ -238,7 +275,11 @@ const toSafeDbError = (cause: unknown): SafeDbError => {
   // unhandled exception, which then never matches the retry predicate in
   // `safe-db.ts` that exists for exactly those codes. The wrapper still
   // classifies a query failure that carries no SQLSTATE.
-  if (code !== undefined || cause instanceof DrizzleQueryError) {
+  if (
+    code !== undefined ||
+    driverCode !== undefined ||
+    cause instanceof DrizzleQueryError
+  ) {
     return new DatabaseError({
       message: "Database query failed",
       cause,
@@ -255,7 +296,7 @@ export const createSafeDb =
     database: RlsDatabase<TTransaction>,
     workspaceIds: SafeId<"workspace">[],
     organizationId: SafeId<"organization">,
-    userId: SafeId<"user">,
+    userId: SafeId<"user"> | null,
   ) =>
   async <T>(
     fn: (tx: TTransaction) => Promise<T>,

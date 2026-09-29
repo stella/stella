@@ -9,6 +9,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -51,6 +52,7 @@ const createContext = ({
     scopedDb,
     memberRole: { role: "owner" },
     orgAIConfig: null,
+    orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     params: { userId: "user_lead" },
     request: recorderBindings.request,
     session: {

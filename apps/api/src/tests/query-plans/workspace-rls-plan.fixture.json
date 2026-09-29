@@ -1,0 +1,257 @@
+{
+  "Node Type": "Index Scan",
+  "Parallel Aware": false,
+  "Async Capable": false,
+  "Scan Direction": "Forward",
+  "Index Name": "entities_workspace_name_idx",
+  "Relation Name": "entities",
+  "Alias": "entities",
+  "Startup Cost": 33.6,
+  "Total Cost": 41.64,
+  "Plan Rows": 1,
+  "Plan Width": 16,
+  "Disabled": false,
+  "Index Cond": "(workspace_id = '00000000-0000-7000-8000-000000000001'::uuid)",
+  "Filter": "CASE WHEN (workspace_id = ANY (COALESCE((NULLIF((InitPlan 1).col1, ''::text))::uuid[], '{}'::uuid[]))) THEN true ELSE (ANY (workspace_id = (hashed SubPlan 3).col1)) END",
+  "Plans": [
+    {
+      "Node Type": "Result",
+      "Parent Relationship": "InitPlan",
+      "Subplan Name": "InitPlan 1",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Startup Cost": 0,
+      "Total Cost": 0.01,
+      "Plan Rows": 1,
+      "Plan Width": 32,
+      "Disabled": false
+    },
+    {
+      "Node Type": "Subquery Scan",
+      "Parent Relationship": "SubPlan",
+      "Subplan Name": "SubPlan 3",
+      "Parallel Aware": false,
+      "Async Capable": false,
+      "Alias": "aw",
+      "Startup Cost": 8.33,
+      "Total Cost": 33.45,
+      "Plan Rows": 3,
+      "Plan Width": 16,
+      "Disabled": false,
+      "Plans": [
+        {
+          "Node Type": "Append",
+          "Parent Relationship": "Subquery",
+          "Parallel Aware": false,
+          "Async Capable": false,
+          "Startup Cost": 8.33,
+          "Total Cost": 33.42,
+          "Plan Rows": 3,
+          "Plan Width": 48,
+          "Disabled": false,
+          "Subplans Removed": 0,
+          "Plans": [
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "InitPlan",
+              "Subplan Name": "CTE current_member",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.15,
+              "Total Cost": 8.18,
+              "Plan Rows": 1,
+              "Plan Width": 96,
+              "Disabled": false,
+              "One-Time Filter": "(current_setting('app.workspace_access_mode'::text, true) = 'membership'::text)",
+              "Plans": [
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "member_userId_idx",
+                  "Relation Name": "member",
+                  "Alias": "m",
+                  "Startup Cost": 0.15,
+                  "Total Cost": 8.18,
+                  "Plan Rows": 1,
+                  "Plan Width": 96,
+                  "Disabled": false,
+                  "Index Cond": "(user_id = NULLIF(current_setting('app.user_id'::text, true), ''::text))",
+                  "Filter": "(organization_id = NULLIF(current_setting('app.organization_id'::text, true), ''::text))"
+                }
+              ]
+            },
+            {
+              "Node Type": "Nested Loop",
+              "Parent Relationship": "Member",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Join Type": "Left",
+              "Startup Cost": 0.15,
+              "Total Cost": 8.49,
+              "Plan Rows": 1,
+              "Plan Width": 48,
+              "Disabled": false,
+              "Inner Unique": true,
+              "Plans": [
+                {
+                  "Node Type": "Function Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Function Name": "unnest",
+                  "Alias": "explicit_workspace",
+                  "Startup Cost": 0.01,
+                  "Total Cost": 0.02,
+                  "Plan Rows": 1,
+                  "Plan Width": 16,
+                  "Disabled": false,
+                  "Filter": "(workspace_id IS NOT NULL)"
+                },
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Inner",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "workspaces_id_org_unq",
+                  "Relation Name": "workspaces",
+                  "Alias": "w",
+                  "Startup Cost": 0.14,
+                  "Total Cost": 8.16,
+                  "Plan Rows": 1,
+                  "Plan Width": 48,
+                  "Disabled": false,
+                  "Index Cond": "(id = explicit_workspace.workspace_id)"
+                }
+              ]
+            },
+            {
+              "Node Type": "Nested Loop",
+              "Parent Relationship": "Member",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Join Type": "Inner",
+              "Startup Cost": 0.29,
+              "Total Cost": 8.55,
+              "Plan Rows": 1,
+              "Plan Width": 48,
+              "Disabled": false,
+              "Inner Unique": true,
+              "Join Filter": "(m_1.organization_id = (w_1.organization_id)::text)",
+              "Plans": [
+                {
+                  "Node Type": "Nested Loop",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.14,
+                  "Total Cost": 8.19,
+                  "Plan Rows": 1,
+                  "Plan Width": 48,
+                  "Disabled": false,
+                  "Inner Unique": false,
+                  "Plans": [
+                    {
+                      "Node Type": "CTE Scan",
+                      "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "CTE Name": "current_member",
+                      "Alias": "m_1",
+                      "Startup Cost": 0,
+                      "Total Cost": 0.02,
+                      "Plan Rows": 1,
+                      "Plan Width": 64,
+                      "Disabled": false
+                    },
+                    {
+                      "Node Type": "Index Scan",
+                      "Parent Relationship": "Inner",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Scan Direction": "Forward",
+                      "Index Name": "workspace_members_user_id_idx",
+                      "Relation Name": "workspace_members",
+                      "Alias": "wm",
+                      "Startup Cost": 0.14,
+                      "Total Cost": 8.16,
+                      "Plan Rows": 1,
+                      "Plan Width": 290,
+                      "Disabled": false,
+                      "Index Cond": "((user_id)::text = m_1.user_id)"
+                    }
+                  ]
+                },
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Inner",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "workspaces_id_org_unq",
+                  "Relation Name": "workspaces",
+                  "Alias": "w_1",
+                  "Startup Cost": 0.14,
+                  "Total Cost": 0.35,
+                  "Plan Rows": 1,
+                  "Plan Width": 322,
+                  "Disabled": false,
+                  "Index Cond": "(id = wm.workspace_id)"
+                }
+              ]
+            },
+            {
+              "Node Type": "Nested Loop",
+              "Parent Relationship": "Member",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Join Type": "Inner",
+              "Startup Cost": 0.12,
+              "Total Cost": 8.18,
+              "Plan Rows": 1,
+              "Plan Width": 48,
+              "Disabled": false,
+              "Inner Unique": false,
+              "Plans": [
+                {
+                  "Node Type": "CTE Scan",
+                  "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "CTE Name": "current_member",
+                  "Alias": "m_2",
+                  "Startup Cost": 0,
+                  "Total Cost": 0.02,
+                  "Plan Rows": 1,
+                  "Plan Width": 32,
+                  "Disabled": false,
+                  "Filter": "(role = ANY ('{owner,admin}'::text[]))"
+                },
+                {
+                  "Node Type": "Index Scan",
+                  "Parent Relationship": "Inner",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Scan Direction": "Forward",
+                  "Index Name": "workspaces_org_client_id_idx",
+                  "Relation Name": "workspaces",
+                  "Alias": "w_2",
+                  "Startup Cost": 0.12,
+                  "Total Cost": 8.14,
+                  "Plan Rows": 1,
+                  "Plan Width": 322,
+                  "Disabled": false,
+                  "Index Cond": "((organization_id)::text = m_2.organization_id)"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

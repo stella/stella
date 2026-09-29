@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-import { ExternalLinkIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { ExternalLinkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import {

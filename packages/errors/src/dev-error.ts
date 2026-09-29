@@ -10,8 +10,8 @@ export type DevErrorSink = (input: {
 }) => void;
 
 export type CreateDevErrorLoggerOptions = {
-  /** Whether the process is running in dev. Outside dev the logger no-ops. */
-  isDev: boolean;
+  /** Whether to echo errors at all; the logger no-ops otherwise. */
+  echoErrors: boolean;
   /** Optional extra sink (e.g. a JSONL file sink on the server). */
   sink?: DevErrorSink;
 };
@@ -22,9 +22,9 @@ export type CreateDevErrorLoggerOptions = {
  * outside dev.
  */
 export const createDevErrorLogger =
-  ({ isDev, sink }: CreateDevErrorLoggerOptions) =>
+  ({ echoErrors, sink }: CreateDevErrorLoggerOptions) =>
   (error: unknown, context?: Record<string, unknown>): void => {
-    if (!isDev) {
+    if (!echoErrors) {
       return;
     }
     // oxlint-disable-next-line no-console -- dev-only error echo

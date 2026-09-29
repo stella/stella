@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { LoaderIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { LoaderIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { detached } from "@/lib/detached";

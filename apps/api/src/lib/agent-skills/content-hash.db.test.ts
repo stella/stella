@@ -159,6 +159,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
       editable: true,
       id: skillId,
       origin: "authored",
+      requiredTools: [],
       resources: [{ kind: "reference", path: "references/checklist.md" }],
       toolName: "fixture",
       version: null,

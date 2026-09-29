@@ -44,6 +44,7 @@ const EXPECTED_EXEMPT_ROUTE_FILES = [
   "apps/api/src/handlers/auth/ui-routes.ts",
   "apps/api/src/handlers/dev/routes.ts",
   "apps/api/src/handlers/entities/desktop-edit-sessions-route.ts",
+  "apps/api/src/handlers/entities/pdf-signing-sessions-route.ts",
   "apps/api/src/handlers/feedback/routes.ts",
   "apps/api/src/handlers/folio-collab/routes.ts",
   "apps/api/src/handlers/health/routes.ts",
@@ -67,8 +68,8 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
   // Session-authenticated (sessionAuthMacro + validateSession guard), not
   // an org-role-scoped resource.
   "ai-config/routes.ts": ["POST /validate-provider"],
-  // Dev-only surface, several endpoints gated by env.isDev inline; the
-  // whole route group sits behind the standard auth macro at mount time.
+  // Local development surface, gated on local development access and behind
+  // the standard auth macro.
   "dev/routes.ts": [
     "POST /seed",
     "POST /seed-firm-knowledge",
@@ -85,6 +86,15 @@ const REVIEWED_UNGUARDED: Record<string, string[]> = {
     "POST /desktop-edit-sessions/:sessionId/checkpoint",
     "POST /desktop-edit-sessions/:sessionId/finalize",
     "POST /desktop-edit-sessions/:sessionId/respond-takeover",
+  ],
+  // PDF signing handoff/session endpoints authenticate via the handoff or
+  // session token in the request, not an org-role permission; each handler
+  // authorizes itself through `createSafeTokenHandler`.
+  "entities/pdf-signing-sessions-route.ts": [
+    "POST /pdf-signing-handoffs/redeem",
+    "POST /pdf-signing-sessions/:sessionId/certificate",
+    "POST /pdf-signing-sessions/:sessionId/signature",
+    "POST /pdf-signing-sessions/:sessionId/cancel",
   ],
   // `POST /feedback` is the deliberately public intake (no Stella account
   // required), protected by per-IP rate limiting and fingerprint dedup inside
