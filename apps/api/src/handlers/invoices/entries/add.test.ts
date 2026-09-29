@@ -115,7 +115,7 @@ describe("addEntries currency enforcement", () => {
           // The preflight read awaits the filter; the legacy-line backfill
           // orders it and finds no attached entry without a line.
           return {
-            where: () =>
+            where: (): unknown =>
               Object.assign(
                 Promise.resolve([
                   {

@@ -302,7 +302,7 @@ describe("invoice lines", () => {
     // a billed source, and the database refuses to orphan a live line.
     expect(
       await deleteTimeEntryById.handler(
-        contextFor({
+        contextFor(deleteTimeEntryById.handler, {
           body: { id: timeEntryId },
           params: { workspaceId: ids.wsA1 },
         }),
@@ -321,7 +321,7 @@ describe("invoice lines", () => {
     // Back to draft the way the product does it, then deleted outright.
     expect(
       await batchUpdateTimeEntries.handler(
-        contextFor({
+        contextFor(batchUpdateTimeEntries.handler, {
           body: { ids: [timeEntryId], action: "revert_to_draft" },
           params: { workspaceId: ids.wsA1 },
         }),
@@ -329,7 +329,7 @@ describe("invoice lines", () => {
     ).toEqual({ updated: 1 });
     expect(
       await updateExpense.handler(
-        contextFor({
+        contextFor(updateExpense.handler, {
           body: { id: expenseId, status: BILLING_STATUS.DRAFT },
           params: { workspaceId: ids.wsA1 },
         }),
@@ -337,7 +337,7 @@ describe("invoice lines", () => {
     ).toEqual({ id: expenseId });
     expect(
       await deleteTimeEntryById.handler(
-        contextFor({
+        contextFor(deleteTimeEntryById.handler, {
           body: { id: timeEntryId },
           params: { workspaceId: ids.wsA1 },
         }),
@@ -345,7 +345,7 @@ describe("invoice lines", () => {
     ).toEqual({ deleted: true });
     expect(
       await deleteExpense.handler(
-        contextFor({
+        contextFor(deleteExpense.handler, {
           body: { id: expenseId },
           params: { workspaceId: ids.wsA1 },
         }),
@@ -426,7 +426,7 @@ describe("invoice lines", () => {
     const second = await seedTimeEntry({ billedMinutes: 10 });
 
     const created = await createInvoice.handler(
-      contextFor<Parameters<typeof createInvoice.handler>[0]>({
+      contextFor(createInvoice.handler, {
         body: {
           invoiceNumber: `INV-LINES-${createSafeId<"invoice">()}`,
           invoiceDate: "2026-09-29",
@@ -597,7 +597,7 @@ describe("invoice lines", () => {
     const createEvents: AuditEvent[] = [];
     const lineId = readId(
       await createInvoiceLine.handler(
-        contextFor({
+        contextFor(createInvoiceLine.handler, {
           body: manual({ quantity: "1", unitPriceMinor: 1000 }, STANDARD_RATE),
           params: { workspaceId: ids.wsA1, invoiceId: legacy.invoiceId },
           auditEvents: createEvents,
@@ -668,7 +668,7 @@ describe("invoice lines", () => {
     // Nothing is left to backfill: the delete records its totals and itself.
     const deleteEvents: AuditEvent[] = [];
     await deleteInvoiceLine.handler(
-      contextFor({
+      contextFor(deleteInvoiceLine.handler, {
         params: { workspaceId: ids.wsA1, invoiceId: legacy.invoiceId, lineId },
         auditEvents: deleteEvents,
       }),
@@ -785,15 +785,18 @@ const manual = (
   vatTreatment: "domestic_vat",
 });
 
-const contextFor = <TContext>({
-  body,
-  params,
-  auditEvents = [],
-}: {
-  body?: unknown;
-  params: Record<string, unknown>;
-  auditEvents?: AuditEvent[];
-}): TContext => {
+const contextFor = <TContext>(
+  _handler: (handlerContext: TContext) => unknown,
+  {
+    body,
+    params,
+    auditEvents = [],
+  }: {
+    body?: unknown;
+    params: Record<string, unknown>;
+    auditEvents?: AuditEvent[];
+  },
+): TContext => {
   const recordAuditEvent = async (
     _tx: unknown,
     events: AuditEvent | AuditEvent[],
@@ -824,7 +827,10 @@ const contextFor = <TContext>({
 
 const runCreate = async (invoiceId: SafeId<"invoice">, body: LineBody) =>
   await createInvoiceLine.handler(
-    contextFor({ body, params: { workspaceId: ids.wsA1, invoiceId } }),
+    contextFor(createInvoiceLine.handler, {
+      body,
+      params: { workspaceId: ids.wsA1, invoiceId },
+    }),
   );
 
 const runUpdate = async (
@@ -833,7 +839,10 @@ const runUpdate = async (
   body: UpdateBody,
 ) =>
   await updateInvoiceLine.handler(
-    contextFor({ body, params: { workspaceId: ids.wsA1, invoiceId, lineId } }),
+    contextFor(updateInvoiceLine.handler, {
+      body,
+      params: { workspaceId: ids.wsA1, invoiceId, lineId },
+    }),
   );
 
 const runDelete = async (
@@ -841,7 +850,9 @@ const runDelete = async (
   lineId: SafeId<"invoiceLine">,
 ) =>
   await deleteInvoiceLine.handler(
-    contextFor({ params: { workspaceId: ids.wsA1, invoiceId, lineId } }),
+    contextFor(deleteInvoiceLine.handler, {
+      params: { workspaceId: ids.wsA1, invoiceId, lineId },
+    }),
   );
 
 const runAddEntries = async (
@@ -849,7 +860,7 @@ const runAddEntries = async (
   timeEntryIds: SafeId<"timeEntry">[],
 ) =>
   await addEntries.handler(
-    contextFor({
+    contextFor(addEntries.handler, {
       body: { timeEntryIds },
       params: { workspaceId: ids.wsA1, invoiceId },
     }),
@@ -887,7 +898,9 @@ const readStoredAmounts = async (invoiceId: SafeId<"invoice">) =>
 
 const runGet = async (invoiceId: SafeId<"invoice">) =>
   await readInvoiceById.handler(
-    contextFor({ params: { workspaceId: ids.wsA1, invoiceId } }),
+    contextFor(readInvoiceById.handler, {
+      params: { workspaceId: ids.wsA1, invoiceId },
+    }),
   );
 
 const runTransition = async (
@@ -895,7 +908,7 @@ const runTransition = async (
   action: Parameters<typeof transitionInvoice.handler>[0]["body"]["action"],
 ) =>
   await transitionInvoice.handler(
-    contextFor({
+    contextFor(transitionInvoice.handler, {
       body: { action },
       params: { workspaceId: ids.wsA1, invoiceId },
     }),
