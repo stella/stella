@@ -27,7 +27,7 @@
 // hold, builds the base branch plus the pull request, runs CI on that commit,
 // and merges only if it passes. Nothing needs a rebase to land, a baseline or
 // lint rule measured on the branch is re-measured on the tree that lands, and
-// migration ordering is checked against the base as it stands at merge time.
+// migration identity is checked against the base as it stands at merge time.
 // Where there is no queue, the bar merges directly, and only once the
 // required checks have succeeded on the exact head.
 //
@@ -45,14 +45,12 @@
 
 import { panic } from "better-result";
 
-import { findMigrationOrderViolation } from "./check-migration-order";
+import { findMigrationIdentityViolation } from "./check-migration-order";
 
 const DEFAULT_REPO = "stella/stella";
 const MERGEABLE_POLL_ATTEMPTS = 8;
 const MERGEABLE_POLL_INTERVAL_MS = 2000;
 const MERGE_COMMIT_POLL_ATTEMPTS = 5;
-// GitHub's REST contents listing silently truncates past this many entries.
-const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
 
 // --- Repository policy --------------------------------------------------------
@@ -135,7 +133,7 @@ const GATE_IDS = [
   "mergeable",
   "required-check",
   "review-threads",
-  "migration-order",
+  "migration-identity",
   "head-stability",
 ] as const;
 type GateId = (typeof GATE_IDS)[number];
@@ -152,7 +150,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
   ciPlanSkipped: "CI_PLAN_SKIPPED",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
-  migrationOrder: "MIGRATION_ORDER_VIOLATION",
+  migrationIdentity: "MIGRATION_IDENTITY_VIOLATION",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
 } as const;
 type MergeBarReason =
@@ -184,10 +182,8 @@ type CheckRunSnapshot = {
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
 
 type MigrationSnapshot = {
-  // Migration directories present on the base branch right now.
-  baseDirectories: readonly string[];
-  // Migration directories this pull request adds.
   addedDirectories: readonly string[];
+  removedDirectories: readonly string[];
 };
 
 export type MergeBarSnapshot = {
@@ -418,34 +414,34 @@ const evaluateReviewThreads = (
 
 // Checked here for fast feedback and again by CI on the merge-group commit,
 // where the base is what the pull request actually lands on.
-const evaluateMigrationOrder = (migrations: MigrationSnapshot): GateVerdict => {
-  const violation = findMigrationOrderViolation({
-    baseDirectories: migrations.baseDirectories,
-    newDirectories: migrations.addedDirectories,
-  });
+const evaluateMigrationIdentity = (
+  migrations: MigrationSnapshot,
+): GateVerdict => {
+  const violation = findMigrationIdentityViolation(migrations);
   if (violation?.type === "invalid-name") {
     return {
-      gate: "migration-order",
+      gate: "migration-identity",
       status: "fail",
-      reason: MERGE_BAR_REASONS.migrationOrder,
+      reason: MERGE_BAR_REASONS.migrationIdentity,
       detail: `${violation.directory} does not start with a 14-digit timestamp`,
     };
   }
-  if (violation?.type === "not-after-base") {
+  if (violation?.type === "removed-base-migration") {
     return {
-      gate: "migration-order",
+      gate: "migration-identity",
       status: "fail",
-      reason: MERGE_BAR_REASONS.migrationOrder,
+      reason: MERGE_BAR_REASONS.migrationIdentity,
       detail:
-        `${violation.directory} (${violation.timestamp}) is not above ` +
-        `${violation.previousTimestamp}; rename it to a timestamp above ` +
-        `${violation.previousTimestamp} so already-migrated databases apply it`,
+        `${violation.directory} was removed; its folder name is the migration's ` +
+        `identity in the deployed ledger. Renaming a merged migration makes ` +
+        `deployed databases re-run it under the new name; deleting it removes ` +
+        `it from fresh databases. Add a new migration instead.`,
     };
   }
   return {
-    gate: "migration-order",
+    gate: "migration-identity",
     status: "pass",
-    detail: `${migrations.addedDirectories.length} added migration(s) ordered above the base branch`,
+    detail: `${migrations.addedDirectories.length} added and ${migrations.removedDirectories.length} removed migration(s)`,
   };
 };
 
@@ -486,7 +482,7 @@ export const evaluateMergeBar = (
       requiredCheckRuns: snapshot.requiredCheckRuns,
     }),
     evaluateReviewThreads(snapshot.reviewThreads),
-    evaluateMigrationOrder(snapshot.migrations),
+    evaluateMigrationIdentity(snapshot.migrations),
     evaluateHeadStability({
       headSha: snapshot.pullRequest.headSha,
       headShaBeforeMerge: snapshot.headShaBeforeMerge,
@@ -696,6 +692,22 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   }
 }`;
 
+const migrationDirectoryFromFile = ({
+  filename,
+  migrationDirectory,
+}: {
+  filename: string;
+  migrationDirectory: string;
+}): string | null => {
+  const prefix = `${migrationDirectory}/`;
+  const suffix = "/migration.sql";
+  if (!filename.startsWith(prefix) || !filename.endsWith(suffix)) {
+    return null;
+  }
+  const name = filename.slice(prefix.length, -suffix.length);
+  return name !== "" && !name.includes("/") ? `${prefix}${name}` : null;
+};
+
 const createGhGateway = ({
   repo,
   pullNumber,
@@ -861,70 +873,53 @@ const createGhGateway = ({
       }
     },
 
-    // Read both sides from the API rather than the local checkout: the local
-    // clone can be behind the base branch, which is the very staleness this
-    // gate exists to catch.
+    // Read the pull request's changed files from the API rather than the local
+    // checkout, which can be behind the base branch.
     readMigrationDirectories: () => {
       if (migrationDirectory === null) {
-        return { baseDirectories: [], addedDirectories: [] };
+        return { addedDirectories: [], removedDirectories: [] };
       }
-      const baseRefName = readString(
-        readRecord(
-          runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
-          "pr view",
-        ),
-        "baseRefName",
-      );
-      // Pin the listing to one commit so it provably describes one tree rather
-      // than whatever the branch pointed at between two separate requests.
-      const baseSha = readString(
-        readRecord(
-          runGhJson([
-            "api",
-            `repos/${repo}/commits/${baseRefName}`,
-            "--jq",
-            "{sha: .sha}",
-          ]),
-          "base commit",
-        ),
-        "sha",
-      );
-      const baseDirectories = runGh([
-        "api",
-        `repos/${repo}/contents/${migrationDirectory}?ref=${baseSha}`,
-        "--jq",
-        '.[] | select(.type == "dir") | .name',
-      ])
-        .split("\n")
-        .filter(Boolean);
-      // The contents endpoint truncates at 1000 entries without saying so. A
-      // truncated listing would drop the newest migrations and let the gate
-      // pass on the exact ordering it exists to catch, so refuse instead.
-      if (baseDirectories.length >= CONTENTS_ENDPOINT_ENTRY_LIMIT) {
-        panic(
-          `${migrationDirectory} has ${baseDirectories.length} entries at ` +
-            `${baseSha}, at or past the contents endpoint's ` +
-            `${CONTENTS_ENDPOINT_ENTRY_LIMIT}-entry limit. The listing may be ` +
-            "truncated; switch this gate to the git tree API before merging.",
-        );
-      }
-
-      const addedDirectories = runGh([
+      const changedFiles = runGh([
         "api",
         "--paginate",
         `repos/${repo}/pulls/${pullNumber}/files`,
         "--jq",
-        '.[] | select(.status == "added") | .filename',
+        '.[] | select(.status == "added" or .status == "removed" or .status == "renamed") | {status, filename, previous_filename} | @json',
       ])
         .split("\n")
-        .filter(
-          (filename) =>
-            filename.startsWith(`${migrationDirectory}/`) &&
-            filename.endsWith("/migration.sql"),
-        )
-        .map((filename) => filename.slice(0, filename.lastIndexOf("/")));
-
-      return { baseDirectories, addedDirectories };
+        .filter(Boolean)
+        .map((line) =>
+          readRecord(JSON.parse(line), "changed pull request file"),
+        );
+      const addedDirectories: string[] = [];
+      const removedDirectories: string[] = [];
+      for (const file of changedFiles) {
+        const status = readString(file, "status");
+        const filename = readString(file, "filename");
+        if (status === "added" || status === "renamed") {
+          const directory = migrationDirectoryFromFile({
+            filename,
+            migrationDirectory,
+          });
+          if (directory !== null) {
+            addedDirectories.push(directory);
+          }
+        }
+        if (status === "removed" || status === "renamed") {
+          const previousFilename =
+            status === "renamed"
+              ? readString(file, "previous_filename")
+              : filename;
+          const directory = migrationDirectoryFromFile({
+            filename: previousFilename,
+            migrationDirectory,
+          });
+          if (directory !== null) {
+            removedDirectories.push(directory);
+          }
+        }
+      }
+      return { addedDirectories, removedDirectories };
     },
 
     merge: ({ expectedHeadSha }) => {
