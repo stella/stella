@@ -195,34 +195,50 @@ const SECTION_PARAGRAPH_SEPARATOR = "\n\n";
 
 /**
  * Finds each block's search section by its text, never moving backwards.
- * Sections join their blocks' texts with a blank line, so each paragraph of
- * a section is indexed once and a lookup costs one map read.
+ * Sections join their blocks' texts with a blank line. Repeated text consumes
+ * its next occurrence, while table-cell runs from one block share its match.
  */
 const sectionLocator = (
   sections: readonly { index: number; text: string }[],
-): ((blockText: string) => number | null) => {
-  const holders = new Map<string, number[]>();
+): ((run: Pick<TextRun, "blockId" | "blockText">) => number | null) => {
+  const holders = new Map<string, { positions: number[]; next: number }>();
   for (const [position, section] of sections.entries()) {
     for (const paragraph of section.text.split(SECTION_PARAGRAPH_SEPARATOR)) {
       const key = paragraph.trim();
       const held = holders.get(key);
       if (held === undefined) {
-        holders.set(key, [position]);
-      } else if (held.at(-1) !== position) {
-        held.push(position);
+        holders.set(key, { positions: [position], next: 0 });
+      } else {
+        held.positions.push(position);
       }
     }
   }
   let cursor = 0;
-  return (blockText) => {
-    const position = holders
-      .get(blockText.trim())
-      ?.find((candidate) => candidate >= cursor);
-    if (position === undefined) {
+  const byBlock = new Map<string, number | null>();
+  return ({ blockId, blockText }) => {
+    if (byBlock.has(blockId)) {
+      return byBlock.get(blockId) ?? null;
+    }
+    const held = holders.get(blockText.trim());
+    if (held === undefined) {
+      byBlock.set(blockId, null);
       return null;
     }
+    while (
+      (held.positions.at(held.next) ?? Number.POSITIVE_INFINITY) < cursor
+    ) {
+      held.next += 1;
+    }
+    const position = held.positions.at(held.next);
+    if (position === undefined) {
+      byBlock.set(blockId, null);
+      return null;
+    }
+    held.next += 1;
     cursor = position;
-    return sections[position]?.index ?? null;
+    const sectionIndex = sections[position]?.index ?? null;
+    byBlock.set(blockId, sectionIndex);
+    return sectionIndex;
   };
 };
 
@@ -366,7 +382,7 @@ export const extractUsCitations = ({
         registry,
         run,
         place: {
-          sectionIndex: carriesToken ? locateSection(run.blockText) : null,
+          sectionIndex: carriesToken ? locateSection(run) : null,
         },
       },
       scanned.value,

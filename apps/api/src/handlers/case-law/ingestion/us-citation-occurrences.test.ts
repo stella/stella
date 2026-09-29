@@ -392,6 +392,7 @@ describe("scopes", () => {
       [{ row: 0, column: 0 }, "identified"],
       [{ row: 0, column: 1 }, "missing-antecedent"],
     ]);
+    expect(occurrences.map(({ sectionIndex }) => sectionIndex)).toEqual([0, 0]);
   });
 
   test("boundaries a parser got wrong reject the record", () => {
@@ -431,6 +432,29 @@ describe("scopes", () => {
 });
 
 describe("reading the text", () => {
+  test("identical blocks consume their matching search-section occurrences in order", () => {
+    const text = "347 U.S. 483.";
+    const blocks = [
+      paragraph("first", text),
+      paragraph("second", text),
+      paragraph("third", text),
+    ];
+    const result = extractDecisionCitations({
+      country: "USA",
+      sections: [
+        { index: 4, text: `${text}\n\n${text}` },
+        { index: 9, text },
+      ],
+      documentAst: documentOf(blocks),
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(
+      result.value.occurrences.map(({ sectionIndex }) => sectionIndex),
+    ).toEqual([4, 4, 9]);
+  });
+
   test("a note mark after a page is not part of it", () => {
     const blocks = [
       paragraph("p", [
