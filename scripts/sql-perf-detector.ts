@@ -59,17 +59,17 @@ const COMMENT_START = /\/\/\s*sql-perf-allow\b/iu;
 // operator; the parameter is `$n` or a template placeholder, with a cast.
 // Bounded repeats keep a long token from making the scan backtrack.
 const KEYSET_PARAMETER = String.raw`(\$\d{1,4}|__SQL_EXPR_\d{1,4}__)`;
-const KEYSET_CAST = String.raw`(?:\s{0,64}::\s{0,64}[a-z_]\w{0,63}(?:\[\])?)?`;
+const KEYSET_CAST = String.raw`(?:\s{0,64}::\s{0,64}[a-z_]\w{0,63}(?:\.[a-z_]\w{0,63})?(?:\[\])?)?`;
 const KEYSET_COLUMN = String.raw`(?:__SQL_EXPR_\d{1,4}__|[a-z_"][\w."]{0,255})`;
 const KEYSET_RANGE = String.raw`\s{0,64}(?:<=|>=|<|>)\s{0,64}`;
 const KEYSET_NULL = String.raw`\s{1,64}IS\s{1,64}NULL`;
 const OPTIONAL_KEYSETS = [
   new RegExp(
-    String.raw`${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}\s{0,64}\)?\s{1,64}OR\s{1,64}\(?\s{0,64}${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}`,
+    String.raw`${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}(?:\s{0,64}\)){0,4}\s{1,64}OR\s{1,64}(?:\(\s{0,64}){0,4}${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}`,
     "giu",
   ),
   new RegExp(
-    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}\s{0,64}\)?\s{1,64}OR\s{1,64}\(?\s{0,64}${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}`,
+    String.raw`${KEYSET_COLUMN}${KEYSET_RANGE}${KEYSET_PARAMETER}${KEYSET_CAST}(?:\s{0,64}\)){0,4}\s{1,64}OR\s{1,64}(?:\(\s{0,64}){0,4}${KEYSET_PARAMETER}${KEYSET_CAST}${KEYSET_NULL}`,
     "giu",
   ),
 ];
