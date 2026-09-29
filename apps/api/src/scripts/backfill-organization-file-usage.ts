@@ -130,6 +130,7 @@ let removed = 0;
 let settledReservations = 0;
 let mismatchedReservations = 0;
 while (true) {
+  // db-await-in-loop: the previous page's last organization ID is the next cursor
   const organizations = await readOrganizationPage(orgCursor);
   if (organizations.length === 0) {
     break;
@@ -162,6 +163,7 @@ while (true) {
 
     let fileCursor: SafeId<"userFile"> | null = null;
     while (true) {
+      // db-await-in-loop: the previous file page supplies this organization's next cursor
       const files = await readUserFilePage({
         cursor: fileCursor,
         organizationId,
@@ -194,6 +196,7 @@ while (true) {
         break;
       }
     }
+    // db-await-in-loop: each organization is repaired after its full object and file walk
     removed += await reconcileAbsentOrganizationFileObjects({
       db: ledgerDb,
       organizationId,
@@ -204,12 +207,14 @@ while (true) {
     });
     let settledBatch;
     do {
-      settledBatch = (
-        await reconcileAbandonedOrganizationFileReservations({
-          db: ledgerDb,
-          organizationId,
-        })
-      ).unwrap("Reservation reconciliation must succeed during backfill");
+      // db-await-in-loop: each bounded batch must settle before the next batch is claimed
+      const batch = await reconcileAbandonedOrganizationFileReservations({
+        db: ledgerDb,
+        organizationId,
+      });
+      settledBatch = batch.unwrap(
+        "Reservation reconciliation must succeed during backfill",
+      );
       settledReservations +=
         settledBatch.committed + settledBatch.deleted + settledBatch.released;
       mismatchedReservations += settledBatch.mismatched;

@@ -240,6 +240,10 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
           )
           .limit(limit),
     );
+    const { headObject } = await import("@/api/lib/s3-presign");
+    const { isMissingS3ObjectError } = await import("@/api/lib/s3");
+    const { deleteOrganizationFileWithSignal } =
+      await import("@/api/lib/files/delete-organization-file");
     let committed = 0;
     let deleted = 0;
     let released = 0;
@@ -309,10 +313,8 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         objectKey: candidate.objectKey,
         writeId: recoveryWriteId,
       };
-      const { headObject } = await import("@/api/lib/s3-presign");
       const head = await headObject(candidate.objectKey);
       if (Result.isError(head)) {
-        const { isMissingS3ObjectError } = await import("@/api/lib/s3");
         if (!isMissingS3ObjectError(head.error.cause)) {
           return yield* Result.err(head.error);
         }
@@ -340,8 +342,6 @@ export const reconcileAbandonedOrganizationFileReservations = async ({
         committed += 1;
         continue;
       }
-      const { deleteOrganizationFileWithSignal } =
-        await import("@/api/lib/files/delete-organization-file");
       const deletedObject = await deleteOrganizationFileWithSignal(
         candidate.objectKey,
         signal ?? AbortSignal.timeout(30_000),
