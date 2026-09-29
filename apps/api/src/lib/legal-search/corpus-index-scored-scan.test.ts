@@ -408,7 +408,7 @@ describe("the candidate scan pages exactly as the recorded ranking does", () => 
   ] as const)("through the %s transport", async (name, transport) => {
     const { pages, endpoints } = await readFixtureSequence(transport);
 
-    expect(structuredClone(pages)).toEqual(await readGolden());
+    expect<unknown>(structuredClone(pages)).toEqual(await readGolden());
     // Guard against a run that never reached the transport under test.
     expect([...endpoints]).toEqual([name]);
   });
