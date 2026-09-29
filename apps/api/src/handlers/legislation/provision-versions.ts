@@ -1,7 +1,14 @@
 import { and, eq, inArray } from "drizzle-orm";
 
+import type {
+  LegislationExpressionKind,
+  LegislationWindowDisposition,
+  LegislationWindowDispositionBasis,
+} from "@stll/api-contract/legislation-expression";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
   publishedLegislationDocument,
@@ -24,6 +31,9 @@ export type LegislationProvisionVersion = {
   documentAst: unknown;
   versionValidFrom: string | null;
   versionValidTo: string | null;
+  expressionKind: LegislationExpressionKind;
+  windowDisposition: LegislationWindowDisposition;
+  windowDispositionBasis: LegislationWindowDispositionBasis | null;
   allowsDerivedAi: boolean;
 };
 
@@ -53,6 +63,7 @@ export const readLegislationProvisionVersions = async ({
           ...versionAstColumns,
           versionValidFrom: legislationDocuments.versionValidFrom,
           versionValidTo: legislationDocuments.versionValidTo,
+          ...legislationExpressionLabelColumns,
           allowsDerivedAi: derivedAiLegislationSource,
         })
         .from(legislationDocuments)

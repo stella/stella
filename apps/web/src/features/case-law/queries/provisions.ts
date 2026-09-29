@@ -1,5 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
+
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
@@ -191,6 +193,25 @@ export const statuteByCitedWork = (
   }
   return statutes;
 };
+
+/**
+ * The cited works, by `citedWorkAtDateKey`, whose date the publisher's own
+ * inconsistent dates leave without an in-force reading. Such a work resolves
+ * to no consolidation; this is why, so the reader says so instead of
+ * leaving the reference silently unlinked.
+ */
+export const publisherInconsistentCitedWorks = (
+  resolved: ResolvedCitedWork[] | undefined,
+): Set<string> =>
+  new Set(
+    optionalArray(resolved)
+      .filter(
+        (item) =>
+          item.statute === null &&
+          item.unresolvedReason === LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
+      )
+      .map((item) => citedWorkAtDateKey(item)),
+  );
 
 /**
  * The statute reader's address for every cited work, each at its own date,

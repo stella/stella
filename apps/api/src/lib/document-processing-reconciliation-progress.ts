@@ -1,4 +1,19 @@
 /**
+ * What the latest finished tick said about itself, for a caller that has
+ * to explain a hold rather than decide one: which phases reported work
+ * left behind, or that the tick never reported at all. `none` until the
+ * first tick finishes. Read synchronously, so it describes the last tick
+ * that finished, never the one in flight.
+ */
+export type ReconciliationTickReport<Phase extends string> =
+  | { readonly status: "failed" }
+  | { readonly status: "none" }
+  | {
+      readonly status: "reported";
+      readonly unfinishedPhases: readonly Phase[];
+    };
+
+/**
  * Reconciliation progress as the idle sampler sees it. A caller that
  * arrives while a tick is running waits for that tick instead of reading
  * the previous one's answer, which makes the answer independent of how
@@ -10,10 +25,11 @@
  * it set, because a tick that never reported cannot prove the backlog is
  * empty. One tick at a time: the caller serialises them.
  */
-export const createReconciliationProgress = () => {
+export const createReconciliationProgress = <Phase extends string>() => {
   let unfinished = false;
   let running: Promise<void> | null = null;
   let generation = 0;
+  let latestReport: ReconciliationTickReport<Phase> = { status: "none" };
   return {
     hasUnfinishedWork: async (): Promise<boolean> => {
       await running;
@@ -33,8 +49,14 @@ export const createReconciliationProgress = () => {
      * running flag nor a verdict of its own behind.
      */
     tickGeneration: (): number => generation,
-    /** `tick` resolves with whether it left work behind. */
-    runTick: async (tick: () => Promise<boolean>): Promise<void> => {
+    /** The latest finished tick's own account; see the type above. */
+    latestTickReport: (): ReconciliationTickReport<Phase> => latestReport,
+    /**
+     * `tick` resolves with the phases that left work behind. The flag is
+     * derived from that list rather than reported beside it, so the
+     * verdict and its explanation cannot disagree.
+     */
+    runTick: async (tick: () => Promise<readonly Phase[]>): Promise<void> => {
       // All three published before the first await, so a caller that
       // arrives during this tick waits for it rather than reading the last
       // one, and one that only overlaps it still sees that it happened.
@@ -44,9 +66,15 @@ export const createReconciliationProgress = () => {
       running = new Promise<void>((resolve) => {
         finish = resolve;
       });
+      // Replaced only once the tick reports, so a rejection records the
+      // tick as failed without a catch that would have to rethrow.
+      let report: ReconciliationTickReport<Phase> = { status: "failed" };
       try {
-        unfinished = await tick();
+        const unfinishedPhases = await tick();
+        unfinished = unfinishedPhases.length > 0;
+        report = { status: "reported", unfinishedPhases };
       } finally {
+        latestReport = report;
         running = null;
         finish();
       }

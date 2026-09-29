@@ -4389,7 +4389,13 @@
     "diffRemoved": "Vypuštěno:",
     "emptyDocument": "Toto znění nemá dostupný text.",
     "emptyState": "Nenalezeny žádné předpisy.",
+    "expression": {
+      "invalidWindow": "Vydavatel uvádí rozporná data",
+      "promulgated": "Vyhlášené znění",
+      "withdrawn": "Vydavatel již neuvádí"
+    },
     "inForceSince": "Účinné od {date}",
+    "ineligibleVersion": "{range} ({label})",
     "leadingDecisions": "Klíčová rozhodnutí",
     "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
@@ -4409,18 +4415,22 @@
     "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
     "provisionPromptSubject": "{provision} předpisu {statute} ({eli}) ve znění účinném od {date}",
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
+    "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
     "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
     "showInText": "Zobrazit v textu",
+    "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {
       "current": "Účinné",
       "draft": "Navrhované",
       "ended": "Neúčinné",
       "future": "Budoucí",
       "historical": "Nahrazené",
-      "repealed": "Zrušené"
+      "neverInForce": "Nenabylo účinnosti",
+      "repealed": "Zrušené",
+      "unknown": "Stav nejasný"
     },
     "title": "Právní předpisy",
     "validity": "Platné od {from} do {to}"

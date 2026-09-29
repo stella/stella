@@ -19,6 +19,11 @@ describe("source edition markers", () => {
       }).unwrap().value,
     ).toBe("24a260f97c24b68f5b4ba79f0da7a747c3cb8f62");
     expect(readSourceEditionMarker("us-non-sdn", {}).isErr()).toBe(true);
+    expect(
+      readSourceEditionMarker("uk", {
+        lastModified: "Mon, 21 Sep 2026 12:51:24 GMT",
+      }).unwrap().value,
+    ).toBe("2026-09-21T12:51:24Z");
     expect(readSourceEditionMarker("eu", { body: "error page" }).isErr()).toBe(
       true,
     );

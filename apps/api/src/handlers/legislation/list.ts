@@ -25,7 +25,15 @@ import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
+  applicableKind,
+  eligibleExpression,
   inForceOn,
+  legislationVersionRef,
+  legislationVersionRefAt,
+  notWithdrawn,
+  openedBy,
+  opensBefore,
+  opensOnOrBefore,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
@@ -140,21 +148,28 @@ const decodeListCursor = (cursor: string): ListCursor | null => {
   return null;
 };
 
+const listedRef = legislationVersionRef(legislationDocuments);
+const newerRef = legislationVersionRefAt("newer");
+const workRef = legislationVersionRefAt("work");
+
+/** Another row of the listed row's Work: `(source, eli, language)`. */
+const newerOfSameWork = sql`newer.source_id = ${legislationDocuments.sourceId}
+      AND newer.eli = ${legislationDocuments.eli}
+      AND newer.language = ${legislationDocuments.language}
+      AND newer.id <> ${legislationDocuments.id}`;
+
 /**
- * The one applicable consolidation of a work: no later window covering the
- * same date exists for its `(source, eli, language)`. The anti-join keeps the
- * list flat, so Postgres can stop at the page limit.
+ * The one applicable consolidation of a work: no later eligible window
+ * covering the same date exists for its `(source, eli, language)`. The
+ * anti-join keeps the list flat, so Postgres can stop at the page limit.
  */
 const isVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`NOT EXISTS (
     SELECT 1
     FROM legislation_documents AS newer
-    WHERE newer.source_id = ${legislationDocuments.sourceId}
-      AND newer.eli = ${legislationDocuments.eli}
-      AND newer.language = ${legislationDocuments.language}
-      AND newer.id <> ${legislationDocuments.id}
-      AND (${inForceOn(sql`newer.version_valid_from`, sql`newer.version_valid_to`, asOf)})
+    WHERE ${newerOfSameWork}
+      AND ${inForceOn(newerRef, asOf)}
       AND (
-        ${versionSortKey(sql`newer.version_valid_from`)},
+        ${versionSortKey(newerRef.validFrom)},
         newer.id
       ) > (
         ${versionSortKey(legislationDocuments.versionValidFrom)},
@@ -165,86 +180,130 @@ const isVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`NOT EXISTS (
 /** The version each work's ordinary, present-day listing shows. */
 export const isCurrentVersionOfWork = isVersionOfWorkAt(sql`CURRENT_DATE`);
 
-/**
- * The row a listing shows per Work: the latest wording that opened on or
- * before `asOf`, whether or not its window is still open. A Work whose last
- * wording closed is listed as ended rather than dropped, so a repealed act
- * stays findable; a Work whose every wording opens after `asOf` is not listed.
- */
-export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
-  ${legislationDocuments.versionValidFrom} IS NULL
-  OR ${legislationDocuments.versionValidFrom} <= ${asOf}
-) AND NOT EXISTS (
-    SELECT 1
-    FROM legislation_documents AS newer
-    WHERE newer.source_id = ${legislationDocuments.sourceId}
-      AND newer.eli = ${legislationDocuments.eli}
-      AND newer.language = ${legislationDocuments.language}
-      AND newer.id <> ${legislationDocuments.id}
-      AND (newer.version_valid_from IS NULL OR newer.version_valid_from <= ${asOf})
-      AND (
-        ${versionSortKey(sql`newer.version_valid_from`)},
-        newer.id
-      ) > (
-        ${versionSortKey(legislationDocuments.versionValidFrom)},
-        ${legislationDocuments.id}
-      )
-  )`;
-
-/** Whether the listed wording still applies on `asOf`; see `LEGISLATION_LIST_VALIDITIES`. */
-const listValidity = (asOf: SQLWrapper): SQL<LegislationListValidity> =>
-  sql<LegislationListValidity>`(CASE
-    WHEN ${legislationDocuments.versionValidTo} IS NULL
-      OR ${legislationDocuments.versionValidTo} > ${asOf}
-    THEN 'in-force'
-    ELSE 'ended'
-  END)`;
-
 /** The same Work's rows as the listed one: `(source, eli, language)`. */
 const sameWork = sql`work.source_id = ${legislationDocuments.sourceId}
   AND work.eli = ${legislationDocuments.eli}
   AND work.language = ${legislationDocuments.language}`;
 
+/** Whether any version of the listed row's Work can apply, at any date. */
+const workHasEligibleVersion = sql`EXISTS (
+  SELECT 1
+  FROM legislation_documents AS work
+  WHERE ${sameWork}
+    AND ${eligibleExpression(workRef)}
+)`;
+
 /**
- * When the Work's earliest wording on record opens. What the corpus proves is
- * the first consolidation window, which is not always the day the act took
- * effect: e-Sbírka opens a Czech act's first window at publication (89/2012
- * Sb. opens 2012-03-22, though it took effect 2014-01-01).
+ * The row a listing shows per Work: the latest eligible wording that opened
+ * on or before `asOf`, whether or not its window is still open. A Work whose
+ * last wording closed is listed as ended rather than dropped, so a repealed
+ * act stays findable; a Work whose every eligible wording opens after `asOf`
+ * is not listed.
+ *
+ * A Work with no eligible wording at all (every version never took effect,
+ * or its publisher windows are inconsistent) is listed by its latest version
+ * that opened by `asOf`, preferring a consolidation over a promulgated text,
+ * so it stays findable under the validity that says so. Withdrawn versions
+ * are never listed, so a Work holding only those is not either.
+ */
+export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
+  ${openedBy(listedRef, asOf)}
+  AND ${notWithdrawn(listedRef)}
+  AND (${eligibleExpression(listedRef)} OR NOT ${workHasEligibleVersion})
+) AND NOT EXISTS (
+    SELECT 1
+    FROM legislation_documents AS newer
+    WHERE ${newerOfSameWork}
+      AND ${openedBy(newerRef, asOf)}
+      AND ${notWithdrawn(newerRef)}
+      AND (${eligibleExpression(newerRef)} OR NOT ${eligibleExpression(listedRef)})
+      AND (
+        ${applicableKind(newerRef)},
+        ${versionSortKey(newerRef.validFrom)},
+        newer.id
+      ) > (
+        ${applicableKind(listedRef)},
+        ${versionSortKey(legislationDocuments.versionValidFrom)},
+        ${legislationDocuments.id}
+      )
+  )`;
+
+/**
+ * Whether the publisher states that the listed row's Work never took effect:
+ * it holds at least one consolidation, and every consolidation it holds is
+ * never in force. Anything less (an inconsistent window, only a promulgated
+ * text) proves nothing, and the Work is `unknown`.
+ */
+const workNeverInForce = sql`(EXISTS (
+  SELECT 1
+  FROM legislation_documents AS work
+  WHERE ${sameWork}
+    AND ${applicableKind(workRef)}
+    AND ${notWithdrawn(workRef)}
+) AND NOT EXISTS (
+  SELECT 1
+  FROM legislation_documents AS work
+  WHERE ${sameWork}
+    AND ${applicableKind(workRef)}
+    AND ${notWithdrawn(workRef)}
+    AND ${workRef.disposition} <> 'never-in-force'
+))`;
+
+/** Whether the listed wording still applies on `asOf`; see `LEGISLATION_LIST_VALIDITIES`. */
+const listValidity = (asOf: SQLWrapper): SQL<LegislationListValidity> =>
+  sql<LegislationListValidity>`(CASE
+    WHEN ${inForceOn(listedRef, asOf)} THEN 'in-force'
+    WHEN ${eligibleExpression(listedRef)} THEN 'ended'
+    WHEN ${workNeverInForce} THEN 'never-in-force'
+    ELSE 'unknown'
+  END)`;
+
+/**
+ * When the Work's earliest eligible wording on record opens. What the corpus
+ * proves is the first consolidation window, which is not always the day the
+ * act took effect: e-Sbírka opens a Czech act's first window at publication
+ * (89/2012 Sb. opens 2012-03-22, though it took effect 2014-01-01).
  *
  * A scalar subquery in the select list, so it is evaluated for the page's
  * rows only; each is one probe of the unique `(source, eli, valid_from,
  * language)` index.
  */
 const firstVersionValidFrom = sql<string | null>`(
-  SELECT min(work.version_valid_from)::text
+  SELECT min(${workRef.validFrom})::text
   FROM legislation_documents AS work
   WHERE ${sameWork}
+    AND ${eligibleExpression(workRef)}
 )`;
 
 /**
- * How many wordings replaced an earlier one up to `asOf`: the Work's windows
- * opened by then, less the first. A count of wording changes, not of amending
- * acts: several acts taking effect the same day count once, one act taking
- * effect in stages counts per stage, and a Czech act published before it took
- * effect counts its entry into force once (see `firstVersionValidFrom`).
+ * How many eligible wordings replaced an earlier one up to `asOf`: the Work's
+ * eligible windows opened by then, less the first. A count of wording
+ * changes, not of amending acts: several acts taking effect the same day
+ * count once, one act taking effect in stages counts per stage, and a Czech
+ * act published before it took effect counts its entry into force once (see
+ * `firstVersionValidFrom`). A promulgated text or a version that never took
+ * effect replaced nothing, so neither counts.
  */
 const amendmentCount = (asOf: SQLWrapper): SQL<number> => sql<number>`(
   SELECT greatest(count(*) - 1, 0)::integer
   FROM legislation_documents AS work
   WHERE ${sameWork}
-    AND work.version_valid_from <= ${asOf}
+    AND ${eligibleExpression(workRef)}
+    AND ${opensOnOrBefore(workRef, asOf)}
 )`;
 
 /**
  * When the last change took effect: the listed wording's opening, when an
- * earlier wording exists for it to have replaced (`amendmentCount > 0`).
+ * earlier eligible wording exists for it to have replaced
+ * (`amendmentCount > 0`). A listed version that cannot apply changed nothing.
  */
 const lastAmendedOn = sql<string | null>`(CASE
-  WHEN EXISTS (
+  WHEN ${eligibleExpression(listedRef)} AND EXISTS (
     SELECT 1
     FROM legislation_documents AS work
     WHERE ${sameWork}
-      AND work.version_valid_from < ${legislationDocuments.versionValidFrom}
+      AND ${eligibleExpression(workRef)}
+      AND ${opensBefore(workRef, legislationDocuments.versionValidFrom)}
   )
   THEN ${legislationDocuments.versionValidFrom}::text
 END)`;

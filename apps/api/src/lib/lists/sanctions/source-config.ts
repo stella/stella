@@ -34,6 +34,11 @@ export const SANCTIONS_SOURCE_CONFIG = {
     markerUrl: SANCTIONS_SOURCES["us-non-sdn"].editionMarker.url,
     freshnessMs: 48 * HOUR_MS,
   },
+  uk: {
+    issuer: "United Kingdom",
+    markerUrl: SANCTIONS_SOURCES.uk.editionMarker.url,
+    freshnessMs: 48 * HOUR_MS,
+  },
 } as const satisfies Record<
   SanctionsSource,
   { issuer: string; markerUrl: string; freshnessMs: number }

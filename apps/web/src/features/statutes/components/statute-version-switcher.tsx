@@ -2,6 +2,7 @@ import { useCallback } from "react";
 
 import { useTranslations } from "use-intl";
 
+import type { LegislationExpressionEligibility } from "@stll/api-contract/legislation-expression";
 import {
   Select,
   SelectItem,
@@ -10,10 +11,11 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { formatValidityRange } from "@/features/statutes/statute-format";
 import { useFormatter } from "@/i18n/formatting-context";
 
-export type StatuteVersion = {
+export type StatuteVersion = LegislationExpressionEligibility & {
   id: string;
   versionValidFrom: string | null;
   versionValidTo: string | null;
@@ -59,16 +61,27 @@ export const StatuteVersionSwitcher = ({
         <SelectValue placeholder={t("common.version")} />
       </SelectTrigger>
       <SelectPopup>
-        {versions.map((version) => (
-          <SelectItem key={version.id} value={version.id}>
-            {formatValidityRange({
-              format,
-              openEnded: t("statutes.openEnded"),
-              validFrom: version.versionValidFrom,
-              validTo: version.versionValidTo,
-            })}
-          </SelectItem>
-        ))}
+        {versions.map((version) => {
+          const range = formatValidityRange({
+            format,
+            openEnded: t("statutes.openEnded"),
+            validFrom: version.versionValidFrom,
+            validTo: version.versionValidTo,
+          });
+          // A version that cannot apply is named for what it is; its dates
+          // are the publisher's statement, not a period in force.
+          const ineligibleLabel = ineligibleExpressionLabelKey(version);
+          return (
+            <SelectItem key={version.id} value={version.id}>
+              {ineligibleLabel === null
+                ? range
+                : t("statutes.ineligibleVersion", {
+                    label: t(ineligibleLabel),
+                    range,
+                  })}
+            </SelectItem>
+          );
+        })}
       </SelectPopup>
     </Select>
   );

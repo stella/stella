@@ -89,6 +89,9 @@ const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   "apps/api/src/handlers/case-law/public-routes.ts": 11,
   "apps/api/src/handlers/files/routes.ts": 4,
   "apps/api/src/handlers/legislation/public-routes.ts": 11,
+  // Built by a factory so tests can inject the bundled catalogue; all six are
+  // internal-only public reads with no MCP tool.
+  "apps/api/src/handlers/public-knowledge/endpoints.ts": 6,
   "apps/api/src/handlers/search/routes.ts": 5,
   "apps/api/src/handlers/workspaces/routes.ts": 4,
 };

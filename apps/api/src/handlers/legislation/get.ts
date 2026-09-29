@@ -17,6 +17,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
   publishedLegislationDocument,
@@ -65,6 +66,7 @@ export const readPublicLegislationHandler = async (
           effectiveDate: legislationDocuments.effectiveDate,
           versionValidFrom: legislationDocuments.versionValidFrom,
           versionValidTo: legislationDocuments.versionValidTo,
+          ...legislationExpressionLabelColumns,
           sections: legislationDocuments.sections,
           sourceUrl: legislationDocuments.sourceUrl,
           documentUrl: legislationDocuments.documentUrl,

@@ -48,6 +48,7 @@ const OFAC_EXPORT =
   "https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/";
 const SDN_XML = `${OFAC_EXPORT}SDN.XML`;
 const NON_SDN_XML = `${OFAC_EXPORT}CONSOLIDATED.XML`;
+const UK_XML = "https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.xml";
 
 /** Publisher locations, reuse terms, and inexpensive checks for new editions. */
 export const SANCTIONS_SOURCES = {
@@ -101,6 +102,15 @@ export const SANCTIONS_SOURCES = {
       url: "https://www.govinfo.gov/content/pkg/USCODE-2024-title17/html/USCODE-2024-title17-chap1-sec105.htm",
     },
     editionMarker: { kind: "http-last-modified", url: NON_SDN_XML },
+  },
+  uk: {
+    id: "uk",
+    issuer: "GB",
+    download: { kind: "direct", urls: [UK_XML] },
+    licence: {
+      url: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+    },
+    editionMarker: { kind: "http-last-modified", url: UK_XML },
   },
 } as const satisfies {
   [Source in SanctionsSource]: SourceMetadata & { id: Source };

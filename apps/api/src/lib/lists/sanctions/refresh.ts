@@ -6,7 +6,6 @@ import {
   checkListReplacement,
   type ListReplacementError,
   type ListStats,
-  type ListVersion,
   type ParsedList,
   type SanctionsSource,
 } from "@stll/sanctions";
@@ -74,8 +73,36 @@ type RefreshOptions = {
 const sha256 = (value: string): string =>
   createHash("sha256").update(value).digest("hex");
 
-const markerKeyOf = (version: ListVersion): string =>
-  sha256(stableStringify({ parserVersion: SANCTIONS_PARSER_VERSION, version }));
+/**
+ * The change key of an edition. Some publishers state only the calendar date
+ * of a list, so the HTTP validator of the list response joins the key when the
+ * source has one; the stated version itself is stored unchanged. Without a
+ * validator the key is the stated version alone, as it always was.
+ */
+const markerKeyOf = ({
+  version,
+  lastModified,
+}: Pick<FetchedMarker, "version" | "lastModified">): string =>
+  sha256(
+    stableStringify(
+      lastModified === null
+        ? { parserVersion: SANCTIONS_PARSER_VERSION, version }
+        : { parserVersion: SANCTIONS_PARSER_VERSION, version, lastModified },
+    ),
+  );
+
+/**
+ * Whether a download is the edition its marker named. A validator missing on
+ * either response does not count against the match.
+ */
+const downloadMatchesMarker = (
+  marker: FetchedMarker,
+  edition: FetchedEdition,
+): boolean =>
+  stableStringify(edition.parsed.version) === stableStringify(marker.version) &&
+  (marker.lastModified === null ||
+    edition.lastModified === null ||
+    marker.lastModified === edition.lastModified);
 
 const markFailure = async ({
   code,
@@ -644,7 +671,7 @@ const fetchCurrentEdition = async ({
   }
 
   let marker: FetchedMarker = firstMarker.value;
-  let markerKey = markerKeyOf(marker.version);
+  let markerKey = markerKeyOf(marker);
   if (hasActiveEdition && activeMarkerKey === markerKey) {
     return { status: "unchanged" };
   }
@@ -657,10 +684,7 @@ const fetchCurrentEdition = async ({
     return { status: "failed", code: edition.error.code };
   }
 
-  if (
-    stableStringify(edition.value.parsed.version) !==
-    stableStringify(marker.version)
-  ) {
+  if (!downloadMatchesMarker(marker, edition.value)) {
     const nextMarker = await fetchMarker(source, fetchOptions);
     if (isAborted()) {
       return { status: "aborted" };
@@ -674,14 +698,11 @@ const fetchCurrentEdition = async ({
     ) {
       return { status: "failed", code: "metadata-invalid" };
     }
-    if (
-      stableStringify(nextMarker.value.version) ===
-      stableStringify(marker.version)
-    ) {
+    if (markerKeyOf(nextMarker.value) === markerKey) {
       return { status: "failed", code: "parse-failed" };
     }
     marker = nextMarker.value;
-    markerKey = markerKeyOf(marker.version);
+    markerKey = markerKeyOf(marker);
     if (hasActiveEdition && activeMarkerKey === markerKey) {
       return { status: "unchanged" };
     }
@@ -695,8 +716,7 @@ const fetchCurrentEdition = async ({
   }
 
   if (
-    stableStringify(edition.value.parsed.version) !==
-      stableStringify(marker.version) ||
+    !downloadMatchesMarker(marker, edition.value) ||
     !validParsedEntries(source, edition.value.parsed)
   ) {
     return { status: "failed", code: "parse-failed" };

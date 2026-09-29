@@ -15,6 +15,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   UNVERSIONED_SORT_DATE,
   versionSortKey,
@@ -76,6 +77,10 @@ const decodeVersionCursor = (cursor: string): VersionCursor | null => {
  * newest validity window first. The work key is the source, ELI and
  * language triple the unique indexes are built on. `isDefault` marks the one
  * the Work's bare address shows, so a reader never re-derives that rule.
+ *
+ * Every version the publisher lists is here, labelled with its kind and
+ * disposition: a version that never took effect or whose window is
+ * inconsistent is history too, just never one that applied.
  */
 export const listStatuteVersionsHandler = async ({
   documentId,
@@ -122,6 +127,7 @@ export const listStatuteVersionsHandler = async ({
         effectiveDate: legislationDocuments.effectiveDate,
         versionValidFrom: legislationDocuments.versionValidFrom,
         versionValidTo: legislationDocuments.versionValidTo,
+        ...legislationExpressionLabelColumns,
         sourceUrl: legislationDocuments.sourceUrl,
         documentUrl: legislationDocuments.documentUrl,
       })
