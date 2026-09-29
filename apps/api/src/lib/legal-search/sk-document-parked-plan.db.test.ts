@@ -44,7 +44,7 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 const PARKED_INDEX = "case_law_decisions_document_parked_idx";
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
-  "../../../drizzle/20261003120200_case_law_document_parked_idx/migration.sql",
+  "../../../drizzle/20261003120400_case_law_document_parked_idx/migration.sql",
 );
 
 /** Pending decisions of the queue's source, none of them parked. */
