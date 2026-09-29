@@ -78,12 +78,9 @@ describe("addEntries currency enforcement", () => {
     });
   });
 
-  test.each([
-    { timeEntryIds: [toSafeId<"timeEntry">("te_1")] },
-    { expenseIds: [toSafeId<"expense">("exp_1")] },
-  ])(
-    "returns a retryable conflict when a claim count changes: %j",
-    async (body) => {
+  test.each(["time entries", "expenses"])(
+    "returns a retryable conflict when a claim count changes: %s",
+    async (source) => {
       let auditCalls = 0;
       const lockInvoiceForUpdate = mock(async () => [
         {
@@ -145,6 +142,10 @@ describe("addEntries currency enforcement", () => {
         }),
       });
 
+      const body =
+        source === "time entries"
+          ? { timeEntryIds: [toSafeId<"timeEntry">("te_1")] }
+          : { expenseIds: [toSafeId<"expense">("exp_1")] };
       const ctx = createContext(body, safeDb);
 
       const result = await addEntries.handler(
