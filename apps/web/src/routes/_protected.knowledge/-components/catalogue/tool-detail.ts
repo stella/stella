@@ -17,8 +17,9 @@ export const getToolDetailPayload = (
   const activeSkill =
     entry.kind === "skill" && entry.chatSkillId !== null
       ? {
+          skillDisplayName: entry.displayName,
           skillId: entry.chatSkillId,
-          skillName: entry.displayName,
+          skillName: entry.slug,
         }
       : undefined;
 

@@ -1,6 +1,6 @@
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 
-const SECTION_ORDER = ["private", "team", "commands"] as const;
+const SECTION_ORDER = ["private", "team", "built-in", "commands"] as const;
 
 export type SlashSectionKey = (typeof SECTION_ORDER)[number];
 

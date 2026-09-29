@@ -571,6 +571,13 @@ type IsUnknown<TValue> =
 
 type IsBroadRecord<TValue> = string extends keyof TValue ? true : false;
 
+export type TypedHandlerDataByName<
+  THandlers,
+  TNames extends keyof THandlers,
+> = {
+  [TName in TNames]: TypedHandlerData<THandlers[TName]>;
+};
+
 type HandlerOutputIsTyped<THandler, TData = TypedHandlerData<THandler>> =
   IsNever<TData> extends true
     ? false

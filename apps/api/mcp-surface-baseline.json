@@ -214,7 +214,7 @@
       "default": {"title": 11, "description": 328, "inputSchema": 891, "outputSchema": 157, "annotations": 113, "payloadUtf8Bytes": 1596}
     },
     "save_playbook": {
-      "default": {"title": 13, "description": 639, "inputSchema": 5559, "outputSchema": 883, "annotations": 115, "payloadUtf8Bytes": 7307}
+      "default": {"title": 13, "description": 639, "inputSchema": 5665, "outputSchema": 883, "annotations": 115, "payloadUtf8Bytes": 7413}
     },
     "save_task": {
       "default": {"title": 9, "description": 418, "inputSchema": 1867, "outputSchema": 153, "annotations": 111, "payloadUtf8Bytes": 2652}

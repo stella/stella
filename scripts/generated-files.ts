@@ -475,10 +475,27 @@ export const GENERATORS = [
     after: [],
   },
   {
+    id: "built-in-skills",
+    outputs: ["packages/skills/src/skills.gen.ts"],
+    inputs: [
+      "packages/skills/skills/**",
+      "packages/skills/scripts/generate-manifest.ts",
+    ],
+    write: ["bun", "--filter", "@stll/skills", "generate"],
+    check: [
+      "bun",
+      "--cwd=packages/skills",
+      "scripts/generate-manifest.ts",
+      "--check",
+    ],
+    autofix: false,
+    after: [],
+  },
+  {
     id: "us-courts",
     outputs: [
       "packages/api-contract/src/us-courts.generated.ts",
-      "packages/api-contract/src/us-writable-courts.generated.ts",
+      "packages/api-contract/src/us-abbreviated-courts.generated.ts",
     ],
     inputs: [
       "packages/api-contract/data/us-courts/**",
