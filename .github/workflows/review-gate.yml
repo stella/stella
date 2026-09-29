@@ -49,10 +49,13 @@ on:
 # One queue per head commit wherever the event names it, so publishers for
 # one commit run one at a time. Comments and dispatches carry no head and
 # key by pull request; the publisher settles any race those still allow.
+# A pull request event's run is listed among the pull request's own checks,
+# where a cancelled run shows as a failure, so it gets a group of its own
+# that nothing supersedes.
 concurrency:
   group: >-
     review-gate-${{
-      github.event.pull_request.head.sha
+      github.event_name == 'pull_request_target' && format('run-{0}', github.run_id)
       || github.event.workflow_run.head_sha
       || github.event.sha
       || github.event.check_run.head_sha

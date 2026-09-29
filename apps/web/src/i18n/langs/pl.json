@@ -983,7 +983,15 @@
       "searchFiles": "Szukaj plików",
       "searchMatters": "Szukaj spraw",
       "searchMcpServers": "Szukaj serwerów MCP...",
-      "searchSkills": "Szukaj umiejętności"
+      "searchSkills": "Szukaj umiejętności",
+      "skillNeeds": {
+        "browserExtension": "Połącz rozszerzenie przeglądarki, aby użyć tej umiejętności",
+        "document": "Otwórz dokument, aby użyć tej umiejętności",
+        "matter": "Rozpocznij czat w sprawie, aby użyć tej umiejętności",
+        "rawSendMode": "Niedostępne w zanonimizowanych czatach",
+        "reviewEdits": "Przełącz edycje na ręczną weryfikację, aby użyć tej umiejętności",
+        "webSearch": "Włącz wyszukiwanie w sieci, aby użyć tej umiejętności"
+      }
     },
     "contextMeter": {
       "attachments": "Załączone dokumenty",

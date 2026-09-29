@@ -75,6 +75,7 @@ import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
@@ -276,6 +277,9 @@ type PromptBarProps = {
   /** The (+) menu's Edit mode submenu; its only home (the dock has none). */
   editMode?: ComposerEditModeMenuProps | undefined;
   skillsOrganizationId?: string | undefined;
+  /** The chat this bar sends in, for the Skills submenu (see
+   *  `ComposerSkillsMenuProps.chat`). */
+  skillChat?: ComposerSkillChatContext | undefined;
   /**
    * Reserved-command availability for this bar's slash menu. Omit on
    * surfaces whose submit path has no reserved-command dispatch.
@@ -508,6 +512,7 @@ export const PromptBar = (props: PromptBarProps) => {
     onNewThread,
     editMode,
     skillsOrganizationId,
+    skillChat,
     reservedCommands,
     context,
     mcpOrganizationId,
@@ -832,6 +837,7 @@ export const PromptBar = (props: PromptBarProps) => {
                   skillsOrganizationId
                     ? {
                         activeOrganizationId: skillsOrganizationId,
+                        chat: skillChat,
                         editor,
                         reservedCommands,
                       }

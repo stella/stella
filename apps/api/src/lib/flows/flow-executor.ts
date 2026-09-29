@@ -410,7 +410,10 @@ const runAiStep = async ({
   });
 
   const orgAIConfig = unwrapOrFlowStepError(
-    await scopedDb(async (tx) => await loadAIConfig(tx, organizationId)),
+    await scopedDb(
+      async (tx) =>
+        await loadAIConfig(tx, { organizationId, userId: actorUserId }),
+    ),
     "AI is not available for this organization.",
   );
   // Every step settles against the organization's usage as it runs; the

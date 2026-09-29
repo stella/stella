@@ -48,12 +48,16 @@ export type DecryptOrgAIConfigRowResult =
  * the same as "no config": a caller that treats it as absent would run the
  * org's traffic on the instance provider and meter it to the wrong source.
  * `own_key_required` means the org has no config and its access state bars
- * the instance provider. Only `ok` lets a null config reach the instance.
+ * the instance provider. `member_assignment_required` means the requesting
+ * member holds no seat assignment in an organization that admits only
+ * assigned members to AI work, whichever key would serve it. Only `ok` lets a
+ * null config reach the instance.
  */
 export const ORG_AI_CONFIG_STATUS = {
   ok: "ok",
   unreadable: "unreadable",
   ownKeyRequired: "own_key_required",
+  memberAssignmentRequired: "member_assignment_required",
 } as const;
 
 export type OrgAIConfigStatus =
