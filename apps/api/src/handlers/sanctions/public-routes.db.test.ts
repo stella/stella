@@ -623,6 +623,22 @@ describe("public sanctions search parity", () => {
             warmMs: Number(warmMs.toFixed(2)),
           }),
         );
+        const incomplete = await assertParity({
+          subject: {
+            type: "organization",
+            name: "Registered",
+            companyId: null,
+          },
+        });
+        expect(
+          incomplete.lists.find(({ source }) => source === "eu"),
+        ).toMatchObject({
+          status: "unavailable",
+          reason: "load-failed",
+          totalMatches: 0,
+          possibleMatches: [],
+        });
+        expect(incomplete.status).not.toBe("clear");
       } finally {
         await context.kill();
       }

@@ -72,6 +72,18 @@ entity type raise or lower the score. A near-exact name whose client fields
 contradict the listing stays reported at the cutoff, with the conflicts named
 in its evidence. `totalMatches` and `truncated` say when the limit cut results.
 
+Query names may contain at most 12 normalized tokens before deduplication;
+excess tokens return `excess-query-tokens` on every screening path. Accepted
+queries and listed aliases retain the first occurrence of each normalized
+spelling, so repeated words preserve exact-name equality. Each screening has
+one deterministic 20,000-unit work budget shared across name readings,
+vocabulary expansion, postings, candidate alignment and identifier matches.
+Exhaustion returns `ScreeningWorkLimitError` (`work-limit`), discarding
+incomplete matches. Both API paths present the affected list as unavailable
+with the existing `load-failed` reason, never clear. Output truncation still
+describes a complete scan whose matches exceed the requested result count.
+Index construction remains cached separately from query matching.
+
 ## Evaluation
 
 ```sh

@@ -259,3 +259,24 @@ export const nameTokens = (
   const tokens = entityType === "person" ? raw : stripLegalForms(raw);
   return tokens.map((token) => ({ raw: token, folded: fold(token) }));
 };
+
+/** Maximum normalized input count, before repeated spellings are deduplicated. */
+export const MAX_QUERY_TOKENS = 12;
+
+export const hasExcessQueryTokens = (
+  name: string,
+  entityType: EntityType,
+): boolean => nameTokens(name, entityType).length > MAX_QUERY_TOKENS;
+
+export const distinctNameTokens = (
+  name: string,
+  entityType: EntityType,
+): NameToken[] => {
+  const distinct = new Map<string, NameToken>();
+  for (const token of nameTokens(name, entityType)) {
+    if (!distinct.has(token.raw)) {
+      distinct.set(token.raw, token);
+    }
+  }
+  return [...distinct.values()];
+};

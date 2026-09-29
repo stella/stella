@@ -5,6 +5,11 @@ import path from "node:path";
 import { parseCzList } from "./cz";
 import type { EntityType, ParsedList, SanctionsEntry } from "./entry";
 import { parseEuList } from "./eu";
+import {
+  MAX_QUERY_TOKENS,
+  hasExcessQueryTokens,
+  distinctNameTokens,
+} from "./normalise";
 import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "./screening";
 import type { ScreeningQuery } from "./screening";
 import { parseUnList } from "./un";
@@ -528,4 +533,135 @@ describe("name screening", () => {
       screen(index, { name: "Vladimir Putin" }, { cutoff: 1.5 }),
     ).toThrow(Panic);
   });
+});
+
+test("warm screening work stays bounded for repeated common query tokens", () => {
+  const realistic = buildScreeningIndex([
+    {
+      version: EXTRA_VERSION,
+      entries: Array.from({ length: 20_000 }, (_, n) =>
+        listed({
+          sourceId: String(n),
+          entityType: "organisation",
+          name: `Registered Entity ${n} Holdings`,
+        }),
+      ),
+    },
+  ]);
+  const measured = [];
+  for (const name of [
+    `Registered ${"r ".repeat(249)}`.slice(0, 512),
+    "Registered ".repeat(46),
+  ]) {
+    const started = performance.now();
+    const result = screen(
+      realistic,
+      { name, entityType: "organisation" },
+      { cutoff: DEFAULT_CUTOFF },
+    );
+    const milliseconds = performance.now() - started;
+    console.log(
+      JSON.stringify({
+        tokens: name.split(/\s+/u).filter(Boolean).length,
+        milliseconds,
+      }),
+    );
+    measured.push({ milliseconds, result });
+  }
+  for (const { milliseconds, result } of measured) {
+    expect(milliseconds).toBeLessThan(50);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("excess-query-tokens");
+    }
+  }
+  // A short, valid query can still reach too many candidates to finish.
+  for (const entityType of ["organisation", undefined] as const) {
+    const started = performance.now();
+    const incomplete = screen(
+      realistic,
+      { name: "Registered", entityType },
+      { cutoff: DEFAULT_CUTOFF },
+    );
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(incomplete.isErr() && incomplete.error.code).toBe("work-limit");
+  }
+});
+
+test("repeated normalized query tokens keep exact-name equality", () => {
+  for (const [entityType, name] of [
+    ["person", "Mohammed Mohammed"],
+    ["organisation", "Baden Baden"],
+  ] as const) {
+    const exactIndex = buildScreeningIndex([
+      {
+        version: EXTRA_VERSION,
+        entries: [listed({ sourceId: name, entityType, name })],
+      },
+    ]);
+    const result = screen(
+      exactIndex,
+      { name, entityType },
+      { cutoff: DEFAULT_CUTOFF },
+    ).unwrap();
+    expect(result.possibleMatches.at(0)?.evidence.nameScore).toBe(1);
+    expect(result.totalMatches).toBe(1);
+    expect(distinctNameTokens(name, entityType)).toHaveLength(1);
+  }
+});
+
+test("query token bounds use normalized input order and count before deduplication", () => {
+  const names = Array.from(
+    { length: MAX_QUERY_TOKENS + 2 },
+    (_, n) => `Token${n}`,
+  );
+  for (const entityType of ["person", "organisation", undefined] as const) {
+    const rejected = screen(
+      index,
+      { name: names.join(" "), entityType },
+      { cutoff: DEFAULT_CUTOFF },
+    );
+    expect(rejected.isErr() && rejected.error.code).toBe("excess-query-tokens");
+  }
+  expect(
+    distinctNameTokens("Émile EMILE Emile Antoine", "person").map(
+      (token) => token.raw,
+    ),
+  ).toEqual(["emile", "antoine"]);
+  expect(
+    hasExcessQueryTokens(
+      "Registered ".repeat(MAX_QUERY_TOKENS),
+      "organisation",
+    ),
+  ).toBe(false);
+  expect(
+    hasExcessQueryTokens(
+      "Registered ".repeat(MAX_QUERY_TOKENS + 1),
+      "organisation",
+    ),
+  ).toBe(true);
+  expect(distinctNameTokens("Émile EMILE Emile", "person")).toHaveLength(1);
+});
+
+test("identifier traversal shares the screening budget and cannot report clear on exhaustion", () => {
+  const entry = listed({
+    sourceId: "one",
+    entityType: "organisation",
+    name: "Unique",
+  });
+  const oneIndex = buildScreeningIndex([
+    { version: EXTRA_VERSION, entries: [entry] },
+  ]);
+  const broadIdentifierIndex = {
+    ...oneIndex,
+    identifierEntries: new Map([
+      ["12345", Array.from({ length: 20_001 }, () => 0)],
+    ]),
+  };
+  const result = screen(
+    broadIdentifierIndex,
+    { name: "", identifiers: ["12345"] },
+    { cutoff: DEFAULT_CUTOFF },
+  );
+  expect(result.isErr() && result.error.code).toBe("work-limit");
 });

@@ -1,8 +1,23 @@
 import { distance } from "@stll/fuzzy-search";
 
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
-import { nameTokens } from "./normalise";
+import { distinctNameTokens } from "./normalise";
 import type { NameToken } from "./normalise";
+
+// One budget covers vocabulary lookups, postings and scoring across readings.
+export const MAX_SCREENING_WORK = 20_000;
+export type ScreeningWorkBudget = { remaining: number; exhausted: boolean };
+export const spendScreeningWork = (
+  budget: ScreeningWorkBudget,
+  cost = 1,
+): boolean => {
+  if (budget.exhausted || cost > budget.remaining) {
+    budget.exhausted = true;
+    return false;
+  }
+  budget.remaining -= cost;
+  return true;
+};
 
 const METRIC = "damerau-levenshtein";
 
@@ -158,7 +173,7 @@ export const buildNameIndex = (
     const byKey = new Map<string, IndexedAlias>();
     const entryTokens = new Set<number>();
     for (const { name, quality } of entry.names) {
-      const tokens = nameTokens(name, entry.entityType);
+      const tokens = distinctNameTokens(name, entry.entityType);
       const key = tokens.map((token) => token.raw).join(" ");
       const existing = byKey.get(key);
       if (tokens.length === 0 || existing?.quality === "strong") {
@@ -224,11 +239,20 @@ export const buildNameIndex = (
  * transposition) destroys at most three of a string's distinct bigrams, so a
  * string within budget k shares at least max(bigrams) - 3k of them.
  */
-const similarStrings = (
-  vocabulary: Vocabulary,
-  text: string,
-): Map<number, number> => {
+type SimilarStringsOptions = {
+  vocabulary: Vocabulary;
+  text: string;
+  work: ScreeningWorkBudget;
+};
+const similarStrings = ({
+  vocabulary,
+  text,
+  work,
+}: SimilarStringsOptions): Map<number, number> => {
   const similar = new Map<number, number>();
+  if (!spendScreeningWork(work, text.length + 1)) {
+    return similar;
+  }
   const exact = vocabulary.ids.get(text);
   if (exact !== undefined) {
     similar.set(exact, 1);
@@ -239,29 +263,38 @@ const similarStrings = (
     return similar;
   }
   const grams = bigrams(text);
-  const shared = new Uint16Array(vocabulary.strings.length);
+  const shared = new Map<number, number>();
   const touched: number[] = [];
   for (let other = length - budget; other <= length + budget; other += 1) {
     for (const gram of grams) {
       for (const id of vocabulary.bigrams.get(gramKey(other, gram)) ?? []) {
-        if (shared[id] === 0) {
+        if (!spendScreeningWork(work)) {
+          return similar;
+        }
+        if (!shared.has(id)) {
           touched.push(id);
         }
-        shared[id] = (shared[id] ?? 0) + 1;
+        shared.set(id, (shared.get(id) ?? 0) + 1);
       }
     }
   }
   for (const id of touched) {
+    if (!spendScreeningWork(work)) {
+      return similar;
+    }
     const candidateLength = vocabulary.lengths[id] ?? 0;
     const pairBudget = editBudget(Math.min(length, candidateLength));
     if (
       id === exact ||
       pairBudget === 0 ||
       Math.abs(candidateLength - length) > pairBudget ||
-      (shared[id] ?? 0) <
+      (shared.get(id) ?? 0) <
         Math.max(grams.size, vocabulary.gramCounts[id] ?? 0) - 3 * pairBudget
     ) {
       continue;
+    }
+    if (!spendScreeningWork(work, length * candidateLength)) {
+      return similar;
     }
     const edits = distance(text, vocabulary.strings[id] ?? "", METRIC);
     if (edits <= pairBudget) {
@@ -287,32 +320,54 @@ type PreparedQuery = {
 
 const isInitial = (token: NameToken) => Array.from(token.raw).length === 1;
 
-const unit = (
-  index: NameIndex,
-  positions: readonly number[],
-  token: NameToken,
-): QueryUnit => ({
+type QueryUnitOptions = {
+  index: NameIndex;
+  positions: readonly number[];
+  token: NameToken;
+  work: ScreeningWorkBudget;
+};
+const unit = ({
+  index,
   positions,
-  folded: similarStrings(index.folded, token.folded),
-  raw: similarStrings(index.raw, token.raw),
+  token,
+  work,
+}: QueryUnitOptions): QueryUnit => ({
+  positions,
+  folded: similarStrings({
+    vocabulary: index.folded,
+    text: token.folded,
+    work,
+  }),
+  raw: similarStrings({ vocabulary: index.raw, text: token.raw, work }),
 });
 
-const prepareQuery = (
-  index: NameIndex,
-  tokens: readonly NameToken[],
-): PreparedQuery => {
+type PrepareQueryOptions = {
+  index: NameIndex;
+  tokens: readonly NameToken[];
+  work: ScreeningWorkBudget;
+};
+const prepareQuery = ({
+  index,
+  tokens,
+  work,
+}: PrepareQueryOptions): PreparedQuery => {
   const initials = tokens.map(isInitial);
   const units: QueryUnit[] = [];
   for (const [position, token] of tokens.entries()) {
     if (!initials[position]) {
-      units.push(unit(index, [position], token));
+      units.push(unit({ index, positions: [position], token, work }));
     }
     const next = tokens[position + 1];
     if (next !== undefined && !initials[position] && !isInitial(next)) {
       units.push(
-        unit(index, [position, position + 1], {
-          raw: `${token.raw}${next.raw}`,
-          folded: `${token.folded}${next.folded}`,
+        unit({
+          index,
+          positions: [position, position + 1],
+          token: {
+            raw: `${token.raw}${next.raw}`,
+            folded: `${token.folded}${next.folded}`,
+          },
+          work,
         }),
       );
     }
@@ -526,13 +581,24 @@ export type NameMatch = { score: number; name: string };
  * query weight an alias could explain to the best final score it could still
  * reach; aliases whose ceiling is below `cutoff` are skipped unscored.
  */
-export const matchNames = (
-  index: NameIndex,
-  tokens: readonly NameToken[],
-  ceiling: (queryShare: number) => number,
-  cutoff: number,
-): Map<number, NameMatch> => {
-  const query = prepareQuery(index, tokens);
+type MatchNamesOptions = {
+  index: NameIndex;
+  tokens: readonly NameToken[];
+  ceiling: (queryShare: number) => number;
+  cutoff: number;
+  work: ScreeningWorkBudget;
+};
+export const matchNames = ({
+  index,
+  tokens,
+  ceiling,
+  cutoff,
+  work,
+}: MatchNamesOptions): Map<number, NameMatch> | undefined => {
+  const query = prepareQuery({ index, tokens, work });
+  if (work.exhausted) {
+    return undefined;
+  }
   const reachedWeight = new Map<number, number>();
   let initialWeight = 0;
   let totalWeight = 0;
@@ -554,27 +620,49 @@ export const matchNames = (
       ] as const) {
         for (const id of similar.keys()) {
           for (const alias of vocabulary.postings[id] ?? []) {
+            if (!spendScreeningWork(work)) {
+              return undefined;
+            }
             reached.add(alias);
           }
           for (const alias of vocabulary.joinPostings[id] ?? []) {
+            if (!spendScreeningWork(work)) {
+              return undefined;
+            }
             reached.add(alias);
           }
         }
       }
     }
     for (const alias of reached) {
+      if (!spendScreeningWork(work)) {
+        return undefined;
+      }
       reachedWeight.set(alias, (reachedWeight.get(alias) ?? 0) + weight);
     }
   }
 
   const best = new Map<number, NameMatch>();
   for (const [aliasIndex, weight] of reachedWeight) {
+    if (!spendScreeningWork(work)) {
+      return undefined;
+    }
     if (ceiling((weight + initialWeight) / totalWeight) < cutoff) {
       continue;
     }
     const alias = index.aliases[aliasIndex];
     if (alias === undefined) {
       continue;
+    }
+    // Reserve pair expansion, alignment and coverage before allocating pairs.
+    // Publisher alias lengths are not bounded by the query cap.
+    const pairs =
+      (query.units.length + query.tokens.length) * alias.tokens.length * 2;
+    const scoringWork =
+      pairs * Math.max(1, Math.ceil(Math.log2(pairs + 1))) +
+      alias.tokens.length;
+    if (!spendScreeningWork(work, scoringWork)) {
+      return undefined;
     }
     const score = scoreAlias(index, alias, query);
     const current = best.get(alias.entry);

@@ -5,6 +5,7 @@ import type { CountryCode } from "@stll/country-codes";
 import {
   buildScreeningIndex,
   DEFAULT_CUTOFF,
+  MAX_QUERY_TOKENS,
   SANCTIONS_SOURCES,
   screen,
 } from "@stll/sanctions";
@@ -17,6 +18,7 @@ import type {
   SanctionsIssuer,
   SanctionsSource,
   ScreeningQuery,
+  ScreeningQueryError,
 } from "@stll/sanctions";
 
 import { classifySanctionsIssuer } from "@/api/lib/lists/sanctions/classification";
@@ -162,9 +164,15 @@ export type SanctionsScreening = {
 const SanctionsSubjectErrorBase: TaggedErrorClass<"SanctionsSubjectError"> =
   TaggedError("SanctionsSubjectError");
 
+export const SANCTIONS_SUBJECT_ERROR_MESSAGES = {
+  "empty-query": "The name to screen has no letters",
+  "invalid-birth-date": "The date of birth is not a valid calendar date",
+  "excess-query-tokens": `The name to screen must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
+} as const satisfies Record<ScreeningQueryError["code"], string>;
+
 /** The subject cannot be screened as given; the caller corrects it. */
 export class SanctionsSubjectError extends SanctionsSubjectErrorBase<{
-  code: "empty-query" | "invalid-birth-date";
+  code: ScreeningQueryError["code"];
   message: string;
 }> {}
 
@@ -321,6 +329,9 @@ const screenList = async ({
     limit: SANCTIONS_MATCH_LIMIT,
   });
   if (screened.isErr()) {
+    if (screened.error.code === "work-limit") {
+      return unavailableList(base, "load-failed", freshness);
+    }
     // The query was validated against an empty index first, and these
     // errors depend on the query alone.
     return panic("A validated sanctions query was rejected");
@@ -382,6 +393,9 @@ export const screenSanctionsSubject = async ({
   const query = toScreeningQuery(subject);
   const validated = screen(EMPTY_INDEX, query, { cutoff: DEFAULT_CUTOFF });
   if (validated.isErr()) {
+    if (validated.error.code === "work-limit") {
+      return panic("Empty sanctions index exhausted the work budget");
+    }
     return Result.err(
       new SanctionsSubjectError({
         code: validated.error.code,

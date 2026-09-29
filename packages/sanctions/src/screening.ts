@@ -9,9 +9,19 @@ import type {
   ParsedList,
   SanctionsEntry,
 } from "./entry";
-import { buildNameIndex, matchNames } from "./name-match";
-import type { NameIndex, NameMatch } from "./name-match";
-import { nameTokens } from "./normalise";
+import {
+  buildNameIndex,
+  matchNames,
+  MAX_SCREENING_WORK,
+  spendScreeningWork,
+} from "./name-match";
+import type { NameIndex, NameMatch, ScreeningWorkBudget } from "./name-match";
+import {
+  distinctNameTokens,
+  hasExcessQueryTokens,
+  MAX_QUERY_TOKENS,
+} from "./normalise";
+import type { NameToken } from "./normalise";
 import { isCalendarDate } from "./values";
 
 /**
@@ -217,9 +227,24 @@ export type ScreeningResult = {
 };
 
 export class ScreeningQueryError extends TaggedError("ScreeningQueryError")<{
-  code: "empty-query" | "invalid-birth-date";
+  code: "empty-query" | "invalid-birth-date" | "excess-query-tokens";
   message: string;
 }> {}
+
+export class ScreeningWorkLimitError extends TaggedError(
+  "ScreeningWorkLimitError",
+)<{
+  code: "work-limit";
+  message: string;
+}> {}
+
+const workLimit = () =>
+  Result.err(
+    new ScreeningWorkLimitError({
+      code: "work-limit",
+      message: "screening exceeded its work limit",
+    }),
+  );
 
 type ScreenOptions = {
   /** Minimum score (0..1) for an entry to be reported as a possible match. */
@@ -373,6 +398,56 @@ const scoreEntry = ({
   };
 };
 
+type ScreenNameReadingsOptions = {
+  index: NameIndex;
+  readings: readonly (readonly NameToken[])[];
+  ceiling: (queryShare: number) => number;
+  cutoff: number;
+  work: ScreeningWorkBudget;
+};
+
+// Both interpretations of an unknown party share a budget and their best evidence.
+const screenNameReadings = ({
+  index,
+  readings,
+  ceiling,
+  cutoff,
+  work,
+}: ScreenNameReadingsOptions): Result<
+  Map<number, NameMatch>,
+  ScreeningWorkLimitError
+> => {
+  const nameMatches = new Map<number, NameMatch>();
+  const distinctReadings = new Map(
+    readings.map((reading) => [
+      reading.map((token) => token.raw).join(" "),
+      reading,
+    ]),
+  );
+  for (const reading of distinctReadings.values()) {
+    if (reading.length === 0) {
+      continue;
+    }
+    const matched = matchNames({
+      index,
+      tokens: reading,
+      ceiling,
+      cutoff,
+      work,
+    });
+    if (matched === undefined) {
+      return workLimit();
+    }
+    for (const [entryIndex, match] of matched) {
+      const known = nameMatches.get(entryIndex);
+      if (known === undefined || match.score > known.score) {
+        nameMatches.set(entryIndex, match);
+      }
+    }
+  }
+  return Result.ok(nameMatches);
+};
+
 /**
  * Screens one party against the index and returns every entry scoring at or
  * above `cutoff`, best first. Each result is a possible match for review.
@@ -381,7 +456,7 @@ export const screen = (
   index: ScreeningIndex,
   query: ScreeningQuery,
   { cutoff, limit = DEFAULT_LIMIT }: ScreenOptions,
-): Result<ScreeningResult, ScreeningQueryError> => {
+): Result<ScreeningResult, ScreeningQueryError | ScreeningWorkLimitError> => {
   if (!(cutoff >= 0 && cutoff <= 1)) {
     panic(`cutoff must be within 0..1, got ${cutoff}`);
   }
@@ -398,14 +473,20 @@ export const screen = (
   }
   // An unknown party is read both ways: as an organisation, with legal forms
   // stripped, and as a person, whose "Ag" or "Sa" may be part of the name.
-  const readings =
+  const kinds =
     query.entityType === undefined
-      ? [
-          nameTokens(query.name, "organisation"),
-          nameTokens(query.name, "person"),
-        ]
-      : [nameTokens(query.name, query.entityType)];
-  const tokens = readings[0] ?? [];
+      ? (["organisation", "person"] as const)
+      : [query.entityType];
+  if (kinds.some((kind) => hasExcessQueryTokens(query.name, kind))) {
+    return Result.err(
+      new ScreeningQueryError({
+        code: "excess-query-tokens",
+        message: `the name must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
+      }),
+    );
+  }
+  const readings = kinds.map((kind) => distinctNameTokens(query.name, kind));
+  const tokens = readings.at(0) ?? [];
   const identifierKeys = new Set(
     (query.identifiers ?? [])
       .map(identifierKey)
@@ -433,31 +514,27 @@ export const screen = (
     }
     return score;
   };
-  const nameMatches = new Map<number, NameMatch>();
-  const distinctReadings = new Map(
-    readings.map((reading) => [
-      reading.map((token) => token.raw).join(" "),
-      reading,
-    ]),
-  );
-  for (const reading of tokens.length === 0 ? [] : distinctReadings.values()) {
-    for (const [entryIndex, match] of matchNames(
-      index.names,
-      reading,
-      ceiling,
-      cutoff,
-    )) {
-      const known = nameMatches.get(entryIndex);
-      if (known === undefined || match.score > known.score) {
-        nameMatches.set(entryIndex, match);
+  const work = { remaining: MAX_SCREENING_WORK, exhausted: false };
+  const matched = screenNameReadings({
+    index: index.names,
+    readings,
+    ceiling,
+    cutoff,
+    work,
+  });
+  if (matched.isErr()) {
+    return matched;
+  }
+  const nameMatches = matched.value;
+  const identifierMatches = new Set<number>();
+  for (const key of identifierKeys) {
+    for (const entryIndex of index.identifierEntries.get(key) ?? []) {
+      if (!spendScreeningWork(work)) {
+        return workLimit();
       }
+      identifierMatches.add(entryIndex);
     }
   }
-  const identifierMatches = new Set(
-    [...identifierKeys].flatMap(
-      (key) => index.identifierEntries.get(key) ?? [],
-    ),
-  );
 
   const possibleMatches: PossibleMatch[] = [];
   for (const entryIndex of new Set([
@@ -467,6 +544,14 @@ export const screen = (
     const entry = index.entries[entryIndex];
     if (entry === undefined) {
       continue;
+    }
+    const cost =
+      entry.birthDates.length +
+      entry.nationalities.length +
+      entry.identifiers.length +
+      1;
+    if (!spendScreeningWork(work, cost)) {
+      return workLimit();
     }
     const best = nameMatches.get(entryIndex);
     const match = scoreEntry({
@@ -480,6 +565,11 @@ export const screen = (
     if (match.score >= cutoff) {
       possibleMatches.push(match);
     }
+  }
+  const sortingWork =
+    possibleMatches.length * Math.ceil(Math.log2(possibleMatches.length + 1));
+  if (!spendScreeningWork(work, sortingWork)) {
+    return workLimit();
   }
   possibleMatches.sort(
     (left, right) =>

@@ -194,6 +194,26 @@ describe("anonymous sanctions search", () => {
     expect(screen.mock.calls).toHaveLength(0);
   });
 
+  test("rejects excess normalized query tokens before database or screening work", async () => {
+    const screen = clearScreen();
+    const validateRole = mock<SanctionsPublicReadDb["validateRole"]>(async () =>
+      Result.ok(undefined),
+    );
+    const { app } = appWith(screen, testDb(validateRole));
+    for (const name of [
+      `Registered ${"r ".repeat(249)}`.slice(0, 512),
+      "Registered ".repeat(46),
+    ]) {
+      const response = await app.handle(
+        request({ type: "organization", name }),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).not.toContain(name);
+    }
+    expect(screen.mock.calls).toHaveLength(0);
+    expect(validateRole.mock.calls).toHaveLength(0);
+  });
+
   test("reports failed role validation before any screening", async () => {
     const screen = clearScreen();
     const marker = "Private Role Failure Sentinel";

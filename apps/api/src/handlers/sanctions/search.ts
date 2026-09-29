@@ -3,6 +3,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { isCountryCode } from "@stll/country-codes";
+import { hasExcessQueryTokens, MAX_QUERY_TOKENS } from "@stll/sanctions";
 
 import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
@@ -12,7 +13,10 @@ import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanct
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
-import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import {
+  screenSanctionsSubject,
+  SANCTIONS_SUBJECT_ERROR_MESSAGES,
+} from "@/api/lib/lists/sanctions/screening-service";
 import type { SanctionsScreeningSubject } from "@/api/lib/lists/sanctions/screening-service";
 import { sanctionsPublicReadDb } from "@/api/lib/root-scoped-db";
 
@@ -124,6 +128,16 @@ export const createPublicSanctionsSearchHandler = ({
     },
     async function* ({ body }) {
       const subject = yield* screeningSubject(body);
+      if (
+        hasExcessQueryTokens(
+          subject.name,
+          subject.type === "organization" ? "organisation" : "person",
+        )
+      ) {
+        return invalidSubject(
+          `The name to screen must contain at most ${MAX_QUERY_TOKENS} normalized tokens`,
+        );
+      }
       const role = yield* Result.await(
         Result.tryPromise({
           try: async () => await db.validateRole(),
@@ -150,10 +164,7 @@ export const createPublicSanctionsSearchHandler = ({
           new HandlerError({
             status: 400,
             code: "validation_error",
-            message:
-              error.code === "empty-query"
-                ? "The name to screen has no letters"
-                : "The date of birth is not a valid calendar date",
+            message: SANCTIONS_SUBJECT_ERROR_MESSAGES[error.code],
           }),
       );
     },
