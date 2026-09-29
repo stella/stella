@@ -128,16 +128,17 @@ const createRunLogReader = ({
       } else {
         after = offsetSequence(offset);
       }
+      if (after === null) {
+        const { log } = await loadPage(0n);
+        after = log === undefined ? 0n : log.nextSeq - 1n;
+      }
       const deadline =
         Temporal.Now.instant().epochMilliseconds + FIRST_ENTRY_WAIT_MS;
       for (;;) {
         if (signal?.aborted) {
           return;
         }
-        if (after === null) {
-          const { log } = await loadPage(0n);
-          after = log === undefined ? 0n : log.nextSeq - 1n;
-        }
+        // db-await-in-loop: tailing page walk; each read starts after the last yielded seq, a page holds at most READ_PAGE_SIZE rows, and the loop ends at the close marker, the not-found deadline, or the abort signal
         const { entries, log } = await loadPage(after);
         for (const entry of entries) {
           after = entry.seq;
@@ -175,6 +176,7 @@ const createRunLogReader = ({
         const result: { offset: string; chunk: StreamChunk }[] = [];
         let after = 0n;
         for (;;) {
+          // db-await-in-loop: snapshot page walk in one transaction; each page starts after the last seq read, holds at most READ_PAGE_SIZE rows, and stops below the header's next_seq
           const entries = await tx
             .select({
               chunk: chatRunLogEntries.chunk,
