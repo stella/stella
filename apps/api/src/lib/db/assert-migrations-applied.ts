@@ -3,7 +3,10 @@ import { sql } from "drizzle-orm";
 import nodePath from "node:path";
 
 import { rootDb } from "@/api/db/root";
-import { assertMigrationHistory } from "@/api/lib/db/migration-history";
+import {
+  type AppliedMigration,
+  assertMigrationHistory,
+} from "@/api/lib/db/migration-history";
 import {
   type ApplicationRlsRolePosture,
   applicationRlsRolePostureViolation,
@@ -17,8 +20,6 @@ import { APPLICATION_RLS_ROLE_NAME } from "../../db/role-names";
 
 const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
-
-type AppliedMigrationRow = { hash: string };
 
 export const assertApplicationRlsRolePosture = async (): Promise<void> => {
   const result = await rootDb.execute<ApplicationRlsRolePosture>(sql`
@@ -76,15 +77,11 @@ export const reportDatabaseLoginPosture = async (): Promise<
   return posture;
 };
 
-const queryAppliedHashes = async (): Promise<Set<string>> => {
-  // Compare on `hash` (always populated) rather than `name` (NULL
-  // on rows applied by older drizzle versions). Hash is the SHA-256
-  // of the migration.sql contents at apply time, so a mismatch
-  // also catches a file edited after it was applied.
-  const result = await rootDb.execute<AppliedMigrationRow>(
-    sql`SELECT hash FROM drizzle.__drizzle_migrations`,
+const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
+  const result = await rootDb.execute<AppliedMigration>(
+    sql`SELECT name, hash FROM drizzle.__drizzle_migrations`,
   );
-  return new Set(result.map((row) => row.hash));
+  return result;
 };
 
 export const assertMigrationsApplied = async (): Promise<void> => {
@@ -100,7 +97,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
   await assertMigrationHistory({
     context: "startup",
     migrationsDir: MIGRATIONS_DIR,
-    queryAppliedHashes,
+    queryAppliedRows,
     remedy:
       `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
       "to bypass the check (emergency only).",
