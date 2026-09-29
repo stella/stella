@@ -460,19 +460,34 @@ const heavyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
 );
 const gatedJobs = resultJob.needs.filter((job) => job !== "ci-plan");
 
+const reportOnlyJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
+  v.parse(v.object({ "continue-on-error": v.optional(v.boolean()) }), body)[
+    "continue-on-error"
+  ]
+    ? [job]
+    : [],
+);
 // Jobs that only collect diagnostics after a gated job failed. ci-result does
 // not wait for them: the failure they report already fails the run.
-const REPORT_ONLY_JOBS = ["e2e-report"];
+const diagnosticJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
+  jobIf(body).includes("needs.") &&
+  /needs\.[\w-]+\.result == 'failure'/u.test(jobIf(body))
+    ? [job]
+    : [],
+);
 
 test("the result gate evaluates every job in the workflow", () => {
   expect(new Set(resultJob.needs)).toEqual(
     new Set(
       Object.keys(ciJobs).filter(
-        (job) => job !== "ci-result" && !REPORT_ONLY_JOBS.includes(job),
+        (job) =>
+          job !== "ci-result" &&
+          !reportOnlyJobs.includes(job) &&
+          !diagnosticJobs.includes(job),
       ),
     ),
   );
-  for (const job of REPORT_ONLY_JOBS) {
+  for (const job of diagnosticJobs) {
     const failedOn = [
       ...jobIf(ciJobs[job]).matchAll(/needs\.([\w-]+)\.result == 'failure'/gu),
     ].map((match) => match[1] ?? "");
@@ -482,6 +497,9 @@ test("the result gate evaluates every job in the workflow", () => {
     }
     expect(jobIf(ciJobs[job]), job).not.toContain("always()");
   }
+  expect(reportOnlyJobs).toEqual(["migration-exact-base-upgrade"]);
+  expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
+  expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   fc.assert(
     fc.property(

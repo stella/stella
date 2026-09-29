@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   compareCatalogs,
@@ -106,4 +109,46 @@ describe("migration catalog", () => {
       ),
     ).toEqual(['data.public.other: "1:same" != "1:drift"']);
   });
+});
+
+test("catalog CLI reserves exit 2 for observed drift and separates unreadable snapshots", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "catalog-verdict-"));
+  const left = path.join(directory, "left.json");
+  const right = path.join(directory, "right.json");
+  try {
+    writeFileSync(left, JSON.stringify({ data: { items: "same" } }));
+    for (const { contents, exitCode, output } of [
+      {
+        contents: JSON.stringify({ data: { items: "same" } }),
+        exitCode: 0,
+        output: "catalogs match",
+      },
+      {
+        contents: JSON.stringify({ data: { items: "changed" } }),
+        exitCode: 2,
+        output: 'data.items: "same" != "changed"',
+      },
+      { contents: "invalid json", exitCode: 1, output: "JSON Parse error" },
+    ]) {
+      writeFileSync(right, contents);
+      const run = Bun.spawnSync({
+        cmd: [
+          process.execPath,
+          path.join(import.meta.dir, "migration-catalog.ts"),
+          "compare",
+          left,
+          right,
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(run.exitCode).toBe(exitCode);
+      const text = new TextDecoder().decode(
+        exitCode === 0 ? run.stdout : run.stderr,
+      );
+      expect(text).toContain(output);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

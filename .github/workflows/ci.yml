@@ -346,7 +346,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/rehearse-exact-base-upgrade.sh|scripts/migration-rehearsal-db.ts|scripts/migration-catalog.ts|scripts/migration-catalog.test.ts|package.json|bun.lock|.github/workflows/ci.yml)
+              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/rehearse-exact-base-upgrade.sh|scripts/rehearse-exact-base-upgrade.test.ts|scripts/migration-rehearsal-db.ts|scripts/migration-catalog.ts|scripts/migration-catalog.test.ts|package.json|bun.lock|.github/workflows/ci.yml)
                 migration_exact_base_required=true
                 ;;
             esac
@@ -2206,6 +2206,7 @@ jobs:
         run: bash scripts/rehearse-migration-upgrade.sh
 
   migration-exact-base-upgrade:
+    # Reports only until a burn-in supports wiring it into ci-result.
     # Compare the queued upgrade from main's exact schema with a clean
     # install. The merge queue builds one PR per group, so base_sha is exact.
     needs: ci-plan
@@ -2216,6 +2217,7 @@ jobs:
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: true
     permissions:
       contents: read
     services:
@@ -2260,15 +2262,30 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      - name: Test migration catalog
-        run: bun test scripts/migration-catalog.test.ts
+      - name: Test exact-base rehearsal contracts
+        run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts
 
       - name: Rehearse exact-base migration upgrade
+        id: rehearsal
         env:
           BASE_SHA: ${{ github.event.merge_group.base_sha }}
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           CLEAN_DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
         run: bash scripts/rehearse-exact-base-upgrade.sh
+
+      - name: Report unavailable rehearsal
+        if: always() && steps.rehearsal.outcome == 'skipped'
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "### Exact-base migration upgrade"
+            echo
+            echo "Verdict: infra failure (rehearsal could not start)."
+            echo "Base: $BASE_SHA; candidate: $CANDIDATE_SHA."
+            echo "Phase durations and rehearsal total: not run."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   release-typecheck:
     needs: ci-plan
@@ -3552,7 +3569,6 @@ jobs:
         mobile-build,
         landing-build,
         marketing-screenshots,
-        migration-exact-base-upgrade,
         migration-upgrade-rehearsal,
         e2e-production-shard,
         e2e-vite-canary,
@@ -3605,7 +3621,6 @@ jobs:
             "landing-build": "landing_build_required",
             "legal-atlas-image": "legal_atlas_image_required",
             "marketing-screenshots": "marketing_screenshots_required",
-            "migration-exact-base-upgrade": "migration_exact_base_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
             "release-typecheck": "release_typecheck_required",

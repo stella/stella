@@ -423,7 +423,7 @@ if (import.meta.main) {
     );
     if (differences.length > 0) {
       console.error(differences.join("\n"));
-      process.exitCode = 1;
+      process.exitCode = 2;
     } else {
       console.log("catalogs match");
     }
@@ -431,6 +431,6 @@ if (import.meta.main) {
     console.error(
       "Usage: bun scripts/migration-catalog.ts snapshot | seed-footprint <before.json> <after.json> | compare <a.json> <b.json> [--exclude-data-tables <path>]",
     );
-    process.exitCode = 2;
+    process.exitCode = 1;
   }
 }
