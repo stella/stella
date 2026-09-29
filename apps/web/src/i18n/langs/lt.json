@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "Įtraukti {name} į {organization}?",
       "confirmDescription": "Šio šablono kopija bus įrašyta į {organization} biblioteką.",
       "confirmDownloadTitle": "Atsisiųsti {name} organizacijai {organization}?",
+      "confirmStarterDescription": "Šio vadovo kopija bus įrašyta į {organization} biblioteką.",
       "confirmUseTitle": "Naudoti {name} organizacijoje {organization}?",
       "installFailed": "Šablono pridėti nepavyko",
       "jurisdictions": "Jurisdikcijos",

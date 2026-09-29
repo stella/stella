@@ -1,7 +1,16 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -12,9 +21,12 @@ import {
   memberKnowledgeSource,
 } from "@/features/knowledge/member/member-knowledge";
 import { PlaybooksPageView } from "@/features/knowledge/views/playbooks/playbooks-page-view";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { roleOptions } from "@/lib/auth-queries";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
+import { organizationListOptions } from "@/lib/organization/queries";
 
 type PlaybookListProps = {
   playbooks: PlaybookListItem[];
@@ -25,6 +37,10 @@ type PlaybookListProps = {
   onSelect: (playbookId: string) => void;
   onLoadMore: () => void;
   onRefresh: () => void;
+  /** A ready-made playbook chosen before sign-in, still to be confirmed. */
+  starterIntent?: string | undefined;
+  /** Drops the chosen playbook from the page's query once it is settled. */
+  onStarterIntentSettled?: (() => void) | undefined;
 };
 
 /** The organization's playbooks: the shared page with the member's starters,
@@ -38,9 +54,15 @@ export const PlaybookList = ({
   onSelect,
   onLoadMore,
   onRefresh,
+  starterIntent,
+  onStarterIntentSettled,
 }: PlaybookListProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ playbook: ["create"] });
+  const { isPending: rolePending } = useQuery(roleOptions);
+  const { data: organizations } = useQuery(organizationListOptions);
+  const organizationName =
+    organizations?.find(({ id }) => id === organizationId)?.name ?? "";
   const recent = memberKnowledgeSource.useRecentPlaybooks(organizationId);
   const starters = memberKnowledgeSource.usePlaybookStarters(
     organizationId,
@@ -81,40 +103,104 @@ export const PlaybookList = ({
     }
   };
 
-  return (
-    <PlaybooksPageView
-      actions={{
-        startFrom: canCreate
-          ? (starter) => startFrom(starter.starterId)
-          : undefined,
-        open: onSelect,
-        loadMore: onLoadMore,
-        refresh: onRefresh,
+  // A playbook chosen before sign-in is only a name: it is looked up in this
+  // organization's own list of ready-made playbooks and confirmed there. One
+  // the list lacks, or a member who may not create playbooks, drops it.
+  const intentKnown =
+    starterIntent !== undefined &&
+    !rolePending &&
+    (!canCreate || starters.status === "ready");
+  const intendedStarter =
+    intentKnown && canCreate
+      ? starters.items.find(({ starterId }) => starterId === starterIntent)
+      : undefined;
+  const intentUnresolvable = intentKnown && intendedStarter === undefined;
+  useExternalSyncEffect(() => {
+    if (intentUnresolvable) {
+      onStarterIntentSettled?.();
+    }
+  }, [intentUnresolvable, onStarterIntentSettled]);
+
+  const starterConfirm = (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          onStarterIntentSettled?.();
+        }
       }}
-      source={{
-        starters: {
-          ...starters,
-          pendingStarterId: create.isPending ? create.variables : null,
-        },
-        recent,
-        library: {
-          playbooks,
-          hasNextPage: Boolean(nextCursor),
-          isFetchingNextPage: loading,
-        },
-      }}
-      toolbar={
-        canCreate && (
+      open={intendedStarter !== undefined}
+    >
+      <DialogPopup className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            {t("knowledge.catalogue.confirmUseTitle", {
+              name: intendedStarter?.name ?? "",
+              organization: organizationName,
+            })}
+          </DialogTitle>
+          <DialogDescription>
+            {t("knowledge.catalogue.confirmStarterDescription", {
+              organization: organizationName,
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
           <Button
-            className="h-11 shrink-0"
-            onClick={onNewPlaybook}
-            {...guideAnchor(GUIDE_ANCHORS.playbooksCreate)}
+            onClick={() => {
+              const starter = intendedStarter;
+              onStarterIntentSettled?.();
+              if (starter !== undefined) {
+                startFrom(starter.starterId);
+              }
+            }}
           >
-            <PlusIcon />
-            {t("knowledge.playbooks.createPlaybook")}
+            {t("knowledge.catalogue.confirm")}
           </Button>
-        )
-      }
-    />
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+
+  return (
+    <>
+      {starterIntent !== undefined && starterConfirm}
+      <PlaybooksPageView
+        actions={{
+          startFrom: canCreate
+            ? (starter) => startFrom(starter.starterId)
+            : undefined,
+          open: onSelect,
+          loadMore: onLoadMore,
+          refresh: onRefresh,
+        }}
+        source={{
+          starters: {
+            ...starters,
+            pendingStarterId: create.isPending ? create.variables : null,
+          },
+          recent,
+          library: {
+            playbooks,
+            hasNextPage: Boolean(nextCursor),
+            isFetchingNextPage: loading,
+          },
+        }}
+        toolbar={
+          canCreate && (
+            <Button
+              className="h-11 shrink-0"
+              onClick={onNewPlaybook}
+              {...guideAnchor(GUIDE_ANCHORS.playbooksCreate)}
+            >
+              <PlusIcon />
+              {t("knowledge.playbooks.createPlaybook")}
+            </Button>
+          )
+        }
+      />
+    </>
   );
 };

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  catalogueStartersOptions,
   catalogueTemplateOptions,
   catalogueTemplatePreviewOptions,
   catalogueTemplatesOptions,
@@ -111,6 +112,21 @@ const useCatalogueTemplatePreview = (
   };
 };
 
+/** The ready-made playbooks, as the playbooks page lists them. */
+const useCatalogueStarters = (): KnowledgeSource<"playbooks">["starters"] => {
+  const { data, isLoading } = useQuery(catalogueStartersOptions());
+  return {
+    status: isLoading ? "loading" : "ready",
+    items: (data ?? []).map((starter) => ({
+      starterId: starter.id,
+      name: starter.name,
+      description: starter.description,
+      positionCount: starter.positionCount,
+    })),
+    pendingStarterId: null,
+  };
+};
+
 /**
  * Reads of the published catalogue: the same for every visitor, keyed apart
  * from any organization's Knowledge. The only source a page for visitors
@@ -120,6 +136,7 @@ export const publicKnowledgeSource = {
   useCatalogueTemplates,
   useCatalogueTemplate,
   useCatalogueTemplatePreview,
+  useCatalogueStarters,
 };
 
 export type { CatalogueTemplate };

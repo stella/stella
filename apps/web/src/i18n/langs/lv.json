@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "Pievienot {name} organizācijai {organization}?",
       "confirmDescription": "Šīs veidnes kopija tiks saglabāta organizācijas {organization} bibliotēkā.",
       "confirmDownloadTitle": "Lejupielādēt {name} organizācijai {organization}?",
+      "confirmStarterDescription": "Šīs rokasgrāmatas kopija tiks saglabāta organizācijas {organization} bibliotēkā.",
       "confirmUseTitle": "Izmantot {name} organizācijā {organization}?",
       "installFailed": "Veidni neizdevās pievienot",
       "jurisdictions": "Jurisdikcijas",

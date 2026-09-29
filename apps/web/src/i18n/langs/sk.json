@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "Pridať {name} do {organization}?",
       "confirmDescription": "Kópia tejto šablóny sa uloží do knižnice {organization}.",
       "confirmDownloadTitle": "Stiahnuť {name} pre {organization}?",
+      "confirmStarterDescription": "Kópia tohto playbooku sa uloží do knižnice {organization}.",
       "confirmUseTitle": "Použiť {name} v {organization}?",
       "installFailed": "Šablónu sa nepodarilo pridať",
       "jurisdictions": "Jurisdikcie",

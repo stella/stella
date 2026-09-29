@@ -30,7 +30,25 @@ export const publicKnowledgeKeys = {
         "preview",
       ] as const,
   },
+  playbooks: {
+    starters: () =>
+      [...publicKnowledgeKeys.all, "playbooks", "starters"] as const,
+  },
 };
+
+/** The ready-made playbooks anyone may start from. */
+export const catalogueStartersOptions = () =>
+  queryOptions({
+    queryKey: publicKnowledgeKeys.playbooks.starters(),
+    queryFn: async ({ signal }) =>
+      unwrapPublicKnowledge(
+        await api.public.knowledge["playbook-starters"].get({
+          fetch: { signal },
+        }),
+        "list starter playbooks",
+      )?.items ?? [],
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
 
 type PackDetail = PublicKnowledgeData<
   ReturnType<(typeof api.public.knowledge)["template-packs"]>["get"]

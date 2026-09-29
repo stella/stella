@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "Kas lisada {name} organisatsioonile {organization}?",
       "confirmDescription": "Selle malli koopia salvestatakse organisatsiooni {organization} teeki.",
       "confirmDownloadTitle": "Kas laadida {name} alla organisatsioonile {organization}?",
+      "confirmStarterDescription": "Selle playbooki koopia salvestatakse organisatsiooni {organization} teeki.",
       "confirmUseTitle": "Kas kasutada {name} organisatsioonis {organization}?",
       "installFailed": "Malli lisamine ebaõnnestus",
       "jurisdictions": "Jurisdiktsioonid",

@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "¿Añadir {name} a {organization}?",
       "confirmDescription": "Se guardará una copia de esta plantilla en la biblioteca de {organization}.",
       "confirmDownloadTitle": "¿Descargar {name} para {organization}?",
+      "confirmStarterDescription": "Se guardará una copia de este playbook en la biblioteca de {organization}.",
       "confirmUseTitle": "¿Usar {name} en {organization}?",
       "installFailed": "No se pudo añadir la plantilla",
       "jurisdictions": "Jurisdicciones",

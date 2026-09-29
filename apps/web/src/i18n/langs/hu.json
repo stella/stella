@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "Hozzáadja a(z) {name} sablont ehhez: {organization}?",
       "confirmDescription": "A sablon egy példánya a(z) {organization} könyvtárába kerül.",
       "confirmDownloadTitle": "Letölti a(z) {name} sablont ehhez: {organization}?",
+      "confirmStarterDescription": "A playbook egy példánya a(z) {organization} könyvtárába kerül.",
       "confirmUseTitle": "Használja a(z) {name} sablont itt: {organization}?",
       "installFailed": "A sablont nem sikerült hozzáadni",
       "jurisdictions": "Joghatóságok",

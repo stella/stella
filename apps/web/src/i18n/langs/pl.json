@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "Dodać {name} do {organization}?",
       "confirmDescription": "Kopia tego szablonu trafi do biblioteki {organization}.",
       "confirmDownloadTitle": "Pobrać {name} dla {organization}?",
+      "confirmStarterDescription": "Kopia tego playbooka trafi do biblioteki {organization}.",
       "confirmUseTitle": "Użyć {name} w {organization}?",
       "installFailed": "Nie udało się dodać szablonu",
       "jurisdictions": "Jurysdykcje",

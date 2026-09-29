@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "إضافة {name} إلى {organization}؟",
       "confirmDescription": "ستُحفظ نسخة من هذا القالب في مكتبة {organization}.",
       "confirmDownloadTitle": "تنزيل {name} لـ {organization}؟",
+      "confirmStarterDescription": "ستُحفظ نسخة من دليل المراجعة هذا في مكتبة {organization}.",
       "confirmUseTitle": "استخدام {name} في {organization}؟",
       "installFailed": "تعذّرت إضافة القالب",
       "jurisdictions": "الولايات القضائية",

@@ -208,6 +208,8 @@ const isMemberModule = (module: string) =>
  * visitor without an account never evaluates it.
  */
 const DISPATCHERS = [
+  "routes/knowledge/index.tsx",
+  "routes/knowledge/playbooks.tsx",
   "routes/knowledge/templates.tsx",
   "routes/knowledge/templates_.catalogue.tsx",
   "routes/knowledge/templates_.catalogue.$packId.$templateId.tsx",
@@ -217,6 +219,12 @@ const DISPATCHERS = [
 
 /** What a dispatcher loads lazily for a member, and nothing else. */
 const LAZY_MEMBER_CONTAINERS = {
+  "routes/knowledge/index.tsx": [
+    "routes/knowledge/-member/member-knowledge-landing.tsx",
+  ],
+  "routes/knowledge/playbooks.tsx": [
+    "routes/knowledge/-member/member-playbooks-page.tsx",
+  ],
   "routes/knowledge/templates.tsx": [
     "routes/knowledge/-member/member-templates-page.tsx",
   ],

@@ -3232,6 +3232,7 @@
       "confirmAddTitle": "Adicionar {name} a {organization}?",
       "confirmDescription": "Uma cópia deste modelo será salva na biblioteca de {organization}.",
       "confirmDownloadTitle": "Baixar {name} para {organization}?",
+      "confirmStarterDescription": "Uma cópia deste playbook será salva na biblioteca de {organization}.",
       "confirmUseTitle": "Usar {name} em {organization}?",
       "installFailed": "Não foi possível adicionar o modelo",
       "jurisdictions": "Jurisdições",

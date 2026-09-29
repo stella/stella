@@ -3235,6 +3235,7 @@ type Messages = {
       "confirmAddTitle": "Add {name} to {organization}?";
       "confirmDescription": "A copy of this template goes into the {organization} library.";
       "confirmDownloadTitle": "Download {name} for {organization}?";
+      "confirmStarterDescription": "A copy of this playbook goes into the {organization} library.";
       "confirmUseTitle": "Use {name} in {organization}?";
       "installFailed": "The template could not be added";
       "jurisdictions": "Jurisdictions";

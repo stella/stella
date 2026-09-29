@@ -1,220 +1,35 @@
-import { useCallback, useRef, useState } from "react";
+import { lazy, Suspense } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
-import { Result } from "better-result";
-import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/toast";
-
-import { guideAnchor } from "@/features/guides/guide-anchor";
-import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
-import {
-  memberKnowledgeActions,
-  memberKnowledgeSource,
-} from "@/features/knowledge/member/member-knowledge";
-import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { detached } from "@/lib/detached";
-import { userErrorMessage } from "@/lib/errors/user-safe";
-import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
-import {
-  playbooksOptions,
-  recentPlaybooksOptions,
-} from "@/lib/knowledge/queries";
-import { prefetchRouteQuery } from "@/lib/react-query";
-import { PlaybookEditor } from "@/routes/knowledge/-components/playbook-editor";
-import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
+import { playbooksIntentSearchSchema } from "@/lib/knowledge/catalogue-intent";
+import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
+import { PublicPlaybooksCatalogue } from "@/routes/knowledge/-public/public-playbooks-catalogue";
 
-// ── View discriminated union ─────────────────────────
-
-type View = { kind: "list" } | { kind: "editor"; playbookId: string | null };
-
-// ── Route ────────────────────────────────────────────
-
-export const Route = createFileRoute("/knowledge/playbooks")({
-  loader: ({ context }) => {
-    // Readable without an account: nothing is loaded before the section
-    // knows who is visiting.
-    if (context.user === undefined) {
-      return;
-    }
-    const organizationId = context.user.activeOrganizationId;
-    const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
-    };
-
-    detached(
-      Promise.all([
-        prefetchRouteQuery(
-          context.queryClient,
-          playbooksOptions(organizationId),
-          onPrefetchError,
-        ),
-        prefetchRouteQuery(
-          context.queryClient,
-          recentPlaybooksOptions(organizationId),
-          onPrefetchError,
-        ),
-      ]),
-      "knowledge-playbooks.prefetch",
-    );
-  },
-  component: RouteComponent,
+// The organization's playbooks load only for a member, after the session is
+// known; the page reads them itself, so nothing is fetched before that.
+const LazyMemberPlaybooksPage = lazy(async () => {
+  const module =
+    await import("@/routes/knowledge/-member/member-playbooks-page");
+  return { default: module.MemberPlaybooksPage };
 });
 
-function RouteComponent() {
-  const t = useTranslations();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const [view, setView] = useState<View>({ kind: "list" });
+export const Route = createFileRoute("/knowledge/playbooks")({
+  validateSearch: playbooksIntentSearchSchema,
+  component: PlaybooksSection,
+});
 
-  // Extra playbooks from cursor-based pagination. nextCursor is three-state:
-  // undefined = "not yet loaded extras" (fall back to initialNextCursor),
-  // string = "has more pages", null = "reached the last page".
-  const [extraPlaybooks, setExtraPlaybooks] = useState<PlaybookListItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null | undefined>();
-  const [loadingMore, setLoadingMore] = useState(false);
-  const loadMoreAbort = useRef<AbortController | null>(null);
-
-  const {
-    data: playbooksData,
-    isLoading,
-    isError,
-  } = memberKnowledgeSource.usePlaybooks(activeOrganizationId);
-  const playbookActions =
-    memberKnowledgeActions.usePlaybookActions(activeOrganizationId);
-
-  const initialPlaybooks: PlaybookListItem[] =
-    playbooksData && "items" in playbooksData ? playbooksData.items : [];
-
-  const initialNextCursor =
-    playbooksData && "nextCursor" in playbooksData
-      ? playbooksData.nextCursor
-      : null;
-
-  const playbooks =
-    extraPlaybooks.length > 0
-      ? [...initialPlaybooks, ...extraPlaybooks]
-      : initialPlaybooks;
-
-  const currentNextCursor =
-    nextCursor === undefined ? initialNextCursor : nextCursor;
-
-  const handleLoadMore = useCallback(async () => {
-    const cursor = currentNextCursor;
-    if (!cursor) {
-      return;
-    }
-
-    loadMoreAbort.current?.abort();
-    const controller = new AbortController();
-    loadMoreAbort.current = controller;
-    setLoadingMore(true);
-
-    // Result.tryPromise instead of try/finally: the try/finally form trips the
-    // React Compiler bailout guard, and the request can throw on abort.
-
-    const result = await Result.tryPromise(async () => {
-      const { data, error } = await playbookActions.loadPage(
-        cursor,
-        controller.signal,
-      );
-      return { data, error };
-    });
-
-    // A superseding load aborted this one; leave the loading state to that call.
-    if (controller.signal.aborted) {
-      return;
-    }
-    setLoadingMore(false);
-
-    // Rethrown rather than swallowed: the caller hands this promise to
-    // `detached`, which captures what comes out of it. Returning here would
-    // leave a failed load with no toast and no capture.
-    if (Result.isError(result)) {
-      throw result.error;
-    }
-
-    const response = result.value;
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("knowledge.playbooks.loadFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    const { data } = response;
-    if (!data || !("items" in data)) {
-      return;
-    }
-
-    setExtraPlaybooks((prev) => [...prev, ...data.items]);
-    setNextCursor(data.nextCursor);
-  }, [currentNextCursor, t, playbookActions]);
-
-  const handleRefresh = useCallback(() => {
-    // Abort any in-flight page load so its result cannot append a stale page
-    // back into the list we are about to reset. handleLoadMore's abort branch
-    // intentionally leaves loadingMore set, so clear it here.
-    loadMoreAbort.current?.abort();
-    loadMoreAbort.current = null;
-    setLoadingMore(false);
-    setExtraPlaybooks([]);
-    setNextCursor(undefined);
-    playbookActions.invalidatePlaybooks();
-  }, [playbookActions]);
-
-  const handleBackToList = useCallback(() => {
-    setView({ kind: "list" });
-    handleRefresh();
-  }, [handleRefresh]);
-
-  if (view.kind === "editor") {
-    return (
-      <PlaybookEditor
-        onBack={handleBackToList}
-        onSaved={handleBackToList}
-        organizationId={activeOrganizationId}
-        playbookId={view.playbookId}
-      />
-    );
-  }
-
-  if (isLoading) {
-    return <PlaybooksPageSkeleton />;
-  }
-
-  if (isError) {
-    return (
-      <KnowledgeStatusMessage>
-        {t("knowledge.playbooks.loadFailed")}
-      </KnowledgeStatusMessage>
-    );
-  }
-
+function PlaybooksSection() {
   return (
-    <div
-      className="flex min-h-0 flex-1 flex-col"
-      {...guideAnchor(GUIDE_ANCHORS.playbooksOverview)}
-    >
-      <PlaybookList
-        loading={loadingMore}
-        nextCursor={currentNextCursor}
-        onLoadMore={() => {
-          detached(handleLoadMore(), "knowledge-playbooks.load-more");
-        }}
-        onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
-        onRefresh={handleRefresh}
-        onSelect={(playbookId) => setView({ kind: "editor", playbookId })}
-        organizationId={activeOrganizationId}
-        playbooks={playbooks}
-      />
-    </div>
+    <KnowledgeAudienceGate
+      anonymous={() => <PublicPlaybooksCatalogue />}
+      checking={<PlaybooksPageSkeleton />}
+      member={(organizationId) => (
+        <Suspense fallback={<PlaybooksPageSkeleton />}>
+          <LazyMemberPlaybooksPage organizationId={organizationId} />
+        </Suspense>
+      )}
+    />
   );
 }
