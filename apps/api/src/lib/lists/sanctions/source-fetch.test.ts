@@ -20,6 +20,7 @@ const FIXTURES = path.join(
 const UN_FIXTURE = path.join(FIXTURES, "un.xml");
 const OFAC_SDN_FIXTURE = path.join(FIXTURES, "ofac-sdn.xml");
 const OFAC_NON_SDN_FIXTURE = path.join(FIXTURES, "ofac-non-sdn.xml");
+const UK_FIXTURE = path.join(FIXTURES, "uk.xml");
 
 /** Serves a fixture file as a successful stream and records requested URLs. */
 const fixtureStream = (fixture: string) => {
@@ -225,6 +226,76 @@ describe("OFAC list refresh", () => {
         return Result.ok({
           body: new Blob([
             '<?xml version="1.0"?><sdnList><sdnEntry><uid>1</uid></sdnEntry></sdnList>',
+          ]).stream(),
+          headers: new Headers(),
+          ok: true,
+          status: 200,
+        });
+      },
+    });
+
+    expect(marker.isErr()).toBe(true);
+    if (marker.isErr()) {
+      expect(marker.error.code).toBe("parse-failed");
+    }
+    expect(attempts).toBe(1);
+  });
+});
+
+describe("UK list refresh", () => {
+  test("reads the edition from the generation date at the start of the export", async () => {
+    const { fetchStreamRequest, requested } = fixtureStream(UK_FIXTURE);
+    const marker = await fetchSanctionsMarker("uk", {
+      signal: new AbortController().signal,
+      fetchStreamRequest,
+    });
+
+    const downloadUrl = SANCTIONS_SOURCES.uk.download.urls[0];
+    expect(marker.unwrap()).toEqual({
+      source: "uk",
+      version: { source: "uk", publishedAt: "2026-09-21", fileId: null },
+      downloadUrl,
+    });
+    expect(requested).toEqual([downloadUrl]);
+  });
+
+  test("parses the export it identified as the UK source", async () => {
+    const marker = (
+      await fetchSanctionsMarker("uk", {
+        signal: new AbortController().signal,
+        fetchStreamRequest: fixtureStream(UK_FIXTURE).fetchStreamRequest,
+      })
+    ).unwrap();
+
+    const edition = await fetchSanctionsEdition(marker, {
+      signal: new AbortController().signal,
+      fetchStreamRequest: fixtureStream(UK_FIXTURE).fetchStreamRequest,
+    });
+
+    const { parsed, contentHash } = edition.unwrap();
+    expect(parsed.version).toEqual(marker.version);
+    expect(parsed.entries.length).toBe(3);
+    expect(
+      parsed.entries.every(
+        (entry) => entry.source === "uk" && entry.issuer === "GB",
+      ),
+    ).toBe(true);
+    expect(contentHash).toBe(
+      new Bun.CryptoHasher("sha256")
+        .update(await Bun.file(UK_FIXTURE).arrayBuffer())
+        .digest("hex"),
+    );
+  });
+
+  test("reports an export without a generation date as a parse failure", async () => {
+    let attempts = 0;
+    const marker = await fetchSanctionsMarker("uk", {
+      signal: new AbortController().signal,
+      fetchStreamRequest: async () => {
+        attempts += 1;
+        return Result.ok({
+          body: new Blob([
+            '<?xml version="1.0"?><Designations><Designation><UniqueID>UK-1</UniqueID></Designation></Designations>',
           ]).stream(),
           headers: new Headers(),
           ok: true,

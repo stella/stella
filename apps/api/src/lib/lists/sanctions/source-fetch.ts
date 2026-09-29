@@ -7,10 +7,12 @@ import {
   parseCzList,
   parseEuList,
   parseOfacList,
+  parseUkList,
   parseUnList,
   readCzListVersion,
   readEuListVersion,
   readOfacListVersion,
+  readUkListVersion,
   readUnListVersion,
 } from "@stll/sanctions";
 import type {
@@ -402,6 +404,14 @@ const loadMarkerOnce = async (
         options,
         readVersion: async (input) => await readOfacListVersion(source, input),
       });
+    // The UK list states its generation date near the top of the XML.
+    case "uk":
+      return await loadStreamedMarker({
+        source,
+        downloadUrl: SANCTIONS_SOURCES.uk.download.urls[0],
+        options,
+        readVersion: readUkListVersion,
+      });
     case "cz": {
       const page = await fetchBytes({
         signal: options.signal,
@@ -482,6 +492,8 @@ const parseStreamedList = async (
     case "us-sdn":
     case "us-non-sdn":
       return await parseOfacList(source, input);
+    case "uk":
+      return await parseUkList(input);
     default: {
       source satisfies never;
       return panic("Unknown streamed sanctions source");
