@@ -213,6 +213,7 @@ const DISPATCHERS = [
   "routes/knowledge/templates.tsx",
   "routes/knowledge/templates_.catalogue.tsx",
   "routes/knowledge/templates_.catalogue.$packId.$templateId.tsx",
+  "routes/knowledge/tools_.$entry.tsx",
   "routes/knowledge/-knowledge-audience-gate.tsx",
   "routes/knowledge/-catalogue-template-actions.tsx",
 ].map(fromSource);
@@ -230,6 +231,9 @@ const LAZY_MEMBER_CONTAINERS = {
   ],
   "routes/knowledge/-catalogue-template-actions.tsx": [
     "routes/knowledge/-member/member-catalogue-template-actions.tsx",
+  ],
+  "routes/knowledge/tools_.$entry.tsx": [
+    "routes/knowledge/-member/member-skill-editor-page.tsx",
   ],
 } as const satisfies Record<string, readonly string[]>;
 

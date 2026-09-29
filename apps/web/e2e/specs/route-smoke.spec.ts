@@ -258,7 +258,7 @@ const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
 const INTENTIONALLY_NOT_SMOKED = new Set([
   // Requires a connected desktop registry account and a real company record.
   "/knowledge/company-formats/$registry/$companyId",
-  "/knowledge/tools/$skillId",
+  "/knowledge/tools/$entry",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
 ]);

@@ -166,8 +166,8 @@ export const CatalogueBrowser = ({
     onSkillSheetChanged();
     detached(
       navigate({
-        to: "/knowledge/tools/$skillId",
-        params: { skillId: skill.id },
+        to: "/knowledge/tools/$entry",
+        params: { entry: skill.id },
       }),
       "catalogue-browser.navigate",
     );
@@ -179,8 +179,8 @@ export const CatalogueBrowser = ({
     }
     detached(
       navigate({
-        to: "/knowledge/tools/$skillId",
-        params: { skillId: entry.installedSkillId },
+        to: "/knowledge/tools/$entry",
+        params: { entry: entry.installedSkillId },
       }),
       "catalogue-browser.navigate",
     );

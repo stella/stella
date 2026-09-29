@@ -59,7 +59,7 @@ import { Route as ProtectedWorkspacesIndexRouteImport } from './routes/_protecte
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as KnowledgeTemplatesCatalogueRouteImport } from './routes/knowledge/templates_.catalogue'
-import { Route as KnowledgeToolsSkillIdRouteImport } from './routes/knowledge/tools_.$skillId'
+import { Route as KnowledgeToolsEntryRouteImport } from './routes/knowledge/tools_.$entry'
 import { Route as LawCasesIndexRouteImport } from './routes/law/cases/index'
 import { Route as SitemapsLawStatutesChar123countryChar125DotxmlRouteImport } from './routes/sitemaps/law-statutes/{$country}[.]xml'
 import { Route as ToolsSlugDownloadRouteImport } from './routes/tools/$slug_.download'
@@ -361,9 +361,9 @@ const KnowledgeTemplatesCatalogueRoute =
     path: '/templates/catalogue',
     getParentRoute: () => KnowledgeRouteRoute,
   } as any)
-const KnowledgeToolsSkillIdRoute = KnowledgeToolsSkillIdRouteImport.update({
-  id: '/tools_/$skillId',
-  path: '/tools/$skillId',
+const KnowledgeToolsEntryRoute = KnowledgeToolsEntryRouteImport.update({
+  id: '/tools_/$entry',
+  path: '/tools/$entry',
   getParentRoute: () => KnowledgeRouteRoute,
 } as any)
 const LawCasesIndexRoute = LawCasesIndexRouteImport.update({
@@ -673,7 +673,7 @@ export interface FileRoutesByFullPath {
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
-  '/knowledge/tools/$skillId': typeof KnowledgeToolsSkillIdRoute
+  '/knowledge/tools/$entry': typeof KnowledgeToolsEntryRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat/': typeof ProtectedChatIndexRoute
@@ -761,7 +761,7 @@ export interface FileRoutesByTo {
   '/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
-  '/knowledge/tools/$skillId': typeof KnowledgeToolsSkillIdRoute
+  '/knowledge/tools/$entry': typeof KnowledgeToolsEntryRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat': typeof ProtectedChatIndexRoute
@@ -858,7 +858,7 @@ export interface FileRoutesById {
   '/_protected/verify/$code': typeof ProtectedVerifyCodeRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
   '/knowledge/templates_/catalogue': typeof KnowledgeTemplatesCatalogueRouteWithChildren
-  '/knowledge/tools_/$skillId': typeof KnowledgeToolsSkillIdRoute
+  '/knowledge/tools_/$entry': typeof KnowledgeToolsEntryRoute
   '/sitemaps/law-statutes/{$country}.xml': typeof SitemapsLawStatutesChar123countryChar125DotxmlRoute
   '/tools/$slug_/download': typeof ToolsSlugDownloadRoute
   '/_protected/chat/': typeof ProtectedChatIndexRoute
@@ -956,7 +956,7 @@ export interface FileRouteTypes {
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates/catalogue'
-    | '/knowledge/tools/$skillId'
+    | '/knowledge/tools/$entry'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug/download'
     | '/chat/'
@@ -1044,7 +1044,7 @@ export interface FileRouteTypes {
     | '/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates/catalogue'
-    | '/knowledge/tools/$skillId'
+    | '/knowledge/tools/$entry'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug/download'
     | '/chat'
@@ -1140,7 +1140,7 @@ export interface FileRouteTypes {
     | '/_protected/verify/$code'
     | '/auth/accept-invitation/$invitationId'
     | '/knowledge/templates_/catalogue'
-    | '/knowledge/tools_/$skillId'
+    | '/knowledge/tools_/$entry'
     | '/sitemaps/law-statutes/{$country}.xml'
     | '/tools/$slug_/download'
     | '/_protected/chat/'
@@ -1566,11 +1566,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KnowledgeTemplatesCatalogueRouteImport
       parentRoute: typeof KnowledgeRouteRoute
     }
-    '/knowledge/tools_/$skillId': {
-      id: '/knowledge/tools_/$skillId'
-      path: '/tools/$skillId'
-      fullPath: '/knowledge/tools/$skillId'
-      preLoaderRoute: typeof KnowledgeToolsSkillIdRouteImport
+    '/knowledge/tools_/$entry': {
+      id: '/knowledge/tools_/$entry'
+      path: '/tools/$entry'
+      fullPath: '/knowledge/tools/$entry'
+      preLoaderRoute: typeof KnowledgeToolsEntryRouteImport
       parentRoute: typeof KnowledgeRouteRoute
     }
     '/law/cases/': {
@@ -1930,7 +1930,7 @@ interface KnowledgeRouteRouteChildren {
   KnowledgeWorkflowsRoute: typeof KnowledgeWorkflowsRoute
   KnowledgeIndexRoute: typeof KnowledgeIndexRoute
   KnowledgeTemplatesCatalogueRoute: typeof KnowledgeTemplatesCatalogueRouteWithChildren
-  KnowledgeToolsSkillIdRoute: typeof KnowledgeToolsSkillIdRoute
+  KnowledgeToolsEntryRoute: typeof KnowledgeToolsEntryRoute
   KnowledgeCompanyFormatsRegistryCompanyIdRoute: typeof KnowledgeCompanyFormatsRegistryCompanyIdRoute
 }
 
@@ -1944,7 +1944,7 @@ const KnowledgeRouteRouteChildren: KnowledgeRouteRouteChildren = {
   KnowledgeIndexRoute: KnowledgeIndexRoute,
   KnowledgeTemplatesCatalogueRoute:
     KnowledgeTemplatesCatalogueRouteWithChildren,
-  KnowledgeToolsSkillIdRoute: KnowledgeToolsSkillIdRoute,
+  KnowledgeToolsEntryRoute: KnowledgeToolsEntryRoute,
   KnowledgeCompanyFormatsRegistryCompanyIdRoute:
     KnowledgeCompanyFormatsRegistryCompanyIdRoute,
 }

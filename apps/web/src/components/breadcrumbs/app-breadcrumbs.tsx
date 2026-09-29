@@ -142,7 +142,7 @@ export const AppBreadcrumbs = () => {
         {t("knowledge.sections.tools.title")}
       </BreadcrumbLink>,
     ),
-    defineBreadcrumb(["/knowledge/tools/$skillId"], <SkillBreadcrumb />),
+    defineBreadcrumb(["/knowledge/tools/$entry"], <SkillBreadcrumb />),
     defineBreadcrumb(
       ["/settings"],
       <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>,

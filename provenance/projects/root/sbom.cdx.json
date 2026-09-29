@@ -16016,7 +16016,7 @@
             "location": "apps/web/src/routes/knowledge/tools.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/knowledge/tools_.$skillId.tsx#1"
+            "location": "apps/web/src/routes/knowledge/tools_.$entry.tsx#1"
           },
           {
             "location": "apps/web/src/routes/knowledge/workflows.tsx#4"

@@ -145,8 +145,8 @@ const ToolDetailContent = ({
     }
     detached(
       navigate({
-        to: "/knowledge/tools/$skillId",
-        params: { skillId: entry.installedSkillId },
+        to: "/knowledge/tools/$entry",
+        params: { entry: entry.installedSkillId },
       }),
       "tool-detail-view.navigate",
     );

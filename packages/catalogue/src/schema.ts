@@ -98,12 +98,23 @@ const ISO_COUNTRY_OR_UNION = /^[A-Z]{2}$/u;
  */
 export const MAX_SLUG_LENGTH = 64;
 
-const slug = v.pipe(
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+/**
+ * A catalogue entry's slug. It shares the `/knowledge/tools/<name>` space with
+ * organizations' skills, whose ids are UUIDs, so a UUID-shaped slug is
+ * refused: the two can never name the same page.
+ */
+export const catalogueSlugSchema = v.pipe(
   v.string(),
   v.minLength(2),
   v.maxLength(MAX_SLUG_LENGTH),
   v.regex(SLUG_PATTERN, "slug must be kebab-case"),
+  v.check((value) => !UUID_PATTERN.test(value), "slug must not be a UUID"),
 );
+
+const slug = catalogueSlugSchema;
 
 /**
  * GitHub `owner/name`. Owner: 1–39 chars, alphanumeric or hyphen, no
