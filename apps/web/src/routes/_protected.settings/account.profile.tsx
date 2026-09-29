@@ -51,6 +51,8 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { signalSessionChange } from "@/lib/account/session-signal";
+import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -290,6 +292,8 @@ function ProfilePageBody() {
       } catch {
         // Session might already be invalidated on the server
       }
+      releaseUserStorage();
+      signalSessionChange();
       window.location.href = "/auth";
     },
     onError: (err: unknown) => {

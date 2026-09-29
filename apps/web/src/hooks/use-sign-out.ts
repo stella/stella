@@ -4,10 +4,24 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { signalSessionChange } from "@/lib/account/session-signal";
+import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+
+/**
+ * Signs out. Whatever the server answers, this browser keeps nothing of the
+ * user and the other tabs are told.
+ */
+export const signOutAndRelease = async (
+  areas?: Parameters<typeof releaseUserStorage>[0],
+) =>
+  await authClient.signOut().finally(() => {
+    releaseUserStorage(areas);
+    signalSessionChange();
+  });
 
 export const useSignOut = () => {
   const analytics = useAnalytics();
@@ -17,7 +31,7 @@ export const useSignOut = () => {
 
   return useMutation({
     mutationFn: async () => {
-      const result = await authClient.signOut();
+      const result = await signOutAndRelease();
 
       if (result.error) {
         stellaToast.add({
