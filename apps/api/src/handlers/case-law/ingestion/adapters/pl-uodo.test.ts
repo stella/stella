@@ -68,6 +68,18 @@ const recordOf = async (urn: string): Promise<Record<string, unknown>> =>
 const bodyBytes = async (): Promise<Uint8Array> =>
   new Uint8Array(await Bun.file(BODY_FIXTURE).arrayBuffer());
 
+test("unmapped body markup is retained in the document and decision metadata", async () => {
+  const xml = (await Bun.file(BODY_FIXTURE).text()).replace(
+    "</xPart>",
+    "<xUnknown>tekst nowego elementu</xUnknown></xPart>",
+  );
+  const decision = builtDecision(
+    buildFrom(await recordOf(DECISION_URN), new TextEncoder().encode(xml)),
+  );
+  expect(decision.fulltext).toContain("tekst nowego elementu");
+  expect(decision.metadata["unmappedMarkup"]).toContain("xUnknown");
+});
+
 const buildFrom = (
   listing: Record<string, unknown>,
   bytes: Uint8Array | undefined,

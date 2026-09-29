@@ -332,14 +332,20 @@ describe("containers and text this reader has no rule for", () => {
     );
   });
 
-  test("text the parse does not carry fails the parse rather than publishing less", () => {
-    // A footnote whose text sits outside any `xText`: the note reader reads
-    // `xText` alone, the validator reads the source, and the gap is an error.
+  test("text outside a footnote text element is preserved and reported", () => {
+    // The source can leave footnote text outside its usual text element.
     const parsed = parseXml(
       decision(
         '<xGlosses><xGloss xID="[1]" xBookmark="g1">przypis zapisany poza elementem tekstu, który musi przetrwać</xGloss></xGlosses>',
       ),
     );
-    expect(Result.isError(parsed)).toBe(true);
+    expect(Result.isOk(parsed)).toBe(true);
+    if (Result.isError(parsed)) {
+      throw parsed.error;
+    }
+    expect(parsed.value.fulltext).toContain(
+      "przypis zapisany poza elementem tekstu, który musi przetrwać",
+    );
+    expect(parsed.value.unmappedMarkup).toContain("#text");
   });
 });
