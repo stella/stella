@@ -1,10 +1,9 @@
-import { Result, TaggedError, panic } from "better-result";
-
-import { stableStringify } from "@stll/stable-stringify";
+import { Result, TaggedError } from "better-result";
 
 import type { Block, DocumentAst } from "@/api/lib/case-law/document-ast";
 import { isDocumentAst } from "@/api/lib/case-law/document-ast";
 import type { CitationOpinionScope } from "@/api/lib/legal-search/ingestion-types";
+import { sortDeep } from "@/api/lib/sort-deep";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -56,16 +55,10 @@ export type CitationScopeEnvelope = {
 };
 
 /** Hash the JSON shape that both jsonb and the corpus payload actually keep. */
-export const citationScopeAstHash = (ast: DocumentAst): string => {
-  const persistedJson = JSON.stringify(ast);
-  const persistedAst: unknown = JSON.parse(persistedJson);
-  if (!isDocumentAst(persistedAst)) {
-    panic("A serialized document AST retains its validated shape");
-  }
-  return new Bun.CryptoHasher("sha256")
-    .update(stableStringify(persistedAst))
+export const citationScopeAstHash = (ast: DocumentAst): string =>
+  new Bun.CryptoHasher("sha256")
+    .update(JSON.stringify(sortDeep(ast)))
     .digest("hex");
-};
 
 export const citationScopeEnvelope = (
   ast: DocumentAst,

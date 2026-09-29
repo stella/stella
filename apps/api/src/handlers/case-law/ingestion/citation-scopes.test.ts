@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { stableStringify } from "@stll/stable-stringify";
+
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { mapCourtListenerRecord } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
+import { recordedClusters } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/test-records";
 import { extractDecisionCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   CITATION_SCOPE_METADATA_KEY,
@@ -16,6 +20,7 @@ import {
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import { isDocumentAst, plainTextOf } from "@/api/lib/case-law/document-ast";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { sortDeep } from "@/api/lib/sort-deep";
 
 const text = "See 347 U.S. 483. Id. at 495.";
 const ast = (paragraphText = text): DocumentAst => ({
@@ -68,6 +73,45 @@ const extract = (documentAst: DocumentAst) => {
 };
 
 describe("persisted citation scopes", () => {
+  test("recorded ASTs hash identical JSON bytes with undefined optional fields", () => {
+    let compared = 0;
+    for (const record of recordedClusters()) {
+      const mapped = mapCourtListenerRecord(record);
+      if (Result.isError(mapped)) {
+        continue;
+      }
+      const documentAst = mapped.value.documentAst;
+      if (!isDocumentAst(documentAst)) {
+        throw new TypeError(
+          "A mapped recorded cluster contains a document AST",
+        );
+      }
+      for (const block of documentAst.blocks) {
+        if (block.type === "paragraph") {
+          block.number = undefined;
+        }
+      }
+      expect(
+        documentAst.blocks.some(
+          (block) =>
+            block.type === "paragraph" && Object.hasOwn(block, "number"),
+        ),
+      ).toBe(true);
+      const persistedJson = JSON.stringify(documentAst);
+      const persisted: unknown = JSON.parse(persistedJson);
+      if (!isDocumentAst(persisted)) {
+        throw new TypeError("A recorded AST retains its shape through JSON");
+      }
+      const previousBytes = stableStringify(persisted);
+      expect(JSON.stringify(sortDeep(documentAst))).toBe(previousBytes);
+      expect(citationScopeAstHash(documentAst)).toBe(
+        new Bun.CryptoHasher("sha256").update(previousBytes).digest("hex"),
+      );
+      compared += 1;
+    }
+    expect(compared).toBeGreaterThan(0);
+  });
+
   test("survive JSON storage with the final annotated AST and reparse to a fixed point", () => {
     const first = extract(ast());
     const annotated = first.documentAst ?? expect.unreachable();
