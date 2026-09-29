@@ -663,19 +663,26 @@ export const evaluateQueuePlacement = ({
     .filter((entry) => entry.position < own.position)
     .toSorted((left, right) => left.position - right.position)
     .map((entry) => entry.pullNumber);
-  return ahead.length === 0
+  // Positions are 1-based. A snapshot with a gap ahead of the entry (only it,
+  // at position 2) is not proof of the front, so it fails closed.
+  return own.position === 1 && ahead.length === 0
     ? { status: "front", position: own.position }
     : { status: "behind", position: own.position, ahead };
 };
 
 export const formatQueuePlacementFailure = (
   placement: Exclude<QueuePlacement, { status: "front" }>,
-): string =>
-  placement.status === "absent"
-    ? `it is not among the ${placement.queueLength} merge queue entries`
-    : `it is at position ${placement.position}, behind ${placement.ahead
-        .map((number) => `#${number}`)
-        .join(", ")}`;
+): string => {
+  if (placement.status === "absent") {
+    return `it is not among the ${placement.queueLength} merge queue entries`;
+  }
+  if (placement.ahead.length === 0) {
+    return `it is at position ${placement.position}, with no entry listed ahead of it`;
+  }
+  return `it is at position ${placement.position}, behind ${placement.ahead
+    .map((number) => `#${number}`)
+    .join(", ")}`;
+};
 
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
   const value = record[key];
@@ -1289,6 +1296,33 @@ if (import.meta.main) {
     process.exit(1);
   }
 
+  // Chosen before the dry-run return, so a dry run reports the same non-write
+  // failure a real run would.
+  const mergeWhenReady =
+    policy.landing === "merge-when-ready"
+      ? mergeWhenReadyAction({
+          handoff: pullRequest.handoff,
+          jump,
+          checksSucceeded: requiredChecksSucceeded({
+            checkRuns: snapshot.checkRuns,
+            requiredCheckRuns: snapshot.requiredCheckRuns,
+          }),
+        })
+      : null;
+  if (mergeWhenReady?.kind === "jump-waits-for-checks") {
+    const armed =
+      mergeWhenReady.armedSince === null
+        ? "Nothing was armed."
+        : `Auto-merge has been on since ${mergeWhenReady.armedSince} and will ` +
+          "enqueue it at the BACK when they pass; disable it to keep the jump.";
+    console.error(
+      "\nverdict: NOT JUMPED — required checks are still running, and " +
+        `the queue accepts a jump only once they pass. ${armed} ` +
+        "Run the bar again once the checks pass.",
+    );
+    process.exit(1);
+  }
+
   if (options.dryRun) {
     console.log("\nverdict: MERGE (dry run, nothing written).");
     process.exit(0);
@@ -1303,14 +1337,9 @@ if (import.meta.main) {
       break;
     }
     case "merge-when-ready": {
-      const action = mergeWhenReadyAction({
-        handoff: pullRequest.handoff,
-        jump,
-        checksSucceeded: requiredChecksSucceeded({
-          checkRuns: snapshot.checkRuns,
-          requiredCheckRuns: snapshot.requiredCheckRuns,
-        }),
-      });
+      const action =
+        mergeWhenReady ??
+        panic("unreachable: chosen for merge-when-ready above");
       switch (action.kind) {
         case "already-queued":
           if (action.verifyFront) {
@@ -1324,21 +1353,6 @@ if (import.meta.main) {
             `\nverdict: ARMED — merge when ready has been on since ${action.enabledAt}`,
           );
           break;
-        case "jump-waits-for-checks": {
-          const armed =
-            action.armedSince === null
-              ? "Nothing was armed."
-              : `Auto-merge has been on since ${action.armedSince} and will ` +
-                "enqueue it at the BACK when they pass; disable it to keep " +
-                "the jump.";
-          console.error(
-            "\nverdict: NOT JUMPED — required checks are still running, and " +
-              `the queue accepts a jump only once they pass. ${armed} ` +
-              "Run the bar again once the checks pass.",
-          );
-          process.exit(1);
-          break;
-        }
         case "enqueue-jump": {
           const reported = gateway.enqueueWithJump({
             pullRequestId: pullRequest.id,

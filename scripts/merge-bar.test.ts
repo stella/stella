@@ -249,6 +249,74 @@ esac
     },
   );
 
+  // A real run refuses to jump while checks are running; a dry run of the same
+  // state must report the same failure instead of a merge verdict.
+  test.each([[], ["--dry-run"]])(
+    "a release jump with running checks exits non-zero without writing: %j",
+    (...extraArguments) => {
+      const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-pending-"));
+      const executable = path.join(directory, "gh");
+      const pullRequest = JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              id: "PR_fixture",
+              number: 123,
+              title: "chore: release v0.9.42",
+              isCrossRepository: false,
+              state: "OPEN",
+              isDraft: false,
+              mergeable: "MERGEABLE",
+              headRefOid: HEAD_SHA,
+              baseRefName: "main",
+              autoMergeRequest: null,
+              mergeQueueEntry: null,
+            },
+          },
+        },
+      });
+      writeFileSync(
+        executable,
+        `#!/bin/sh
+case "$*" in
+  *'pr merge'*|*enqueuePullRequest*) exit 98;;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs*) printf '1\\tci-result\\tin_progress\\t\\n';;
+  *headRefOid*)
+    if [ "$1" = api ]; then printf '%s\\n' '${pullRequest}';
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
+  *) exit 99;;
+esac
+`,
+      );
+      chmodSync(executable, 0o700);
+      try {
+        const result = Bun.spawnSync({
+          cmd: [
+            process.execPath,
+            fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+            "123",
+            "--repo",
+            PRIVATE_REPO,
+            ...extraArguments.flat(),
+          ],
+          env: {
+            ...process.env,
+            PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr.toString()).toContain("NOT JUMPED");
+        expect(result.stdout.toString()).not.toContain("verdict: MERGE");
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   test.each([null, { enabledAt: "2026-09-08T07:00:00Z" }])(
     "recognizes queue membership independently of auto-merge: %j",
     (autoMergeRequest) => {
@@ -890,6 +958,20 @@ describe("release pull requests jump the merge queue", () => {
         ahead: [4101, 4102],
       }),
     ).toBe("it is at position 3, behind #4101, #4102");
+  });
+
+  // A transitional snapshot can list the entry alone at a later position.
+  // Nothing is listed ahead of it, yet GitHub says it is not first.
+  test("a gapped snapshot is not proof of the front", () => {
+    expect(
+      evaluateQueuePlacement({
+        entries: [{ pullNumber: 4112, position: 2 }],
+        pullNumber: 4112,
+      }),
+    ).toEqual({ status: "behind", position: 2, ahead: [] });
+    expect(
+      formatQueuePlacementFailure({ status: "behind", position: 2, ahead: [] }),
+    ).toBe("it is at position 2, with no entry listed ahead of it");
   });
 
   test("a pull request missing from the queue is not at the front", () => {
