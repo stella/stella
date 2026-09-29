@@ -40,10 +40,7 @@ export const createPublicKnowledgeRoute = (
       }
     })
     .onBeforeHandle(({ path, set }) => {
-      if (!isPublicKnowledgePath(path)) {
-        return;
-      }
-      if (!env.FEATURE_PUBLIC_KNOWLEDGE) {
+      if (isPublicKnowledgePath(path) && !env.FEATURE_PUBLIC_KNOWLEDGE) {
         set.status = 404;
         return { error: "Not Found" } as const;
       }

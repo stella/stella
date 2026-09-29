@@ -25,8 +25,8 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
-const request = (path: string, cookie?: string) =>
-  publicKnowledgeRoute.handle(
+const request = async (path: string, cookie?: string) =>
+  await publicKnowledgeRoute.handle(
     new Request(`http://localhost${path}`, {
       headers: cookie ? { cookie } : undefined,
     }),
