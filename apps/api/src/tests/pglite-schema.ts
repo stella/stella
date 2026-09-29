@@ -454,7 +454,7 @@ export const installPgliteCaseLawObservationFence = async (
 
 const ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261002130000_organization_member_capacity",
+  "20261003120100_organization_member_capacity",
   "migration.sql",
 );
 
