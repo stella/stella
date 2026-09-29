@@ -1607,6 +1607,7 @@ const caseLawDecisionIdentityProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
   appUrl: v.nullable(v.string()),
   caseNumber: v.string(),
+  caseNumberType: caseNumberTypeProjection,
   court: v.string(),
   decisionDate: v.nullable(v.string()),
   decisionId: passthroughId(),
