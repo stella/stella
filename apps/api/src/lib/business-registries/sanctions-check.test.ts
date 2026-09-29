@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import type { CountryCode } from "@stll/country-codes";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -49,7 +51,7 @@ const dependencies = ({
 }: {
   executeLookup?: typeof executeRegistryLookup;
   screen?: typeof screenSanctionsSubject;
-  jurisdictions?: string[];
+  jurisdictions?: CountryCode[];
 }): SanctionsCheckDependencies => ({
   scopedDb: noDatabase,
   organizationId: toSafeId<"organization">("org_1"),

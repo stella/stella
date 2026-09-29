@@ -7,6 +7,7 @@ import type { CounterpartyCheckResult } from "@/api/lib/business-registries/enti
 import { CHECK_COUNTERPARTY_PROJECTION } from "@/api/lib/chat/projections";
 import { unavailableSanctionsScreening } from "@/api/lib/lists/sanctions/screening-service";
 import { SANCTIONS_UNAVAILABLE_REASONS } from "@/api/lib/lists/sanctions/screening-vocabulary";
+import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 
 // check_counterparty forwards the shared check's result verbatim, so its
 // projection must accept both result families and nothing else.
@@ -51,6 +52,7 @@ const sanctionsPossibleMatch = {
       editionId: "0b8f7c1e-3a52-4c1b-9d0e-4f6a2b7c8d90",
       publishedAt: "2026-09-28",
       verifiedAt: "2026-09-29T06:00:00.000Z",
+      pendingUpdate: null,
       totalMatches: 12,
       truncated: true,
       possibleMatches: [
@@ -118,6 +120,56 @@ describe("check_counterparty projection", () => {
     expect(v.safeParse(CHECK_COUNTERPARTY_PROJECTION, withExtra).success).toBe(
       false,
     );
+  });
+
+  test("accepts a list with an update held for review", () => {
+    const [list] = sanctionsPossibleMatch.lists;
+    const held = {
+      ...sanctionsPossibleMatch,
+      lists: [
+        {
+          ...list,
+          pendingUpdate: {
+            code: "contracted",
+            heldAt: NOW.toISOString(),
+            previousCount: 1000,
+            nextCount: 12,
+          },
+        },
+      ],
+    } satisfies CounterpartyCheckResult;
+    expect(v.safeParse(CHECK_COUNTERPARTY_PROJECTION, held).success).toBe(true);
+  });
+
+  test("names every registered list, and refuses a source, issuer or register it does not know", () => {
+    const [list] = sanctionsPossibleMatch.lists;
+    const screening = unavailableSanctionsScreening({
+      reason: "registry-unavailable",
+      practiceJurisdictions: [],
+      now: NOW,
+    });
+    expect(screening.lists.map((outcome) => outcome.source).toSorted()).toEqual(
+      sanctionsSourceIds().toSorted(),
+    );
+    const refused = [
+      { ...sanctionsPossibleMatch, lists: [{ ...list, source: "xx" }] },
+      { ...sanctionsPossibleMatch, lists: [{ ...list, issuer: "XX" }] },
+      {
+        ...sanctionsPossibleMatch,
+        subject: {
+          ...sanctionsPossibleMatch.subject,
+          resolvedFrom: {
+            ...sanctionsPossibleMatch.subject.resolvedFrom,
+            registry: "orsr",
+          },
+        },
+      },
+    ];
+    for (const payload of refused) {
+      expect(v.safeParse(CHECK_COUNTERPARTY_PROJECTION, payload).success).toBe(
+        false,
+      );
+    }
   });
 
   test("refuses a register outcome dressed with sanctions fields", () => {

@@ -6,12 +6,13 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
-import type {
-  BusinessRegistrySlug,
-  executeRegistryLookup,
-} from "@/api/lib/business-registries/dispatch";
+import type { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
-import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
+import { SANCTIONS_COMPANY_REGISTRY_BY_COUNTRY } from "@/api/lib/business-registries/sanctions-check-vocabulary";
+import type {
+  SanctionsCompanyIdCountry,
+  SanctionsCompanyRegistry,
+} from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   screenSanctionsSubject,
@@ -28,13 +29,10 @@ import type { SanctionsUnavailableReason } from "@/api/lib/lists/sanctions/scree
 // jurisdictions (which only label each list binding or informational), and
 // hands both to the shared screening service. Nothing here logs the subject.
 
-const COMPANY_REGISTERS = {
-  CZ: { registry: "ares", label: "Czech" },
-  SK: { registry: "rpo", label: "Slovak" },
-} as const satisfies Record<
-  SanctionsCompanyIdCountry,
-  { registry: BusinessRegistrySlug; label: string }
->;
+const COMPANY_ID_LABELS = {
+  CZ: "Czech",
+  SK: "Slovak",
+} as const satisfies Record<SanctionsCompanyIdCountry, string>;
 
 /** Who the caller asked to screen, as the counterparty check reads it. */
 export type SanctionsCheckSubject =
@@ -68,7 +66,7 @@ export type SanctionsCheckedSubject =
         type: "company-id";
         value: string;
         country: SanctionsCompanyIdCountry;
-        registry: BusinessRegistrySlug;
+        registry: SanctionsCompanyRegistry;
       } | null;
     }
   | {
@@ -114,7 +112,7 @@ export const loadPracticeJurisdictions = async ({
 }: {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
-}): Promise<string[]> => {
+}): Promise<CountryCode[]> => {
   const row = await scopedDb(
     async (tx) =>
       await tx.query.organizationSettings.findFirst({
@@ -148,7 +146,8 @@ const resolveCompanyName = async ({
   country: SanctionsCompanyIdCountry;
   dependencies: SanctionsCheckDependencies;
 }): Promise<Result<ResolvedName, HandlerError>> => {
-  const { registry, label } = COMPANY_REGISTERS[country];
+  const registry = SANCTIONS_COMPANY_REGISTRY_BY_COUNTRY[country];
+  const label = COMPANY_ID_LABELS[country];
   const companyId = value.trim();
   if (!BUSINESS_REGISTRY_DISPATCH[registry].isCanonicalId(companyId)) {
     return invalidSubject(

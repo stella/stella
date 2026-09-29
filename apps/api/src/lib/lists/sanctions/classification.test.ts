@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { CountryCode } from "@stll/country-codes";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsIssuer } from "@stll/sanctions";
 
@@ -7,7 +8,7 @@ import { classifySanctionsIssuer } from "./classification";
 
 type Row = {
   issuer: SanctionsIssuer;
-  jurisdictions: readonly string[];
+  jurisdictions: readonly CountryCode[];
   expected: "binding" | "informational";
 };
 
@@ -29,8 +30,6 @@ const TABLE: readonly Row[] = [
   { issuer: "CH", jurisdictions: ["CH"], expected: "binding" },
   { issuer: "CH", jurisdictions: ["DE"], expected: "informational" },
   { issuer: "UA", jurisdictions: ["UA", "PL"], expected: "binding" },
-  // Stored codes are upper case; a stray lower-case one still counts.
-  { issuer: "CZ", jurisdictions: ["cz"], expected: "binding" },
 ];
 
 describe("sanctions list classification", () => {
@@ -47,13 +46,22 @@ describe("sanctions list classification", () => {
     }
   });
 
+  test("the Swiss list binds a firm practising in Switzerland only", () => {
+    expect(classifySanctionsIssuer(SANCTIONS_SOURCES.ch.issuer, ["CH"])).toBe(
+      "binding",
+    );
+    expect(
+      classifySanctionsIssuer(SANCTIONS_SOURCES.ch.issuer, ["CZ", "DE"]),
+    ).toBe("informational");
+  });
+
   test("every registered national list binds a firm in its issuing country", () => {
+    const firmCountryOf = (issuer: SanctionsIssuer): CountryCode =>
+      issuer === "EU" || issuer === "UN" ? "CZ" : issuer;
     for (const source of Object.values(SANCTIONS_SOURCES)) {
-      const firmCountry =
-        source.issuer === "EU" || source.issuer === "UN" ? "CZ" : source.issuer;
-      expect(classifySanctionsIssuer(source.issuer, [firmCountry])).toBe(
-        "binding",
-      );
+      expect(
+        classifySanctionsIssuer(source.issuer, [firmCountryOf(source.issuer)]),
+      ).toBe("binding");
     }
   });
 });

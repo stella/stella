@@ -41,7 +41,10 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
-import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
+import {
+  SANCTIONS_COMPANY_ID_COUNTRIES,
+  SANCTIONS_COMPANY_REGISTRIES,
+} from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
@@ -67,7 +70,10 @@ import {
   SANCTIONS_ENTITY_TYPES,
   SANCTIONS_FIELD_COMPARISONS,
   SANCTIONS_IDENTITY_FIELDS,
+  SANCTIONS_ISSUERS,
+  SANCTIONS_PENDING_UPDATE_CODES,
   SANCTIONS_SCREENING_STATUSES,
+  SANCTIONS_SOURCE_IDS,
   SANCTIONS_UNAVAILABLE_REASONS,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
 
@@ -2199,7 +2205,7 @@ const sanctionsCheckedSubjectProjection = v.variant("type", [
         type: v.literal("company-id"),
         value: v.string(),
         country: v.picklist(SANCTIONS_COMPANY_ID_COUNTRIES),
-        registry: v.string(),
+        registry: v.picklist(SANCTIONS_COMPANY_REGISTRIES),
       }),
     ),
   }),
@@ -2238,20 +2244,39 @@ const sanctionsPossibleMatchProjection = v.strictObject({
   }),
 });
 
+// A newer edition the refresh fetched and held back for review; the list
+// still answers from the edition it had.
+const sanctionsPendingUpdateProjection = v.strictObject({
+  code: v.picklist(SANCTIONS_PENDING_UPDATE_CODES),
+  heldAt: v.string(),
+  previousCount: v.nullable(v.number()),
+  nextCount: v.nullable(v.number()),
+});
+
 // One list's answer. Flattened over its status: a clear or possible-match
 // list names the edition it screened; an unavailable one names its reason
 // and, when one is on file, the edition it did not use.
 const sanctionsListOutcomeProjection = v.strictObject({
-  source: v.string(),
-  issuer: v.string(),
+  source: v.picklist(SANCTIONS_SOURCE_IDS),
+  issuer: v.picklist(SANCTIONS_ISSUERS),
   issuerName: v.string(),
   classification: v.picklist(SANCTIONS_CLASSIFICATIONS),
   status: v.picklist(SANCTIONS_SCREENING_STATUSES),
   reason: v.nullable(v.picklist(SANCTIONS_UNAVAILABLE_REASONS)),
   checkedAt: v.string(),
-  editionId: v.nullable(passthroughId()),
+  // The output schema budget leaves room for one note: which edition these
+  // fields name depends on the list's status.
+  editionId: v.pipe(
+    v.nullable(passthroughId()),
+    v.description(
+      "With publishedAt: the edition screened; if unavailable, the latest on file, NOT screened",
+    ),
+  ),
   publishedAt: v.nullable(v.string()),
   verifiedAt: v.nullable(v.string()),
+  // A newer edition held back for review; the list still screens the
+  // edition above.
+  pendingUpdate: v.nullable(sanctionsPendingUpdateProjection),
   totalMatches: v.number(),
   truncated: v.boolean(),
   possibleMatches: v.array(sanctionsPossibleMatchProjection),

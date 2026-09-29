@@ -1,4 +1,5 @@
 import { EU_MEMBER_STATES } from "@stll/catalogue";
+import type { CountryCode } from "@stll/country-codes";
 import type { SanctionsIssuer } from "@stll/sanctions";
 
 import type { SanctionsClassification } from "@/api/lib/lists/sanctions/screening-vocabulary";
@@ -15,12 +16,11 @@ import type { SanctionsClassification } from "@/api/lib/lists/sanctions/screenin
  */
 export const classifySanctionsIssuer = (
   issuer: SanctionsIssuer,
-  practiceJurisdictions: readonly string[],
+  practiceJurisdictions: readonly CountryCode[],
 ): SanctionsClassification => {
-  const codes = practiceJurisdictions.map((code) => code.toUpperCase());
   const binding =
     issuer === "EU" || issuer === "UN"
-      ? codes.some((code) => EU_MEMBER_STATES.has(code))
-      : codes.includes(issuer);
+      ? practiceJurisdictions.some((code) => EU_MEMBER_STATES.has(code))
+      : practiceJurisdictions.some((code) => code === issuer);
   return binding ? "binding" : "informational";
 };

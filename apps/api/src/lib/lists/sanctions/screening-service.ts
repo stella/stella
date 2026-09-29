@@ -27,6 +27,7 @@ import { sharedSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-i
 import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import type {
   SanctionsClassification,
+  SanctionsPendingUpdateCode,
   SanctionsScreeningStatus,
   SanctionsUnavailableReason,
 } from "@/api/lib/lists/sanctions/screening-vocabulary";
@@ -89,12 +90,26 @@ export type SanctionsPossibleMatch = {
   };
 };
 
+/**
+ * A newer edition the refresh fetched but held back for review; the list
+ * still screens against the edition it had. Null when nothing is held.
+ */
+export type SanctionsPendingUpdate = {
+  code: SanctionsPendingUpdateCode;
+  /** When the edition was held. */
+  heldAt: string;
+  /** Entries in the edition in use, and in the held one, when known. */
+  previousCount: number | null;
+  nextCount: number | null;
+};
+
 type ListOutcomeBase = {
   source: SanctionsSource;
   issuer: SanctionsIssuer;
   issuerName: string;
   classification: SanctionsClassification;
   checkedAt: string;
+  pendingUpdate: SanctionsPendingUpdate | null;
 };
 
 type ScreenedEdition = {
@@ -199,16 +214,30 @@ export const aggregateSanctionsStatus = (
   return "clear";
 };
 
+const toPendingUpdate = (
+  heldUpdate: SanctionsSourceFreshness["heldUpdate"],
+): SanctionsPendingUpdate | null =>
+  heldUpdate === null
+    ? null
+    : {
+        code: heldUpdate.code,
+        heldAt: heldUpdate.at.toISOString(),
+        previousCount: heldUpdate.previousCount,
+        nextCount: heldUpdate.nextCount,
+      };
+
 const listBase = ({
   source,
   issuerName,
   practiceJurisdictions,
   checkedAt,
+  heldUpdate,
 }: {
   source: SanctionsSource;
   issuerName: string;
-  practiceJurisdictions: readonly string[];
+  practiceJurisdictions: readonly CountryCode[];
   checkedAt: string;
+  heldUpdate: SanctionsSourceFreshness["heldUpdate"];
 }): ListOutcomeBase => {
   const { issuer } = SANCTIONS_SOURCES[source];
   return {
@@ -217,6 +246,7 @@ const listBase = ({
     issuerName,
     classification: classifySanctionsIssuer(issuer, practiceJurisdictions),
     checkedAt,
+    pendingUpdate: toPendingUpdate(heldUpdate),
   };
 };
 
@@ -332,7 +362,7 @@ export type ScreenSanctionsSubjectProps = {
   db: ScopedDb;
   subject: SanctionsScreeningSubject;
   /** The firm's practice jurisdictions; empty labels every list informational. */
-  practiceJurisdictions: readonly string[];
+  practiceJurisdictions: readonly CountryCode[];
   now?: Date | undefined;
   indexCache?: SanctionsIndexCache | undefined;
 };
@@ -386,6 +416,7 @@ export const screenSanctionsSubject = async ({
             issuerName: sourceFreshness.issuer,
             practiceJurisdictions,
             checkedAt,
+            heldUpdate: sourceFreshness.heldUpdate,
           }),
           indexCache,
         }),
@@ -409,7 +440,7 @@ export const unavailableSanctionsScreening = ({
   now = new Date(),
 }: {
   reason: SanctionsUnavailableReason;
-  practiceJurisdictions: readonly string[];
+  practiceJurisdictions: readonly CountryCode[];
   now?: Date | undefined;
 }): SanctionsScreening => {
   const checkedAt = now.toISOString();
@@ -420,6 +451,8 @@ export const unavailableSanctionsScreening = ({
         issuerName: SANCTIONS_SOURCE_CONFIG[source].issuer,
         practiceJurisdictions,
         checkedAt,
+        // Nothing was read about the lists: no subject reached them.
+        heldUpdate: null,
       }),
       reason,
       null,

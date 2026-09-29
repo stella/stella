@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
+import type { SanctionsActiveEdition } from "@/api/lib/lists/sanctions/screening-index";
 import {
   SANCTIONS_MATCH_LIMIT,
   screenSanctionsSubject,
@@ -33,8 +34,7 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 const HOUR_MS = 60 * 60 * 1000;
 const VERIFIED_AT = new Date("2026-09-20T08:00:00Z");
 const FRESH_NOW = new Date(VERIFIED_AT.getTime() + HOUR_MS);
-// Past the 48-hour limit of the EU, UN, US and UK lists, within the 14 days of
-// the Czech one.
+// Past the 48-hour limit most lists carry, within the 14 days of the Czech one.
 const STALE_NOW = new Date(VERIFIED_AT.getTime() + 72 * HOUR_MS);
 const TRUNCATED_ENTRIES = SANCTIONS_MATCH_LIMIT + 5;
 
@@ -136,6 +136,75 @@ const seedSource = async (source: SanctionsSource) => {
     })
     .where(eq(sanctionsSources.id, source));
   editionIds.set(source, editionId);
+};
+
+const HELD_AT = new Date(VERIFIED_AT.getTime() + HOUR_MS / 2);
+
+/** A second edition of a list, fetched and held for review beside the active one. */
+const seedHeldEdition = async (
+  source: SanctionsSource,
+): Promise<SanctionsActiveEdition> => {
+  const entries = entriesFor(source);
+  const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+  await db.insert(sanctionsEditions).values({
+    id,
+    sourceId: source,
+    markerKey: sha256(`${source}:held-marker`),
+    publishedAt: "2026-09-20",
+    fileId: null,
+    contentHash: sha256(`${source}:held-content`),
+    entryCount: entries.length,
+    state: "staging",
+  });
+  await db.insert(sanctionsEditionEntries).values(
+    entries.map((item) => ({
+      editionId: id,
+      sourceEntryId: item.sourceId,
+      contentHash: sha256(JSON.stringify(item)),
+    })),
+  );
+  await db
+    .update(sanctionsSources)
+    .set({
+      heldEditionId: id,
+      heldGuardCode: "contracted",
+      heldAt: HELD_AT,
+      heldPreviousCount: entries.length,
+      heldNextCount: entries.length,
+    })
+    .where(eq(sanctionsSources.id, source));
+  return {
+    id,
+    publishedAt: "2026-09-20",
+    fileId: null,
+    entryCount: entries.length,
+  };
+};
+
+const clearHeldEdition = async (source: SanctionsSource) => {
+  const [row] = await db
+    .select({ heldEditionId: sanctionsSources.heldEditionId })
+    .from(sanctionsSources)
+    .where(eq(sanctionsSources.id, source));
+  await db
+    .update(sanctionsSources)
+    .set({
+      heldEditionId: null,
+      heldGuardCode: null,
+      heldAt: null,
+      heldPreviousCount: null,
+      heldNextCount: null,
+    })
+    .where(eq(sanctionsSources.id, source));
+  const heldEditionId = row?.heldEditionId ?? null;
+  if (heldEditionId !== null) {
+    await db
+      .delete(sanctionsEditionEntries)
+      .where(eq(sanctionsEditionEntries.editionId, heldEditionId));
+    await db
+      .delete(sanctionsEditions)
+      .where(eq(sanctionsEditions.id, heldEditionId));
+  }
 };
 
 beforeAll(async () => {
@@ -365,6 +434,41 @@ describe("sanctions screening service", () => {
       // The second screening reads freshness only.
       expect(reads - firstReads).toBe(1);
       expect(firstReads).toBeGreaterThan(sanctionsSourceIds().length);
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "reports an update held for review on its list, which still screens the edition it had",
+    async () => {
+      const held = await seedHeldEdition("ch");
+      try {
+        const result = await screenSanctionsSubject({
+          db: requestDb,
+          subject: {
+            type: "organization",
+            name: "Blue Meadow Bakery",
+            identifiers: [],
+          },
+          practiceJurisdictions: [],
+          now: FRESH_NOW,
+          indexCache: createSanctionsIndexCache(),
+        });
+        const screening = result.unwrap();
+        expect(listOf(screening.lists, "ch")).toMatchObject({
+          status: "clear",
+          editionId: editionIds.get("ch"),
+          pendingUpdate: {
+            code: "contracted",
+            heldAt: HELD_AT.toISOString(),
+            previousCount: entriesFor("ch").length,
+            nextCount: held.entryCount,
+          },
+        });
+        expect(listOf(screening.lists, "eu").pendingUpdate).toBeNull();
+      } finally {
+        await clearHeldEdition("ch");
+      }
     },
     DB_TEST_TIMEOUT_MS,
   );

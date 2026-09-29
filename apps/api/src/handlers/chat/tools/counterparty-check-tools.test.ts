@@ -117,6 +117,7 @@ describe("counterparty_check chat tool", () => {
           editionId: null,
           publishedAt: null,
           verifiedAt: null,
+          pendingUpdate: null,
           totalMatches: 0,
           truncated: false,
           possibleMatches: [],
