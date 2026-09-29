@@ -1,22 +1,24 @@
 import { useCallback, useRef, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
+import {
+  memberKnowledgeActions,
+  memberKnowledgeSource,
+} from "@/features/knowledge/member/member-knowledge";
+import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
+import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import {
-  knowledgeKeys,
   playbooksOptions,
   recentPlaybooksOptions,
 } from "@/lib/knowledge/queries";
@@ -58,49 +60,8 @@ export const Route = createFileRoute("/_protected/knowledge/playbooks")({
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-const PLAYBOOK_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
-
-function PlaybooksPageSkeleton() {
-  return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-36" />
-            <Skeleton className="h-4 w-96 max-w-full" />
-          </div>
-          <Skeleton className="h-11 w-36 rounded-md" />
-        </div>
-        <div>
-          <Skeleton className="mb-3 h-5 w-44" />
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {["starter-a", "starter-b", "starter-c", "starter-d"].map((key) => (
-              <Skeleton className="h-44 rounded-xl" key={key} />
-            ))}
-          </div>
-        </div>
-        <div>
-          <Skeleton className="mb-3 h-5 w-28" />
-          <ul className="divide-y rounded-xl border">
-            {PLAYBOOK_ROW_KEYS.map((key) => (
-              <li className="flex min-h-16 items-center gap-3 px-4" key={key}>
-                <Skeleton className="size-9 shrink-0 rounded-lg" />
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <Skeleton className="h-4 w-48" />
-                  <Skeleton className="h-3 w-32" />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function RouteComponent() {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -118,10 +79,9 @@ function RouteComponent() {
     data: playbooksData,
     isLoading,
     isError,
-  } = useQuery({
-    ...playbooksOptions(activeOrganizationId),
-    refetchOnWindowFocus: false,
-  });
+  } = memberKnowledgeSource.usePlaybooks(activeOrganizationId);
+  const playbookActions =
+    memberKnowledgeActions.usePlaybookActions(activeOrganizationId);
 
   const initialPlaybooks: PlaybookListItem[] =
     playbooksData && "items" in playbooksData ? playbooksData.items : [];
@@ -154,10 +114,10 @@ function RouteComponent() {
     // React Compiler bailout guard, and the request can throw on abort.
 
     const result = await Result.tryPromise(async () => {
-      const { data, error } = await api.playbooks.get({
-        query: { cursor, limit: 50 },
-        fetch: { signal: controller.signal },
-      });
+      const { data, error } = await playbookActions.loadPage(
+        cursor,
+        controller.signal,
+      );
       return { data, error };
     });
 
@@ -194,7 +154,7 @@ function RouteComponent() {
 
     setExtraPlaybooks((prev) => [...prev, ...data.items]);
     setNextCursor(data.nextCursor);
-  }, [currentNextCursor, t]);
+  }, [currentNextCursor, t, playbookActions]);
 
   const handleRefresh = useCallback(() => {
     // Abort any in-flight page load so its result cannot append a stale page
@@ -205,13 +165,8 @@ function RouteComponent() {
     setLoadingMore(false);
     setExtraPlaybooks([]);
     setNextCursor(undefined);
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.playbooks.all(activeOrganizationId),
-      }),
-      "knowledge-playbooks.invalidate",
-    );
-  }, [queryClient, activeOrganizationId]);
+    playbookActions.invalidatePlaybooks();
+  }, [playbookActions]);
 
   const handleBackToList = useCallback(() => {
     setView({ kind: "list" });
@@ -235,11 +190,9 @@ function RouteComponent() {
 
   if (isError) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("knowledge.playbooks.loadFailed")}
-        </p>
-      </div>
+      <KnowledgeStatusMessage>
+        {t("knowledge.playbooks.loadFailed")}
+      </KnowledgeStatusMessage>
     );
   }
 

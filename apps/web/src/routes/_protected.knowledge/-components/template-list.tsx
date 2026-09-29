@@ -1,11 +1,10 @@
-import { type CSSProperties, useState } from "react";
+import { useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { compareByLocale } from "@stll/collation";
-import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
+import { LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -24,7 +23,6 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
-import { ContextMenu } from "@stll/ui/context-menu";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import {
   Dialog,
@@ -38,11 +36,8 @@ import {
 import {
   CheckIcon,
   DownloadIcon,
-  MoreHorizontalIcon,
   PencilLineIcon,
   PlusIcon,
-  Rows2Icon,
-  Rows3Icon,
   SquarePenIcon,
   TagIcon,
   Trash2Icon,
@@ -50,35 +45,30 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@stll/ui/menu";
-import { SegmentedIconToggle } from "@stll/ui/segmented-icon-toggle";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
-import { UserIdentityAvatar } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { memberKnowledgeActions } from "@/features/knowledge/member/member-knowledge";
+import { TemplateLibraryView } from "@/features/knowledge/views/templates/template-list-view";
+import {
+  languageDisplayName,
+  TemplateRowView,
+} from "@/features/knowledge/views/templates/template-row-view";
+import type { TemplateDensity } from "@/features/knowledge/views/templates/template-row-view";
+import type {
+  KnowledgeTemplate,
+  TemplatesSource,
+} from "@/features/knowledge/views/templates/templates-seam";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { api } from "@/lib/api";
+import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
-import { isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+import { isDocxFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
-import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/_protected.knowledge/-components/category-sidebar";
 import {
@@ -98,54 +88,28 @@ type DiscoverData = Exclude<
   Response
 >;
 
-type TemplateItem = {
-  id: string;
-  name: string;
-  fileName: string;
-  fieldCount: number;
-  sizeBytes: number;
-  categoryId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  lastUsedAt: string | null;
-  useCount: number;
-  tags: string[] | null;
-  /** Ordered BCP-47 tags of the document text, primary language first. */
-  languages: string[];
-  whenToUse: string | null;
-  whenNotToUse: string | null;
-  authorName: string | null;
-  authorImage: string | null;
+/** The member library keeps full category rows for the category tools. */
+type MemberTemplatesSource = TemplatesSource & {
+  categories: TemplateCategoryItem[];
 };
 
 type TemplateListProps = {
-  templates: TemplateItem[];
-  categories: TemplateCategoryItem[];
-  selectedCategoryId: string | null;
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
+  source: MemberTemplatesSource;
   onCategorySelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
   onCreateBlank: () => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
   onLoadMore: () => void;
-  onSelect: (template: TemplateItem) => void;
+  onSelect: (template: KnowledgeTemplate) => void;
   onDeleted: () => void;
 };
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-// Only the .docx file-drop affordance — NOT the internal template-row drag
-// (which carries TEMPLATE_DRAG_MIME, not files) — should light up the list.
-const isFileDrag = (e: React.DragEvent) =>
-  e.dataTransfer.types.includes("Files");
-
+/** The organization's template library: the shared list view with the member
+ *  category tools, upload, and row actions in its slots. */
 export const TemplateList = ({
-  templates,
-  categories,
-  selectedCategoryId,
-  hasNextPage,
-  isFetchingNextPage,
+  source,
   onCategorySelect,
   onCategoriesChanged,
   onCreateBlank,
@@ -155,21 +119,13 @@ export const TemplateList = ({
   onDeleted,
 }: TemplateListProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const lang = useI18nStore((s) => s.lang);
   const canCreateTemplate = usePermissions({ template: ["create"] });
+  const templateActions = useMemberTemplateActions();
   const assignCategory = useAssignTemplateCategory();
   const [discovering, setDiscovering] = useState(false);
-  const [tagFilter, setTagFilter] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [density, setDensity] = useState<TemplateDensity>(readTemplateDensity);
   const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
   const categoryLabels = useTemplateCategoryLabels();
-
-  const changeDensity = (next: TemplateDensity) => {
-    setDensity(next);
-    writeTemplateDensity(next);
-  };
+  const { categories, selectedCategoryId } = source;
 
   const discover = async (file: File) => {
     if (!isDocxFile(file)) {
@@ -181,10 +137,10 @@ export const TemplateList = ({
     }
 
     setDiscovering(true);
-    // `finally` rather than a straight-line reset: both callers hand this
+    // `finally` rather than a straight-line reset: the caller hands this
     // promise to `detached`, so a rejected request would leave the dropzone
     // stuck in its discovering state with nothing to clear it.
-    const response = await api.templates.discover.post({ file }).finally(() => {
+    const response = await templateActions.discover(file).finally(() => {
       setDiscovering(false);
     });
 
@@ -212,32 +168,7 @@ export const TemplateList = ({
     onDiscovered(file, data);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    if (!canCreateTemplate || !isFileDrag(e)) {
-      return;
-    }
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    if (!isFileDrag(e)) {
-      return;
-    }
-    e.preventDefault();
-    setIsDragOver(false);
-    if (!canCreateTemplate) {
-      return;
-    }
-    const file = e.dataTransfer.files.item(0);
-    if (!file) {
-      return;
-    }
+  const dropFile = (file: File) => {
     if (!isDocxFile(file)) {
       stellaToast.add({
         type: "error",
@@ -249,205 +180,85 @@ export const TemplateList = ({
     detached(discover(file), "template-list.discover-dropped");
   };
 
-  if (templates.length === 0 && !selectedCategoryId) {
-    return (
-      <TemplateUpload
-        onCreateBlank={onCreateBlank}
-        onDiscovered={onDiscovered}
-      />
-    );
-  }
-
-  const allTags = [
-    ...new Set(templates.flatMap((template) => optionalArray(template.tags))),
-  ].toSorted(compareByLocale(lang));
-
-  const visibleTemplates = tagFilter
-    ? templates.filter((template) => template.tags?.includes(tagFilter))
-    : templates;
-
   return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col md:flex-row"
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
-      {isDragOver && (
-        <div className="border-foreground/30 bg-background/80 pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-xl border-2 border-dashed opacity-100 transition-opacity">
-          <p className="text-foreground text-sm font-medium">
-            {t("templates.dropToCreate")}
-          </p>
-        </div>
-      )}
-
-      <div className="hidden md:contents">
-        <TemplateCategorySidebar
-          categories={categories}
-          onAssignCategory={assignCategory}
-          onCategoriesChanged={onCategoriesChanged}
-          onSelect={onCategorySelect}
-          onSelectTag={setTagFilter}
-          selectedId={selectedCategoryId}
-          selectedTag={tagFilter}
-          tags={allTags}
+    <TemplateLibraryView
+      actions={{
+        loadMore: onLoadMore,
+        dropFile: canCreateTemplate ? dropFile : undefined,
+      }}
+      emptyState={
+        <TemplateUpload
+          onCreateBlank={onCreateBlank}
+          onDiscovered={onDiscovered}
         />
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col md:border-s">
-        <div
-          className={cn(
-            "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 md:py-0",
-            TOOLBAR_ROW_MIN_HEIGHT,
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-foreground text-sm font-semibold">
-              {t("knowledge.sections.templates.title")}
-            </h2>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {format.number(visibleTemplates.length)}
-            </span>
-            {tagFilter && (
-              <span className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium">
-                {tagFilter}
-                <Tooltip
-                  content={t("common.remove")}
-                  render={
-                    <button
-                      aria-label={t("common.remove")}
-                      className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
-                      onClick={() => setTagFilter(null)}
-                      type="button"
-                    />
-                  }
-                >
-                  <XIcon className="size-3" />
-                </Tooltip>
-              </span>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <DensityToggle density={density} onChange={changeDensity} />
-            {canCreateTemplate && (
-              <Button disabled={discovering} onClick={onCreateBlank} size="sm">
-                <PlusIcon />
-                {discovering ? t("common.loading") : t("templates.newTemplate")}
-              </Button>
-            )}
-          </div>
-        </div>
-
+      }
+      mobileFilters={(filter) => (
         <CategoryMobileFilterBar
           canCreate={canCreateTemplate}
           categories={categories}
-          extraFilters={allTags.map((tag) => ({
+          extraFilters={filter.tags.map((tag) => ({
             id: tag,
             label: tag,
-            active: tagFilter === tag,
+            active: filter.selectedTag === tag,
             icon: <TagIcon className="size-3.5" />,
-            onSelect: () => setTagFilter(tagFilter === tag ? null : tag),
+            onSelect: () =>
+              filter.selectTag(filter.selectedTag === tag ? null : tag),
           }))}
           labels={categoryLabels}
           onCreateCategory={() => setCreateCategoryOpen(true)}
           onSelect={onCategorySelect}
           onSelectAll={() => {
             onCategorySelect(null);
-            setTagFilter(null);
+            filter.selectTag(null);
           }}
           selectedId={selectedCategoryId}
         />
-
-        <div className="flex-1 overflow-y-auto">
-          {visibleTemplates.length === 0 && (
-            <div className="flex items-center justify-center p-8">
-              <p className="text-muted-foreground text-sm">
-                {t("templates.noTemplates")}
-              </p>
-            </div>
-          )}
-
-          <ul className="divide-y">
-            {visibleTemplates.map((template) => (
-              <TemplateRow
-                allTags={allTags}
-                categories={categories}
-                density={density}
-                key={template.id}
-                onAssignCategory={assignCategory}
-                onCategoriesChanged={onCategoriesChanged}
-                onDeleted={onDeleted}
-                onSelect={() => onSelect(template)}
-                template={template}
-              />
-            ))}
-          </ul>
-
-          {hasNextPage && (
-            <div className="border-t p-1">
-              <Button
-                className="w-full"
-                disabled={isFetchingNextPage}
-                onClick={onLoadMore}
-                size="sm"
-                variant="muted"
-              >
-                {t("common.loadMore")}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-
+      )}
+      renderRow={(template, row) => (
+        <MemberTemplateRow
+          allTags={row.allTags}
+          categories={categories}
+          density={row.density}
+          key={template.id}
+          onAssignCategory={assignCategory}
+          onCategoriesChanged={onCategoriesChanged}
+          onDeleted={onDeleted}
+          onSelect={() => onSelect(template)}
+          template={template}
+        />
+      )}
+      sidebar={(filter) => (
+        <TemplateCategorySidebar
+          categories={categories}
+          onAssignCategory={assignCategory}
+          onCategoriesChanged={onCategoriesChanged}
+          onSelect={onCategorySelect}
+          onSelectTag={filter.selectTag}
+          selectedId={selectedCategoryId}
+          selectedTag={filter.selectedTag}
+          tags={filter.tags}
+        />
+      )}
+      source={source}
+      toolbar={
+        canCreateTemplate && (
+          <Button disabled={discovering} onClick={onCreateBlank} size="sm">
+            <PlusIcon />
+            {discovering ? t("common.loading") : t("templates.newTemplate")}
+          </Button>
+        )
+      }
+    >
       <CategoryFormDialog
         onOpenChange={setCreateCategoryOpen}
         onSaved={onCategoriesChanged}
         open={createCategoryOpen}
       />
-    </div>
-  );
-};
-
-type DensityToggleProps = {
-  density: TemplateDensity;
-  onChange: (density: TemplateDensity) => void;
-};
-
-const DensityToggle = ({ density, onChange }: DensityToggleProps) => {
-  const t = useTranslations();
-
-  return (
-    <SegmentedIconToggle
-      onChange={onChange}
-      options={[
-        { value: "compact", icon: Rows3Icon, label: t("common.compact") },
-        {
-          value: "comfortable",
-          icon: Rows2Icon,
-          label: t("common.comfortable"),
-        },
-      ]}
-      value={density}
-    />
+    </TemplateLibraryView>
   );
 };
 
 // ── Row ──────────────────────────────────────────────
-
-/** The template detail returns an audited presigned URL for the source DOCX. */
-const downloadTemplateSource = async (
-  templateId: string,
-  errorTitle: string,
-) => {
-  const response = await api
-    .templates({ templateId: toSafeId<"template">(templateId) })
-    .get();
-  if (response.error) {
-    stellaToast.add({ type: "error", title: errorTitle });
-    return;
-  }
-  openIsolatedWindow(response.data.presignedUrl);
-};
 
 /** Builds a category submenu entry, marking the current one with a check and
  *  disabling it so re-assigning to the same category is a no-op. */
@@ -462,63 +273,8 @@ const categoryAction = (
   return { label, onClick };
 };
 
-/** Renders a single `ContextMenuAction` inside the ⋯ dropdown, mirroring the
- *  right-click `ContextMenu` so both surfaces stay driven by one array. */
-const DropdownActionItem = ({ action }: { action: ContextMenuAction }) => {
-  const separator = action.separatorBefore ? <DropdownMenuSeparator /> : null;
-
-  if (action.submenu) {
-    return (
-      <>
-        {separator}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            {action.icon}
-            {action.label}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            {action.submenu.map((sub) => (
-              <DropdownActionItem action={sub} key={sub.label} />
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      </>
-    );
-  }
-
-  return (
-    <>
-      {separator}
-      <DropdownMenuItem
-        className={cn(
-          action.variant === "destructive" && "text-destructive-foreground",
-        )}
-        disabled={action.disabled === true}
-        onClick={action.onClick}
-      >
-        {action.icon}
-        {action.label}
-      </DropdownMenuItem>
-    </>
-  );
-};
-
-type TemplateDensity = "compact" | "comfortable";
-
-const DENSITY_STORAGE_KEY = "stella.templates.density";
-
-/** Persisted list density; defaults to compact for fast scanning. */
-const readTemplateDensity = (): TemplateDensity =>
-  localStorage.getItem(DENSITY_STORAGE_KEY) === "comfortable"
-    ? "comfortable"
-    : "compact";
-
-const writeTemplateDensity = (density: TemplateDensity): void => {
-  localStorage.setItem(DENSITY_STORAGE_KEY, density);
-};
-
-type TemplateRowProps = {
-  template: TemplateItem;
+type MemberTemplateRowProps = {
+  template: KnowledgeTemplate;
   allTags: string[];
   categories: TemplateCategoryItem[];
   density: TemplateDensity;
@@ -531,50 +287,9 @@ type TemplateRowProps = {
   onDeleted: () => void;
 };
 
-/** Stable hue (0–359) from a category id, so each category gets a consistent
- *  low-chroma tint and otherwise-identical rows become scannable. */
-const categoryHue = (categoryId: string): number => {
-  let hue = 0;
-  for (const char of categoryId) {
-    hue = (hue * 31 + (char.codePointAt(0) ?? 0)) % 360;
-  }
-  return hue;
-};
-
-/** The template's initial in a rounded square, tinted by its category (the one
- *  accent per row). The hue rides in a CSS variable so the oklch classes can
- *  pick theme-appropriate lightness; uncategorized templates stay neutral. */
-const TemplateMonogram = ({
-  name,
-  categoryId,
-}: {
-  name: string;
-  categoryId: string | null;
-}) => {
-  const initial = (name.trim().at(0) ?? "?").toUpperCase();
-  if (categoryId === null) {
-    return (
-      <div className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold">
-        {initial}
-      </div>
-    );
-  }
-  // CSSProperties has no index signature for CSS custom properties, so widen
-  // the binding rather than cast; --cat-hue feeds the oklch() classes.
-  const style: CSSProperties & { "--cat-hue": string } = {
-    "--cat-hue": String(categoryHue(categoryId)),
-  };
-  return (
-    <div
-      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.94_0.045_var(--cat-hue))] text-sm font-semibold text-[oklch(0.45_0.13_var(--cat-hue))] dark:bg-[oklch(0.32_0.05_var(--cat-hue))] dark:text-[oklch(0.85_0.11_var(--cat-hue))]"
-      style={style}
-    >
-      {initial}
-    </div>
-  );
-};
-
-const TemplateRow = ({
+/** One library row: the shared row view with the member's actions and the
+ *  dialogs behind them. */
+const MemberTemplateRow = ({
   template,
   allTags,
   categories,
@@ -583,12 +298,12 @@ const TemplateRow = ({
   onCategoriesChanged,
   onSelect,
   onDeleted,
-}: TemplateRowProps) => {
+}: MemberTemplateRowProps) => {
   const categoryName =
     categories.find((category) => category.id === template.categoryId)?.name ??
     null;
   const t = useTranslations();
-  const lang = useI18nStore((s) => s.lang);
+  const templateActions = useMemberTemplateActions();
   const canUseTemplate = usePermissions({ template: ["use"] });
   const canUpdateTemplate = usePermissions({ template: ["update"] });
   const canDeleteTemplate = usePermissions({ template: ["delete"] });
@@ -601,11 +316,7 @@ const TemplateRow = ({
 
   const handleDelete = async () => {
     setDeleting(true);
-    const response = await api
-      .templates({
-        templateId: template.id,
-      })
-      .delete();
+    const response = await templateActions.remove(template.id);
 
     setDeleting(false);
 
@@ -629,6 +340,16 @@ const TemplateRow = ({
     onDeleted();
   };
 
+  /** Opens the audited presigned URL of the source DOCX. */
+  const downloadSource = async () => {
+    const sourceUrl = await templateActions.readSourceUrl(template.id);
+    if (sourceUrl === null) {
+      stellaToast.add({ type: "error", title: t("common.unexpectedError") });
+      return;
+    }
+    openIsolatedWindow(sourceUrl);
+  };
+
   const rowActions: ContextMenuAction[] = [
     {
       // Redundant with the whole-row click, but makes "you can edit this"
@@ -649,10 +370,7 @@ const TemplateRow = ({
     label: t("common.download"),
     icon: <DownloadIcon />,
     onClick: () =>
-      detached(
-        downloadTemplateSource(template.id, t("common.unexpectedError")),
-        "template-list.download-template-source",
-      ),
+      detached(downloadSource(), "template-list.download-template-source"),
   });
   if (canUpdateTemplate) {
     const categorySubmenu: ContextMenuAction[] = [
@@ -714,119 +432,19 @@ const TemplateRow = ({
     e.dataTransfer.effectAllowed = "move";
   };
 
-  // Trailing cluster — fixed width so it lines up across rows. `relative z-10`
-  // keeps Use / ⋯ clickable above the row-wide open affordance (the name
-  // button's stretched ::after). Opening the template is the whole-row click,
-  // mirroring the clause list; Use (fill) stays an explicit CTA.
-  const actions = (
-    <div className="relative z-10 flex shrink-0 items-center gap-2">
-      {canUseTemplate && (
-        <Button
-          className="max-sm:hidden"
-          onClick={() => setUseOpen(true)}
-          size="xs"
-          variant="outline"
-        >
-          {t("templates.useTemplate")}
-        </Button>
-      )}
-      <span className="hidden sm:inline-flex">
-        <Tooltip
-          content={template.authorName}
-          render={<span className="inline-flex" />}
-        >
-          <UserIdentityAvatar
-            className="size-6 shrink-0 text-[0.5625rem]"
-            image={template.authorImage}
-            name={template.authorName}
-          />
-        </Tooltip>
-      </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              aria-label={t("common.actions")}
-              size="icon-xs"
-              variant="ghost"
-            />
-          }
-        >
-          <MoreHorizontalIcon />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          {rowActions.map((action) => (
-            <DropdownActionItem action={action} key={action.label} />
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-
   return (
-    <li className="group">
-      <ContextMenu actions={rowActions}>
-        <div
-          className={cn(
-            density === "compact"
-              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2"
-              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3",
-          )}
-          draggable
-          onDragStart={handleDragStart}
-        >
-          <TemplateMonogram
-            categoryId={template.categoryId}
-            name={template.name}
-          />
-
-          {density === "compact" ? (
-            <>
-              <button
-                className="flex min-w-0 flex-1 items-baseline gap-2 text-start after:absolute after:inset-0"
-                onClick={onSelect}
-                type="button"
-              >
-                <span className="truncate text-sm font-medium" dir="auto">
-                  {template.name}
-                </span>
-                {categoryName !== null && (
-                  <span
-                    className="text-muted-foreground shrink-0 truncate text-xs"
-                    dir="auto"
-                  >
-                    {categoryName}
-                  </span>
-                )}
-              </button>
-              {actions}
-            </>
-          ) : (
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <div className="flex items-center gap-3">
-                <button
-                  className="flex min-w-0 flex-1 text-start after:absolute after:inset-0"
-                  onClick={onSelect}
-                  type="button"
-                >
-                  <span className="truncate text-sm font-medium" dir="auto">
-                    {template.name}
-                  </span>
-                </button>
-                {actions}
-              </div>
-              <RowDescription
-                canUpdate={canUpdateTemplate}
-                categoryName={categoryName}
-                onDescribe={() => setGuidanceOpen(true)}
-                template={template}
-              />
-              <RowStats lang={lang} template={template} />
-            </div>
-          )}
-        </div>
-      </ContextMenu>
-
+    <TemplateRowView
+      actions={{
+        open: onSelect,
+        use: canUseTemplate ? () => setUseOpen(true) : undefined,
+        describe: canUpdateTemplate ? () => setGuidanceOpen(true) : undefined,
+        menu: rowActions,
+        dragStart: handleDragStart,
+      }}
+      categoryName={categoryName}
+      density={density}
+      template={template}
+    >
       <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
         <AlertDialogPopup>
           <AlertDialogHeader>
@@ -882,125 +500,7 @@ const TemplateRow = ({
         onSaved={onCategoriesChanged}
         open={createCategoryOpen}
       />
-    </li>
-  );
-};
-
-// ── Row metadata (muted, small) ──────────────────────
-
-/** Endonym from the shared language list, with an Intl fallback localized to
- *  the UI language for tags outside the canonical list. */
-const languageDisplayName = (tag: string, uiLang: string): string =>
-  displayLanguageName(tag, { displayLocale: uiLang });
-
-type RowStatsProps = {
-  template: TemplateItem;
-  lang: string;
-};
-
-// Always-visible secondary stats (comfortable density only): language chips
-// plus field/usage counts and the last-updated time.
-const RowStats = ({ template, lang }: RowStatsProps) => {
-  const t = useTranslations();
-
-  const segments: string[] = [
-    t("templates.fieldCount", { count: template.fieldCount }),
-  ];
-  if (template.useCount > 0) {
-    segments.push(t("templates.usedTimes", { count: template.useCount }));
-  }
-  if (template.lastUsedAt) {
-    segments.push(
-      t("templates.lastUsedAgo", {
-        time: formatRelativeTime(template.lastUsedAt),
-      }),
-    );
-  }
-  segments.push(
-    t("templates.updatedAgo", {
-      time: formatRelativeTime(template.updatedAt),
-    }),
-  );
-
-  return (
-    <span className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">
-      {template.languages.length > 0 && (
-        <span className="flex items-center gap-1">
-          {template.languages.map((tag) => (
-            <span
-              aria-label={languageDisplayName(tag, lang)}
-              className="bg-muted text-3xs rounded px-1.5 py-0.5 font-medium uppercase"
-              key={tag}
-              role="group"
-            >
-              {tag}
-            </span>
-          ))}
-        </span>
-      )}
-      <span className="truncate">{segments.join(" · ")}</span>
-    </span>
-  );
-};
-
-type RowDescriptionProps = {
-  template: TemplateItem;
-  categoryName: string | null;
-  canUpdate: boolean;
-  onDescribe: () => void;
-};
-
-// Category + "when to use" guidance (comfortable density only). Falls back to
-// a quiet nudge to add guidance when none is set and the user can edit.
-const RowDescription = ({
-  template,
-  categoryName,
-  canUpdate,
-  onDescribe,
-}: RowDescriptionProps) => {
-  const t = useTranslations();
-
-  const guidance = template.whenToUse?.trim() ?? "";
-
-  // Editable "when to use": a pencil-led button that opens the guidance dialog.
-  // `relative z-10` keeps it clickable above the row-wide open affordance, so
-  // editing guidance is distinct from opening the template. When the user can't
-  // edit, show plain text (or nothing if there is no guidance).
-  const detail = (() => {
-    if (canUpdate) {
-      return (
-        <button
-          className="hover:text-foreground relative z-10 inline-flex min-w-0 items-center gap-1 underline-offset-2 hover:underline"
-          onClick={onDescribe}
-          type="button"
-        >
-          <PencilLineIcon className="size-3 shrink-0" />
-          <span className="truncate">
-            {guidance === "" ? t("templates.describeWhenToUse") : guidance}
-          </span>
-        </button>
-      );
-    }
-    if (guidance !== "") {
-      return <span className="truncate">{guidance}</span>;
-    }
-    return null;
-  })();
-
-  if (categoryName === null && detail === null) {
-    return null;
-  }
-
-  return (
-    <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-      {categoryName !== null && (
-        <span className="text-foreground shrink-0 font-medium">
-          {categoryName}
-        </span>
-      )}
-      {categoryName !== null && detail !== null && <span aria-hidden>·</span>}
-      {detail}
-    </span>
+    </TemplateRowView>
   );
 };
 
@@ -1011,7 +511,7 @@ const MAX_TAG_SUGGESTIONS = 6;
 type TemplateTagsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  template: TemplateItem;
+  template: KnowledgeTemplate;
   suggestions: string[];
 };
 
@@ -1039,7 +539,7 @@ const TemplateTagsDialogBody = ({
   suggestions,
 }: Omit<TemplateTagsDialogProps, "open">) => {
   const t = useTranslations();
-  const invalidateTemplates = useInvalidateTemplates();
+  const templateActions = useMemberTemplateActions();
   const [tags, setTags] = useState<string[]>(() =>
     optionalArray(template.tags),
   );
@@ -1066,7 +566,7 @@ const TemplateTagsDialogBody = ({
 
   const handleSave = async () => {
     setSaving(true);
-    const response = await api.templates({ templateId: template.id }).post({
+    const response = await templateActions.update(template.id, {
       tags,
     });
     setSaving(false);
@@ -1083,7 +583,7 @@ const TemplateTagsDialogBody = ({
       return;
     }
 
-    invalidateTemplates();
+    templateActions.invalidateTemplates();
     onOpenChange(false);
   };
 
@@ -1171,7 +671,7 @@ const TemplateTagsDialogBody = ({
 type TemplateGuidanceDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  template: TemplateItem;
+  template: KnowledgeTemplate;
 };
 
 const TemplateGuidanceDialog = ({
@@ -1197,7 +697,7 @@ const TemplateGuidanceDialogBody = ({
   template,
 }: Omit<TemplateGuidanceDialogProps, "open">) => {
   const t = useTranslations();
-  const invalidateTemplates = useInvalidateTemplates();
+  const templateActions = useMemberTemplateActions();
   const [whenToUse, setWhenToUse] = useState(template.whenToUse ?? "");
   const [whenNotToUse, setWhenNotToUse] = useState(template.whenNotToUse ?? "");
   const [languages, setLanguages] = useState<string[]>(template.languages);
@@ -1205,7 +705,7 @@ const TemplateGuidanceDialogBody = ({
 
   const handleSave = async () => {
     setSaving(true);
-    const response = await api.templates({ templateId: template.id }).post({
+    const response = await templateActions.update(template.id, {
       whenToUse: whenToUse.trim() || null,
       whenNotToUse: whenNotToUse.trim() || null,
       languages,
@@ -1224,7 +724,7 @@ const TemplateGuidanceDialogBody = ({
       return;
     }
 
-    invalidateTemplates();
+    templateActions.invalidateTemplates();
     onOpenChange(false);
   };
 
@@ -1402,10 +902,10 @@ const TemplateLanguagesField = ({
  *  Mirrors the tag/guidance saves: same POST endpoint, single-field body. */
 const useAssignTemplateCategory = () => {
   const t = useTranslations();
-  const invalidateTemplates = useInvalidateTemplates();
+  const templateActions = useMemberTemplateActions();
 
   return async (templateId: string, categoryId: string | null) => {
-    const response = await api.templates({ templateId }).post({
+    const response = await templateActions.update(templateId, {
       categoryId:
         categoryId === null ? null : toSafeId<"templateCategory">(categoryId),
     });
@@ -1422,24 +922,15 @@ const useAssignTemplateCategory = () => {
       return;
     }
 
-    invalidateTemplates();
+    templateActions.invalidateTemplates();
   };
 };
 
-// ── Shared invalidation ──────────────────────────────
+// ── Member template writes ───────────────────────────
 
-const useInvalidateTemplates = () => {
-  const queryClient = useQueryClient();
+const useMemberTemplateActions = () => {
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-
-  return () => {
-    detached(
-      queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-      }),
-      "template-list.invalidate-templates",
-    );
-  };
+  return memberKnowledgeActions.useTemplateActions(activeOrganizationId);
 };
