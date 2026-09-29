@@ -34220,40 +34220,6 @@ type T2d674d595a = {
 
 type T2df478253f = "approved" | "draft" | "ephemeral";
 
-type T2dc5e98509 = {
-  workspaceId?: T9e07a7d6cd;
-  contextMatterIds?: Array<T9e07a7d6cd>;
-  truncateAfterMessageId?: T66e92cdab1;
-  turnIntent?: "regenerate";
-  toolScope?: "suggest-template-fields";
-  runMode?: "agent";
-  userContext?: T129008ae9b;
-  activeDraft?: T42a50d3ca2;
-  activeFile?: T088b2f68ca;
-  activeTemplate?: T9bf573e525;
-  activeDecision?: Tfc773e48e5;
-  activeExternal?: Tc42c89297d;
-  activeSkill?: T369422441d;
-  activeStatute?: T576bcbcea8;
-  browserClient?: Tf9e246ce28;
-  editApplyMode?: "auto" | "manual";
-  docxEditRepresentation?: "direct" | "tracked-changes";
-  devModelId?: string;
-  message: {
-    metadata?: unknown;
-    id: T66e92cdab1;
-    role: "assistant";
-    parts: Array<unknown>;
-  };
-  runId: string;
-  threadId: Taf779979ed;
-  sendMode: T00bc2c60de;
-  parentRunId: string;
-  resume: Array<Tacbaeed0d6>;
-};
-
-type T2e1b9ec514 = `File validation failed: ${string}` | "Base entity version not found." | "Desktop edit session file type changed while finalizing." | "Desktop edit session is already closed." | "Desktop edit session not found." | "Desktop edit session source file is no longer available." | "Desktop editing moved to another device. This local copy is preserved." | "Entity not found." | "This file changed in stella while you were editing. Your local copy is preserved." | "Workspace is not active";
-
 type T2e2021adee = {
   readonly input: Taeaa3ad44e;
   readonly output: Td84f9e1ca6;
