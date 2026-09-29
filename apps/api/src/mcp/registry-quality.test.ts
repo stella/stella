@@ -38,6 +38,7 @@ import {
 } from "@/api/tests/helpers/wire-json-schema";
 
 import {
+  baselineAudiences,
   diffMcpSurfaceBaseline,
   formatSurfaceDrifts,
   measureMcpSurfaces,
@@ -51,9 +52,10 @@ import {
  *
  * Surface sizes (tool count and every advertised part, per audience) are held
  * by the committed `apps/api/mcp-surface-baseline.json`, measured by
- * `scripts/mcp-surface-baseline.ts`: a change that moves a row past its
- * tolerance rewrites that file, and the pull request argues for the diff. The
- * per-tool ceilings below are fixed limits, not measurements.
+ * `scripts/mcp-surface-baseline.ts`: it stores one row per tool and audience,
+ * the totals are derived from the rows, and a change that moves a total past
+ * its tolerance rewrites that file, so the pull request argues for the diff.
+ * The per-tool ceilings below are fixed limits, not measurements.
  */
 
 // Every audience, read from the canonical registry. Each is serialized with
@@ -90,9 +92,7 @@ describe("MCP tool-surface baseline", () => {
   const baseline = readMcpSurfaceBaseline();
 
   test("every audience has exactly one baseline row", () => {
-    expect(Object.keys(baseline.surfaces).toSorted()).toEqual(
-      [...MCP_MODES].toSorted(),
-    );
+    expect(baselineAudiences(baseline)).toEqual([...MCP_MODES].toSorted());
   });
 
   test("every audience matches its committed baseline within tolerance", async () => {
