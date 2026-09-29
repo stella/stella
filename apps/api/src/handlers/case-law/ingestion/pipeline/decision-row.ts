@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
@@ -37,6 +37,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { lockActiveCorpusProjectionSourceByIdTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { markListingOnly } from "@/api/lib/legal-search/ingestion-normalization";
+import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 
 /** The row a decision nothing stored yet is inserted as. */
@@ -92,6 +93,63 @@ const insertedRowValues = (
   sourceObservationHash: result.rawHash,
 });
 
+type SlugAllocationAttempt =
+  (typeof CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS)[number];
+
+/** A new decision's slug for each allocation attempt, base slug first. */
+type DecisionSlugLadder = (attempt: SlugAllocationAttempt) => string;
+
+/**
+ * Insert a new decision's row under the first slug of its ladder the slug
+ * index does not already hold, in the row write's transaction.
+ *
+ * A taken candidate is skipped by `ON CONFLICT DO NOTHING` whose target is
+ * the slug index alone (its column and its partial predicate), so the
+ * transaction moves on to the next candidate instead of aborting. A conflict
+ * on any other unique index, such as the row id or the publisher identity,
+ * still raises. The last candidate is inserted without the clause, so a
+ * ladder with every candidate taken fails with the slug index's own unique
+ * violation, as it did when each candidate was a transaction of its own.
+ */
+const insertDecisionRowTx = async (
+  tx: Transaction,
+  write: DecisionRowWrite,
+  slugLadder: DecisionSlugLadder,
+): Promise<SafeId<"caseLawDecision">> => {
+  // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+  const finalAttempt = CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS.at(-1);
+  if (finalAttempt === undefined) {
+    panic("Case-law decision slug allocation has no attempts");
+  }
+  for (const attempt of CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS) {
+    if (attempt === finalAttempt) {
+      break;
+    }
+    // db-await-in-loop: slug allocation: the next candidate depends on whether the slug index held this one; attempts are capped
+    const [decisionRow] = await tx
+      .insert(caseLawDecisions)
+      .values(insertedRowValues(write, slugLadder(attempt)))
+      // The slug index is `(slug) WHERE slug IS NOT NULL`; the predicate
+      // lets Postgres infer it as the only arbiter.
+      .onConflictDoNothing({
+        target: caseLawDecisions.slug,
+        where: isNotNull(caseLawDecisions.slug),
+      })
+      .returning({ id: caseLawDecisions.id });
+    if (decisionRow) {
+      return decisionRow.id;
+    }
+  }
+  const [decisionRow] = await tx
+    .insert(caseLawDecisions)
+    .values(insertedRowValues(write, slugLadder(finalAttempt)))
+    .returning({ id: caseLawDecisions.id });
+  if (!decisionRow) {
+    panic("Failed to insert decision: no row returned");
+  }
+  return decisionRow.id;
+};
+
 /**
  * Finish an inserted row in the row write's transaction, after the row and
  * its identifiers are written: its judges, the identifiers it announces to
@@ -136,7 +194,7 @@ const finishInsertedRowTx = async (
 const writeDecisionRow = async (
   scopedDb: ScopedDb,
   write: DecisionRowWrite,
-  slug?: string,
+  slugLadder?: DecisionSlugLadder,
 ): Promise<DecisionRowWriteStatus> =>
   await scopedDb(async (tx) => {
     const {
@@ -263,38 +321,32 @@ const writeDecisionRow = async (
       );
     }
 
-    if (slug === undefined) {
+    if (slugLadder === undefined) {
       panic("Missing slug for a new case-law decision");
     }
 
-    const [decisionRow] = await tx
-      .insert(caseLawDecisions)
-      .values(insertedRowValues(write, slug))
-      .returning({ id: caseLawDecisions.id });
-
-    if (!decisionRow) {
-      panic("Failed to insert decision: no row returned");
-    }
+    const insertedId = await insertDecisionRowTx(tx, write, slugLadder);
     if (composedSupplements.length > 0) {
       await markSupplementsMerged(tx, {
         sourceId,
-        decisionId: decisionRow.id,
+        decisionId: insertedId,
         supplements: composedSupplements,
       });
     }
 
     await tx.insert(caseLawDecisionIdentifiers).values(
       write.plan.identifierRows.map((identifier) => ({
-        decisionId: decisionRow.id,
+        decisionId: insertedId,
         ...identifier,
       })),
     );
-    return await finishInsertedRowTx(tx, write, decisionRow.id, projectionLock);
+    return await finishInsertedRowTx(tx, write, insertedId, projectionLock);
   });
 
 /**
  * Write the decision's row, allocating a new decision's slug: the base slug
- * first, then a candidate per attempt while the slug index turns it away.
+ * first, then a candidate per attempt while the slug index holds the one
+ * before it. Every candidate is tried within the one row write.
  *
  * Pass the original error through: the pipeline's halt semantics inspect
  * its type (a TimeoutError holds the cursor), which a wrapper would hide.
@@ -308,39 +360,37 @@ export const writeDecisionRowWithSlug = async (
     ? `${sourceId}\u0000document\u0000${persistedSourceDocumentId}`
     : `${sourceId}\u0000case\u0000${result.caseNumber}\u0000${result.language}`;
   const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
-  const writeRow = async (slug?: string): Promise<DecisionRowWriteStatus> =>
-    await writeDecisionRow(scopedDb, write, slug);
+  const slugLadder: DecisionSlugLadder = (attempt) =>
+    attempt === 0
+      ? baseSlug
+      : createCaseLawDecisionSlugCandidate({
+          baseSlug,
+          identity: slugIdentity,
+          attempt,
+        });
 
-  let rowWrite = await Result.tryPromise({
-    try: async () => await writeRow(existing ? undefined : baseSlug),
+  const rowWrite = await Result.tryPromise({
+    try: async () =>
+      await writeDecisionRow(
+        scopedDb,
+        write,
+        existing ? undefined : slugLadder,
+      ),
     catch: (cause: unknown) => cause,
   });
-
-  for (const attempt of CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS) {
-    if (attempt === 0) {
-      continue;
-    }
-    if (Result.isOk(rowWrite)) {
-      break;
-    }
-    if (
-      !isPgConstraintError(
-        rowWrite.error,
-        PG_ERROR.UNIQUE_VIOLATION,
-        "case_law_decisions_slug_uidx",
-      )
-    ) {
-      break;
-    }
-    const slug = createCaseLawDecisionSlugCandidate({
+  if (
+    Result.isError(rowWrite) &&
+    isPgConstraintError(
+      rowWrite.error,
+      PG_ERROR.UNIQUE_VIOLATION,
+      "case_law_decisions_slug_uidx",
+    )
+  ) {
+    // Only the ladder's last candidate can raise on the slug index.
+    logger.warn("case_law.ingestion.slug_candidates_exhausted", {
+      sourceId,
       baseSlug,
-      identity: slugIdentity,
-      attempt,
-    });
-    rowWrite = await Result.tryPromise({
-      // db-await-in-loop: slug-collision retry: the next candidate slug depends on this write's unique-violation outcome; attempts are capped
-      try: async () => await writeRow(slug),
-      catch: (cause: unknown) => cause,
+      attempts: CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS.length,
     });
   }
   return rowWrite;
