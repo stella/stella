@@ -149,18 +149,20 @@ export const TemplateRowView = ({
           {t("templates.useTemplate")}
         </Button>
       )}
-      <span className="hidden sm:inline-flex">
-        <Tooltip
-          content={template.authorName}
-          render={<span className="inline-flex" />}
-        >
-          <UserIdentityAvatar
-            className="size-6 shrink-0 text-[0.5625rem]"
-            image={template.authorImage}
-            name={template.authorName}
-          />
-        </Tooltip>
-      </span>
+      {template.authorName !== undefined && (
+        <span className="hidden sm:inline-flex">
+          <Tooltip
+            content={template.authorName}
+            render={<span className="inline-flex" />}
+          >
+            <UserIdentityAvatar
+              className="size-6 shrink-0 text-[0.5625rem]"
+              image={template.authorImage}
+              name={template.authorName}
+            />
+          </Tooltip>
+        </span>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -263,14 +265,15 @@ type RowStatsProps = {
 };
 
 // Always-visible secondary stats (comfortable density only): language chips
-// plus field/usage counts and the last-updated time.
+// plus field/usage counts and the last-updated time. Usage and times the
+// source does not know are left out.
 const RowStats = ({ template, lang }: RowStatsProps) => {
   const t = useTranslations();
 
   const segments: string[] = [
     t("templates.fieldCount", { count: template.fieldCount }),
   ];
-  if (template.useCount > 0) {
+  if (template.useCount !== undefined && template.useCount > 0) {
     segments.push(t("templates.usedTimes", { count: template.useCount }));
   }
   if (template.lastUsedAt) {
@@ -280,11 +283,13 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
       }),
     );
   }
-  segments.push(
-    t("templates.updatedAgo", {
-      time: formatRelativeTime(template.updatedAt),
-    }),
-  );
+  if (template.updatedAt !== undefined) {
+    segments.push(
+      t("templates.updatedAgo", {
+        time: formatRelativeTime(template.updatedAt),
+      }),
+    );
+  }
 
   return (
     <span className="text-muted-foreground flex items-center gap-2 text-xs tabular-nums">

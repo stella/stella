@@ -2,25 +2,28 @@ import type { DragEvent } from "react";
 
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 
-/** A template as the shared views render it, whichever source supplied it. */
+/**
+ * A template as the shared views render it, whichever source supplied it.
+ * Usage, authorship and edit times exist only for a library's own templates:
+ * a source without them leaves them out, and the views show nothing in their
+ * place rather than a zero or a made-up date.
+ */
 export type KnowledgeTemplate = {
   id: string;
   name: string;
-  fileName: string;
   fieldCount: number;
-  sizeBytes: number;
   categoryId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  lastUsedAt: string | null;
-  useCount: number;
   tags: string[] | null;
   /** Ordered BCP-47 tags of the document text, primary language first. */
   languages: string[];
   whenToUse: string | null;
   whenNotToUse: string | null;
-  authorName: string | null;
-  authorImage: string | null;
+  updatedAt?: string | undefined;
+  lastUsedAt?: string | null | undefined;
+  useCount?: number | undefined;
+  /** Present, even as `null`, when the source records who added the template. */
+  authorName?: string | null | undefined;
+  authorImage?: string | null | undefined;
 };
 
 type KnowledgeTemplateCategory = {
