@@ -213,7 +213,7 @@ jobs:
               echo "legal_atlas_image_required=true"
               echo "lockfile_ages_required=false"
               echo "marketing_screenshots_required=true"
-              echo "migration_exact_base_required=true"
+              echo "migration_exact_base_required=false"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
               echo "model_catalog_drift_required=true"

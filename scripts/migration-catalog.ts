@@ -56,7 +56,9 @@ const stable = (value: unknown): unknown => {
         .map(([key, nested]) => [
           key,
           Array.isArray(nested) && ["acl", "config", "roles"].includes(key)
-            ? nested.toSorted()
+            ? nested.toSorted((left, right) =>
+                String(left).localeCompare(String(right)),
+              )
             : stable(nested),
         ]),
     );
@@ -136,31 +138,36 @@ const snapshotData = async (
 ): Promise<Record<string, string>> => {
   const data: Record<string, string> = {};
   for (const table of tables) {
-    const schema = String(table.schema);
-    const name = String(table.name);
+    const schema = String(table["schema"]);
+    const name = String(table["name"]);
     if (
       schema === "drizzle" ||
       (schema === "public" && SEEDED_TABLES.has(name)) ||
-      table.kind === "f"
+      table["kind"] === "f"
     ) {
       continue;
     }
     const selected = digestColumnNames(
       columns
-        .filter((column) => column.schema === schema && column.table === name)
-        .map((column) => ({
-          name: String(column.name),
-          default: column.default === null ? null : String(column.default),
-        })),
+        .filter(
+          (column) => column["schema"] === schema && column["table"] === name,
+        )
+        .map((column) => {
+          const expression = column["default"];
+          if (expression !== null && typeof expression !== "string") {
+            panic("Catalog column default must be text or null");
+          }
+          return { name: String(column["name"]), default: expression };
+        }),
     );
     const excluded = columns
       .filter(
         (column) =>
-          column.schema === schema &&
-          column.table === name &&
-          !selected.includes(String(column.name)),
+          column["schema"] === schema &&
+          column["table"] === name &&
+          !selected.includes(String(column["name"])),
       )
-      .map((column) => String(column.name));
+      .map((column) => String(column["name"]));
     excluded.push(
       ...(NONDETERMINISTIC_MIGRATION_COLUMNS[`${schema}.${name}`] ?? []),
     );
@@ -177,7 +184,7 @@ const snapshotData = async (
             FROM ${quoteIdentifier(schema)}.${quoteIdentifier(name)} t) rows`,
     );
     data[`${schema}.${name}`] =
-      `${String(digest.at(0)?.count)}:${String(digest.at(0)?.digest)}`;
+      `${String(digest.at(0)?.["count"])}:${String(digest.at(0)?.["digest"])}`;
   }
   return data;
 };
@@ -345,8 +352,8 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
 
   const enums: Record<string, string[]> = {};
   for (const row of enumRows) {
-    const key = `${String(row.schema)}.${String(row.name)}`;
-    (enums[key] ??= []).push(String(row.label));
+    const key = `${String(row["schema"])}.${String(row["name"])}`;
+    (enums[key] ??= []).push(String(row["label"]));
   }
   return {
     schemas: rowsByKey(schemas, ["name"]),
@@ -366,8 +373,8 @@ export const snapshotCatalog = async (client: SQL): Promise<Catalog> => {
     memberships,
     ledger: ledgerPairs(
       ledgerRows.map((row) => ({
-        name: String(row.name),
-        hash: String(row.hash),
+        name: String(row["name"]),
+        hash: String(row["hash"]),
       })),
     ),
     data,

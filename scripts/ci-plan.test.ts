@@ -1023,3 +1023,34 @@ test("a failed API image run annotates the failing lines, escaped", () => {
     "::error title=API image build (linux/arm64)::ERROR: failed to solve: pull failed",
   ]);
 });
+
+test("manual full-depth runs leave the merge-group-only exact-base job unplanned", () => {
+  const step = jobSteps(ciJobs["ci-plan"]).find(({ run }) =>
+    run?.includes('if [[ "$EVENT_NAME" == "workflow_dispatch" ]]'),
+  );
+  expect(step?.run).toBeDefined();
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-exact-base-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    const run = Bun.spawnSync({
+      cmd: ["bash", "-e", "-c", step?.run ?? "exit 1"],
+      env: {
+        EVENT_NAME: "workflow_dispatch",
+        SUITE_DEPTH: "full",
+        GITHUB_OUTPUT: output,
+        PATH: process.env["PATH"] ?? "",
+      },
+      stdout: "ignore",
+      stderr: "pipe",
+    });
+    expect(run.exitCode, new TextDecoder().decode(run.stderr)).toBe(0);
+    expect(readFileSync(output, "utf-8").split("\n")).toContain(
+      "migration_exact_base_required=false",
+    );
+    expect(jobIf(ciJobs["migration-exact-base-upgrade"])).toContain(
+      "github.event_name == 'merge_group'",
+    );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
