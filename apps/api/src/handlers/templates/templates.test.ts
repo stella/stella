@@ -12,6 +12,8 @@ import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -25,7 +27,7 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -41,8 +43,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const makeEmptyDocx = async () => makeDocx(WRAP(P("Hello")));
@@ -70,7 +71,7 @@ const makeDocxWithParts = async (opts: {
   documentXml: string;
   headers?: Record<string, string>;
   footers?: Record<string, string>;
-}): Promise<Buffer> => {
+}): Promise<ScannedFile> => {
   const zip = new JSZip();
   const relationships: string[] = [];
   const sectionRefs: string[] = [];
@@ -124,8 +125,7 @@ const makeDocxWithParts = async (opts: {
       "</Types>",
     ].join(""),
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const DOCX_MIME =
@@ -138,8 +138,8 @@ const { scopedDb: stubScopedDb, safeDb: stubSafeDb } = createScopedDbMock({
   query: { businessRegistryCredentials: { findMany: async () => [] } },
 });
 
-const makeDocxFile = async (buf: Buffer) =>
-  new File([new Uint8Array(buf)], "test.docx", { type: DOCX_MIME });
+const makeDocxFile = async (docx: ScannedFile) =>
+  new File([docx.bytes], "test.docx", { type: DOCX_MIME });
 
 const CLIENT_NAME_FIELD: FieldMeta = {
   path: "clientName",
@@ -154,10 +154,10 @@ const CLIENT_NAME_FIELD: FieldMeta = {
  * so a fixture naming a path the document does not carry configures nothing.
  */
 const authorFieldMarkers = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     fields.map((field) => ({
       path: field.path,
@@ -169,7 +169,7 @@ const authorFieldMarkers = async (
       throw new Error(`fixture has no {{${path}}} marker to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 // ── Discover ─────────────────────────────────────────────
@@ -367,10 +367,10 @@ describe("template fill", () => {
       date: "2026-01-15",
     });
 
-    expect(result.buffer).toBeInstanceOf(Buffer);
-    expect(result.buffer.length).toBeGreaterThan(0);
+    expect(result.file.bytes).toBeInstanceOf(ArrayBuffer);
+    expect(result.file.bytes.byteLength).toBeGreaterThan(0);
 
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
     expect(docXml).toContain("Alice");
     expect(docXml).toContain("2026-01-15");
@@ -858,7 +858,7 @@ describe("discover → fill round-trip", () => {
     expect(result.unmatchedPlaceholders).toEqual([]);
     expect(result.unusedValues).toEqual([]);
 
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
     expect(docXml).toContain("value_for_client_name");
     expect(docXml).toContain("value_for_effective_date");
@@ -876,7 +876,7 @@ describe("discover → fill round-trip", () => {
 
     const result = await fillTemplate(buf, { clientName: "Acme Corp" });
 
-    const zip = await JSZip.loadAsync(result.buffer);
+    const zip = await JSZip.loadAsync(result.file.bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
     expect(docXml).toContain("Acme Corp");
     // The filled document carries the value, not the configuration that asked

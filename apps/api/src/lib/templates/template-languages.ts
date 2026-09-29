@@ -15,6 +15,7 @@ import { toLanguageCode } from "@stll/locales";
 import type { LanguageCode } from "@stll/locales";
 
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 export const MAX_TEMPLATE_LANGUAGES = 4;
 
@@ -152,10 +153,10 @@ export const detectTemplateLanguages = (text: string): string[] => {
 /** Best-effort: extraction failures yield [] rather than failing the
  *  surrounding create flow (languages stay editable afterwards). */
 export const detectTemplateLanguagesFromDocx = async (
-  docx: Uint8Array,
+  file: ScannedFile,
 ): Promise<string[]> => {
   const extracted = await Result.tryPromise(
-    async () => await extractDocxDocument(docx),
+    async () => await extractDocxDocument(file),
   );
   if (Result.isError(extracted)) {
     return [];

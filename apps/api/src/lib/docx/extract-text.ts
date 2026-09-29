@@ -4,15 +4,14 @@
  * (`docxToMarkdown`), which owns the DOCX parser and its full fidelity.
  */
 
-import {
-  // oxlint-disable-next-line scanned-file-boundary/scanned-file-boundary -- stored templates and filled output are read back by plain storage key, which carries no ScannedFile proof; uploads are scanned at the route (SW-0013)
-  extractDocxText,
-  type ExtractedDocxParagraph,
-} from "@stll/folio-core/server";
+import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   blockDirectiveLinePattern,
   isBlockDirectiveKind,
 } from "@stll/template-conditions";
+
+import { extractScannedDocxText } from "@/api/lib/file-scan/document-parsers";
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
 import type { ExtractedDocument, ExtractedParagraph, FieldMeta } from "./types";
 
@@ -63,9 +62,9 @@ const annotateDirective = (
 };
 
 export const extractDocxDocument = async (
-  docxBytes: Uint8Array,
+  file: ScannedFile,
 ): Promise<ExtractedDocument> => {
-  const result = await extractDocxText(docxBytes);
+  const result = await extractScannedDocxText(file);
   return {
     paragraphs: result.paragraphs.map(annotateDirective),
     charCount: result.charCount,
@@ -74,9 +73,9 @@ export const extractDocxDocument = async (
 };
 
 export const extractTextForPreview = async (
-  docxBytes: Uint8Array,
+  file: ScannedFile,
 ): Promise<ExtractedDocument> => {
-  const result = await extractDocxText(docxBytes);
+  const result = await extractScannedDocxText(file);
   const extractedParagraphs: ExtractedDocxParagraph[] = [];
   for (const paragraph of result.paragraphs) {
     if (paragraph.tableRow === undefined) {
@@ -117,7 +116,7 @@ export const extractTextForPreview = async (
  * prompt and token cost stay unchanged for non-opted templates.
  */
 export const documentTextForAiFields = async (
-  docxBytes: Uint8Array,
+  file: ScannedFile,
   fields: readonly FieldMeta[],
 ): Promise<string | undefined> => {
   const wantsDocumentText = fields.some(
@@ -129,6 +128,6 @@ export const documentTextForAiFields = async (
   if (!wantsDocumentText) {
     return undefined;
   }
-  const { paragraphs } = await extractDocxDocument(docxBytes);
+  const { paragraphs } = await extractDocxDocument(file);
   return paragraphs.map((paragraph) => paragraph.text).join("\n");
 };

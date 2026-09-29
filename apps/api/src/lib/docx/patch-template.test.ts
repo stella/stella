@@ -4,6 +4,9 @@ import * as slimdom from "slimdom";
 
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
+import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { fillTemplate } from "./patch-template";
 import type { FieldMeta, TemplateData } from "./types";
@@ -15,10 +18,10 @@ import { writeFieldFilters } from "./write-field-filters";
  * so a fixture naming a path the document does not carry configures nothing.
  */
 const authorFieldMarkers = async (
-  docx: Buffer,
+  docx: ScannedFile,
   fields: readonly FieldMeta[],
-): Promise<Buffer> => {
-  const { buffer, written } = await writeFieldFilters(
+): Promise<ScannedFile> => {
+  const { file, written } = await writeFieldFilters(
     docx,
     fields.map((field) => ({
       path: field.path,
@@ -30,7 +33,7 @@ const authorFieldMarkers = async (
       throw new Error(`fixture has no {{${path}}} marker to configure`);
     }
   }
-  return buffer;
+  return file;
 };
 
 // SPA fixture is ~177KB; template filling needs time.
@@ -41,34 +44,41 @@ const SPA_FIXTURE = new URL(
   import.meta.url,
 ).pathname;
 
+const spaFixture = async (): Promise<ScannedFile> =>
+  testDocxFile(await Bun.file(SPA_FIXTURE).arrayBuffer());
+
 describe("fillTemplate", () => {
   test("fills plain string values", async () => {
-    const { buffer, unmatchedPlaceholders } = await fillTemplate(SPA_FIXTURE, {
-      price_share_1: "1 250 000",
-      price_share_2: "875 000",
-      price_share_3: "2 100 000",
-      price_share_4: "450 000",
-      price_share_5: "3 750 000",
-      contract_date: "15. ledna 2026",
-      seller_1_name: "Novák Holdings s.r.o.",
-      buyer_name: "Stella Legal a.s.",
-    });
+    const { file, unmatchedPlaceholders } = await fillTemplate(
+      await spaFixture(),
+      {
+        price_share_1: "1 250 000",
+        price_share_2: "875 000",
+        price_share_3: "2 100 000",
+        price_share_4: "450 000",
+        price_share_5: "3 750 000",
+        contract_date: "15. ledna 2026",
+        seller_1_name: "Novák Holdings s.r.o.",
+        buyer_name: "Stella Legal a.s.",
+      },
+    );
 
-    expect(buffer).toBeInstanceOf(Buffer);
-    expect(buffer.length).toBeGreaterThan(0);
+    expect(file.bytes).toBeInstanceOf(ArrayBuffer);
+    expect(file.bytes.byteLength).toBeGreaterThan(0);
 
-    const zip = await JSZip.loadAsync(buffer);
+    const zip = await JSZip.loadAsync(file.bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
     expect(docXml).toContain("1 250 000");
     expect(docXml).toContain("Stella Legal a.s.");
     expect(unmatchedPlaceholders).toEqual([]);
   });
 
-  test("accepts a Buffer as template input", async () => {
-    const file = Bun.file(SPA_FIXTURE);
-    const templateBuffer = Buffer.from(await file.arrayBuffer());
+  test("accepts template bytes read into a Buffer", async () => {
+    const templateBuffer = Buffer.from(
+      await Bun.file(SPA_FIXTURE).arrayBuffer(),
+    );
 
-    const { buffer } = await fillTemplate(templateBuffer, {
+    const { file } = await fillTemplate(testDocxFile(templateBuffer), {
       price_share_1: "100",
       price_share_2: "200",
       price_share_3: "300",
@@ -79,12 +89,12 @@ describe("fillTemplate", () => {
       buyer_name: "Buyer",
     });
 
-    expect(buffer).toBeInstanceOf(Buffer);
-    expect(buffer.length).toBeGreaterThan(0);
+    expect(file.bytes).toBeInstanceOf(ArrayBuffer);
+    expect(file.bytes.byteLength).toBeGreaterThan(0);
   });
 
   test("reports unmatched placeholders", async () => {
-    const { unmatchedPlaceholders } = await fillTemplate(SPA_FIXTURE, {
+    const { unmatchedPlaceholders } = await fillTemplate(await spaFixture(), {
       price_share_1: "100",
     });
 
@@ -93,7 +103,7 @@ describe("fillTemplate", () => {
   });
 
   test("reports unused values", async () => {
-    const { unusedValues } = await fillTemplate(SPA_FIXTURE, {
+    const { unusedValues } = await fillTemplate(await spaFixture(), {
       price_share_1: "100",
       price_share_2: "200",
       price_share_3: "300",
@@ -109,7 +119,7 @@ describe("fillTemplate", () => {
   });
 
   test("fills rich patch values with formatted runs", async () => {
-    const { buffer } = await fillTemplate(SPA_FIXTURE, {
+    const { file } = await fillTemplate(await spaFixture(), {
       price_share_1: "100",
       price_share_2: "200",
       price_share_3: "300",
@@ -126,8 +136,8 @@ describe("fillTemplate", () => {
       buyer_name: "Stella Legal a.s.",
     });
 
-    expect(buffer).toBeInstanceOf(Buffer);
-    const zip = await JSZip.loadAsync(buffer);
+    expect(file.bytes).toBeInstanceOf(ArrayBuffer);
+    const zip = await JSZip.loadAsync(file.bytes);
     const docXml = await zip.file("word/document.xml")?.async("string");
     // Bold run should produce <w:b/> in run properties
     expect(docXml).toContain("Novák ");
@@ -137,7 +147,7 @@ describe("fillTemplate", () => {
 
 // ── Block directive e2e tests ────────────────────────────
 
-const makeDocx = async (documentXml: string): Promise<Buffer> => {
+const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
   zip.file("word/document.xml", documentXml);
   zip.file(
@@ -148,8 +158,7 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
-  return Buffer.from(buf);
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 const WRAP = (body: string) =>
@@ -159,8 +168,8 @@ const WRAP = (body: string) =>
 
 const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-const extractTexts = async (buffer: Buffer): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(buffer);
+const extractTexts = async (file: ScannedFile): Promise<string[]> => {
+  const zip = await JSZip.loadAsync(file.bytes);
   const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
   // Simple extraction: find all w:t content
   const texts: string[] = [];
@@ -185,13 +194,13 @@ describe("fillTemplate — block directives e2e", () => {
     );
     const docx = await makeDocx(xml);
 
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       buyer_name: "Stella Legal",
       has_guarantor: true,
       guarantor_name: "Jan Novák",
     });
 
-    const texts = await extractTexts(buffer);
+    const texts = await extractTexts(file);
     const joined = texts.join(" ");
     expect(joined).toContain("Stella Legal");
     expect(joined).toContain("Jan Novák");
@@ -220,12 +229,12 @@ describe("fillTemplate — block directives e2e", () => {
     );
     const docx = await makeDocx(xml);
 
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       guarantor_name: "Jan Novák",
       has_guarantor: "yes",
     });
 
-    const joined = (await extractTexts(buffer)).join(" ");
+    const joined = (await extractTexts(file)).join(" ");
     expect(joined).toContain("Jan Novák");
     expect(joined).not.toContain("{% if");
     expect(joined).not.toContain("{% endif");
@@ -246,12 +255,12 @@ describe("fillTemplate — block directives e2e", () => {
     );
     const docx = await makeDocx(xml);
 
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       has_guarantor: false,
       guarantor_name: "Should not appear",
     });
 
-    const texts = await extractTexts(buffer);
+    const texts = await extractTexts(file);
     const joined = texts.join(" ");
     expect(joined).toContain("Before");
     expect(joined).toContain("After");
@@ -295,8 +304,8 @@ describe("fillTemplate — block directives e2e", () => {
     });
     expect(stepError).toBeNull();
 
-    const { buffer } = await fillTemplate(docx, values);
-    const joined = (await extractTexts(buffer)).join(" ");
+    const { file } = await fillTemplate(docx, values);
+    const joined = (await extractTexts(file)).join(" ");
     // The display text is substituted (run boundaries leave the date in its
     // own w:t, so assert on the localized value, not exact run spacing)…
     expect(joined).toContain("13. června 2028");
@@ -334,8 +343,8 @@ describe("fillTemplate — block directives e2e", () => {
     });
     expect(stepError).toBeNull();
 
-    const { buffer } = await fillTemplate(docx, values);
-    const joined = (await extractTexts(buffer)).join(" ");
+    const { file } = await fillTemplate(docx, values);
+    const joined = (await extractTexts(file)).join(" ");
     expect(joined).not.toContain("Future clause.");
     expect(joined).toContain("Tail.");
   });
@@ -352,14 +361,14 @@ describe("fillTemplate — block directives e2e", () => {
     );
     const docx = await makeDocx(xml);
 
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       sellers: [
         { name: "Alice", id: "A1" },
         { name: "Bob", id: "B2" },
       ],
     });
 
-    const texts = await extractTexts(buffer);
+    const texts = await extractTexts(file);
     const joined = texts.join(" ");
     expect(joined).toContain("Alice");
     expect(joined).toContain("A1");
@@ -382,11 +391,11 @@ describe("fillTemplate — block directives e2e", () => {
       ),
     );
 
-    const { buffer, unmatchedPlaceholders } = await fillTemplate(docx, {
+    const { file, unmatchedPlaceholders } = await fillTemplate(docx, {
       groups: [{ subitems: ["first"] }, { subitems: ["second"] }],
     });
 
-    expect(await extractTexts(buffer)).toEqual(["first", "second"]);
+    expect(await extractTexts(file)).toEqual(["first", "second"]);
     expect(unmatchedPlaceholders).toEqual([]);
   });
 
@@ -405,14 +414,14 @@ describe("fillTemplate — block directives e2e", () => {
       ),
     );
 
-    const { buffer, unmatchedPlaceholders } = await fillTemplate(docx, {
+    const { file, unmatchedPlaceholders } = await fillTemplate(docx, {
       groups: [
         { items: [{ subitems: ["first"] }] },
         { items: [{ subitems: ["second"] }] },
       ],
     });
 
-    expect(await extractTexts(buffer)).toEqual(["first", "second"]);
+    expect(await extractTexts(file)).toEqual(["first", "second"]);
     expect(unmatchedPlaceholders).toEqual([]);
   });
 
@@ -425,14 +434,14 @@ describe("fillTemplate — block directives e2e", () => {
     );
     const docx = await makeDocx(xml);
 
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       company: {
         name: "Acme Corp",
         registration_number: "CZ12345",
       },
     });
 
-    const texts = await extractTexts(buffer);
+    const texts = await extractTexts(file);
     const joined = texts.join(" ");
     expect(joined).toContain("Acme Corp");
     expect(joined).toContain("CZ12345");
@@ -442,11 +451,11 @@ describe("fillTemplate — block directives e2e", () => {
     const xml = WRAP(P("Hello {{name}}"));
     const docx = await makeDocx(xml);
 
-    const { buffer } = await fillTemplate(docx, {
+    const { file } = await fillTemplate(docx, {
       name: "World",
     });
 
-    const texts = await extractTexts(buffer);
+    const texts = await extractTexts(file);
     expect(texts.join(" ")).toContain("World");
   });
 
@@ -454,7 +463,7 @@ describe("fillTemplate — block directives e2e", () => {
     const xml = WRAP([P("{{x}}"), P("{{y}}")].join(""));
     const docx = await makeDocx(xml);
 
-    const { buffer, unmatchedPlaceholders, unusedValues } = await fillTemplate(
+    const { file, unmatchedPlaceholders, unusedValues } = await fillTemplate(
       docx,
       {
         x: "hello",
@@ -462,7 +471,7 @@ describe("fillTemplate — block directives e2e", () => {
       },
     );
 
-    expect(buffer).toBeInstanceOf(Buffer);
+    expect(file.bytes).toBeInstanceOf(ArrayBuffer);
     expect(unmatchedPlaceholders).toEqual([]);
     expect(unusedValues).toEqual([]);
   });
@@ -493,7 +502,7 @@ const NUMBERING_XML =
   `<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>` +
   `</w:numbering>`;
 
-const makeStructuralFixture = async (): Promise<Buffer> => {
+const makeStructuralFixture = async (): Promise<ScannedFile> => {
   const cell = (content: string) => `<w:tc><w:tcPr/>${content}</w:tc>`;
   const table = `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol/><w:gridCol/></w:tblGrid><w:tr>${cell(
     SPLIT("Pełnomocnik: {", "{agent_", "name}} (PL)"),
@@ -529,27 +538,29 @@ const makeStructuralFixture = async (): Promise<Buffer> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
 describe("fillTemplate — output stays well-formed in every part", () => {
   test("table + inline if + loop numbering + split-run markers", async () => {
     const fixture = await makeStructuralFixture();
 
-    const { buffer, structureErrors, unmatchedPlaceholders } =
-      await fillTemplate(fixture, {
+    const { file, structureErrors, unmatchedPlaceholders } = await fillTemplate(
+      fixture,
+      {
         agent_name: "Małgorzata Wróblewska-Żak",
         hasSpouse: true,
         showClause: true,
         client: "rč & co.",
         items: [{ label: "first" }, { label: "second" }],
-      });
+      },
+    );
 
     expect(structureErrors).toEqual([]);
     expect(unmatchedPlaceholders).toEqual([]);
 
-    const inZip = await JSZip.loadAsync(fixture);
-    const outZip = await JSZip.loadAsync(buffer);
+    const inZip = await JSZip.loadAsync(fixture.bytes);
+    const outZip = await JSZip.loadAsync(file.bytes);
     const partNames = (zip: JSZip) =>
       Object.keys(zip.files)
         .filter((name) => !zip.files[name]?.dir)
@@ -566,7 +577,7 @@ describe("fillTemplate — output stays well-formed in every part", () => {
       expect(() => slimdom.parseXmlDocument(xml)).not.toThrow();
     }
 
-    const texts = (await extractTexts(buffer)).join(" ");
+    const texts = (await extractTexts(file)).join(" ");
     expect(texts).toContain("and their spouse");
     expect(texts).toContain("Małgorzata Wróblewska-Żak");
     expect(texts).toContain("first");
@@ -578,7 +589,7 @@ describe("fillTemplate — output stays well-formed in every part", () => {
 // ── Boolean condition-field as a {% if %} target ──────────
 
 describe("fillTemplate — {% if field_path %} resolves a condition-field rule", () => {
-  const makeConditionDocx = async (): Promise<Buffer> => {
+  const makeConditionDocx = async (): Promise<ScannedFile> => {
     const xml = WRAP(
       [
         P("Before"),
@@ -601,10 +612,10 @@ describe("fillTemplate — {% if field_path %} resolves a condition-field rule",
   };
 
   test("includes the block when the field's rule is true", async () => {
-    const { buffer } = await fillTemplate(await makeConditionDocx(), {
+    const { file } = await fillTemplate(await makeConditionDocx(), {
       client: { type: "company", name: "ACME" },
     });
-    const joined = (await extractTexts(buffer)).join(" ");
+    const joined = (await extractTexts(file)).join(" ");
     expect(joined).toContain("Company clause for");
     expect(joined).toContain("ACME");
     expect(joined).toContain("After");
@@ -612,10 +623,10 @@ describe("fillTemplate — {% if field_path %} resolves a condition-field rule",
   });
 
   test("excludes the block when the field's rule is false", async () => {
-    const { buffer } = await fillTemplate(await makeConditionDocx(), {
+    const { file } = await fillTemplate(await makeConditionDocx(), {
       client: { type: "individual", name: "Jan Novák" },
     });
-    const joined = (await extractTexts(buffer)).join(" ");
+    const joined = (await extractTexts(file)).join(" ");
     expect(joined).toContain("Before");
     expect(joined).toContain("After");
     expect(joined).not.toContain("Company clause");
