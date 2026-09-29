@@ -3107,6 +3107,7 @@ export default defineConfig({
         "apps/web/src/routes/__root.tsx",
         "apps/web/src/routes/tools/**/*.{ts,tsx}",
         "apps/web/src/routes/knowledge/-public/**/*.{ts,tsx}",
+        "apps/web/src/features/knowledge/public/tools/**/*.{ts,tsx}",
         "apps/web/src/routes/knowledge/tools_.*.{ts,tsx}",
       ],
       rules: {

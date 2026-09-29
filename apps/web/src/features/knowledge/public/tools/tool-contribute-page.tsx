@@ -26,14 +26,6 @@ import {
 } from "@stll/ui/select";
 import { Textarea } from "@stll/ui/textarea";
 
-import { useMountEffect } from "@/hooks/use-effect";
-import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
-import { pageTitle } from "@/lib/page-title";
-import { publicToolsContributePath } from "@/lib/public-tools-path";
-import { createPublicToolsHead } from "@/lib/public-tools-seo";
-import { sanitizeHref } from "@/lib/sanitize-href";
-import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 import {
   createLatestCommitLookupGuard,
   deriveSlug,
@@ -43,13 +35,21 @@ import {
   githubNewFileUrl,
   normalizeGithubRepo,
   type ContributeFormState,
-} from "@/routes/tools/-components/contribute.logic";
-import { CopyButton } from "@/routes/tools/-components/copy-button";
-import { ToggleChip } from "@/routes/tools/-components/toggle-chip";
+} from "@/features/knowledge/public/tools/contribute.logic";
+import { CopyButton } from "@/features/knowledge/public/tools/copy-button";
+import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
 import {
   CATALOGUE_CONTRIBUTING_URL,
   CATALOGUE_ENTRIES_URL,
-} from "@/routes/tools/-components/tool-detail.logic";
+} from "@/features/knowledge/public/tools/tool-detail.logic";
+import { useMountEffect } from "@/hooks/use-effect";
+import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { publicToolsContributePath } from "@/lib/knowledge/public-tools-path";
+import { pageTitle } from "@/lib/page-title";
+import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import { sanitizeHref } from "@/lib/sanitize-href";
+import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 
 const COMMIT_FETCH_TIMEOUT_MS = 10_000;
 const JURISDICTION_INPUT = /^[A-Za-z]{2}$/u;
@@ -94,7 +94,7 @@ export const createToolContributeHead = () =>
   });
 
 /** How to add a tool to the published catalogue. */
-export function ContributePage() {
+export const ContributePage = () => {
   const t = useTranslations();
 
   return (
@@ -171,9 +171,9 @@ export function ContributePage() {
       </div>
     </main>
   );
-}
+};
 
-function AddSkillForm() {
+const AddSkillForm = () => {
   const t = useTranslations();
   const [form, setForm] = useState<ContributeFormState>(INITIAL_FORM);
   const [slugTouched, setSlugTouched] = useState(false);
@@ -583,9 +583,9 @@ function AddSkillForm() {
       </div>
     </section>
   );
-}
+};
 
-function GithubSourceFields({
+const GithubSourceFields = ({
   commitStatus,
   form,
   onRepoChange,
@@ -597,7 +597,7 @@ function GithubSourceFields({
   onRepoChange: (repo: string) => void;
   onResolveLatestCommit: () => void;
   setForm: Dispatch<SetStateAction<ContributeFormState>>;
-}) {
+}) => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-4">
@@ -669,9 +669,9 @@ function GithubSourceFields({
       </FormRow>
     </div>
   );
-}
+};
 
-function SourceChip({
+const SourceChip = ({
   active,
   label,
   onSelect,
@@ -679,15 +679,15 @@ function SourceChip({
   active: boolean;
   label: string;
   onSelect: () => void;
-}) {
-  return (
+}) => 
+  (
     <ToggleChip active={active} className="px-2.5 py-1" onClick={onSelect}>
       {label}
     </ToggleChip>
-  );
-}
+  )
+;
 
-function FormRow({
+const FormRow = ({
   children,
   hint,
   htmlFor,
@@ -697,7 +697,7 @@ function FormRow({
   hint?: string;
   htmlFor?: string;
   label: string;
-}) {
+}) => {
   const groupLabelId = useId();
 
   // A single labelable control associates via `htmlFor`. Rows that hold a
@@ -725,15 +725,21 @@ function FormRow({
       {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
     </div>
   );
-}
+};
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
+const Section = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) => 
+  (
     <section className="flex flex-col gap-2">
       <h2 className="text-base font-semibold">{title}</h2>
       <div className="text-muted-foreground flex flex-col gap-2 text-sm leading-relaxed">
         {children}
       </div>
     </section>
-  );
-}
+  )
+;

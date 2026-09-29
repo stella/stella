@@ -9,33 +9,38 @@ import {
 } from "@stll/catalogue";
 import { Button } from "@stll/ui/button";
 
-import { publicToolDownloadPath } from "@/lib/public-tools-path";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
-} from "@/routes/tools/-components/tool-detail.logic";
+} from "@/features/knowledge/public/tools/tool-detail.logic";
+import { publicToolDownloadPath } from "@/lib/knowledge/public-tools-path";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 const ToolMarkdown = lazy(async () => ({
-  default: (await import("@/routes/tools/-components/tool-markdown"))
+  default: (await import("@/features/knowledge/public/tools/tool-markdown"))
     .ToolMarkdown,
 }));
 
 const CopyButton = lazy(async () => ({
-  default: (await import("@/routes/tools/-components/copy-button")).CopyButton,
+  default: (await import("@/features/knowledge/public/tools/copy-button"))
+    .CopyButton,
 }));
 
 /** The install button's place while it cannot act yet. */
-export function InstallButtonPlaceholder() {
+export const InstallButtonPlaceholder = () => {
   const t = useTranslations();
   return (
     <Button disabled type="button">
       {t("publicTools.addToStella")}
     </Button>
   );
-}
+};
 
-export function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
+export const DownloadAffordance = ({
+  entry,
+}: {
+  entry: LoadedCatalogueEntry;
+}) => {
   const t = useTranslations();
   if (entry.kind !== "skill") {
     return null;
@@ -70,16 +75,16 @@ export function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
       {t("publicTools.downloadUpstream")}
     </Button>
   );
-}
+};
 
 /** A tool's long-form content: its documentation, or how to connect it. */
-export function ToolContent({
+export const ToolContent = ({
   entry,
   markdown,
 }: {
   entry: LoadedCatalogueEntry;
   markdown: string | null;
-}) {
+}) => {
   const t = useTranslations();
 
   if (entry.kind === "mcp") {
@@ -119,9 +124,9 @@ export function ToolContent({
       )}
     </div>
   );
-}
+};
 
-function McpConfig({ entry }: { entry: LoadedEntryByKind<"mcp"> }) {
+const McpConfig = ({ entry }: { entry: LoadedEntryByKind<"mcp"> }) => {
   const t = useTranslations();
   const snippet = buildMcpConfigSnippet({
     slug: entry.slug,
@@ -173,11 +178,11 @@ function McpConfig({ entry }: { entry: LoadedEntryByKind<"mcp"> }) {
       </div>
     </section>
   );
-}
+};
 
-function ContentLoading() {
+const ContentLoading = () => {
   const t = useTranslations();
   return (
     <p className="text-muted-foreground text-sm">{t("publicTools.content")}</p>
   );
-}
+};

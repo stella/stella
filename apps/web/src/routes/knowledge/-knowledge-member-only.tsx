@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Navigate, useRouterState } from "@tanstack/react-router";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 
 type KnowledgeMemberOnlyProps = {
   /** While the session is unknown. */

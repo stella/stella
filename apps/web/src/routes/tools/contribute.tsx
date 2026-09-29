@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   ContributePage,
   createToolContributeHead,
-} from "@/routes/knowledge/-public/tool-contribute-page";
+} from "@/features/knowledge/public/tools/tool-contribute-page";
 
 // Goes once the Knowledge flag is permanent: the page then lives only at
 // `/knowledge/tools/contribute`.

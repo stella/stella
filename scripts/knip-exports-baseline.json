@@ -493,7 +493,7 @@
       "apps/web/src/routes/law/-case-detail.logic.ts": 1,
       "apps/web/src/routes/law/-law-home/jurisdictions.ts": 1,
       "apps/web/src/routes/onboarding/-queries.ts": 1,
-      "apps/web/src/routes/tools/-components/contribute.logic.ts": 1,
+      "apps/web/src/features/knowledge/public/tools/contribute.logic.ts": 1,
       "apps/web/src/routes/tools/-components/public-tools-index.logic.ts": 1
     }
   },

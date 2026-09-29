@@ -19,9 +19,14 @@ import {
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import {
+  DownloadAffordance,
+  InstallButtonPlaceholder,
+  ToolContent,
+} from "@/features/knowledge/public/tools/public-tool-content";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { publicToolPath } from "@/lib/knowledge/public-tools-path";
 import { pageTitleLiteral } from "@/lib/page-title";
-import { publicToolPath } from "@/lib/public-tools-path";
 import {
   createPublicToolsCanonicalUrl,
   createPublicToolsHead,
@@ -29,14 +34,9 @@ import {
 } from "@/lib/public-tools-seo";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
-import {
-  DownloadAffordance,
-  InstallButtonPlaceholder,
-  ToolContent,
-} from "@/routes/knowledge/-public/public-tool-content";
 
 const AddToStella = lazy(async () => ({
-  default: (await import("@/routes/tools/-components/add-to-stella"))
+  default: (await import("@/features/knowledge/public/tools/add-to-stella"))
     .AddToStella,
 }));
 

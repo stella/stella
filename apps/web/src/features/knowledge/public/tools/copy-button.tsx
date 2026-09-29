@@ -12,13 +12,13 @@ import { getAnalytics } from "@/lib/analytics/provider";
 
 // Client-only: reads `navigator.clipboard`. Lazy-loaded by the detail
 // page so it never runs during SSR.
-export function CopyButton({
+export const CopyButton = ({
   text,
   className,
 }: {
   text: string;
   className?: string;
-}) {
+}) => {
   const t = useTranslations();
   const [copied, setCopied] = useState(false);
 
@@ -52,4 +52,4 @@ export function CopyButton({
       {copied ? t("common.copied") : t("common.copy")}
     </Button>
   );
-}
+};

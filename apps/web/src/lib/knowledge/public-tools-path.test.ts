@@ -7,7 +7,7 @@ import {
   publicToolPath,
   publicToolsBasePath,
   publicToolsContributePath,
-} from "@/lib/public-tools-path";
+} from "@/lib/knowledge/public-tools-path";
 
 describe("published tools' addresses", () => {
   test("under Knowledge when it is readable without an account", () => {

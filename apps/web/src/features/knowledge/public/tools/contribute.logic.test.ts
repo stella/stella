@@ -11,7 +11,7 @@ import {
   isFullCommitSha,
   normalizeGithubRepo,
   type ContributeFormState,
-} from "@/routes/tools/-components/contribute.logic";
+} from "@/features/knowledge/public/tools/contribute.logic";
 
 const SHA = "a".repeat(40);
 

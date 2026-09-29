@@ -13,18 +13,18 @@ import { normalizeRedirectTo } from "@/lib/redirect";
 
 // Readable without an account: the catalogue behind each of these is the same
 // for every visitor.
-const OPEN_SECTIONS = new Set<KnowledgeSection["key"]>([
+const OPEN_SECTIONS: readonly KnowledgeSection["key"][] = [
   "tools",
   "templates",
   "playbooks",
-]);
+];
 
 // An organization's own: shown so the visitor knows they exist, opened with an
 // account.
-const ACCOUNT_SECTIONS = new Set<KnowledgeSection["key"]>([
+const ACCOUNT_SECTIONS: readonly KnowledgeSection["key"][] = [
   "clauses",
   "styles",
-]);
+];
 
 type PublicKnowledgeLandingProps = {
   /** A page that needs an account, asked for before this one: sign-in is
@@ -60,9 +60,12 @@ export const PublicKnowledgeLanding = ({
           ? t("styleSets.description")
           : t(`knowledge.sections.${section.key}.description`),
     };
-    if (OPEN_SECTIONS.has(section.key)) {
+    if (OPEN_SECTIONS.includes(section.key)) {
       cards.push({ ...content, to: section.to });
-    } else if (ACCOUNT_SECTIONS.has(section.key) && requestSignIn !== null) {
+    } else if (
+      ACCOUNT_SECTIONS.includes(section.key) &&
+      requestSignIn !== null
+    ) {
       cards.push({
         ...content,
         note: t("knowledge.landing.withAccount"),

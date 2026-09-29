@@ -191,11 +191,11 @@ describe("public tools security invariants", () => {
       // Loaded via dynamic import() so its auth/install deps never enter
       // the SSR-reachable module graph.
       expect(source).toContain(
-        'import("@/routes/tools/-components/add-to-stella")',
+        'import("@/features/knowledge/public/tools/add-to-stella")',
       );
       expect(source).toContain("<ClientOnly");
       expect(source).not.toContain(
-        'from "@/routes/tools/-components/add-to-stella"',
+        'from "@/features/knowledge/public/tools/add-to-stella"',
       );
     },
   );
@@ -215,7 +215,7 @@ describe("public tools security invariants", () => {
     const addToStella = readFileSync(
       nodePath.resolve(
         repoRoot,
-        "apps/web/src/routes/tools/-components/add-to-stella.tsx",
+        "apps/web/src/features/knowledge/public/tools/add-to-stella.tsx",
       ),
       "utf-8",
     );

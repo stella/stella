@@ -3,7 +3,7 @@ import { betaFeaturesHostDefaultEnabled } from "@/lib/beta-features";
 import {
   isPublicKnowledgeEnabled,
   isPublicKnowledgeSitemapEnabled,
-} from "@/lib/public-knowledge-launch";
+} from "@/lib/knowledge/public-knowledge-launch";
 
 // Beta hosts always serve the /tools routes; the env flag governs
 // production. The gate must resolve identically on server and client

@@ -3,8 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   publicToolDownloadResponse,
   publicToolNotFoundResponse,
-} from "@/lib/public-tool-download";
-import { legacyToolsRoutesServed } from "@/lib/public-tools-path";
+} from "@/lib/knowledge/public-tool-download";
+import { legacyToolsRoutesServed } from "@/lib/knowledge/public-tools-path";
 
 // Goes once the Knowledge flag is permanent: the download then lives only at
 // `/knowledge/tools/$entry/download`.

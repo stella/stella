@@ -3,8 +3,8 @@ import * as v from "valibot";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { pageTitle } from "@/lib/page-title";
-import { publicToolsBasePath } from "@/lib/public-tools-path";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import {
   TOOLS_KIND_FILTERS,

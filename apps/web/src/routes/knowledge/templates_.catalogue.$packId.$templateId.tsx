@@ -1,4 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { publicKnowledgeSource } from "@/features/knowledge/public/public-knowledge";
@@ -7,11 +8,11 @@ import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-sta
 import { TemplateCatalogueDetailView } from "@/features/knowledge/views/templates/template-catalogue-detail-view";
 import { detached } from "@/lib/detached";
 import { templateIntentSearchSchema } from "@/lib/knowledge/catalogue-intent";
-import { pageTitle } from "@/lib/page-title";
 import {
   isPublicKnowledgeCrawlAllowed,
   isPublicKnowledgeEnabled,
-} from "@/lib/public-knowledge-launch";
+} from "@/lib/knowledge/public-knowledge-launch";
+import { pageTitle } from "@/lib/page-title";
 import { createPublicHead } from "@/lib/public-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { CatalogueTemplateActions } from "@/routes/knowledge/-catalogue-template-actions";
@@ -28,7 +29,7 @@ export const Route = createFileRoute(
   validateSearch: templateIntentSearchSchema,
   beforeLoad: () => {
     if (!isPublicKnowledgeEnabled()) {
-      throw notFound();
+      notFound({ throw: true });
     }
   },
   loader: async ({ context, params }) => {
@@ -39,7 +40,8 @@ export const Route = createFileRoute(
     // An unknown or unlisted template is not a page; an act named for it in
     // the query goes with it.
     if (template === null) {
-      throw notFound();
+      notFound({ throw: true });
+      return panic("TanStack Router did not throw a not-found response.");
     }
     return { displayName: template.title };
   },

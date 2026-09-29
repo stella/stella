@@ -18,7 +18,8 @@ import {
   createCaseLawLanguageAlternateLinks,
 } from "@/lib/case-law-language-alternates";
 import { ClientOperationError } from "@/lib/errors/client";
-import { isPublicKnowledgeCrawlAllowed } from "@/lib/public-knowledge-launch";
+import { isPublicKnowledgeCrawlAllowed } from "@/lib/knowledge/public-knowledge-launch";
+import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import {
   isPublicLawCrawlAllowed,
   isPublicLawSitemapEnabled,
@@ -34,7 +35,6 @@ import {
   isPublicToolsCrawlAllowed,
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
-import { publicToolsBasePath } from "@/lib/public-tools-path";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";

@@ -1,9 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
-import { unwrapPublicKnowledge } from "@/lib/public-knowledge-api";
-import type { PublicKnowledgeData } from "@/lib/public-knowledge-api";
+import { unwrapPublicKnowledge } from "@/lib/knowledge/public-knowledge-api";
+import type { PublicKnowledgeData } from "@/lib/knowledge/public-knowledge-api";
 
 /**
  * Catalogue reads: the same bytes for every visitor, keyed under their own
@@ -40,13 +41,18 @@ export const publicKnowledgeKeys = {
 export const catalogueStartersOptions = () =>
   queryOptions({
     queryKey: publicKnowledgeKeys.playbooks.starters(),
-    queryFn: async ({ signal }) =>
-      unwrapPublicKnowledge(
+    queryFn: async ({ signal }) => {
+      const list = unwrapPublicKnowledge(
         await api.public.knowledge["playbook-starters"].get({
           fetch: { signal },
         }),
         "list starter playbooks",
-      )?.items ?? [],
+      );
+      // Only an item can be missing; the list route always answers a list.
+      return list === null
+        ? panic("The starter playbook list answered not found.")
+        : list.items;
+    },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

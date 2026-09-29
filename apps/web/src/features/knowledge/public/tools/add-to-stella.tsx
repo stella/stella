@@ -17,6 +17,7 @@ import { Button } from "@stll/ui/button";
 import { PlusIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
+import { resolveAddToStellaState } from "@/features/knowledge/public/tools/add-to-stella.logic";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { TranslationKey } from "@/i18n/types";
 import { authClient, type Role } from "@/lib/auth-client";
@@ -24,16 +25,15 @@ import { roleOptions } from "@/lib/auth-queries";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { publicToolInstallPath } from "@/lib/knowledge/public-tools-path";
 import {
   catalogueKeys,
   catalogueOptions,
 } from "@/lib/knowledge/queries/catalogue";
-import { publicToolInstallPath } from "@/lib/public-tools-path";
 import {
   agentSkillsQueryRoot,
   mcpQueryRoot,
 } from "@/lib/resource-query-roots.logic";
-import { resolveAddToStellaState } from "@/routes/tools/-components/add-to-stella.logic";
 
 const SignInDialog = lazy(async () => {
   const module = await import("@/components/auth/sign-in-dialog");
@@ -56,12 +56,12 @@ type AddToStellaProps = {
  * click is itself the confirmation and installs immediately. Never on the
  * SSR path — the page renders fully without a session.
  */
-export function AddToStella({
+export const AddToStella = ({
   entry,
   displayName,
   installIntent,
   onClearInstallIntent,
-}: AddToStellaProps) {
+}: AddToStellaProps) => {
   const t = useTranslations();
   const authStatus = useClientAuthStatus();
   const queryClient = useQueryClient();
@@ -200,7 +200,7 @@ export function AddToStella({
       )}
     </>
   );
-}
+};
 
 type ResolveInstallPermissionOptions = {
   authenticated: boolean;
@@ -236,13 +236,13 @@ type InstallConfirmDialogProps = {
   onCancel: () => void;
 };
 
-function InstallConfirmDialog({
+const InstallConfirmDialog = ({
   entry,
   name,
   isPending,
   onConfirm,
   onCancel,
-}: InstallConfirmDialogProps) {
+}: InstallConfirmDialogProps) => {
   const t = useTranslations();
 
   const handleOpenChange = (open: boolean) => {
@@ -273,15 +273,15 @@ function InstallConfirmDialog({
       </AlertDialogPopup>
     </AlertDialog>
   );
-}
+};
 
-function InstallConfirmBody({
+const InstallConfirmBody = ({
   kind,
   name,
 }: {
   kind: LoadedCatalogueEntry["kind"];
   name: string;
-}) {
+}) => {
   const t = useTranslations();
 
   if (kind === "mcp") {
@@ -291,4 +291,4 @@ function InstallConfirmBody({
     return t("publicTools.installConfirm.nativeToolBody", { name });
   }
   return t("publicTools.installConfirm.skillBody", { name });
-}
+};

@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { isInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -37,15 +38,18 @@ export const loadProtectedContext = async ({
   const redirectTo = returnPathOf(location);
 
   if (!authContext.session || !authContext.user) {
-    throw redirect({ to: "/auth", search: { redirectTo } });
+    redirect({ to: "/auth", search: { redirectTo }, throw: true });
+    return panic("TanStack Router did not throw the sign-in redirect.");
   }
 
   if (!authContext.session.activeOrganizationId) {
-    throw redirect({
+    redirect({
       to: "/auth/organization",
       search: { redirectTo },
       replace: true,
+      throw: true,
     });
+    return panic("TanStack Router did not throw the organization redirect.");
   }
 
   const activeOrganizationId = authContext.session.activeOrganizationId;

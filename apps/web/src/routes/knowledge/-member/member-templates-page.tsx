@@ -17,7 +17,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/knowledge/-components/template-list";
 import { TemplateStudioPage } from "@/routes/knowledge/-components/template-studio";
@@ -343,7 +343,7 @@ const CatalogueTabLink = () => {
       className="text-muted-foreground hover:text-foreground text-sm"
       to="/knowledge/templates/catalogue"
     >
-      {t("knowledge.catalogue.browse")}
+      {t("common.catalogue")}
     </Link>
   );
 };

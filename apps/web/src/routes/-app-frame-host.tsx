@@ -7,18 +7,18 @@ import { panic } from "better-result";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
-import {
-  frameVisitor,
-  selectAppFrame,
-  visitorChanged,
-} from "@/lib/app-frame.logic";
-import type { AppFrameAudience } from "@/lib/app-frame.logic";
 import { rootKeys } from "@/lib/auth-queries";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { resetVisitorCache } from "@/lib/knowledge/knowledge-cache";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
+import {
+  frameVisitor,
+  selectAppFrame,
+  visitorChanged,
+} from "@/routes/-app-frame.logic";
+import type { AppFrameAudience } from "@/routes/-app-frame.logic";
 import { ProtectedPendingSkeleton } from "@/routes/-protected-pending-skeleton";
 
 // The signed-in frame (sidebar, inspector, chat and their registrations) loads

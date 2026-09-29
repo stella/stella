@@ -4,8 +4,8 @@ import {
   frameVisitor,
   selectAppFrame,
   visitorChanged,
-} from "@/lib/app-frame.logic";
-import type { AppFrameAudience } from "@/lib/app-frame.logic";
+} from "@/routes/-app-frame.logic";
+import type { AppFrameAudience } from "@/routes/-app-frame.logic";
 
 const PROTECTED = ["__root__", "/_protected", "/_protected/chat/"];
 const KNOWLEDGE = ["__root__", "/knowledge", "/knowledge/templates"];

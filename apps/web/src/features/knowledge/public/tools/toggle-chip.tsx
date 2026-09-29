@@ -29,7 +29,7 @@ type ToggleChipProps = {
   variant?: "ghost" | "outline";
 };
 
-export function ToggleChip({
+export const ToggleChip = ({
   active,
   children,
   className,
@@ -38,8 +38,8 @@ export function ToggleChip({
   // on AssignmentPattern property values (BuildHIR::lowerAssignment Todo),
   // so the default is applied at the use site instead.
   variant,
-}: ToggleChipProps) {
-  return (
+}: ToggleChipProps) => 
+  (
     <Button
       aria-pressed={active}
       className={cn(
@@ -54,5 +54,5 @@ export function ToggleChip({
     >
       {children}
     </Button>
-  );
-}
+  )
+;

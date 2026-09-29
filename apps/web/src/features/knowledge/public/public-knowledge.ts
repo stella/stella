@@ -55,7 +55,9 @@ const toCatalogueDetail = (
 /** The catalogue as the template list renders it, with each row's source. */
 const useCatalogueTemplates = () => {
   const { data, isLoading, isError } = useQuery(catalogueTemplatesOptions());
-  const catalogue = data ?? [];
+  // Nothing is listed until the catalogue has been read.
+  const catalogue: readonly CatalogueTemplate[] =
+    data === undefined ? [] : data;
   const status = ((): KnowledgeSource<"templates">["status"] => {
     if (isLoading) {
       return "loading";
@@ -139,12 +141,14 @@ export const toCatalogueStarters = (
   if (isLoading) {
     return { status: "loading", items: [], pendingStarterId: null };
   }
-  if (isError && data === undefined) {
-    return { status: "error", items: [], pendingStarterId: null, retry };
+  if (data === undefined) {
+    return isError
+      ? { status: "error", items: [], pendingStarterId: null, retry }
+      : { status: "loading", items: [], pendingStarterId: null };
   }
   return {
     status: "ready",
-    items: (data ?? []).map((starter) => ({
+    items: data.map((starter) => ({
       starterId: starter.id,
       name: starter.name,
       description: starter.description,

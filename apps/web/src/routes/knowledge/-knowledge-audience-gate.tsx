@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 
 type KnowledgeAudienceGateProps = {
   /** While the session is unknown: a skeleton, no data. */

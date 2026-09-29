@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
-import { legacyToolsRoutesServed } from "@/lib/public-tools-path";
+import { legacyToolsRoutesServed } from "@/lib/knowledge/public-tools-path";
 import { PublicToolsShell } from "@/routes/tools/-components/public-tools-shell";
 
 // The older top-level tools pages. They answer only while Knowledge needs an

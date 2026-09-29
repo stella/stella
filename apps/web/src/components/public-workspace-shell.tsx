@@ -45,7 +45,7 @@ import { usePublicShellInboxEntryEnabled } from "@/hooks/use-inbox-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { spdxLicenseUrl } from "@/lib/spdx-license";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
-} from "@/routes/tools/-components/tool-detail.logic";
+} from "@/features/knowledge/public/tools/tool-detail.logic";
+import { spdxLicenseUrl } from "@/lib/spdx-license";
 
 describe("tool-detail.logic", () => {
   test("spdx url points at the canonical license page", () => {

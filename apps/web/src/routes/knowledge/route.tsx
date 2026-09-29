@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { pageTitle } from "@/lib/page-title";
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
 import {
   loadProtectedContext,
   prefetchProtectedShell,

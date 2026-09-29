@@ -18,7 +18,7 @@ import type {
   CatalogueSetup,
 } from "@stll/catalogue";
 
-import { STELLA_REPO_URL } from "@/routes/tools/-components/tool-detail.logic";
+import { STELLA_REPO_URL } from "@/features/knowledge/public/tools/tool-detail.logic";
 
 /** Where the skill's content lives relative to this repository. */
 export type SkillSource = "github" | "in-tree";

@@ -14,8 +14,9 @@ import {
 } from "@/features/knowledge/member/member-knowledge";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
 import { PlaybooksPageSkeleton } from "@/features/knowledge/views/playbooks/playbooks-page-view";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { PlaybookEditor } from "@/routes/knowledge/-components/playbook-editor";
 import { PlaybookList } from "@/routes/knowledge/-components/playbook-list";
@@ -103,11 +104,19 @@ export function MemberPlaybooksPage({
     }
     setLoadingMore(false);
 
-    // Rethrown rather than swallowed: the caller hands this promise to
-    // `detached`, which captures what comes out of it. Returning here would
-    // leave a failed load with no toast and no capture.
+    // Reported, not swallowed: a load that failed outright is captured and
+    // told the same way as one the server refused.
     if (Result.isError(result)) {
-      throw result.error;
+      getAnalytics().captureError(result.error);
+      stellaToast.add({
+        type: "error",
+        title: t("knowledge.playbooks.loadFailed"),
+        description: userErrorFromThrown(
+          result.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
     }
 
     const response = result.value;

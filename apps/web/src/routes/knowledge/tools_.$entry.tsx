@@ -8,13 +8,13 @@ import * as v from "valibot";
 import { Button } from "@stll/ui/button";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { resolveToolEntry } from "@/lib/knowledge/tool-entry";
-import { pageTitleLiteral } from "@/lib/page-title";
 import {
   isPublicKnowledgeCrawlAllowed,
   isPublicKnowledgeEnabled,
-} from "@/lib/public-knowledge-launch";
-import { publicToolPath } from "@/lib/public-tools-path";
+} from "@/lib/knowledge/public-knowledge-launch";
+import { publicToolPath } from "@/lib/knowledge/public-tools-path";
+import { resolveToolEntry } from "@/lib/knowledge/tool-entry";
+import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createPublicToolsCanonicalUrl,
   createPublicToolsHead,
@@ -54,7 +54,8 @@ export const Route = createFileRoute("/knowledge/tools_/$entry")({
     });
     switch (page.page) {
       case "missing":
-        throw notFound();
+        notFound({ throw: true });
+        return panic("TanStack Router did not throw a not-found response.");
       case "skill":
         return page;
       case "catalogue":

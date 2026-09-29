@@ -1,17 +1,17 @@
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
+  publicToolPath,
+  publicToolsBasePath,
+  publicToolsContributePath,
+} from "@/lib/knowledge/public-tools-path";
+import {
   assertSitemapXmlWithinProtocolLimits,
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
   TOOLS_SITEMAP_PATH,
 } from "@/lib/public-sitemap";
 import { isPublicToolsSitemapEnabled } from "@/lib/public-tools-launch";
-import {
-  publicToolPath,
-  publicToolsBasePath,
-  publicToolsContributePath,
-} from "@/lib/public-tools-path";
 import { createPublicToolsCanonicalUrl } from "@/lib/public-tools-seo";
 
 export { SITEMAP_XML_RESPONSE_HEADERS, TOOLS_SITEMAP_PATH };

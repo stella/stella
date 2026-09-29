@@ -7,16 +7,16 @@ import type { LoadedCatalogueEntry } from "@stll/catalogue";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { toKnowledgeToolDetail } from "@/features/knowledge/public/public-tools";
-import { ToolDetailPanelView } from "@/features/knowledge/views/tools/tool-detail-panel-view";
-import { detached } from "@/lib/detached";
 import {
   DownloadAffordance,
   InstallButtonPlaceholder,
   ToolContent,
-} from "@/routes/knowledge/-public/public-tool-content";
+} from "@/features/knowledge/public/tools/public-tool-content";
+import { ToolDetailPanelView } from "@/features/knowledge/views/tools/tool-detail-panel-view";
+import { detached } from "@/lib/detached";
 
 const AddToStella = lazy(async () => ({
-  default: (await import("@/routes/tools/-components/add-to-stella"))
+  default: (await import("@/features/knowledge/public/tools/add-to-stella"))
     .AddToStella,
 }));
 

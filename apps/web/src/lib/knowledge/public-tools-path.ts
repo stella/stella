@@ -1,4 +1,4 @@
-import { isPublicKnowledgeEnabled } from "@/lib/public-knowledge-launch";
+import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 
 // Every address of the published tools comes from here. They live under
