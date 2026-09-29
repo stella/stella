@@ -230,14 +230,17 @@ const preflightAndAdopt = async ({
           ADD COLUMN applied_at timestamp with time zone DEFAULT now()
         `);
       }
-      for (const decision of decisions) {
-        if (decision.type !== "mapped" || decision.receipt.name !== null) {
-          continue;
-        }
+      const unnamedReceipts = decisions.flatMap((decision) =>
+        decision.type === "mapped" && decision.receipt.name === null
+          ? [sql`(${decision.receipt.id}::integer, ${decision.name}::text)`]
+          : [],
+      );
+      if (unnamedReceipts.length > 0) {
         await tx.execute(sql`
-          UPDATE ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)}
-          SET name = ${decision.name}, applied_at = NULL
-          WHERE id = ${decision.receipt.id}
+          UPDATE ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)} AS ledger
+          SET name = adopted.name, applied_at = NULL
+          FROM (VALUES ${sql.join(unnamedReceipts, sql`, `)}) AS adopted(id, name)
+          WHERE ledger.id = adopted.id
         `);
       }
       const nameColumn = columns.find(({ name }) => name === "name");
