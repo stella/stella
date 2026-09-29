@@ -24,7 +24,7 @@ CREATE INDEX "time_timers_workspace_idx" ON "time_timers" ("workspace_id");--> s
 CREATE INDEX "time_timers_legacy_entry_idx" ON "time_timers" ("legacy_time_entry_id");--> statement-breakpoint
 
 -- Preserve the running clock and original draft until confirmation or discard.
--- stella-migration-safety: reviewed bulk-backfill - copies only active draft timers, bounded by the existing one-active-timer-per-user index; the original entries remain intact for rollback.
+-- stella-migration-safety: reviewed insert-select - copies only active draft timers, bounded by the existing one-active-timer-per-user index; the original entries remain intact for rollback.
 INSERT INTO "time_timers" ("id", "organization_id", "user_id", "workspace_id", "description", "legacy_time_entry_id", "state", "started_at", "accumulated_seconds", "last_resumed_at", "created_at", "updated_at")
 SELECT "id", "organization_id", "user_id", "workspace_id", "narrative", "id", 'running', "timer_started_at", 0, "timer_started_at", "created_at", now()
 FROM "time_entries"
