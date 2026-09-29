@@ -25140,7 +25140,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
                 description:
-                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. Use invoices.list for a paginated summary without lines.",
+                  "Read one invoice with its full detail: its lines in order with quantity, unit price, VAT, and amounts; totals with the VAT breakdown by rate; seller profile, buyer, dates, currency, and status; and every attached time entry and expense with its work item. An invoice from before invoice lines lists no lines for its attached entries until its first line edit; its totals still count them. Use invoices.list for a paginated summary without lines.",
                 access: "read",
                 flags: [
                   {
@@ -25233,23 +25233,8 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "vatRateBps",
                   },
-                  {
-                    kind: "enum",
-                    enum: [
-                      "domestic_vat",
-                      "not_vat_payer",
-                      "reverse_charge",
-                      "exempt",
-                    ],
-                    repeatable: false,
-                    flag: "--vat-treatment",
-                    prop: "vatTreatment",
-                    required: true,
-                    part: "body",
-                    partPath: "vatTreatment",
-                  },
                 ],
-                inputOnly: ["body.source"],
+                inputOnly: ["body.source", "body.vatTreatment"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -25361,13 +25346,23 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         vatTreatment: {
-                          default: "domestic_vat",
-                          type: "string",
-                          enum: [
-                            "domestic_vat",
-                            "not_vat_payer",
-                            "reverse_charge",
-                            "exempt",
+                          anyOf: [
+                            {
+                              const: "domestic_vat",
+                              type: "string",
+                            },
+                            {
+                              const: "not_vat_payer",
+                              type: "string",
+                            },
+                            {
+                              const: "reverse_charge",
+                              type: "string",
+                            },
+                            {
+                              const: "exempt",
+                              type: "string",
+                            },
                           ],
                         },
                       },
@@ -25560,23 +25555,8 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "vatRateBps",
                   },
-                  {
-                    kind: "enum",
-                    enum: [
-                      "domestic_vat",
-                      "not_vat_payer",
-                      "reverse_charge",
-                      "exempt",
-                    ],
-                    repeatable: false,
-                    flag: "--vat-treatment",
-                    prop: "vatTreatment",
-                    required: false,
-                    part: "body",
-                    partPath: "vatTreatment",
-                  },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.vatTreatment"],
                 paginated: false,
                 destructive: false,
                 scope: "billing_write",
@@ -25623,13 +25603,23 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         vatTreatment: {
-                          default: "domestic_vat",
-                          type: "string",
-                          enum: [
-                            "domestic_vat",
-                            "not_vat_payer",
-                            "reverse_charge",
-                            "exempt",
+                          anyOf: [
+                            {
+                              const: "domestic_vat",
+                              type: "string",
+                            },
+                            {
+                              const: "not_vat_payer",
+                              type: "string",
+                            },
+                            {
+                              const: "reverse_charge",
+                              type: "string",
+                            },
+                            {
+                              const: "exempt",
+                              type: "string",
+                            },
                           ],
                         },
                       },
